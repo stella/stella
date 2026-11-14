@@ -224,6 +224,7 @@
         "./capabilities/lists.verifications.claim-reviews.list.json",
         "./capabilities/lists.verifications.create.json",
         "./capabilities/lists.verifications.get.json",
+        "./capabilities/lists.verifications.graph.get.json",
         "./capabilities/lists.verifications.latest.list.json",
         "./capabilities/lists.verifications.list.json",
         "./capabilities/matters.anonymization-allowlist.create.json",

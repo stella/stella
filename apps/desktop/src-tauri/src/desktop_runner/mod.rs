@@ -21,6 +21,12 @@ mod sidecar_host;
   reason = "tests construct local file fixtures"
 )]
 mod sidecar_host_tests;
+#[cfg(all(feature = "dev-runner-stand-in", unix))]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the development stand-in keeps its link and folders under the checkout's .stella-dev"
+)]
+pub(crate) mod stand_in;
 mod state;
 pub(crate) mod step_outputs;
 #[cfg(test)]

@@ -241,6 +241,12 @@
       "showSources": "إظهار المصادر",
       "title": "الوقائع المرجعية"
     },
+    "chronology": {
+      "claims": "{count, plural, zero {لا يستند أي ادعاء إلى هذه الواقعة} one {يستند ادعاء واحد إلى هذه الواقعة} two {يستند ادعاءان إلى هذه الواقعة} few {يستند # ادعاءات إلى هذه الواقعة} many {يستند # ادعاءً إلى هذه الواقعة} other {يستند # ادعاء إلى هذه الواقعة}}",
+      "empty": "لا تحتوي هذه القائمة على وقائع بعد.",
+      "moreClaims": "{count, plural, zero {لا ادعاءات أخرى} one {ادعاء آخر} two {ادعاءان آخران} few {# ادعاءات أخرى} many {# ادعاءً آخر} other {# ادعاء آخر}}",
+      "undated": "بلا تاريخ"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "الوقائع المرجعية متعارضة",
@@ -405,6 +411,42 @@
       "showNextSteps": "عرض الخطوات التالية",
       "unlink": "إلغاء ربط {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, zero {لا ادعاءات} one {ادعاء واحد} two {ادعاءان} few {# ادعاءات} many {# ادعاءً} other {# ادعاء}}",
+      "claimTitle": "الادعاء",
+      "columns": {
+        "claims": "الادعاءات",
+        "sources": "المستندات المصدر",
+        "statements": "الإفادات"
+      },
+      "empty": "لا تحتوي هذه القائمة على وقائع أو مستندات تم التحقق منها بعد.",
+      "factCount": "{count, plural, zero {لا وقائع} one {واقعة واحدة} two {واقعتان} few {# وقائع} many {# واقعة} other {# واقعة}}",
+      "factOverflow": "تُعرض أول {count} واقعة من هذه القائمة.",
+      "filters": {
+        "allSources": "جميع المصادر",
+        "allVerdicts": "جميع النتائج",
+        "conflicts": "التعارضات",
+        "heldFacts": "الوقائع المحجوزة",
+        "source": "التصفية حسب المصدر",
+        "verdict": "التصفية حسب النتيجة"
+      },
+      "held": "محجوزة",
+      "linkedFacts": "{count, plural, zero {لا وقائع مرتبطة} one {واقعة مرتبطة واحدة} two {واقعتان مرتبطتان} few {# وقائع مرتبطة} many {# واقعة مرتبطة} other {# واقعة مرتبطة}}",
+      "listLabel": "المخطط في صورة قائمة",
+      "loadMore": "تحميل المزيد من المستندات",
+      "noMatch": "لا يوجد ما يطابق عوامل التصفية هذه.",
+      "noStatements": "لم يُتحقق بعد من أي مستند مقابل هذه القائمة.",
+      "offList": "لم تعد في القائمة",
+      "relation": {
+        "conflicts": "يتعارض",
+        "governs": "حاكم",
+        "record": "في السجل",
+        "recordConflict": "سجل متعارض",
+        "supports": "يدعم"
+      },
+      "unlinked": "وقائع لا يستند إليها أي ادعاء",
+      "verifyInReview": "التحقق من مستند"
+    },
     "guidance": {
       "escalate": "إحالة",
       "manualJudgement": "قرار بشري",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, zero {لا مطابقات} one {مطابقة واحدة} two {مطابقتان} few {# مطابقات} many {# مطابقة} other {# مطابقة}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "التسلسل الزمني",
+      "graph": "المخطط",
+      "label": "عرض القائمة بصيغة",
+      "review": "المراجعة"
     },
     "qualifiers": {
       "heading": "تحفظات",
@@ -1873,6 +1921,8 @@
       "folderStateProtected": "يحتوي على بيانات stella نفسها",
       "folderStateUnlinked": "لم يعد مرتبطًا",
       "folderStateUnreadable": "تتعذر قراءته",
+      "limitReminderNotify": "أبلغني عند إعادة ضبطه",
+      "limitReminderScheduled": "سنبلغك بعد {time}.",
       "permissionAboveLimit": "غير مسموح به في مؤسستك",
       "permissionAskDescription": "يعدّل الملفات في مجلد الدردشة من تلقاء نفسه، ويسأل قبل أي شيء آخر.",
       "permissionAutoDescription": "ينفّذ من تلقاء نفسه ما يراه آمنًا، ويسأل عن الباقي.",
@@ -2108,6 +2158,7 @@
     "sendErrorStreamIncomplete": "انقطع ردّ الذكاء الاصطناعي قبل أن يكتمل. حاول مجدداً.",
     "sendErrorTimedOut": "لم تستجب خدمة الدردشة في الوقت المحدد. حاول مرة أخرى.",
     "sendErrorToolsUnsupported": "لا يستطيع هذا النموذج استخدام الأدوات، لذا لا يمكنه الإجابة عن أسئلة تخص ملفك القانوني. انتقل إلى نموذج يدعم الأدوات.",
+    "sendErrorTurnTooLarge": "أصبح هذا الردّ أكبر من أن يُرسَل كاملاً. أرسل رسالة جديدة للمتابعة.",
     "sendPrompt": "إرسال الرسالة",
     "sendQueuedMessageNow": "إرسال الآن",
     "sendWithoutAnonymization": "إرسال دون تجهيل",
@@ -5059,6 +5110,7 @@
       "flowRunAwaitingApproval": "مسار العمل <bdi>{flowName}</bdi> بانتظار موافقتك",
       "flowRunCompleted": "اكتمل مسار العمل <bdi>{flowName}</bdi>",
       "flowRunFailed": "فشل مسار العمل <bdi>{flowName}</bdi>",
+      "localRunLimitReset": "يمكن لوكيل البرمجة على حاسوبك متابعة دردشتك",
       "mention": "ذكرك <bdi>{actorName}</bdi> في تعليق",
       "reportExportFailed": "فشل تصدير تقريرك",
       "reportExportSucceeded": "تقريرك جاهز",

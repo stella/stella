@@ -255,6 +255,17 @@ export const chatKeys = {
     userId: string,
     threadId: string,
   ) => [...chatKeys.all, activeOrganizationId, userId, "tool-grants", threadId],
+  limitReminder: (
+    activeOrganizationId: string,
+    userId: string,
+    threadKey: string,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "limit-reminder",
+    threadKey,
+  ],
   localFilesUndo: (
     activeOrganizationId: string,
     userId: string,

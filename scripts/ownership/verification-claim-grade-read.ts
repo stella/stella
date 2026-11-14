@@ -27,6 +27,11 @@ export default {
           "Counts written grades in SQL, then moves every claim with a view-changing review event through `reviewedView` (`countAsReviewed`).",
       },
       {
+        path: "apps/api/src/lib/lists/verification/graph-read.ts",
+        reason:
+          "Reads a page of the graph's claims and moves every one through `gradeOf` and `reviewedView` (`presentClaims`) before it leaves the module.",
+      },
+      {
         path: "apps/api/src/lib/lists/verification/review-history.ts",
         reason:
           "Reads each history step through `claimDisposition`, which resolves the grade with `reviewedView`.",
