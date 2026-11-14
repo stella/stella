@@ -23,6 +23,7 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { DESKTOP_RUNNER_OPEN_RUN_STATES } from "@/api/lib/desktop-runner/states";
 import type { DesktopRunnerDb, RunOwner } from "@/api/lib/desktop-runner/store";
 import { brandPersistedChatThreadId } from "@/api/lib/safe-id-boundaries";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 /**
  * What the steps of a chat's local runs produced, as stella stores it: one
@@ -500,6 +501,8 @@ type StepOfThread = {
 /** What a thread the member sees holds for one step. */
 export type VisibleStepContent =
   | { type: "none" }
+  /** A fork holds nothing for a step its source thread still stores. */
+  | { type: "not_copied" }
   | {
       type: "unstored";
       state: Exclude<ChatLocalRunStepContentStoredState, "stored">;
@@ -535,7 +538,8 @@ export type StoredStepContent =
  * step only with its thread, so a thread the member cannot see (another
  * member's, another organization's, one whose matter they can no longer
  * open) answers `null`, and `none` means the thread is theirs and holds
- * nothing for the step. Text is opened for the member's organization.
+ * nothing for the step; `not_copied` is that for a fork whose source thread
+ * still stores the step. Text is opened for the member's organization.
  */
 export const readVisibleStepContent = async (
   safeDb: SafeDb,
@@ -555,6 +559,9 @@ export const readVisibleStepContent = async (
           fileName: userFiles.fileName,
           mimeType: userFiles.mimeType,
           placeholder: userFiles.placeholder,
+          // A fork's source thread, where the member sees it, still storing
+          // the step: the fork's copy of it is missing.
+          sourceStores: sql<boolean>`EXISTS (SELECT 1 FROM chat_local_run_step_contents source_step WHERE source_step.thread_id = ${chatThreads.parentThreadId} AND source_step.step_key = ${stepKey})`,
         })
         .from(chatThreads)
         .leftJoin(
@@ -588,7 +595,7 @@ export const readVisibleStepContent = async (
     row.totalBytes === null ||
     row.storedBytes === null
   ) {
-    return Result.ok({ type: "none" });
+    return Result.ok({ type: row.sourceStores ? "not_copied" : "none" });
   }
   const state = storedStateOf(row.outcome);
   if (state !== stored) {
@@ -658,3 +665,86 @@ export const isStepRunOpen = async (
       )
       .limit(1)
   ).length === 1;
+
+/** One step a fork copies, and the fork's message that shows it. */
+type CopiedStep = {
+  stepKey: string;
+  messageId: SafeId<"chatMessage">;
+};
+
+type CopyStepContentsOptions = {
+  owner: RunOwner;
+  sourceThreadId: SafeId<"chatThread">;
+  targetThreadId: SafeId<"chatThread">;
+  steps: readonly CopiedStep[];
+};
+
+/** Steps one statement copies: each adds two parameters. */
+const COPY_STEPS_PER_STATEMENT = 200;
+
+/**
+ * Copy what the steps of a forked thread's messages stored, inside the
+ * database: each copy is owned by the fork's message that shows the step, so
+ * it goes with that message. Both threads must be the owner's. Text is
+ * copied as stored (one organization encrypts both). An image row names the
+ * fork's own copy of the step's file, found among the fork's files by the
+ * bytes' hash; a step whose file the fork does not hold is left out, so the
+ * fork never names the source's file.
+ *
+ * A row the fork already holds is kept, so the copy can be run again: a
+ * repeat adds what an earlier one missed and changes nothing else. Returns
+ * how many rows were added.
+ */
+export const copyStepContents = async (
+  db: Pick<DesktopRunnerDb, "select" | "insert">,
+  { owner, sourceThreadId, targetThreadId, steps }: CopyStepContentsOptions,
+): Promise<number> => {
+  const ownedThread = (threadId: SafeId<"chatThread">) =>
+    sql`EXISTS (SELECT 1 FROM ${chatThreads} WHERE ${chatThreads.id} = ${threadId} AND ${chatThreads.userId} = ${owner.userId} AND ${chatThreads.organizationId} = ${owner.organizationId})`;
+  const forkFile = sql`(SELECT fork_file.id FROM user_files fork_file JOIN user_files source_file ON source_file.id = ${contents.userFileId} WHERE fork_file.thread_id = ${targetThreadId} AND fork_file.user_id = ${owner.userId} AND fork_file.sha256_hex = source_file.sha256_hex ORDER BY fork_file.id LIMIT 1)`;
+  let copied = 0;
+  for (let from = 0; from < steps.length; from += COPY_STEPS_PER_STATEMENT) {
+    const batch = steps.slice(from, from + COPY_STEPS_PER_STATEMENT);
+    const rows = db
+      .select({
+        threadId: sql<string>`${targetThreadId}::uuid`.as("thread_id"),
+        stepKey: contents.stepKey,
+        runId: contents.runId,
+        messageId: sqlCaseFragment({
+          operand: sql`${contents.stepKey}`,
+          branches: batch.map(
+            (step) => sql`WHEN ${step.stepKey} THEN ${step.messageId}::uuid`,
+          ),
+          fallback: sql`NULL::uuid`,
+        }).as("message_id"),
+        kind: contents.kind,
+        outcome: contents.outcome,
+        totalBytes: contents.totalBytes,
+        storedBytes: contents.storedBytes,
+        textEncrypted: contents.textEncrypted,
+        textIv: contents.textIv,
+        userFileId: forkFile.as("user_file_id"),
+      })
+      .from(contents)
+      .where(
+        and(
+          eq(contents.threadId, sourceThreadId),
+          inArray(
+            contents.stepKey,
+            batch.map((step) => step.stepKey),
+          ),
+          ownedThread(sourceThreadId),
+          ownedThread(targetThreadId),
+          sql`(${contents.userFileId} IS NULL) = (${forkFile} IS NULL)`,
+        ),
+      );
+    // audit: skip - copied history belongs to the fork's own thread create event
+    const inserted = await db
+      .insert(contents)
+      .select(rows)
+      .onConflictDoNothing()
+      .returning({ stepKey: contents.stepKey });
+    copied += inserted.length;
+  }
+  return copied;
+};

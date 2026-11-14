@@ -22,6 +22,7 @@ describe("one read of a stored step", () => {
   test("every stored outcome answers in the contract's shape", () => {
     const outcomes: StoredStepContent[] = [
       { type: "arriving" },
+      { type: "not_copied" },
       { type: "not_stored" },
       { type: "unstored", state: "too_large", kind: "image", totalBytes: 9 },
       {
