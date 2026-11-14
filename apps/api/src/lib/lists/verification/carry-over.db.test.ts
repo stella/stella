@@ -446,6 +446,7 @@ const complete = async () =>
       tx,
       runId: newRunId,
       workspaceId,
+      unreadParts: [],
       blocks: [],
       claims: NEXT.map((claim, position) =>
         claimRow(newRunId, idOf(nextClaimIds, claim.key), position, claim),

@@ -1,5 +1,6 @@
 //! Safe wrappers over the raw Security.framework calls behind PDF signing:
-//! enumerating the keychain identities that can sign, and producing a
+//! enumerating the keychain identities that can sign (imported ones and
+//! those a smart card publishes through CryptoTokenKit), and producing a
 //! signature over a SHA-256 digest with the identity's private key. The
 //! desktop crate forbids `unsafe` code, so the Core Foundation attribute
 //! reads live here behind a minimal API that owns their soundness (every
@@ -25,6 +26,7 @@
 mod failure;
 #[cfg(target_os = "macos")]
 mod macos;
+mod merge;
 
 pub use stella_desktop_signing_core::{
   Signer, SigningError, SigningErrorCode, SigningIdentity, SigningKeyType,
@@ -50,7 +52,8 @@ impl Signer for KeychainSigner {
 }
 
 /// Every keychain identity (certificate plus private key) that can sign a
-/// document now, in keychain order, filtered by
+/// document now, in keychain order, then those of inserted smart cards and
+/// other CryptoTokenKit tokens, filtered by
 /// [`stella_desktop_signing_core::signing_identity`].
 ///
 /// Reading identities never touches key material, so this does not prompt.

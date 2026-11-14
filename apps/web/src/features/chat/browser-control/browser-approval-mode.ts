@@ -123,6 +123,7 @@ export const browserCommandSite = ({
     // Where going back leads is checked after it ran.
     case BROWSER_CONTROL_ACTION.goBack:
     case BROWSER_CONTROL_ACTION.snapshot:
+    case BROWSER_CONTROL_ACTION.find:
       return pageOrigin;
     case BROWSER_CONTROL_ACTION.click:
     case BROWSER_CONTROL_ACTION.fill:
@@ -169,6 +170,7 @@ const isCoveredBySiteGrant = ({
     case BROWSER_CONTROL_ACTION.switchTab:
     case BROWSER_CONTROL_ACTION.goBack:
     case BROWSER_CONTROL_ACTION.snapshot:
+    case BROWSER_CONTROL_ACTION.find:
       return true;
     case BROWSER_CONTROL_ACTION.click:
     case BROWSER_CONTROL_ACTION.pressKey:

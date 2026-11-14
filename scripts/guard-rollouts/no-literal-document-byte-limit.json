@@ -1,0 +1,19 @@
+{
+  "id": "no-literal-document-byte-limit",
+  "rules": ["no-literal-document-byte-limit/no-literal-document-byte-limit"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-19T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-literal-document-byte-limit/no-literal-document-byte-limit",
+    "apps",
+    "packages"
+  ]
+}

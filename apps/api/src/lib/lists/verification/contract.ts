@@ -103,7 +103,7 @@ export const CLAIM_FACT_RELATIONS = [
   "conflicts",
   "record",
 ] as const;
-type ClaimFactRelation = (typeof CLAIM_FACT_RELATIONS)[number];
+export type ClaimFactRelation = (typeof CLAIM_FACT_RELATIONS)[number];
 
 export type ClaimRef = {
   factEntityId: SafeId<"entity">;
@@ -181,6 +181,17 @@ export type ParagraphNumbering = (typeof PARAGRAPH_NUMBERINGS)[number];
 /** A point in the text a run read: a block by the id the run stores it
  *  under, and a UTF-16 offset into that block's text. */
 export type VerificationScopeEdge = { blockId: string; offset: number };
+
+/**
+ * Text a completed run read without finding its claims: a model call kept
+ * failing after its retries. From `start` (inclusive) to `end` (exclusive),
+ * in whole-document coordinates. No claim was looked for inside it, so a
+ * reader says so and offers to verify again.
+ */
+export type VerificationUnreadPart = {
+  start: VerificationScopeEdge;
+  end: VerificationScopeEdge;
+};
 
 /**
  * What a run checks: the whole document, or an inclusive range of its

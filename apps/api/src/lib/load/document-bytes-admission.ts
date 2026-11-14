@@ -84,10 +84,12 @@ export const createByteAdmission = (capacityBytes: number): ByteAdmission => {
 };
 
 /**
- * Upload finalization reads the whole staged file and scans and rewrites it,
- * holding several copies at once. Without a bound, a burst of large uploads
- * multiplies that by however many arrive together.
+ * Work that holds a whole stored document in memory: upload finalization,
+ * which reads the staged file and scans and rewrites it, and list
+ * verification, which parses the whole document. Each holds several copies at
+ * once; without one bound, a burst of large documents multiplies that by
+ * however many arrive together.
  */
-export const UPLOAD_FINALIZE_ADMISSION = createByteAdmission(
-  LIMITS.uploadFinalizeInFlightBytes,
+export const DOCUMENT_BYTES_ADMISSION = createByteAdmission(
+  LIMITS.documentBytesInFlight,
 );
