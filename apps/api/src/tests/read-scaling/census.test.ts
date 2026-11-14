@@ -37,11 +37,15 @@ import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redire
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
-import { dictationScalingScenario } from "./dictation";
+import {
+  desktopDictationModelsScalingScenario,
+  dictationScalingScenario,
+} from "./dictation";
 import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
+import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
@@ -111,6 +115,7 @@ const measuredApiScenarios = [
   ...reviewHistoryScalingScenarios,
   ...verificationGraphScalingScenarios,
   ...verificationChronologyScalingScenarios,
+  ...graphToolsScalingScenarios,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
@@ -125,6 +130,7 @@ const measuredApiScenarios = [
   ...invoicePaymentScalingScenarios,
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
+  desktopDictationModelsScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,
   softLawSearchScalingScenario,

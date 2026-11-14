@@ -21,11 +21,14 @@ use cpal::{
 use tauri::AppHandle;
 
 use crate::{
-  dictation::{self, Command, Failure, Phase},
+  clipboard,
+  dictation::{self, Command, Failed, Failure, Phase},
   dictation_audio::{MODEL_SAMPLE_RATE, holds_speech, resample, to_mono},
   dictation_cleanup,
+  dictation_cloud::{self, Destination},
+  dictation_context::{self, CleanupContext},
   dictation_focus::{self, FocusTarget, Insertion},
-  dictation_format::AppClass,
+  dictation_format::{AppClass, Segment},
   dictation_input,
   dictation_worker::{self, Response},
 };
@@ -60,21 +63,27 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
     match commands.recv_timeout(WORKER_IDLE) {
       Ok(Command::Press) if recorder.is_none() => {
         dictation::clear_failure(app);
-        match begin() {
+        match begin(app) {
           Ok(started) => {
             dictation::set_phase(app, Phase::Recording);
-            // Read once recording runs, so the lookup never delays capture.
-            recorder = Some((started, dictation_focus::current(app)));
+            // Read once recording runs, so the lookups never delay capture;
+            // the context is where the speaker pressed the shortcut.
+            let focus = dictation_focus::current(app);
+            let context =
+              dictation_context::read(focus.as_ref(), dictation::context_sharing(app));
+            recorder = Some((started, focus, context));
           }
           Err(failure) => dictation::report_failure(app, failure),
         }
       }
       Ok(Command::Press) => {}
       Ok(Command::Release) => {
-        if let Some((active, focus)) = recorder.take() {
+        if let Some((active, focus, context)) = recorder.take() {
           dictation::set_phase(app, Phase::Transcribing);
-          if let Err(failure) = finish(app, active, focus.as_ref(), &mut worker) {
-            dictation::report_failure(app, failure);
+          if let Err(failed) =
+            finish(app, active, focus.as_ref(), &context, &mut worker)
+          {
+            dictation::report_failure(app, failed);
           }
           dictation::set_phase(app, Phase::Idle);
         }
@@ -88,8 +97,10 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
   }
 }
 
-fn begin() -> Result<Recorder, Failure> {
-  if dictation::installed_model().is_none() {
+fn begin(app: &AppHandle) -> Result<Recorder, Failure> {
+  // stella AI transcribes without the speech model on this computer.
+  let (destination, _) = dictation::destination(app);
+  if destination == Destination::Local && dictation::installed_model().is_none() {
     return Err(Failure::ModelMissing);
   }
   if !dictation_input::request_access() {
@@ -102,29 +113,69 @@ fn finish(
   app: &AppHandle,
   recorder: Recorder,
   focus: Option<&FocusTarget>,
+  context: &CleanupContext,
   worker: &mut Option<Worker>,
-) -> Result<(), Failure> {
+) -> Result<(), Failed> {
   let captured = recorder.finish().ok_or(Failure::Microphone)?;
   // A denied microphone delivers exact zeros rather than an error.
   if captured.interleaved.iter().all(|sample| *sample == 0.0) {
-    return Err(Failure::Microphone);
+    return Err(Failure::Microphone.into());
   }
   let mono = to_mono(&captured.interleaved, captured.channels);
   let samples = resample(&mono, captured.rate, MODEL_SAMPLE_RATE);
   if !holds_speech(&samples) {
     return Ok(());
   }
-  let model = dictation::installed_model().ok_or(Failure::ModelMissing)?;
   let language = dictation::language(app);
-  let text = transcribe(worker, &model, &samples, language.hint)
-    .ok_or(Failure::Transcription)?;
+  let (destination, cloud_model) = dictation::destination(app);
+  let model = dictation::installed_model();
+  let text = dictation_cloud::transcribe_with(
+    destination,
+    model.is_some(),
+    || {
+      dictation_cloud::transcribe(
+        app,
+        &samples,
+        MODEL_SAMPLE_RATE,
+        cloud_model.as_deref(),
+        language.hint,
+      )
+      .inspect_err(|error| {
+        tracing::info!(%error, "stella AI transcription failed");
+      })
+      .ok()
+    },
+    || {
+      let model = model.as_deref()?;
+      transcribe(worker, model, &samples, language.hint)
+    },
+  )?;
   let text = text.trim();
   if text.is_empty() {
     return Ok(());
   }
   let cleaned = dictation::cleanup_enabled(app)
-    .then(|| dictation_cleanup::clean_up(app, text, &language.speaker))
+    .then(|| dictation_cleanup::clean_up(app, text, &language.speaker, context))
     .flatten();
+  let identifier = focus.and_then(|target| target.identifier.as_deref());
+  // Kept before typing, so a dictation that cannot be typed is not lost.
+  let kept_in_history = clipboard::keep_dictation(
+    app,
+    &dictation_cleanup::typed_text(text, cleaned.as_deref()),
+    identifier,
+  );
+  type_into_focus(app, text, cleaned.as_deref(), focus).map_err(|failure| Failed {
+    failure,
+    kept_in_history,
+  })
+}
+
+fn type_into_focus(
+  app: &AppHandle,
+  text: &str,
+  cleaned: Option<&[Segment]>,
+  focus: Option<&FocusTarget>,
+) -> Result<(), Failure> {
   // A modifier still held down would turn typed text into shortcuts.
   if !dictation_input::wait_for_released_modifiers() {
     return Err(Failure::ShortcutHeld);
@@ -137,7 +188,7 @@ fn finish(
     Insertion::FocusUnconfirmed => return Err(Failure::FocusUnconfirmed),
   }
   let class = AppClass::of(focus.and_then(|target| target.identifier.as_deref()));
-  dictation_input::send(&dictation_cleanup::strokes(text, cleaned.as_deref(), class))
+  dictation_input::send(&dictation_cleanup::strokes(text, cleaned, class))
     .map_err(|_typing| Failure::Accessibility)
 }
 

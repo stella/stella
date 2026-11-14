@@ -20,10 +20,10 @@ import {
 } from "../lib/access";
 import { browserControlError } from "../lib/browser-control-result";
 import { storedCommandBudget } from "../lib/command-budget";
+import { CONTROL_TRANSPORT } from "../lib/control-holder";
 import {
   admitControl,
   CONTROL_ADMISSION,
-  CONTROL_TRANSPORT,
   takeOverControl,
 } from "../lib/control-owner";
 import { createControlSession } from "../lib/control-session";
@@ -48,7 +48,10 @@ import {
   judgeDownload,
   loadDownloadScope,
   noteNavigation,
+  reportDeliveredDownload,
+  setDownloadReporter,
   setDownloadScope,
+  type SuggestFilename,
   takeDownloadNotices,
 } from "../lib/download-guard";
 import { executeAtMostOnce } from "../lib/execution-ledger";
@@ -163,7 +166,7 @@ type FilenameEvents = {
   addListener: (
     listener: (
       download: chrome.downloads.DownloadItem,
-      suggest: () => void,
+      suggest: SuggestFilename,
     ) => boolean,
   ) => void;
 };
@@ -191,6 +194,7 @@ const registerOptionalListeners = (): void => {
     });
     chrome.downloads.onChanged.addListener((delta) => {
       enforceStoppedDownload(delta).catch(() => undefined);
+      reportDeliveredDownload(delta).catch(() => undefined);
     });
   }
   if (!navigationTargetsRegistered && Reflect.has(chrome, "webNavigation")) {
@@ -555,6 +559,7 @@ const handlePopupRequest = async (
 
 export default defineBackground(() => {
   onContainedTabsChanged(setDownloadScope);
+  setDownloadReporter(desktopLink.reportDownload);
   loadDownloadScope().catch(() => undefined);
   registerOptionalListeners();
   chrome.permissions.onAdded.addListener(registerOptionalListeners);
