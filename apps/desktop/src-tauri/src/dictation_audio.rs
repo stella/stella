@@ -22,8 +22,9 @@ pub const MIN_STRETCH_MILLIS: usize = 1_000;
 /// Silence kept before speech; longer silence is dropped as it arrives.
 pub const LEAD_MILLIS: usize = PAUSE_MILLIS / 2;
 // Whole frames make up a pause, and a stretch outlasts the pause ending it.
-const _: () =
-  assert!(PAUSE_MILLIS % FRAME_MILLIS == 0 && MIN_STRETCH_MILLIS > PAUSE_MILLIS);
+const _: () = assert!(
+  PAUSE_MILLIS.is_multiple_of(FRAME_MILLIS) && MIN_STRETCH_MILLIS > PAUSE_MILLIS
+);
 /// Filter half-width in input samples at the lowered cutoff.
 const SINC_ZERO_CROSSINGS: f64 = 16.0;
 
