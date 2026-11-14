@@ -415,6 +415,14 @@ describe("a run sending what a step produced", () => {
       content: new File(["hello"], "shot.png"),
     });
     expect(response.status).toBe(422);
+    // Nor is a real image stored under a size that is not its own.
+    const missized = await put(run.runId, stepKey(), {
+      token: tokenFor(run.runId),
+      kind: "image",
+      totalBytes: PNG.byteLength + 1,
+      content: new File([PNG], "shot.png"),
+    });
+    expect(missized.status).toBe(422);
     expect(await threadFiles(run.threadId)).toEqual([]);
   });
 

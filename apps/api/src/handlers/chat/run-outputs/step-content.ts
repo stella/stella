@@ -359,6 +359,10 @@ export const createStoreRunStepContent = (
         return invalid("A step's content is larger than its kind keeps");
       }
       if (kind === "image") {
+        // An image is stored whole or not at all, so what is sent is all of it.
+        if (content.size !== totalBytes) {
+          return invalid("An image's content is the whole image");
+        }
         const image = yield* Result.await(
           storeImage({
             control,
