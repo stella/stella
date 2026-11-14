@@ -19,12 +19,15 @@ const PREVIOUS_RUN_GUARD = "previous-completed-run-owner";
 const EXCLUDED = /\.(?:test|spec|type-test)\.tsx?$|\/__fixtures__\//u;
 const SELF_EXCLUSION = /\bne\(\s*([A-Za-z_$][\w$]*)\.id\s*,/gu;
 
+const lineAt = (source: string, index: number): number =>
+  source.slice(0, index).split("\n").length;
+
 /** The tables a source both filters to completed runs and excludes one run
- *  of by id (with the line of the exclusion): the shape of a "previous
- *  completed run" lookup. */
+ *  of by id, with the lines of both predicates: the shape of a "previous
+ *  completed run" lookup. A change to either line makes the site new. */
 const previousCompletedRunSites = (
   source: string,
-): { table: string; line: number }[] =>
+): { table: string; line: number; lines: number[] }[] =>
   [...source.matchAll(SELF_EXCLUSION)].flatMap((match) => {
     const [, table] = match;
     if (table === undefined) {
@@ -32,10 +35,16 @@ const previousCompletedRunSites = (
     }
     const completed = new RegExp(
       String.raw`\beq\(\s*${table}\.status\s*,\s*"completed"\s*\)`,
-      "u",
+      "gu",
     );
-    const line = source.slice(0, match.index).split("\n").length;
-    return completed.test(source) ? [{ table, line }] : [];
+    const completedLines = [...source.matchAll(completed)].map((found) =>
+      lineAt(source, found.index),
+    );
+    if (completedLines.length === 0) {
+      return [];
+    }
+    const line = lineAt(source, match.index);
+    return [{ table, line, lines: [line, ...completedLines] }];
   });
 
 const previousCompletedRunTables = (source: string): string[] =>
@@ -72,12 +81,14 @@ describe("previous completed run lookup", () => {
       }
       const sites = previousCompletedRunSites(
         await Bun.file(path.join(API_SOURCE, file)).text(),
-      ).filter(({ line }) =>
-        guardEnforcesLine({
-          guard: PREVIOUS_RUN_GUARD,
-          file: `apps/api/src/${file}`,
-          line,
-        }),
+      ).filter(({ lines }) =>
+        lines.some((line) =>
+          guardEnforcesLine({
+            guard: PREVIOUS_RUN_GUARD,
+            file: `apps/api/src/${file}`,
+            line,
+          }),
+        ),
       );
       if (sites.length > 0) {
         offenders.push(
