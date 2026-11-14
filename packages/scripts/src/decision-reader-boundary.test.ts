@@ -310,6 +310,25 @@ const removedReaderImportViolations = (file: string, source: string) => {
   );
 };
 
+/**
+ * A scanned file's text, or `null` when the file is gone by the time it is
+ * read. Generators rewrite their outputs (for one, the MCP apps' bundles
+ * module) while other packages' tests run, so a path the scan listed can be
+ * briefly absent; what is not there imports nothing. Any other failure to
+ * read is still an error.
+ */
+const scannedSource = (file: string): string | null => {
+  const absolute = path.join(repositoryRoot, file);
+  try {
+    return readFileSync(absolute, "utf-8");
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+};
+
 test("web has no second owner for any extracted reader module", () => {
   expect(
     removedReaderPaths.filter((file) =>
@@ -329,10 +348,11 @@ test("source imports never reference any removed reader module", () => {
     for (const file of new Bun.Glob(pattern).scanSync({
       cwd: repositoryRoot,
     })) {
-      for (const specifier of removedReaderImportViolations(
-        file,
-        readFileSync(path.join(repositoryRoot, file), "utf-8"),
-      )) {
+      const source = scannedSource(file);
+      if (source === null) {
+        continue;
+      }
+      for (const specifier of removedReaderImportViolations(file, source)) {
         violations.push({ file, specifier });
       }
     }
@@ -456,13 +476,11 @@ test("MCP decision reader entries use the shared rendering package", () => {
     if (/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file)) {
       continue;
     }
-    expect(
-      mcpReaderRequiresSharedPackage(
-        file,
-        readFileSync(path.join(repositoryRoot, file), "utf-8"),
-      ),
-      file,
-    ).toBe(false);
+    const source = scannedSource(file);
+    if (source === null) {
+      continue;
+    }
+    expect(mcpReaderRequiresSharedPackage(file, source), file).toBe(false);
   }
 });
 
