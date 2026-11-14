@@ -27,7 +27,11 @@ const GRANT_EXPIRES_AT_HEADER: &str = "x-stella-bridge-grant";
 const TOTAL_BYTES_HEADER: &str = "x-stella-output-bytes";
 /// The longest a grant lasts, plus the proof window for a clock that differs.
 const GRANT_MAX_SECONDS: i64 = 300 + 30;
-const STEP_OUTPUT_MAX_BYTES: u64 = 1024 * 1024;
+/// The most of any kept step that is served: the largest of the contract's
+/// caps by kind (an image's). A kept file does not say which kind it holds;
+/// the sidecar writes none past its own kind's cap, and a page takes no more
+/// than the cap of the kind it reads.
+const STEP_OUTPUT_MAX_BYTES: u64 = 10 * 1024 * 1024;
 /// A step file's header line, `{"bytes":<n>}`, is far shorter.
 const STEP_HEADER_MAX_BYTES: u64 = 64;
 const STREAM_CHUNK_BYTES: usize = 64 * 1024;
@@ -249,7 +253,8 @@ fn open_step(file: &std::path::Path) -> Result<OpenedStep, StepRefusal> {
   })
 }
 
-/// The body of a kept step, read and sent in chunks, never past the cap.
+/// The body of a kept step, read and sent in chunks, never past the largest
+/// cap a step is kept under.
 fn streamed(file: std::fs::File) -> axum::body::Body {
   use tokio::io::AsyncReadExt;
   let reader = tokio::fs::File::from_std(file).take(STEP_OUTPUT_MAX_BYTES);
@@ -627,7 +632,11 @@ pub(crate) mod tests {
       GRANT_EXPIRES_AT_HEADER
     );
     assert_eq!(fixtures["headers"]["totalBytes"], TOTAL_BYTES_HEADER);
-    assert_eq!(fixtures["maxBytes"].as_u64(), Some(STEP_OUTPUT_MAX_BYTES));
+    let caps = fixtures["maxBytes"].as_object().unwrap();
+    assert_eq!(
+      caps.values().map(|cap| cap.as_u64().unwrap()).max(),
+      Some(STEP_OUTPUT_MAX_BYTES)
+    );
     assert_eq!(
       fixtures["grantSeconds"]
         .as_i64()
@@ -659,6 +668,8 @@ pub(crate) mod tests {
 
   struct StepPlace {
     root: std::path::PathBuf,
+    /// Where the run's steps are kept.
+    dir: std::path::PathBuf,
     run: uuid::Uuid,
     output_key: String,
   }
@@ -690,6 +701,7 @@ pub(crate) mod tests {
     .unwrap();
     StepPlace {
       root,
+      dir,
       run,
       output_key,
     }
@@ -786,6 +798,32 @@ pub(crate) mod tests {
       read_step(&place, "user-fixture-1", place.run, &"ef".repeat(32)).await;
     assert_eq!(missing.status(), StatusCode::NOT_FOUND);
     assert_eq!(code_of(missing).await, "step_not_kept");
+  }
+
+  #[tokio::test]
+  #[allow(
+    clippy::disallowed_methods,
+    reason = "tests construct local file fixtures"
+  )]
+  async fn a_kept_step_is_served_whole_at_the_cap_and_never_past_it() {
+    let place = step_place();
+    let cap = usize::try_from(STEP_OUTPUT_MAX_BYTES).unwrap();
+    let header = b"{\"bytes\":1}\n";
+    for (step, kept, served) in [
+      ("0a".repeat(32), cap, cap),
+      // A file holding more than any step keeps is cut where it is served.
+      ("0b".repeat(32), cap + 1, cap),
+    ] {
+      let mut file = header.to_vec();
+      file.resize(header.len() + kept, 0x2a);
+      std::fs::write(place.dir.join(&step), file).unwrap();
+      let response = read_step(&place, "user-fixture-1", place.run, &step).await;
+      assert_eq!(response.status(), StatusCode::OK);
+      let bytes = axum::body::to_bytes(response.into_body(), cap + 2)
+        .await
+        .unwrap();
+      assert_eq!(bytes.len(), served);
+    }
   }
 
   #[tokio::test]
