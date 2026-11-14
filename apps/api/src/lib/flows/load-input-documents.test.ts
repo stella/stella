@@ -236,7 +236,7 @@ describe("loadInputDocuments", () => {
       async (tx) => {
         await tx
           .update(entityVersions)
-          .set({ deletedAt: new Date() })
+          .set({ deletedAt: new Date("2026-04-30T09:00:00.000Z") })
           .where(eq(entityVersions.id, versionId));
         const scoped = asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
           async (

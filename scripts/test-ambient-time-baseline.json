@@ -514,16 +514,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/docx-suggestions/reject-pending.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/docx-suggestions/resolve-revert.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/handlers/entities/annotations/document-annotations.db.test.ts": {
     "count": 4,
     "owner": "api",
@@ -1344,11 +1334,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/document-processing-queue.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/document-processing-reconciliation-feeds.db.test.ts": {
     "count": 2,
     "owner": "api",
@@ -1580,7 +1565,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/flows/load-input-documents.test.ts": {
-    "count": 2,
+    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
