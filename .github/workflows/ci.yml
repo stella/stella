@@ -4356,6 +4356,9 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           STELLA_RUN_CORPUS_ENGINE_TESTS: "true"
+          # The service image this job already pulled, for suites whose
+          # engine keeps its metastore in Postgres.
+          STELLA_CORPUS_METASTORE_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
         run: bun scripts/run-corpus-engine-suites.ts
 
       - name: Corpus engine diagnostics and cleanup
