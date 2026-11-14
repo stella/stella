@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import type { ChatLimitReminderResponse } from "@stll/api-contract/chat-limit-reminder";
 
-import { chatLimitReminders } from "@/api/db/schema";
+import { chatLimitReminders, chatTurns } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
   chatThreadNotFound,
@@ -54,7 +54,10 @@ const getChatLimitReminder = createSafeRootHandler(
           return null;
         }
         const [reminder] = await tx
-          .select({ remindAt: chatLimitReminders.remindAt })
+          .select({
+            remindAt: chatLimitReminders.remindAt,
+            turnId: chatLimitReminders.turnId,
+          })
           .from(chatLimitReminders)
           .where(
             and(
@@ -63,7 +66,21 @@ const getChatLimitReminder = createSafeRootHandler(
             ),
           )
           .limit(1);
-        return { reminder };
+        if (reminder === undefined) {
+          return { reminder };
+        }
+        // A reminder kept for an earlier turn sends nothing once a newer turn
+        // exists (the sweep skips it), so it is not shown: the member can ask
+        // again for the newest turn, which replaces it.
+        const [latest] = await tx
+          .select({ id: chatTurns.id })
+          .from(chatTurns)
+          .where(eq(chatTurns.threadId, threadId))
+          .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+          .limit(1);
+        return {
+          reminder: latest?.id === reminder.turnId ? reminder : undefined,
+        };
       }),
     );
     if (found === null) {

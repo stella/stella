@@ -33,6 +33,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { chatThreadRoute } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -386,8 +387,10 @@ const NotificationLink = ({
           <Link
             className={className}
             onClick={onRead}
-            params={{ threadId: target.entityId }}
-            to="/chat/$threadId"
+            {...chatThreadRoute({
+              threadId: target.entityId,
+              workspaceId: target.workspaceId,
+            })}
           />
         }
       >
