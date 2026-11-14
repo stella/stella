@@ -106,7 +106,7 @@ describe("timeout observability", () => {
     const error = new TimeoutError({
       message: "expired",
       label,
-      timeoutMs: 25,
+      timeoutMs: 25, // timeout: a recorded duration, never a deadline
     });
     if (stack !== undefined) {
       error.stack = stack;
