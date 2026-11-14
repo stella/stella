@@ -75,7 +75,10 @@ import {
   useThreadActiveSkill,
 } from "@/features/chat/thread-active-skill-store";
 import { useMarkChatThreadReadWhileOpen } from "@/features/chat/thread-reader-state";
-import { useMakeSkillFromChat } from "@/features/chat/use-make-skill-from-chat";
+import {
+  useMakeSkillFromChat,
+  useSaveDraftedSkill,
+} from "@/features/chat/use-make-skill-from-chat";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -143,7 +146,8 @@ export const ChatThreadPage = ({
   workspaceId,
 }: ChatThreadPageProps) => {
   const t = useTranslations();
-  const makeSkillFromChat = useMakeSkillFromChat();
+  const saveDraftedSkill = useSaveDraftedSkill();
+  const makeSkillFromChat = useMakeSkillFromChat(saveDraftedSkill);
   const { availability, ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);

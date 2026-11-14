@@ -61,6 +61,9 @@ const config = {
   actionAdmission: { type: "handler", actionKind: "skills.draft-from-chat" },
   permissions: { agentSkill: ["create"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  // A read: the draft comes back for review and nothing is stored, like a
+  // proposed answer edit. `skills.save-draft` is the write.
+  access: "read",
   mcp: { type: "internal", reason: "assistant_chat" },
   body: fromChatBodySchema,
   // Like the draft generator: the user waits on a draft, not a reply.

@@ -887,7 +887,7 @@ const ROOT_MUTATION_DISPOSITIONS = {
   },
   "POST /v1/skills/from-chat": {
     type: "non-replay",
-    reason: "external-effect",
+    reason: "read",
   },
   "POST /v1/skills/generate-draft": {
     type: "non-replay",

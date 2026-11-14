@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -21,6 +21,7 @@ import { Label } from "@stll/ui/label";
 import { useMountEffect } from "@/hooks/use-effect";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 import { saveSkillDraft, useMakeSkillReviewStore } from "./make-skill-review";
 import {
@@ -81,29 +82,36 @@ const MakeSkillReviewBody = ({
 }) => {
   const t = useTranslations();
   const tReview = useTranslations("chat.makeSkill.review");
+  const queryClient = useQueryClient();
   const openReview = useMakeSkillReviewStore((store) => store.open);
   const openSaved = useOpenSavedSkill();
   const [kept, setKept] = useState<ReadonlySet<string>>(
     () => new Set(names.map(({ value }) => value)),
   );
   const save = useMutation({
-    mutationFn: async () => {
-      const replaced = names.filter(({ value }) => !kept.has(value));
-      const reviewed = replaceDraftNames(draft, replaced, (kind) =>
-        // The brackets mark a role in skill text, so they are not translated.
-        kind === "person"
-          ? `<${tReview("role.person")}>`
-          : `<${tReview("role.organization")}>`,
-      );
-      // Names kept in an earlier round stay approved: the server checks the
-      // whole draft again on every save.
-      const approvedNow = mergeApprovedNames(approved, kept);
-      return {
-        approvedNow,
-        reviewed,
-        outcome: await saveSkillDraft(reviewed, approvedNow),
-      };
-    },
+    mutationFn: resourceMutation({
+      mutation: "saveSkillDraft",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async () => {
+        const replaced = names.filter(({ value }) => !kept.has(value));
+        const reviewed = replaceDraftNames(draft, replaced, (kind) =>
+          // The brackets mark a role in skill text, so they are not
+          // translated.
+          kind === "person"
+            ? `<${tReview("role.person")}>`
+            : `<${tReview("role.organization")}>`,
+        );
+        // Names kept in an earlier round stay approved: the server checks
+        // the whole draft again on every save.
+        const approvedNow = mergeApprovedNames(approved, kept);
+        return {
+          approvedNow,
+          reviewed,
+          outcome: await saveSkillDraft(reviewed, approvedNow),
+        };
+      },
+    }),
     onSuccess: ({ approvedNow, reviewed, outcome }) => {
       if (outcome.type === "saved") {
         onDone();

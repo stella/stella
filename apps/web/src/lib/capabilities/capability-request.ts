@@ -46,7 +46,7 @@ export type AppOnlyWriteId =
   | "sharepoint.connection.delete"
   | "sharepoint.enablement.update"
   | "sharepoint.imports.create"
-  | "skills.from-chat.create"
+  | "skills.from-chat.read"
   | "skills.save-draft.create";
 
 /** Declares an app-only write that deliberately has no automation capability. */
