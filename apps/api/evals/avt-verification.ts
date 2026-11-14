@@ -575,7 +575,7 @@ const pipelineMode = async (input: CaseInput): Promise<CaseRun> => {
       matchedText: {},
     };
   }
-  const claims = extracted.value;
+  const { claims } = extracted.value;
   // As a run grades: every fact claim, with the passage it sits in.
   const factClaims = claims.flatMap((claim, position) =>
     claim.type === "fact" ? [{ claim, position }] : [],

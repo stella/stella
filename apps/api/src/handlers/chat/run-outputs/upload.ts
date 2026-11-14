@@ -38,7 +38,7 @@ const BEARER = /^Bearer (\S+)$/u;
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 
-type RunOutputCaller = {
+export type RunOutputCaller = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   threadId: SafeId<"chatThread">;
@@ -46,7 +46,7 @@ type RunOutputCaller = {
   recordAuditEvent: AuditRecorder;
 };
 
-type RunOutputDependencies = {
+export type RunCallerDependencies = {
   /** The bearer verifier; the provider's own in production. */
   verifyToken?: VerifyBearerToken;
   resolveContext?: (
@@ -54,6 +54,9 @@ type RunOutputDependencies = {
     options: { request: Request },
   ) => Promise<Pick<RunOutputCaller, "safeDb" | "recordAuditEvent">>;
   readRunThread?: typeof readOpenLocalRunThread;
+};
+
+type RunOutputDependencies = RunCallerDependencies & {
   uploads?: UploadUserFileDependencies;
 };
 
@@ -81,12 +84,12 @@ const unreadable = (message: string, cause: unknown) =>
  * request, names the thread. Live membership is the MCP server's own check, so
  * a token outlives neither a member's access nor the run.
  */
-const verifyRunCaller =
+export const verifyRunCaller =
   ({
     verifyToken,
     resolveContext = resolveMcpSessionContext,
     readRunThread = readOpenLocalRunThread,
-  }: RunOutputDependencies): VerifyCaller<RunOutputCaller> =>
+  }: RunCallerDependencies): VerifyCaller<RunOutputCaller> =>
   async ({ request, params }) => {
     const bearer = BEARER.exec(request.headers.get("authorization") ?? "")?.[1];
     if (bearer === undefined) {

@@ -46,3 +46,10 @@ export const dictationBodySchema = v.strictObject({
   ),
   matterId: v.optional(resourceIdSchema("workspace")),
 });
+
+/** What a linked desktop uploads: the audio chunk, a model and a language.
+ *  It names no matter and sends no vocabulary. */
+export const desktopDictationBodySchema = v.omit(dictationBodySchema, [
+  "matterId",
+  "vocabulary",
+]);
