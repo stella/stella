@@ -140,11 +140,11 @@ const newThread = async (
 };
 
 /**
- * A settled turn of the thread, started `microseconds` after `BASE`. Whatever
- * position the row asks for, the trigger gives it the thread's next.
+ * A settled turn of the thread, started `microseconds` after `BASE`, with
+ * the position the trigger gives it unless `ordinal` supplies one.
  */
 const newTurn = async (
-  transaction: TestDatabaseTransaction,
+  transaction: Pick<TestDatabaseTransaction, "insert">,
   threadId: Thread,
   {
     microseconds = 0,
@@ -249,15 +249,14 @@ const backfill = (batchSize: number) =>
 const run = async (connection: Connection, batchSize = 2) =>
   await backfill(batchSize).repair(connection);
 
-test("a new turn takes the next position of its thread, whatever it asked for", async () => {
+test("a new turn takes the next position of its thread, and another thread counts for itself", async () => {
   await withFixture(async (transaction) => {
     const thread = await newThread(transaction);
     const other = await newThread(transaction);
     expect(await counterOf(transaction, thread)).toBeNull();
 
     const first = await newTurn(transaction, thread);
-    // A row that names a position gets the thread's next all the same.
-    const second = await newTurn(transaction, thread, { ordinal: 40 });
+    const second = await newTurn(transaction, thread);
     // Another thread counts for itself, as a fork does.
     const elsewhere = await newTurn(transaction, other);
 
@@ -267,6 +266,77 @@ test("a new turn takes the next position of its thread, whatever it asked for", 
     expect(positionOf(rows, elsewhere)).toBe(1);
     expect(await counterOf(transaction, thread)).toBe(2);
     expect(await counterOf(transaction, other)).toBe(1);
+  });
+});
+
+test("a turn inserted with a position keeps it, and later turns continue above it", async () => {
+  await withFixture(async (transaction) => {
+    const thread = await newThread(transaction);
+    const first = await newTurn(transaction, thread);
+    const copied = await newTurn(transaction, thread, { ordinal: 40 });
+    expect(await counterOf(transaction, thread)).toBe(40);
+    // Below the counter: kept as it is, and the counter does not go back.
+    const earlier = await newTurn(transaction, thread, { ordinal: 7 });
+    expect(await counterOf(transaction, thread)).toBe(40);
+    const next = await newTurn(transaction, thread);
+
+    const rows = await snapshot(transaction, [thread]);
+    expect(positionOf(rows, first)).toBe(1);
+    expect(positionOf(rows, copied)).toBe(40);
+    expect(positionOf(rows, earlier)).toBe(7);
+    expect(positionOf(rows, next)).toBe(41);
+    expect(await counterOf(transaction, thread)).toBe(41);
+  });
+});
+
+test("turns copied with their positions in any arrival order keep the order as numbered", async () => {
+  await withFixture(async (transaction) => {
+    const thread = await newThread(transaction);
+    // A restore hands rows over in no particular order, at one start time.
+    const arrival = [3, 5, 1, 4, 2];
+    const byPosition = new Map<number, Turn>();
+    for (const ordinal of arrival) {
+      byPosition.set(ordinal, await newTurn(transaction, thread, { ordinal }));
+    }
+    const rows = await snapshot(transaction, [thread]);
+    for (const [ordinal, id] of byPosition) {
+      expect(positionOf(rows, id)).toBe(ordinal);
+    }
+    const newestFirst = await transaction
+      .select({ id: chatTurns.id })
+      .from(chatTurns)
+      .where(sql`${chatTurns.threadId} = ${thread}`)
+      .orderBy(...NEWEST_CHAT_TURN_FIRST);
+    expect(newestFirst.map(({ id }) => id)).toEqual(
+      [5, 4, 3, 2, 1].map(
+        (ordinal) => byPosition.get(ordinal) ?? panic("no such turn"),
+      ),
+    );
+    expect(await counterOf(transaction, thread)).toBe(5);
+    const next = await newTurn(transaction, thread);
+    expect(positionOf(await snapshot(transaction, [thread]), next)).toBe(6);
+  });
+});
+
+test("a position the thread already holds is refused", async () => {
+  await withFixture(async (transaction) => {
+    const thread = await newThread(transaction);
+    const held = await newTurn(transaction, thread);
+    const refused = await Result.tryPromise(
+      async () =>
+        await transaction.transaction(
+          async (attempt) => await newTurn(attempt, thread, { ordinal: 1 }),
+        ),
+    );
+    expect(refused.isErr()).toBe(true);
+    const rows = await snapshot(transaction, [thread]);
+    expect(rows.map(({ id, ordinal }) => ({ id, ordinal }))).toEqual([
+      { id: held, ordinal: 1 },
+    ]);
+    // The refused insert moved nothing: the next turn is the second.
+    expect(await counterOf(transaction, thread)).toBe(1);
+    const next = await newTurn(transaction, thread);
+    expect(positionOf(await snapshot(transaction, [thread]), next)).toBe(2);
   });
 });
 

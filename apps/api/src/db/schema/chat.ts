@@ -307,7 +307,8 @@ export const chatThreads = p.pgTable(
     /**
      * The largest `chat_turns.ordinal` the thread has given out; null until
      * it gives out its first. Written only by the insert trigger on
-     * `chat_turns` and the `chat-turn-ordinals` repair, never by a handler.
+     * `chat_turns` and the `chat-turn-ordinals` repair, never by a handler
+     * (`no-chat-turn-ordinal-write`).
      */
     lastTurnOrdinal: p.integer("last_turn_ordinal"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -619,9 +620,11 @@ export const chatTurns = p.pgTable(
      * The turn's position in its thread by acceptance: unique in the thread,
      * larger for a later turn, never given out twice. The database assigns it
      * as the row is inserted (`assign_chat_turn_ordinal`), under the thread's
-     * lock; an inserted value is replaced. Null only on a turn stored before
-     * the column, until the `chat-turn-ordinals` repair numbers it. Read turn
-     * order through `chat-turn-order.ts`.
+     * lock. Application code never supplies one
+     * (`no-chat-turn-ordinal-write`); a row copied with its number, as a
+     * restore does, keeps it. Null only on a turn stored before the column,
+     * until the `chat-turn-ordinals` repair numbers it. Read turn order
+     * through `lib/chat/turn-order.ts`.
      */
     ordinal: p.integer("ordinal"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),

@@ -15,11 +15,11 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "chat_threads" ADD COLUMN "last_turn_ordinal" integer;--> statement-breakpoint
 ALTER TABLE "chat_turns" ADD COLUMN "ordinal" integer;--> statement-breakpoint
 
--- Every turn gets the next position of its thread as it is inserted, whoever
--- inserts it: this release, an API task of the previous one that is still
--- running, or a test fixture. The thread's row is locked first (every send
--- already holds that lock), and the counter is read by the locking statement
--- itself, so it is the value the previous holder committed.
+-- Every turn inserted without a position gets the next one of its thread,
+-- whoever inserts it: this release, an API task of the previous one that is
+-- still running, or a test fixture. The thread's row is locked first (every
+-- send already holds that lock), and the counter is read by the locking
+-- statement itself, so it is the value the previous holder committed.
 --
 -- A thread that has not given out a position yet starts above the turns it
 -- already holds. Those are numbered later from 1 in their stored order, and
@@ -27,6 +27,13 @@ ALTER TABLE "chat_turns" ADD COLUMN "ordinal" integer;--> statement-breakpoint
 -- one), so they stay below every position given out here and no turn is ever
 -- renumbered. A position is never given out twice: the counter does not go
 -- back when a turn is deleted.
+--
+-- A turn inserted with a position keeps it, so rows copied with their
+-- numbers (a data-only restore, a copy between environments, a repair) keep
+-- their stored order whatever order they arrive in. The thread's counter
+-- moves up to at least that position and never down, and the unique index
+-- refuses a position the thread already holds. Application code supplies
+-- none.
 --
 -- A thread the inserting role cannot see gets no position; the turn's own
 -- row policy and its thread reference refuse that row.
@@ -51,10 +58,14 @@ BEGIN
       FROM public.chat_turns
      WHERE thread_id = NEW.thread_id;
   END IF;
-  NEW.ordinal := given + 1;
-  UPDATE public.chat_threads
-     SET last_turn_ordinal = NEW.ordinal
-   WHERE id = NEW.thread_id;
+  IF NEW.ordinal IS NULL THEN
+    NEW.ordinal := given + 1;
+  END IF;
+  IF NEW.ordinal > given THEN
+    UPDATE public.chat_threads
+       SET last_turn_ordinal = NEW.ordinal
+     WHERE id = NEW.thread_id;
+  END IF;
   RETURN NEW;
 END
 $ordinal$;--> statement-breakpoint
