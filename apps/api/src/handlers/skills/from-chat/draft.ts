@@ -79,36 +79,8 @@ const generationFailed = (cause: unknown) =>
     cause,
   });
 
-/**
- * One model call for the draft. The chat is read through its withdrawn-copy
- * projection and refused before this when it holds a withdrawn copy. The
- * draft goes back for review and is never stored as generated: the member
- * saves it as a skill they author.
- */
-const generateDraft = async <T>({
-  aiAnalytics,
-  generate,
-}: {
-  aiAnalytics: { captureError: (cause: unknown) => void };
-  generate: () => Promise<T>;
-}): Promise<Result<T, HandlerError>> => {
-  const generation = await Result.tryPromise({
-    try: async () =>
-      await generateArtefact({
-        generator: "apps/api/src/handlers/skills/from-chat/draft.ts",
-        sources: { decisionIds: [], inputs: [] },
-        generate,
-      }),
-    catch: (cause) => {
-      aiAnalytics.captureError(cause);
-      return generationFailed(cause);
-    },
-  });
-  if (Result.isError(generation)) {
-    return Result.err(generation.error);
-  }
-  return generation.value.map(readUnsourcedArtefact).mapError(generationFailed);
-};
+/** The chat's draft goes back for review and is never stored as generated. */
+const GENERATOR = "apps/api/src/handlers/skills/from-chat/draft.ts";
 
 /**
  * Draft a skill from one of the caller's own chats. The chat is read as the
@@ -256,34 +228,50 @@ const draftSkillFromChat = createSafeRootHandler(
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });
-    const generated = await generateDraft({
-      aiAnalytics,
-      generate: async () =>
-        await generateTanStackObjectForTask({
-          userId: user.id,
-          dataClass: "customer",
-          admission: configuredModelAdmission({ modelAdmission }),
-          deadlineMs: GENERATION_TIMEOUT_MS,
-          maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
-          task: "short-text",
-          serviceTier: "flex",
-          orgAIConfig,
-          managedAIResidency,
-          organizationId: session.activeOrganizationId,
-          tenantWorkspaceIds: workspaceId === null ? [] : [workspaceId],
-          analytics: aiAnalytics,
-          caching: resolveCaching({
-            promptCachingEnabled,
-            task: "short-text",
-            scopeKey: `${session.activeOrganizationId}:skills:from-chat`,
-          }),
-          outputSchema: aiGenerationSchema,
-          prompt: buildSkillDraftPrompt({
-            intent: body.intent ?? DEFAULT_INTENT,
-            sourceTranscript: transcript,
-          }),
+    // The chat was refused above if it holds a withdrawn copy; the member
+    // saves the reviewed draft as a skill they author.
+    const generation = await Result.tryPromise({
+      try: async () =>
+        await generateArtefact({
+          generator: GENERATOR,
+          sources: { decisionIds: [], inputs: [] },
+          generate: async () =>
+            await generateTanStackObjectForTask({
+              userId: user.id,
+              dataClass: "customer",
+              admission: configuredModelAdmission({ modelAdmission }),
+              deadlineMs: GENERATION_TIMEOUT_MS,
+              maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
+              task: "short-text",
+              serviceTier: "flex",
+              orgAIConfig,
+              managedAIResidency,
+              organizationId: session.activeOrganizationId,
+              tenantWorkspaceIds: workspaceId === null ? [] : [workspaceId],
+              analytics: aiAnalytics,
+              caching: resolveCaching({
+                promptCachingEnabled,
+                task: "short-text",
+                scopeKey: `${session.activeOrganizationId}:skills:from-chat`,
+              }),
+              outputSchema: aiGenerationSchema,
+              prompt: buildSkillDraftPrompt({
+                intent: body.intent ?? DEFAULT_INTENT,
+                sourceTranscript: transcript,
+              }),
+            }),
         }),
+      catch: (cause) => {
+        aiAnalytics.captureError(cause);
+        return generationFailed(cause);
+      },
     });
+    if (Result.isError(generation)) {
+      return Result.err(generation.error);
+    }
+    const generated = generation.value
+      .map(readUnsourcedArtefact)
+      .mapError(generationFailed);
     if (Result.isError(generated)) {
       return Result.err(generated.error);
     }
