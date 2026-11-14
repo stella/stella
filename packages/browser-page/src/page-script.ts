@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import type {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_KEYS,
