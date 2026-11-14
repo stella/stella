@@ -567,4 +567,16 @@ export const VERIFICATION_LIMITS = {
   /** Characters of a fact's text, a source quote or a source's document
    *  name pinned on a run. */
   EVIDENCE_TEXT_MAX: 2000,
+  /** Verified documents one page of a list's verification graph reads. */
+  GRAPH_STATEMENTS_PAGE_MAX: 50,
+  /** Claims one page of a list's verification graph carries; a document
+   *  with more continues on the next page. */
+  GRAPH_CLAIMS_PAGE_MAX: 500,
+  /** Facts of the list the first page of its verification graph carries. */
+  GRAPH_FACTS_MAX: 1000,
+  /** Verified documents and claims one chronology export reads, as one
+   *  page of the verification graph; a list verified past them is refused,
+   *  never exported in part. */
+  CHRONOLOGY_EXPORT_DOCUMENTS_MAX: 200,
+  CHRONOLOGY_EXPORT_CLAIMS_MAX: 10_000,
 } as const;

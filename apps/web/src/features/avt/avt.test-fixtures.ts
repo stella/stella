@@ -97,6 +97,7 @@ export const makeClaim = ({
   text: `Claim ${String(suffix)}`,
   assertedOn,
   anchor,
+  paragraph: null,
   refs,
   review,
   recheck,

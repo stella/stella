@@ -241,6 +241,12 @@
       "showSources": "Pokaż źródła",
       "title": "Fakty referencyjne"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# twierdzenie opiera się na tym fakcie} few {# twierdzenia opierają się na tym fakcie} many {# twierdzeń opiera się na tym fakcie} other {# twierdzenia opiera się na tym fakcie}}",
+      "empty": "Ta lista nie ma jeszcze żadnych faktów.",
+      "moreClaims": "{count, plural, one {# kolejne twierdzenie} few {# kolejne twierdzenia} many {# kolejnych twierdzeń} other {# kolejnego twierdzenia}}",
+      "undated": "Bez daty"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Fakty referencyjne są sprzeczne",
@@ -407,6 +413,42 @@
       "showNextSteps": "Pokaż kolejne kroki",
       "unlink": "Usuń powiązanie: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# twierdzenie} few {# twierdzenia} many {# twierdzeń} other {# twierdzenia}}",
+      "claimTitle": "Twierdzenie",
+      "columns": {
+        "claims": "Twierdzenia",
+        "sources": "Dokumenty źródłowe",
+        "statements": "Oświadczenia"
+      },
+      "empty": "Ta lista nie ma jeszcze żadnych faktów ani zweryfikowanych dokumentów.",
+      "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktów} other {# faktu}}",
+      "factOverflow": "Wyświetlane jest pierwszych {count} faktów z tej listy.",
+      "filters": {
+        "allSources": "Wszystkie źródła",
+        "allVerdicts": "Wszystkie rozstrzygnięcia",
+        "conflicts": "Sprzeczności",
+        "heldFacts": "Wstrzymane fakty",
+        "source": "Filtruj według źródła",
+        "verdict": "Filtruj według rozstrzygnięcia"
+      },
+      "held": "Wstrzymany",
+      "linkedFacts": "{count, plural, one {# powiązany fakt} few {# powiązane fakty} many {# powiązanych faktów} other {# powiązanego faktu}}",
+      "listLabel": "Graf w formie listy",
+      "loadMore": "Załaduj więcej dokumentów",
+      "noMatch": "Nic nie pasuje do tych filtrów.",
+      "noStatements": "Żaden dokument nie został jeszcze zweryfikowany względem tej listy.",
+      "offList": "Nie ma go już na liście",
+      "relation": {
+        "conflicts": "Przeczy",
+        "governs": "Nadrzędny",
+        "record": "W rejestrze",
+        "recordConflict": "Sprzeczny wpis",
+        "supports": "Potwierdza"
+      },
+      "unlinked": "Fakty, na których nie opiera się żadne twierdzenie",
+      "verifyInReview": "Zweryfikuj dokument"
+    },
     "guidance": {
       "escalate": "Przekaż dalej",
       "manualJudgement": "Wymaga decyzji",
@@ -460,6 +502,12 @@
     "matches": {
       "count": "{count, plural, one {# trafienie} few {# trafienia} many {# trafień} other {# trafienia}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologia",
+      "graph": "Graf",
+      "label": "Pokaż listę jako",
+      "review": "Weryfikacja"
     },
     "qualifiers": {
       "heading": "Zastrzeżenia",
@@ -1875,6 +1923,8 @@
       "folderStateProtected": "Zawiera własne dane stelli",
       "folderStateUnlinked": "Już niepołączony",
       "folderStateUnreadable": "Nie można odczytać",
+      "limitReminderNotify": "Powiadom mnie po odnowieniu",
+      "limitReminderScheduled": "Powiadomimy Cię po {time}.",
       "permissionAboveLimit": "Twoja organizacja na to nie pozwala",
       "permissionAskDescription": "Sam edytuje pliki w folderze czatu; o wszystko inne pyta.",
       "permissionAutoDescription": "Sam robi to, co uznaje za bezpieczne; o resztę pyta.",
@@ -2110,6 +2160,7 @@
     "sendErrorStreamIncomplete": "Odpowiedź AI urwała się przed zakończeniem. Spróbuj ponownie.",
     "sendErrorTimedOut": "Czat nie odpowiedział na czas. Spróbuj ponownie.",
     "sendErrorToolsUnsupported": "Ten model nie może używać narzędzi, więc nie może odpowiadać na pytania dotyczące Twojej sprawy. Przełącz się na model, który obsługuje narzędzia.",
+    "sendErrorTurnTooLarge": "Ta odpowiedź stała się zbyt duża, aby dostarczyć ją w całości. Wyślij nową wiadomość, aby kontynuować.",
     "sendPrompt": "Wyślij wiadomość",
     "sendQueuedMessageNow": "Wyślij teraz",
     "sendWithoutAnonymization": "Wyślij bez anonimizacji",
@@ -5061,6 +5112,7 @@
       "flowRunAwaitingApproval": "Przepływ pracy <bdi>{flowName}</bdi> czeka na Twoje zatwierdzenie",
       "flowRunCompleted": "Przepływ pracy <bdi>{flowName}</bdi> został zakończony",
       "flowRunFailed": "Przepływ pracy <bdi>{flowName}</bdi> nie powiódł się",
+      "localRunLimitReset": "Agent programistyczny na Twoim komputerze może kontynuować Twój czat",
       "mention": "<bdi>{actorName}</bdi> wspomniał o Tobie w komentarzu",
       "reportExportFailed": "Eksport raportu nie powiódł się",
       "reportExportSucceeded": "Twój raport jest gotowy",

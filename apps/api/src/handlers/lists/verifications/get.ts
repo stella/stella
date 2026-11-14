@@ -26,7 +26,10 @@ const config = {
     "it rests on a held fact), the facts it " +
     "rests on, for a record conflict the fact suggested to govern it (the " +
     "document's record over a witness's account; null when neither), and " +
-    "the claim's current review (null while nobody has acted on it). Each " +
+    "the claim's current review (null while nobody has acted on it). A " +
+    "claim's `paragraph` is the printed number of the paragraph it sits in " +
+    "(null when the document's numbering is unclear or the claim is outside " +
+    "a numbered paragraph). Each " +
     "claim's `staleness` says why its grade may no longer stand on the list " +
     "as it is now: a fact the grade cites was edited (`fact-changed`), held " +
     "out of scoring (`fact-held`) or taken off the list (`fact-removed`), or " +

@@ -241,6 +241,12 @@
       "showSources": "Zobrazit zdroje",
       "title": "Referenční fakta"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# tvrzení se opírá o tento fakt} few {# tvrzení se opírají o tento fakt} many {# tvrzení se opírá o tento fakt} other {# tvrzení se opírá o tento fakt}}",
+      "empty": "Tento seznam zatím nemá žádná fakta.",
+      "moreClaims": "{count, plural, one {# další tvrzení} few {# další tvrzení} many {# dalšího tvrzení} other {# dalších tvrzení}}",
+      "undated": "Bez data"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Referenční fakta si odporují",
@@ -407,6 +413,42 @@
       "showNextSteps": "Zobrazit další kroky",
       "unlink": "Zrušit propojení: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# tvrzení} few {# tvrzení} many {# tvrzení} other {# tvrzení}}",
+      "claimTitle": "Tvrzení",
+      "columns": {
+        "claims": "Tvrzení",
+        "sources": "Zdrojové dokumenty",
+        "statements": "Prohlášení"
+      },
+      "empty": "Tento seznam zatím nemá žádná fakta ani ověřené dokumenty.",
+      "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktu} other {# faktů}}",
+      "factOverflow": "Zobrazuje se prvních {count} faktů tohoto seznamu.",
+      "filters": {
+        "allSources": "Všechny zdroje",
+        "allVerdicts": "Všechny závěry",
+        "conflicts": "Rozpory",
+        "heldFacts": "Pozastavená fakta",
+        "source": "Filtrovat podle zdroje",
+        "verdict": "Filtrovat podle závěru"
+      },
+      "held": "Pozastaveno",
+      "linkedFacts": "{count, plural, one {# propojený fakt} few {# propojené fakty} many {# propojeného faktu} other {# propojených faktů}}",
+      "listLabel": "Graf jako seznam",
+      "loadMore": "Načíst další dokumenty",
+      "noMatch": "Těmto filtrům nic neodpovídá.",
+      "noStatements": "Vůči tomuto seznamu zatím nebyl ověřen žádný dokument.",
+      "offList": "Už není v seznamu",
+      "relation": {
+        "conflicts": "Odporuje",
+        "governs": "Rozhodující",
+        "record": "V záznamech",
+        "recordConflict": "Rozporný záznam",
+        "supports": "Podporuje"
+      },
+      "unlinked": "Fakta, o která se neopírá žádné tvrzení",
+      "verifyInReview": "Ověřit dokument"
+    },
     "guidance": {
       "escalate": "Předat dál",
       "manualJudgement": "Vyžaduje úsudek",
@@ -460,6 +502,12 @@
     "matches": {
       "count": "{count, plural, one {# shoda} few {# shody} other {# shod} many {# shody}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologie",
+      "graph": "Graf",
+      "label": "Zobrazit seznam jako",
+      "review": "Kontrola"
     },
     "qualifiers": {
       "heading": "Výhrady",
@@ -1875,6 +1923,8 @@
       "folderStateProtected": "Obsahuje vlastní data stelly",
       "folderStateUnlinked": "Už není propojená",
       "folderStateUnreadable": "Nelze přečíst",
+      "limitReminderNotify": "Upozornit mě, až se obnoví",
+      "limitReminderScheduled": "Upozorníme vás po {time}.",
       "permissionAboveLimit": "Vaše organizace to nepovoluje",
       "permissionAskDescription": "Soubory ve složce chatu upravuje sám; na vše ostatní se zeptá.",
       "permissionAutoDescription": "Co považuje za bezpečné, udělá sám; na zbytek se zeptá.",
@@ -2110,6 +2160,7 @@
     "sendErrorStreamIncomplete": "Odpověď AI se přerušila dřív, než byla dokončena. Zkuste to znovu.",
     "sendErrorTimedOut": "Chat neodpověděl včas. Zkuste to znovu.",
     "sendErrorToolsUnsupported": "Tento model neumí používat nástroje, takže nemůže odpovídat na otázky k vašemu spisu. Přepněte na model, který nástroje podporuje.",
+    "sendErrorTurnTooLarge": "Tato odpověď je příliš velká na to, aby se dala doručit celá. Pokračujte novou zprávou.",
     "sendPrompt": "Odeslat zprávu",
     "sendQueuedMessageNow": "Odeslat hned",
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
@@ -5061,6 +5112,7 @@
       "flowRunAwaitingApproval": "Pracovní postup <bdi>{flowName}</bdi> čeká na vaše schválení",
       "flowRunCompleted": "Pracovní postup <bdi>{flowName}</bdi> byl dokončen",
       "flowRunFailed": "Pracovní postup <bdi>{flowName}</bdi> selhal",
+      "localRunLimitReset": "Programovací agent ve vašem počítači může pokračovat ve vašem chatu",
       "mention": "<bdi>{actorName}</bdi> vás zmínil v komentáři",
       "reportExportFailed": "Export vaší zprávy se nezdařil",
       "reportExportSucceeded": "Vaše zpráva je připravena",
