@@ -71,10 +71,10 @@ import {
   claimQualifiers,
   restingFactIds,
 } from "@/api/lib/lists/verification/qualifiers";
-import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
+import { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 import {
   computeRawUsageMicroUnits,
   normalizeProviderPromptTokens,
@@ -329,8 +329,9 @@ const engineDeps = ({
     await Promise.resolve(
       spentUsd() >= maxUsd
         ? Result.err(
-            new ListVerificationRunCapError({
+            new ModelRunCapError({
               message: `Eval spend reached ${maxUsd.toFixed(2)} USD`,
+              kind: "list-run",
               reason: "daily",
               hint: "Raise --max-usd or run fewer claims",
             }),
