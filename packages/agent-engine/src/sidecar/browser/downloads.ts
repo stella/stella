@@ -374,28 +374,34 @@ const fillTarget = async (
   const identity = await Result.tryPromise(
     async () => await target.handle.stat({ bigint: true }),
   );
-  if (Result.isError(identity)) {
-    // Nothing was written: an empty file whose identity is unknown stays.
-    await Result.tryPromise(async () => await target.handle.close());
-    return Result.err("unwritable");
-  }
-  const filled = await Result.tryPromise(
-    async () => await copyBounded(source, target.handle),
-  );
+  // Without it nothing is written: an empty file whose identity is unknown
+  // stays.
+  const filled = Result.isOk(identity)
+    ? await Result.tryPromise(
+        async () => await copyBounded(source, target.handle),
+      )
+    : Result.err(identity.error);
   const complete = Result.isOk(filled) && filled.value.type === "copied";
   // Whatever an unfinished copy wrote goes, through the file's own descriptor.
-  const emptied = complete
-    ? Result.ok(undefined)
-    : await Result.tryPromise(async () => {
-        await target.handle.truncate(0);
-      });
+  const emptied =
+    complete || Result.isError(identity)
+      ? Result.ok(undefined)
+      : await Result.tryPromise(async () => {
+          await target.handle.truncate(0);
+        });
   const closed = await Result.tryPromise(
     async () => await target.handle.close(),
   );
   if (complete && Result.isOk(filled) && Result.isOk(closed)) {
     return Result.ok(filled.value);
   }
-  await removeWorkspaceFile(workspaceDir, target.relativePath, identity.value);
+  if (Result.isOk(identity)) {
+    await removeWorkspaceFile(
+      workspaceDir,
+      target.relativePath,
+      identity.value,
+    );
+  }
   return Result.isOk(filled) && Result.isOk(emptied) && Result.isOk(closed)
     ? Result.ok(filled.value)
     : Result.err("unwritable");
