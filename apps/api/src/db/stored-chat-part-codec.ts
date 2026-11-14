@@ -7,6 +7,8 @@
 // the model), and is written back exactly as stored. The column carries an
 // unknown type; the stored reader carries every other part it cannot decode.
 // Parts are never dropped or reordered, so a path into `data` stays valid.
+// A sub-agent part stores each of its child's messages as content of this
+// same shape, so every rule here holds inside it too, at every depth.
 
 import type { MessagePart } from "@tanstack/ai-client";
 
@@ -24,13 +26,14 @@ export const STORED_CHAT_PART_TYPES = {
   document: true,
   image: true,
   "structured-output": true,
+  subagent: true,
   text: true,
   thinking: true,
   "tool-call": true,
   "tool-result": true,
   "ui-resource": true,
   video: true,
-} as const satisfies Record<Exclude<MessagePart["type"], "subagent">, true>;
+} as const satisfies Record<MessagePart["type"], true>;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -48,8 +51,43 @@ export const carriedChatPart = (part: unknown): UnsupportedChatPart => ({
   content: { part },
 });
 
-/** `data` with `map` applied to each part, or `content` itself when no part
- *  changes, so a row without such parts passes through untouched. */
+const sameItems = (left: readonly unknown[], right: readonly unknown[]) =>
+  left.every((item, index) => item === right.at(index));
+
+/** A stored sub-agent part with `map` applied to the content of each of its
+ *  child's messages, or `part` itself when none changes. */
+const mapChildContents = (
+  part: unknown,
+  map: (content: unknown) => unknown,
+): unknown => {
+  if (
+    !isRecord(part) ||
+    part["type"] !== "subagent" ||
+    !isRecord(part["subagent"])
+  ) {
+    return part;
+  }
+  const subagent = part["subagent"];
+  const stored: unknown = subagent["messages"];
+  if (!Array.isArray(stored)) {
+    return part;
+  }
+  const messages: readonly unknown[] = stored;
+  const mapped = messages.map((message) => {
+    if (!isRecord(message)) {
+      return message;
+    }
+    const content = map(message["content"]);
+    return content === message["content"] ? message : { ...message, content };
+  });
+  return sameItems(mapped, messages)
+    ? part
+    : { ...part, subagent: { ...subagent, messages: mapped } };
+};
+
+/** `data` with `map` applied to each part, at every depth, or `content`
+ *  itself when no part changes, so a row without such parts passes through
+ *  untouched. */
 const mapParts = (
   content: unknown,
   map: (part: unknown) => unknown,
@@ -58,10 +96,12 @@ const mapParts = (
     return content;
   }
   const data: unknown[] = content["data"];
-  const mapped = data.map(map);
-  return mapped.every((part, index) => part === data.at(index))
-    ? content
-    : { ...content, data: mapped };
+  // `map` first: writing back unwraps a carried sub-agent part, whose child
+  // content then still holds carried parts of its own.
+  const mapped = data.map((part) =>
+    mapChildContents(map(part), (child) => mapParts(child, map)),
+  );
+  return sameItems(mapped, data) ? content : { ...content, data: mapped };
 };
 
 /** Stored content as this release reads it: a part of a type it cannot read

@@ -16,7 +16,36 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 // reading it must load it as written: every optional field the store keeps is
 // optional on read as well.
 
-type StoredPartType = Exclude<ChatPart["type"], "subagent">;
+type StoredPartType = ChatPart["type"];
+
+/** A sub-agent run's child messages, as its newest writer stores them. */
+const childMessages = (): Extract<
+  ChatPart,
+  { type: "subagent" }
+>["subagent"]["messages"] => [
+  {
+    id: "child-1",
+    parts: [{ content: "Open the register.", type: "text" }],
+    role: "user",
+  },
+  {
+    id: "child-2",
+    parts: [
+      {
+        arguments: '{"url":"https://example.test"}',
+        id: "child-call-1",
+        input: { url: "https://example.test" },
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+        name: "use-browser",
+        output: { status: "error" },
+        state: "complete",
+        type: "tool-call",
+      },
+      { content: "The register is closed.", type: "text" },
+    ],
+    role: "assistant",
+  },
+];
 
 type PartAcrossReleases<TType extends StoredPartType> = {
   /** The part with only the fields every release writes. */
@@ -25,7 +54,7 @@ type PartAcrossReleases<TType extends StoredPartType> = {
   latest: Extract<ChatPart, { type: TType }>;
 };
 
-/** One part of every stored type (the engine never stores `subagent`). */
+/** One part of every stored type. */
 const PARTS_ACROSS_RELEASES = {
   activity: {
     earliest: {
@@ -91,6 +120,33 @@ const PARTS_ACROSS_RELEASES = {
       reasoning: "Both parties disclose.",
       status: "complete",
       type: "structured-output",
+    },
+  },
+  subagent: {
+    earliest: {
+      subagent: {
+        id: "subagent-run-1",
+        messages: childMessages(),
+        name: "browse",
+        parentToolCallId: "call-1",
+        status: "finished",
+      },
+      type: "subagent",
+    },
+    latest: {
+      subagent: {
+        description: "Reads pages for the task.",
+        error: { code: "child_failed", message: "The child failed." },
+        id: "subagent-run-1",
+        messages: childMessages(),
+        metadata: { tanstack: { depth: 1 } },
+        name: "browse",
+        parentRunId: "run-1",
+        parentSubagentRunId: "subagent-run-0",
+        parentToolCallId: "call-1",
+        status: "error",
+      },
+      type: "subagent",
     },
   },
   text: {

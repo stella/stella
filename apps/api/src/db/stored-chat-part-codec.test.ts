@@ -46,6 +46,19 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type StoredPartType = keyof typeof STORED_CHAT_PART_TYPES;
 
+/** A sub-agent run's child messages: stored as content of their own, so a
+ *  newer release's additions inside them are that content's own case. */
+const subagentMessages = (): Extract<
+  ChatPart,
+  { type: "subagent" }
+>["subagent"]["messages"] => [
+  {
+    id: "child-1",
+    parts: [{ content: "The register is closed.", type: "text" }],
+    role: "assistant",
+  },
+];
+
 /** One part of every type this release stores, every field it knows set. */
 const CURRENT_PARTS = {
   activity: {
@@ -75,6 +88,22 @@ const CURRENT_PARTS = {
     raw: '{"mutual":true}',
     status: "complete",
     type: "structured-output",
+  },
+  subagent: {
+    subagent: {
+      description: "Reads pages for the task.",
+      error: { code: "child_failed", message: "The child failed." },
+      id: "subagent-run-1",
+      interruptIds: ["interrupt-1"],
+      messages: subagentMessages(),
+      metadata: { depth: 1 },
+      name: "browse",
+      parentRunId: "run-1",
+      parentSubagentRunId: "subagent-run-0",
+      parentToolCallId: "call-1",
+      status: "error",
+    },
+    type: "subagent",
   },
   text: { content: "The NDA is mutual.", type: "text" },
   thinking: {
@@ -150,6 +179,7 @@ const FREE_FIELDS: Record<StoredPartType, readonly Path[]> = {
   document: [["metadata"]],
   image: [["metadata"]],
   "structured-output": [["data"], ["partial"]],
+  subagent: [["subagent", "metadata"]],
   text: [["metadata"], ["providerMetadata"]],
   thinking: [["providerMetadata"]],
   "tool-call": [
@@ -171,6 +201,7 @@ const ENUM_FIELDS: Record<StoredPartType, readonly Path[]> = {
   document: [["source", "type"]],
   image: [["source", "type"]],
   "structured-output": [["status"]],
+  subagent: [["subagent", "status"]],
   text: [],
   thinking: [],
   "tool-call": [
@@ -195,14 +226,19 @@ const KNOWN_FIELD_NAMES = new Set([
   "approved",
   "blob",
   "call",
+  "code",
   "content",
   "createdAt",
   "data",
+  "description",
   "error",
   "errorMessage",
   "format",
   "id",
   "input",
+  "interruptIds",
+  "message",
+  "messages",
   "meta",
   "metadata",
   "mimeType",
@@ -211,6 +247,9 @@ const KNOWN_FIELD_NAMES = new Set([
   "needsApproval",
   "outcome",
   "output",
+  "parentRunId",
+  "parentSubagentRunId",
+  "parentToolCallId",
   "partial",
   "provenance",
   "provider",
@@ -227,6 +266,7 @@ const KNOWN_FIELD_NAMES = new Set([
   "state",
   "status",
   "stepId",
+  "subagent",
   "subagentRunId",
   "text",
   "toolCallId",
@@ -746,6 +786,85 @@ describe("stored chat content across releases", () => {
       ),
     });
     expect(encode(load(stored))).toEqual(stored);
+  });
+
+  test("a carried sub-agent part writes its child's carried parts back as stored", () => {
+    // A status this release cannot read carries the whole part, and a part
+    // type it cannot read inside its child is carried there too.
+    const stored = throughJson({
+      ...currentStored(),
+      data: [
+        {
+          subagent: {
+            id: "subagent-run-1",
+            messages: [
+              {
+                content: {
+                  data: [
+                    { content: "Hotovo.", type: "text" },
+                    { note: SENTINEL, type: "citation" },
+                  ],
+                  version: 3,
+                },
+                id: "child-1",
+                role: "assistant",
+              },
+            ],
+            name: "browse",
+            parentToolCallId: "call-1",
+            status: "later-status",
+          },
+          type: "subagent",
+        },
+      ],
+    });
+    const message = load(stored);
+    expect(message.parts.filter(isUnsupportedChatPart)).toHaveLength(1);
+    for (const save of Object.values(SAVES)) {
+      expect(save(message)).toEqual(stored);
+    }
+  });
+
+  test("a sub-agent part whose child message or content a newer release extended is carried and written back as stored", () => {
+    const child = {
+      content: {
+        data: [{ content: "Hotovo.", type: "text" }],
+        version: 3,
+      },
+      id: "child-1",
+      role: "assistant",
+    };
+    const subagentWith = (message: unknown) => ({
+      subagent: {
+        id: "subagent-run-1",
+        messages: [message],
+        name: "browse",
+        parentToolCallId: "call-1",
+        status: "finished",
+      },
+      type: "subagent",
+    });
+    for (const message of [
+      { ...child, later: SENTINEL },
+      { ...child, content: { ...child.content, later: SENTINEL } },
+      { ...child, content: { ...child.content, version: 4 } },
+    ]) {
+      const stored = throughJson({
+        ...currentStored(),
+        data: [subagentWith(message)],
+      });
+      const loaded = load(stored);
+      expect(loaded.parts.filter(isUnsupportedChatPart)).toHaveLength(1);
+      expect(modelInput(loaded)).not.toContain(SENTINEL);
+      for (const save of Object.values(SAVES)) {
+        expect(save(loaded)).toEqual(stored);
+      }
+    }
+    // A child this release reads whole is decoded, not carried.
+    const known = load(
+      throughJson({ ...currentStored(), data: [subagentWith(child)] }),
+    );
+    expect(known.parts.filter(isUnsupportedChatPart)).toHaveLength(0);
   });
 
   test("saving keeps every part a newer release stored, past this release's rich-part budget", () => {

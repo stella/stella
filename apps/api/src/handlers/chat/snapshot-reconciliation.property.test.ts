@@ -1071,14 +1071,29 @@ const subagentLifecycleArbitrary = fc.record({
   ),
 });
 
+// What each status adds to a run's handle, as the SDK's stream processor
+// writes it: a failed run its error, a suspended run the interrupts it waits on.
+const SUBAGENT_LIFECYCLE_STATUS_FIELDS = {
+  error: { error: { message: "The child run failed." } },
+  finished: {},
+  running: {},
+  suspended: { interruptIds: ["lifecycle-interrupt"] },
+} as const satisfies Record<
+  SubagentPart["subagent"]["status"],
+  Partial<SubagentPart["subagent"]>
+>;
+
+// A tool-mode run (chat stores only those): started by a parent tool call.
 const subagentLifecyclePart = (
   status: SubagentPart["subagent"]["status"],
   content: string,
 ): SubagentPart => ({
   type: "subagent",
   subagent: {
+    ...SUBAGENT_LIFECYCLE_STATUS_FIELDS[status],
     id: "lifecycle-child",
     name: "Review",
+    parentToolCallId: "lifecycle-call",
     status,
     messages: [
       {
@@ -2147,6 +2162,7 @@ const occurrenceFixtures = (token: string) =>
       subagent: {
         id: "occurrence-child",
         name: "Review",
+        parentToolCallId: "occurrence-call",
         status: "finished",
         messages: [],
       },
@@ -2267,8 +2283,8 @@ test(
           }
           // Identity keys describe content, not cardinality. Each repeated
           // snapshot slot remains a distinct ordered transcript occurrence.
-          // Persistence deliberately drops SDK subagent cards. Reconciliation
-          // still preserves every kind below; compare storage through its policy.
+          // Reconciliation preserves every kind below; compare storage through
+          // its policy, which normalizes what it persists.
           const expectedPersisted = expected.flatMap((part) => {
             const decision = classifyChatPartForPersistence(part);
             return decision.type === "persist" ? [decision.part] : [];
