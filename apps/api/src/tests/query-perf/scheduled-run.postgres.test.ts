@@ -99,151 +99,185 @@ describe.skipIf(!enabled)("scheduled receipt measurement (postgres)", () => {
   });
 });
 
+// Each case registers through its own test() call under a literal title: the
+// flaky-test quarantine wraps plain test registrations by title, not test.each.
+const EXPORT_CASES = [
+  [
+    "export measurement executes auto / quiet once without replaying writes",
+    "auto",
+    "quiet",
+  ],
+  [
+    "export measurement executes auto / transitions once without replaying writes",
+    "auto",
+    "transitions",
+  ],
+  [
+    "export measurement executes auto / queued once without replaying writes",
+    "auto",
+    "queued",
+  ],
+  [
+    "export measurement executes force_generic_plan / quiet once without replaying writes",
+    "force_generic_plan",
+    "quiet",
+  ],
+  [
+    "export measurement executes force_generic_plan / transitions once without replaying writes",
+    "force_generic_plan",
+    "transitions",
+  ],
+  [
+    "export measurement executes force_generic_plan / queued once without replaying writes",
+    "force_generic_plan",
+    "queued",
+  ],
+] as const;
+
 describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
-  test.each([
-    ["auto", "quiet"],
-    ["auto", "transitions"],
-    ["auto", "queued"],
-    ["force_generic_plan", "quiet"],
-    ["force_generic_plan", "transitions"],
-    ["force_generic_plan", "queued"],
-  ] as const)(
-    "export measurement executes %s / %s once without replaying writes",
-    async (planCacheMode, cohort) => {
-      await withQueryPerfFixture({
-        databaseUrl:
-          process.env["STELLA_POSTGRES_TEST_TEMPLATE_URL"] ??
-          process.env["DATABASE_URL"] ??
-          panic("Missing PostgreSQL test URL"),
-        profileId: "corpus",
-        run: async (_database, _deadline, openClient) => {
-          const { db } = openClient({
-            max: 1,
-            connection: {
-              ...QUERY_PERF_CONNECTION_SETTINGS,
-              plan_cache_mode: planCacheMode,
+  const measureExport = async (
+    planCacheMode: (typeof EXPORT_CASES)[number][1],
+    cohort: (typeof EXPORT_CASES)[number][2],
+  ): Promise<void> => {
+    await withQueryPerfFixture({
+      databaseUrl:
+        process.env["STELLA_POSTGRES_TEST_TEMPLATE_URL"] ??
+        process.env["DATABASE_URL"] ??
+        panic("Missing PostgreSQL test URL"),
+      profileId: "corpus",
+      run: async (_database, _deadline, openClient) => {
+        const { db } = openClient({
+          max: 1,
+          connection: {
+            ...QUERY_PERF_CONNECTION_SETTINGS,
+            plan_cache_mode: planCacheMode,
+          },
+        });
+        expect(
+          executedRows(
+            await db.execute(
+              sql`SELECT rolsuper, rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = current_user`,
+            ),
+          ).at(0),
+        ).toEqual({ rolsuper: false, rolbypassrls: false });
+        const exportRows = async () =>
+          await db
+            .select({
+              id: organizationDataExports.id,
+              status: organizationDataExports.status,
+              attempt: organizationDataExports.attempt,
+              failures: organizationDataExports.failures,
+            })
+            .from(organizationDataExports)
+            .orderBy(asc(organizationDataExports.id))
+            .limit(12_000);
+        const measuredRuns = new Map<
+          string,
+          Awaited<ReturnType<typeof measureScheduledJobRun>>
+        >();
+        for (const rows of [6000, 12_000]) {
+          const scenario = {
+            type: "data-exports",
+            rows,
+            cohort,
+          } as const;
+          await seedDataExportScenario(db, scenario);
+          const original = await exportRows();
+          const originalById = new Map(original.map((row) => [row.id, row]));
+          let enqueued = 0;
+          const measured = await measureScheduledJobRun({
+            database: db,
+            jobId: "dataExports.maintain.fiveMinute",
+            task: MAINTAIN_DATA_EXPORTS_TASK,
+            now: new Date("2026-01-10T12:00:00Z"),
+            dataExportMaintenance: {
+              handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
+              enqueue: async () => {
+                enqueued += 1;
+                return QUEUE_REQUEUE_OUTCOME.REQUEUED;
+              },
             },
           });
           expect(
-            executedRows(
-              await db.execute(
-                sql`SELECT rolsuper, rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = current_user`,
-              ),
-            ).at(0),
-          ).toEqual({ rolsuper: false, rolbypassrls: false });
-          const exportRows = async () =>
-            await db
-              .select({
-                id: organizationDataExports.id,
-                status: organizationDataExports.status,
-                attempt: organizationDataExports.attempt,
-                failures: organizationDataExports.failures,
-              })
-              .from(organizationDataExports)
-              .orderBy(asc(organizationDataExports.id))
-              .limit(12_000);
-          const measuredRuns = new Map<
-            string,
-            Awaited<ReturnType<typeof measureScheduledJobRun>>
-          >();
-          for (const rows of [6000, 12_000]) {
-            const scenario = {
-              type: "data-exports",
-              rows,
-              cohort,
-            } as const;
-            await seedDataExportScenario(db, scenario);
-            const original = await exportRows();
-            const originalById = new Map(original.map((row) => [row.id, row]));
-            let enqueued = 0;
-            const measured = await measureScheduledJobRun({
+            measured.planViolations.filter(
+              ({ kind }) =>
+                kind === "large-scan" || kind === "deadline-missing",
+            ),
+          ).toEqual([]);
+          expect(await db.$count(systemAuditRuns)).toBe(1);
+          const changed = await exportRows();
+          const audits = await db.$count(auditLogs);
+          if (cohort === "transitions") {
+            expect(changed).not.toEqual(original);
+            expect(audits).toBeGreaterThan(0);
+            for (const row of changed) {
+              const before = originalById.get(row.id);
+              expect(before).toBeDefined();
+              if (before !== undefined) {
+                expect(row.attempt - before.attempt).toBeLessThanOrEqual(1);
+                expect(row.failures - before.failures).toBeLessThanOrEqual(1);
+              }
+            }
+          } else {
+            expect(changed).toEqual(original);
+            expect(audits).toBe(0);
+          }
+          const smaller = measuredRuns.get(cohort);
+          if (smaller !== undefined) {
+            expect(
+              scaleViolations({
+                size: smaller.metrics.sharedBlocks,
+                double: measured.metrics.sharedBlocks,
+              }),
+              JSON.stringify({
+                planCacheMode,
+                cohort,
+                statementMetrics: [smaller, measured].map(({ statements }) =>
+                  statements.map(({ statement, metrics }) => ({
+                    statement,
+                    metrics,
+                  })),
+                ),
+              }),
+            ).toEqual([]);
+          }
+          measuredRuns.set(cohort, measured);
+          expect(measured.statements.length).toBeGreaterThan(0);
+          expect(
+            measured.statements.some(({ statement }) =>
+              /^\s*explain\b/iu.test(statement),
+            ),
+          ).toBe(false);
+          if (cohort === "queued") {
+            expect(enqueued).toBe(
+              DATA_EXPORT_HANDOFF_PAGE_SIZE * DATA_EXPORT_MAX_HANDOFF_PAGES,
+            );
+          }
+          if (cohort === "quiet") {
+            expect(enqueued).toBe(0);
+          }
+          if (cohort === "transitions") {
+            expect(enqueued).toBeGreaterThan(0);
+          }
+        }
+        expect(
+          await rejectionOf(
+            measureScheduledJobRun({
               database: db,
               jobId: "dataExports.maintain.fiveMinute",
-              task: MAINTAIN_DATA_EXPORTS_TASK,
-              now: new Date("2026-01-10T12:00:00Z"),
-              dataExportMaintenance: {
-                handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
-                enqueue: async () => {
-                  enqueued += 1;
-                  return QUEUE_REQUEUE_OUTCOME.REQUEUED;
-                },
-              },
-            });
-            expect(
-              measured.planViolations.filter(
-                ({ kind }) =>
-                  kind === "large-scan" || kind === "deadline-missing",
-              ),
-            ).toEqual([]);
-            expect(await db.$count(systemAuditRuns)).toBe(1);
-            const changed = await exportRows();
-            const audits = await db.$count(auditLogs);
-            if (cohort === "transitions") {
-              expect(changed).not.toEqual(original);
-              expect(audits).toBeGreaterThan(0);
-              for (const row of changed) {
-                const before = originalById.get(row.id);
-                expect(before).toBeDefined();
-                if (before !== undefined) {
-                  expect(row.attempt - before.attempt).toBeLessThanOrEqual(1);
-                  expect(row.failures - before.failures).toBeLessThanOrEqual(1);
-                }
-              }
-            } else {
-              expect(changed).toEqual(original);
-              expect(audits).toBe(0);
-            }
-            const smaller = measuredRuns.get(cohort);
-            if (smaller !== undefined) {
-              expect(
-                scaleViolations({
-                  size: smaller.metrics.sharedBlocks,
-                  double: measured.metrics.sharedBlocks,
-                }),
-                JSON.stringify({
-                  planCacheMode,
-                  cohort,
-                  statementMetrics: [smaller, measured].map(({ statements }) =>
-                    statements.map(({ statement, metrics }) => ({
-                      statement,
-                      metrics,
-                    })),
-                  ),
-                }),
-              ).toEqual([]);
-            }
-            measuredRuns.set(cohort, measured);
-            expect(measured.statements.length).toBeGreaterThan(0);
-            expect(
-              measured.statements.some(({ statement }) =>
-                /^\s*explain\b/iu.test(statement),
-              ),
-            ).toBe(false);
-            if (cohort === "queued") {
-              expect(enqueued).toBe(
-                DATA_EXPORT_HANDOFF_PAGE_SIZE * DATA_EXPORT_MAX_HANDOFF_PAGES,
-              );
-            }
-            if (cohort === "quiet") {
-              expect(enqueued).toBe(0);
-            }
-            if (cohort === "transitions") {
-              expect(enqueued).toBeGreaterThan(0);
-            }
-          }
-          expect(
-            await rejectionOf(
-              measureScheduledJobRun({
-                database: db,
-                jobId: "dataExports.maintain.fiveMinute",
-                task: "requests.sweepReceipts",
-              }),
-            ),
-          ).toMatchObject({
-            message: expect.stringContaining("dataExports.maintain"),
-          });
-        },
-      });
-    },
-  );
+              task: "requests.sweepReceipts",
+            }),
+          ),
+        ).toMatchObject({
+          message: expect.stringContaining("dataExports.maintain"),
+        });
+      },
+    });
+  };
+
+  for (const [title, planCacheMode, cohort] of EXPORT_CASES) {
+    test(title, async () => {
+      await measureExport(planCacheMode, cohort);
+    });
+  }
 });

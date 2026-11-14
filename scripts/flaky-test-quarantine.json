@@ -22,6 +22,13 @@
       "expires": "2026-11-04"
     },
     {
+      "id": "apps/api/src/tests/query-perf/scheduled-run.postgres.test.ts::scheduled export measurement (postgres) > export measurement executes auto / transitions once without replaying writes",
+      "owner": "stella",
+      "reason": "Failed on two pull requests that change no export code (runs 43587536394, 43591313231) while merge groups on the same main pass: the queued-export key reads go from 19 and 13 pages at 6,000 rows to 320 each at 12,000, so the doubling budget fails (455 vs 1065, at most 564). The plan depends on planner state; the read needs a plan that stays bounded.",
+      "created": "2026-11-14",
+      "expires": "2026-11-28"
+    },
+    {
       "id": "apps/web/src/routes/law/-law-home/law-recent.dom.test.tsx::a delayed second-client import cannot restore history cleared by the first client",
       "owner": "stella",
       "reason": "Times out at the 5 s fast-suite limit under parallel load on main as well as on branches, together with the retry case in the same file; it mounts two server-history clients and needs a lighter fixture.",
