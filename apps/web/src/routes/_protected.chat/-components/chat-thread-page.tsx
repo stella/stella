@@ -45,10 +45,6 @@ import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
-import {
-  LocalRunForkSourceContext,
-  localRunForkSourceOf,
-} from "@/components/chat/local-run-step-output";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
@@ -771,60 +767,50 @@ export const ChatThreadPage = ({
                           threadRef,
                         }}
                       >
-                        <LocalRunForkSourceContext
-                          value={localRunForkSourceOf(data.forkProvenance)}
-                        >
-                          <ChatThreadMessages
-                            activitySession={activitySession}
-                            onAnswerEdited={refreshAnswers}
-                            answerRewriteAvailability={
-                              data.usedAnonymization
-                                ? "anonymized"
-                                : "available"
-                            }
-                            approvalPendingMessageId={approvalPendingMessageId}
-                            branchSource={{
-                              contextMatterIds: selectedContextMatterIds,
-                              threadRef,
-                            }}
-                            error={error}
-                            hasOlderMessages={olderCursor !== null}
-                            isGenerating={isGenerating}
-                            isLoadingOlder={isLoadingOlder}
-                            loadOlderError={loadOlderError}
-                            messages={messages}
-                            onLoadOlder={loadOlder}
-                            onAskUserEditAndRerun={handleAskUserEditAndRerun}
-                            onAskUserEditingChange={handleAskUserEditingChange}
-                            onAskUserSubmit={handleAskUserSubmit}
-                            onCreateDocumentResolve={
-                              handleCreateDocumentResolve
-                            }
-                            onOpenCreateDocumentDraft={
-                              handleOpenCreateDocumentDraft
-                            }
-                            onOpenCreatedDocument={handleOpenCreatedDocument}
-                            onOpenPlaybook={handleOpenPlaybook}
-                            onContinuePausedTurn={handleContinuePausedTurn}
-                            onResend={resendLatestMessage}
-                            onSendWithoutAnonymization={
-                              sendWithoutAnonymization
-                            }
-                            queuedMessageActions={{
-                              remove: removeQueuedMessage,
-                              sendNow: sendQueuedMessageNow,
-                            }}
-                            queuedMessages={queuedMessages}
-                            stickyUserMessages
-                            streamdownComponents={streamdownComponents}
-                            computerWait={computerWait}
-                            newestLocalTurn={data.newestLocalTurn}
-                            threadRef={threadRef}
-                            turnSentAt={turnSentAt}
-                            userMessageEdit={userMessageEdit}
-                            workspaceId={workspaceId}
-                          />
-                        </LocalRunForkSourceContext>
+                        <ChatThreadMessages
+                          activitySession={activitySession}
+                          onAnswerEdited={refreshAnswers}
+                          answerRewriteAvailability={
+                            data.usedAnonymization ? "anonymized" : "available"
+                          }
+                          approvalPendingMessageId={approvalPendingMessageId}
+                          branchSource={{
+                            contextMatterIds: selectedContextMatterIds,
+                            threadRef,
+                          }}
+                          error={error}
+                          hasOlderMessages={olderCursor !== null}
+                          isGenerating={isGenerating}
+                          isLoadingOlder={isLoadingOlder}
+                          loadOlderError={loadOlderError}
+                          messages={messages}
+                          onLoadOlder={loadOlder}
+                          onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                          onAskUserEditingChange={handleAskUserEditingChange}
+                          onAskUserSubmit={handleAskUserSubmit}
+                          onCreateDocumentResolve={handleCreateDocumentResolve}
+                          onOpenCreateDocumentDraft={
+                            handleOpenCreateDocumentDraft
+                          }
+                          onOpenCreatedDocument={handleOpenCreatedDocument}
+                          onOpenPlaybook={handleOpenPlaybook}
+                          onContinuePausedTurn={handleContinuePausedTurn}
+                          onResend={resendLatestMessage}
+                          onSendWithoutAnonymization={sendWithoutAnonymization}
+                          queuedMessageActions={{
+                            remove: removeQueuedMessage,
+                            sendNow: sendQueuedMessageNow,
+                          }}
+                          queuedMessages={queuedMessages}
+                          stickyUserMessages
+                          streamdownComponents={streamdownComponents}
+                          computerWait={computerWait}
+                          newestLocalTurn={data.newestLocalTurn}
+                          threadRef={threadRef}
+                          turnSentAt={turnSentAt}
+                          userMessageEdit={userMessageEdit}
+                          workspaceId={workspaceId}
+                        />
                       </ChatLocalRunQuestionContext>
                       <ChatBackgroundTasks
                         generationActive={isGenerating}

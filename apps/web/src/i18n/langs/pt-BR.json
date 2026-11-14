@@ -2352,7 +2352,6 @@
         "conversation": "Conversa do subagente",
         "conversationPrompt": "Tarefa",
         "conversationReport": "Relatório",
-        "copyToFork": "Copiar para este chat",
         "cut": "Mostrando os primeiros {kept} de {total}",
         "diff": "Alterações nos arquivos",
         "empty": "Sem saída",

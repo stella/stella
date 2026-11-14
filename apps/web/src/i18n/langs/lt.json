@@ -2352,7 +2352,6 @@
         "conversation": "Subagento pokalbis",
         "conversationPrompt": "Užduotis",
         "conversationReport": "Ataskaita",
-        "copyToFork": "Kopijuoti į šį pokalbį",
         "cut": "Rodomi pirmieji {kept} iš {total}",
         "diff": "Failų pakeitimai",
         "empty": "Išvesties nėra",

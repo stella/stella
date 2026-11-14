@@ -2352,7 +2352,6 @@
         "conversation": "Alamagendi vestlus",
         "conversationPrompt": "Ülesanne",
         "conversationReport": "Aruanne",
-        "copyToFork": "Kopeeri sellesse vestlusesse",
         "cut": "Kuvatakse esimesed {kept} (kokku {total})",
         "diff": "Failimuudatused",
         "empty": "Väljund puudub",

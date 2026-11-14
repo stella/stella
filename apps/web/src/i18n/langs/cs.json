@@ -2352,7 +2352,6 @@
         "conversation": "Konverzace dílčího agenta",
         "conversationPrompt": "Zadání",
         "conversationReport": "Zpráva",
-        "copyToFork": "Zkopírovat do tohoto chatu",
         "cut": "Zobrazeno prvních {kept} z {total}",
         "diff": "Změny souborů",
         "empty": "Žádný výstup",

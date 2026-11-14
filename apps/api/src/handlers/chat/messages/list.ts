@@ -81,8 +81,6 @@ type ForkProvenance =
   | { type: "parent-unavailable" }
   | {
       threadId: SafeId<"chatThread">;
-      /** The parent's message the fork was made up to: a repeated fork names it. */
-      messageId: SafeId<"chatMessage">;
       title: string;
       type: "parent";
       workspaceId: SafeId<"workspace"> | null;
@@ -109,7 +107,6 @@ const resolveForkProvenance = ({
   }
   return {
     threadId: parent.id,
-    messageId: forkedFromMessageId,
     title: parent.title,
     type: "parent",
     workspaceId: parent.workspaceId,

@@ -1,10 +1,9 @@
-import { type ContextType, createContext, type ReactNode, use } from "react";
+import type { ReactNode } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import {
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE,
   chatLocalRunStepContentCap,
@@ -23,7 +22,6 @@ import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import { isRunningToolPart } from "@/components/chat/chat-ui-tools";
 import { CopyControl } from "@/components/copy-control";
 import { MarkdownPreview } from "@/components/markdown-preview";
-import { chatKeys } from "@/features/chat/chat-query-contract";
 import { localRunStepOutputOptions } from "@/features/chat/local-run-step-output";
 import {
   diffLines,
@@ -31,16 +29,10 @@ import {
   localRunConversationEntries,
   type LocalRunStepOutputView,
 } from "@/features/chat/local-run-step-output.logic";
-import type { ForkProvenance } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
-import { getAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
 import { detached } from "@/lib/detached";
-import { unwrapApiResponse } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatFileSize } from "@/lib/file-size";
 import { queryView } from "@/lib/query-view.logic";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
@@ -137,19 +129,6 @@ const ConversationText = ({ text }: { text: string }) => {
   );
 };
 
-/**
- * The fork a thread was made as, if any: a step whose content its copy has
- * yet to bring offers to complete it by asking for the same fork again.
- */
-export const LocalRunForkSourceContext = createContext<Extract<
-  ForkProvenance,
-  { type: "parent" }
-> | null>(null);
-
-/** The fork source a thread's provenance names, for `LocalRunForkSourceContext`. */
-export const localRunForkSourceOf = (provenance: ForkProvenance) =>
-  provenance.type === "parent" ? provenance : null;
-
 type StepContentProps = {
   activeOrganizationId: string;
   callId: string;
@@ -157,81 +136,6 @@ type StepContentProps = {
   name: string;
   threadId: SafeId<"chatThread">;
   userId: string;
-};
-
-type ForkSource = NonNullable<ContextType<typeof LocalRunForkSourceContext>>;
-
-/** Asks for the thread's fork again, which completes its copy of the steps. */
-const CopyToFork = ({
-  activeOrganizationId,
-  source,
-  threadId,
-  userId,
-}: Pick<StepContentProps, "activeOrganizationId" | "threadId" | "userId"> & {
-  source: ForkSource;
-}) => {
-  const t = useTranslations();
-  const queryClient = useQueryClient();
-  const sourceThreadId = toSafeId<"chatThread">(source.threadId);
-  const copy = useCapabilityMutation({
-    capability: "chat.fork.create",
-    target: resourceRef({
-      type: RESOURCE_TYPE.CHAT_THREAD,
-      id: sourceThreadId,
-    }),
-    mutationFn: async (_variables, request) =>
-      unwrapApiResponse(
-        await api.chat.threads({ threadId: sourceThreadId }).fork.post(
-          {
-            newThreadId: threadId,
-            upToMessageId: toSafeId<"chatMessage">(source.messageId),
-          },
-          {
-            ...request,
-            query:
-              source.workspaceId === null
-                ? {}
-                : { workspaceId: toSafeId<"workspace">(source.workspaceId) },
-          },
-        ),
-      ),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: chatKeys.localRunStepOutputs({
-          activeOrganizationId,
-          userId,
-          threadId,
-        }),
-      });
-    },
-    onError: (error) => {
-      getAnalytics().captureError(error, {
-        fingerprintKey: "LocalRunStepContent:copy",
-        scope: { type: "handler", handlerId: "LocalRunStepContent:copy" },
-      });
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-  });
-  return (
-    <Button
-      disabled={copy.isPending}
-      onClick={() => {
-        copy.mutate();
-      }}
-      size="xs"
-      variant="ghost"
-    >
-      {t("chat.toolCall.localOutput.copyToFork")}
-    </Button>
-  );
-};
-
-/** The copy action, where the fork's source is known. */
-const CopyToForkButton = (
-  props: Pick<StepContentProps, "activeOrganizationId" | "threadId" | "userId">,
-) => {
-  const source = use(LocalRunForkSourceContext);
-  return source === null ? null : <CopyToFork {...props} source={source} />;
 };
 
 /** A stored text step: the output, diff or conversation, as it is read. */
@@ -403,16 +307,7 @@ const LocalRunStepContent = ({
         </Note>
       );
     case CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notCopied:
-      return (
-        <Note>
-          {t("chat.toolCall.localOutput.notCopied")}
-          <CopyToForkButton
-            activeOrganizationId={activeOrganizationId}
-            threadId={threadId}
-            userId={userId}
-          />
-        </Note>
-      );
+      return <Note>{t("chat.toolCall.localOutput.notCopied")}</Note>;
     case CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notStored:
       return <Note>{t("chat.toolCall.localOutput.notStored")}</Note>;
     case CHAT_LOCAL_RUN_STEP_CONTENT_STATE.runBudgetReached:

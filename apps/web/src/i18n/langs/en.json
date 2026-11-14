@@ -2352,7 +2352,6 @@
         "conversation": "Subagent conversation",
         "conversationPrompt": "Task given",
         "conversationReport": "Report",
-        "copyToFork": "Copy to this chat",
         "cut": "Showing the first {kept} of {total}",
         "diff": "File changes",
         "empty": "No output",

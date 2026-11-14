@@ -45,8 +45,6 @@ const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
 const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
-const { LocalRunForkSourceContext } =
-  await import("@/components/chat/local-run-step-output");
 const { getUserFileContentUrl } = await import("@/lib/user-files");
 const { isCanonicalChatUIMessage } =
   await import("@/components/chat/chat-ui-tools");
@@ -159,19 +157,9 @@ const removal = { command: "rm draft.md" };
 /** The thread the turn is in: a step's content is read by it. */
 const THREAD_ID = "thread-fixture";
 
-/** The thread a fork was made from, for a step its copy has yet to bring. */
-const FORK_SOURCE = {
-  type: "parent",
-  threadId: "thread-source",
-  messageId: "message-source",
-  title: "Lease review",
-  workspaceId: null,
-} as const;
-
 const turnTree = (
   queryClient: InstanceType<typeof QueryClient>,
   parts: readonly object[],
-  forkSource: typeof FORK_SOURCE | null = null,
 ) => (
   <ChatThreadTestRouter>
     <QueryClientProvider client={queryClient}>
@@ -183,28 +171,26 @@ const turnTree = (
             <AuthenticatedUserProvider user={MEMBER}>
               <ChatApprovalContext value={testChatApprovalContextValue}>
                 <ChatEditorProvider>
-                  <LocalRunForkSourceContext value={forkSource}>
-                    <ChatThreadMessages
-                      activitySession={{
-                        reportedUnknownActivityTypes: new Set<string>(),
-                      }}
-                      approvalPendingMessageId={null}
-                      messages={[turnOf(parts)]}
-                      onAskUserSubmit={() => {}}
-                      onCreateDocumentResolve={() => {}}
-                      onOpenCreatedDocument={() => {}}
-                      showToolCalls
-                      streamdownComponents={{
-                        a: ({ children, ...props }) => (
-                          <a {...props}>{children}</a>
-                        ),
-                      }}
-                      threadRef={{
-                        scope: "global",
-                        threadId: toChatThreadId(THREAD_ID),
-                      }}
-                    />
-                  </LocalRunForkSourceContext>
+                  <ChatThreadMessages
+                    activitySession={{
+                      reportedUnknownActivityTypes: new Set<string>(),
+                    }}
+                    approvalPendingMessageId={null}
+                    messages={[turnOf(parts)]}
+                    onAskUserSubmit={() => {}}
+                    onCreateDocumentResolve={() => {}}
+                    onOpenCreatedDocument={() => {}}
+                    showToolCalls
+                    streamdownComponents={{
+                      a: ({ children, ...props }) => (
+                        <a {...props}>{children}</a>
+                      ),
+                    }}
+                    threadRef={{
+                      scope: "global",
+                      threadId: toChatThreadId(THREAD_ID),
+                    }}
+                  />
                 </ChatEditorProvider>
               </ChatApprovalContext>
             </AuthenticatedUserProvider>
@@ -248,17 +234,11 @@ type RenderOptions = {
   conversation?: LocalRunStepOutputView;
   /** What stella answers for the viewed image. */
   image?: LocalRunStepOutputView;
-  /** The fork the thread was made as, if any. */
-  forkSource?: typeof FORK_SOURCE | null;
 };
 
 const renderTurn = (
   parts: readonly object[],
-  {
-    conversation = NOT_STORED,
-    image: viewed = NOT_STORED,
-    forkSource = null,
-  }: RenderOptions = {},
+  { conversation = NOT_STORED, image: viewed = NOT_STORED }: RenderOptions = {},
 ) => {
   const queryClient = new QueryClient();
   queryClient.setQueryData(
@@ -275,7 +255,7 @@ const renderTurn = (
       .queryKey,
     { canManageCustomConnectors: false, connectors: [], nativeTools: [] },
   );
-  const view = render(turnTree(queryClient, parts, forkSource));
+  const view = render(turnTree(queryClient, parts));
   return {
     view,
     queryClient,
@@ -604,32 +584,19 @@ test("a step still arriving says so and can be read again", async () => {
   queryClient.clear();
 });
 
-test("a step a fork has yet to copy offers to copy it only where the fork's source is known", async () => {
-  const notCopied = {
-    status: "answered",
-    content: { state: "not_copied" },
-  } as const;
-  const restore = answeringStep(notCopied.content);
-  const copy = { name: messages.chat.toolCall.localOutput.copyToFork };
-  const unknown = renderTurn([image], { image: notCopied });
-  await unknown.view.findByText("scans/page-1.png");
-  await openImageRow(unknown.view);
-  expect(
-    await unknown.view.findByText(messages.chat.toolCall.localOutput.notCopied),
-  ).toBeDefined();
-  expect(unknown.view.queryByRole("button", copy)).toBeNull();
-  unknown.queryClient.clear();
-  await act(async () => cleanup());
-
-  const known = renderTurn([image], {
-    image: notCopied,
-    forkSource: FORK_SOURCE,
+test("a step a fork has yet to copy says so", async () => {
+  const content = { state: "not_copied" } as const;
+  const restore = answeringStep(content);
+  const { view, queryClient } = renderTurn([image], {
+    image: { status: "answered", content },
   });
-  await known.view.findByText("scans/page-1.png");
-  await openImageRow(known.view);
-  expect(await known.view.findByRole("button", copy)).toBeDefined();
+  await view.findByText("scans/page-1.png");
+  await openImageRow(view);
+  expect(
+    await view.findByText(messages.chat.toolCall.localOutput.notCopied),
+  ).toBeDefined();
   restore();
-  known.queryClient.clear();
+  queryClient.clear();
 });
 
 test("a stored turn groups by the link in each call's metadata, as the phone groups it, and never by a step's input", async () => {

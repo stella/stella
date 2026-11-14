@@ -2352,7 +2352,6 @@
         "conversation": "Az alügynök beszélgetése",
         "conversationPrompt": "Feladat",
         "conversationReport": "Jelentés",
-        "copyToFork": "Másolás ebbe a csevegésbe",
         "cut": "Az első {kept} látható, összesen {total}",
         "diff": "Fájlmódosítások",
         "empty": "Nincs kimenet",

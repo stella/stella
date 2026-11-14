@@ -902,7 +902,6 @@ test("get-messages reports the fork's provenance and loses it when the parent go
 
   expect(await readProvenance()).toEqual({
     threadId: source.threadId,
-    messageId: messageAt(source, 1),
     title: "Termination clause",
     type: "parent",
     workspaceId: null,

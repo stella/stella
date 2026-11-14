@@ -2352,7 +2352,6 @@
         "conversation": "Conversation du sous-agent",
         "conversationPrompt": "Tâche",
         "conversationReport": "Rapport",
-        "copyToFork": "Copier dans cette conversation",
         "cut": "Affichage des {kept} premiers sur {total}",
         "diff": "Modifications des fichiers",
         "empty": "Aucun résultat",

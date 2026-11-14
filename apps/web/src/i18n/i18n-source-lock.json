@@ -1885,7 +1885,6 @@
   "chat.toolCall.localOutput.conversation": "Subagent conversation",
   "chat.toolCall.localOutput.conversationPrompt": "Task given",
   "chat.toolCall.localOutput.conversationReport": "Report",
-  "chat.toolCall.localOutput.copyToFork": "Copy to this chat",
   "chat.toolCall.localOutput.cut": "Showing the first {kept} of {total}",
   "chat.toolCall.localOutput.diff": "File changes",
   "chat.toolCall.localOutput.empty": "No output",
