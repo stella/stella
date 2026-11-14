@@ -62,7 +62,7 @@ for (const agent of ["codex", "claude-code"] as const) {
 
     // The chat keeps its place and its answer from the server.
     await expectTurnsFinished(page, 1);
-    await page.reload();
+    await page.reload({ waitUntil: "commit" });
     await expect(transcript(page)).toContainText(ANSWERS[agent].answer, {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });

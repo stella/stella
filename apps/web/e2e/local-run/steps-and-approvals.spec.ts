@@ -129,7 +129,7 @@ for (const agent of ["codex", "claude-code"] as const) {
     }
 
     // The same after a reload, from what the server kept.
-    await page.reload();
+    await page.reload({ waitUntil: "commit" });
     await expectTurnsFinished(page, 1);
     await expect(transcript(page)).toContainText(STEPS[agent].shown[0]);
     await expandTranscript(page);

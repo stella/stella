@@ -30,13 +30,6 @@ const WROTE_ANSWER = "Wrote notes.md.";
 const UNDONE_NOTE = "the member undid the file changes of an earlier reply";
 const UNDO_REQUEST =
   /\/chat\/threads\/[^/]+\/turns\/[^/]+\/local-files\/undo$/u;
-/**
- * Undo is not offered on the stand-in computer: the turn's undo read answers
- * `undoable: false` for the newest turn although its folder was saved before
- * the turn, also after the chat is loaded again. Remove once it is offered.
- */
-const UNDO_NOT_OFFERED =
-  "Undo is not offered: GET .../local-files/undo answers undoable false for the newest turn that wrote a file.";
 
 /** The chat's read of its thread. */
 const THREAD_MESSAGES = /\/v1\/chat\/threads\/[^/]+\/messages(?:\?|$)/u;
@@ -95,7 +88,6 @@ const askToUndo = async (page: Page) => {
 test("the answer of a turn that just wrote files offers to undo them", async ({
   page,
 }) => {
-  test.fail(true, UNDO_NOT_OFFERED);
   await writeNotes(page);
   await notesAnswerActions(page).click();
   await expect(undoItem(page)).toBeVisible();
@@ -105,10 +97,9 @@ test("undo removes what the newest turn wrote, and the next turn is told", async
   page,
   request,
 }) => {
-  test.fail(true, UNDO_NOT_OFFERED);
   const file = await writeNotes(page);
   // From the chat as loaded, which reads the newest local turn.
-  await page.reload();
+  await page.reload({ waitUntil: "commit" });
 
   const undoRequest = page.waitForRequest(
     (sent) => sent.method() === "POST" && UNDO_REQUEST.test(sent.url()),
@@ -134,8 +125,9 @@ test("undo removes what the newest turn wrote, and the next turn is told", async
   ).toBe(true);
 
   // The marker stays with the older turn, which can no longer be undone:
-  // its answer offers no undo, and the API refuses one.
-  await page.reload();
+  // its answer offers no undo, and asking the API again answers with the
+  // undo already done, never a second one.
+  await page.reload({ waitUntil: "commit" });
   await expect(marker).toBeVisible({
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
@@ -143,21 +135,21 @@ test("undo removes what the newest turn wrote, and the next turn is told", async
   await expect(page.getByRole("menu")).toBeVisible();
   await expect(undoItem(page)).toHaveCount(0);
   await page.keyboard.press("Escape");
-  const refused = await request.post(`${E2E_API_ORIGIN}${undoUrl.pathname}`);
-  expect(refused.status()).toBe(409);
-  expect(await refused.json()).toMatchObject({
-    status: "refused",
-    reason: "not_newest",
+  const repeated = await request.post(`${E2E_API_ORIGIN}${undoUrl.pathname}`);
+  expect(repeated.status()).toBe(202);
+  expect(await repeated.json()).toMatchObject({
+    status: "accepted",
+    undo: { state: "restored" },
   });
+  expect(existsSync(file)).toBe(false);
 });
 
 test("undo is refused while the computer is offline, and the file stays", async ({
   page,
   request,
 }) => {
-  test.fail(true, UNDO_NOT_OFFERED);
   const file = await writeNotes(page);
-  await page.reload();
+  await page.reload({ waitUntil: "commit" });
   await setComputerOnline(request, false);
 
   await askToUndo(page);
@@ -293,7 +285,7 @@ test("a send while the chat shows the computer offline waits for stella desktop,
   await answeredChat(page);
   await setComputerOnline(request, false);
   // The chat as loaded reads the computer again and says it is offline.
-  await page.reload();
+  await page.reload({ waitUntil: "commit" });
   await expectComputerState(page, "codex", "offline");
 
   await send(page, "Second question");
