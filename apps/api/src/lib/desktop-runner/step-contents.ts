@@ -55,7 +55,7 @@ type StepOptions = {
  * another run of the thread, or it already settled with other content. A
  * step settles once; nothing rewrites it.
  */
-export type StepContentRefusal = "other_run" | "different_content";
+type StepContentRefusal = "other_run" | "different_content";
 
 /** How a step's content settled; `unknown_run` for a run that takes none. */
 export type StepContentSettlement =

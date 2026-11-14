@@ -65,25 +65,17 @@ type SeededRun = {
   userMessageId: SafeId<"chatMessage">;
 };
 
-/** A running local run of `owner` with its own turn in one of their threads. */
+/**
+ * A running local run of `owner` for one turn of a thread of theirs. A thread
+ * has one turn going at a time, and that turn may be read by more than one
+ * run.
+ */
 const seedRunIn = async (
   owner: RunOwner,
   threadId: SafeId<"chatThread">,
-  userMessageId: SafeId<"chatMessage">,
+  turnId: SafeId<"chatTurn">,
 ) => {
   const now = new Date(clock.now());
-  const turnId = createSafeId<"chatTurn">();
-  await db.insert(chatTurns).values({
-    id: turnId,
-    organizationId: owner.organizationId,
-    userId: owner.userId,
-    threadId,
-    userMessageId,
-    status: "running",
-    executionId: Bun.randomUUIDv7(),
-    // After the row's own creation time, which the database stamps.
-    leaseExpiresAt: new Date("2099-01-01T00:00:00.000Z"),
-  });
   const desktopId = Bun.randomUUIDv7();
   const deviceJkt = `jkt-${desktopId}`;
   await db.insert(desktopRunners).values({
@@ -117,7 +109,7 @@ const seedRunIn = async (
     chatThreadId: threadId,
     chatTurnId: turnId,
   });
-  return { runId, turnId };
+  return { runId };
 };
 
 /** A running local run of `owner`, bound to a turn of a thread of theirs. */
@@ -143,7 +135,19 @@ const seedRun = async (
       data: [{ type: "text", content: "Work on the matter" }],
     }),
   });
-  const { runId, turnId } = await seedRunIn(owner, threadId, userMessageId);
+  const turnId = createSafeId<"chatTurn">();
+  await db.insert(chatTurns).values({
+    id: turnId,
+    organizationId: owner.organizationId,
+    userId: owner.userId,
+    threadId,
+    userMessageId,
+    status: "running",
+    executionId: Bun.randomUUIDv7(),
+    // After the row's own creation time, which the database stamps.
+    leaseExpiresAt: new Date("2099-01-01T00:00:00.000Z"),
+  });
+  const { runId } = await seedRunIn(owner, threadId, turnId);
   return { runId, threadId, turnId, userMessageId };
 };
 
@@ -368,11 +372,7 @@ describe("the stored content of a local run's steps", () => {
     const earlier = await seedRun(ownerA);
     const key = stepKey();
     await storeText(ownerA, earlier, key, "what the earlier run printed");
-    const later = await seedRunIn(
-      ownerA,
-      earlier.threadId,
-      earlier.userMessageId,
-    );
+    const later = await seedRunIn(ownerA, earlier.threadId, earlier.turnId);
     const refused = { type: "refused", reason: "other_run" } as const;
     // Neither other text nor the very same text: the step is not this run's.
     expect(await storeText(ownerA, later, key, "rewritten")).toEqual(refused);
