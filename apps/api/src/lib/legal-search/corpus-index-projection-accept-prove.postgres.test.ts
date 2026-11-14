@@ -140,22 +140,30 @@ const cleanUp = async (db: GatedTestDb, fixture: Fixture): Promise<void> => {
     eq(corpusIndexGenerations.family, "case_law"),
     eq(corpusIndexGenerations.generation, GENERATION),
   );
-  // Projection history is deletable only under a retired generation.
+  // An applied revision is not terminal, so its history goes under a retiring
+  // generation and the rebuild fence, as a rebuild removes it.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(1937007986, 1)`);
+    await tx
+      .update(corpusIndexGenerations)
+      .set({ status: "retiring" })
+      .where(generation);
+    await tx
+      .delete(corpusIndexProjectionIntents)
+      .where(eq(corpusIndexProjectionIntents.id, fixture.intentId));
+    await tx
+      .delete(corpusIndexProjectionStates)
+      .where(
+        and(
+          eq(corpusIndexProjectionStates.generation, GENERATION),
+          eq(corpusIndexProjectionStates.entityId, fixture.entityId),
+        ),
+      );
+  });
   await db
     .update(corpusIndexGenerations)
     .set({ status: "retired" })
     .where(generation);
-  await db
-    .delete(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.id, fixture.intentId));
-  await db
-    .delete(corpusIndexProjectionStates)
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.generation, GENERATION),
-        eq(corpusIndexProjectionStates.entityId, fixture.entityId),
-      ),
-    );
   await db
     .delete(caseLawDecisions)
     .where(
