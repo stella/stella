@@ -23,9 +23,9 @@ import {
 const PROMPT = "Remember where this ran";
 
 /**
- * The most commits each step may take: the highest count of three measured
- * runs plus a third, which is how far one step's count moved between runs (a
- * commit that trails a step counts for the next). A budget only goes down:
+ * The most commits each step may take: the highest count of three runs that
+ * measured the steps one after another on one page, plus a third, which is
+ * how far a step's count moved between those runs. A budget only goes down:
  * lower it with the measurement that shows the step commits less.
  */
 const COMMIT_BUDGET = {
@@ -62,70 +62,102 @@ test.beforeEach(async ({ request }) => {
   await setComputerOnline(request, true);
 });
 
-test("choosing where a new chat runs and typing its message stay within the commit budget of each step", async ({
-  page,
-}) => {
-  const measured = new Map<Step, number>();
-  // Each step ends on the state the member sees (the chips' names, the menu
-  // closed, the text typed); a commit that trails it counts for the next.
-  const measure = async (step: Step, act: () => Promise<unknown>) => {
+const openAndClose = async (page: Page, name: string | RegExp) => {
+  await page.getByRole("button", { name }).click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+};
+
+const onTheComputer = async (page: Page) => {
+  await chooseRunOn(page, {
+    place: "computer",
+    agent: "claude-code",
+    model: "tool_calls",
+  });
+};
+
+/** What each step does, and what the chat needs chosen before it. */
+const STEP_ACTIONS = {
+  accountMenu: {
+    act: async (page) => {
+      await openAndClose(page, /test@stella\.dev/u);
+    },
+  },
+  attachmentsMenu: {
+    act: async (page) => {
+      await openAndClose(page, "Open attachments and tools menu");
+    },
+  },
+  cloudWhereMenu: {
+    act: async (page) => {
+      await openAndClose(page, "Runs on: Cloud");
+    },
+  },
+  agentAndModel: { act: onTheComputer },
+  whereMenu: {
+    before: onTheComputer,
+    act: async (page) => {
+      await widestPermission(page);
+    },
+  },
+  choosePermission: {
+    before: onTheComputer,
+    act: async (page) => {
+      await choosePermission(page, "auto");
+    },
+  },
+  readPermission: {
+    before: onTheComputer,
+    act: async (page) => {
+      await chosenPermission(page);
+    },
+  },
+  typing: {
+    act: async (page) => {
+      await composer(page).focus();
+      await composer(page).pressSequentially(PROMPT);
+      await expect(composer(page)).toHaveText(PROMPT);
+    },
+  },
+} as const satisfies Record<
+  Step,
+  {
+    before?: (page: Page) => Promise<void>;
+    act: (page: Page) => Promise<void>;
+  }
+>;
+
+// One step to a test, each on a newly loaded chat. The dev render-storm
+// canary reports more than 80 commits in each of two consecutive seconds,
+// so 160 at the least; the most a test commits here is its step and the
+// choice of the computer before it, about 115 by the measurements above.
+for (const key of STEPS) {
+  const { step, commits: budget } = COMMIT_BUDGET[key];
+
+  test(`a new chat takes at most ${String(budget)} commits to ${step}`, async ({
+    page,
+  }) => {
+    const action = STEP_ACTIONS[key];
+    await openNewChat(page);
+    if ("before" in action) {
+      await action.before(page);
+    }
+
+    // The step ends on the state the member sees: the chips' names, the menu
+    // closed, the text typed.
     const before = await readCommits(page);
-    await act();
-    measured.set(step, (await readCommits(page)) - before);
-  };
-  const openAndClose = async (name: string | RegExp) => {
-    await page.getByRole("button", { name }).click();
-    await expect(page.getByRole("menu")).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("menu")).toHaveCount(0);
-  };
+    await action.act(page);
+    const commits = (await readCommits(page)) - before;
 
-  await openNewChat(page);
-  await measure("accountMenu", async () => {
-    await openAndClose(/test@stella\.dev/u);
-  });
-  await measure("attachmentsMenu", async () => {
-    await openAndClose("Open attachments and tools menu");
-  });
-  await measure("cloudWhereMenu", async () => {
-    await openAndClose("Runs on: Cloud");
-  });
-  await measure("agentAndModel", async () => {
-    await chooseRunOn(page, {
-      place: "computer",
-      agent: "claude-code",
-      model: "tool_calls",
-    });
-  });
-  let widest: Awaited<ReturnType<typeof widestPermission>> = "auto";
-  await measure("whereMenu", async () => {
-    widest = await widestPermission(page);
-  });
-  await measure("choosePermission", async () => {
-    await choosePermission(page, widest);
-  });
-  await measure("readPermission", async () => {
-    await chosenPermission(page);
-  });
-  await measure("typing", async () => {
-    await composer(page).focus();
-    await composer(page).pressSequentially(PROMPT);
-    await expect(composer(page)).toHaveText(PROMPT);
-  });
-
-  const report = STEPS.map((key) => ({
-    step: COMMIT_BUDGET[key].step,
-    commits: measured.get(key),
-    budget: COMMIT_BUDGET[key].commits,
-  }));
-  // The numbers go to the run's output as well as its report.
-  process.stdout.write(`composer commits: ${JSON.stringify(report)}\n`);
-  for (const { step, commits, budget } of report) {
     test.info().annotations.push({
       type: "commits",
       description: `${step}: ${String(commits)} of ${String(budget)}`,
     });
-    expect(commits, step).toBeDefined();
-    expect(commits ?? 0, step).toBeLessThanOrEqual(budget);
-  }
-});
+    // The number goes to the run's output as well as its report.
+    process.stdout.write(
+      `composer commits: ${JSON.stringify({ step, commits, budget })}\n`,
+    );
+    expect(commits, step).toBeLessThanOrEqual(budget);
+  });
+}
