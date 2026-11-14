@@ -18,7 +18,8 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // Reading the start as a time (showing it, adding an interval to it) is not
 // ordering and is not reported.
 
-import { filenameForContext, isAstNode } from "./utils.ts";
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
+import { type AstNode, filenameForContext, isAstNode } from "./utils.ts";
 
 const OWNER = "apps/api/src/lib/chat/turn-order.ts";
 const FIXTURE =
@@ -51,8 +52,22 @@ const rawOf = (quasi: unknown): string => {
 // `->` and `->>` are JSON operators, not comparisons.
 const COMPARED_BEFORE = /(?<!-)(?:<=?|>=?)\s*$/u;
 const COMPARED_AFTER = /^\s*(?:<=?|>=?)(?!>)/u;
-// A row value's parenthesis follows no name; a function call's does.
-const OPENS_ROW_BEFORE = /(?:^|[^\w])\(\s*$/u;
+// A row value's parenthesis follows no name, or a keyword; a function call's
+// follows the function's name, with or without a space.
+const OPENING_PARENTHESIS = /(?:([A-Za-z_][\w$]*)\s*)?\(\s*$/u;
+const KEYWORDS_BEFORE_ROW = new Set(
+  "ALL AND ANY BY ELSE FROM HAVING IN NOT ON OR RETURNING SELECT SET SOME THEN VALUES WHEN WHERE".split(
+    " ",
+  ),
+);
+const opensRow = (before: string): boolean => {
+  const opening = OPENING_PARENTHESIS.exec(before);
+  if (opening === null) {
+    return false;
+  }
+  const word = opening[1];
+  return word === undefined || KEYWORDS_BEFORE_ROW.has(word.toUpperCase());
+};
 const OPENS_ROW_AFTER = /^\s*,/u;
 const ORDERED_BEFORE = /\bORDER\s+BY\s*$/iu;
 const ORDERED_AFTER = /^\s*(?:ASC|DESC)\b/iu;
@@ -60,7 +75,7 @@ const ORDERED_AFTER = /^\s*(?:ASC|DESC)\b/iu;
 const ordersInSql = (before: string, after: string): boolean =>
   COMPARED_BEFORE.test(before) ||
   COMPARED_AFTER.test(after) ||
-  (OPENS_ROW_BEFORE.test(before) && OPENS_ROW_AFTER.test(after)) ||
+  (opensRow(before) && OPENS_ROW_AFTER.test(after)) ||
   ORDERED_BEFORE.test(before) ||
   ORDERED_AFTER.test(after);
 
@@ -103,6 +118,17 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const report = (node: AstNode) => {
+          if (
+            guardEnforcesLine({
+              guard: "no-chat-turn-time-order",
+              file: filenameForContext(context),
+              line: context.sourceCode.getLocFromIndex(node.range[0]).line,
+            })
+          ) {
+            context.report({ node, messageId: "timeOrder" });
+          }
+        };
         return {
           before() {
             const filename = filenameForContext(context);
@@ -120,7 +146,7 @@ export default eslintCompatPlugin({
             const args: readonly unknown[] = node.arguments;
             for (const argument of args) {
               if (isAstNode(argument) && isTurnStart(argument)) {
-                context.report({ node: argument, messageId: "timeOrder" });
+                report(argument);
               }
             }
           },
@@ -147,7 +173,7 @@ export default eslintCompatPlugin({
                   rawOf(quasis.at(index + 1)),
                 )
               ) {
-                context.report({ node: expression, messageId: "timeOrder" });
+                report(expression);
               }
             }
           },

@@ -8,8 +8,8 @@
 // - A routine definition (`CREATE [OR REPLACE] FUNCTION | PROCEDURE`). The
 //   migration stores its body and does not run it, so the rows the body
 //   writes are not counted as written by the migration. The routine is
-//   remembered as chat-writing when its body writes a chat table or calls a
-//   chat-writing routine.
+//   remembered as chat-writing when its body writes a chat table, calls a
+//   chat-writing routine, or writes a table whose trigger runs one.
 // - Any other statement, which the migration runs. It counts when
 //   - its text, bodies and string literals included, writes a chat table (a
 //     `DO` block runs its body; dynamic SQL in a string counts as written),
@@ -42,11 +42,24 @@ const bareName = (qualified: string): string =>
 const escaped = (name: string) =>
   name.replaceAll(/[.*+?^${}()|[\]\\]/gu, (character) => `\\${character}`);
 
+const named = (table: string) =>
+  String.raw`(ONLY\s+)?("?public"?\.)?"?${escaped(table)}"?(\s|\(|;|,|\*|'|$)`;
+
+/** `TRUNCATE` takes a list: every target after the first follows a comma. */
+const TRUNCATE_TARGETS = /\bTRUNCATE\s+(?:TABLE\s+)?([^;]*)/giu;
+
 const writesTable = (statement: string, table: string): boolean =>
   new RegExp(
-    String.raw`\b(UPDATE|INSERT\s+INTO|DELETE\s+FROM|MERGE\s+INTO|COPY|TRUNCATE(\s+TABLE)?)\s+(ONLY\s+)?("?public"?\.)?"?${escaped(table)}"?(\s|\(|;|'|$)`,
+    String.raw`\b(UPDATE|INSERT\s+INTO|DELETE\s+FROM|MERGE\s+INTO|COPY|TRUNCATE(\s+TABLE)?)\s+${named(table)}`,
     "imu",
-  ).test(statement);
+  ).test(statement) ||
+  [...statement.matchAll(TRUNCATE_TARGETS)].some((truncate) =>
+    (truncate[1] ?? "")
+      .split(",")
+      .some((target) =>
+        new RegExp(String.raw`^\s*${named(table)}`, "iu").test(target),
+      ),
+  );
 
 const callsRoutine = (statement: string, routine: string): boolean =>
   new RegExp(String.raw`(^|[^\w$])"?${escaped(routine)}"?\s*\(`, "imu").test(
@@ -165,9 +178,20 @@ export const chatWritingRoutinesOf = (
       ]);
     }
   }
+  const triggers = statements.flatMap((statement) => {
+    const trigger = TRIGGER_DEFINITION.exec(statement);
+    const table = trigger?.[1];
+    const routine = trigger?.[2];
+    return table === undefined || routine === undefined
+      ? []
+      : [{ table: bareName(table), routine: bareName(routine) }];
+  });
   const routines = new Set<string>();
-  // A routine that calls a chat-writing routine is one too; repeat until no
-  // routine is added.
+  const triggerTables = new Set<string>();
+  // A routine is chat-writing when it writes a chat table, calls a
+  // chat-writing routine, or writes a table whose trigger runs one; such a
+  // trigger's table then counts for the next routine. Repeat until neither
+  // set grows.
   for (let added = true; added;) {
     added = false;
     for (const [name, definitions] of bodies) {
@@ -175,7 +199,9 @@ export const chatWritingRoutinesOf = (
         !routines.has(name) &&
         definitions.some(
           (definition) =>
-            tables.some((table) => writesTable(definition, table)) ||
+            [...tables, ...triggerTables].some((table) =>
+              writesTable(definition, table),
+            ) ||
             [...routines].some((routine) => callsRoutine(definition, routine)),
         )
       ) {
@@ -183,18 +209,11 @@ export const chatWritingRoutinesOf = (
         added = true;
       }
     }
-  }
-  const triggerTables = new Set<string>();
-  for (const statement of statements) {
-    const trigger = TRIGGER_DEFINITION.exec(statement);
-    const table = trigger?.[1];
-    const routine = trigger?.[2];
-    if (
-      table !== undefined &&
-      routine !== undefined &&
-      routines.has(bareName(routine))
-    ) {
-      triggerTables.add(bareName(table));
+    for (const { table, routine } of triggers) {
+      if (routines.has(routine) && !triggerTables.has(table)) {
+        triggerTables.add(table);
+        added = true;
+      }
     }
   }
   return { routines, triggerTables };

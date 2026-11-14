@@ -43,9 +43,10 @@ describe.serial("no-chat-turn-time-order", () => {
         "  sql`now() < ${chatTurns.createdAt}`,",
         "  sql`ORDER BY ${chatTurns.createdAt}`,",
         "  sql`${chatTurns.createdAt} DESC NULLS LAST`,",
+        "  sql`WHERE (${chatTurns.createdAt}, ${chatTurns.id}) < (now(), ${turnId})`,",
         "];",
       ]),
-    ).toEqual([2, 3, 4, 5, 6].map(lineAfterPreamble));
+    ).toEqual([2, 3, 4, 5, 6, 7].map(lineAfterPreamble));
   });
 
   test("accepts the start read as a time and other tables' starts", async () => {
@@ -55,6 +56,8 @@ describe.serial("no-chat-turn-time-order", () => {
         "export const c = [",
         "  sql`${chatTurns.createdAt} + interval '1 millisecond'`,",
         "  sql<Date>`coalesce(${chatTurns.activeStartedAt}, ${chatTurns.createdAt})`,",
+        "  sql`coalesce (${chatTurns.createdAt}, now())`,",
+        "  sql`date_trunc('day', ${chatTurns.createdAt})`,",
         "  sql`${chatTurns.assistantMessageId} -> ${chatTurns.createdAt}`,",
         "  query.orderBy(desc(chatMessages.createdAt), desc(chatMessages.id)),",
         "  query.orderBy(desc(chatTurns.id)),",

@@ -12,6 +12,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // `.insert(chatThreads).values(...)` or `.update(chatThreads).set(...)`.
 // Tests are not checked: they insert rows as a restore does.
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import { filenameForContext, isAstNode } from "./utils.ts";
 
 const FIXTURE =
@@ -128,7 +129,16 @@ export default eslintCompatPlugin({
             const args: readonly unknown[] = node.arguments;
             for (const row of rowsOf(args.at(0))) {
               for (const property of propertiesOf(row)) {
-                if (isAstNode(property) && namesColumn(property, column)) {
+                if (
+                  isAstNode(property) &&
+                  namesColumn(property, column) &&
+                  guardEnforcesLine({
+                    guard: "no-chat-turn-ordinal-write",
+                    file: filenameForContext(context),
+                    line: context.sourceCode.getLocFromIndex(property.range[0])
+                      .line,
+                  })
+                ) {
                   context.report({
                     node: property,
                     messageId: "ordinalWrite",

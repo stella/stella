@@ -136,10 +136,13 @@ if (!databaseUrl || !runPostgresTests) {
         return await storeTurn(sender, threadId);
       });
       await firstStarted.promise;
-      const lateTurn = await db.transaction(
-        async (sender) => await storeTurn(sender, threadId),
-      );
-      secondCommitted.resolve(undefined);
+      // Released however the second sender ends, so a failure never leaves
+      // the first one open.
+      const lateTurn = await db
+        .transaction(async (sender) => await storeTurn(sender, threadId))
+        .finally(() => {
+          secondCommitted.resolve(undefined);
+        });
       const earlyTurn = await early;
 
       const turns = await readTurns(threadId);
@@ -171,16 +174,20 @@ if (!databaseUrl || !runPostgresTests) {
       const second = db.transaction(
         async (sender) => await storeTurn(sender, threadId),
       );
-      await waitForExternalState({
-        description: "the second sender waiting on the thread's row lock",
-        read: async () => {
-          const waiting = await db.execute(
-            sql`SELECT 1 FROM pg_locks WHERE NOT granted AND locktype IN ('transactionid', 'tuple') LIMIT 1`,
-          );
-          return waiting.at(0) !== undefined;
-        },
-      });
-      releaseFirst.resolve(undefined);
+      try {
+        await waitForExternalState({
+          description: "the second sender waiting on the thread's row lock",
+          read: async () => {
+            const waiting = await db.execute(
+              sql`SELECT 1 FROM pg_locks WHERE NOT granted AND locktype IN ('transactionid', 'tuple') LIMIT 1`,
+            );
+            return waiting.at(0) !== undefined;
+          },
+        });
+      } finally {
+        // The first sender holds the thread's row lock until it is released.
+        releaseFirst.resolve(undefined);
+      }
       const [firstTurn, secondTurn] = await Promise.all([first, second]);
 
       const turns = await readTurns(threadId);

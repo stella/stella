@@ -131,6 +131,26 @@ UPDATE notes SET body = body;`),
     ).toBe(true);
   });
 
+  test("when it calls a routine that writes a table whose trigger runs a chat-writing one", () => {
+    expect(
+      writes(`${routine("touch_thread", WRITE, "$a$")}
+CREATE TRIGGER touch AFTER UPDATE ON notes FOR EACH ROW EXECUTE FUNCTION touch_thread();
+${routine("write_note", "UPDATE notes SET body = body;", "$b$")}
+SELECT write_note();`),
+    ).toBe(true);
+  });
+
+  test("when it truncates a chat table anywhere in the list", () => {
+    for (const statement of [
+      "TRUNCATE chat_turns, chat_messages CASCADE;",
+      "TRUNCATE TABLE notes, ONLY public.chat_turns;",
+      'TRUNCATE notes, "chat_threads" RESTART IDENTITY;',
+    ]) {
+      expect(writes(statement), statement).toBe(true);
+    }
+    expect(writes("TRUNCATE notes, chat_turns_archive;")).toBe(false);
+  });
+
   test("when it calls or fires a chat-writing routine an earlier migration defined", () => {
     const earlier = [
       `${routine("touch_thread", WRITE, "$fn$")}
