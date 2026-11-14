@@ -329,10 +329,7 @@ pub(super) fn answer_of(status: u16, body: &[u8]) -> Answer {
   match status {
     200..=299 => {
       let stored = serde_json::from_slice::<serde_json::Value>(body)
-        .ok()
-        .is_some_and(|answer| {
-          answer.get("state").is_some_and(|state| state.is_string())
-        });
+        .is_ok_and(|answer| answer.get("state").is_some_and(|state| state.is_string()));
       if stored {
         Answer::Settled
       } else {
