@@ -192,6 +192,7 @@ export const AI_ERROR_KIND_SHAPES = {
   local_runner_not_reached: LOCAL_RUNNER_REPORTED,
   local_runner_relinked: LOCAL_RUNNER_REPORTED,
   local_runner_restoring: LOCAL_RUNNER_REPORTED,
+  local_runner_folder_unavailable: LOCAL_RUNNER_REPORTED,
   unknown: ["mid-stream-error"],
 } as const satisfies Record<AIErrorKind, NotAShape | readonly ResponseShape[]>;
 

@@ -414,6 +414,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
     "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
   ]),
+  fixtureRuleOverride("local-browser-no-network.fixture.ts", [
+    "local-browser-no-network/local-browser-no-network",
+  ]),
   fixtureRuleOverride("require-caller-feature-access.fixture.tsx", [
     "require-caller-feature-access/require-caller-feature-access",
   ]),
@@ -687,6 +690,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-dom-node-poll-assertion.fixture.tsx", [
     "no-dom-node-poll-assertion/no-dom-node-poll-assertion",
+  ]),
+  fixtureRuleOverride("review-decision-map-owner.fixture.ts", [
+    "review-decision-map-owner/review-decision-map-owner",
   ]),
   fixtureRuleOverride("text-mark-not-in-button.fixture.tsx", [
     "text-mark-not-in-button/text-mark-not-in-button",
@@ -1830,6 +1836,10 @@ const config = defineConfig({
         ],
       },
     ],
+    // The operand the rule above lets through under `::timestamptz`: a
+    // Date is still truncated there. Changed lines only until its rollout
+    // in scripts/guard-rollouts ends.
+    "no-truncated-timestamp-comparison/no-date-under-timestamp-cast": "error",
     "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
     "no-facade-imports/no-facade-imports": "error",
     "docs-source-policy/docs-source-policy": "error",
@@ -2222,6 +2232,7 @@ const config = defineConfig({
     "./.oxlint-plugins/narrative-prose-component.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
+    "./.oxlint-plugins/local-browser-no-network.ts",
     "./.oxlint-plugins/no-raw-deployment-feature-read.ts",
     "./.oxlint-plugins/require-caller-feature-access.ts",
     "./.oxlint-plugins/docs-source-policy.ts",
@@ -2347,6 +2358,7 @@ const config = defineConfig({
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/no-dom-node-poll-assertion.ts",
+    "./.oxlint-plugins/review-decision-map-owner.ts",
     "./.oxlint-plugins/text-mark-not-in-button.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
@@ -4585,6 +4597,18 @@ const config = defineConfig({
       },
     },
     {
+      // What a review status means as the shared decision has one owner,
+      // REVIEW_STATUS_DECISION in @stll/api-contract/review-decision.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/review-decision-map-owner.fixture.ts",
+      ],
+      rules: {
+        "review-decision-map-owner/review-decision-map-owner": "error",
+      },
+    },
+    {
       // A text mark is prose; a Button is one atomic box that would lift a
       // mark crossing a line out of the paragraph's reading order. Clickable
       // prose is ButtonTextRun.
@@ -5971,6 +5995,18 @@ const config = defineConfig({
       rules: {
         "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads":
           "error",
+      },
+    },
+    {
+      // Page content between the member's Chrome and a local coding agent
+      // never leaves the computer: the transport has no network client.
+      files: [
+        "apps/extension/src/lib/desktop-link.ts",
+        "packages/agent-engine/src/sidecar/browser/**/*.ts",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: {
+        "local-browser-no-network/local-browser-no-network": "error",
       },
     },
     {

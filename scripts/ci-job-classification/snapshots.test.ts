@@ -35,12 +35,16 @@ const commit = (directory: string, message: string) => {
   return git(directory, "rev-parse", "HEAD");
 };
 
+// Every fixture job holds a write permission, directly or through the
+// workflow it calls: only privileged jobs keep a decision to move.
 const reusable = (step = "run: echo ok") => `name: shared
 on:
   workflow_call:
 jobs:
   shared:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - ${step}
 `;
@@ -50,6 +54,8 @@ on: push
 jobs:
   local:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - run: echo local
 ${sha ? `  shared:\n    uses: acme/shared/.github/workflows/shared.yml@${sha}\n` : ""}`;

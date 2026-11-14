@@ -11,6 +11,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DOCUMENT_REVIEW_DECISION_REASON_SETTING } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewFindingFlag } from "@/api/lib/document-review/run-contract";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -85,22 +86,37 @@ type UpdateValues = {
 
 const createHarness = (rows: StoredFinding[]) => {
   const updates: UpdateValues[] = [];
+  /** Each raw statement, and each update, in the order the handler ran them. */
+  const steps: string[] = [];
   const decisionEvents: Record<string, unknown>[] = [];
   const auditEvents: AuditEvent[] = [];
   const { safeDb, scopedDb } = createScopedDbMock({
+    // The locked read of the finding, then its decision history.
     select: () => ({
       from: () => ({
         where: () => ({
           limit: () => ({ for: async () => rows }),
+          orderBy: () => ({ limit: async () => [] }),
         }),
       }),
     }),
     update: () => ({
       set: (values: UpdateValues) => {
         updates.push(values);
+        steps.push("update");
         return { where: async () => {} };
       },
     }),
+    execute: async (statement: { queryChunks?: unknown[] }) => {
+      steps.push(
+        JSON.stringify(statement.queryChunks ?? statement).includes(
+          DOCUMENT_REVIEW_DECISION_REASON_SETTING,
+        )
+          ? `reason ${JSON.stringify(statement)}`
+          : "other",
+      );
+      return [];
+    },
     insert: () => ({
       values: (values: Record<string, unknown> | Record<string, unknown>[]) => {
         decisionEvents.push(...[values].flat());
@@ -134,7 +150,7 @@ const createHarness = (rows: StoredFinding[]) => {
     },
   });
 
-  return { auditEvents, context, decisionEvents, updates };
+  return { auditEvents, context, decisionEvents, steps, updates };
 };
 
 describe("decideDocumentReviewFinding", () => {
@@ -162,6 +178,15 @@ describe("decideDocumentReviewFinding", () => {
     // The history is the database trigger's, written from the decider and
     // moment above; `finding-decisions.postgres.test.ts` covers it.
     expect(decisionEvents).toEqual([]);
+    // The answer carries the history as read after the change (the trigger's
+    // event is not in this mock), folded by the shared fold.
+    expect(result).toMatchObject({
+      decisions: {
+        events: [],
+        truncated: false,
+        current: { decision: null, decidedBy: null },
+      },
+    });
 
     expect(auditEvents).toHaveLength(1);
     expect(auditEvents.at(0)).toMatchObject({
@@ -171,6 +196,31 @@ describe("decideDocumentReviewFinding", () => {
       changes: { decision: { old: "open", new: "accepted" } },
       metadata: { findingId: FINDING_ID, positionId: POSITION_ID },
     });
+  });
+
+  // The history trigger reads the reason from a transaction-local setting:
+  // set for the decision's own update and cleared after it, so no other
+  // write in the transaction carries it.
+  test("a reason travels with the decision it was given for, and only it", async () => {
+    const { context, steps } = createHarness(storedFinding("open"));
+    await decideDocumentReviewFinding.handler({
+      ...context,
+      body: { decision: "dismissed", reason: "Covered by clause 9." },
+    });
+    expect(steps.map((step) => step.split(" ")[0])).toEqual([
+      "reason",
+      "update",
+      "reason",
+    ]);
+    expect(steps.at(0)).toContain("Covered by clause 9.");
+
+    // Restating the decision is no new decision: its reason is not recorded.
+    const restated = createHarness(storedFinding("dismissed"));
+    await decideDocumentReviewFinding.handler({
+      ...restated.context,
+      body: { decision: "dismissed", flags: ["needs-review"], reason: "Again" },
+    });
+    expect(restated.steps).toEqual(["update"]);
   });
 
   // Reopening must withdraw the decider with the decision: the column pair is

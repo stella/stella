@@ -1057,6 +1057,19 @@ describe("a run folder's checkpoint", () => {
       expect(existsSync(lockFile(workspaceDir))).toBe(false);
     });
 
+    test("a lock whose holder is gone is taken over even when the wait is spent", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "a.txt", "saved");
+      await capture(workspaceDir);
+      const gone = Bun.spawn(["true"]);
+      await gone.exited;
+      writeFileSync(lockFile(workspaceDir), holder(gone.pid));
+      expect(
+        (await capture(workspaceDir, { limits: { lockWaitMs: 0 } })).report,
+      ).toEqual({ status: "taken" });
+      expect(existsSync(lockFile(workspaceDir))).toBe(false);
+    });
+
     test("a lock its holder gives up while another reads it reads as held or as free, never as a failure", async () => {
       const { workspaceDir } = place();
       write(workspaceDir, "a.txt", "saved");

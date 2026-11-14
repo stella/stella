@@ -58,10 +58,6 @@ import {
 } from "@/api/lib/lists/verification/paragraph-scope";
 import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
 import {
-  checkVerificationDispatchBudget,
-  ListVerificationRunCapError,
-} from "@/api/lib/lists/verification/run-caps";
-import {
   completeVerificationRun,
   failVerificationRun,
 } from "@/api/lib/lists/verification/run-persistence";
@@ -92,6 +88,17 @@ import {
   formatModelRef,
   getTanStackTextModelInfoForTask,
 } from "@/api/lib/tanstack-ai-models";
+import {
+  checkModelRunCaps,
+  ModelRunCapError,
+} from "@/api/lib/usage/model-run-caps/caps";
+
+/** A verification's model calls re-check the list counter it was charged to. */
+const VERIFICATION_DISPATCH_CAPS = {
+  kind: "list-run",
+  operation: "lists.verifications.create",
+  phase: "dispatch",
+} as const;
 
 const CONFIG_FAILED_SINK = failureSink({
   event: "list_verification_run.config_failed",
@@ -640,9 +647,10 @@ const executeRun = async ({
     checkRunBudget: async () =>
       await actor.writeDb(
         async (tx) =>
-          await checkVerificationDispatchBudget({
+          await checkModelRunCaps({
             tx,
             organizationId: actor.organizationId,
+            ...VERIFICATION_DISPATCH_CAPS,
           }),
       ),
     ...(execution.generateObjectForTask === undefined
@@ -675,7 +683,7 @@ const executeRun = async ({
 
   const extracted = await extractClaims({ passages, deps });
   if (Result.isError(extracted)) {
-    if (extracted.error.cause instanceof ListVerificationRunCapError) {
+    if (extracted.error.cause instanceof ModelRunCapError) {
       return "run_limit_reached";
     }
     return extracted.error.cause instanceof ListVerificationAccessRevokedError
@@ -705,7 +713,7 @@ const executeRun = async ({
     deps,
   });
   if (Result.isError(graded)) {
-    if (graded.error.cause instanceof ListVerificationRunCapError) {
+    if (graded.error.cause instanceof ModelRunCapError) {
       return "run_limit_reached";
     }
     return graded.error.cause instanceof ListVerificationAccessRevokedError

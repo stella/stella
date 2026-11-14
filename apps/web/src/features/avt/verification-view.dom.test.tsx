@@ -16,6 +16,7 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
@@ -756,6 +757,24 @@ test("a governing record changes the verdict and escalation keeps the conflict o
     decidedBy: actorId,
   } as const;
   answers.push(Response.json({ claimId: claim.id, review: governed }));
+  /** The run read again after a record conflict changes, as the server
+   *  answers whether the claim needs attention. */
+  const serveAttention = (needsAttention: boolean) => {
+    act(() => {
+      client.setQueryData(
+        verificationRunOptions(workspaceId, run.id).queryKey,
+        (current) =>
+          current === undefined
+            ? current
+            : {
+                ...current,
+                claims: current.claims.map((each) =>
+                  each.id === claim.id ? { ...each, needsAttention } : each,
+                ),
+              },
+      );
+    });
+  };
   const governingButton = screen
     .getAllByRole("button", {
       name: messages.avt.claimDetail.recordConflict.treatAsGoverningRecord,
@@ -798,7 +817,10 @@ test("a governing record changes the verdict and escalation keeps the conflict o
     },
   });
   expect(runText(claimButton(5))).toContain("Supported");
-  expect(screen.getByText("0/2")).toBeTruthy();
+  // Governing reads the run again, and the server answers that the claim
+  // no longer needs attention; the tiles follow its answer.
+  serveAttention(false);
+  await waitFor(() => expect(screen.queryByText("0/2") === null).toBe(false));
   expect(
     screen.getByText(messages.avt.claimDetail.basis.verdictWithheld),
   ).toBeTruthy();
@@ -848,7 +870,9 @@ test("a governing record changes the verdict and escalation keeps the conflict o
       .hasAttribute("disabled"),
   ).toBe(true);
   expect(runText(claimButton(5))).toContain("Record conflict");
-  expect(screen.getByText("0/3")).toBeTruthy();
+  // Escalating reads the run again, and the conflict needs attention again.
+  serveAttention(true);
+  await waitFor(() => expect(screen.queryByText("0/3") === null).toBe(false));
   expect(
     screen.getByText(messages.avt.claimDetail.basis.verdictWithheld),
   ).toBeTruthy();
@@ -2628,7 +2652,7 @@ test("a re-check refused as a whole stops, says so, and offers the claims again"
     Response.json(
       {
         error: "This organization has reached its daily verification limit.",
-        code: "verification_daily_limit_reached",
+        code: MODEL_RUN_CAP_CODES.daily,
       },
       { status: 429 },
     ),
