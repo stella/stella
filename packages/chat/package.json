@@ -54,7 +54,7 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
-    "@ag-ui/core": "1.0.3",
+    "@ag-ui/core": "1.0.4",
     "@stll/ai-catalog": "workspace:^",
     "@stll/html": "workspace:*",
     "@stll/ui": "workspace:^",
@@ -69,8 +69,8 @@
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@tiptap/core": "^3.32.1",
-    "@tiptap/pm": "^3.32.1",
+    "@tiptap/core": "^3.33.0",
+    "@tiptap/pm": "^3.33.0",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
@@ -80,8 +80,8 @@
   },
   "peerDependencies": {
     "@base-ui/react": "^1.7.0",
-    "@tiptap/core": "^3.32.1",
-    "@tiptap/pm": "^3.32.1",
+    "@tiptap/core": "^3.33.0",
+    "@tiptap/pm": "^3.33.0",
     "@types/react": ">=19",
     "react": ">=19"
   },

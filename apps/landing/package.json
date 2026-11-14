@@ -28,9 +28,9 @@
     "test:e2e": "playwright test --config e2e/playwright.config.ts --project landing"
   },
   "dependencies": {
-    "@astrojs/react": "^7.1.2",
+    "@astrojs/react": "^7.1.4",
     "@astrojs/sitemap": "^3.7.4",
-    "@astrojs/starlight": "^0.42.7",
+    "@astrojs/starlight": "^0.42.10",
     "@resvg/resvg-js": "^2.6.2",
     "@stll/aho-corasick": "catalog:",
     "@stll/aho-corasick-wasm": "catalog:",
@@ -45,7 +45,7 @@
     "@stll/ui": "workspace:*",
     "@stll/workspace-ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "astro": "^7.4.4",
+    "astro": "^7.4.7",
     "better-result": "catalog:",
     "js-yaml": "4.3.2",
     "prosemirror-commands": "catalog:",
@@ -70,7 +70,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/text-normalize": "workspace:*",
