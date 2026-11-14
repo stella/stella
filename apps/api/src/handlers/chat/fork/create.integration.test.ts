@@ -47,6 +47,7 @@ import {
   storeStepText,
 } from "@/api/lib/desktop-runner/step-contents";
 import type { DesktopRunnerDb } from "@/api/lib/desktop-runner/store";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import {
@@ -81,12 +82,21 @@ const forkThread = createForkThread({ indexChatThread: indexChatThreadMock });
 // SAFETY: the test database exposes the same Drizzle query and transaction
 // APIs as the owner connection the step content store runs on.
 const runnerDb = () => asTestRaw<DesktopRunnerDb>(testDb);
+/** How many of the next step content copies fail before one is made. */
+const stepCopy = { failuresLeft: 0 };
 /** The fork with stored step content copied on the test database. */
 const forkThreadWithSteps = createForkThread({
   indexChatThread: indexChatThreadMock,
   control: () => ({
-    copyStepContents: async (options) =>
-      Result.ok(await copyStepContents(runnerDb(), options)),
+    copyStepContents: async (options) => {
+      if (stepCopy.failuresLeft > 0) {
+        stepCopy.failuresLeft -= 1;
+        return Result.err(
+          new DatabaseError({ message: "The step content store is away" }),
+        );
+      }
+      return Result.ok(await copyStepContents(runnerDb(), options));
+    },
   }),
 });
 
@@ -471,6 +481,7 @@ test("copies the prefix, preserves the title, and projects fork provenance", asy
   );
 
   expect(result).toEqual({
+    stepContent: "complete",
     threadId: newThreadId,
     title: "Termination clause",
   });
@@ -1609,7 +1620,7 @@ test("a fork copies what its copied steps stored, each owned by the fork's own m
   const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   seededThreadIds.push(newThreadId);
 
-  await expectForked(
+  const forked = await expectForked(
     forkThreadWithSteps.handler(
       forkContext({
         newThreadId,
@@ -1618,6 +1629,7 @@ test("a fork copies what its copied steps stored, each owned by the fork's own m
       }),
     ),
   );
+  expect(forked.stepContent).toBe("complete");
 
   const forkAnswer = (await readMessages(newThreadId)).at(1)?.id;
   const copied = await stepRows(newThreadId);
@@ -1667,4 +1679,72 @@ test("a fork copies what its copied steps stored, each owned by the fork's own m
     .where(eq(chatMessages.id, forkAnswer ?? panic("the fork has no answer")));
   expect(await stepRows(newThreadId)).toEqual([]);
   expect(await stepRows(source.threadId)).toHaveLength(3);
+});
+
+test("a fork whose step content did not copy says so, and the same request again completes it", async () => {
+  const source = await seedThread({ texts: ["Run the tests", "Done"] });
+  const owner = { userId: ids.userA1, organizationId: ids.orgA };
+  const runId = await seedLocalRun(source.threadId, messageAt(source, 0));
+  const step = stepOf(runId, "call-1");
+  await showSteps(messageAt(source, 1), [step.callId]);
+  await storeStepText(runnerDb(), {
+    owner,
+    runId,
+    stepKey: step.stepKey,
+    kind: "command",
+    totalBytes: 6,
+    text: "3 pass",
+    storedBytes: 6,
+  });
+  const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  seededThreadIds.push(newThreadId);
+  const request = async () =>
+    await expectForked(
+      forkThreadWithSteps.handler(
+        forkContext({
+          newThreadId,
+          threadId: source.threadId,
+          upToMessageId: messageAt(source, 1),
+        }),
+      ),
+    );
+  const readStep = async () =>
+    (
+      await readVisibleStepContent(safeDb, {
+        owner,
+        threadId: newThreadId,
+        stepKey: step.stepKey,
+      })
+    ).unwrap();
+
+  // The copy fails once: the fork is returned whole, and says what it lacks.
+  stepCopy.failuresLeft = 1;
+  const first = await request();
+  expect(first).toMatchObject({
+    stepContent: "incomplete",
+    threadId: newThreadId,
+  });
+  expect(messageTexts(await readMessages(newThreadId))).toEqual([
+    "Run the tests",
+    "Done",
+  ]);
+  expect(await stepRows(newThreadId)).toEqual([]);
+  // The step reads as not copied, never as something that was never stored.
+  expect(await readStep()).toEqual({ type: "not_copied" });
+
+  // The same request again finds the fork and copies what is missing.
+  const second = await request();
+  expect(second).toMatchObject({
+    stepContent: "complete",
+    threadId: newThreadId,
+  });
+  const copied = await stepRows(newThreadId);
+  expect(copied).toHaveLength(1);
+  expect(await readStep()).toMatchObject({ type: "text", text: "3 pass" });
+
+  // A third time changes nothing.
+  const third = await request();
+  expect(third).toMatchObject({ stepContent: "complete" });
+  expect(await stepRows(newThreadId)).toEqual(copied);
+  expect(await readMessages(newThreadId)).toHaveLength(2);
 });

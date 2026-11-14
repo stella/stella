@@ -599,9 +599,7 @@ describe("the stored content of a local run's steps", () => {
     const key = stepKey();
     await storeText(ownerA, source, key, "not for anyone else");
     const foreign = await seedRun(ownerSameOrg);
-    const steps = [
-      { stepKey: key, messageId: foreign.userMessageId, userFileId: null },
-    ];
+    const steps = [{ stepKey: key, messageId: foreign.userMessageId }];
     // Another member cannot copy a step out of a thread that is not theirs,
     expect(
       await copyStepContents(runnerDb(), {
@@ -623,9 +621,7 @@ describe("the stored content of a local run's steps", () => {
     expect(await read(ownerSameOrg, foreign, key)).toEqual({ type: "none" });
     // Between the owner's own threads the copy is made once.
     const own = await seedRun(ownerA);
-    const ownSteps = [
-      { stepKey: key, messageId: own.userMessageId, userFileId: null },
-    ];
+    const ownSteps = [{ stepKey: key, messageId: own.userMessageId }];
     const copy = async () =>
       await copyStepContents(runnerDb(), {
         owner: ownerA,

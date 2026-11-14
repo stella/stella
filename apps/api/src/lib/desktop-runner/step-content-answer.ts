@@ -26,6 +26,8 @@ export const stepContentAnswer = (
   switch (content.type) {
     case "arriving":
       return { state: CHAT_LOCAL_RUN_STEP_CONTENT_STATE.arriving };
+    case "not_copied":
+      return { state: CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notCopied };
     case "not_stored":
       return { state: CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notStored };
     case "unstored":

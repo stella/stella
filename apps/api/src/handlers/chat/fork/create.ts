@@ -1,13 +1,17 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
+import {
+  CHAT_FORK_STEP_CONTENT,
+  type ChatForkStepContent,
+} from "@stll/api-contract/chat-local-run-step-content";
 import { chatLocalRunOfCall } from "@stll/api-contract/chat-local-run-step-output";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
-import { defaultDatabaseRetry } from "@/api/db/safe-db";
+import { defaultDatabaseRetry, type SafeDbError } from "@/api/db/safe-db";
 import {
   chatLocalRunStepContents,
   chatMessages,
@@ -184,7 +188,9 @@ type PrefixStep = { stepKey: string; messageId: SafeId<"chatMessage"> };
  * is the same in both threads; a call repeated across messages belongs to
  * the first that shows it.
  */
-const collectPrefixSteps = (prefix: readonly PrefixMessage[]): PrefixStep[] => {
+const collectPrefixSteps = (
+  prefix: readonly Pick<PrefixMessage, "message" | "newMessageId">[],
+): PrefixStep[] => {
   const steps = new Map<string, PrefixStep>();
   for (const { message, newMessageId } of prefix) {
     for (const part of message.parts) {
@@ -727,6 +733,83 @@ export const createForkThread = ({
         (fork.parentThreadId === null ||
           fork.parentThreadId === params.threadId);
 
+      /**
+       * Copy what `steps` stored in the source thread to the fork. The fork
+       * is whole without it, so a failure is reported and answered as
+       * `incomplete`, never raised: the same request sent again copies what
+       * is missing, since a row the fork already holds is kept.
+       */
+      const copyStepContent = async ({
+        sourceThreadId,
+        steps: copiedSteps,
+      }: {
+        sourceThreadId: SafeId<"chatThread">;
+        steps: readonly PrefixStep[];
+      }): Promise<ChatForkStepContent> => {
+        if (copiedSteps.length === 0) {
+          return CHAT_FORK_STEP_CONTENT.complete;
+        }
+        const stepControl = control?.() ?? getDesktopRunnerControl().control;
+        const copied = await stepControl.copyStepContents({
+          owner: {
+            userId: user.id,
+            organizationId: session.activeOrganizationId,
+          },
+          sourceThreadId,
+          targetThreadId: newThreadId,
+          steps: copiedSteps,
+        });
+        if (copied.isErr()) {
+          observeFailure(copied.error, { sink: FORK_STEP_CONTENT_SINK });
+          return CHAT_FORK_STEP_CONTENT.incomplete;
+        }
+        return CHAT_FORK_STEP_CONTENT.complete;
+      };
+
+      /**
+       * Copy again for a fork that already exists: its own stored messages
+       * say which steps it shows. A fork whose source thread is gone has
+       * nothing left to copy from.
+       */
+      const repairStepContent = async (fork: {
+        parentThreadId: SafeId<"chatThread"> | null;
+      }): Promise<Result<ChatForkStepContent, SafeDbError>> => {
+        const sourceThreadId = fork.parentThreadId;
+        if (sourceThreadId === null) {
+          return Result.ok(CHAT_FORK_STEP_CONTENT.complete);
+        }
+        const forkSteps = await safeDb(async (tx) => {
+          const last = (
+            await tx
+              .select({ id: chatMessages.id })
+              .from(chatMessages)
+              .where(eq(chatMessages.threadId, newThreadId))
+              .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+              .limit(1)
+          ).at(0);
+          const rows =
+            last === undefined
+              ? null
+              : await loadChatMessagePrefixOnTx({
+                  targetMessageId: last.id,
+                  threadId: newThreadId,
+                  tx,
+                });
+          return collectPrefixSteps(
+            (rows ?? []).map((row) => ({
+              message: chatMessageFromPersisted(row),
+              newMessageId: row.id,
+            })),
+          );
+        });
+        if (Result.isError(forkSteps)) {
+          return Result.err(forkSteps.error);
+        }
+        return Result.ok(
+          await copyStepContent({ sourceThreadId, steps: forkSteps.value }),
+        );
+      };
+
       const reads = yield* Result.await(
         safeDb(async (tx) => {
           // Resolved before the source lookup so a retry still converges after
@@ -784,8 +867,8 @@ export const createForkThread = ({
           }));
 
           // The images the copied steps viewed are chat files of the source
-          // thread: the fork copies them with the attachments, so its steps
-          // name its own files.
+          // thread: the fork copies them with the attachments, and the step
+          // copy then names the fork's own file of the same bytes.
           const steps = collectPrefixSteps(prefix);
           const stepImages =
             steps.length === 0
@@ -854,7 +937,6 @@ export const createForkThread = ({
             prefix,
             source,
             sourceFiles,
-            stepImages,
             steps,
             unresolvedFileIds: sourceFileIds.filter(
               (fileId) => !resolvedFileIds.has(fileId),
@@ -903,20 +985,16 @@ export const createForkThread = ({
             readWithdrawnCopyProjection({ values: existingFork }),
           ),
         );
+        // A retry of a fork whose step content did not copy completes it.
+        const repaired = yield* Result.await(repairStepContent(existingFork));
         return Result.ok({
+          stepContent: repaired,
           threadId: existingFork.id,
           title: projection.thread(existingFork).title,
         });
       }
 
-      const {
-        prefix,
-        source,
-        sourceFiles,
-        stepImages,
-        steps,
-        unresolvedFileIds,
-      } = reads;
+      const { prefix, source, sourceFiles, steps, unresolvedFileIds } = reads;
       const projection = yield* Result.await(
         Result.tryPromise(async () =>
           readWithdrawnCopyProjection({ values: source }),
@@ -1125,7 +1203,11 @@ export const createForkThread = ({
           if (!raced.ownObjectsReferenced) {
             await rollbackCopiedS3Keys(copiedS3Keys, fileUsageDb);
           }
+          const repaired = yield* Result.await(
+            repairStepContent(raced.existingFork),
+          );
           return Result.ok({
+            stepContent: repaired,
             threadId: raced.existingFork.id,
             title: projection.thread(raced.existingFork).title,
           });
@@ -1135,36 +1217,11 @@ export const createForkThread = ({
       }
 
       // What the copied steps stored is written only on the gateway's owner
-      // connection, so it is copied once the fork exists. A failure leaves
-      // the fork whole and its steps without stored content.
-      if (steps.length > 0) {
-        const imageOfStep = new Map(
-          stepImages.map((image) => [image.stepKey, image.userFileId]),
-        );
-        const stepControl = control?.() ?? getDesktopRunnerControl().control;
-        const copiedSteps = await stepControl.copyStepContents({
-          owner: {
-            userId: user.id,
-            organizationId: session.activeOrganizationId,
-          },
-          sourceThreadId: params.threadId,
-          targetThreadId: newThreadId,
-          steps: steps.map(({ stepKey, messageId }) => {
-            const sourceImage = imageOfStep.get(stepKey);
-            return {
-              stepKey,
-              messageId,
-              userFileId:
-                sourceImage === undefined
-                  ? null
-                  : (copiedFileIds.get(sourceImage) ?? null),
-            };
-          }),
-        });
-        if (copiedSteps.isErr()) {
-          observeFailure(copiedSteps.error, { sink: FORK_STEP_CONTENT_SINK });
-        }
-      }
+      // connection, so it is copied once the fork exists.
+      const stepContent = await copyStepContent({
+        sourceThreadId: params.threadId,
+        steps,
+      });
 
       // Fire-and-forget after the fork commits: indexing must never block or
       // fail it. Rebuilds both the thread and message search documents for the
@@ -1180,6 +1237,7 @@ export const createForkThread = ({
       );
 
       return Result.ok({
+        stepContent,
         threadId: newThreadId,
         title: projection.thread(source).title,
       });

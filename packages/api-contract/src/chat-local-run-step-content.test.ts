@@ -128,6 +128,7 @@ describe("a stored step's content", () => {
         totalBytes: 12,
       },
       { state: CHAT_LOCAL_RUN_STEP_CONTENT_STATE.arriving },
+      { state: CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notCopied },
       { state: CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notStored },
     ];
     for (const answer of answers) {

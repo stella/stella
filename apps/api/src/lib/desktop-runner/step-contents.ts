@@ -501,6 +501,8 @@ type StepOfThread = {
 /** What a thread the member sees holds for one step. */
 export type VisibleStepContent =
   | { type: "none" }
+  /** A fork holds nothing for a step its source thread still stores. */
+  | { type: "not_copied" }
   | {
       type: "unstored";
       state: Exclude<ChatLocalRunStepContentStoredState, "stored">;
@@ -536,7 +538,8 @@ export type StoredStepContent =
  * step only with its thread, so a thread the member cannot see (another
  * member's, another organization's, one whose matter they can no longer
  * open) answers `null`, and `none` means the thread is theirs and holds
- * nothing for the step. Text is opened for the member's organization.
+ * nothing for the step; `not_copied` is that for a fork whose source thread
+ * still stores the step. Text is opened for the member's organization.
  */
 export const readVisibleStepContent = async (
   safeDb: SafeDb,
@@ -556,6 +559,9 @@ export const readVisibleStepContent = async (
           fileName: userFiles.fileName,
           mimeType: userFiles.mimeType,
           placeholder: userFiles.placeholder,
+          // A fork's source thread, where the member sees it, still storing
+          // the step: the fork's copy of it is missing.
+          sourceStores: sql<boolean>`EXISTS (SELECT 1 FROM chat_local_run_step_contents source_step WHERE source_step.thread_id = ${chatThreads.parentThreadId} AND source_step.step_key = ${stepKey})`,
         })
         .from(chatThreads)
         .leftJoin(
@@ -589,7 +595,7 @@ export const readVisibleStepContent = async (
     row.totalBytes === null ||
     row.storedBytes === null
   ) {
-    return Result.ok({ type: "none" });
+    return Result.ok({ type: row.sourceStores ? "not_copied" : "none" });
   }
   const state = storedStateOf(row.outcome);
   if (state !== stored) {
@@ -660,13 +666,10 @@ export const isStepRunOpen = async (
       .limit(1)
   ).length === 1;
 
-/** One step a fork copies: where it goes, and the fork's own copy of its image. */
+/** One step a fork copies, and the fork's message that shows it. */
 type CopiedStep = {
   stepKey: string;
-  /** The fork's message that shows the step. */
   messageId: SafeId<"chatMessage">;
-  /** The fork's copy of the step's image file; `null` for none. */
-  userFileId: SafeId<"userFile"> | null;
 };
 
 type CopyStepContentsOptions = {
@@ -676,30 +679,21 @@ type CopyStepContentsOptions = {
   steps: readonly CopiedStep[];
 };
 
-/** Steps one statement copies: each adds two parameters per mapped column. */
+/** Steps one statement copies: each adds two parameters. */
 const COPY_STEPS_PER_STATEMENT = 200;
-
-/** The uuid `valueOf` gives each step, by the row's step key; null for none. */
-const mappedBy = (
-  steps: readonly CopiedStep[],
-  valueOf: (step: CopiedStep) => string | null,
-) =>
-  sqlCaseFragment({
-    operand: sql`${contents.stepKey}`,
-    branches: steps.map(
-      (step) => sql`WHEN ${step.stepKey} THEN ${valueOf(step)}::uuid`,
-    ),
-    fallback: sql`NULL::uuid`,
-  });
 
 /**
  * Copy what the steps of a forked thread's messages stored, inside the
  * database: each copy is owned by the fork's message that shows the step, so
  * it goes with that message. Both threads must be the owner's. Text is
- * copied as stored (one organization encrypts both); an image row is copied
- * only with the fork's own copy of its file, and a step whose file was not
- * copied is left out, so the fork never names the source's file. A row the
- * fork already holds is kept. Returns how many rows were copied.
+ * copied as stored (one organization encrypts both). An image row names the
+ * fork's own copy of the step's file, found among the fork's files by the
+ * bytes' hash; a step whose file the fork does not hold is left out, so the
+ * fork never names the source's file.
+ *
+ * A row the fork already holds is kept, so the copy can be run again: a
+ * repeat adds what an earlier one missed and changes nothing else. Returns
+ * how many rows were added.
  */
 export const copyStepContents = async (
   db: Pick<DesktopRunnerDb, "select" | "insert">,
@@ -707,23 +701,29 @@ export const copyStepContents = async (
 ): Promise<number> => {
   const ownedThread = (threadId: SafeId<"chatThread">) =>
     sql`EXISTS (SELECT 1 FROM ${chatThreads} WHERE ${chatThreads.id} = ${threadId} AND ${chatThreads.userId} = ${owner.userId} AND ${chatThreads.organizationId} = ${owner.organizationId})`;
+  const forkFile = sql`(SELECT fork_file.id FROM user_files fork_file JOIN user_files source_file ON source_file.id = ${contents.userFileId} WHERE fork_file.thread_id = ${targetThreadId} AND fork_file.user_id = ${owner.userId} AND fork_file.sha256_hex = source_file.sha256_hex ORDER BY fork_file.id LIMIT 1)`;
   let copied = 0;
   for (let from = 0; from < steps.length; from += COPY_STEPS_PER_STATEMENT) {
     const batch = steps.slice(from, from + COPY_STEPS_PER_STATEMENT);
-    const copiedFile = mappedBy(batch, (step) => step.userFileId);
     const rows = db
       .select({
         threadId: sql<string>`${targetThreadId}::uuid`.as("thread_id"),
         stepKey: contents.stepKey,
         runId: contents.runId,
-        messageId: mappedBy(batch, (step) => step.messageId).as("message_id"),
+        messageId: sqlCaseFragment({
+          operand: sql`${contents.stepKey}`,
+          branches: batch.map(
+            (step) => sql`WHEN ${step.stepKey} THEN ${step.messageId}::uuid`,
+          ),
+          fallback: sql`NULL::uuid`,
+        }).as("message_id"),
         kind: contents.kind,
         outcome: contents.outcome,
         totalBytes: contents.totalBytes,
         storedBytes: contents.storedBytes,
         textEncrypted: contents.textEncrypted,
         textIv: contents.textIv,
-        userFileId: copiedFile.as("user_file_id"),
+        userFileId: forkFile.as("user_file_id"),
       })
       .from(contents)
       .where(
@@ -735,7 +735,7 @@ export const copyStepContents = async (
           ),
           ownedThread(sourceThreadId),
           ownedThread(targetThreadId),
-          sql`(${contents.userFileId} IS NULL) = (${copiedFile} IS NULL)`,
+          sql`(${contents.userFileId} IS NULL) = (${forkFile} IS NULL)`,
         ),
       );
     // db-await-in-loop: one bounded statement per batch of steps
