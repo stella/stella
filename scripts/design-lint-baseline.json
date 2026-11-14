@@ -968,7 +968,7 @@
     "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts": 11,
     "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 1,
     "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts": 3,
-    "apps/api/src/lib/legal-search/corpus-index-projection-store.ts": 15,
+    "apps/api/src/lib/legal-search/corpus-index-projection-store.ts": 14,
     "apps/api/src/lib/legal-search/reconciliation-store.ts": 4,
     "apps/api/src/lib/legal-search/sk-document-backfill.ts": 2,
     "apps/api/src/lib/legal-search/soft-law-ingestion-store.ts": 11,
