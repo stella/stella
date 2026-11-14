@@ -2384,7 +2384,7 @@
     },
     "turnPaused": {
       "continue": "Kontynuuj",
-      "status": "Wstrzymano po {count, plural, one {# kroku} few {# krokach} many {# krokach} other {# kroku}}"
+      "status": "Wstrzymano po {count, plural, one {# wywołaniu narzędzia} few {# wywołaniach narzędzi} many {# wywołaniach narzędzi} other {# wywołania narzędzia}}"
     },
     "turnStatus": {
       "answerFailed": "Nie udało się dokończyć odpowiedzi",

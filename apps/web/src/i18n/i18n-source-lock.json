@@ -1912,7 +1912,7 @@
   "chat.turnNotification.replyReadyBody": "stella finished answering in your chat.",
   "chat.turnNotification.replyReadyTitle": "Reply ready",
   "chat.turnPaused.continue": "Keep going",
-  "chat.turnPaused.status": "Paused after {count, plural, one {# step} other {# steps}}",
+  "chat.turnPaused.status": "Paused after {count, plural, one {# tool call} other {# tool calls}}",
   "chat.turnStatus.answerFailed": "The answer could not be finished",
   "chat.turnStatus.answerReady": "Answer ready",
   "chat.turnStatus.waitingForApproval": "Waiting for approval",

@@ -2384,7 +2384,7 @@
     },
     "turnPaused": {
       "continue": "Pokračovať",
-      "status": "Pozastavené po {count, plural, one {# kroku} few {# krokoch} many {# kroku} other {# krokoch}}"
+      "status": "Pozastavené po {count, plural, one {# volaní nástroja} few {# volaniach nástrojov} many {# volania nástroja} other {# volaniach nástrojov}}"
     },
     "turnStatus": {
       "answerFailed": "Odpoveď sa nepodarilo dokončiť",

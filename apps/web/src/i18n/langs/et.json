@@ -2384,7 +2384,7 @@
     },
     "turnPaused": {
       "continue": "Jätka",
-      "status": "Peatatud pärast {count, plural, one {# sammu} other {# sammu}}"
+      "status": "Peatatud pärast {count, plural, one {# tööriistakutset} other {# tööriistakutset}}"
     },
     "turnStatus": {
       "answerFailed": "Vastust ei õnnestunud lõpetada",

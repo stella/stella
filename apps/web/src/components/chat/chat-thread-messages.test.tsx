@@ -314,8 +314,8 @@ describe("chat thread messages", () => {
       },
     } satisfies ChatUIMessage;
     const status = messages.chat.turnPaused.status.replace(
-      "{count, plural, one {# step} other {# steps}}",
-      "3 steps",
+      "{count, plural, one {# tool call} other {# tool calls}}",
+      "3 tool calls",
     );
     const render = (thread: ChatUIMessage[]) =>
       renderWithProviders(
@@ -333,8 +333,8 @@ describe("chat thread messages", () => {
           }}
         />,
       );
-    // The fixture's copy must be what the page renders for three steps.
-    expect(status).toBe("Paused after 3 steps");
+    // The fixture's copy must be what the page renders for three tool calls.
+    expect(status).toBe("Paused after 3 tool calls");
 
     const latest = render([paused]);
     expect(renderedText(latest)).toContain(status);

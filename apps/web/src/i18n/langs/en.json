@@ -2384,7 +2384,7 @@
     },
     "turnPaused": {
       "continue": "Keep going",
-      "status": "Paused after {count, plural, one {# step} other {# steps}}"
+      "status": "Paused after {count, plural, one {# tool call} other {# tool calls}}"
     },
     "turnStatus": {
       "answerFailed": "The answer could not be finished",

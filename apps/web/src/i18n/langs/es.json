@@ -2384,7 +2384,7 @@
     },
     "turnPaused": {
       "continue": "Continuar",
-      "status": "En pausa tras {count, plural, one {# paso} many {# pasos} other {# pasos}}"
+      "status": "En pausa tras {count, plural, one {# llamada a herramienta} many {# llamadas a herramientas} other {# llamadas a herramientas}}"
     },
     "turnStatus": {
       "answerFailed": "No se pudo terminar la respuesta",

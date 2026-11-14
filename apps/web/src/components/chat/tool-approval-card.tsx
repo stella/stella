@@ -658,6 +658,7 @@ export const ToolApprovalCard = ({
       : async () => await browserApproval.confirmSiteGrant(part.id);
   const shouldAutoApprove =
     !isBlocked &&
+    !awaitedAtOpen(approvalId, approvalIdsAwaitedAtOpen) &&
     !requiresPerCallChatApproval(name) &&
     (isGrantAutoApproval ||
       browserApproval.isReadsAutoApproval ||
@@ -690,10 +691,7 @@ export const ToolApprovalCard = ({
           },
           // A card the user already answered is not answered again.
           shouldRespond:
-            isAwaitingUser &&
-            !responded &&
-            !awaitedAtOpen(approvalId, approvalIdsAwaitedAtOpen) &&
-            (isBlocked || shouldAutoApprove),
+            isAwaitingUser && !responded && (isBlocked || shouldAutoApprove),
         };
   // Answered cards stop asking, even while the answer waits for the rest of
   // a batch.

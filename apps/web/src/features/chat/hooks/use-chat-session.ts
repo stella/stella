@@ -48,6 +48,7 @@ import {
   consumePlaybookSaveToolCalls,
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
+  getChatWorkAwaitedAtOpen,
   getCurrentApprovalPendingMessageId,
   isChatClientRequestActive,
   isNonPersistentGrantChatToolName,
@@ -382,6 +383,13 @@ export const useChatSession = ({
     chat.subscribe,
     chat.getSnapshot,
     chat.getSnapshot,
+  );
+  // What the thread already waits on when this page opens it: it resumes only
+  // once the user acts. Read per page open, not per runtime, because the
+  // registry keeps a waiting thread's runtime across a reopen.
+  const workAwaitedAtOpen = useMemo(
+    () => getChatWorkAwaitedAtOpen(chat.getSnapshot().messages),
+    [chat],
   );
   const {
     error: runtimeError,
@@ -1856,7 +1864,8 @@ export const useChatSession = ({
 
   return {
     activitySession: chat,
-    approvalIdsAwaitedAtOpen: chat.workAwaitedAtOpen.approvalIds,
+    approvalIdsAwaitedAtOpen: workAwaitedAtOpen.approvalIds,
+    workAwaitedAtOpen,
     clientStatus: status,
     reconnecting,
     refreshAnswers,

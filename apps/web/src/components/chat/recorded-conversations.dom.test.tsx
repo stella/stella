@@ -1467,6 +1467,41 @@ describe("a recorded conversation, rendered", () => {
     });
   });
 
+  test("a reopened page whose kept runtime watched a card arrive starts no tool call until the user answers", async () => {
+    const recording = readRecording("conversation-grant");
+    const sent =
+      recording.steps.at(0)?.action ??
+      expect.unreachable("The recording must start with a send");
+    // No grant yet: the card that arrives while the page is open waits.
+    const server = createRecordedServer(recording, []);
+    routeRequest = server.fetch;
+    openGrants = server.grants;
+    const first = await openPage(recording);
+    const pendingActions: Promise<Result<void, unknown>>[] = [];
+    await performAction({
+      action: sent,
+      container: first.view.container,
+      live: first,
+      server,
+      pendingActions,
+    });
+    await flush();
+    expect(readScreen(first.view.container).actionable).toEqual(["call-1"]);
+    // The user leaves without answering; the registry keeps the runtime that
+    // still waits on the card. Then a grant comes to cover its tool.
+    first.view.unmount();
+    server.grants.push(...grantConversationTools(recording));
+    const posted = server.posted.length;
+    const reopened = await openPage(recording);
+    await flush();
+
+    expect(
+      server.posted.length,
+      finding(RENDER_ORACLE.requestsMatchRecorded, "reattach"),
+    ).toBe(posted);
+    expect(readScreen(reopened.view.container).actionable).toEqual(["call-1"]);
+  });
+
   test("a recording performs every action the page offers, or says why not", () => {
     const performed = SCENARIOS.flatMap((scenario) =>
       readRecording(scenario).steps.map(({ action }) => action),

@@ -2384,7 +2384,7 @@
     },
     "turnPaused": {
       "continue": "Turpināt",
-      "status": "Apturēts pēc {count, plural, zero {# soļiem} one {# soļa} other {# soļiem}}"
+      "status": "Apturēts pēc {count, plural, zero {# rīka izsaukumiem} one {# rīka izsaukuma} other {# rīka izsaukumiem}}"
     },
     "turnStatus": {
       "answerFailed": "Atbildi neizdevās pabeigt",

@@ -38,9 +38,14 @@ const renderPendingCard = (
   confirmStoredApprovalGrant: () => Promise<boolean>,
   {
     approvalIdsAwaitedAtOpen = new Set<string>(),
-  }: { approvalIdsAwaitedAtOpen?: ReadonlySet<string> } = {},
+    blockedApprovalTools,
+  }: {
+    approvalIdsAwaitedAtOpen?: ReadonlySet<string>;
+    blockedApprovalTools?: ReadonlySet<"web_search">;
+  } = {},
 ) => {
   const approved: string[] = [];
+  const denied: string[] = [];
   const queryClient = new QueryClient();
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -54,6 +59,10 @@ const renderPendingCard = (
             handleApprove: (id: string) => {
               approved.push(id);
             },
+            handleDeny: (id: string) => {
+              denied.push(id);
+            },
+            blockedApprovalTools,
           }}
         >
           <ToolApprovalCard
@@ -65,7 +74,7 @@ const renderPendingCard = (
       </IntlProvider>
     </QueryClientProvider>,
   );
-  return { approved, queryClient, view };
+  return { approved, denied, queryClient, view };
 };
 
 test("a cached grant the API no longer holds does not answer a new card", async () => {
@@ -122,6 +131,22 @@ test("a card already waiting when the thread opened waits for the user, whatever
   await waitFor(() => {
     expect(approved).toEqual(["pending-approval"]);
   });
+  queryClient.clear();
+});
+
+test("a blocked card waiting when the thread opened is still denied, so it never strands its batch", async () => {
+  const { approved, denied, queryClient } = renderPendingCard(
+    async () => await Promise.resolve(true),
+    {
+      approvalIdsAwaitedAtOpen: new Set(["pending-approval"]),
+      blockedApprovalTools: new Set(["web_search"]),
+    },
+  );
+
+  await waitFor(() => {
+    expect(denied).toEqual(["pending-approval"]);
+  });
+  expect(approved).toEqual([]);
   queryClient.clear();
 });
 

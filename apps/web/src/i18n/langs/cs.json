@@ -2384,7 +2384,7 @@
     },
     "turnPaused": {
       "continue": "Pokračovat",
-      "status": "Pozastaveno po {count, plural, one {# kroku} few {# krocích} many {# kroku} other {# krocích}}"
+      "status": "Pozastaveno po {count, plural, one {# volání nástroje} few {# voláních nástrojů} many {# volání nástroje} other {# voláních nástrojů}}"
     },
     "turnStatus": {
       "answerFailed": "Odpověď se nepodařilo dokončit",
