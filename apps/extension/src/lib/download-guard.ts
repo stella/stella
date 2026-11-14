@@ -129,7 +129,7 @@ const urlFileName = (rawUrl: string): string => {
 };
 
 /** The file name the page or server suggested; Chrome's, else the URL's. */
-export const suggestedDownloadName = (download: DownloadFacts): string =>
+const suggestedDownloadName = (download: DownloadFacts): string =>
   (
     [
       lastSegment(download.filename),
@@ -186,6 +186,11 @@ type Delivery = {
   suggestedName: string;
 };
 
+/**
+ * Every download a desktop chat takes, by id: reserved in the same step
+ * that counts the running ones, so downloads judged at once never pass the
+ * limit together, and released by every judgement that does not deliver.
+ */
 const deliveries = new Map<number, Delivery>();
 
 const sourceUrlOf = (download: DownloadFacts): string =>
@@ -194,9 +199,30 @@ const sourceUrlOf = (download: DownloadFacts): string =>
     BROWSER_CONTROL_LIMITS.urlChars,
   );
 
+/**
+ * The verdict for a desktop chat, and the slot it takes when it delivers,
+ * in one synchronous step: no other judgement runs between the count and
+ * the reservation.
+ */
+const reserveDelivery = (
+  download: DownloadFacts & { id: number },
+  chatId: string,
+): DesktopDownloadVerdict => {
+  const verdict = desktopDownloadVerdict(download, deliveries.size);
+  if (verdict.type === "deliver") {
+    deliveries.set(download.id, {
+      chatId,
+      sourceUrl: sourceUrlOf(download),
+      stagedPath: browserDownloadStagedPath(crypto.randomUUID()),
+      suggestedName: suggestedDownloadName(download),
+    });
+  }
+  return verdict;
+};
+
 /** Who takes a download traced to chat's tabs, judged now. */
 const readDownloadReceiver = async (
-  download: DownloadFacts,
+  download: DownloadFacts & { id: number },
 ): Promise<DownloadReceiver> => {
   const holder = await readControlHolder();
   switch (holder.transport) {
@@ -213,7 +239,7 @@ const readDownloadReceiver = async (
       return {
         chatId,
         type: "desktop",
-        verdict: desktopDownloadVerdict(download, deliveries.size),
+        verdict: reserveDelivery(download, chatId),
       };
     }
     default:
@@ -389,12 +415,25 @@ const runJudgement = async (
     owner === "contained"
       ? await readDownloadReceiver(download)
       : NO_DOWNLOAD_RECEIVER;
-  const [current] = await chrome.downloads.search({ id: download.id });
+  const release = () => {
+    deliveries.delete(download.id);
+  };
+  const current = await chrome.downloads.search({ id: download.id }).then(
+    ([item]) => item,
+    (error: unknown) => {
+      release();
+      throw error;
+    },
+  );
   const action = downloadAction(
     owner,
     current?.state ?? download.state,
     receiver,
   );
+  // Only a download that is delivered keeps the slot its verdict reserved.
+  if (action !== "deliver") {
+    release();
+  }
   switch (action) {
     case "allow":
       return;
@@ -402,14 +441,6 @@ const runJudgement = async (
       await keepFinishedDownload(download.id);
       return;
     case "deliver":
-      if (receiver.type === "desktop") {
-        deliveries.set(download.id, {
-          chatId: receiver.chatId,
-          sourceUrl: sourceUrlOf(download),
-          stagedPath: browserDownloadStagedPath(crypto.randomUUID()),
-          suggestedName: suggestedDownloadName(download),
-        });
-      }
       return;
     case "refuse":
       if (receiver.type === "desktop" && receiver.verdict.type === "stop") {

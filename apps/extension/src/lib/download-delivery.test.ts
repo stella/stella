@@ -270,6 +270,57 @@ describe("a download from chat's tab", () => {
     ]);
   });
 
+  test("PDFs started together never pass the running limit, and the rest hear why", async () => {
+    const { events, items, reports } = installFakeChrome({
+      chatId: "thread-7",
+      link: "connected",
+      type: "desktop",
+    });
+    await loadDownloadScope();
+    const started = Array.from(
+      { length: MAX_RUNNING_DELIVERIES + 2 },
+      (_, index) =>
+        fileDownload(920 + index, {
+          filename: `Judgment ${String(index)}.pdf`,
+          mime: "application/pdf",
+        }),
+    );
+    for (const download of started) {
+      items.set(download.id, download);
+    }
+
+    const suggestions = await Promise.all(started.map(named));
+
+    expect(
+      suggestions.filter((suggestion) => suggestion !== undefined),
+    ).toHaveLength(MAX_RUNNING_DELIVERIES);
+    expect(events.filter((event) => event.startsWith("cancel:"))).toHaveLength(
+      2,
+    );
+    expect(reports.map(({ download }) => download)).toEqual([
+      expect.objectContaining({ outcome: "stopped", reason: "too-many" }),
+      expect.objectContaining({ outcome: "stopped", reason: "too-many" }),
+    ]);
+    // Each settled one frees its slot for the next download.
+    const delivered = started.filter(
+      (_, index) => suggestions[index] !== undefined,
+    );
+    for (const download of delivered) {
+      items.set(download.id, { ...download, state: "interrupted" });
+      // await-in-loop: each settles in turn, as Chrome reports them.
+      await reportDeliveredDownload({
+        id: download.id,
+        state: { current: "interrupted", previous: "in_progress" },
+      });
+    }
+    const next = fileDownload(930, {
+      filename: "Judgment 10.pdf",
+      mime: "application/pdf",
+    });
+    items.set(next.id, next);
+    expect(await named(next)).toMatchObject({ conflictAction: "uniquify" });
+  });
+
   test("a PDF Chrome could not finish is reported as interrupted", async () => {
     const { items, reports } = installFakeChrome({
       chatId: "thread-7",
