@@ -59,6 +59,11 @@
     "scripts/check-rust-test-determinism.test.ts": ["**"],
     "scripts/check-staged-secrets.test.ts": ["**"],
     "scripts/check-swallowed-item-error-ledger.test.ts": ["**"],
+    "scripts/check-tailwind-sources.test.ts": [
+      "apps/**/*.css",
+      "apps/*/package.json",
+      "packages/*/package.json"
+    ],
     "scripts/check-test-state-baseline.test.ts": ["**"],
     "scripts/check-tracked-cloud-reports.test.ts": ["**"],
     "scripts/check-tracked-symlinks.test.ts": ["**"],

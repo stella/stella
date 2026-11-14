@@ -169,6 +169,10 @@ import {
   fileChatThreadOptions,
   materializeFileChatThread,
 } from "@/features/chat/queries";
+import {
+  useMakeSkillFromChat,
+  useSaveDraftedSkill,
+} from "@/features/chat/use-make-skill-from-chat";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getTranslator } from "@/i18n/i18n-store";
@@ -1170,6 +1174,8 @@ const FileChatOverlayInner = ({
   presets,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
+  const saveDraftedSkill = useSaveDraftedSkill();
+  const makeSkillFromChat = useMakeSkillFromChat(saveDraftedSkill);
   const queryClient = useQueryClient();
   const capturePromptSubmitError = useCallback(
     (error: unknown): void => {
@@ -1537,6 +1543,7 @@ const FileChatOverlayInner = ({
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     turnAbandoned,
@@ -2487,6 +2494,17 @@ const FileChatOverlayInner = ({
             title: args.length > 0 ? args : null,
           });
         },
+        "make-skill": (args) => {
+          editorController.setContent(composerText(""));
+          if (!hasMessages) {
+            stellaToast.add({
+              title: t("chat.makeSkill.emptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          makeSkillFromChat({ intent: args, threadRef });
+        },
       });
       if (!handledReserved) {
         return await handlePromptSubmit({ prompt, files });
@@ -2776,6 +2794,7 @@ const FileChatOverlayInner = ({
           onStop={() => {
             stop();
           }}
+          stopping={stopPending}
           onSubmit={handleComposerSubmit}
           pendingCount={0}
           presets={presets}

@@ -113,6 +113,22 @@ export const resourceQueryOptions = <
 });
 
 export const RESOURCE_MUTATION_CONTRACTS = {
+  // The member's own reminder for when a chat's usage limit resets.
+  changeChatLimitReminder: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/chat/threads/:threadId/limit-reminder",
+      },
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/chat/threads/:threadId/limit-reminder",
+      },
+    ],
+    resources: [RESOURCE_TYPE.CHAT_THREAD],
+  },
   createInvoice: {
     writes: [
       {
@@ -209,6 +225,14 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       RESOURCE_TYPE.MCP_CONNECTOR,
     ],
   },
+  // A skill drafted from a chat is stored as a new private, disabled skill;
+  // the skills lists refresh. Drafting it is a read and stores nothing.
+  saveSkillDraft: {
+    writes: [
+      { type: "handler-route", method: "POST", route: "/skills/save-draft" },
+    ],
+    resources: [RESOURCE_TYPE.AGENT_SKILL],
+  },
   updateNativeTool: {
     writes: [
       {
@@ -240,6 +264,18 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       { type: "handler-route", method: "POST", route: "/mcp/connections" },
     ],
     resources: [RESOURCE_TYPE.MCP_CONNECTOR],
+  },
+  // The member lets chat turns work in a folder linked on their computer;
+  // the computers' report, which lists the folder's approval, refreshes.
+  approveLocalFolder: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/chat/local-runners/:desktopId/folders/:linkId/approval",
+      },
+    ],
+    resources: [RESOURCE_TYPE.USER],
   },
   deleteOrganization: {
     writes: [

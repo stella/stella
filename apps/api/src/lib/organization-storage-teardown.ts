@@ -258,6 +258,9 @@ export const WORKSPACE_STORAGE_DISPOSITION = {
 
 export const WORKSPACE_STORAGE_REFERENCE_DISPOSITION = {
   "buffer_object_cleanup_intents.object_key": "recovery-tombstone",
+  // Names a `user_files` row, whose own key is cleaned up; the step's row
+  // cascades when that row goes.
+  "chat_local_run_step_contents.user_file_id": "user-file-alias",
   "desktop_edit_sessions.checkpoint_file_id": "cleanup-request",
   "document_processing_runs.id": "derived-key-cleanup-request",
   "document_processing_runs.source_file_id": "field-file-alias",

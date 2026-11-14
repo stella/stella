@@ -80,6 +80,30 @@ Chat reads the controlled tab. That tab is either one stella opened through
 `open`, or a tab the user already has open: open the popup on that page and
 choose **Use this tab with stella**, then ask about it in chat.
 
+## stella desktop
+
+Coding agents that run on the member's computer reach the extension through
+stella desktop's native messaging host (`app.stll.browser`), behind the
+optional `nativeMessaging` permission the popup asks for on its own. The same
+control session, origin policy, containment, budgets and execution ledger
+apply as for a stella tab; results go back through the host and never through
+stella's servers. A desktop chat's commands run under their own controller
+id. One controller holds the browser at a time, and only its commands run:
+another controller can list, switch to or act on none of its tabs. A desktop
+chat takes the browser over only with a page it opens, once nothing refused
+the open; the previous holder then loses its controlled tab and its tabs go
+back to the member, and a stella tab's chat is refused until the member
+connects it again or hands it a tab from the popup.
+
+A page that asks for a sign-in (a visible password or one-time-code field,
+input or text area, in any frame, or an identity provider's page) is the
+member's: a desktop command on it gets `needs-member`, with nothing on the
+page read, typed or clicked and no snapshot stored. Every frame is checked
+before any is read, and the page script checks before it reads any field
+or starts watching the page. A click or fill that leads to such a page has
+run: its `needs-member` says the page it led to is the member's. Commands
+from a stella tab still read such a page with its secret fields withheld.
+
 ## Control and stopping
 
 The extension's background worker runs browser commands one at a time, and
@@ -201,12 +225,19 @@ that holds one, such as a new field a "show password" button put in the old
 one's place, is withheld or shown as `[hidden]`.
 
 Snapshots leave out text and controls a reader of the page cannot see: hidden
-from assistive technology (`aria-hidden`), transparent, invisible, clipped
-away, collapsed to a pixel, off the page, or in zero-size or transparent type.
+from assistive technology (`aria-hidden`, except a short paragraph or margin
+number), transparent, invisible, clipped away, collapsed to a pixel, off the
+page, or in zero-size or transparent type.
 
-Snapshots read every frame and open shadow root, return interactive elements
-with their link destinations, and page the visible text; long pages are read in
-slices through `snapshot` with `textOffset`.
+A snapshot returns a window of the visible text, one block per line, with
+headings marked and each link's words followed by its id (`[L3]`), the
+window's links and controls, the page's own controls, and the page's
+canonical link and standard meta entries. Without a cursor it starts at the
+section in view, else at the top; `next` and `previous` cursors move on from
+there, and `find` searches the same text or lists the headings. Frames are
+read in order after the top document. The reading rules live in
+`src/lib/page-script.ts` (in the page) and `src/lib/page-window.ts` (cursors
+and frames).
 
 Each browser command is approved in stella chat. The user may choose, per web
 session, to auto-approve page reads; every other command always asks.

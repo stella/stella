@@ -480,7 +480,20 @@ function ChatIndex() {
           type: "info",
         });
       },
+      "make-skill": () => {
+        // Like `/rename-chat`: an unsent draft has nothing to learn from.
+        controller.setContent(composerText(""));
+        stellaToast.add({
+          title: t("chat.makeSkill.emptyThread"),
+          type: "info",
+        });
+      },
     });
+    // Inside the member's send gesture, before any await: a turn for
+    // their computer opens stella desktop when none is connected.
+    if (!handledReserved || newThreadMessages.length > 0) {
+      composerModels.openDesktopForSend();
+    }
     if (handledReserved) {
       const newThreadMessage = newThreadMessages.at(0);
       if (newThreadMessage === undefined) {

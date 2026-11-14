@@ -118,6 +118,10 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "desktop_edit_handoffs.linked_account",
   // Harness reports: ids, states, versions and models.
   "desktop_runners.harnesses",
+  // Folders linked on the computer: link ids, folder names and states.
+  "desktop_runners.linked_folders",
+  // Background task counts keyed by run id.
+  "desktop_runners.background_tasks",
   "desktop_time_entry_batches.result",
   "desktop_edit_sessions.checkpoint_scan_warnings",
   "document_review_findings.payload",
@@ -164,6 +168,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_verification_runs.evidence",
   // A paragraph range and its two edges (block id, offset); no member id.
   "legal_list_verification_runs.scope",
+  // Edges of text a run could not read (block id, offset); no member id.
+  "legal_list_verification_runs.unread_parts",
   "legal_lists.sample_case",
   "legal_reader_answer_messages.citations",
   "legal_reader_answer_messages.usage",
@@ -596,6 +602,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "The person's own organization-scoped tool approvals; every tool call still checks matter access.",
   "chat_browser_site_grants.user_id":
     "The person's own organization-scoped browser site approvals; they hold no matter data.",
+  "chat_limit_reminders.user_id":
+    "The person's own reminder for their own chat; it files a content-free notification, and opening the chat goes through current chat and matter access.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",
   "session.user_id":

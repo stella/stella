@@ -188,6 +188,7 @@ pub fn manage(app: &AppHandle) {
           changed.emit(CHANGED_EVENT, ()),
           "ChatGPT connection change was not announced",
         );
+        crate::desktop_runner::harness_sign_in_changed();
       }),
       clear_harness_sign_in: Box::new(move || {
         if let Some(installation) = harness.try_state::<HarnessInstallation>()

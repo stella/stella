@@ -15,6 +15,8 @@ import type {
   DESKTOP_RUNNER_RUN_OUTCOMES,
 } from "@stll/api-contract/desktop-runner";
 
+import type { HarnessStepOutput } from "./step-output";
+
 type DesktopRunnerApprovalDecision =
   (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
 type DesktopRunnerApprovalKind = (typeof DESKTOP_RUNNER_APPROVAL_KINDS)[number];
@@ -66,11 +68,24 @@ export type HarnessToolCall = {
    * reads it, and it is not part of what a turn reports.
    */
   localInput?: unknown;
+  /**
+   * The harness's id of the subagent step that made the call; absent on the
+   * main thread. Reported beside the call, never inside its input.
+   */
+  parentCallId?: string;
 };
 
 export type HarnessToolResult = {
   content: string;
-  status: "succeeded" | "failed";
+  /** `cancelled`: the harness never ran the call to its end because the
+   *  turn was stopped or a new message cut it off; not a failure. */
+  status: "succeeded" | "failed" | "cancelled";
+  /**
+   * What a native step produced (a command's output, a change's diff). It
+   * stays on this computer: the sidecar keeps it for the member to open
+   * here, and it is not part of what a turn reports.
+   */
+  localOutput?: HarnessStepOutput;
 };
 
 /**

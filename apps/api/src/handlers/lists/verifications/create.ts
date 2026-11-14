@@ -30,6 +30,7 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { encryptedContentError } from "@/api/lib/files/detect-file-encryption";
+import { LIMITS } from "@/api/lib/limits";
 import { WHOLE_DOCUMENT_SCOPE } from "@/api/lib/lists/verification/contract";
 import type { VerificationScope } from "@/api/lib/lists/verification/contract";
 import { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
@@ -41,10 +42,13 @@ import {
   scopePassages,
 } from "@/api/lib/lists/verification/paragraph-scope";
 import type { ParagraphScopeRefusal } from "@/api/lib/lists/verification/paragraph-scope";
-import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import { enqueueListVerificationRun } from "@/api/lib/lists/verification/run-queue";
 import { startVerificationRun } from "@/api/lib/lists/verification/start-run";
 import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
+import {
+  ModelRunCapError,
+  modelRunCapRefusal,
+} from "@/api/lib/usage/model-run-caps/caps";
 import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -231,8 +235,10 @@ const resolveRunScope = async ({
           fileId: file.id,
           mimeType: file.mimeType,
           pdfFileId: file.pdfFileId,
+          sizeBytes: file.sizeBytes,
         },
         signal: AbortSignal.timeout(SCOPE_READ_TIMEOUT_MS),
+        admissionWaitMs: LIMITS.documentBytesAdmissionWaitMs,
       }),
     catch: (cause) =>
       new HandlerError({
@@ -251,6 +257,18 @@ const resolveRunScope = async ({
   const document = read.value;
   if (document.type === "unsupported-format") {
     return panic("A verifiable file always has a readable format");
+  }
+  if (document.type === "busy") {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        code: "upstream_unavailable",
+        message: "The document could not be read to find these paragraphs.",
+        hint: "Try again in a moment.",
+        retryable: true,
+        retryAfterMs: 1000,
+      }),
+    );
   }
   if (document.type === "no-text") {
     return Result.err(
@@ -459,15 +477,7 @@ const createVerification = createSafeHandler(
               }),
           });
           const created = yield* inserted.mapError((error) =>
-            ListVerificationRunCapError.is(error)
-              ? new HandlerError({
-                  status: 429,
-                  code: error.code,
-                  message: error.message,
-                  hint: error.hint,
-                  retryable: true,
-                })
-              : error,
+            ModelRunCapError.is(error) ? modelRunCapRefusal(error) : error,
           );
           if (!created) {
             return Result.err(

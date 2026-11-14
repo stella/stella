@@ -43,6 +43,7 @@ const MODEL_BACKGROUND = {
 export const ACTION_KINDS = {
   "billing.activity-drafts": MODEL_ACTION,
   "dictation.transcribe": MODEL_ACTION,
+  "dictation.cleanup": MODEL_ACTION,
   "chat.send": MODEL_ACTION,
   "chat.generate-thread-title": MODEL_ACTION,
   "chat.improve-prompt": MODEL_ACTION,
@@ -64,6 +65,7 @@ export const ACTION_KINDS = {
   "templates.fill": MODEL_ACTION,
   "skills.rewrite-resource": MODEL_ACTION,
   "skills.generate-draft": MODEL_ACTION,
+  "skills.draft-from-chat": MODEL_ACTION,
   "skills.propose-from-comments": MODEL_ACTION,
   "time-entries.polish-narrative": MODEL_ACTION,
   "entities.suggest-placements": MODEL_ACTION,

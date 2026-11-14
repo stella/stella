@@ -19,6 +19,7 @@ import {
   parseApiErrorValue,
   parseApiValidationIssues,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
+  SKILL_FROM_CHAT_REFUSAL_CODE,
   SKILL_SOURCE_UNREACHABLE_CODE,
 } from "@stll/api-contract";
 import {
@@ -33,6 +34,8 @@ import {
 import { CORRESPONDENCE_SOURCE_CHANGED_CODE } from "@stll/api-contract/correspondence";
 import { ORGANIZATION_DATA_BOX_REFUSAL_CODE } from "@stll/api-contract/data-box";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
+import type { ModelRunCapCode } from "@stll/api-contract/model-run-caps";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -47,8 +50,6 @@ import {
   type SharepointRefusalCode,
 } from "@stll/api-contract/sharepoint";
 import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
-import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
 import { getTranslator } from "@/i18n/translator";
@@ -261,12 +262,11 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
     "legal_source_structural_repair_required",
 } as const;
 
-const VERIFICATION_RUN_CAP_ERROR_KEYS = {
-  [VERIFICATION_RUN_CAP_CODES.active]:
-    "errors.apiCodes.verificationActiveLimitReached",
-  [VERIFICATION_RUN_CAP_CODES.daily]:
-    "errors.apiCodes.verificationDailyLimitReached",
-} as const satisfies Record<VerificationRunCapCode, TranslationKey>;
+/** An organization's run caps, whichever feature's run was refused. */
+const MODEL_RUN_CAP_ERROR_KEYS = {
+  [MODEL_RUN_CAP_CODES.active]: "errors.apiCodes.runActiveLimitReached",
+  [MODEL_RUN_CAP_CODES.daily]: "errors.apiCodes.runDailyLimitReached",
+} as const satisfies Record<ModelRunCapCode, TranslationKey>;
 
 /** Why a chat turn bound for the member's computer was refused. */
 const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
@@ -276,6 +276,8 @@ const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
     "chat.localRun.refusalHarnessUnavailable",
   [CHAT_LOCAL_RUN_REFUSAL.modelUnavailable]:
     "chat.localRun.refusalModelUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable]:
+    "chat.localRun.refusalReasoningEffortUnavailable",
   [CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable]:
     "chat.localRun.refusalPermissionUnavailable",
   [CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit]:
@@ -283,6 +285,10 @@ const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
   [CHAT_LOCAL_RUN_REFUSAL.tooLarge]: "chat.localRun.refusalTooLarge",
   [CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode]:
     "chat.localRun.refusalConflictingRunMode",
+  [CHAT_LOCAL_RUN_REFUSAL.folderUnavailable]:
+    "chat.localRun.refusalFolderUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.folderNotApproved]:
+    "chat.localRun.refusalFolderNotApproved",
 } as const satisfies Record<ChatLocalRunRefusal, TranslationKey>;
 
 /** Why a chat turn was refused before it started, with what the person can do. */
@@ -326,7 +332,7 @@ const CODE_ERROR_KEYS = {
   ...AI_FAILURE_ERROR_KEYS,
   ...CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS,
   ...CHAT_INPUT_REFUSAL_ERROR_KEYS,
-  ...VERIFICATION_RUN_CAP_ERROR_KEYS,
+  ...MODEL_RUN_CAP_ERROR_KEYS,
   ...INVOICE_ISSUE_ERROR_KEYS,
   ...SHAREPOINT_REFUSAL_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
@@ -383,6 +389,16 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.mcpAuthorizationApprovalRequired",
   provider_key_rejected: "errors.apiCodes.providerKeyRejected",
   provider_rate_limited: "errors.apiCodes.providerRateLimited",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.anonymizedThread]:
+    "errors.apiCodes.skillFromChatAnonymizedThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.emptyThread]:
+    "errors.apiCodes.skillFromChatEmptyThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.localRunThread]:
+    "errors.apiCodes.skillFromChatLocalRunThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.threadNotFound]:
+    "errors.apiCodes.skillFromChatThreadNotFound",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.withdrawn]:
+    "errors.apiCodes.skillFromChatWithdrawn",
   [SKILL_SOURCE_UNREACHABLE_CODE]: "errors.apiCodes.skillSourceUnreachable",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
   usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",

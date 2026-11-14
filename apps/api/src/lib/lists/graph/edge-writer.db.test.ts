@@ -44,6 +44,21 @@ import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
 import type { GraphEdgeWrite } from "@/api/lib/lists/graph/edge-writer";
 import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
 import type { FactSourceEdgeWrite } from "@/api/lib/lists/graph/fact-source-edges";
+import {
+  GRAPH_LOOKUP_NODE_KINDS,
+  lookupGraphNodes,
+  readGraphNeighbourhood,
+  readGraphNode,
+  walkGraph,
+} from "@/api/lib/lists/graph/read";
+import type {
+  GraphEdgeFilter,
+  GraphEdgeView,
+  GraphLookupCursor,
+  GraphNodeRef,
+  GraphNodeView,
+  GraphWalk,
+} from "@/api/lib/lists/graph/read";
 import type {
   ClaimRef,
   ClaimReviewEventPayload,
@@ -279,6 +294,7 @@ const seedMatter = async (): Promise<Matter> => {
       },
       facts: { changed: [], removed: [] },
       modelRef: null,
+      assertedOn: { type: "none" },
     } satisfies ClaimReviewEventPayload;
     await tx.insert(legalListClaimReviewEvents).values({
       id: recheckId,
@@ -392,7 +408,7 @@ const applyWrite = async (
 
 const writesOf = (matter: Matter): AnyWrite[] => [
   { type: "run", runId: matter.runId },
-  { type: "recheck", eventId: matter.recheckId },
+  { type: "recheck", eventIds: [matter.recheckId] },
   {
     type: "fact-sources",
     sourceIds: matter.sources,
@@ -513,6 +529,7 @@ describe("graph edge writers", () => {
         tx,
         runId,
         workspaceId: matter.workspaceId,
+        unreadParts: [],
         blocks: [
           {
             id: "p0",
@@ -873,5 +890,317 @@ describe("graph edge decisions", () => {
       ),
       { numRuns: 25 },
     );
+  });
+});
+
+describe("graph reads for agents", () => {
+  const NO_FILTER: GraphEdgeFilter = { kinds: [], stances: [], decisions: [] };
+
+  const seedWithEdges = async (): Promise<Matter> => {
+    const matter = await seedMatter();
+    for (const write of writesOf(matter)) {
+      await scoped(
+        matter.workspaceId,
+        async (tx) => await applyWrite(tx, matter.workspaceId, write),
+      );
+    }
+    return matter;
+  };
+
+  const claimOf = (matter: Matter, index: number) =>
+    matter.claims.at(index)?.id ?? panic(`claim ${String(index)}`);
+
+  const nodeOf = async (
+    matter: Matter,
+    ref: GraphNodeRef,
+  ): Promise<GraphNodeView> =>
+    (await scoped(
+      matter.workspaceId,
+      async (tx) => await readGraphNode(tx, matter.workspaceId, ref),
+    )) ?? panic("node not visible");
+
+  const edgeSummary = (edge: GraphEdgeView) =>
+    [edge.kind, edge.from.id, edge.to.id, edge.stance, edge.producer.kind].join(
+      "|",
+    );
+
+  test("a lookup finds facts, claims and documents by their words, a page at a time", async () => {
+    const matter = await seedWithEdges();
+    const delivered = await scoped(
+      matter.workspaceId,
+      async (tx) =>
+        await lookupGraphNodes({
+          tx,
+          workspaceId: matter.workspaceId,
+          text: "DELIVER",
+          kinds: GRAPH_LOOKUP_NODE_KINDS,
+          after: null,
+          limit: 10,
+        }),
+    );
+    expect(delivered.nodes.map(({ kind, id }) => [kind, id])).toEqual([
+      ["fact", matter.facts[1]],
+    ]);
+    expect(delivered.after).toBeNull();
+
+    // A wildcard in the text is matched literally.
+    expect(
+      (
+        await scoped(
+          matter.workspaceId,
+          async (tx) =>
+            await lookupGraphNodes({
+              tx,
+              workspaceId: matter.workspaceId,
+              text: "%",
+              kinds: GRAPH_LOOKUP_NODE_KINDS,
+              after: null,
+              limit: 10,
+            }),
+        )
+      ).nodes,
+    ).toEqual([]);
+
+    const pages: GraphNodeView[][] = [];
+    let after: GraphLookupCursor | null = null;
+    do {
+      const cursor: GraphLookupCursor | null = after;
+      const page: Awaited<ReturnType<typeof lookupGraphNodes>> = await scoped(
+        matter.workspaceId,
+        async (tx) =>
+          await lookupGraphNodes({
+            tx,
+            workspaceId: matter.workspaceId,
+            text: "claim",
+            kinds: ["claim"],
+            after: cursor,
+            limit: 2,
+          }),
+      );
+      pages.push(page.nodes);
+      after = page.after;
+    } while (after !== null);
+    expect(pages.map((page) => page.length)).toEqual([2, 1]);
+    expect(
+      pages
+        .flat()
+        .map((node) => node.id)
+        .toSorted(),
+    ).toEqual(matter.claims.map((claim) => claim.id).toSorted());
+    // A claim names the run and the document it was read from.
+    expect(pages.flat().at(0)).toMatchObject({
+      runId: matter.runId,
+      documentId: matter.documentId,
+    });
+  });
+
+  test("a neighbourhood holds a claim's current citations and each Spot, with the exact text", async () => {
+    const matter = await seedWithEdges();
+    const fact = await nodeOf(matter, { kind: "fact", id: matter.facts[1] });
+    const neighbourhood = await scoped(
+      matter.workspaceId,
+      async (tx) =>
+        await readGraphNeighbourhood({
+          tx,
+          workspaceId: matter.workspaceId,
+          node: fact,
+          filter: NO_FILTER,
+          after: null,
+          limit: 10,
+        }),
+    );
+    // The first claim's run cited this fact as conflicting; its re-check
+    // reads it as supporting, and only the grade it is read with counts.
+    expect(neighbourhood.edges.map(edgeSummary).toSorted()).toEqual(
+      [
+        ["cites", claimOf(matter, 0), matter.facts[1], "supports", "recheck"],
+        ["cites", claimOf(matter, 1), matter.facts[1], "record", "run"],
+        ["sourced-from", matter.facts[1], matter.documentId, "", "reviewer"],
+      ]
+        .map((parts) => parts.join("|"))
+        .toSorted(),
+    );
+    expect(neighbourhood.summary).toEqual([
+      { kind: "cites", stance: "record", decision: "proposed", count: 1 },
+      { kind: "cites", stance: "supports", decision: "proposed", count: 1 },
+      { kind: "sourced-from", stance: null, decision: "proposed", count: 1 },
+    ]);
+    const spot = neighbourhood.edges.find(
+      (edge) => edge.kind === "sourced-from",
+    );
+    expect(spot?.quote).toEqual({
+      text: "Delivery arrived on 9 June.",
+      documentId: matter.documentId,
+      documentName: "Minutes.docx",
+      locator: { type: "docx-block", blockId: "p1" },
+    });
+    expect(spot?.neighbour).toMatchObject({
+      kind: "document",
+      id: matter.documentId,
+    });
+    const citation = neighbourhood.edges.find(
+      (edge) => edge.from.id === claimOf(matter, 1),
+    );
+    expect(citation?.quote).toEqual({
+      text: "Claim 1",
+      documentId: matter.documentId,
+      documentName: "Minutes.docx",
+      locator: { type: "docx-block", blockId: "p0", start: 0, end: 5 },
+    });
+    expect(citation?.provenance).toEqual({
+      type: "reason",
+      reason: "claim-anchor",
+    });
+  });
+
+  test("filters, decisions and pages narrow the edges in the query", async () => {
+    const matter = await seedWithEdges();
+    const fact = await nodeOf(matter, { kind: "fact", id: matter.facts[1] });
+    const read = async (
+      filter: GraphEdgeFilter,
+      after: string | null,
+      limit: number,
+    ) =>
+      await scoped(
+        matter.workspaceId,
+        async (tx) =>
+          await readGraphNeighbourhood({
+            tx,
+            workspaceId: matter.workspaceId,
+            node: fact,
+            filter,
+            after,
+            limit,
+          }),
+      );
+    await scoped(matter.workspaceId, async (tx) => {
+      await tx.insert(legalListItemSourceDecisions).values({
+        workspaceId: matter.workspaceId,
+        sourceId: matter.sources[1],
+        decision: "accepted",
+        actorId: userId,
+        createdAt: FIXTURE_TIME,
+      });
+    });
+    const accepted = await read(
+      { ...NO_FILTER, decisions: ["accepted"] },
+      null,
+      10,
+    );
+    expect(accepted.edges.map((edge) => [edge.kind, edge.decision])).toEqual([
+      ["sourced-from", "accepted"],
+    ]);
+    expect(accepted.summary).toEqual([
+      { kind: "sourced-from", stance: null, decision: "accepted", count: 1 },
+    ]);
+    const records = await read({ ...NO_FILTER, stances: ["record"] }, null, 10);
+    expect(records.edges.map((edge) => edge.from.id)).toEqual([
+      claimOf(matter, 1),
+    ]);
+
+    const first = await read(NO_FILTER, null, 2);
+    expect(first.edges).toHaveLength(2);
+    const second = await read(NO_FILTER, first.after, 2);
+    expect(second.edges).toHaveLength(1);
+    expect(second.after).toBeNull();
+    expect(
+      new Set([...first.edges, ...second.edges].map((edge) => edge.id)).size,
+    ).toBe(3);
+  });
+
+  test("a walk follows links for its depth and says when it stops short", async () => {
+    const matter = await seedWithEdges();
+    const claim = await nodeOf(matter, {
+      kind: "claim",
+      id: claimOf(matter, 1),
+    });
+    const walk = async (depth: number, maxPaths: number) =>
+      await scoped(
+        matter.workspaceId,
+        async (tx) =>
+          await walkGraph({
+            tx,
+            workspaceId: matter.workspaceId,
+            start: claim,
+            depth,
+            filter: NO_FILTER,
+            maxPaths,
+          }),
+      );
+    const pathsOf = (result: GraphWalk) =>
+      result.paths
+        .map((path) => path.nodes.map((node) => node.id).join(">"))
+        .toSorted();
+    const two = await walk(2, 50);
+    expect(pathsOf(two)).toEqual(
+      [
+        [claimOf(matter, 1), matter.facts[1]],
+        [claimOf(matter, 1), matter.facts[1], matter.documentId],
+        [claimOf(matter, 1), matter.facts[1], claimOf(matter, 0)],
+      ]
+        .map((ids) => ids.join(">"))
+        .toSorted(),
+    );
+    expect(two.truncated).toBe(false);
+    // Every edge on a path carries the text it rests on.
+    expect(
+      two.paths
+        .flatMap((path) => path.edges)
+        .every((edge) => edge.quote !== null),
+    ).toBe(true);
+    expect(pathsOf(await walk(1, 50))).toEqual([
+      [claimOf(matter, 1), matter.facts[1]].join(">"),
+    ]);
+    const capped = await walk(2, 2);
+    expect(capped.paths).toHaveLength(2);
+    expect(capped.truncated).toBe(true);
+  });
+
+  test("another matter, and a reader without the feature, see none of a matter's graph", async () => {
+    const matter = await seedWithEdges();
+    const other = await seedWithEdges();
+    const fact = await nodeOf(matter, { kind: "fact", id: matter.facts[1] });
+    expect(
+      await scoped(
+        other.workspaceId,
+        async (tx) =>
+          await readGraphNode(tx, other.workspaceId, {
+            kind: "fact",
+            id: matter.facts[1],
+          }),
+      ),
+    ).toBeNull();
+    // Even handed the node, the other matter's scope reads no edge of it.
+    const crossed = await scoped(
+      other.workspaceId,
+      async (tx) =>
+        await readGraphNeighbourhood({
+          tx,
+          workspaceId: matter.workspaceId,
+          node: fact,
+          filter: NO_FILTER,
+          after: null,
+          limit: 10,
+        }),
+    );
+    expect(crossed.edges).toEqual([]);
+    expect(crossed.summary).toEqual([]);
+    // A reader of the matter with no list feature: no edge passes the gate.
+    const outsider = toSafeId<"user">(`user_${Bun.randomUUIDv7()}`);
+    const gated = await createScopedQuery(testDb)(
+      [matter.workspaceId],
+      organizationId,
+      async (tx) =>
+        await readGraphNeighbourhood({
+          tx: asTestRaw<Transaction>(tx),
+          workspaceId: matter.workspaceId,
+          node: fact,
+          filter: NO_FILTER,
+          after: null,
+          limit: 10,
+        }),
+      outsider,
+    );
+    expect(gated.edges).toEqual([]);
   });
 });

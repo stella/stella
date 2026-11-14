@@ -2068,7 +2068,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Create template can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Create template is confined to the private workspace or a bounded computation."
     },
-    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters ARE its field's configuration. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields writes those filters.",
+    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 200 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters ARE its field's configuration. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields writes those filters.",
     "annotations": {
       "title": "Create template",
       "destructiveHint": true,
@@ -3113,7 +3113,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Prepare file comparison is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Prepare file comparison is confined to the private workspace or a bounded computation."
     },
-    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, open_file_comparison provides a picker panel that uploads from the user's browser; prepare_file_comparison_from_links accepts files reachable by HTTPS link. Both files must be .docx and at most 50 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, open_file_comparison provides a picker panel that uploads from the user's browser; prepare_file_comparison_from_links accepts files reachable by HTTPS link. Both files must be .docx and at most 200 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
     "annotations": {
       "title": "Prepare file comparison",
       "destructiveHint": false,
@@ -3141,8 +3141,8 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "size": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 52428800,
-              "description": "Exact byte length of the file, at most 50 MB."
+              "maximum": 209715200,
+              "description": "Exact byte length of the file, at most 200 MB."
             },
             "sha256_hex": {
               "type": "string",
@@ -3169,8 +3169,8 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "size": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 52428800,
-              "description": "Exact byte length of the file, at most 50 MB."
+              "maximum": 209715200,
+              "description": "Exact byte length of the file, at most 200 MB."
             },
             "sha256_hex": {
               "type": "string",
@@ -3197,7 +3197,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Prepare file comparison from links is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Prepare file comparison from links can access public or external entities outside the private workspace."
     },
-    "description": "Stage two .docx files for redlining from HTTPS links the server can download, so no bytes pass through the client. Each file is at most 50 MB and must be a .docx. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "description": "Stage two .docx files for redlining from HTTPS links the server can download, so no bytes pass through the client. Each file is at most 200 MB and must be a .docx. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
     "annotations": {
       "title": "Prepare file comparison from links",
       "destructiveHint": false,
@@ -6837,7 +6837,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
   },
   {
     "name": "add_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Add matter member changes state or starts stateful work.",
@@ -6875,7 +6875,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
   },
   {
     "name": "remove_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Remove matter member changes state or starts stateful work.",
@@ -9636,7 +9636,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Create template can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Create template is confined to the private workspace or a bounded computation."
     },
-    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters ARE its field's configuration. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields writes those filters.",
+    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 200 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters ARE its field's configuration. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields writes those filters.",
     "annotations": {
       "title": "Create template",
       "destructiveHint": true,
@@ -10681,7 +10681,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Prepare file comparison is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Prepare file comparison is confined to the private workspace or a bounded computation."
     },
-    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, open_file_comparison provides a picker panel that uploads from the user's browser; prepare_file_comparison_from_links accepts files reachable by HTTPS link. Both files must be .docx and at most 50 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, open_file_comparison provides a picker panel that uploads from the user's browser; prepare_file_comparison_from_links accepts files reachable by HTTPS link. Both files must be .docx and at most 200 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
     "annotations": {
       "title": "Prepare file comparison",
       "destructiveHint": false,
@@ -10709,8 +10709,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "size": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 52428800,
-              "description": "Exact byte length of the file, at most 50 MB."
+              "maximum": 209715200,
+              "description": "Exact byte length of the file, at most 200 MB."
             },
             "sha256_hex": {
               "type": "string",
@@ -10737,8 +10737,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "size": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 52428800,
-              "description": "Exact byte length of the file, at most 50 MB."
+              "maximum": 209715200,
+              "description": "Exact byte length of the file, at most 200 MB."
             },
             "sha256_hex": {
               "type": "string",
@@ -10765,7 +10765,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Prepare file comparison from links is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Prepare file comparison from links can access public or external entities outside the private workspace."
     },
-    "description": "Stage two .docx files for redlining from HTTPS links the server can download, so no bytes pass through the client. Each file is at most 50 MB and must be a .docx. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "description": "Stage two .docx files for redlining from HTTPS links the server can download, so no bytes pass through the client. Each file is at most 200 MB and must be a .docx. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
     "annotations": {
       "title": "Prepare file comparison from links",
       "destructiveHint": false,
@@ -14405,7 +14405,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   },
   {
     "name": "add_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Add matter member changes state or starts stateful work.",
@@ -14443,7 +14443,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   },
   {
     "name": "remove_matter_member",
-    "scope": "stella:admin_write",
+    "scope": "stella:matters_write",
     "access": "write",
     "annotationReasons": {
       "readOnlyHint": "Remove matter member changes state or starts stateful work.",
@@ -15362,7 +15362,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
       "destructiveHint": "Prepare file comparison is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Prepare file comparison is confined to the private workspace or a bounded computation."
     },
-    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, open_file_comparison provides a picker panel that uploads from the user's browser; prepare_file_comparison_from_links accepts files reachable by HTTPS link. Both files must be .docx and at most 50 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, open_file_comparison provides a picker panel that uploads from the user's browser; prepare_file_comparison_from_links accepts files reachable by HTTPS link. Both files must be .docx and at most 200 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
     "annotations": {
       "title": "Prepare file comparison",
       "destructiveHint": false,
@@ -15390,8 +15390,8 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
             "size": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 52428800,
-              "description": "Exact byte length of the file, at most 50 MB."
+              "maximum": 209715200,
+              "description": "Exact byte length of the file, at most 200 MB."
             },
             "sha256_hex": {
               "type": "string",
@@ -15418,8 +15418,8 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
             "size": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 52428800,
-              "description": "Exact byte length of the file, at most 50 MB."
+              "maximum": 209715200,
+              "description": "Exact byte length of the file, at most 200 MB."
             },
             "sha256_hex": {
               "type": "string",
@@ -15446,7 +15446,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
       "destructiveHint": "Prepare file comparison from links is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Prepare file comparison from links can access public or external entities outside the private workspace."
     },
-    "description": "Stage two .docx files for redlining from HTTPS links the server can download, so no bytes pass through the client. Each file is at most 50 MB and must be a .docx. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "description": "Stage two .docx files for redlining from HTTPS links the server can download, so no bytes pass through the client. Each file is at most 200 MB and must be a .docx. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
     "annotations": {
       "title": "Prepare file comparison from links",
       "destructiveHint": false,

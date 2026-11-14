@@ -12,6 +12,26 @@ export const DOCUMENT_VERSION_UPLOAD_TRANSPORT = {
 } as const;
 
 /**
+ * Largest stored matter document: what a presigned upload may declare, and
+ * the bound every reader of a stored document reads it under. The bytes go
+ * straight to object storage, so no proxy or ingress ceiling applies; what
+ * sets it is the API process, which reads, scans and may rewrite the whole
+ * file while finalizing it, and parses it whole for list verification. Both
+ * hold it under one process byte budget sized from this value.
+ *
+ * Every client reads this one value: the browser and the CLI refuse a larger
+ * file before reading it. The desktop app edits only what it can save back as
+ * a multipart checkpoint, the smaller `MULTIPART_DOCUMENT_MAX_BYTES`.
+ */
+export const UPLOAD_DOCUMENT_MAX_BYTES: number = 200 * 1024 * 1024;
+
+/**
+ * The slowest uplink a maximum-size document must still finish on inside
+ * `DOCUMENT_UPLOAD_PUT_TIMEOUT_MS`: 128 KiB/s, about one megabit.
+ */
+export const DOCUMENT_UPLOAD_MIN_BYTES_PER_SECOND: number = 128 * 1024;
+
+/**
  * How long a client lets one presigned document PUT run before it gives up.
  * A stall ceiling, not a target duration: the largest document at the slowest
  * supported link rate fits inside it. The API keeps an upload finalizable for

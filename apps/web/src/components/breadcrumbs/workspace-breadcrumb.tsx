@@ -7,6 +7,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { resolveReferenceEdit } from "@stll/api-contract/matter-reference-edit";
 import { BidiText, stripDirectionalControls } from "@stll/ui/bidi-text";
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 import { Button } from "@stll/ui/button";
@@ -21,7 +22,6 @@ import {
   MatterColorContextPicker,
   MatterColorPicker,
 } from "@/components/workspaces/matter-color-picker";
-import { resolveReferenceEdit } from "@/components/workspaces/matter-metadata-sheet.logic";
 import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
@@ -354,7 +354,7 @@ export const WorkspaceBreadcrumb = ({
                   activeProps={{
                     className: "text-foreground font-semibold",
                   }}
-                  className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5 font-semibold"
+                  className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     startEditingName();

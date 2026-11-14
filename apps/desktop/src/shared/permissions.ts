@@ -4,6 +4,7 @@ export const PERMISSIONS = [
   "notifications",
   "openAtLogin",
   "accessibility",
+  "microphone",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

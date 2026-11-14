@@ -14,11 +14,14 @@ import {
   type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
   type DesktopRunnerLimits,
+  type DesktopRunnerLinkedFolder,
+  type DesktopRunnerReasoningEffort,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
   type DesktopRunnerTiming,
 } from "@stll/api-contract/desktop-runner";
 
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { pairAppCall, recordAppCall } from "@/api/lib/desktop-runner/app-calls";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
@@ -29,12 +32,21 @@ import {
   requestFolderRestore,
   type TurnFolderRestore,
 } from "@/api/lib/desktop-runner/folder-restores";
+import { openRunOutputKey } from "@/api/lib/desktop-runner/output-keys";
 import {
   type RunAnswerMessage,
   sealRunAnswer,
 } from "@/api/lib/desktop-runner/sealed-answers";
 import {
+  isStepRunOpen,
+  openStepImage,
+  recordStepTooLarge,
+  storeStepImage,
+  storeStepText,
+} from "@/api/lib/desktop-runner/step-contents";
+import {
   type AnsweredRequest,
+  approveLinkedFolder,
   type ChatRunBinding,
   type ChatRunForRequest,
   type DesktopRunnerDb,
@@ -50,7 +62,9 @@ import {
   readOpenRunChatThread,
   readRun,
   readRunOutputFile,
+  readRunOutputKey,
   readStoredRunEvents,
+  readThreadBackgroundTasks,
   recordChatReadSeq,
   type RunOwner,
   type StoredRunEvent,
@@ -85,7 +99,14 @@ type RunApproval = Extract<
 
 /** Which of a member's computers can take a run of `harness`. */
 export type PickedDesktop =
-  | { type: "available"; desktopId: string; harness: ReadyHarnessReport }
+  | {
+      type: "available";
+      desktopId: string;
+      harness: ReadyHarnessReport;
+      /** The computer's linked folders, and those runs may work in. */
+      linkedFolders: readonly DesktopRunnerLinkedFolder[];
+      approvedFolderIds: readonly string[];
+    }
   /** No computer of the member has an open runner socket. */
   | { type: "no_computer" }
   /** The most recently seen computer cannot run the harness now. */
@@ -109,6 +130,8 @@ export type StartLocalRunInput = {
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  /** The effort the run asks the model for; the computer must report it. */
+  reasoningEffort: DesktopRunnerReasoningEffort | null;
   /** How much the run asks before it acts; the computer must report it. */
   approvals: DesktopRunnerApprovalMode;
   harnessSessionId: string | null;
@@ -120,6 +143,12 @@ export type StartLocalRunInput = {
   mcp: Omit<RunStart["mcp"], "token" | "expiresAt">;
   /** Workspaces already authorized for this member and run. */
   workspaceIds: readonly SafeId<"workspace">[];
+  /**
+   * A folder linked on the computer for the run to work in, which the
+   * computer must report available and the member must have let runs use;
+   * `null` for the chat's own folder.
+   */
+  linkedFolderId: string | null;
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
 };
@@ -133,9 +162,12 @@ export type StartLocalRunOutcome =
       report: DesktopRunnerHarnessReport | null;
     }
   | { type: "model_unavailable" }
+  | { type: "reasoning_effort_unavailable" }
   | { type: "approvals_unavailable" }
   /** The chat's folder is being restored on its computer. */
   | { type: "folder_busy" }
+  /** The linked folder is not available, or runs may not work in it yet. */
+  | { type: "folder_unavailable" }
   /** The message would not fit one frame, even with the longest token. */
   | { type: "too_large" };
 
@@ -159,6 +191,8 @@ const TOKEN_SHAPE = "t".repeat(DESKTOP_RUNNER_MAX_TOKEN_LENGTH);
 const ATTACHMENT_LINK_SHAPE = `https://${"l".repeat(
   DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH - "https://".length,
 )}`;
+/** A run's output key, derived when the command is sent. */
+const OUTPUT_KEY_SHAPE = "0".repeat(64);
 
 /** Whether `message`, as sent, fits one frame. */
 const fitsOneFrame = (message: unknown) =>
@@ -192,6 +226,42 @@ type ControlDeps = {
 const toDatabaseError = (cause: unknown) =>
   new DatabaseError({ message: "Desktop runner store is unavailable", cause });
 
+/** What a run's steps produced, as the gateway's owner connection handles it. */
+const stepContentControl = (db: DesktopRunnerDb) => ({
+  /** Store a step's text for the owner's run that is still going. */
+  storeStepText: async (options: Parameters<typeof storeStepText>[1]) =>
+    await Result.tryPromise({
+      try: async () => await storeStepText(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Record a step whose content was too large to send. */
+  recordStepTooLarge: async (
+    options: Parameters<typeof recordStepTooLarge>[1],
+  ) =>
+    await Result.tryPromise({
+      try: async () => await recordStepTooLarge(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Whether a step of the owner's run takes an image. */
+  openStepImage: async (options: Parameters<typeof openStepImage>[1]) =>
+    await Result.tryPromise({
+      try: async () => await openStepImage(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Name a stored chat file as a step's image. */
+  storeStepImage: async (options: Parameters<typeof storeStepImage>[1]) =>
+    await Result.tryPromise({
+      try: async () => await storeStepImage(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Whether the owner's run is still going in this thread. */
+  isStepRunOpen: async (options: Parameters<typeof isStepRunOpen>[1]) =>
+    await Result.tryPromise({
+      try: async () => await isStepRunOpen(db, options),
+      catch: toDatabaseError,
+    }),
+});
+
 const invalid = (
   kind: DesktopRunnerServerMessage["type"],
   issues: v.BaseIssue<unknown>[],
@@ -205,13 +275,18 @@ const invalid = (
 const seenSince = ({ now, timing }: ControlDeps) =>
   new Date(now().getTime() - timing.runnerFreshnessMs);
 
-type PickDesktopOptions = { owner: RunOwner; harness: AgentHarness };
+type PickDesktopOptions = {
+  owner: RunOwner;
+  harness: AgentHarness;
+  /** Only this computer, as a turn in a folder linked on it needs. */
+  desktopId?: string;
+};
 
 const pickDesktop = async (
   deps: ControlDeps,
-  { owner, harness }: PickDesktopOptions,
+  { owner, harness, desktopId }: PickDesktopOptions,
 ): Promise<Result<PickedDesktop, DatabaseError>> => {
-  const runners = await Result.tryPromise({
+  const read = await Result.tryPromise({
     try: async () =>
       await readConnectedRunners(deps.db, {
         ...owner,
@@ -220,10 +295,14 @@ const pickDesktop = async (
       }),
     catch: toDatabaseError,
   });
-  if (runners.isErr()) {
-    return runners;
+  if (read.isErr()) {
+    return read;
   }
-  for (const runner of runners.value) {
+  const runners =
+    desktopId === undefined
+      ? read.value
+      : read.value.filter((runner) => runner.desktopId === desktopId);
+  for (const runner of runners) {
     const report = runner.harnesses.find(({ id }) => id === harness);
     // Only what the computer reports `ready` is routed to.
     if (report?.state === DESKTOP_RUNNER_HARNESS_STATE.ready) {
@@ -231,10 +310,12 @@ const pickDesktop = async (
         type: "available",
         desktopId: runner.desktopId,
         harness: report,
+        linkedFolders: runner.linkedFolders,
+        approvedFolderIds: runner.approvedFolderIds,
       });
     }
   }
-  const latest = runners.value.at(0);
+  const latest = runners.at(0);
   return Result.ok(
     latest === undefined
       ? { type: "no_computer" }
@@ -283,9 +364,11 @@ const startRun = async (
     runId,
     // A chat's turns share a folder; a run outside a chat keeps its own.
     folderId: input.chat?.threadId ?? runId,
+    linkedFolderId: input.linkedFolderId,
     harness: input.harness,
     harnessVersion: input.harnessVersion,
     model: input.model,
+    reasoningEffort: input.reasoningEffort,
     harnessSessionId: input.harnessSessionId,
     instructions: input.instructions,
     messages: input.messages,
@@ -311,6 +394,7 @@ const startRun = async (
       token: TOKEN_SHAPE,
       expiresAt: deps.now().toISOString(),
     },
+    outputKey: OUTPUT_KEY_SHAPE,
   });
   if (!checked.success) {
     return Result.err(invalid(message.type, checked.issues));
@@ -327,8 +411,10 @@ const startRun = async (
         harness: input.harness,
         harnessVersion: input.harnessVersion,
         model: input.model,
+        reasoningEffort: input.reasoningEffort,
         approvals: input.approvals,
         workspaceIds: input.workspaceIds,
+        linkedFolderId: input.linkedFolderId,
         chat,
         payload: { plain: message, withNote },
         now: deps.now(),
@@ -543,6 +629,25 @@ const readEvents = async (
   });
 };
 
+type BackgroundTasksOptions = {
+  owner: RunOwner;
+  threadId: SafeId<"chatThread">;
+};
+
+const readBackgroundTasks = async (
+  deps: ControlDeps,
+  { owner, threadId }: BackgroundTasksOptions,
+): Promise<Result<number, DatabaseError>> =>
+  await Result.tryPromise({
+    try: async () =>
+      await readThreadBackgroundTasks(deps.db, {
+        owner,
+        threadId,
+        freshSince: seenSince(deps),
+      }),
+    catch: toDatabaseError,
+  });
+
 /**
  * What the rest of the API uses to run work on a member's computer: pick a
  * computer, queue commands for a run, read what the run produced. Commands are
@@ -566,6 +671,21 @@ export const createDesktopRunnerControl = ({
     pickDesktop: async (options: PickDesktopOptions) =>
       await pickDesktop(deps, options),
     startRun: async (input: StartLocalRunInput) => await startRun(deps, input),
+    /**
+     * Let runs work in a folder linked on one of the member's computers,
+     * recording its audit event in the same transaction. `false` when that
+     * computer does not report the folder.
+     */
+    approveLinkedFolder: async (options: {
+      owner: RunOwner;
+      desktopId: string;
+      linkId: string;
+      recordAuditEvent: AuditRecorder;
+    }): Promise<Result<boolean, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await approveLinkedFolder(db, options),
+        catch: toDatabaseError,
+      }),
     /** Add a user message to a running run; idempotent on `inputId`. */
     sendInput: async ({
       owner,
@@ -636,6 +756,30 @@ export const createDesktopRunnerControl = ({
         try: async () => await readRun(db, { owner, runId }),
         catch: toDatabaseError,
       }),
+    /**
+     * The output key of the owner's run, to sign a grant with; `null` for a
+     * run that is not theirs or keeps no key. Never logged or answered.
+     */
+    readRunOutputKey: async ({
+      owner,
+      runId,
+    }: RunOptions): Promise<Result<string | null, DatabaseError>> => {
+      const stored = await Result.tryPromise({
+        try: async () => await readRunOutputKey(db, { owner, runId }),
+        catch: toDatabaseError,
+      });
+      if (stored.isErr()) {
+        return Result.err(stored.error);
+      }
+      if (stored.value === null) {
+        return Result.ok(null);
+      }
+      const opened = await openRunOutputKey(
+        owner.organizationId,
+        stored.value.sealedOutputKey,
+      );
+      return Result.ok(opened.type === "opened" ? opened.outputKey : null);
+    },
     /** The chat thread of the owner's run that is still going. */
     readOpenRunChatThread: async (
       options: RunOptions,
@@ -652,6 +796,7 @@ export const createDesktopRunnerControl = ({
         try: async () => await readRunOutputFile(db, options),
         catch: toDatabaseError,
       }),
+    ...stepContentControl(db),
     /** Record what the server answered the run for a tool an app presents. */
     recordAppCall: async (options: Parameters<typeof recordAppCall>[1]) =>
       await Result.tryPromise({
@@ -693,6 +838,13 @@ export const createDesktopRunnerControl = ({
         })),
       );
     },
+    /**
+     * What the chat's runs left running in the background on the member's
+     * computers, counted only for a computer whose socket is fresh, the
+     * same rule `readMemberRunners` uses.
+     */
+    readBackgroundTasks: async (options: BackgroundTasksOptions) =>
+      await readBackgroundTasks(deps, options),
     /** The harness session a thread's next turn on this computer resumes. */
     readChatRunSession: async (
       options: Parameters<typeof readChatRunSession>[1],

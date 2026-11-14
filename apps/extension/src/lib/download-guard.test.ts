@@ -101,7 +101,12 @@ const installFakeChrome = ({
           },
         },
       },
-      tabs: { query: async () => [{ id: 1 }, { id: 3 }] },
+      tabs: {
+        // Both tabs stay open; a failing frame lookup is Chrome's, not a
+        // closed tab's.
+        get: async (tabId: number) => ({ id: tabId }),
+        query: async () => [{ id: 1 }, { id: 3 }],
+      },
       webNavigation: {
         getAllFrames: async ({ tabId }: { tabId: number }) => {
           await framesReady;

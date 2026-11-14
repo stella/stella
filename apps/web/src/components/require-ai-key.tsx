@@ -616,13 +616,13 @@ export const AIKeyRequiredDialog = ({
             setRoleModels(initialRoleModels);
           }}
         />
-        <DialogHeader className="p-4 pb-2">
+        <DialogHeader className="p-4 pb-1">
           <DialogTitle>{t("ai.keyRequired.title")}</DialogTitle>
           <DialogDescription>
             {t("ai.keyRequired.description")}
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 overflow-x-hidden overflow-y-auto px-4 pb-3">
+        <div className="min-h-0 overflow-x-hidden overflow-y-auto px-4 pt-1 pb-3">
           {configRefusalKey !== null ? (
             <p className="text-muted-foreground text-sm">
               {t(configRefusalKey)}

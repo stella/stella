@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Értesít, ha egy dokumentum elkészült, vagy egy szinkronizálás figyelmet igényel.",
     "permissionAccessibility": "Kisegítő lehetőségek",
     "permissionAccessibilityDescription": "Lehetővé teszi, hogy a tevékenységi idővonal ablakcímeket rögzítsen.",
+    "permissionMicrophone": "Mikrofon",
+    "permissionMicrophoneDescription": "Így a diktálás hallja Önt, amíg nyomva tartja a billentyűparancsát.",
     "permissionAllowed": "Engedélyezve",
     "permissionAllow": "Engedélyezés",
     "permissionOpenSettings": "Beállítások megnyitása",
@@ -294,6 +296,7 @@
     "errorReadHistory": "A vágólap előzményeit nem sikerült betölteni.",
     "errorUpdateHistory": "A vágólap előzményeit nem sikerült frissíteni.",
     "formattedText": "Formázott szöveg",
+    "dictation": "Diktált szöveg",
     "image": "Kép",
     "imageCleanupPending": "Néhány törölt képadatot nem sikerült eltávolítani. A tisztítás automatikusan újrapróbálkozik.",
     "imageDimensions": "{width} × {height} képpont",
@@ -581,7 +584,41 @@
   },
   "dictation": {
     "title": "Diktálás",
-    "description": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg a használt alkalmazásban jelenik meg. A beszéd átírása ezen a számítógépen történik, és nem kerül tárolásra.",
+    "description": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg a használt alkalmazásban jelenik meg. A beszéd átírása ezen a számítógépen történik, és nem kerül tárolásra. Ha az AI-javítás be van kapcsolva, az átírt szöveg – nem a hang – a stellán keresztül a szervezete AI-szolgáltatójához kerül a hibák és a formázás javítására; a stella nem tárolja.",
+    "descriptionCloud": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg abban az alkalmazásban jelenik meg, amelyet éppen használ. A beszédet a stella AI írja át, és a stella nem tárolja.",
+    "cleanup": {
+      "title": "Javítás AI-jal",
+      "description": "A beszéd átírása továbbra is ezen a számítógépen történik, a hang soha nem hagyja el. Ha a javítás be van kapcsolva, az átírt szöveg a stellán keresztül a szervezete AI-szolgáltatójához kerül, amely kijavítja a felismerési hibákat, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”. A stella nem tárolja. A javítás azt is megkapja, milyen típusú alkalmazásba diktál, például e-mailbe vagy csevegésbe, hogy a szöveg illeszkedjen hozzá.",
+      "descriptionCloud": "Ha a javítás be van kapcsolva, a stella AI az átírt szöveg felismerési hibáit is kijavítja, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”. A javítás azt is megkapja, milyen típusú alkalmazásba diktál, például e-mailbe vagy csevegésbe, hogy a szöveg illeszkedjen hozzá."
+    },
+    "context": {
+      "windowTitle": {
+        "title": "Az ablak címének megosztása az AI-javítással",
+        "description": "A javítás annak az ablaknak a címét is megkapja, amelybe diktál, hogy meg tudja különböztetni például a szerződést a belső feljegyzéstől. Az ablakok címe ügyfelek nevét vagy ügyek megnevezését is tartalmazhatja. A cím a stellán keresztül a szervezete AI-szolgáltatójához kerül, és a stella nem tárolja."
+      },
+      "textBeforeCursor": {
+        "title": "A kurzor előtti szöveg megosztása az AI-javítással",
+        "description": "A javítás a kurzor előtti legfeljebb {limit, number} karaktert is megkapja, hogy a diktátum folytassa az éppen írt szöveget. Így annak a dokumentumnak egy része, amelyben éppen dolgozik, a stellán keresztül a szervezete AI-szolgáltatójához kerül, és a stella nem tárolja."
+      }
+    },
+    "keptInHistory": "Minden diktátum ezen a számítógépen a vágólap előzményeibe is bekerül.",
+    "destination": {
+      "title": "Átírás ezzel",
+      "local": "Ez a számítógép",
+      "cloud": "stella AI",
+      "cloudDescription": "A hang elhagyja ezt a számítógépet: átírásra a stellához, majd a stella AI-szolgáltatóján keresztül a kiválasztott modell szolgáltatójához kerül. A stella nem tárolja.",
+      "unavailableRegion": "A stella AI a szervezete régiójában még nem kínál átírást.",
+      "unavailableProvider": "A szervezete AI-szolgáltatója nem kínál átírást.",
+      "unavailable": "A stella AI átírás most nem érhető el.",
+      "model": "Átírási modell"
+    },
+    "language": {
+      "title": "Diktálás nyelve",
+      "description": "A beszéd felismerése ezen a nyelven történik, és a javítás ezen a nyelven hagyja a szöveget. Az automatikus beállítás a számítógép megjelenítési és billentyűzetnyelveit használja.",
+      "automatic": "Automatikus",
+      "automaticWith": "Automatikus ({languages})",
+      "noResults": "Nem található nyelv"
+    },
     "modelNeeded": "A beszédmodell ezen a számítógépen fut.",
     "download": "Letöltés ({size} MB)",
     "downloading": "A beszédmodell letöltése: {percent}%",
@@ -592,8 +629,13 @@
       "accessibility": "Engedélyezze a Kisegítő lehetőségek hozzáférést, hogy a stella más alkalmazásokba írhasson.",
       "microphone": "A stella nem hallja a mikrofont. Ellenőrizze a mikrofon-hozzáférést a Rendszerbeállításokban.",
       "modelMissing": "Először töltse le a beszédmodellt.",
-      "transcription": "Az átírás nem sikerült. Próbálja újra."
-    }
+      "transcription": "Az átírás nem sikerült. Próbálja újra.",
+      "focusChanged": "Másik alkalmazásra váltott, mielőtt a szöveg elkészült, ezért semmi sem lett beírva. Próbálja újra.",
+      "focusUnconfirmed": "A stella nem tudta megállapítani, melyik alkalmazás aktív, ezért semmi sem lett beírva. Próbálja újra.",
+      "shortcutHeld": "Engedje fel a billentyűparancs gombjait a gépeléshez. Semmi sem lett beírva; próbálja újra.",
+      "cloudTranscription": "A stella AI nem tudta átírni ezt a diktálást, és a beszédmodell nincs ezen a számítógépen. Próbálja újra, vagy az „Átírás ezzel” beállításnál válassza az „Ez a számítógép” lehetőséget, és töltse le a modellt."
+    },
+    "failureKeptInHistory": "A szöveg megtalálható a vágólap előzményeiben."
   },
   "shortcut": {
     "title": "Vágólap-billentyűparancs",
@@ -710,6 +752,18 @@
     "introduceActivityTitle": "Újdonság: tevékenységi idővonal",
     "introduceActivityBody": "A tevékenység mostantól elérhető a fiókjában. Semmit nem rögzít, amíg el nem indítja a tevékenységablakban.",
     "openActivity": "Tevékenység megnyitása",
+    "dictationModel": "A beszédmodell ({size} MB) egyszer töltődik le, és ezen a számítógépen fut.",
+    "dictationTurnOn": "Bekapcsolás és letöltés",
+    "dictationDownloadContinues": "Továbbléphet. A letöltés a háttérben folytatódik.",
+    "dictationReady": "A diktálás be van kapcsolva és kész.",
+    "dictationTryLabel": "Diktáljon ide",
+    "dictationTryPlaceholder": "Kattintson ide, tartsa lenyomva a(z) {shortcut} billentyűt, és mondjon egy mondatot.",
+    "dictationListening": "Figyelek…",
+    "dictationTranscribing": "Leírom, amit mondott…",
+    "dictationMicrophone": "Így a stella hallja Önt, amíg nyomva tartja a billentyűparancsot.",
+    "dictationAccessibility": "Így a stella beírja, amit mondott, abba az alkalmazásba, amelyet használ.",
+    "dictationFailed": "A stella desktop nem tudta bekapcsolni a diktálást. Próbálja újra.",
+    "introduceDictationTitle": "Újdonság: diktálás",
     "guideWaiting": "Kapcsolja be a stella desktopot a fenti listában a Kisegítő lehetőségek engedélyezéséhez.",
     "guideAllowed": "A stella desktop engedélyt kapott",
     "never": {
@@ -816,6 +870,27 @@
       "runs_can_write": "A helyi futtatások írhatnak ebbe a mappába, ezért nem tartalmazhat készséget.",
       "network_folder": "Ez a mappa hálózati megosztáson van. A készségeknek a számítógép saját lemezén kell lenniük.",
       "path_changed": "Egy szülőmappa megváltozott. Távolítsa el ezt a mappát, majd adja hozzá újra."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Csatolt mappák",
+    "description": "Mappák ezen a számítógépen, amelyekben egy csevegés ügynöke dolgozhat. A csevegés csak a mappa nevét látja; az elérési útja ezen a számítógépen marad.",
+    "add": "Mappa csatolása",
+    "remove": "Leválasztás",
+    "removeFolder": "{name} leválasztása",
+    "state": {
+      "offline": "A meghajtó, amelyen ez a mappa van, nincs csatlakoztatva.",
+      "moved": "Ezt a mappát áthelyezték, átnevezték vagy törölték. Válassza le, majd csatolja újra.",
+      "protected": "Ez a mappa a stella saját adatait vagy egy készségmappát tartalmaz, ezért az ügynök nem dolgozhat benne.",
+      "unreadable": "Ezt a mappát nem sikerült beolvasni."
+    },
+    "notice": {
+      "action_failed": "Ez nem sikerült. Próbálja újra.",
+      "too_many": "Ezen a számítógépen már annyi csatolt mappa van, amennyit tárolni tud. Előbb válasszon le egyet.",
+      "not_a_folder": "Válasszon egy mappát.",
+      "network_folder": "Ez a mappa hálózati megosztáson van. A számítógép saját lemezén lévő mappát csatoljon.",
+      "protected": "Ez a mappa a stella saját adatait vagy egy készségmappát tartalmaz, ezért az ügynök nem dolgozhat benne.",
+      "unreadable": "Ezt a mappát nem sikerült beolvasni."
     }
   }
 }

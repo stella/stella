@@ -99,7 +99,7 @@ const cleanupSettlementFailure = failureSink({
 });
 
 const uploadEntityBodySchema = v.object({
-  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
   name: defaultVarcharSchema,
   propertyId: resourceIdSchema("property"),
 });
