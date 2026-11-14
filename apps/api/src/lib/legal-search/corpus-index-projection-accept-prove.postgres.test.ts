@@ -148,9 +148,7 @@ const cleanUp = async (db: GatedTestDb, fixture: Fixture): Promise<void> => {
       .update(corpusIndexGenerations)
       .set({ status: "retiring" })
       .where(generation);
-    await tx
-      .delete(corpusIndexProjectionIntents)
-      .where(eq(corpusIndexProjectionIntents.id, fixture.intentId));
+    // The state names the applied revision, so it goes first.
     await tx
       .delete(corpusIndexProjectionStates)
       .where(
@@ -159,6 +157,9 @@ const cleanUp = async (db: GatedTestDb, fixture: Fixture): Promise<void> => {
           eq(corpusIndexProjectionStates.entityId, fixture.entityId),
         ),
       );
+    await tx
+      .delete(corpusIndexProjectionIntents)
+      .where(eq(corpusIndexProjectionIntents.id, fixture.intentId));
   });
   await db
     .update(corpusIndexGenerations)
