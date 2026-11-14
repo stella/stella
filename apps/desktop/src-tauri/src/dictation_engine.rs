@@ -1,5 +1,6 @@
 //! One thread owns a dictation from key press to inserted text. Commands wait
-//! in a channel while it transcribes, so two dictations never overlap.
+//! in a channel while it transcribes and cleans up, so two dictations never
+//! overlap.
 
 use std::{
   io::{self, BufReader},
@@ -22,6 +23,9 @@ use tauri::AppHandle;
 use crate::{
   dictation::{self, Command, Failure, Phase},
   dictation_audio::{MODEL_SAMPLE_RATE, holds_speech, resample, to_mono},
+  dictation_cleanup,
+  dictation_focus::{self, FocusTarget, Insertion},
+  dictation_format::AppClass,
   dictation_input,
   dictation_worker::{self, Response},
 };
@@ -31,6 +35,9 @@ const WORKER_IDLE: Duration = Duration::from_secs(300);
 const MAX_RECORDING_SECONDS: usize = 600;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+/// The speaker waits on every request, so a busy machine must not starve it.
+#[cfg(target_os = "windows")]
+const ABOVE_NORMAL_PRIORITY_CLASS: u32 = 0x0000_8000;
 
 pub fn spawn(app: AppHandle) -> Option<Sender<Command>> {
   let (sender, receiver) = mpsc::channel();
@@ -55,17 +62,18 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
         dictation::clear_failure(app);
         match begin() {
           Ok(started) => {
-            recorder = Some(started);
             dictation::set_phase(app, Phase::Recording);
+            // Read once recording runs, so the lookup never delays capture.
+            recorder = Some((started, dictation_focus::current(app)));
           }
           Err(failure) => dictation::report_failure(app, failure),
         }
       }
       Ok(Command::Press) => {}
       Ok(Command::Release) => {
-        if let Some(active) = recorder.take() {
+        if let Some((active, focus)) = recorder.take() {
           dictation::set_phase(app, Phase::Transcribing);
-          if let Err(failure) = finish(active, &mut worker) {
+          if let Err(failure) = finish(app, active, focus.as_ref(), &mut worker) {
             dictation::report_failure(app, failure);
           }
           dictation::set_phase(app, Phase::Idle);
@@ -90,7 +98,12 @@ fn begin() -> Result<Recorder, Failure> {
   Recorder::start().ok_or(Failure::Microphone)
 }
 
-fn finish(recorder: Recorder, worker: &mut Option<Worker>) -> Result<(), Failure> {
+fn finish(
+  app: &AppHandle,
+  recorder: Recorder,
+  focus: Option<&FocusTarget>,
+  worker: &mut Option<Worker>,
+) -> Result<(), Failure> {
   let captured = recorder.finish().ok_or(Failure::Microphone)?;
   // A denied microphone delivers exact zeros rather than an error.
   if captured.interleaved.iter().all(|sample| *sample == 0.0) {
@@ -102,13 +115,29 @@ fn finish(recorder: Recorder, worker: &mut Option<Worker>) -> Result<(), Failure
     return Ok(());
   }
   let model = dictation::installed_model().ok_or(Failure::ModelMissing)?;
-  let text = transcribe(worker, &model, &samples).ok_or(Failure::Transcription)?;
+  let language = dictation::language(app);
+  let text = transcribe(worker, &model, &samples, language.hint)
+    .ok_or(Failure::Transcription)?;
   let text = text.trim();
   if text.is_empty() {
     return Ok(());
   }
-  // The trailing space lets the next dictation continue the sentence.
-  dictation_input::type_text(&format!("{text} "))
+  let cleaned = dictation::cleanup_enabled(app)
+    .then(|| dictation_cleanup::clean_up(app, text, &language.speaker))
+    .flatten();
+  // A modifier still held down would turn typed text into shortcuts.
+  if !dictation_input::wait_for_released_modifiers() {
+    return Err(Failure::ShortcutHeld);
+  }
+  // Transcription and cleanup take a moment; text goes only to the app the
+  // speaker pressed the shortcut in.
+  match dictation_focus::insertion(focus, dictation_focus::current(app).as_ref()) {
+    Insertion::Allowed => {}
+    Insertion::FocusMoved => return Err(Failure::FocusChanged),
+    Insertion::FocusUnconfirmed => return Err(Failure::FocusUnconfirmed),
+  }
+  let class = AppClass::of(focus.and_then(|target| target.identifier.as_deref()));
+  dictation_input::send(&dictation_cleanup::strokes(text, cleaned.as_deref(), class))
     .map_err(|_typing| Failure::Accessibility)
 }
 
@@ -116,6 +145,7 @@ fn transcribe(
   worker: &mut Option<Worker>,
   model: &Path,
   samples: &[f32],
+  language: Option<&str>,
 ) -> Option<String> {
   if worker.is_none() {
     *worker = match Worker::start() {
@@ -126,7 +156,7 @@ fn transcribe(
       }
     };
   }
-  match worker.as_mut()?.transcribe(model, samples) {
+  match worker.as_mut()?.transcribe(model, samples, language) {
     Ok(Response::Text(text)) => Some(text),
     Ok(Response::Failed) => None,
     Err(error) => {
@@ -141,6 +171,7 @@ struct Worker {
   child: Child,
   stdin: ChildStdin,
   stdout: BufReader<ChildStdout>,
+  backend_logged: bool,
 }
 
 impl Worker {
@@ -155,7 +186,7 @@ impl Worker {
     #[cfg(target_os = "windows")]
     std::os::windows::process::CommandExt::creation_flags(
       &mut process,
-      CREATE_NO_WINDOW,
+      CREATE_NO_WINDOW | ABOVE_NORMAL_PRIORITY_CLASS,
     );
     let mut child = process.spawn()?;
     let stdin = child.stdin.take().ok_or(io::ErrorKind::BrokenPipe)?;
@@ -164,12 +195,30 @@ impl Worker {
       child,
       stdin,
       stdout: BufReader::new(stdout),
+      backend_logged: false,
     })
   }
 
-  fn transcribe(&mut self, model: &Path, samples: &[f32]) -> io::Result<Response> {
-    dictation_worker::write_request(&mut self.stdin, model, samples)?;
-    dictation_worker::read_response(&mut self.stdout)
+  fn transcribe(
+    &mut self,
+    model: &Path,
+    samples: &[f32],
+    language: Option<&str>,
+  ) -> io::Result<Response> {
+    dictation_worker::write_request(&mut self.stdin, model, samples, language)?;
+    let reply = dictation_worker::read_response(&mut self.stdout)?;
+    // Once per worker: which compute backend the model resolved to.
+    if !self.backend_logged
+      && let Some(backend) = reply.backend.as_deref()
+    {
+      self.backend_logged = true;
+      tracing::info!(
+        target: crate::logging::TRAIL_TARGET,
+        event = "dictation.worker_backend",
+        code = backend
+      );
+    }
+    Ok(reply.response)
   }
 }
 

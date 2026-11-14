@@ -10,7 +10,7 @@
 import { panic } from "better-result";
 
 import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provider";
-import type { ReviewDecision } from "@stll/api-contract/review-decision";
+import type { ReadsExactly } from "@stll/api-contract/review-decision";
 import type { SpotTarget } from "@stll/api-contract/spot";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -251,13 +251,9 @@ export const CLAIM_REVIEW_STATUSES = [
 ] as const;
 export type ClaimReviewStatus = (typeof CLAIM_REVIEW_STATUSES)[number];
 
-/** `needs-evidence` keeps a claim open until the record can answer it, so
- *  it decides nothing either way. */
-export const AVT_CLAIM_REVIEW_DECISION = {
-  reviewed: "accepted",
-  disputed: "rejected",
-  "needs-evidence": null,
-} as const satisfies Record<ClaimReviewStatus, ReviewDecision | null>;
+/** What each status decides is the shared owner's
+ *  (`REVIEW_STATUS_DECISION.claim`). */
+true satisfies ReadsExactly<"claim", ClaimReviewStatus>;
 
 /**
  * Reviewer actions, one row each, never rewritten. The current disposition of
@@ -370,7 +366,7 @@ type ClaimFactLinkChange = (typeof CLAIM_FACT_LINK_CHANGES)[number];
  * not fitting what the grader cited (`incompatible`), or the call not being
  * admitted (budget or access) before it was sent (`not-admitted`).
  */
-export const VERDICT_FALLBACK_REASONS = [
+const VERDICT_FALLBACK_REASONS = [
   ...DECISION_UNDECIDED_REASONS,
   "incompatible",
   "not-admitted",

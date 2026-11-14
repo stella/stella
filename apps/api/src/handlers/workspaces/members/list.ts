@@ -15,6 +15,7 @@ const readWorkspaceMembers = createSafeHandler(
     access: "read",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    workspaceStatus: "active-or-archived",
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {

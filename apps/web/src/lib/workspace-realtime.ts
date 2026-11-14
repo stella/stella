@@ -241,6 +241,18 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.MCP_CONNECTOR],
   },
+  // The member lets chat turns work in a folder linked on their computer;
+  // the computers' report, which lists the folder's approval, refreshes.
+  approveLocalFolder: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/chat/local-runners/:desktopId/folders/:linkId/approval",
+      },
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
   deleteOrganization: {
     writes: [
       {

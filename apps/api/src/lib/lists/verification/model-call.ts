@@ -24,10 +24,10 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
-import type { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import type { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 
 /** The task both passes dispatch on, and the one a run records. */
 export const VERIFICATION_MODEL_TASK = "pdf";
@@ -41,7 +41,7 @@ export type VerificationModelDeps = {
   accessProof: ListVerificationAccessProof;
   refreshAccessProof: () => Promise<ListVerificationAccessProof | null>;
   admission: ModelDispatchAdmission;
-  checkRunBudget: () => Promise<Result<void, ListVerificationRunCapError>>;
+  checkRunBudget: () => Promise<Result<void, ModelRunCapError>>;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
@@ -71,7 +71,7 @@ const proofMatchesRequest = (
 export const admitVerificationDispatch = async (
   deps: VerificationModelDeps,
 ): Promise<
-  Result<void, ListVerificationAccessRevokedError | ListVerificationRunCapError>
+  Result<void, ListVerificationAccessRevokedError | ModelRunCapError>
 > => {
   const proof = await deps.refreshAccessProof();
   if (
@@ -110,7 +110,7 @@ export type VerificationCall<TSchema extends v.GenericSchema> = {
   ) => Promise<
     Result<
       v.InferOutput<TSchema>,
-      ListVerificationAccessRevokedError | ListVerificationRunCapError
+      ListVerificationAccessRevokedError | ModelRunCapError
     >
   >;
   captureError: (cause: unknown) => void;

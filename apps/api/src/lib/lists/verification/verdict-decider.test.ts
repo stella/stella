@@ -25,7 +25,6 @@ import type {
   VerificationEvidenceFact,
 } from "@/api/lib/lists/verification/contract";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
-import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import {
   decideVerdicts,
   LLM_DECIDER,
@@ -35,6 +34,7 @@ import {
 } from "@/api/lib/lists/verification/verdict-decider";
 import type { VerdictDecider } from "@/api/lib/lists/verification/verdict-decider";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 import { hasCustomerDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import { decisionConfidenceFloor } from "@/api/lib/workflow/decisions/decision-policy";
@@ -312,7 +312,8 @@ describe("who decides the verdict", () => {
       checkRunBudget: async () =>
         await Promise.resolve(
           Result.err(
-            new ListVerificationRunCapError({
+            new ModelRunCapError({
+              kind: "list-run",
               message: "Budget reached",
               reason: "daily",
               hint: "Try again tomorrow.",

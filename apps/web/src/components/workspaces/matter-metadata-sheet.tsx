@@ -7,6 +7,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { resolveReferenceEdit } from "@stll/api-contract/matter-reference-edit";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
@@ -29,7 +30,6 @@ import { cn } from "@stll/ui/utils";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import { LeadSection } from "@/components/workspaces/lead-section";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
-import { resolveReferenceEdit } from "@/components/workspaces/matter-metadata-sheet.logic";
 import { MembersSection } from "@/components/workspaces/members-section";
 import { PartiesSection } from "@/components/workspaces/parties-section";
 import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";

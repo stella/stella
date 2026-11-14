@@ -66,17 +66,17 @@ import {
   EMPTY_CLAIM_REVIEW,
   rejectRecheck,
 } from "@/api/lib/lists/verification/review-fold";
-import type { VerificationRunCaps } from "@/api/lib/lists/verification/run-cap-config";
-import {
-  checkVerificationRecheckBudget,
-  ListVerificationRunCapError,
-} from "@/api/lib/lists/verification/run-caps";
 import { readVerdictDecider } from "@/api/lib/lists/verification/verdict-decider-setting";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   formatModelRef,
   getTanStackTextModelInfoForTask,
 } from "@/api/lib/tanstack-ai-models";
+import {
+  checkModelRunCaps,
+  ModelRunCapError,
+} from "@/api/lib/usage/model-run-caps/caps";
+import type { ModelRunCaps } from "@/api/lib/usage/model-run-caps/config";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 /** One round of grading calls: a request re-checks at most as many claims
@@ -86,6 +86,14 @@ export const RECHECKS_PER_REQUEST_MAX = VERIFICATION_RECHECKS_PER_REQUEST_MAX;
 /** One round of grading calls, and one repair round at most. */
 const RECHECK_TIMEOUT_MS = 90_000;
 const SERVICE_TIER = "standard" as const satisfies AIRequestServiceTier;
+
+/** A re-check is no run of its own: it is refused once the list counter is
+ *  at either cap, and takes no slot or start. */
+const RECHECK_CAPS = {
+  kind: "list-run",
+  operation: "lists.verifications.claim-rechecks.create",
+  phase: "start",
+} as const;
 
 type RecheckScope = {
   workspaceId: SafeId<"workspace">;
@@ -147,7 +155,7 @@ type RecheckCommon = RecheckScope & {
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
   signal: AbortSignal;
-  caps?: VerificationRunCaps;
+  caps?: ModelRunCaps;
   /** External model-dispatch boundary; supplied by focused tests. */
   generateObjectForTask?: VerificationModelDeps["generateObjectForTask"];
   /** The decision model the verdict decider asks, in place of the org's;
@@ -170,7 +178,7 @@ export type RecheckRefusal =
   | { type: "superseded" }
   | { type: "too-many-facts" }
   | { type: "access-revoked" }
-  | { type: "run-limit"; error: ListVerificationRunCapError }
+  | { type: "run-limit"; error: ModelRunCapError }
   | { type: "grading-failed"; cause: unknown };
 
 export type RecheckOutcome =
@@ -313,7 +321,7 @@ type RecheckGrading = { grade: ClaimGrade; assertedOn: ClaimAssertedDate };
 
 /** Why a batch's grading failed, as each of its claims reports it. */
 const gradingRefusal = (cause: unknown): RecheckRefusal => {
-  if (cause instanceof ListVerificationRunCapError) {
+  if (cause instanceof ModelRunCapError) {
     return { type: "run-limit", error: cause };
   }
   if (cause instanceof ListVerificationAccessRevokedError) {
@@ -342,9 +350,10 @@ const gradeRechecks = async ({
       (
         await safeDb(
           async (tx) =>
-            await checkVerificationRecheckBudget({
+            await checkModelRunCaps({
               tx,
               organizationId,
+              ...RECHECK_CAPS,
               ...(args.caps === undefined ? {} : { caps: args.caps }),
             }),
         )
@@ -613,9 +622,10 @@ export const recheckClaims = async (
   if (current.length > 0) {
     const budget = await args.safeDb(
       async (tx) =>
-        await checkVerificationRecheckBudget({
+        await checkModelRunCaps({
           tx,
           organizationId: args.organizationId,
+          ...RECHECK_CAPS,
           ...(args.caps === undefined ? {} : { caps: args.caps }),
         }),
     );

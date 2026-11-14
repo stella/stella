@@ -8,10 +8,14 @@ import {
 } from "@tanstack/ai";
 import { panic } from "better-result";
 
-import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import {
+  type AgentHarness,
+  harnessSessionIdEvent,
+} from "@stll/api-contract/agent-harness";
 import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   chatLocalRunApprovalReason,
 } from "@stll/api-contract/chat-local-run-tool";
 import {
@@ -50,10 +54,6 @@ import { shownToolInput, shownToolResult } from "./tool-parts";
 
 /** CUSTOM event reporting how the turn's context was established. */
 export const HARNESS_CONTINUATION_EVENT = "harness.continuation";
-
-/** CUSTOM event carrying the harness's native session id. */
-export const harnessSessionIdEvent = (harness: AgentHarness) =>
-  `${harness}.session-id`;
 
 /** Tool name for a harness question, matching Codex's native item name. */
 export const HARNESS_QUESTION_TOOL = CHAT_LOCAL_RUN_QUESTION_TOOL;
@@ -343,6 +343,16 @@ class ChunkMapper {
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
         toolName: toolCall.name,
+        // The subagent step that made the call, beside it: the API keeps
+        // the link under that step's chat call id.
+        ...(toolCall.parentCallId === undefined
+          ? {}
+          : {
+              metadata: {
+                [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]:
+                  toolCall.parentCallId,
+              },
+            }),
       },
       {
         type: EventType.TOOL_CALL_ARGS,

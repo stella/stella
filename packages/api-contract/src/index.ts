@@ -494,6 +494,7 @@ export type {
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
+  chatBackgroundTasksChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
   chatThreadsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,

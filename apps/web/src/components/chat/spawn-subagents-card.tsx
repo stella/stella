@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -69,37 +69,25 @@ export const SpawnSubagentsCard = ({
 
   if (!input) {
     return (
-      <div className="border-border bg-muted/30 my-1 rounded-lg border text-sm">
-        <div className="flex items-center gap-2 px-3 py-2">
-          <SplitIcon
-            aria-hidden="true"
-            className="text-muted-foreground size-4 shrink-0"
-          />
-          <span className="font-medium">{t("chat.tool.spawn_subagents")}</span>
-          {output !== null && (
-            <span className="text-muted-foreground text-xs tabular-nums">
-              {format.number(output.results.length)}
-            </span>
-          )}
-          <CallStatusIndicator status={callStatus} />
-        </div>
-      </div>
+      <SubagentsCardShell>
+        <SubagentsCardHeader
+          sizeLabel={
+            output === null ? null : format.number(output.results.length)
+          }
+          status={<SubagentsCallStatusIndicator status={callStatus} />}
+          title={t("chat.tool.spawn_subagents")}
+        />
+      </SubagentsCardShell>
     );
   }
 
   return (
-    <div className="border-border bg-muted/30 my-1 rounded-lg border text-sm">
-      <div className="flex items-center gap-2 px-3 py-2">
-        <SplitIcon
-          aria-hidden="true"
-          className="text-muted-foreground size-4 shrink-0"
-        />
-        <span className="font-medium">{t("chat.tool.spawn_subagents")}</span>
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {format.number(input.subagents.length)}
-        </span>
-        <CallStatusIndicator status={callStatus} />
-      </div>
+    <SubagentsCardShell>
+      <SubagentsCardHeader
+        sizeLabel={format.number(input.subagents.length)}
+        status={<SubagentsCallStatusIndicator status={callStatus} />}
+        title={t("chat.tool.spawn_subagents")}
+      />
 
       <SpawnSubagentsSubtaskList
         callStatus={callStatus}
@@ -107,9 +95,52 @@ export const SpawnSubagentsCard = ({
         subagents={input.subagents}
         streamdownComponents={streamdownComponents}
       />
-    </div>
+    </SubagentsCardShell>
   );
 };
+
+/**
+ * The card every delegation shows as: stella's own subagents here, and a
+ * coding agent's subagent on the member's computer
+ * (`LocalRunSubagentCard`).
+ */
+export const SubagentsCardShell = ({ children }: { children: ReactNode }) => (
+  <div className="border-border bg-muted/30 my-1 rounded-lg border text-sm">
+    {children}
+  </div>
+);
+
+type SubagentsCardHeaderProps = {
+  title: string;
+  /** What follows the title on its line, such as what was delegated. */
+  detail?: ReactNode;
+  /** How much was delegated, formatted for the locale; `null` when unknown. */
+  sizeLabel: string | null;
+  /** The call's one status, at the line's end. */
+  status: ReactNode;
+};
+
+export const SubagentsCardHeader = ({
+  sizeLabel,
+  detail,
+  status,
+  title,
+}: SubagentsCardHeaderProps) => (
+  <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2">
+    <SplitIcon
+      aria-hidden="true"
+      className="text-muted-foreground size-4 shrink-0"
+    />
+    <span className="shrink-0 font-medium">{title}</span>
+    {detail}
+    {sizeLabel !== null && (
+      <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+        {sizeLabel}
+      </span>
+    )}
+    {status}
+  </div>
+);
 
 type SpawnSubagentsSubtaskListProps = {
   subagents: SpawnSubagentsInput["subagents"];
@@ -290,7 +321,9 @@ type CallStatusIndicatorProps = {
   status: SpawnSubagentsCallStatus;
 };
 
-const CallStatusIndicator = ({ status }: CallStatusIndicatorProps) => {
+export const SubagentsCallStatusIndicator = ({
+  status,
+}: CallStatusIndicatorProps) => {
   const t = useTranslations();
 
   switch (status) {

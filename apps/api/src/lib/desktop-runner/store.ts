@@ -22,11 +22,14 @@ import * as v from "valibot";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  DESKTOP_RUNNER_MAX_BACKGROUND_TASKS,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   type DesktopRunnerHarnessReport,
   desktopRunnerHarnessReportSchema,
   type DesktopRunnerLimits,
+  type DesktopRunnerLinkedFolder,
+  desktopRunnerLinkedFolderSchema,
   type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 
@@ -42,6 +45,11 @@ import {
   desktopRunners,
   userFiles,
 } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  type AuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import {
@@ -54,7 +62,10 @@ import {
   transitionLifecycle,
   transitionLifecycleBatch,
 } from "@/api/lib/db/transitions";
-import { questionPauseOf } from "@/api/lib/desktop-runner/chunk";
+import {
+  openedSessionOf,
+  questionPauseOf,
+} from "@/api/lib/desktop-runner/chunk";
 import {
   carryFolderRestoreNotes,
   expireFolderRestoresOfKeys,
@@ -62,6 +73,12 @@ import {
   hasUnnotedFolderRestore,
   markFolderRestoreNotesTold,
 } from "@/api/lib/desktop-runner/folder-restores";
+import {
+  mintRunOutputKey,
+  type SealedRunOutputKey,
+  sealRunOutputKey,
+  storedRunOutputKey,
+} from "@/api/lib/desktop-runner/output-keys";
 import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
 import {
   DESKTOP_RUNNER_LEASED_RUN_STATES,
@@ -155,6 +172,50 @@ const storedHarnessReports = (value: unknown): DesktopRunnerHarnessReport[] => {
     : panic("A stored desktop runner harness report no longer validates");
 };
 
+const linkedFoldersSchema = v.array(desktopRunnerLinkedFolderSchema);
+
+/** Runs of one socket with work in the background, at most; as many as it may hold. */
+const MAX_BACKGROUND_RUNS = MAX_HELD_RUNS;
+
+const backgroundTasksSchema = v.pipe(
+  v.record(
+    v.string(),
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(DESKTOP_RUNNER_MAX_BACKGROUND_TASKS),
+    ),
+  ),
+  v.check(
+    (counts) => Object.keys(counts).length <= MAX_BACKGROUND_RUNS,
+    "Too many runs with background work",
+  ),
+);
+
+const storedBackgroundTasks = (value: unknown): Record<string, number> => {
+  const parsed = v.safeParse(backgroundTasksSchema, value);
+  return parsed.success
+    ? parsed.output
+    : panic("Stored desktop runner background counts no longer validate");
+};
+
+/** Linked folders are validated before they are stored, like reports. */
+const storedLinkedFolders = (value: unknown): DesktopRunnerLinkedFolder[] => {
+  const parsed = v.safeParse(linkedFoldersSchema, value);
+  return parsed.success
+    ? parsed.output
+    : panic("A stored desktop runner linked folder no longer validates");
+};
+
+/**
+ * The approvals a computer's linked folders keep: only of folders it still
+ * reports. A folder unlinked and linked again has a new id and is asked
+ * about again.
+ */
+const keptFolderApprovals = (folders: readonly DesktopRunnerLinkedFolder[]) =>
+  sql`ARRAY(SELECT approved FROM unnest(${runner.approvedFolderIds}) AS approved WHERE approved::text IN (SELECT jsonb_array_elements(${JSON.stringify(folders)}::text::jsonb) ->> 'id'))::uuid[]`;
+
 type HelloMessage = Extract<
   DesktopRunnerDesktopMessage,
   { type: typeof DESKTOP_RUNNER_DESKTOP_MESSAGE.hello }
@@ -186,6 +247,11 @@ type ClaimSessionResult =
       retired: RunHolder[];
       /** The runs the desktop listed that are bound to it, after reconciling. */
       held: HeldRun[];
+      /**
+       * The runner held background counts of an earlier socket, which this
+       * claim cleared: the computer reports the live ones again.
+       */
+      clearedBackgroundTasks: boolean;
     }
   /** The account holds its maximum of installations and none could go. */
   | { type: "too_many_runners" }
@@ -359,6 +425,7 @@ export const claimRunnerSession = async (
         sessionId: runner.sessionId,
         instanceId: runner.instanceId,
         connection: runner.connection,
+        heldBackgroundTasks: sql<boolean>`${runner.backgroundTasks} <> '{}'::jsonb`,
       })
       .from(runner)
       .where(runnerKey(binding))
@@ -390,6 +457,10 @@ export const claimRunnerSession = async (
       appVersion: hello.appVersion,
       sidecarVersion: hello.sidecarVersion,
       harnesses: hello.harnesses,
+      linkedFolders: hello.linkedFolders,
+      // What ran in the background before this socket is reported again
+      // after `welcome`; a count the computer no longer holds must not linger.
+      backgroundTasks: {},
       connectedAt: now,
       lastSeenAt: now,
     };
@@ -500,6 +571,7 @@ export const claimRunnerSession = async (
         ...row,
         workspaceIds: row.workspaceIds.map(brandPersistedWorkspaceId),
       })),
+      clearedBackgroundTasks: existing?.heldBackgroundTasks === true,
     };
   });
 
@@ -673,6 +745,32 @@ export const renewRunnerSession = async (
     };
   });
 
+/** One report the computer makes about itself over its socket. */
+type ComputerReport =
+  | Pick<typeof runner.$inferInsert, "harnesses">
+  | (Pick<typeof runner.$inferInsert, "linkedFolders"> & {
+      approvedFolderIds: SQL;
+    })
+  | Pick<typeof runner.$inferInsert, "backgroundTasks">;
+
+/**
+ * Store a report of the computer on its runner row while this socket holds
+ * it; `false` when the socket is not current.
+ */
+const writeComputerReport = async (
+  tx: Transaction,
+  { binding, sessionId }: SessionOptions,
+  report: ComputerReport,
+): Promise<boolean> => {
+  // audit: skip - runner socket bookkeeping; the row stores the computer's own harness, linked folder and background work reports
+  const updated = await tx
+    .update(runner)
+    .set(report)
+    .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+    .returning({ desktopId: runner.desktopId });
+  return updated.length > 0;
+};
+
 type HarnessStatusOptions = SessionOptions & {
   report: DesktopRunnerHarnessReport;
 };
@@ -683,11 +781,10 @@ export const recordHarnessStatus = async (
   { binding, sessionId, report }: HarnessStatusOptions,
 ): Promise<boolean> =>
   await withAggregateTransaction(db, async (tx) => {
-    const current = and(runnerKey(binding), eq(runner.sessionId, sessionId));
     const [row] = await tx
       .select({ harnesses: runner.harnesses })
       .from(runner)
-      .where(current)
+      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
       .limit(1);
     if (row === undefined) {
       return false;
@@ -698,9 +795,133 @@ export const recordHarnessStatus = async (
       ),
       report,
     ];
-    // audit: skip - runner socket bookkeeping; the run's caller audits the work
-    await tx.update(runner).set({ harnesses }).where(current);
+    return await writeComputerReport(tx, { binding, sessionId }, { harnesses });
+  });
+
+type LinkedFoldersOptions = SessionOptions & {
+  folders: readonly DesktopRunnerLinkedFolder[];
+};
+
+/**
+ * Replace the computer's linked folders, dropping approvals of folders it no
+ * longer reports; returns `false` when the socket is not current.
+ */
+export const recordLinkedFolders = async (
+  db: DesktopRunnerDb,
+  { binding, sessionId, folders }: LinkedFoldersOptions,
+): Promise<boolean> =>
+  await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await writeComputerReport(
+        tx,
+        { binding, sessionId },
+        {
+          linkedFolders: [...folders],
+          approvedFolderIds: keptFolderApprovals(folders),
+        },
+      ),
+  );
+
+type ApproveLinkedFolderOptions = {
+  owner: RunOwner;
+  desktopId: string;
+  linkId: string;
+  /** Records the approval's audit event, in the approval's transaction. */
+  recordAuditEvent: AuditRecorder;
+};
+
+/**
+ * Record the member's OK for runs to work in a folder linked on one of their
+ * computers, on every device key of that installation that reports it, with
+ * its audit event in the same transaction: an approval whose audit event
+ * cannot be written is not kept. `false` when none of them reports the
+ * folder; nothing is then recorded.
+ */
+export const approveLinkedFolder = async (
+  db: DesktopRunnerDb,
+  { owner, desktopId, linkId, recordAuditEvent }: ApproveLinkedFolderOptions,
+): Promise<boolean> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const updated = await tx
+      .update(runner)
+      .set({
+        approvedFolderIds: sql`CASE WHEN ${linkId}::uuid = ANY(${runner.approvedFolderIds}) THEN ${runner.approvedFolderIds} ELSE array_append(${runner.approvedFolderIds}, ${linkId}::uuid) END`,
+      })
+      .where(
+        and(
+          eq(runner.userId, owner.userId),
+          eq(runner.organizationId, owner.organizationId),
+          eq(runner.desktopId, desktopId),
+          ne(runner.connection, "retired"),
+          sql`${runner.linkedFolders} @> ${JSON.stringify([{ id: linkId }])}::text::jsonb`,
+        ),
+      )
+      .returning({ desktopId: runner.desktopId });
+    if (updated.length === 0) {
+      return false;
+    }
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL,
+      resourceId: linkId,
+      workspaceId: null,
+      metadata: { desktopId },
+    });
     return true;
+  });
+
+type BackgroundTasksOptions = SessionOptions & {
+  runId: string;
+  count: number;
+};
+
+/**
+ * Store what a run's computer reports running in the background for the
+ * run's chat, on the runner row of the socket that reports it: a claim of a
+ * newer socket replaces that row's counts, so a replaced socket never writes
+ * after it. `not_current` when the socket was replaced, `unknown_run` for a
+ * run that is not this computer's; either changes nothing. `too_many` when
+ * the socket would hold counts of more runs than it may hold.
+ */
+export const recordBackgroundTasks = async (
+  db: DesktopRunnerDb,
+  { binding, sessionId, runId, count }: BackgroundTasksOptions,
+): Promise<"applied" | "not_current" | "unknown_run" | "too_many"> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const [row] = await tx
+      .select({ backgroundTasks: runner.backgroundTasks })
+      .from(runner)
+      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+      .limit(1);
+    if (row === undefined) {
+      return "not_current";
+    }
+    const [run] = await tx
+      .select({ runId: runs.runId })
+      .from(runs)
+      .where(and(boundTo(binding), eq(runs.runId, runId)))
+      .limit(1);
+    if (run === undefined) {
+      return "unknown_run";
+    }
+    // Keyed by the stored id, the form the read joins on.
+    const others = Object.entries(
+      storedBackgroundTasks(row.backgroundTasks),
+    ).filter(([id]) => id !== run.runId);
+    const backgroundTasks = Object.fromEntries(
+      count === 0 ? others : [...others, [run.runId, count]],
+    );
+    if (Object.keys(backgroundTasks).length > MAX_BACKGROUND_RUNS) {
+      return "too_many";
+    }
+    return (await writeComputerReport(
+      tx,
+      { binding, sessionId },
+      { backgroundTasks },
+    ))
+      ? "applied"
+      : "not_current";
   });
 
 type RunTransitionOptions = {
@@ -880,11 +1101,35 @@ const advanceRun = async ({
         set: {
           ...advanced,
           outcome: message.outcome,
-          harnessSessionId: message.harnessSessionId,
+          // A run that ends without naming its session keeps the one it
+          // reported opening.
+          harnessSessionId:
+            message.harnessSessionId ?? sql`${runs.harnessSessionId}`,
         },
         recordTransitionAuditEvent: skipRunAudit,
       });
-    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent: {
+      // The session is recorded as soon as it takes the run's prompt: a run
+      // lost or failed after that may have changed the session, so the
+      // session lookup must see it even without a `run.finished`.
+      const opened = openedSessionOf(message.chunk);
+      return await transitionLifecycle({
+        tx,
+        spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+        id: message.runId,
+        moves: { state: { from: SEQUENCED_RUN_STATES, to: "running" } },
+        guard,
+        set:
+          opened === null
+            ? advanced
+            : {
+                ...advanced,
+                // Only a session of the run's own harness counts.
+                harnessSessionId: sql`case when ${runs.harness} = ${opened.harness} then ${opened.sessionId} else ${runs.harnessSessionId} end`,
+              },
+        recordTransitionAuditEvent: skipRunAudit,
+      });
+    }
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest:
       return await transitionLifecycle({
         tx,
@@ -1248,6 +1493,8 @@ export type PendingCommand = {
   readonly kind: DesktopRunnerCommandKind;
   readonly payload: unknown;
   readonly workspaceIds: readonly SafeId<"workspace">[];
+  /** The run's output key, which a `run.start` carries; never logged. */
+  readonly sealedOutputKey: SealedRunOutputKey | null;
 };
 
 type PendingCommandsOptions = SessionOptions & {
@@ -1282,6 +1529,8 @@ export const readPendingCommands = async (
       kind: desktopRunnerCommands.kind,
       payload: desktopRunnerCommands.payload,
       workspaceIds: runs.workspaceIds,
+      outputKeyEncrypted: runs.outputKeyEncrypted,
+      outputKeyIv: runs.outputKeyIv,
     })
     .from(desktopRunnerCommands)
     .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
@@ -1309,10 +1558,13 @@ export const readPendingCommands = async (
   }
   return {
     type: "current",
-    commands: rows.map((row) => ({
-      ...row,
-      workspaceIds: row.workspaceIds.map(brandPersistedWorkspaceId),
-    })),
+    commands: rows.map(
+      ({ outputKeyEncrypted, outputKeyIv, workspaceIds, ...row }) => ({
+        ...row,
+        workspaceIds: workspaceIds.map(brandPersistedWorkspaceId),
+        sealedOutputKey: storedRunOutputKey(outputKeyEncrypted, outputKeyIv),
+      }),
+    ),
   };
 };
 
@@ -1489,6 +1741,9 @@ export type ConnectedRunner = {
   readonly instanceId: string;
   readonly lastSeenAt: Date;
   readonly harnesses: readonly DesktopRunnerHarnessReport[];
+  readonly linkedFolders: readonly DesktopRunnerLinkedFolder[];
+  /** Linked folders the member let runs work in. */
+  readonly approvedFolderIds: readonly string[];
 };
 
 /** A member's connected runners seen since `seenSince`, most recent first. */
@@ -1504,6 +1759,8 @@ export const readConnectedRunners = async (
       instanceId: runner.instanceId,
       lastSeenAt: runner.lastSeenAt,
       harnesses: runner.harnesses,
+      linkedFolders: runner.linkedFolders,
+      approvedFolderIds: runner.approvedFolderIds,
     })
     .from(runner)
     .where(
@@ -1519,6 +1776,7 @@ export const readConnectedRunners = async (
   return rows.map((row) => ({
     ...row,
     harnesses: storedHarnessReports(row.harnesses),
+    linkedFolders: storedLinkedFolders(row.linkedFolders),
   }));
 };
 
@@ -1546,6 +1804,8 @@ type InsertRunOptions = {
   reasoningEffort: DesktopRunnerReasoningEffort | null;
   approvals: DesktopRunnerApprovalMode;
   workspaceIds: readonly SafeId<"workspace">[];
+  /** The folder linked on the computer the run works in, if any. */
+  linkedFolderId: string | null;
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
   /**
@@ -1575,19 +1835,29 @@ export type InsertedRun =
   | { type: "reasoning_effort_unavailable" }
   | { type: "approvals_unavailable" }
   /** The chat's folder is being restored on its computer. */
-  | { type: "folder_busy" };
+  | { type: "folder_busy" }
+  /**
+   * The linked folder is not reported available by the computer, or the
+   * member has not let runs work in it.
+   */
+  | { type: "folder_unavailable" };
 
 /**
  * Bind a new run to a connected runner and queue its `run.start`, both or
  * neither. The runner must report the harness ready at the requested version
  * with the requested model and approval mode. The caller mints the run id, so nothing here
- * answers for a run id another tenant holds.
+ * answers for a run id another tenant holds. The run gets its own output key
+ * (`output-keys.ts`), stored encrypted for its organization.
  */
 export const insertAssignedRun = async (
   db: DesktopRunnerDb,
   options: InsertRunOptions,
-): Promise<InsertedRun> =>
-  await withAggregateTransaction(db, async (tx) => {
+): Promise<InsertedRun> => {
+  const sealedOutputKey = await sealRunOutputKey(
+    options.owner.organizationId,
+    mintRunOutputKey(),
+  );
+  return await withAggregateTransaction(db, async (tx) => {
     const { owner, runId, desktopId, harness, harnessVersion, now } = options;
     // Serialized with the account's restore requests and settlements, so a
     // restore is either pending here (refused below) or settled and noted.
@@ -1602,6 +1872,8 @@ export const insertAssignedRun = async (
         sessionId: runner.sessionId,
         instanceId: runner.instanceId,
         harnesses: runner.harnesses,
+        linkedFolders: runner.linkedFolders,
+        approvedFolderIds: runner.approvedFolderIds,
       })
       .from(runner)
       .where(
@@ -1638,6 +1910,16 @@ export const insertAssignedRun = async (
     if (!report.approvalModes.includes(options.approvals)) {
       return { type: "approvals_unavailable" };
     }
+    const { linkedFolderId } = options;
+    if (
+      linkedFolderId !== null &&
+      (!target.approvedFolderIds.includes(linkedFolderId) ||
+        storedLinkedFolders(target.linkedFolders).find(
+          ({ id }) => id === linkedFolderId,
+        )?.state !== "available")
+    ) {
+      return { type: "folder_unavailable" };
+    }
     // A restore of the chat's folder that its computer may still act on: the
     // run would work in files about to change. The computer refuses such a
     // run too, for a restore asked while this one is stored.
@@ -1667,10 +1949,13 @@ export const insertAssignedRun = async (
       harness,
       harnessVersion,
       workspaceIds: [...options.workspaceIds],
+      linkedFolderId,
       chatThreadId: options.chat?.threadId ?? null,
       chatTurnId: options.chat?.turnId ?? null,
       state: "assigned",
       leaseExpiresAt: leaseUntil(now, options.leaseMs),
+      outputKeyEncrypted: sealedOutputKey.ciphertext,
+      outputKeyIv: sealedOutputKey.iv,
       createdAt: now,
       updatedAt: now,
     });
@@ -1692,6 +1977,7 @@ export const insertAssignedRun = async (
       holder: { sessionId: target.sessionId, instanceId: target.instanceId },
     };
   });
+};
 
 type InsertCommandOptions = {
   owner: RunOwner;
@@ -1894,6 +2180,41 @@ export const readRun = async (
   ).at(0) ?? null;
 
 /**
+ * The stored output key of one run of `owner`: `null` when it has no run by
+ * that id, a `null` key when the run keeps none. Read apart from `readRun`,
+ * so no view of a run carries it.
+ */
+export const readRunOutputKey = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, runId }: ReadRunOptions,
+): Promise<{ readonly sealedOutputKey: SealedRunOutputKey | null } | null> => {
+  const row = (
+    await db
+      .select({
+        outputKeyEncrypted: runs.outputKeyEncrypted,
+        outputKeyIv: runs.outputKeyIv,
+      })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.runId, runId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  return row === undefined
+    ? null
+    : {
+        sealedOutputKey: storedRunOutputKey(
+          row.outputKeyEncrypted,
+          row.outputKeyIv,
+        ),
+      };
+};
+
+/**
  * The chat thread of the owner's run that is still going; `null` for a run of
  * someone else, one that ended, or one no chat started. What a run's token may
  * write is read from here, never from the request.
@@ -1988,6 +2309,48 @@ export const readStoredRunEvents = async (
     .orderBy(asc(desktopRunnerEvents.seq))
     .limit(limit);
 
+/**
+ * What a chat's runs left running in the background on the member's
+ * computers, as each computer last reported it; only a computer whose socket
+ * is connected and was seen since `freshSince` counts. The database sums the
+ * runs, so the read is one row however many runs the chat holds; the total
+ * stops at `DESKTOP_RUNNER_MAX_BACKGROUND_TASKS`.
+ */
+export const readThreadBackgroundTasks = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    threadId,
+    freshSince,
+  }: { owner: RunOwner; threadId: SafeId<"chatThread">; freshSince: Date },
+): Promise<number> => {
+  const [row] = await db
+    .select({
+      count: sql<number>`least(coalesce(sum((${runner.backgroundTasks} ->> ${runs.runId}::text)::integer), 0), ${DESKTOP_RUNNER_MAX_BACKGROUND_TASKS})::int`,
+    })
+    .from(runs)
+    .innerJoin(
+      runner,
+      and(
+        eq(runner.userId, runs.userId),
+        eq(runner.organizationId, runs.organizationId),
+        eq(runner.desktopId, runs.desktopId),
+        eq(runner.deviceJkt, runs.deviceJkt),
+        eq(runner.connection, "connected"),
+        sql`${runner.lastSeenAt} >= ${freshSince}::timestamptz`,
+      ),
+    )
+    .where(
+      and(
+        eq(runs.chatThreadId, threadId),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        sql`${runner.backgroundTasks} ->> ${runs.runId}::text IS NOT NULL`,
+      ),
+    );
+  return row?.count ?? 0;
+};
+
 type MemberRunnersOptions = { owner: RunOwner; limit: number };
 
 export type MemberRunner = {
@@ -1995,6 +2358,9 @@ export type MemberRunner = {
   readonly connected: boolean;
   readonly lastSeenAt: Date;
   readonly harnesses: readonly DesktopRunnerHarnessReport[];
+  readonly linkedFolders: readonly DesktopRunnerLinkedFolder[];
+  /** Linked folders the member let runs work in. */
+  readonly approvedFolderIds: readonly string[];
 };
 
 /**
@@ -2012,6 +2378,8 @@ export const readMemberRunners = async (
       connection: runner.connection,
       lastSeenAt: runner.lastSeenAt,
       harnesses: runner.harnesses,
+      linkedFolders: runner.linkedFolders,
+      approvedFolderIds: runner.approvedFolderIds,
     })
     .from(runner)
     .where(
@@ -2041,6 +2409,8 @@ export const readMemberRunners = async (
     connected: row.connection === "connected",
     lastSeenAt: row.lastSeenAt,
     harnesses: storedHarnessReports(row.harnesses),
+    linkedFolders: storedLinkedFolders(row.linkedFolders),
+    approvedFolderIds: row.approvedFolderIds,
   }));
 };
 
@@ -2050,6 +2420,12 @@ type ChatRunSessionOptions = {
   chat: ChatRunBinding;
   desktopId: string;
   harness: AgentHarness;
+  /**
+   * The linked folder the turn works in, `null` for the chat's own: a
+   * harness keeps its sessions per working folder, so a session from
+   * another folder is not resumed.
+   */
+  linkedFolderId: string | null;
 };
 
 /**
@@ -2070,10 +2446,15 @@ type ChatRunSessionOptions = {
  */
 export const readChatRunSession = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { owner, chat, desktopId, harness }: ChatRunSessionOptions,
+  { owner, chat, desktopId, harness, linkedFolderId }: ChatRunSessionOptions,
 ): Promise<string | null> => {
   // The run that last wrote the session: a later one resumed it or replaced
-  // it, whatever state it ended in.
+  // it, whatever state it ended in. A run records its session id once the
+  // session takes its prompt. A run without one is passed over only when it
+  // provably never reached the harness: it ended (finished or refused)
+  // without naming a session, or no computer picked it up. Any other run
+  // without one (lost, or still open) may have reached it before its
+  // session id arrived, so it hides the session and the turn starts fresh.
   const newest = db
     .select({
       state: runs.state,
@@ -2088,6 +2469,15 @@ export const readChatRunSession = async (
         eq(runs.harness, harness),
         eq(runs.userId, owner.userId),
         eq(runs.organizationId, owner.organizationId),
+        sql`${runs.linkedFolderId} IS NOT DISTINCT FROM ${linkedFolderId}::uuid`,
+        or(
+          isNotNull(runs.harnessSessionId),
+          and(
+            ne(runs.state, "finished"),
+            ne(runs.state, "rejected"),
+            or(isNull(runs.lostReason), ne(runs.lostReason, "not_reached")),
+          ),
+        ),
       ),
     )
     .orderBy(desc(runs.createdAt), desc(runs.runId))

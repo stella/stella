@@ -8,6 +8,7 @@ import type {
 import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import {
   DOCX_SUGGESTION_SURFACE,
@@ -31,6 +32,7 @@ import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
 
 import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
@@ -1093,16 +1095,21 @@ const fetchChatLocalRunners = async (signal: AbortSignal) =>
   unwrapApiResponse(await api.chat["local-runners"].get({ fetch: { signal } }));
 
 /**
- * The member's computers and the harnesses a turn can run on. Read when the
- * Models submenu opens, like the model options, and kept briefly: a computer
- * signing in or reaching a limit shows on the next open.
+ * The member's computers, what each can run and the folders linked on them.
+ * Read when the Models submenu opens, like the model options, and kept
+ * briefly: a computer signing in or reaching a limit shows on the next open.
+ * The computers report themselves over their own sockets; the member's one
+ * write here, allowing a linked folder, refreshes the read.
  */
 export const localRunnersOptions = (activeOrganizationId: string) =>
-  queryOptions({
-    queryKey: chatKeys.localRunners(activeOrganizationId),
-    staleTime: 30_000,
-    queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: chatKeys.localRunners(activeOrganizationId),
+      staleTime: 30_000,
+      queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
+    }),
+    { resources: [RESOURCE_TYPE.USER], scope: { type: "organization" } },
+  );
 
 export const groupedChatThreadsOptions = ({
   activeOrganizationId,
