@@ -38,6 +38,7 @@ import {
   sealRunAnswer,
 } from "@/api/lib/desktop-runner/sealed-answers";
 import {
+  copyStepContents,
   isStepRunOpen,
   openStepImage,
   recordStepTooLarge,
@@ -252,6 +253,12 @@ const stepContentControl = (db: DesktopRunnerDb) => ({
   storeStepImage: async (options: Parameters<typeof storeStepImage>[1]) =>
     await Result.tryPromise({
       try: async () => await storeStepImage(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Copy the stored steps of a forked thread's messages to the fork. */
+  copyStepContents: async (options: Parameters<typeof copyStepContents>[1]) =>
+    await Result.tryPromise({
+      try: async () => await copyStepContents(db, options),
       catch: toDatabaseError,
     }),
   /** Whether the owner's run is still going in this thread. */

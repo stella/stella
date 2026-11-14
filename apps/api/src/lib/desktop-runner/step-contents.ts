@@ -23,6 +23,7 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { DESKTOP_RUNNER_OPEN_RUN_STATES } from "@/api/lib/desktop-runner/states";
 import type { DesktopRunnerDb, RunOwner } from "@/api/lib/desktop-runner/store";
 import { brandPersistedChatThreadId } from "@/api/lib/safe-id-boundaries";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 /**
  * What the steps of a chat's local runs produced, as stella stores it: one
@@ -658,3 +659,93 @@ export const isStepRunOpen = async (
       )
       .limit(1)
   ).length === 1;
+
+/** One step a fork copies: where it goes, and the fork's own copy of its image. */
+type CopiedStep = {
+  stepKey: string;
+  /** The fork's message that shows the step. */
+  messageId: SafeId<"chatMessage">;
+  /** The fork's copy of the step's image file; `null` for none. */
+  userFileId: SafeId<"userFile"> | null;
+};
+
+type CopyStepContentsOptions = {
+  owner: RunOwner;
+  sourceThreadId: SafeId<"chatThread">;
+  targetThreadId: SafeId<"chatThread">;
+  steps: readonly CopiedStep[];
+};
+
+/** Steps one statement copies: each adds two parameters per mapped column. */
+const COPY_STEPS_PER_STATEMENT = 200;
+
+/** The uuid `valueOf` gives each step, by the row's step key; null for none. */
+const mappedBy = (
+  steps: readonly CopiedStep[],
+  valueOf: (step: CopiedStep) => string | null,
+) =>
+  sqlCaseFragment({
+    operand: sql`${contents.stepKey}`,
+    branches: steps.map(
+      (step) => sql`WHEN ${step.stepKey} THEN ${valueOf(step)}::uuid`,
+    ),
+    fallback: sql`NULL::uuid`,
+  });
+
+/**
+ * Copy what the steps of a forked thread's messages stored, inside the
+ * database: each copy is owned by the fork's message that shows the step, so
+ * it goes with that message. Both threads must be the owner's. Text is
+ * copied as stored (one organization encrypts both); an image row is copied
+ * only with the fork's own copy of its file, and a step whose file was not
+ * copied is left out, so the fork never names the source's file. A row the
+ * fork already holds is kept. Returns how many rows were copied.
+ */
+export const copyStepContents = async (
+  db: Pick<DesktopRunnerDb, "select" | "insert">,
+  { owner, sourceThreadId, targetThreadId, steps }: CopyStepContentsOptions,
+): Promise<number> => {
+  const ownedThread = (threadId: SafeId<"chatThread">) =>
+    sql`EXISTS (SELECT 1 FROM ${chatThreads} WHERE ${chatThreads.id} = ${threadId} AND ${chatThreads.userId} = ${owner.userId} AND ${chatThreads.organizationId} = ${owner.organizationId})`;
+  let copied = 0;
+  for (let from = 0; from < steps.length; from += COPY_STEPS_PER_STATEMENT) {
+    const batch = steps.slice(from, from + COPY_STEPS_PER_STATEMENT);
+    const copiedFile = mappedBy(batch, (step) => step.userFileId);
+    const rows = db
+      .select({
+        threadId: sql<string>`${targetThreadId}::uuid`.as("thread_id"),
+        stepKey: contents.stepKey,
+        runId: contents.runId,
+        messageId: mappedBy(batch, (step) => step.messageId).as("message_id"),
+        kind: contents.kind,
+        outcome: contents.outcome,
+        totalBytes: contents.totalBytes,
+        storedBytes: contents.storedBytes,
+        textEncrypted: contents.textEncrypted,
+        textIv: contents.textIv,
+        userFileId: copiedFile.as("user_file_id"),
+      })
+      .from(contents)
+      .where(
+        and(
+          eq(contents.threadId, sourceThreadId),
+          inArray(
+            contents.stepKey,
+            batch.map((step) => step.stepKey),
+          ),
+          ownedThread(sourceThreadId),
+          ownedThread(targetThreadId),
+          sql`(${contents.userFileId} IS NULL) = (${copiedFile} IS NULL)`,
+        ),
+      );
+    // db-await-in-loop: one bounded statement per batch of steps
+    // audit: skip - copied history belongs to the fork's own thread create event
+    const inserted = await db
+      .insert(contents)
+      .select(rows)
+      .onConflictDoNothing()
+      .returning({ stepKey: contents.stepKey });
+    copied += inserted.length;
+  }
+  return copied;
+};

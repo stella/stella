@@ -1,0 +1,7 @@
+{
+  "alter-column": "Dropping NOT NULL on turn_id changes only the catalog and scans no row, under 1s lock_timeout and 10s statement_timeout.",
+  "add-column": "One nullable uuid column without a default on the step content table: a catalog-only change that rewrites no rows, under 1s lock_timeout and 10s statement_timeout.",
+  "add-foreign-key": "The message reference is added NOT VALID, so no existing row is checked; lock acquisition on chat_messages is bounded by 1s lock_timeout and the statement by 10s statement_timeout.",
+  "add-constraint": "The owner check is added NOT VALID, so no existing row is scanned; every existing row has a turn and no message, so it holds for all of them.",
+  "create-index": "A partial index over message_id on the step content table, which no computer writes to before the release that follows this migration, so the build reads an empty or near-empty table; bounded by 10s statement_timeout."
+}

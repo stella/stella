@@ -25,7 +25,7 @@ import {
   DESKTOP_RUNNER_STORED_REJECT_REASONS,
 } from "@/api/lib/desktop-runner/states";
 
-import { chatThreads, chatTurns } from "./chat";
+import { chatMessages, chatThreads, chatTurns } from "./chat";
 import {
   bytea,
   jsonb,
@@ -474,7 +474,8 @@ export const desktopRunnerAppCalls = p.pgTable.withRLS(
  * the row names.
  *
  * A row lives as long as the answer that shows its step: it goes with the
- * turn that produced it, and so with that turn's messages and its thread. It
+ * turn that produced it, and so with that turn's messages, or, in a forked
+ * thread, with the message it was copied for; and always with its thread. It
  * is keyed by thread, since a forked thread keeps its source's call ids, and
  * names its run without depending on it, since an ended run is pruned long
  * before its conversation.
@@ -491,8 +492,10 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
     stepKey: p.varchar("step_key", { length: 64 }).notNull(),
     /** The run whose step this is; its row may be gone. */
     runId: p.uuid("run_id").notNull(),
-    /** The turn that produced the step. */
-    turnId: p.uuid("turn_id").notNull(),
+    /** The turn that produced the step; null for a row a fork copied. */
+    turnId: p.uuid("turn_id"),
+    /** The message a fork copied the step for; null for a run's own row. */
+    messageId: p.uuid("message_id"),
     kind: p.text().notNull(),
     /** How the step's content settled: stored, or why it was not. */
     outcome: p.text().notNull(),
@@ -529,14 +532,25 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
       .onDelete("cascade"),
     p
       .foreignKey({
+        name: "chat_local_run_step_contents_message_fk",
+        columns: [table.messageId, table.threadId],
+        foreignColumns: [chatMessages.id, chatMessages.threadId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
         name: "chat_local_run_step_contents_user_file_fk",
         columns: [table.userFileId],
         foreignColumns: [userFiles.id],
       })
       .onDelete("cascade"),
-    // Each serves its reference's cascade, so deleting a turn or a file
-    // never reads the whole table.
+    // Each serves its reference's cascade, so deleting a turn, a message or
+    // a file never reads the whole table.
     p.index("chat_local_run_step_contents_turn_idx").on(table.turnId),
+    p
+      .index("chat_local_run_step_contents_message_idx")
+      .on(table.messageId)
+      .where(sql`${table.messageId} IS NOT NULL`),
     p
       .index("chat_local_run_step_contents_user_file_idx")
       .on(table.userFileId)
@@ -552,6 +566,10 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
     p.check(
       "chat_local_run_step_contents_outcome_check",
       sql`${table.outcome} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES)})`,
+    ),
+    p.check(
+      "chat_local_run_step_contents_owner_check",
+      sql`num_nonnulls(${table.turnId}, ${table.messageId}) = 1`,
     ),
     p.check(
       "chat_local_run_step_contents_bytes_check",

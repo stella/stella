@@ -10,10 +10,17 @@ import {
 } from "bun:test";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
+import { DESKTOP_RUNNER_PROTOCOL } from "@stll/api-contract/desktop-runner";
+import { sha256Hex } from "@stll/sha256/bun";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
+  chatLocalRunStepContents,
   chatMessages,
   chatThreads,
+  chatTurns,
+  desktopRunnerRuns,
+  desktopRunners,
   organizationFileObjects,
   organizationFileUsage,
   usageEntitlements,
@@ -33,6 +40,13 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  copyStepContents,
+  readVisibleStepContent,
+  storeStepImage,
+  storeStepText,
+} from "@/api/lib/desktop-runner/step-contents";
+import type { DesktopRunnerDb } from "@/api/lib/desktop-runner/store";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import {
@@ -63,6 +77,18 @@ import { createForkThread } from "./create";
 // boundary so the fork's own behaviour is what these tests observe.
 const indexChatThreadMock = mock(async () => await Promise.resolve());
 const forkThread = createForkThread({ indexChatThread: indexChatThreadMock });
+
+// SAFETY: the test database exposes the same Drizzle query and transaction
+// APIs as the owner connection the step content store runs on.
+const runnerDb = () => asTestRaw<DesktopRunnerDb>(testDb);
+/** The fork with stored step content copied on the test database. */
+const forkThreadWithSteps = createForkThread({
+  indexChatThread: indexChatThreadMock,
+  control: () => ({
+    copyStepContents: async (options) =>
+      Result.ok(await copyStepContents(runnerDb(), options)),
+  }),
+});
 
 // Exercises the fork endpoint against PGlite and an in-process object store:
 // prefix selection, attachment duplication (source object AND thumbnail), the
@@ -1442,4 +1468,203 @@ test("copies a prefix longer than one insert batch", async () => {
 
   const copied = await readMessages(newThreadId);
   expect(messageTexts(copied)).toEqual(texts);
+});
+
+/** A local run of member A1 going in `threadId`, for the turn answering `userMessageId`. */
+const seedLocalRun = async (
+  threadId: SafeId<"chatThread">,
+  userMessageId: SafeId<"chatMessage">,
+) => {
+  const seen = new Date("2026-01-01T00:00:00.000Z");
+  const turnId = createSafeId<"chatTurn">();
+  await testDb.insert(chatTurns).values({
+    id: turnId,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    threadId,
+    userMessageId,
+    status: "running",
+    executionId: Bun.randomUUIDv7(),
+    leaseExpiresAt: new Date("2099-01-01T00:00:00.000Z"),
+  });
+  const desktopId = Bun.randomUUIDv7();
+  const deviceJkt = `jkt-${desktopId}`;
+  await testDb.insert(desktopRunners).values({
+    userId: ids.userA1,
+    organizationId: ids.orgA,
+    desktopId,
+    deviceJkt,
+    keyId: `key-${desktopId}`,
+    sessionId: Bun.randomUUIDv7(),
+    instanceId: "api-test",
+    connection: "connected",
+    protocol: DESKTOP_RUNNER_PROTOCOL.current,
+    appVersion: "1.4.0",
+    sidecarVersion: "1.4.0",
+    harnesses: [],
+    connectedAt: seen,
+    lastSeenAt: seen,
+  });
+  const runId = Bun.randomUUIDv7();
+  await testDb.insert(desktopRunnerRuns).values({
+    runId,
+    userId: ids.userA1,
+    organizationId: ids.orgA,
+    desktopId,
+    deviceJkt,
+    harness: "codex",
+    harnessVersion: "1.0.0",
+    workspaceIds: [],
+    state: "running",
+    leaseExpiresAt: new Date("2099-01-01T00:00:00.000Z"),
+    chatThreadId: threadId,
+    chatTurnId: turnId,
+  });
+  return runId;
+};
+
+/** The chat call id of a step of `runId`, and the key its content is stored under. */
+const stepOf = (runId: string, name: string) => {
+  const callId = `${runId.replaceAll("-", "")}_${name}`;
+  return { callId, stepKey: sha256Hex(callId) };
+};
+
+/** Make the seeded answer show the steps of a local run, as a turn stores them. */
+const showSteps = async (
+  messageId: SafeId<"chatMessage">,
+  callIds: readonly string[],
+) => {
+  await testDb
+    .update(chatMessages)
+    .set({
+      content: toPersistedChatMessageContentV3({
+        data: [
+          { content: "Done", type: "text" as const },
+          ...callIds.map((id) => ({
+            arguments: "{}",
+            id,
+            input: {},
+            name: "command_execution",
+            output: { status: "completed" },
+            state: "complete" as const,
+            type: "tool-call" as const,
+          })),
+        ],
+      }),
+    })
+    .where(eq(chatMessages.id, messageId));
+};
+
+const stepRows = async (threadId: SafeId<"chatThread">) =>
+  await testDb
+    .select({
+      stepKey: chatLocalRunStepContents.stepKey,
+      runId: chatLocalRunStepContents.runId,
+      turnId: chatLocalRunStepContents.turnId,
+      messageId: chatLocalRunStepContents.messageId,
+      kind: chatLocalRunStepContents.kind,
+      outcome: chatLocalRunStepContents.outcome,
+      userFileId: chatLocalRunStepContents.userFileId,
+    })
+    .from(chatLocalRunStepContents)
+    .where(eq(chatLocalRunStepContents.threadId, threadId))
+    .orderBy(asc(chatLocalRunStepContents.kind));
+
+test("a fork copies what its copied steps stored, each owned by the fork's own message", async () => {
+  const source = await seedThread({
+    texts: ["Run the tests", "Done", "And again", "Done again"],
+    withAttachment: true,
+  });
+  const owner = { userId: ids.userA1, organizationId: ids.orgA };
+  const runId = await seedLocalRun(source.threadId, messageAt(source, 0));
+  const command = stepOf(runId, "call-1");
+  const image = stepOf(runId, "call-2");
+  const later = stepOf(runId, "call-3");
+  await showSteps(messageAt(source, 1), [command.callId, image.callId]);
+  await showSteps(messageAt(source, 3), [later.callId]);
+  for (const [step, text] of [
+    [command, "3 pass"],
+    [later, "after the fork point"],
+  ] as const) {
+    await storeStepText(runnerDb(), {
+      owner,
+      runId,
+      stepKey: step.stepKey,
+      kind: "command",
+      totalBytes: Buffer.byteLength(text),
+      text,
+      storedBytes: Buffer.byteLength(text),
+    });
+  }
+  // The image a step viewed is a chat file of the source thread.
+  const sourceImage = source.attachment?.fileId ?? panic("seeded no file");
+  await storeStepImage(runnerDb(), {
+    owner,
+    runId,
+    stepKey: image.stepKey,
+    sha256Hex: "a".repeat(64),
+    userFileId: sourceImage,
+    sizeBytes: 12,
+  });
+  const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  seededThreadIds.push(newThreadId);
+
+  await expectForked(
+    forkThreadWithSteps.handler(
+      forkContext({
+        newThreadId,
+        threadId: source.threadId,
+        upToMessageId: messageAt(source, 1),
+      }),
+    ),
+  );
+
+  const forkAnswer = (await readMessages(newThreadId)).at(1)?.id;
+  const copied = await stepRows(newThreadId);
+  // The steps of the copied answer, and not the one past the fork point.
+  expect(copied).toEqual([
+    {
+      stepKey: command.stepKey,
+      runId,
+      turnId: null,
+      messageId: forkAnswer ?? null,
+      kind: "command",
+      outcome: "stored",
+      userFileId: null,
+    },
+    {
+      stepKey: image.stepKey,
+      runId,
+      turnId: null,
+      messageId: forkAnswer ?? null,
+      kind: "image",
+      outcome: "stored",
+      userFileId: expect.any(String),
+    },
+  ]);
+  // The fork names its own copy of the image, never the source's file.
+  const forkImage = copied.at(1)?.userFileId;
+  expect(forkImage).not.toBe(sourceImage);
+  const [forkFile] = await testDb
+    .select({ threadId: userFiles.threadId })
+    .from(userFiles)
+    .where(eq(userFiles.id, toSafeId<"userFile">(forkImage ?? "")));
+  expect(forkFile).toEqual({ threadId: newThreadId });
+  // The member reads the copied text in the fork, in their own scope.
+  expect(
+    (
+      await readVisibleStepContent(safeDb, {
+        owner,
+        threadId: newThreadId,
+        stepKey: command.stepKey,
+      })
+    ).unwrap(),
+  ).toMatchObject({ type: "text", kind: "command", text: "3 pass" });
+
+  // A copy goes with the fork's message; the source keeps its own.
+  await testDb
+    .delete(chatMessages)
+    .where(eq(chatMessages.id, forkAnswer ?? panic("the fork has no answer")));
+  expect(await stepRows(newThreadId)).toEqual([]);
+  expect(await stepRows(source.threadId)).toHaveLength(3);
 });
