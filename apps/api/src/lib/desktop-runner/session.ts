@@ -30,6 +30,7 @@ import {
   claimFolderRestores,
   settleFolderRestore,
 } from "@/api/lib/desktop-runner/folder-restores";
+import { openRunOutputKey } from "@/api/lib/desktop-runner/output-keys";
 import {
   openRunAnswer,
   storedRunAnswerSchema,
@@ -37,13 +38,17 @@ import {
 import {
   claimRunnerSession,
   type DesktopRunnerDb,
+  markRunStartsSending,
   type PendingCommand,
   persistRunMessage,
   readPendingCommands,
+  recordBackgroundTasks,
   recordHarnessStatus,
+  recordLinkedFolders,
   recordRunAccepted,
   recordRunRejected,
   releaseRunnerSession,
+  releaseUnsentRunStarts,
   renewRunnerSession,
   type RunHolder,
   type RunnerBinding,
@@ -106,6 +111,8 @@ type RunnerSessionContext = {
   readonly ringPrevious: (holder: RunHolder) => void;
   /** Wake the readers of a run whose stored messages or state changed. */
   readonly ringRun: (runId: string) => void;
+  /** Tell the account its chats' background work here changed. */
+  readonly announceBackgroundTasks: (owner: RunnerBinding) => void;
 };
 
 type RunnerSessionOptions = {
@@ -337,7 +344,7 @@ type Composed =
 
 /**
  * A stored command as the message to send: a `run.start` with a fresh
- * token, a `run.answer` with its answers opened.
+ * token and its run's output key, a `run.answer` with its answers opened.
  */
 const compose = async (
   state: SessionState,
@@ -348,6 +355,14 @@ const compose = async (
     const stored = v.safeParse(runStartPayloadSchema, command.payload);
     if (!stored.success) {
       return { type: "unreadable", reason: "its MCP server does not read" };
+    }
+    // The socket is bound to the organization of every run it holds.
+    const outputKey = await openRunOutputKey(
+      state.binding.organizationId,
+      command.sealedOutputKey,
+    );
+    if (outputKey.type === "unreadable") {
+      return { type: "unreadable", reason: "its run has no output key" };
     }
     const token = await mint(state, command.runId, command.workspaceIds);
     const attachments = await Promise.all(
@@ -364,6 +379,7 @@ const compose = async (
       ...stored.output,
       attachments,
       mcp: { ...stored.output.mcp, ...token },
+      outputKey: outputKey.outputKey,
     };
   }
   if (command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer) {
@@ -430,11 +446,12 @@ const deliverRestores = async (state: SessionState, resendSent: boolean) => {
     resendSent,
     limit: RESTORE_PAGE_SIZE,
   });
-  for (const { restoreId, folderId, runId } of due) {
+  for (const { restoreId, folderId, linkedFolderId, runId } of due) {
     const sent = send(state, {
       type: DESKTOP_RUNNER_SERVER_MESSAGE.folderRestore,
       restoreId,
       folderId,
+      linkedFolderId,
       runId,
     });
     if (sent === "closed") {
@@ -472,37 +489,95 @@ const deliverPending = async (
       return;
     }
     // db-await-in-loop: keyset page per iteration; the page is the batch
-    const pending = await readPendingCommands(state.context.db, {
-      binding: state.binding,
-      sessionId: state.sessionId,
-      afterId: state.deliveredThrough,
-      limit: COMMAND_PAGE_SIZE,
-    });
-    if (pending.type === "superseded") {
-      close(state, DESKTOP_RUNNER_CLOSE.superseded);
+    const page = await deliverPage(state, held);
+    if (page !== "full") {
       return;
     }
-    for (const command of pending.commands) {
-      const resend =
-        command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runStart ||
-        !held.has(command.runId);
-      const sent = resend
-        ? send(state, await outgoing(state, command))
-        : "sent";
+  }
+};
+
+/**
+ * One page of the socket's queue: read, composed (tokens minted), then
+ * checked at the send boundary and written with nothing awaited in between,
+ * so a relink that retires this socket's key, or ends a run, lands before
+ * the check and nothing of it goes out. A `run.start` whose run ended since
+ * the read is skipped; one recorded as delivered that never went out (the
+ * socket closed or filled up) is released, so it keeps the pickup window.
+ * `full` when another page may follow.
+ */
+const deliverPage = async (
+  state: SessionState,
+  held: ReadonlySet<string>,
+): Promise<"full" | "done"> => {
+  const { db } = state.context;
+  const pending = await readPendingCommands(db, {
+    binding: state.binding,
+    sessionId: state.sessionId,
+    afterId: state.deliveredThrough,
+    limit: COMMAND_PAGE_SIZE,
+  });
+  if (pending.type === "superseded") {
+    close(state, DESKTOP_RUNNER_CLOSE.superseded);
+    return "done";
+  }
+  const composed: {
+    command: PendingCommand;
+    message: DesktopRunnerServerMessage | null;
+  }[] = [];
+  for (const command of pending.commands) {
+    const resend =
+      command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runStart ||
+      !held.has(command.runId);
+    composed.push({
+      command,
+      message: resend ? await outgoing(state, command) : null,
+    });
+  }
+  const starts = composed.flatMap(({ command, message }) =>
+    message !== null && command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runStart
+      ? [command.runId]
+      : [],
+  );
+  const now = state.context.now();
+  const boundary = await markRunStartsSending(db, {
+    binding: state.binding,
+    sessionId: state.sessionId,
+    runIds: starts,
+    now,
+  });
+  if (boundary.type === "superseded") {
+    close(state, DESKTOP_RUNNER_CLOSE.superseded);
+    return "done";
+  }
+  const unsent = new Set(boundary.open);
+  const written = (() => {
+    for (const { command, message } of composed) {
+      const ended =
+        message !== null &&
+        command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runStart &&
+        !boundary.open.has(command.runId);
+      const sent = message === null || ended ? "sent" : send(state, message);
       if (sent === "closed") {
-        return;
+        return "stopped";
       }
+      unsent.delete(command.runId);
       // A buffered frame was taken; the next command waits for the drain.
       state.deliveredThrough = command.id;
       if (sent === "backpressure") {
         state.backpressured = true;
-        return;
+        return "stopped";
       }
     }
-    if (pending.commands.length < COMMAND_PAGE_SIZE) {
-      return;
-    }
-  }
+    return "all";
+  })();
+  await releaseUnsentRunStarts(db, {
+    binding: state.binding,
+    runIds: [...unsent],
+    now,
+  });
+  return written === "all" && pending.commands.length === COMMAND_PAGE_SIZE
+    ? "full"
+    : "done";
 };
 
 const deliver = async (state: SessionState) => {
@@ -676,10 +751,26 @@ const onHello = async (
     close(state, DESKTOP_RUNNER_CLOSE.tooManyRunners);
     return;
   }
+  // A newer key of the account replaced this one on the installation; the
+  // desktop holding it stops rather than take the installation back.
+  if (claim.type === "retired") {
+    close(state, DESKTOP_RUNNER_CLOSE.superseded);
+    return;
+  }
   // Claimed, so the closing socket's release marks the runner disconnected.
   state.claimed = true;
+  // The claim cleared what ran in the background before this socket; the
+  // computer reports what still runs after `welcome`.
+  if (claim.clearedBackgroundTasks) {
+    context.announceBackgroundTasks(state.binding);
+  }
   if (claim.previous !== null) {
     context.ringPrevious(claim.previous);
+  }
+  // A socket still open under a key this claim retired reads its queue at
+  // once, finds itself retired and closes, instead of at its next heartbeat.
+  for (const retired of claim.retired) {
+    context.ringPrevious(retired);
   }
   // The socket may have closed while the claim was stored: then nothing is
   // scheduled or minted for it.
@@ -721,6 +812,38 @@ const onHello = async (
   await deliverPending(state, { resendSent: true });
 };
 
+/** Store a run's background count and tell the member's clients. */
+const storeBackgroundTasks = async (
+  state: SessionState,
+  message: Extract<DesktopRunnerDesktopMessage, { type: "run.background" }>,
+) => {
+  const { binding, context } = state;
+  const recorded = await recordBackgroundTasks(context.db, {
+    binding,
+    sessionId: state.sessionId,
+    runId: message.runId,
+    count: message.count,
+  });
+  switch (recorded) {
+    case "applied":
+      context.announceBackgroundTasks(binding);
+      return;
+    case "not_current":
+      close(state, DESKTOP_RUNNER_CLOSE.superseded);
+      return;
+    case "unknown_run":
+      // A run the API already forgot, or never routed here: its chat shows
+      // nothing for it.
+      return;
+    case "too_many":
+      close(state, policyViolation("run_limit"));
+      return;
+    default:
+      recorded satisfies never;
+      panic("Unhandled background count outcome");
+  }
+};
+
 const handleMessage = async (
   state: SessionState,
   message: DesktopRunnerDesktopMessage,
@@ -744,6 +867,17 @@ const handleMessage = async (
         binding,
         sessionId: state.sessionId,
         report: message.harness,
+      });
+      if (!current) {
+        close(state, DESKTOP_RUNNER_CLOSE.superseded);
+      }
+      return;
+    }
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.linkedFoldersStatus: {
+      const current = await recordLinkedFolders(db, {
+        binding,
+        sessionId: state.sessionId,
+        folders: message.folders,
       });
       if (!current) {
         close(state, DESKTOP_RUNNER_CLOSE.superseded);
@@ -789,6 +923,9 @@ const handleMessage = async (
         outcome: message.outcome,
         now: now(),
       });
+      return;
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runBackground:
+      await storeBackgroundTasks(state, message);
       return;
     default: {
       message satisfies never;
@@ -859,6 +996,8 @@ const onSocketClosed = (state: SessionState) => {
       // Routing ignores the runner once its heartbeat goes stale.
       observeFailure(released.error, { sink: RELEASE_SINK });
     }
+    // An open chat stops showing what this computer runs while it is away.
+    state.context.announceBackgroundTasks(state.binding);
   }, "desktop-runner.release");
 };
 

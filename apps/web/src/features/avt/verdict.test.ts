@@ -18,7 +18,7 @@ import {
   countClaims,
   dispositionGuidance,
   effectiveState,
-  needsAttention,
+  isContested,
   resolveClaimView,
   routineUnsettledClaimIds,
 } from "@/features/avt/verdict";
@@ -96,34 +96,73 @@ describe("AVT displayed verdict", () => {
 });
 
 describe("AVT triage", () => {
-  test("a clean claim resting on a contested fact needs attention", () => {
+  test("a claim on a contested fact shows as contested", () => {
     const facts = [
       makeFact(1, { interpretationNote: "Initials may be a draft mark" }),
     ];
-    const claim = makeClaim({
+    const refs = [{ factEntityId: factId(1), rel: "supports" as const }];
+
+    expect(isContested({ refs, recheck: null }, contestedFactIds(facts))).toBe(
+      true,
+    );
+    expect(isContested({ refs, recheck: null }, NONE_CONTESTED)).toBe(false);
+  });
+
+  test("a re-checked claim is contested by the facts its re-check read, not the run's", () => {
+    const pinned = contestedFactIds([
+      makeFact(1, { interpretationNote: "Initials may be a draft mark" }),
+    ]);
+    const refs = [{ factEntityId: factId(1), rel: "supports" as const }];
+    const recheck = (interpretationNote: string | null) => ({
+      checkedAt: "2026-11-11T10:00:00.000Z",
+      checkedBy: "0199a3c4-5b6d-7e8f-9a0b-000000009098",
+      modelRef: null,
+      factCount: 1,
+      facts: [makeFact(1, { interpretationNote })],
+      original: { verdict: noCover, refs: [], qualifiers: [] },
+    });
+
+    // The note was cleared before the re-check: its grade no longer rests
+    // on a contested reading, whatever the run pinned.
+    expect(isContested({ refs, recheck: recheck(null) }, pinned)).toBe(false);
+    // A note added since the run counts for the claim that read it.
+    expect(
+      isContested(
+        { refs, recheck: recheck("Initials may be a draft mark") },
+        NONE_CONTESTED,
+      ),
+    ).toBe(true);
+  });
+
+  // The server sends a re-checked claim's verdict as the re-check graded it
+  // (`gradeOf`), and run summaries count it the same way; the tiles must not
+  // fall back to the grade the re-check replaced.
+  test("a re-checked claim counts in the tiles under its new grade", () => {
+    const rechecked = makeClaim({
       suffix: 1,
       verdict: supported(),
       refs: [{ factEntityId: factId(1), rel: "supports" }],
+      recheck: {
+        checkedAt: "2026-11-11T10:00:00.000Z",
+        checkedBy: "0199a3c4-5b6d-7e8f-9a0b-000000009098",
+        modelRef: null,
+        factCount: 1,
+        facts: [makeFact(1)],
+        original: { verdict: contradicted(), refs: [], qualifiers: [] },
+      },
     });
-
-    expect(
-      needsAttention(
-        { state: "supported", refs: claim.refs, qualifiers: [] },
-        contestedFactIds(facts),
-      ),
-    ).toBe(true);
-    expect(
-      needsAttention(
-        { state: "supported", refs: claim.refs, qualifiers: [] },
-        NONE_CONTESTED,
-      ),
-    ).toBe(false);
+    const { byState } = countClaims([rechecked]);
+    expect({
+      supported: byState.supported,
+      contradicted: byState.contradicted,
+    }).toEqual({ supported: 1, contradicted: 0 });
   });
 
-  // The review each qualifier asks for comes from the server; a clean
-  // verdict on a held footing leaves the routine claims, and the count, the
-  // bulk accept and the claim's own copy agree about it.
-  test("a qualifier that asks for judgement takes a clean verdict out of the routine claims", () => {
+  // Whether a claim needs attention is the server's (`needsAttention` on the
+  // claim), the reading bulk acceptance refuses by, so the count and the
+  // routine claims offered follow it, whatever the verdict shows here. The
+  // claim's own copy still explains why from its qualifiers.
+  test("the tiles and the routine claims follow the server's attention", () => {
     const held = makeClaim({
       suffix: 1,
       verdict: supported(),
@@ -132,6 +171,7 @@ describe("AVT triage", () => {
         { kind: "unsourced-only", explanation: null, review: "routine" },
         { kind: "rests-on-held", explanation: null, review: "needs-judgement" },
       ],
+      needsAttention: true,
     });
     const unsourced = makeClaim({
       suffix: 2,
@@ -141,17 +181,20 @@ describe("AVT triage", () => {
         { kind: "unsourced-only", explanation: null, review: "routine" },
       ],
     });
-    const counts = countClaims([held, unsourced], NONE_CONTESTED);
+    const counts = countClaims([held, unsourced]);
     expect({
       attnTotal: counts.attnTotal,
       routine: counts.routineTotal,
     }).toEqual({ attnTotal: 1, routine: 1 });
-    expect(routineUnsettledClaimIds([held, unsourced], NONE_CONTESTED)).toEqual(
-      [unsourced.id],
-    );
+    expect(routineUnsettledClaimIds([held, unsourced])).toEqual([unsourced.id]);
     expect(
       dispositionGuidance(
-        { state: "supported", refs: held.refs, qualifiers: held.qualifiers },
+        {
+          state: "supported",
+          refs: held.refs,
+          qualifiers: held.qualifiers,
+          recheck: null,
+        },
         NONE_CONTESTED,
       ),
     ).toEqual({
@@ -168,6 +211,7 @@ describe("AVT triage", () => {
           state: "supported",
           refs: unsourced.refs,
           qualifiers: unsourced.qualifiers,
+          recheck: null,
         },
         NONE_CONTESTED,
       ),
@@ -176,21 +220,6 @@ describe("AVT triage", () => {
       guideKey: "avt.guidance.readyToConfirm",
       askKey: "avt.disposition.unsourcedOnly",
     });
-  });
-
-  test("set-aside claims never need attention, even on contested facts", () => {
-    const facts = [makeFact(1, { interpretationNote: "Ambiguous" })];
-
-    expect(
-      needsAttention(
-        {
-          state: "notverifiable",
-          refs: [{ factEntityId: factId(1), rel: "supports" }],
-          qualifiers: [],
-        },
-        contestedFactIds(facts),
-      ),
-    ).toBe(false);
   });
 
   test("counts outcomes without treating overrides as verdicts", () => {
@@ -212,14 +241,14 @@ describe("AVT triage", () => {
       }),
     ];
 
-    const counts = countClaims(claims, NONE_CONTESTED);
+    const counts = countClaims(claims);
 
     expect(counts.byState.contradicted).toBe(1);
     expect(counts.byState.supported).toBe(1);
     expect(counts.byState.recordconflict).toBe(0);
   });
 
-  test("accepting routine claims skips conflicts and settled claims", () => {
+  test("accepting routine claims skips claims needing attention and settled claims", () => {
     const routine = makeClaim({ suffix: 1, verdict: supported() });
     const uncovered = makeClaim({ suffix: 2, verdict: noCover });
     const settled = makeClaim({
@@ -230,10 +259,7 @@ describe("AVT triage", () => {
     const conflict = makeClaim({ suffix: 4, verdict: contradicted() });
 
     expect(
-      routineUnsettledClaimIds(
-        [routine, uncovered, settled, conflict],
-        NONE_CONTESTED,
-      ),
+      routineUnsettledClaimIds([routine, uncovered, settled, conflict]),
     ).toEqual([routine.id, uncovered.id]);
   });
 
@@ -246,10 +272,10 @@ describe("AVT triage", () => {
       makeClaim({ suffix: 5, verdict: notVerifiable }),
     ];
 
-    const counts = countClaims(claims, NONE_CONTESTED);
+    const counts = countClaims(claims);
 
     expect(counts.attnTotal + counts.routineTotal).toBe(claims.length);
-    expect(routineUnsettledClaimIds(claims, NONE_CONTESTED)).toHaveLength(
+    expect(routineUnsettledClaimIds(claims)).toHaveLength(
       counts.routineUnsettled,
     );
   });

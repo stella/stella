@@ -11,11 +11,12 @@ import { panic, Result } from "better-result";
 import { fetch as streamingFetch } from "expo/fetch";
 import { AppState } from "react-native";
 
-import { REALTIME_EVENT_TYPE } from "@stll/api-contract";
-import type { UserRealtimeEvent } from "@stll/api-contract";
+import { USER_EVENT_READ, USER_EVENT_READS } from "@stll/api-contract";
+import type { UserEventRead, UserRealtimeEvent } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { sleep } from "@stll/concurrency/sleep";
 
+import { useChanged } from "@/components/changes";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
@@ -81,9 +82,10 @@ const unread = (source: AccessTokenSource | undefined): Reading => ({
 /**
  * The person's unfinished chat runs, kept fresh without polling: read each
  * time their event stream opens (once anyway if it cannot), and again
- * whenever it says the runs changed. The stream closes while the app is in
- * the background and reopens when it returns. Each read is compared with
- * the one before for banners; the first read after the app returns from
+ * whenever it says the runs changed; what else an event makes it read
+ * again, the chats lists among them, is the contract's USER_EVENT_READS.
+ * The stream closes while the app is in the background and reopens when it
+ * returns. Each read is compared with the one before for banners; the first read after the app returns from
  * the background only sets what later reads are compared with, so what
  * happened meanwhile is left to the chats list and push. What was read
  * belongs to the sign-in that read it: another sign-in, or none, starts
@@ -93,6 +95,7 @@ const useRunsStream = (
   source: AccessTokenSource | undefined,
 ): ActiveChatRuns => {
   const { end } = useSession();
+  const changed = useChanged();
   const [stored, setReading] = useState(() => unread(source));
   const reading = stored.source === source ? stored : unread(source);
   /** Changes what this sign-in has read, from scratch if it read nothing yet. */
@@ -162,20 +165,25 @@ const useRunsStream = (
     }));
   });
 
-  const onEvent = useEffectEvent(({ type: eventType }: UserRealtimeEvent) => {
-    switch (eventType) {
-      case REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED:
-        reread();
-        return;
-      // The app hears of notifications through push.
-      case REALTIME_EVENT_TYPE.NEW_NOTIFICATION:
-        return;
-      default:
-        eventType satisfies never;
-        panic("Unhandled user realtime event");
+  const readsAgain = {
+    [USER_EVENT_READ.ACTIVE_CHAT_RUNS]: reread,
+    [USER_EVENT_READ.CHAT_THREADS]: () => {
+      changed("chats");
+    },
+    // The app hears of notifications through push.
+    [USER_EVENT_READ.NOTIFICATIONS]: () => undefined,
+    // Read by an open chat's own background count, not by this list.
+    [USER_EVENT_READ.CHAT_BACKGROUND_TASKS]: () => undefined,
+  } satisfies Record<UserEventRead, () => void>;
+  const onEvent = useEffectEvent(({ type }: UserRealtimeEvent) => {
+    for (const stale of USER_EVENT_READS[type]) {
+      readsAgain[stale]();
     }
   });
   const onResync = useEffectEvent(reread);
+  const onReopen = useEffectEvent(() => {
+    changed("chats");
+  });
   const signOut = useEffectEvent((refused: AccessTokenSource) => {
     end(refused);
   });
@@ -187,6 +195,9 @@ const useRunsStream = (
     let connection: AbortController | null = null;
     // Whether this sign-in has asked for the runs at all yet.
     const asked = { runs: false };
+    // Whether its stream has opened before: chats marked while it was
+    // closed sent events no one heard, so a later open reads them again.
+    const stream = { opened: false };
     const resync = () => {
       asked.runs = true;
       onResync();
@@ -203,6 +214,10 @@ const useRunsStream = (
         onOpen: () => {
           heard = true;
           resync();
+          if (stream.opened) {
+            onReopen();
+          }
+          stream.opened = true;
         },
         signal,
         source,

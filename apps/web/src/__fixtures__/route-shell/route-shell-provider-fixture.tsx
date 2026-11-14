@@ -383,6 +383,7 @@ const installFixtureNetwork = () => {
           return Response.json({
             activeSkill: null,
             activeTurnId: null,
+            newestLocalTurn: null,
             attachedFiles: { fileCount: 0, files: [] },
             context: {
               estimatedTokens: 0,
@@ -421,6 +422,10 @@ const installFixtureNetwork = () => {
           limit: 100,
           nextCursor: null,
         } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
+      }
+      // The composer's where chip: this member runs no turns on a computer.
+      if (pathname === "/v1/chat/local-runners") {
+        return Response.json({ status: "hidden" });
       }
       if (pathname === "/v1/chat/skill-availability") {
         return Response.json({

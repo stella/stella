@@ -66,6 +66,10 @@
     "accountWindowTitle": "Connect account",
     "accountTitle": "Connect this account?",
     "accountSubtitle": "Connect stella desktop to this account and organization.",
+    "switchWindowTitle": "Switch account",
+    "switchTitle": "Switch to another account?",
+    "switchSubtitle": "stella desktop is connected to {currentEmail}. Disconnect it and connect {email} instead?",
+    "switchConfirm": "Disconnect and connect",
     "accountEmail": "Account",
     "organizationName": "Organization",
     "allow": "Allow",
@@ -577,7 +581,18 @@
   },
   "dictation": {
     "title": "Dictation",
-    "description": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed on this computer and is not stored.",
+    "description": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed on this computer and is not stored. With AI cleanup on, the transcribed text, not the audio, is sent through stella to your organization’s AI provider to fix mistakes and formatting, and stella does not store it.",
+    "cleanup": {
+      "title": "Clean up with AI",
+      "description": "Speech is still transcribed on this computer, and audio never leaves it. With cleanup on, the transcribed text is sent through stella to your organization’s AI provider to fix recognition mistakes and apply spoken punctuation and formatting, such as “new line” or “bold”. stella does not store it."
+    },
+    "language": {
+      "title": "Dictation language",
+      "description": "Speech is recognized in this language, and cleanup keeps the text in it. Automatic uses the languages of this computer’s display and keyboards.",
+      "automatic": "Automatic",
+      "automaticWith": "Automatic ({languages})",
+      "noResults": "No languages found"
+    },
     "modelNeeded": "The speech model runs on this computer.",
     "download": "Download ({size} MB)",
     "downloading": "Downloading the speech model: {percent}%",
@@ -588,7 +603,10 @@
       "accessibility": "Allow Accessibility access so stella can type into other apps.",
       "microphone": "stella could not hear your microphone. Check Microphone access in System Settings.",
       "modelMissing": "Download the speech model first.",
-      "transcription": "Transcription failed. Try again."
+      "transcription": "Transcription failed. Try again.",
+      "focusChanged": "You switched to another app before the text was ready, so nothing was typed. Try again.",
+      "focusUnconfirmed": "stella could not confirm which app has focus, so nothing was typed. Try again.",
+      "shortcutHeld": "Release the shortcut keys to type. Nothing was typed; try again."
     }
   },
   "shortcut": {
@@ -770,7 +788,9 @@
         "notCompleted": "The sign-in did not finish. Try again.",
         "timedOut": "The sign-in took too long. Try again.",
         "unavailable": "Claude Code could not be started on this computer. Try again."
-      }
+      },
+      "unknown": "Couldn't check the Claude Code sign-in. Check again in a moment.",
+      "checkAgain": "Check again"
     },
     "install": {
       "notInstalled": "{name} is not installed on this computer yet.",
@@ -810,6 +830,27 @@
       "runs_can_write": "Local runs can write to this folder, so it cannot hold a skill.",
       "network_folder": "This folder is on a network share. Skills must be on this computer's own disk.",
       "path_changed": "A folder on the way to this one has changed. Remove it and add it again."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Linked folders",
+    "description": "Folders on this computer that a chat's coding agent can work in. A chat sees only a folder's name; its path stays on this computer.",
+    "add": "Link folder",
+    "remove": "Unlink",
+    "removeFolder": "Unlink {name}",
+    "state": {
+      "offline": "The drive this folder is on is not connected.",
+      "moved": "This folder was moved, renamed or deleted. Unlink it and link it again.",
+      "protected": "This folder holds stella's own data or a skill folder, so the agent cannot work in it.",
+      "unreadable": "This folder could not be read."
+    },
+    "notice": {
+      "action_failed": "That did not work. Try again.",
+      "too_many": "This computer already has as many linked folders as it can keep. Unlink one first.",
+      "not_a_folder": "Choose a folder.",
+      "network_folder": "This folder is on a network share. Link a folder on this computer's own disk.",
+      "protected": "This folder holds stella's own data or a skill folder, so the agent cannot work in it.",
+      "unreadable": "This folder could not be read."
     }
   }
 }

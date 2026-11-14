@@ -38,6 +38,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   organization_settings: "Organization settings, not reviewer content.",
   billing_draft_user_settings:
     "Per-user billing draft consent and preferences, not reviewer content.",
+  conflict_checks:
+    "Conflict checks are an invitation-only feature the review organization is never granted, so no reviewer can record one there; the table stays empty for it.",
   organization_access_states: "Organization access state, set by operators.",
   organization_configured_access: "Organization access, set by operators.",
   feature_enrolments:
@@ -58,7 +60,7 @@ export const REVIEW_RESET_KEPT_TABLES = {
     "Account-owned creation replay receipts; retaining them prevents duplicate organizations after a content reset.",
   organization_professional_use_acceptances:
     "The organization's professional-use acceptance; written once, never reviewer content.",
-  legal_list_verification_budgets: "Usage ledger: verification budget.",
+  model_run_budgets: "Usage ledger: model run caps.",
   organization_file_objects:
     "Storage accounting, settled by the cleanup workers as objects are erased.",
   organization_file_usage:
@@ -117,6 +119,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "chat_secrets",
   "chat_threads",
   "chat_browser_site_grants",
+  "chat_limit_reminders",
   "chat_tool_grants",
   "chat_turns",
   "clause_categories",
@@ -163,6 +166,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "number_series_allocations",
   "number_series_counters",
   "office_file_evidence",
+  "organization_data_exports",
   "pending_uploads",
   "playbook_definition_versions",
   "playbook_definitions",
@@ -178,6 +182,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "search_document_preview_passages",
   "search_documents",
   "search_history_entries",
+  "search_history_country_clears",
   "search_history_tombstones",
   "search_history_owners",
   "search_projection_repair_queue",
@@ -226,9 +231,12 @@ export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_R
       "desktop_runner_runs",
       "desktop_runners",
     ],
-    // The member's standing approvals, for websites and for tools: both
-    // member-scoped, keyed on the same member and organization.
-    ["chat_browser_site_grants", "chat_tool_grants"],
+    // The member's own chat settings: standing approvals for websites and
+    // for tools, and usage limit reminders, all keyed on the same member and
+    // organization.
+    ["chat_browser_site_grants", "chat_limit_reminders", "chat_tool_grants"],
+    // Independent search history deletion barriers under one owner policy.
+    ["search_history_country_clears", "search_history_tombstones"],
   ];
 
 /**

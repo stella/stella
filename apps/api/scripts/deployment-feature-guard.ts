@@ -101,6 +101,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Matter vocabulary uses the normal matter read permission on every deployment",
   ],
   [
+    "/v1/workspaces/matter-numbering",
+    "The matter-number convention is read under the normal matter read permission on every deployment",
+  ],
+  [
+    "/v1/workspaces/member-candidates",
+    "The organization's people a matter can be shared with are listed under the normal matter read permission on every deployment",
+  ],
+  [
     "/v1/desktop/matter-candidates",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
@@ -111,6 +119,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/chat/runs/active",
     "The member's own unfinished chat runs are readable on every deployment that serves chat",
+  ],
+  [
+    "/v1/chat/threads/:threadId/read-state",
+    "A member's own read marks on their chats are set on every deployment that serves chat",
+  ],
+  [
+    "/v1/chat/threads/:threadId/pin-state",
+    "A member's own pins on their chats are set on every deployment that serves chat",
   ],
   [
     "/v1/chat/browser-site-grants",
@@ -125,8 +141,16 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Undoing a turn's file changes is mounted on every deployment; there is something to undo only once the member's local-agents feature let the turn's run start",
   ],
   [
+    "/v1/chat/threads/:threadId/background-tasks",
+    "A chat's background task count is mounted on every deployment; it is above 0 only once the member's local-agents feature let a run start on their computer",
+  ],
+  [
     "/v1/chat/local-runs",
     "A run's output upload authenticates the run's agent token on every deployment; a run exists only once the member's local-agents feature let it start",
+  ],
+  [
+    "/v1/chat/threads/:threadId/limit-reminder",
+    "A chat limit reminder is mounted on every deployment; it can be set only for a turn the member's local-agents feature let run",
   ],
   [
     "/v1/organization-settings/local-runs",
@@ -149,9 +173,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A personal data export is available to every account on every deployment",
   ],
   [
+    "/v1/data-exports",
+    "Organization data export (data portability) is available on every deployment",
+  ],
+  [
     "/v1/chat/threads/:threadId/connectors/:toolCallId",
     "Authenticated chat connector receipts are available on every deployment",
   ],
+  ["/v1/me/role", "A member reads their own role on every deployment"],
   [
     "/v1/me/push-devices",
     "Mobile push device registration is available on every deployment; alerts are sent only where APNs credentials are configured",
@@ -167,6 +196,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/presence",
     "Desktop account presence supports handoff on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/cleanup",
+    "Desktop dictation cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/marked",

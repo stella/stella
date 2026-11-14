@@ -60,7 +60,7 @@ jobs:
           if [[ "$EVENT_NAME" != "push" ]]; then
             affected=true
           elif ! affected="$(
-            bun scripts/landing-deploy-scope.ts --base "$BEFORE" --head "$GITHUB_SHA"
+            bun scripts/landing-deploy-scope.ts --package @stll/landing --base "$BEFORE" --head "$GITHUB_SHA"
           )"; then
             echo "::warning::Could not scope the landing deploy; deploying."
             affected=true
@@ -160,7 +160,7 @@ jobs:
             main_sha="$(git rev-parse FETCH_HEAD)"
             if [[ "$main_sha" != "$GITHUB_SHA" ]]; then
               if affected="$(
-                bun scripts/landing-deploy-scope.ts --base "$GITHUB_SHA" --head "$main_sha"
+                bun scripts/landing-deploy-scope.ts --package @stll/landing --base "$GITHUB_SHA" --head "$main_sha"
               )"; then
                 if [[ "$affected" == "true" ]]; then
                   covered=true

@@ -12,6 +12,7 @@ import {
   DESKTOP_RUNNER_CONNECTIONS,
   DESKTOP_RUNNER_EVENT_TYPES,
   DESKTOP_RUNNER_LEASED_RUN_STATES,
+  DESKTOP_RUNNER_LOST_REASONS,
   DESKTOP_RUNNER_RUN_STATES,
   DESKTOP_RUNNER_STORED_OUTCOMES,
   DESKTOP_RUNNER_STORED_REJECT_REASONS,
@@ -19,6 +20,7 @@ import {
 
 import { chatThreads, chatTurns } from "./chat";
 import {
+  bytea,
   jsonb,
   organization,
   p,
@@ -85,6 +87,28 @@ export const desktopRunners = p.pgTable.withRLS(
     sidecarVersion: p.varchar("sidecar_version", { length: 64 }).notNull(),
     /** Each harness's latest report, as the protocol defines it. */
     harnesses: jsonb("harnesses").notNull(),
+    /**
+     * The folders the member linked on the computer, by id, name and state as
+     * it last reported them; their paths never leave the computer.
+     */
+    linkedFolders: jsonb("linked_folders").notNull().default([]),
+    /**
+     * Linked folders the member let runs work in. A run in a folder not
+     * listed here is refused, so the first run in a newly linked folder asks.
+     */
+    approvedFolderIds: p
+      .uuid("approved_folder_ids")
+      .array()
+      .notNull()
+      .default([]),
+    /**
+     * How many tasks the harness process each run left behind keeps running
+     * in the background, by run id, as the computer reported them over its
+     * current socket (`run.background`), while the run's chat waits for its
+     * next turn. A run with none has no entry; a socket's claim starts from
+     * none, and the computer reports the live ones again after `welcome`.
+     */
+    backgroundTasks: jsonb("background_tasks").notNull().default({}),
     connectedAt: timestamptz("connected_at").notNull(),
     /** Renewed by the socket's heartbeat; routing ignores a stale runner. */
     lastSeenAt: timestamptz("last_seen_at").notNull(),
@@ -130,6 +154,11 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     harnessVersion: p.varchar("harness_version", { length: 64 }).notNull(),
     /** Workspaces the run's MCP token may reach, authorized when assigned. */
     workspaceIds: p.text("workspace_ids").array().notNull(),
+    /**
+     * The folder linked on the computer the run works in; null for the
+     * chat's own. An undo of the run's files restores that folder.
+     */
+    linkedFolderId: p.uuid("linked_folder_id"),
     state: p.text({ enum: DESKTOP_RUNNER_RUN_STATES }).notNull(),
     /** Set with `finished`: how the run ended, as the desktop reported. */
     outcome: p.text({ enum: DESKTOP_RUNNER_STORED_OUTCOMES }),
@@ -137,8 +166,27 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     rejectReason: p.text("reject_reason", {
       enum: DESKTOP_RUNNER_STORED_REJECT_REASONS,
     }),
+    /** Set with `lost` where the API knows why (`DESKTOP_RUNNER_LOST_REASONS`). */
+    lostReason: p.text("lost_reason", { enum: DESKTOP_RUNNER_LOST_REASONS }),
     /** The harness session a later run on this desktop may resume. */
     harnessSessionId: p.varchar("harness_session_id", { length: 256 }),
+    /**
+     * The run's output key, encrypted for its organization: random per run,
+     * sent to the computer in `run.start`, and what every grant to read the
+     * run's step outputs there is signed with. Absent only for a run
+     * assigned before runs kept one: it gets no grant, and its `run.start`
+     * is cancelled rather than sent again.
+     */
+    outputKeyEncrypted: bytea("output_key_encrypted"),
+    /** The IV of `output_key_encrypted`; set with it. */
+    outputKeyIv: bytea("output_key_iv"),
+    /**
+     * When `run.start` was first written to one of the computer's sockets;
+     * absent while it never was. A run never written ends after the short
+     * unaccepted window, one that was keeps the recovery window, since its
+     * computer may be running it.
+     */
+    deliveredAt: timestamptz("delivered_at"),
     /** When the desktop accepted `run.start`; absent while it never has. */
     acceptedAt: timestamptz("accepted_at"),
     /** Highest position of the run's desktop messages persisted without a gap. */
@@ -237,6 +285,10 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     p.check(
       "desktop_runner_runs_reject_reason_check",
       sql`(${table.state} = 'rejected') = (${table.rejectReason} IS NOT NULL) AND (${table.rejectReason} IS NULL OR ${table.rejectReason} IN (${sqlValues(DESKTOP_RUNNER_STORED_REJECT_REASONS)}))`,
+    ),
+    p.check(
+      "desktop_runner_runs_lost_reason_check",
+      sql`(${table.lostReason} IS NULL OR ${table.state} = 'lost') AND (${table.lostReason} IS NULL OR ${table.lostReason} IN (${sqlValues(DESKTOP_RUNNER_LOST_REASONS)}))`,
     ),
     p.check(
       "desktop_runner_runs_ack_seq_check",

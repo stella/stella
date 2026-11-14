@@ -66,6 +66,10 @@
     "accountWindowTitle": "Połącz konto",
     "accountTitle": "Połączyć to konto?",
     "accountSubtitle": "Połącz stella desktop z tym kontem i organizacją.",
+    "switchWindowTitle": "Zmień konto",
+    "switchTitle": "Przełączyć na inne konto?",
+    "switchSubtitle": "stella desktop jest połączony z kontem {currentEmail}. Odłączyć je i połączyć zamiast niego {email}?",
+    "switchConfirm": "Odłącz i połącz",
     "accountEmail": "Konto",
     "organizationName": "Organizacja",
     "allow": "Zezwól",
@@ -577,7 +581,18 @@
   },
   "dictation": {
     "title": "Dyktowanie",
-    "description": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowa jest przetwarzana na tym komputerze i nie jest zapisywana.",
+    "description": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowa jest przetwarzana na tym komputerze i nie jest zapisywana. Po włączeniu poprawiania przez AI przetworzony tekst (nie dźwięk) jest wysyłany za pośrednictwem stelli do dostawcy AI Twojej organizacji w celu poprawienia błędów i formatowania; stella go nie zapisuje.",
+    "cleanup": {
+      "title": "Popraw za pomocą AI",
+      "description": "Mowa nadal jest przetwarzana na tym komputerze, a dźwięk nigdy go nie opuszcza. Po włączeniu poprawiania przetworzony tekst jest wysyłany za pośrednictwem stelli do dostawcy AI Twojej organizacji, który poprawia błędy rozpoznawania i stosuje podyktowaną interpunkcję oraz formatowanie, na przykład „nowa linia” lub „pogrubienie”. stella go nie zapisuje."
+    },
+    "language": {
+      "title": "Język dyktowania",
+      "description": "Mowa jest rozpoznawana w tym języku, a poprawianie zachowuje w nim tekst. Automatycznie używa języków interfejsu i klawiatur tego komputera.",
+      "automatic": "Automatycznie",
+      "automaticWith": "Automatycznie ({languages})",
+      "noResults": "Nie znaleziono języków"
+    },
     "modelNeeded": "Model mowy działa na tym komputerze.",
     "download": "Pobierz ({size} MB)",
     "downloading": "Pobieranie modelu mowy: {percent}%",
@@ -588,7 +603,10 @@
       "accessibility": "Zezwól na dostęp do funkcji Dostępność, aby stella mogła pisać w innych aplikacjach.",
       "microphone": "stella nie słyszy mikrofonu. Sprawdź dostęp do mikrofonu w Ustawieniach systemowych.",
       "modelMissing": "Najpierw pobierz model mowy.",
-      "transcription": "Transkrypcja nie powiodła się. Spróbuj ponownie."
+      "transcription": "Transkrypcja nie powiodła się. Spróbuj ponownie.",
+      "focusChanged": "Przełączono na inną aplikację, zanim tekst był gotowy, więc nic nie zostało wpisane. Spróbuj ponownie.",
+      "focusUnconfirmed": "stella nie mogła potwierdzić, która aplikacja jest aktywna, więc nic nie zostało wpisane. Spróbuj ponownie.",
+      "shortcutHeld": "Puść klawisze skrótu, aby można było wpisać tekst. Nic nie zostało wpisane; spróbuj ponownie."
     }
   },
   "shortcut": {
@@ -770,7 +788,9 @@
         "notCompleted": "Logowanie nie zostało dokończone. Spróbuj ponownie.",
         "timedOut": "Logowanie trwało zbyt długo. Spróbuj ponownie.",
         "unavailable": "Nie udało się uruchomić Claude Code na tym komputerze. Spróbuj ponownie."
-      }
+      },
+      "unknown": "Nie udało się sprawdzić logowania do Claude Code. Sprawdź ponownie za chwilę.",
+      "checkAgain": "Sprawdź ponownie"
     },
     "install": {
       "notInstalled": "{name} nie jest jeszcze zainstalowany na tym komputerze.",
@@ -810,6 +830,27 @@
       "runs_can_write": "Lokalne uruchomienia mogą zapisywać w tym folderze, więc nie może on zawierać umiejętności.",
       "network_folder": "Ten folder znajduje się w udziale sieciowym. Umiejętności muszą być na dysku tego komputera.",
       "path_changed": "Zmienił się folder nadrzędny. Usuń ten folder i dodaj go ponownie."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Połączone foldery",
+    "description": "Foldery na tym komputerze, w których może pracować agent czatu. Czat widzi tylko nazwę folderu; jego ścieżka pozostaje na tym komputerze.",
+    "add": "Połącz folder",
+    "remove": "Odłącz",
+    "removeFolder": "Odłącz {name}",
+    "state": {
+      "offline": "Dysk, na którym jest ten folder, nie jest podłączony.",
+      "moved": "Ten folder został przeniesiony, zmienił nazwę lub został usunięty. Odłącz go i połącz ponownie.",
+      "protected": "Ten folder zawiera własne dane stelli lub folder z umiejętnościami, więc agent nie może w nim pracować.",
+      "unreadable": "Nie udało się odczytać tego folderu."
+    },
+    "notice": {
+      "action_failed": "Nie udało się. Spróbuj ponownie.",
+      "too_many": "Ten komputer ma już tyle połączonych folderów, ile może przechować. Najpierw odłącz jeden.",
+      "not_a_folder": "Wybierz folder.",
+      "network_folder": "Ten folder znajduje się w udziale sieciowym. Połącz folder z dysku tego komputera.",
+      "protected": "Ten folder zawiera własne dane stelli lub folder z umiejętnościami, więc agent nie może w nim pracować.",
+      "unreadable": "Nie udało się odczytać tego folderu."
     }
   }
 }

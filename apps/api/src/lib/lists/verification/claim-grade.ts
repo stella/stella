@@ -17,15 +17,19 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { parsePartialDate } from "@/api/lib/lists/fact-details";
+import type { PartialDate } from "@/api/lib/lists/fact-details";
 import { claimPassage } from "@/api/lib/lists/verification/claim-context";
+import { claimAssertedDate } from "@/api/lib/lists/verification/claim-date";
 import {
   CLAIM_FACT_RELATIONS,
   SCORED_CLAIM_STATES,
 } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimAnchor,
+  ClaimAssertedDate,
+  ClaimGrade,
   ClaimRef,
-  ClaimType,
   ClaimVerdict,
   VerificationEvidenceFact,
 } from "@/api/lib/lists/verification/contract";
@@ -41,8 +45,8 @@ import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifie
 /** Claims per grading call: the facts dominate the variable part of the
  *  prompt, so a batch amortises them without letting one failure take the
  *  whole run with it. */
-const BATCH_SIZE = 10;
-const CONCURRENCY = 3;
+export const GRADING_BATCH_SIZE = 10;
+export const GRADING_CONCURRENCY = 3;
 
 const GRADED_VERDICTS = [
   ...SCORED_CLAIM_STATES,
@@ -77,6 +81,9 @@ const rawGradeSchema = v.strictObject({
       explanation: v.string(),
     }),
   ),
+  /** The date the claim's words give, `YYYY[-MM[-DD]]`; read only when the
+   *  words alone name no complete date (`claim-date.ts`). */
+  statedDate: v.nullable(v.string()),
 });
 
 /** Read by the structured-output role contract test. @public */
@@ -88,24 +95,13 @@ type RawGrade = v.InferOutput<typeof rawGradeSchema>;
 
 type GradedVerdict = ClaimVerdict & { refs: ClaimRef[] };
 
-export type ClaimGrade = GradedVerdict & {
-  qualifiers: GraderClaimQualifier[];
-};
-
-/**
- * The type a graded claim is stored with. Extraction sets aside the claims it
- * recognises as untestable, but the grader can still find that one taken for
- * a fact cannot be tested; that claim is stored as unverifiable, the only type
- * the state may carry.
- */
-export const gradedClaimType = (grade: ClaimGrade): ClaimType =>
-  grade.state === "notverifiable" ? "unverifiable" : "fact";
-
-/** A claim to grade, with the text of the block it sits in for meaning. */
+/** A claim to grade, with the text of the block it sits in for meaning and
+ *  the facts a reviewer pointed it at, if any. */
 type GradeableClaim = {
   key: string;
   text: string;
   context: { text: string; anchor: Pick<ClaimAnchor, "start" | "end"> };
+  linkedFactIds: readonly SafeId<"entity">[];
 };
 
 const SYSTEM_PROMPT = `You check claims from a legal document against a record of evidence (the facts), one claim at a time.
@@ -127,7 +123,9 @@ A difference in scope alone never makes a claim contradicted: when the only conf
 
 For recordconflict, fill conflict: subject (the disputed point, in a few words), factIds (exactly the two conflicting facts), values (what each of those facts says on the point, in the same order), and verdictIfGoverning (the verdict the claim would get if that fact governed, in the same order: supported, tension or contradicted). Otherwise conflict is null.
 
-A fact's confidence says how unambiguous its meaning is and an interpretation note says where its meaning is contested; weigh them, but do not treat a low-confidence fact as absent. Use only the facts supplied. Answer every claim exactly once, preserving its claimId. Each claim comes with the passage it sits in: that passage says what the claim means and is never evidence.`;
+statedDate is the date the claim's own words give for what it asserts, as YYYY-MM-DD, YYYY-MM or YYYY, stating only as much as the claim does; when the claim gives a day or month without its year, take the year from its passage. null when the claim gives no date or only a relative one ("the next day", "a week later"). Never take it from the facts.
+
+A fact's confidence says how unambiguous its meaning is and an interpretation note says where its meaning is contested; weigh them, but do not treat a low-confidence fact as absent. A claim may name facts a reviewer points to as bearing on it: read those first, but grade on what they say; being pointed to is not support. Use only the facts supplied. Answer every claim exactly once, preserving its claimId. Each claim comes with the passage it sits in: that passage says what the claim means and is never evidence.`;
 
 const factLine = (id: string, fact: VerificationEvidenceFact): string => {
   const detail = [
@@ -142,6 +140,22 @@ const factLine = (id: string, fact: VerificationEvidenceFact): string => {
       : `interpretation note=${fact.interpretationNote}`,
   ].filter((part) => part !== null);
   return `- ${id}: ${fact.text}${detail.length === 0 ? "" : `\n  ${detail.join("; ")}`}`;
+};
+
+/** The facts a reviewer pointed the claim at, by prompt id. A pointed fact
+ *  the grading does not carry (held since) is left out. */
+const pointedLine = (
+  claim: GradeableClaim,
+  promptIdByFactId: ReadonlyMap<SafeId<"entity">, string>,
+): string => {
+  // A linked fact the check does not read has no prompt id to point at.
+  const pointed = claim.linkedFactIds.flatMap((factId) => {
+    const promptId = promptIdByFactId.get(factId);
+    return promptId === undefined ? [] : [promptId];
+  });
+  return pointed.length === 0
+    ? ""
+    : `\n  reviewer points to: ${pointed.join(", ")}`;
 };
 
 type Violation = { claimId: string; reason: string };
@@ -292,9 +306,35 @@ type GradeClaimsArgs = {
   deps: VerificationModelDeps;
 };
 
+/** `incomplete` keeps the grades it has: a run fails on any claim left
+ *  unanswered, a re-check records the claims that were answered. */
 export type GradeClaimsOutcome =
-  | { type: "graded"; grades: Map<string, ClaimGrade> }
-  | { type: "incomplete"; ungraded: number };
+  | {
+      type: "graded";
+      grades: Map<string, ClaimGrade>;
+      /** Each claim's asserted date: its words', else the grader's. */
+      assertedDates: Map<string, ClaimAssertedDate>;
+    }
+  | {
+      type: "incomplete";
+      grades: Map<string, ClaimGrade>;
+      /** The asserted date of each graded claim. */
+      assertedDates: Map<string, ClaimAssertedDate>;
+      ungraded: number;
+    };
+
+/** The asserted date of each claim, with the grader's answer where it gave
+ *  one. */
+const assertedDatesOf = (
+  claims: readonly GradeableClaim[],
+  statedDates: ReadonlyMap<string, PartialDate | null>,
+): Map<string, ClaimAssertedDate> =>
+  new Map(
+    claims.map((claim) => [
+      claim.key,
+      claimAssertedDate(claim.text, statedDates.get(claim.key) ?? null),
+    ]),
+  );
 
 /** A grade per claim key, or how many claims no answer could be held to. */
 export const gradeClaims = async ({
@@ -305,7 +345,11 @@ export const gradeClaims = async ({
   Result<GradeClaimsOutcome, WorkflowIntegrationError>
 > => {
   if (claims.length === 0) {
-    return Result.ok({ type: "graded", grades: new Map() });
+    return Result.ok({
+      type: "graded",
+      grades: new Map(),
+      assertedDates: new Map(),
+    });
   }
   if (facts.length === 0) {
     // Nothing to check against is an answer, not a model call.
@@ -323,11 +367,15 @@ export const gradeClaims = async ({
           },
         ]),
       ),
+      assertedDates: assertedDatesOf(claims, new Map()),
     });
   }
 
   const factIdByPromptId = new Map(
     facts.map((fact, index) => [`F${String(index + 1)}`, fact.factEntityId]),
+  );
+  const promptIdByFactId = new Map(
+    [...factIdByPromptId].map(([promptId, factId]) => [factId, promptId]),
   );
   const factsPart = `Facts:\n${facts
     .map((fact, index) => factLine(`F${String(index + 1)}`, fact))
@@ -348,24 +396,27 @@ export const gradeClaims = async ({
   const keyByPromptId = new Map(
     prompted.map(({ promptId, claim }) => [promptId, claim.key]),
   );
-  const batches = chunkItems(prompted, BATCH_SIZE);
+  const batches = chunkItems(prompted, GRADING_BATCH_SIZE);
 
   return Result.flatten(
     await Result.tryPromise({
       try: async () => {
         const perBatch = await mapWithConcurrency({
           items: batches,
-          limit: CONCURRENCY,
+          limit: GRADING_CONCURRENCY,
           operation: async (batch) => {
             const request = call.request(
               `Claims:\n${batch
                 .map(
                   ({ promptId, claim }) =>
-                    `- ${promptId}: ${claim.text}\n  passage: ${claimPassage(claim.context.text, claim.context.anchor)}`,
+                    `- ${promptId}: ${claim.text}\n  passage: ${claimPassage(claim.context.text, claim.context.anchor)}${pointedLine(claim, promptIdByFactId)}`,
                 )
                 .join("\n")}`,
             );
-            const graded = new Map<string, ClaimGrade>();
+            const graded = new Map<
+              string,
+              { grade: ClaimGrade; statedDate: PartialDate | null }
+            >();
             const asked = new Set(batch.map(({ promptId }) => promptId));
             const hold = (answers: readonly RawGrade[]): Violation[] => {
               const violations: Violation[] = [];
@@ -375,7 +426,10 @@ export const gradeClaims = async ({
                 }
                 const grade = normalizeGrade(raw, factIdByPromptId);
                 if (Result.isOk(grade)) {
-                  graded.set(raw.claimId, grade.value);
+                  graded.set(raw.claimId, {
+                    grade: grade.value,
+                    statedDate: parsePartialDate(raw.statedDate),
+                  });
                 } else {
                   violations.push({
                     claimId: raw.claimId,
@@ -417,6 +471,7 @@ export const gradeClaims = async ({
         });
 
         const grades = new Map<string, ClaimGrade>();
+        const statedDates = new Map<string, PartialDate | null>();
         for (const batch of perBatch) {
           if (batch.isErr()) {
             return Result.err(
@@ -426,18 +481,31 @@ export const gradeClaims = async ({
               }),
             );
           }
-          for (const [promptId, grade] of batch.value) {
+          for (const [promptId, { grade, statedDate }] of batch.value) {
             const key = keyByPromptId.get(promptId);
             if (key !== undefined) {
               grades.set(key, grade);
+              statedDates.set(key, statedDate);
             }
           }
         }
         const ungraded = claims.length - grades.size;
         return Result.ok(
           ungraded === 0
-            ? ({ type: "graded", grades } as const)
-            : ({ type: "incomplete", ungraded } as const),
+            ? ({
+                type: "graded",
+                grades,
+                assertedDates: assertedDatesOf(claims, statedDates),
+              } as const)
+            : ({
+                type: "incomplete",
+                grades,
+                assertedDates: assertedDatesOf(
+                  claims.filter((claim) => grades.has(claim.key)),
+                  statedDates,
+                ),
+                ungraded,
+              } as const),
         );
       },
       catch: (cause) => {

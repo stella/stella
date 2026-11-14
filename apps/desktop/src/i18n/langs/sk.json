@@ -66,6 +66,10 @@
     "accountWindowTitle": "Pripojiť účet",
     "accountTitle": "Pripojiť tento účet?",
     "accountSubtitle": "Pripojte stella desktop k tomuto účtu a organizácii.",
+    "switchWindowTitle": "Prepnúť účet",
+    "switchTitle": "Prepnúť na iný účet?",
+    "switchSubtitle": "stella desktop je pripojený k účtu {currentEmail}. Odpojiť ho a namiesto neho pripojiť {email}?",
+    "switchConfirm": "Odpojiť a pripojiť",
     "accountEmail": "Účet",
     "organizationName": "Organizácia",
     "allow": "Povoliť",
@@ -577,7 +581,18 @@
   },
   "dictation": {
     "title": "Diktovanie",
-    "description": "Podržte {shortcut} a hovorte. Text sa zobrazí v aplikácii, ktorú práve používate. Reč sa prevádza na tomto počítači a neukladá sa.",
+    "description": "Podržte {shortcut} a hovorte. Text sa zobrazí v aplikácii, ktorú práve používate. Reč sa prevádza na tomto počítači a neukladá sa. So zapnutou úpravou pomocou AI sa prevedený text (nie zvuk) odošle cez stellu poskytovateľovi AI vašej organizácie, ktorý opraví chyby a formátovanie; stella ho neukladá.",
+    "cleanup": {
+      "title": "Upraviť pomocou AI",
+      "description": "Reč sa naďalej prevádza na tomto počítači a zvuk ho nikdy neopustí. So zapnutou úpravou sa prevedený text odošle cez stellu poskytovateľovi AI vašej organizácie, ktorý opraví chyby rozpoznávania a použije vyslovenú interpunkciu a formátovanie, napríklad „nový riadok“ alebo „tučne“. stella ho neukladá."
+    },
+    "language": {
+      "title": "Jazyk diktovania",
+      "description": "Reč sa rozpoznáva v tomto jazyku a úprava v ňom text ponechá. Automaticky sa použijú jazyky zobrazenia a klávesníc tohto počítača.",
+      "automatic": "Automaticky",
+      "automaticWith": "Automaticky ({languages})",
+      "noResults": "Nenašli sa žiadne jazyky"
+    },
     "modelNeeded": "Rečový model beží na tomto počítači.",
     "download": "Stiahnuť ({size} MB)",
     "downloading": "Sťahovanie rečového modelu: {percent} %",
@@ -588,7 +603,10 @@
       "accessibility": "Povoľte prístup Prístupnosť, aby stella mohla písať do iných aplikácií.",
       "microphone": "stella nepočuje váš mikrofón. Skontrolujte prístup k mikrofónu v Systémových nastaveniach.",
       "modelMissing": "Najprv stiahnite rečový model.",
-      "transcription": "Prevod zlyhal. Skúste to znova."
+      "transcription": "Prevod zlyhal. Skúste to znova.",
+      "focusChanged": "Kým bol text pripravený, prepli ste do inej aplikácie, takže sa nič nenapísalo. Skúste to znova.",
+      "focusUnconfirmed": "stella nemohla overiť, ktorá aplikácia je aktívna, takže sa nič nenapísalo. Skúste to znova.",
+      "shortcutHeld": "Pustite klávesy skratky, aby sa text mohol napísať. Nič sa nenapísalo, skúste to znova."
     }
   },
   "shortcut": {
@@ -770,7 +788,9 @@
         "notCompleted": "Prihlásenie sa nedokončilo. Skúste to znova.",
         "timedOut": "Prihlásenie trvalo príliš dlho. Skúste to znova.",
         "unavailable": "Claude Code sa na tomto počítači nepodarilo spustiť. Skúste to znova."
-      }
+      },
+      "unknown": "Prihlásenie do Claude Code sa nepodarilo overiť. O chvíľu to overte znova.",
+      "checkAgain": "Overiť znova"
     },
     "install": {
       "notInstalled": "{name} ešte nie je na tomto počítači nainštalovaný.",
@@ -810,6 +830,27 @@
       "runs_can_write": "Do tohto priečinka môžu miestne behy zapisovať, preto v ňom zručnosť byť nemôže.",
       "network_folder": "Tento priečinok je na sieťovom úložisku. Zručnosti musia byť na vlastnom disku tohto počítača.",
       "path_changed": "Niektorý nadradený priečinok sa zmenil. Odstráňte ho a pridajte znova."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Prepojené priečinky",
+    "description": "Priečinky v tomto počítači, v ktorých môže pracovať agent chatu. Chat vidí len názov priečinka; jeho cesta zostáva v tomto počítači.",
+    "add": "Prepojiť priečinok",
+    "remove": "Odpojiť",
+    "removeFolder": "Odpojiť {name}",
+    "state": {
+      "offline": "Disk, na ktorom je tento priečinok, nie je pripojený.",
+      "moved": "Tento priečinok bol presunutý, premenovaný alebo odstránený. Odpojte ho a prepojte znova.",
+      "protected": "Tento priečinok obsahuje vlastné údaje stelly alebo priečinok so zručnosťami, takže v ňom agent nemôže pracovať.",
+      "unreadable": "Tento priečinok sa nepodarilo prečítať."
+    },
+    "notice": {
+      "action_failed": "Nepodarilo sa to. Skúste to znova.",
+      "too_many": "Tento počítač už má toľko prepojených priečinkov, koľko ich udrží. Najprv jeden odpojte.",
+      "not_a_folder": "Vyberte priečinok.",
+      "network_folder": "Tento priečinok je na sieťovom úložisku. Prepojte priečinok na vlastnom disku tohto počítača.",
+      "protected": "Tento priečinok obsahuje vlastné údaje stelly alebo priečinok so zručnosťami, takže v ňom agent nemôže pracovať.",
+      "unreadable": "Tento priečinok sa nepodarilo prečítať."
     }
   }
 }

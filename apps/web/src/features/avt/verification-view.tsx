@@ -12,19 +12,22 @@ import { useTranslations } from "use-intl";
 
 import { LiteralTextProvider } from "@stll/decision-reader/display-elision-policy";
 import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
-import { Button } from "@stll/ui/button";
+import { Button, ButtonTextRun } from "@stll/ui/button";
 import {
   CheckIcon,
   CircleAlertIcon,
   EyeIcon,
+  FileSearchIcon,
   FilterIcon,
   FlagIcon,
+  HistoryIcon,
 } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { textMarkClass } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -36,6 +39,10 @@ import {
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import type { OriginalScrollTarget } from "@/features/avt/original-docx-view";
 import { isPdfClaimBoxDrawn } from "@/features/avt/original-pdf-claim-box";
+import { outsideSpansForBlock } from "@/features/avt/paragraph-scope.logic";
+import { RunHistorySheet } from "@/features/avt/review-history";
+import { RunStalenessLine } from "@/features/avt/run-staleness";
+import { isOutOfDate, outOfDateIdsIn } from "@/features/avt/staleness.logic";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   MatchStepper,
@@ -45,21 +52,20 @@ import {
 } from "@/features/avt/state-chip";
 import type {
   ClaimState,
-  FactId,
   VerificationClaim,
   VerificationRun,
 } from "@/features/avt/types";
-import { STATE_META } from "@/features/avt/types";
+import { REVIEW_STATUS_META, STATE_META } from "@/features/avt/types";
+import { useBulkRecheck } from "@/features/avt/use-bulk-recheck";
 import { useClaimReviewActions } from "@/features/avt/use-claim-review-actions";
 import {
+  claimFactsById,
   contestedFactIds,
   countClaims,
   effectiveState,
-  evidenceFactsById,
   isConflictState,
   isContested,
   isSettled,
-  needsAttention,
   resolveClaimView,
   routineUnsettledClaimIds,
 } from "@/features/avt/verdict";
@@ -87,11 +93,24 @@ const OriginalPdfView = React.lazy(async () => {
 type DocumentView = "reading" | "original";
 
 type VerdictFilter =
-  "all" | "conflicts" | "needsreview" | "reviewed" | ClaimState;
+  | "all"
+  | "conflicts"
+  | "needsreview"
+  | "needsevidence"
+  | "reviewed"
+  | "outdated"
+  | ClaimState;
+
+/** What the run's header can ask of the view: select a claim and bring it
+ *  into view, as stepping through a filter does. */
+export type VerificationViewHandle = {
+  showClaim: (claimId: VerificationClaim["id"]) => void;
+};
 
 type VerificationViewProps = {
   workspaceId: string;
   run: VerificationRun;
+  ref?: React.Ref<VerificationViewHandle>;
 };
 
 type OriginalDocumentProps = React.ComponentProps<typeof OriginalDocxView> & {
@@ -118,6 +137,7 @@ const OriginalDocument = ({
 export const VerificationView = ({
   workspaceId,
   run,
+  ref,
 }: VerificationViewProps) => {
   const format = useFormatter();
   const t = useTranslations();
@@ -131,12 +151,14 @@ export const VerificationView = ({
   // and the detail panel agree about what each claim currently is.
   const claims = run.claims.map(resolveClaimView);
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
+  // The run's pinned reading; a re-checked claim reads its own re-check's
+  // facts instead (`isContested`).
   const contested = contestedFactIds(run.evidence.facts);
-  const factsById = evidenceFactsById(run);
   const presentation = selectClaimPresentation(run.blocks, claims);
   const readingOrder = presentation.readingOrder;
-  const counts = countClaims(run.claims, contested);
-  const routineIds = routineUnsettledClaimIds(run.claims, contested);
+  const counts = countClaims(run.claims);
+  const routineIds = routineUnsettledClaimIds(run.claims);
+  const bulkRecheck = useBulkRecheck({ workspaceId, runId: run.id });
 
   const [selected, setSelected] = React.useState(readingOrder.at(0) ?? null);
   const [filter, setFilter] = React.useState<VerdictFilter>("all");
@@ -152,7 +174,7 @@ export const VerificationView = ({
   const view = hasOriginal ? documentView : "reading";
 
   const matches = (claim: VerificationClaim, value: VerdictFilter) =>
-    claimMatchesFilter(claim, value, contested);
+    claimMatchesFilter(claim, value);
 
   const selectedClaim = selected === null ? undefined : claimById.get(selected);
 
@@ -171,6 +193,8 @@ export const VerificationView = ({
       setSelected(firstMatch);
     }
   };
+
+  const outOfDateIds = outOfDateIdsIn(readingOrder, claimById);
 
   const orderedMatches =
     filter === "all"
@@ -225,6 +249,14 @@ export const VerificationView = ({
       scrollOriginalToClaim(selectedClaim);
     }
   };
+
+  React.useImperativeHandle(ref, () => ({
+    showClaim: (id) => {
+      if (claimById.has(id)) {
+        goToMatch(id);
+      }
+    },
+  }));
 
   const stepper = matchStepper({
     orderedMatches,
@@ -348,46 +380,28 @@ export const VerificationView = ({
         ))}
       </div>
 
-      <div className="bg-muted flex flex-wrap items-center gap-2.5 rounded-lg border px-3 py-2 text-xs">
-        <FilterIcon aria-hidden="true" className="size-3.5 shrink-0" />
-        <span className="min-w-0 flex-1">
-          {counts.attnOpen > 0
-            ? t.rich("avt.verification.attentionOpen", {
-                count: counts.attnOpen,
-                routineCount: counts.routineTotal,
-                strong: (chunks) => <b>{chunks}</b>,
-              })
-            : t.rich("avt.verification.attentionComplete", {
-                count: counts.routineTotal,
-                strong: (chunks) => <b>{chunks}</b>,
-              })}
-        </span>
-        {counts.attnOpen > 0 && (
-          <Button
-            onClick={() =>
-              applyFilter(filter === "needsreview" ? "all" : "needsreview")
-            }
-            size="sm"
-            variant="link"
-          >
-            {filter === "needsreview"
-              ? t("common.showAll")
-              : t("avt.verification.showQueue")}
-          </Button>
-        )}
-        {routineIds.length > 0 && (
-          <Button
-            disabled={!canReview}
-            onClick={() => acceptRoutine(routineIds)}
-            size="sm"
-            variant="outline"
-          >
-            <CheckIcon />
-            {t("avt.verification.acceptRoutine", { count: routineIds.length })}
-          </Button>
-        )}
-      </div>
-
+      <AttentionBar
+        canReview={canReview}
+        counts={counts}
+        filter={filter}
+        onAcceptRoutine={() => acceptRoutine(routineIds)}
+        onFilter={applyFilter}
+        routineCount={routineIds.length}
+      >
+        <RunHistorySheet
+          claims={claims}
+          onShowClaim={goToMatch}
+          runId={run.id}
+          workspaceId={workspaceId}
+        />
+      </AttentionBar>
+      <RunStalenessLine
+        canReview={canReview}
+        filtered={filter === "outdated"}
+        onFilter={(on) => applyFilter(on ? "outdated" : "all")}
+        outOfDateIds={outOfDateIds}
+        recheck={bulkRecheck}
+      />
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-5">
         <div className="flex h-96 flex-col overflow-hidden rounded-xl border md:col-span-3 md:h-auto md:min-h-0">
           {(hasOriginal || stepper.total > 0) && (
@@ -429,6 +443,7 @@ export const VerificationView = ({
             <ReadingDocument
               presentation={presentation}
               renderClaim={renderClaim}
+              scope={run.scope}
             />
           )}
         </div>
@@ -442,16 +457,108 @@ export const VerificationView = ({
             <ClaimDetailPanel
               claim={selectedClaim}
               contested={contested}
-              factsById={factsById}
+              factsById={claimFactsById(run, selectedClaim)}
               key={selectedClaim.id}
               onReviewEvent={(event) => recordEvent(selectedClaim.id, event)}
-              runId={run.id}
-              stepper={stepper}
+              recheckRun={bulkRecheck.forClaim(selectedClaim.id)}
+              run={run}
               workspaceId={workspaceId}
             />
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+type AttentionBarProps = {
+  counts: ReturnType<typeof countClaims>;
+  filter: VerdictFilter;
+  routineCount: number;
+  canReview: boolean;
+  onFilter: (next: VerdictFilter) => void;
+  onAcceptRoutine: () => void;
+  /** The run's review history, opened from the same bar. */
+  children: React.ReactNode;
+};
+
+/** Where the triage stands, the queue filters, the run's history, and the
+ *  bulk acceptance of routine claims. */
+const AttentionBar = ({
+  counts,
+  filter,
+  routineCount,
+  canReview,
+  onFilter,
+  onAcceptRoutine,
+  children,
+}: AttentionBarProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const toggle = (next: VerdictFilter) => {
+    onFilter(filter === next ? "all" : next);
+  };
+  const sentence =
+    counts.attnOpen > 0
+      ? t.rich("avt.verification.attentionOpen", {
+          count: counts.attnOpen,
+          routineCount: counts.routineTotal,
+          strong: (chunks) => <b>{chunks}</b>,
+        })
+      : t.rich("avt.verification.attentionComplete", {
+          count: counts.routineTotal,
+          strong: (chunks) => <b>{chunks}</b>,
+        });
+  return (
+    <div className="bg-muted flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-lg border px-3 py-2 text-xs">
+      <FilterIcon aria-hidden="true" className="size-3.5 shrink-0" />
+      {/* One line, whatever the width: a cut sentence shows whole on hover,
+          focus or tap, and stays in the text a screen reader reads. */}
+      <TruncatedText className="min-w-0 flex-1 basis-48">
+        {sentence}
+      </TruncatedText>
+      {/* The queue's views are quiet; accepting routine claims is the bar's
+          one accent. */}
+      <div className="flex flex-wrap items-center gap-1">
+        {counts.attnOpen > 0 && (
+          <Button
+            onClick={() => toggle("needsreview")}
+            size="sm"
+            variant="ghost"
+          >
+            {filter === "needsreview"
+              ? t("common.showAll")
+              : t("avt.verification.showQueue")}
+          </Button>
+        )}
+        {(counts.needsEvidence > 0 || filter === "needsevidence") && (
+          <Button
+            aria-pressed={filter === "needsevidence"}
+            onClick={() => toggle("needsevidence")}
+            selected={filter === "needsevidence"}
+            size="sm"
+            variant="ghost"
+          >
+            <FileSearchIcon />
+            {t(REVIEW_STATUS_META["needs-evidence"].labelKey)}
+            <span className="tabular-nums">
+              {format.number(counts.needsEvidence)}
+            </span>
+          </Button>
+        )}
+        {children}
+      </div>
+      {routineCount > 0 && (
+        <Button
+          disabled={!canReview}
+          onClick={onAcceptRoutine}
+          size="sm"
+          variant="outline"
+        >
+          <CheckIcon />
+          {t("avt.verification.acceptRoutine", { count: routineCount })}
+        </Button>
+      )}
     </div>
   );
 };
@@ -486,15 +593,58 @@ const claimDomId = (claimId: string): string => `avt-claim-${claimId}`;
 
 type ReadingDocumentProps = {
   presentation: ClaimPresentation;
+  /** A paragraph range stores only the blocks it spans; the text of its
+   *  first and last block outside the range is dimmed. */
+  scope: VerificationRun["scope"];
   renderClaim: (
     claim: VerificationClaim,
     children: React.ReactNode,
   ) => React.ReactElement;
 };
 
+// The reader colours its own text, so the outside is faded as a whole.
+const renderOutsideScope = (children: React.ReactNode) => (
+  <span className="opacity-45" data-outside-scope="">
+    {children}
+  </span>
+);
+
+/** The text a range starts after, folded to one quiet control so the
+ *  range is what the reader opens on; unfolded, it reads faded. */
+const OutsideScopeLead = ({
+  from,
+  children,
+}: {
+  from: number;
+  children: React.ReactNode;
+}) => {
+  const t = useTranslations();
+  const [shown, setShown] = React.useState(false);
+  if (shown) {
+    return renderOutsideScope(children);
+  }
+  // Its own `dir` keeps the label out of the document text's direction:
+  // `dir="auto"` on the block skips an element that states one.
+  return (
+    <span className="block" dir="auto">
+      <Button
+        aria-expanded={false}
+        onClick={() => setShown(true)}
+        size="inline"
+        variant="ghost"
+      >
+        <span className="text-muted-foreground font-sans text-xs">
+          {t("avt.scope.showBefore", { from: String(from) })}
+        </span>
+      </Button>
+    </span>
+  );
+};
+
 /** The stored text in the shared reader, or the claims' own passages. */
 const ReadingDocument = ({
   presentation,
+  scope,
   renderClaim,
 }: ReadingDocumentProps) => {
   const t = useTranslations();
@@ -525,14 +675,31 @@ const ReadingDocument = ({
                       activeMatchIndex={NO_ACTIVE_MATCH}
                       anchorPresentation="embedded"
                       anchorsByPieceId={{
-                        [block.paragraph.id]: block.claimSpans.map(
-                          ({ claim, start, end }) => ({
+                        [block.paragraph.id]: [
+                          ...outsideSpansForBlock(scope, {
+                            blockId: block.paragraph.id,
+                            text: block.paragraph.plainText,
+                          }).map(({ start, end }) => ({
+                            start,
+                            end,
+                            key: `outside-${String(start)}`,
+                            render:
+                              start === 0 && scope.kind === "paragraphs"
+                                ? (children: React.ReactNode) => (
+                                    <OutsideScopeLead from={scope.from}>
+                                      {children}
+                                    </OutsideScopeLead>
+                                  )
+                                : renderOutsideScope,
+                          })),
+                          ...block.claimSpans.map(({ claim, start, end }) => ({
                             start,
                             end,
                             key: claim.id,
-                            render: (children) => renderClaim(claim, children),
-                          }),
-                        ),
+                            render: (children: React.ReactNode) =>
+                              renderClaim(claim, children),
+                          })),
+                        ].toSorted((a, b) => a.start - b.start),
                       }}
                       block={block.paragraph}
                       rangesByPieceId={NO_RANGES}
@@ -584,7 +751,6 @@ const ReadingDocument = ({
 const claimMatchesFilter = (
   claim: VerificationClaim,
   filter: VerdictFilter,
-  contested: ReadonlySet<FactId>,
 ): boolean => {
   const state = effectiveState(claim, claim.review);
   switch (filter) {
@@ -595,15 +761,16 @@ const claimMatchesFilter = (
       return isConflictState(state);
     }
     case "needsreview": {
-      return (
-        needsAttention(
-          { state, refs: claim.refs, qualifiers: claim.qualifiers },
-          contested,
-        ) && !isSettled(claim.review)
-      );
+      return claim.needsAttention && !isSettled(claim.review);
     }
     case "reviewed": {
       return isSettled(claim.review);
+    }
+    case "needsevidence": {
+      return claim.review?.status === "needs-evidence";
+    }
+    case "outdated": {
+      return isOutOfDate(claim);
     }
     case "supported":
     case "tension":
@@ -702,12 +869,14 @@ const ClaimSpan = ({
   const reviewStatus = claim.review?.status ?? null;
   const { mark, markTextClass } = STATE_COLOR[state];
   const qualifierAnnouncement = announceQualifiers(claim);
+  const outOfDate = isOutOfDate(claim);
   return (
-    // The claim's look is the review text mark, drawn by the span; the plain
-    // button only makes the run of evidence a control.
-    <Button
+    // The claim's look is the review text mark, drawn by the span. A claim is
+    // a run of the document's prose and wraps with it, so it is a text run,
+    // never a <button> (one atomic box that would lift a claim crossing a
+    // line out of the paragraph's reading order).
+    <ButtonTextRun
       aria-pressed={selected}
-      className="inline"
       id={claimDomId(claim.id)}
       onClick={() => onSelect(claim.id)}
       variant="plain"
@@ -744,17 +913,33 @@ const ClaimSpan = ({
             className="text-destructive-foreground ms-0.5 inline-block size-3 align-middle"
           />
         )}
+        {reviewStatus === "needs-evidence" && (
+          <FileSearchIcon
+            aria-hidden="true"
+            className="text-warning ms-0.5 inline-block size-3 align-middle"
+          />
+        )}
+        {outOfDate && (
+          <HistoryIcon
+            aria-hidden="true"
+            className="text-muted-foreground ms-0.5 inline-block size-3 align-middle"
+          />
+        )}
         {/* The verdict colour, the underline and each marker are visual only;
             a screen-reader user hears the verdict and markers here. */}
         <span className="sr-only">
           {t("avt.verification.claimAnnouncement", {
             state: t(STATE_META[state].chipKey),
             contested: String(contested),
-            reviewStatus: reviewStatus ?? "none",
+            reviewStatus:
+              reviewStatus === null
+                ? "none"
+                : REVIEW_STATUS_META[reviewStatus].selectKey,
           })}
           {qualifierAnnouncement !== null && ` ${qualifierAnnouncement}`}
+          {outOfDate && ` ${t("common.outOfDate")}`}
         </span>
       </span>
-    </Button>
+    </ButtonTextRun>
   );
 };

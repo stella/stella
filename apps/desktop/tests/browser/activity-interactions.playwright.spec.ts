@@ -95,6 +95,9 @@ type InstallNativeBoundaryOptions = {
   /** The firm's AI drafting mode, the user's consent on the server, and how
    * a drafting request settles. */
   drafting?: DraftingFixture;
+  /** Whether the matters a day is matched against answer at once, or wait
+   * until the test calls `releaseCandidates`. */
+  candidates?: "answer" | "held";
 };
 
 type DraftingFixture = {
@@ -112,6 +115,26 @@ type DraftingFixture = {
 };
 
 const RELEASE_DRAFT = "__STELLA_TEST_RELEASE_DRAFT__";
+const RELEASE_CANDIDATES = "__STELLA_TEST_RELEASE_CANDIDATES__";
+
+/** Lets the held read of the matters a day is matched against answer. */
+const releaseCandidates = async (page: Page) => {
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        (key) => typeof Reflect.get(window, key) === "function",
+        RELEASE_CANDIDATES,
+      ),
+    )
+    .toBe(true);
+  await page.evaluate((key) => {
+    const release: unknown = Reflect.get(window, key);
+    if (typeof release !== "function") {
+      throw new TypeError("No matters read is held");
+    }
+    release();
+  }, RELEASE_CANDIDATES);
+};
 
 const heldDrafts = async (page: Page) =>
   page.evaluate((key) => {
@@ -166,6 +189,7 @@ const installNativeBoundary = async ({
   view = "activity",
   activityEnabled = true,
   drafting = DRAFTING,
+  candidates = "answer",
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
   await setFixedBrowserTime(page, new Date(`${snapshot.today}T10:00:00Z`));
@@ -185,6 +209,8 @@ const installNativeBoundary = async ({
       refinedNarrative: REFINED_NARRATIVE,
       earlierEntry: EARLIER_ENTRY,
       releaseDraftKey: RELEASE_DRAFT,
+      candidates,
+      releaseCandidatesKey: RELEASE_CANDIDATES,
       settingsWindow: {
         account: ACCOUNT,
         activityEnabled,
@@ -207,6 +233,8 @@ const installNativeBoundary = async ({
         refinedNarrative,
         earlierEntry,
         releaseDraftKey,
+        candidates: candidatesFixture,
+        releaseCandidatesKey,
         settingsWindow,
       },
       { emit },
@@ -311,6 +339,7 @@ const installNativeBoundary = async ({
         // No install status either, read the same as the refusal with local agents off.
         harness_get_status: () => null,
         local_skill_folders_get: () => null,
+        local_linked_folders_get: () => null,
         activity_delete_all: (args) => {
           if (
             args["recovery"] === "discardUnreadable" &&
@@ -565,8 +594,15 @@ const installNativeBoundary = async ({
               color: "--option-emerald",
             },
           ] satisfies DesktopMatter[],
-        time_entry_candidates: () =>
-          [
+        time_entry_candidates: async () => {
+          if (candidatesFixture === "held") {
+            const held = Promise.withResolvers<undefined>();
+            Reflect.set(window, releaseCandidatesKey, () => {
+              held.resolve(undefined);
+            });
+            await held.promise;
+          }
+          return [
             {
               id: "matter-1",
               name: "Example matter",
@@ -589,7 +625,8 @@ const installNativeBoundary = async ({
                   upcomingDeadline: null,
                 },
               }) satisfies DesktopTimeEntryMatterCandidate,
-          ),
+          );
+        },
         time_entry_submit_batch_confirmed: async (args) => {
           batchAttempts += 1;
           if (validation === "hold-first" && batchAttempts === 1) {
@@ -2956,6 +2993,53 @@ for (const language of ["en", "ar"] as const) {
     ).toBeDisabled();
   });
 }
+
+const DRAWN_BLOCKS = "__STELLA_TEST_DRAWN_BLOCKS__";
+
+test("the day's blocks wait for its matters and are drawn once", async ({
+  page,
+}) => {
+  // Every Activity block the page ever puts in the document, by its name.
+  await page.addInitScript((key) => {
+    const drawn: string[] = [];
+    Reflect.set(window, key, drawn);
+    const record = (node: Node) => {
+      if (!(node instanceof Element)) {
+        return;
+      }
+      for (const block of [node, ...node.querySelectorAll("*")]) {
+        if (
+          block.matches('[data-slot="day-calendar-block"]') &&
+          block.closest('[data-column-id="activity"]') !== null
+        ) {
+          drawn.push(block.getAttribute("aria-label") ?? "");
+        }
+      }
+    };
+    new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          record(node);
+        }
+      }
+    }).observe(document, { childList: true, subtree: true });
+  }, DRAWN_BLOCKS);
+  await installNativeBoundary({ page, candidates: "held" });
+  await expect(page.locator('[data-slot="day-calendar"]')).toBeVisible();
+  const blocks = page.locator(ACTIVITY_BLOCKS);
+  await expect(blocks).toHaveCount(0);
+
+  await releaseCandidates(page);
+  await expect(blocks).toHaveCount(1);
+  await expect(blocks).toHaveAccessibleName(
+    /^Example matter · Example Editor/u,
+  );
+  const drawn: unknown = await page.evaluate(
+    (key) => Reflect.get(window, key),
+    DRAWN_BLOCKS,
+  );
+  expect(drawn).toEqual([expect.stringMatching(/^Example matter · /u)]);
+});
 
 /** An hour mostly spent on mail no matter claimed, ending on a matter's
  * document. */

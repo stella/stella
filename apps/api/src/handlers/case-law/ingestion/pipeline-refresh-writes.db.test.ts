@@ -66,6 +66,17 @@ const canonical = {
       return await Promise.resolve(Result.ok(undefined));
     },
   },
+  // A write that replaces a document reads the one it replaces, to record
+  // where its anchors went.
+  readBytes: {
+    readRange: async ({ key, offset, length }) => {
+      const pack = transferred.find(({ packKey }) => packKey === key);
+      if (pack === undefined) {
+        throw new Error(`Pack not found: ${key}`);
+      }
+      return await Promise.resolve(pack.bytes.slice(offset, offset + length));
+    },
+  },
 } satisfies CaseLawCorpusDependencies;
 
 /** Settles into the corpus like canonical, but keeps the row's payload. */

@@ -66,6 +66,10 @@
     "accountWindowTitle": "Připojit účet",
     "accountTitle": "Připojit tento účet?",
     "accountSubtitle": "Připojte stella desktop k tomuto účtu a organizaci.",
+    "switchWindowTitle": "Přepnout účet",
+    "switchTitle": "Přepnout na jiný účet?",
+    "switchSubtitle": "stella desktop je připojený k účtu {currentEmail}. Odpojit ho a místo něj připojit {email}?",
+    "switchConfirm": "Odpojit a připojit",
     "accountEmail": "Účet",
     "organizationName": "Organizace",
     "allow": "Povolit",
@@ -577,7 +581,18 @@
   },
   "dictation": {
     "title": "Diktování",
-    "description": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč se převádí na tomto počítači a neukládá se.",
+    "description": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč se převádí na tomto počítači a neukládá se. Se zapnutou úpravou pomocí AI se převedený text (ne zvuk) odešle přes stellu poskytovateli AI vaší organizace, který opraví chyby a formátování; stella ho neukládá.",
+    "cleanup": {
+      "title": "Upravit pomocí AI",
+      "description": "Řeč se i nadále převádí na tomto počítači a zvuk ho nikdy neopustí. Se zapnutou úpravou se převedený text odešle přes stellu poskytovateli AI vaší organizace, který opraví chyby rozpoznávání a použije vyslovenou interpunkci a formátování, například „nový řádek“ nebo „tučně“. stella ho neukládá."
+    },
+    "language": {
+      "title": "Jazyk diktování",
+      "description": "Řeč se rozpoznává v tomto jazyce a úprava v něm text ponechá. Automaticky se použijí jazyky zobrazení a klávesnic tohoto počítače.",
+      "automatic": "Automaticky",
+      "automaticWith": "Automaticky ({languages})",
+      "noResults": "Žádné jazyky nenalezeny"
+    },
     "modelNeeded": "Řečový model běží na tomto počítači.",
     "download": "Stáhnout ({size} MB)",
     "downloading": "Stahování řečového modelu: {percent} %",
@@ -588,7 +603,10 @@
       "accessibility": "Povolte přístup Zpřístupnění, aby stella mohla psát do jiných aplikací.",
       "microphone": "stella neslyší váš mikrofon. Zkontrolujte přístup k mikrofonu v Nastavení systému.",
       "modelMissing": "Nejprve stáhněte řečový model.",
-      "transcription": "Převod se nezdařil. Zkuste to znovu."
+      "transcription": "Převod se nezdařil. Zkuste to znovu.",
+      "focusChanged": "Než byl text připraven, přepnuli jste do jiné aplikace, takže se nic nenapsalo. Zkuste to znovu.",
+      "focusUnconfirmed": "stella nemohla ověřit, která aplikace je aktivní, takže se nic nenapsalo. Zkuste to znovu.",
+      "shortcutHeld": "Pusťte klávesy zkratky, aby se text mohl napsat. Nic se nenapsalo, zkuste to znovu."
     }
   },
   "shortcut": {
@@ -770,7 +788,9 @@
         "notCompleted": "Přihlášení nebylo dokončeno. Zkuste to znovu.",
         "timedOut": "Přihlášení trvalo příliš dlouho. Zkuste to znovu.",
         "unavailable": "Claude Code se na tomto počítači nepodařilo spustit. Zkuste to znovu."
-      }
+      },
+      "unknown": "Přihlášení do Claude Code se nepodařilo ověřit. Za chvíli to ověřte znovu.",
+      "checkAgain": "Ověřit znovu"
     },
     "install": {
       "notInstalled": "{name} zatím není na tomto počítači nainstalován.",
@@ -810,6 +830,27 @@
       "runs_can_write": "Do této složky mohou místní běhy zapisovat, proto v ní dovednost být nemůže.",
       "network_folder": "Tato složka je na síťovém úložišti. Dovednosti musí být na vlastním disku tohoto počítače.",
       "path_changed": "Některá nadřazená složka se změnila. Odeberte ji a přidejte znovu."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Propojené složky",
+    "description": "Složky v tomto počítači, ve kterých může pracovat agent chatu. Chat vidí jen název složky; její cesta zůstává v tomto počítači.",
+    "add": "Propojit složku",
+    "remove": "Odpojit",
+    "removeFolder": "Odpojit {name}",
+    "state": {
+      "offline": "Disk, na kterém tato složka je, není připojený.",
+      "moved": "Tato složka byla přesunuta, přejmenována nebo smazána. Odpojte ji a propojte znovu.",
+      "protected": "Tato složka obsahuje vlastní data stelly nebo složku s dovednostmi, takže v ní agent pracovat nemůže.",
+      "unreadable": "Tuto složku se nepodařilo přečíst."
+    },
+    "notice": {
+      "action_failed": "Nepodařilo se to. Zkuste to znovu.",
+      "too_many": "Tento počítač už má tolik propojených složek, kolik jich udrží. Nejdřív jednu odpojte.",
+      "not_a_folder": "Vyberte složku.",
+      "network_folder": "Tato složka je na síťovém úložišti. Propojte složku na vlastním disku tohoto počítače.",
+      "protected": "Tato složka obsahuje vlastní data stelly nebo složku s dovednostmi, takže v ní agent pracovat nemůže.",
+      "unreadable": "Tuto složku se nepodařilo přečíst."
     }
   }
 }

@@ -1,18 +1,19 @@
 import { useHeaderHeight } from "expo-router/react-navigation";
 import { KeyboardAvoidingView, Platform } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
 import { ChatThreadView } from "@/components/chat-thread-view";
 import { screenStyles } from "@/components/empty-state-screen";
 import { EntityDetailSheet } from "@/components/entity-detail-sheet";
 import { MatterEntities } from "@/components/matter-entities";
+import { MatterName } from "@/components/matter-name";
 import { Pane } from "@/components/pane";
 import type {
   MatterSelection,
   TaskSelection,
   ThreadSelection,
 } from "@/components/selection";
+import { SafeAreaView } from "@/components/ui/safe-area-view";
 import { useSession } from "@/connection/session-provider";
 
 /**
@@ -50,7 +51,13 @@ export const MatterPane = ({ matter }: { matter: MatterSelection }) => {
   const { state } = useSession();
 
   return (
-    <Pane title={matter.name}>
+    <Pane
+      title={
+        <MatterName fallback={matter.name} matterId={matter.workspaceId}>
+          {(name) => name}
+        </MatterName>
+      }
+    >
       {state.status === "signed-in" ? (
         <MatterEntities
           // Another matter is another list.
@@ -68,7 +75,7 @@ export const TaskPane = ({ task }: { task: TaskSelection }) => {
   const { state } = useSession();
 
   return state.status === "signed-in" ? (
-    <SafeAreaView className="flex-1" edges={["top"]}>
+    <SafeAreaView edges={["top"]}>
       <EntityDetailSheet
         entityId={task.entityId}
         source={state.source}

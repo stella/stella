@@ -739,6 +739,14 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     expiresAt: "2026-12-04T00:00:00.000Z",
     reason: "no-llms-txt",
   },
+  {
+    checkedAt: "2026-11-12T00:00:00.000Z",
+    dependency: "js-yaml",
+    explanation:
+      "https://nodeca.github.io/js-yaml/llms.txt and https://raw.githubusercontent.com/nodeca/js-yaml/HEAD/llms.txt return 404. Use the README at https://github.com/nodeca/js-yaml directly; the landing app declares the package only so Starlight's bundled routes resolve the major they are written against, and imports nothing from it.",
+    expiresAt: "2026-12-12T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
   ...["@dnd-kit/core", "@dnd-kit/sortable"].map(
     (dependency) =>
       ({
@@ -883,6 +891,38 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     explanation:
       "https://tailwindcss.com/llms.txt returns 404. Use the PostCSS installation guide at https://tailwindcss.com/docs/installation/using-postcss directly.",
     expiresAt: "2026-11-05T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "@tailwindcss/cli",
+    explanation:
+      "https://tailwindcss.com/llms.txt and https://tailwindcss.com/docs/llms.txt return 404. Use the CLI installation guide at https://tailwindcss.com/docs/installation/tailwind-cli directly; the Outlook add-in build runs only its --input, --output and --minify options.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "@types/office-js",
+    explanation:
+      "https://raw.githubusercontent.com/DefinitelyTyped/DefinitelyTyped/HEAD/llms.txt and https://raw.githubusercontent.com/OfficeDev/office-js/HEAD/llms.txt return 404. Use the Outlook add-in API reference at https://learn.microsoft.com/javascript/api/outlook directly, with the declarations in @types/office-js.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "libxml2-wasm",
+    explanation:
+      "https://jameslan.github.io/libxml2-wasm/llms.txt and the repository's llms.txt return 404. Use the API documentation at https://jameslan.github.io/libxml2-wasm/ directly; the Outlook add-in uses it only to validate its manifest against the Office XML schemas.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-10T00:00:00.000Z",
+    dependency: "mimetext",
+    explanation:
+      "https://muratgozel.github.io/MIMEText/llms.txt and the repository's llms.txt return 404. Use the README at https://github.com/muratgozel/MIMEText directly; the Outlook add-in uses it only to assemble an .eml message from a mail item.",
+    expiresAt: "2026-12-10T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {

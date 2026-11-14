@@ -1,7 +1,10 @@
 //! Hold-to-talk dictation into any app. Speech is transcribed on this
 //! computer: audio never leaves it, and neither audio nor text is stored.
+//! With AI cleanup on (the default), the transcribed text, never the audio,
+//! goes through stella to the organization's AI provider before it is typed,
+//! and stella does not store it.
 //!
-//! This module owns the preference, the speech model file and the shortcut.
+//! This module owns the preferences, the speech model file and the shortcut.
 //! `dictation_engine` owns capture, transcription and insertion on one thread.
 
 #![cfg_attr(
@@ -26,11 +29,16 @@ use crate::{
   clipboard_shortcut::ShortcutKeys,
   config::APP_DATA_DIR_NAME,
   device_preference::DevicePreference,
+  dictation_language::{self, Choice, LanguageSnapshot},
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
 };
 
 const PREFERENCE_FILE_NAME: &str = "dictation-enabled";
+/// On unless the user turned it off.
+const CLEANUP_PREFERENCE_FILE_NAME: &str = "dictation-cleanup";
+/// `auto` or a language code the speech model lists.
+const LANGUAGE_PREFERENCE_FILE_NAME: &str = "dictation-language";
 const ENABLED_VALUE: &str = "on";
 const DISABLED_VALUE: &str = "off";
 /// Payload-free: windows read the new state through the snapshot command.
@@ -82,6 +90,13 @@ pub enum Failure {
   Microphone,
   ModelMissing,
   Transcription,
+  /// Another app had focus by the time the text was ready; nothing was typed.
+  FocusChanged,
+  /// Focus could not be read again before typing, so nothing was typed.
+  FocusUnconfirmed,
+  /// Shortcut keys were still held down when the text was ready; typing
+  /// would have combined them with the text, so nothing was typed.
+  ShortcutHeld,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -89,6 +104,8 @@ pub enum Failure {
 pub struct DictationSnapshot {
   available: bool,
   enabled: bool,
+  cleanup: bool,
+  language: LanguageSnapshot,
   model: ModelState,
   model_bytes: u64,
   phase: Phase,
@@ -99,6 +116,8 @@ pub struct DictationSnapshot {
 
 struct Inner {
   enabled: bool,
+  cleanup: bool,
+  language: Choice,
   model: ModelState,
   phase: Phase,
   failure: Option<Failure>,
@@ -112,8 +131,19 @@ impl DictationState {
   pub fn load() -> Self {
     let preference = DevicePreference::in_app_data(PREFERENCE_FILE_NAME);
     let enabled = SUPPORTED && preference.read().as_deref() == Some(ENABLED_VALUE);
+    let cleanup = DevicePreference::in_app_data(CLEANUP_PREFERENCE_FILE_NAME)
+      .read()
+      .as_deref()
+      != Some(DISABLED_VALUE);
+    let language = Choice::parse(
+      DevicePreference::in_app_data(LANGUAGE_PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
     Self(Mutex::new(Inner {
       enabled,
+      cleanup,
+      language,
       model: if installed_model().is_some() {
         ModelState::Ready
       } else {
@@ -126,11 +156,17 @@ impl DictationState {
     }))
   }
 
-  fn snapshot(&self, available: bool) -> DictationSnapshot {
+  fn snapshot(
+    &self,
+    available: bool,
+    inferred: Vec<&'static str>,
+  ) -> DictationSnapshot {
     let inner = self.0.lock().unwrap_or_else(|error| error.into_inner());
     DictationSnapshot {
       available,
       enabled: inner.enabled,
+      cleanup: inner.cleanup,
+      language: LanguageSnapshot::new(&inner.language, inferred),
       model: inner.model,
       model_bytes: MODEL_BYTES,
       phase: inner.phase,
@@ -144,14 +180,56 @@ impl DictationState {
     let mut inner = self.0.lock().unwrap_or_else(|error| error.into_inner());
     apply(&mut inner)
   }
+
+  /// Writes `value` to `preference` and only then applies `apply`, under one
+  /// lock: the state never holds a preference that is not stored, so a
+  /// failed write changes nothing and a retry writes again.
+  fn store<T>(
+    &self,
+    preference: &DevicePreference,
+    value: &str,
+    apply: impl FnOnce(&mut Inner) -> T,
+  ) -> Result<T, String> {
+    let mut inner = self.0.lock().unwrap_or_else(|error| error.into_inner());
+    preference.write(value)?;
+    Ok(apply(&mut inner))
+  }
+}
+
+fn publish(app: &AppHandle) {
+  if let Err(error) = app.emit(CHANGED_EVENT, ()) {
+    tracing::warn!(%error, "dictation change event failed");
+  }
 }
 
 fn change<T>(app: &AppHandle, apply: impl FnOnce(&mut Inner) -> T) -> T {
   let value = app.state::<DictationState>().update(apply);
-  if let Err(error) = app.emit(CHANGED_EVENT, ()) {
-    tracing::warn!(%error, "dictation change event failed");
-  }
+  publish(app);
   value
+}
+
+/// A preference change: stored first, then applied and published.
+fn change_preference<T>(
+  app: &AppHandle,
+  file_name: &str,
+  value: &str,
+  apply: impl FnOnce(&mut Inner) -> T,
+) -> Result<T, String> {
+  let value = app.state::<DictationState>().store(
+    &DevicePreference::in_app_data(file_name),
+    value,
+    apply,
+  )?;
+  publish(app);
+  Ok(value)
+}
+
+const fn stored_switch(enabled: bool) -> &'static str {
+  if enabled {
+    ENABLED_VALUE
+  } else {
+    DISABLED_VALUE
+  }
 }
 
 /// A build that can run the model, for an account the server enabled.
@@ -178,6 +256,32 @@ pub fn installed_model() -> Option<PathBuf> {
     std::fs::symlink_metadata(path)
       .is_ok_and(|meta| meta.is_file() && meta.len() == MODEL_BYTES)
   })
+}
+
+/// The language hint for the model and the languages the speaker uses.
+pub struct SpeakerLanguage {
+  pub hint: Option<&'static str>,
+  pub speaker: Vec<&'static str>,
+}
+
+/// What the current language choice means on this computer right now.
+pub fn language(app: &AppHandle) -> SpeakerLanguage {
+  let choice = app
+    .state::<DictationState>()
+    .update(|inner| inner.language.clone());
+  let inferred = match choice {
+    Choice::Automatic => dictation_language::inferred(app),
+    Choice::Language(_) => Vec::new(),
+  };
+  SpeakerLanguage {
+    hint: dictation_language::hint(&choice, &inferred),
+    speaker: dictation_language::speaker_languages(&choice, &inferred),
+  }
+}
+
+/// Whether a finished dictation goes through AI cleanup before it is typed.
+pub fn cleanup_enabled(app: &AppHandle) -> bool {
+  app.state::<DictationState>().update(|inner| inner.cleanup)
 }
 
 pub fn set_phase(app: &AppHandle, phase: Phase) {
@@ -261,12 +365,23 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   change(app, |_inner| ());
 }
 
+/// The snapshot a window reads, with the languages inferred right now.
+fn read_snapshot(app: &AppHandle, state: &DictationState) -> DictationSnapshot {
+  let available = available(app);
+  let inferred = if available {
+    dictation_language::inferred(app)
+  } else {
+    Vec::new()
+  };
+  state.snapshot(available, inferred)
+}
+
 #[tauri::command]
 pub fn dictation_get_snapshot(
   app: AppHandle,
   state: State<'_, DictationState>,
 ) -> DictationSnapshot {
-  state.snapshot(available(&app))
+  read_snapshot(&app, &state)
 }
 
 #[tauri::command]
@@ -278,24 +393,64 @@ pub fn dictation_set_enabled(
   if !available(&app) {
     return Err("dictation is not available on this computer".to_string());
   }
-  let unchanged = change(&app, |inner| {
-    let unchanged = inner.enabled == enabled;
-    inner.enabled = enabled;
-    unchanged
-  });
+  let unchanged = change_preference(
+    &app,
+    PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| {
+      let unchanged = inner.enabled == enabled;
+      inner.enabled = enabled;
+      unchanged
+    },
+  )?;
   if !unchanged {
-    DevicePreference::in_app_data(PREFERENCE_FILE_NAME).write(if enabled {
-      ENABLED_VALUE
-    } else {
-      DISABLED_VALUE
-    })?;
     if enabled {
       start(&app);
     } else {
       stop(&app);
     }
   }
-  Ok(state.snapshot(true))
+  Ok(read_snapshot(&app, &state))
+}
+
+#[tauri::command]
+pub fn dictation_set_cleanup(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  change_preference(
+    &app,
+    CLEANUP_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| inner.cleanup = enabled,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+#[tauri::command]
+pub fn dictation_set_language(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  language: String,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let choice = Choice::parse(Some(&language));
+  if choice.stored() != language {
+    return Err("this language is not available for dictation".to_string());
+  }
+  change_preference(
+    &app,
+    LANGUAGE_PREFERENCE_FILE_NAME,
+    choice.stored(),
+    |inner| inner.language = choice,
+  )?;
+  Ok(read_snapshot(&app, &state))
 }
 
 #[tauri::command]
@@ -332,7 +487,7 @@ pub fn dictation_download_model(
       change(&handle, |inner| inner.model = model);
     });
   }
-  Ok(state.snapshot(true))
+  Ok(read_snapshot(&app, &state))
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -432,6 +587,72 @@ mod tests {
   fn the_pinned_model_is_a_full_digest_of_the_named_file() {
     assert_eq!(MODEL_SHA256.len(), 64);
     assert!(MODEL_URL.ends_with(MODEL_FILE_NAME));
+  }
+
+  #[test]
+  fn failures_reach_the_window_by_their_string_names() {
+    for (failure, name) in [
+      (Failure::FocusChanged, "focusChanged"),
+      (Failure::FocusUnconfirmed, "focusUnconfirmed"),
+      (Failure::ShortcutHeld, "shortcutHeld"),
+    ] {
+      assert_eq!(
+        serde_json::to_value(failure).unwrap(),
+        serde_json::json!(name)
+      );
+    }
+  }
+
+  fn state(cleanup: bool) -> DictationState {
+    DictationState(Mutex::new(Inner {
+      enabled: true,
+      cleanup,
+      language: Choice::Automatic,
+      model: ModelState::Missing,
+      phase: Phase::Idle,
+      failure: None,
+      shortcut_taken: false,
+      commands: None,
+    }))
+  }
+
+  fn temp_preference() -> (DevicePreference, PathBuf) {
+    let dir =
+      std::env::temp_dir().join(format!("stella-dictation-{}", uuid::Uuid::new_v4()));
+    (DevicePreference::at(dir.join("dictation-cleanup")), dir)
+  }
+
+  #[test]
+  fn a_preference_that_cannot_be_stored_leaves_the_state_unchanged() {
+    let (_, dir) = temp_preference();
+    // A directory where the file belongs refuses the write.
+    let blocked = dir.join("dictation-cleanup");
+    crate::local_store::create_private_dir(&blocked).unwrap();
+    let state = state(true);
+    let mut applied = false;
+    assert!(
+      state
+        .store(&DevicePreference::at(blocked), DISABLED_VALUE, |inner| {
+          applied = true;
+          inner.cleanup = false;
+        })
+        .is_err()
+    );
+    assert!(!applied);
+    assert!(state.update(|inner| inner.cleanup));
+    std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn a_stored_preference_is_applied_and_reads_back() {
+    let (preference, dir) = temp_preference();
+    let state = state(true);
+    state
+      .store(&preference, DISABLED_VALUE, |inner| inner.cleanup = false)
+      .unwrap();
+    assert!(!state.update(|inner| inner.cleanup));
+    assert_eq!(preference.read().as_deref(), Some(DISABLED_VALUE));
+    std::fs::remove_dir_all(dir).unwrap();
   }
 
   #[test]

@@ -155,6 +155,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "chat-turn-reaper.ts",
     "Ends chat turns whose lease expired; reads no content.",
   ),
+  "chat.sendLimitReminders": platform(
+    "chat-limit-reminders.ts",
+    "Files the reminders members asked for when their agent's usage limit resets; reads ids and times only.",
+  ),
   "chat.purgeSecrets": platform(
     "chat-secret-retention.ts",
     "Clears expired encrypted chat payloads while retaining request receipts.",
@@ -270,6 +274,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "reviewOrganization.reset": platform(
     "review-organization-reset.ts",
     "Resets the configured restricted review organization; each run first proves its only member is the configured review account.",
+  ),
+  "dataExports.maintain": platform(
+    "data-export-maintenance.ts",
+    "Marks exports past their expiry as expired (the bucket lifecycle deletes their files) and resumes or fails stalled runs; queued exports are handed back to their queue, whose worker reads as the requester's membership.",
   ),
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",

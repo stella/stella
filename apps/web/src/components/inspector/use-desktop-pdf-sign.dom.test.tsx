@@ -26,6 +26,7 @@ const { stellaToast, ToastProvider } = await import("@stll/ui/toast");
 const { useDesktopPdfSign } =
   await import("@/components/inspector/use-desktop-pdf-sign");
 const en = (await import("@/i18n/langs/en.json")).default;
+const { getAnalytics } = await import("@/lib/analytics/provider");
 
 const copy = en.workspaces.files.pdfSigning;
 const ID = "90123344-5566-7788-9900-aabbccddeeff";
@@ -366,6 +367,65 @@ test("a handoff failure after authority is revoked closes the toast without a fa
     expect(document.body.textContent).not.toContain(copy.waitingTitle);
   });
   expect(document.body.textContent).not.toContain(copy.startFailedTitle);
+  client.clear();
+});
+
+test("a start refusal the hook explains shows its reason as a notice", async () => {
+  fetchBoundary.mockImplementation(
+    Object.assign(
+      async (input: Parameters<typeof fetch>[0]) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("pdf-signing-handoffs")) {
+          return Response.json(
+            { code: "pdf_signing_in_progress", message: "Refused" },
+            { status: 409 },
+          );
+        }
+        return json({});
+      },
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+  const capture = spyOn(getAnalytics(), "captureError");
+  const { client, ui } = mountSign();
+
+  await act(async () => {
+    await ui.result.current.sign({ target });
+  });
+
+  await waitFor(() => {
+    expect(document.body.textContent).toContain(copy.inProgressDescription);
+  });
+  expect(document.body.textContent).toContain(copy.startFailedTitle);
+  expect(capture).not.toHaveBeenCalled();
+  expect(ui.result.current.isSigning).toBe(false);
+  client.clear();
+});
+
+test("a start failure the hook cannot explain takes the error path", async () => {
+  fetchBoundary.mockImplementation(
+    Object.assign(
+      async (input: Parameters<typeof fetch>[0]) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("pdf-signing-handoffs")) {
+          return Response.json({ message: "Unavailable" }, { status: 503 });
+        }
+        return json({});
+      },
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+  const capture = spyOn(getAnalytics(), "captureError");
+  const { client, ui } = mountSign();
+
+  await act(async () => {
+    await ui.result.current.sign({ target });
+  });
+
+  await waitFor(() => {
+    expect(document.body.textContent).toContain(copy.startFailedTitle);
+  });
+  expect(capture).toHaveBeenCalled();
   client.clear();
 });
 

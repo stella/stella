@@ -41,6 +41,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/knowledge/workflows": "private-no-store",
   "/law/coverage": "public-indexable",
   "/mcp/oauth-callback": "private-no-store",
+  "/sharepoint/oauth-callback": "private-no-store",
   "/sitemaps/law.xml": "public-anonymous",
   "/sitemaps/tools.xml": "public-anonymous",
   "/tools/$slug": "public-indexable",

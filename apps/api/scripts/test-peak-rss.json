@@ -2032,14 +2032,6 @@
         "job": "measure-1"
       }
     },
-    "src/db/schema/docx-suggestions.test.ts": {
-      "peakMb": 179,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
-      }
-    },
     "src/db/schema/entities.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
@@ -6208,14 +6200,6 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/chat/browser-snapshot-history.test.ts": {
-      "peakMb": 336,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
-      }
-    },
     "src/handlers/chat/chat-message-parts-older-rows.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
@@ -7230,14 +7214,6 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-3"
-      }
-    },
-    "src/handlers/chat/thread-title.test.ts": {
-      "peakMb": 184,
-      "baselineMb": 184,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-1"
       }
     },
     "src/handlers/chat/threads/list.integration.test.ts": {
@@ -8398,14 +8374,6 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-2"
-      }
-    },
-    "src/handlers/document-reviews/finding-decision-event.test.ts": {
-      "peakMb": 216,
-      "baselineMb": 216,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-3"
       }
     },
     "src/handlers/document-reviews/finding-decisions.postgres.test.ts": {
@@ -12672,6 +12640,14 @@
         "job": "measure-2"
       }
     },
+    "src/lib/ai-generation/thread-title.test.ts": {
+      "peakMb": 184,
+      "baselineMb": 184,
+      "source": {
+        "runId": "42807986206",
+        "job": "measure-1"
+      }
+    },
     "src/lib/ai-provider-probe.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
@@ -16160,14 +16136,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/document-review/run-contract.test.ts": {
-      "peakMb": 184,
-      "baselineMb": 184,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-1"
-      }
-    },
     "src/lib/document-review/run-inputs.test.ts": {
       "peakMb": 784,
       "baselineMb": 179,
@@ -18800,7 +18768,7 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/corpus-index-projection-margin-stop.db.test.ts": {
+    "src/lib/legal-search/corpus-index-projection-long-commit-window.db.test.ts": {
       "peakMb": 765,
       "baselineMb": 184,
       "source": {
@@ -20088,14 +20056,6 @@
         "job": "measure-2"
       }
     },
-    "src/lib/lists/review-decision-maps.test.ts": {
-      "peakMb": 216,
-      "baselineMb": 216,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-3"
-      }
-    },
     "src/lib/lists/sanctions/classification.test.ts": {
       "peakMb": 184,
       "baselineMb": 184,
@@ -20334,22 +20294,6 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-3"
-      }
-    },
-    "src/lib/lists/verification/run-caps.db.test.ts": {
-      "peakMb": 184,
-      "baselineMb": 184,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-1"
-      }
-    },
-    "src/lib/lists/verification/run-caps.test.ts": {
-      "peakMb": 179,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
       }
     },
     "src/lib/lists/verification/run-persistence.db.test.ts": {
@@ -22766,14 +22710,6 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-1"
-      }
-    },
-    "src/lib/search/index-global-case-law.db.test.ts": {
-      "peakMb": 700,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
       }
     },
     "src/lib/search/index-global-filter-only.test.ts": {
@@ -25360,7 +25296,7 @@
         "job": "measure-1"
       }
     },
-    "src/mcp/provision-text-window.test.ts": {
+    "src/mcp/bound-text-window.test.ts": {
       "peakMb": 179,
       "baselineMb": 179,
       "source": {
@@ -26624,14 +26560,6 @@
         "job": "measure-3"
       }
     },
-    "src/tests/module-mock-factories.test.ts": {
-      "peakMb": 184,
-      "baselineMb": 184,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-1"
-      }
-    },
     "src/tests/pglite-file-snapshot.db.test.ts": {
       "peakMb": 1221,
       "baselineMb": 179,
@@ -26678,14 +26606,6 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-1"
-      }
-    },
-    "src/tests/query-perf/case-law-search-fixture.test.ts": {
-      "peakMb": 179,
-      "baselineMb": 179,
-      "source": {
-        "runId": "42807986206",
-        "job": "measure-2"
       }
     },
     "src/tests/query-perf/coverage.test.ts": {
@@ -27638,6 +27558,22 @@
       "source": {
         "runId": "42807986206",
         "job": "measure-1"
+      }
+    },
+    "src/lib/usage/model-run-caps/caps.db.test.ts": {
+      "peakMb": 184,
+      "baselineMb": 184,
+      "source": {
+        "runId": "42807986206",
+        "job": "measure-1"
+      }
+    },
+    "src/lib/usage/model-run-caps/caps.test.ts": {
+      "peakMb": 179,
+      "baselineMb": 179,
+      "source": {
+        "runId": "42807986206",
+        "job": "measure-2"
       }
     }
   }

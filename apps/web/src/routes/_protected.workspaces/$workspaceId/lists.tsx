@@ -38,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -213,7 +214,7 @@ function LegalListsPage() {
               }
               variant="ghost"
             >
-              <span className="truncate">{list.name}</span>
+              <TruncatedText>{list.name}</TruncatedText>
             </Button>
           ))}
         </div>
@@ -330,10 +331,10 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
             listSectionId: toSafeId<"legalListSection">(selectedSectionId),
           }),
         },
-        send: async (body) =>
+        send: async (body, request) =>
           api
             .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            .put(body),
+            .put(body, request),
       });
       if (response.error) {
         throw toAPIError(response.error);
@@ -448,7 +449,9 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
       {reviewRun && <QueryViewFeedback view={candidatesView} />}
       <header className="flex items-start justify-between gap-4 border-b px-6 py-4">
         <div className="min-w-0">
-          <h2 className="truncate text-lg font-semibold">{listData.name}</h2>
+          <h2 className="min-w-0 text-lg font-semibold">
+            <TruncatedText>{listData.name}</TruncatedText>
+          </h2>
           {listData.description && (
             <p className="text-muted-foreground mt-1 text-sm">
               {listData.description}
@@ -658,7 +661,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                       }
                       variant="link"
                     >
-                      <span className="truncate">{item.name}</span>
+                      <TruncatedText>{item.name}</TruncatedText>
                     </Button>
                   </div>
                 </TableCell>

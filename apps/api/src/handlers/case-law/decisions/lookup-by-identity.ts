@@ -63,6 +63,7 @@ import {
   authenticLanguageTag,
   preferredLanguageVersionsFirst,
 } from "@/api/lib/case-law/decision-language";
+import { derivedAiCaseLawSourceFor } from "@/api/lib/case-law/derived-ai-source";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
@@ -491,9 +492,13 @@ export const lookupDecisionsByIdentity = async ({
         courtId: publishedCaseLawDecisions.courtId,
         decisionDate: publishedCaseLawDecisions.decisionDate,
         decisionType: publishedCaseLawDecisions.decisionType,
+        // The publisher's classification text goes to the model, so a
+        // source that allows showing its text but not AI use returns none.
         subjectSummary: sql<
           string | null
-        >`left(split_part(${publisherSummaryMetadataSql(publishedCaseLawDecisions.metadata)}, E'\\n', 1), ${LIMITS.caseLawLookupSubjectMaxChars})`,
+        >`CASE WHEN ${derivedAiCaseLawSourceFor(
+          caseLawSources.descriptor,
+        )} THEN left(split_part(${publisherSummaryMetadataSql(publishedCaseLawDecisions.metadata)}, E'\\n', 1), ${LIMITS.caseLawLookupSubjectMaxChars}) END`,
         ecli: publishedCaseLawDecisions.ecli,
         id: publishedCaseLawDecisions.id,
         language: publishedCaseLawDecisions.language,

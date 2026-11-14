@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -28,10 +28,11 @@ import { matchesConnectionQuery } from "@/lib/account/connections.logic";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
 import { queryView } from "@/lib/query-view.logic";
-import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 type NativeTool = McpConnectorsResponse["nativeTools"][number];
 
@@ -102,18 +103,18 @@ const NativeToolRow = ({
 }) => {
   const t = useTranslations();
   const { description, displayName } = useNativeToolCopy()(tool);
-  const { activeOrganizationId } = useAuthenticatedUser();
-  const mutation = useSettingsMutation({
-    exceptionScope: {
-      type: "handler",
-      handlerId: "NativeToolRow.update:failure",
-    },
-    mutationFn: async (enabled: boolean) =>
-      unwrapApiResponse(
-        await api.mcp["native-tools"]({ slug: tool.slug }).patch({ enabled }),
-      ),
-    invalidate: mcpConnectorsOptions(activeOrganizationId).queryKey,
-    errorToast: { title: t("errors.actionFailed") },
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: resourceMutation({
+      mutation: "updateNativeTool",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (enabled: boolean) =>
+        unwrapApiResponse(
+          await api.mcp["native-tools"]({ slug: tool.slug }).patch({ enabled }),
+        ),
+    }),
+    onError: (error) => notifyUserError(error, t("errors.actionFailed")),
   });
 
   return (
