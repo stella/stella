@@ -1,6 +1,20 @@
 import { panic } from "better-result";
 
 import {
+  BROWSER_CONTROL_LIMITS,
+  BROWSER_DOWNLOAD_STOP_REASON,
+  type BrowserDownload,
+  browserDownloadStagedPath,
+  type BrowserDownloadStopReason,
+} from "@stll/api-contract/browser-control";
+
+import { CONTROL_TRANSPORT, readControlHolder } from "./control-holder";
+import {
+  DESKTOP_LINK_STATE,
+  desktopChatId,
+  readDesktopLinkState,
+} from "./desktop-link";
+import {
   recordNavigation,
   systemTraceClock,
   type TraceClock,
@@ -14,35 +28,197 @@ import {
   type TabOwners,
 } from "./tab-containment";
 
-type DownloadAction = "allow" | "cancel" | "keep-and-flag";
+type DownloadAction =
+  "allow" | "cancel" | "deliver" | "keep-and-flag" | "refuse";
+
+/** Why a desktop chat does not take a download its tab started. */
+type DesktopStopReason = Exclude<
+  BrowserDownloadStopReason,
+  typeof BROWSER_DOWNLOAD_STOP_REASON.interrupted
+>;
+
+/** Whether a desktop chat takes a download its tab started. */
+export type DesktopDownloadVerdict =
+  { type: "deliver" } | { type: "stop"; reason: DesktopStopReason };
+
+/**
+ * Who takes a download from chat's tabs. Nobody under the web connection, or
+ * while stella desktop is not connected: such a download is stopped, as
+ * always. A desktop chat takes a PDF (`deliver`): Chrome saves it into the
+ * staging folder and stella desktop checks the file and moves it into the
+ * chat's folder. Anything else is stopped and the chat is told why.
+ */
+export type DownloadReceiver =
+  | { type: "none" }
+  | { type: "desktop"; chatId: string; verdict: DesktopDownloadVerdict };
+
+export const NO_DOWNLOAD_RECEIVER: DownloadReceiver = { type: "none" };
+
+const containedAction = (receiver: DownloadReceiver): DownloadAction => {
+  switch (receiver.type) {
+    case "none":
+      return "cancel";
+    case "desktop":
+      return receiver.verdict.type === "deliver" ? "deliver" : "refuse";
+    default:
+      receiver satisfies never;
+      return panic("Unhandled download receiver");
+  }
+};
 
 /**
  * What to do with a download while stella controls a tab. It goes through
  * only when it is traced to the user's tabs, alone or beside confined ones;
- * one traced to confined tabs, or to nobody, is stopped while it runs. A
- * download traced to both sides goes through: the user may have started
- * it, and stopping it would leave them no way to get a file whenever stella
- * works on the same site. A confined page can only use that when the user's
- * own tabs already reach the same address. A file is never deleted: tracing cannot prove who started a
- * download, so a finished one stays on disk and the user is told about it.
- * Chrome holds each download until it is judged, so a finished one means
- * Chrome skipped that step.
+ * one traced to confined tabs, or to nobody, is stopped while it runs,
+ * unless it is traced to chat's tabs and a desktop chat takes it
+ * (`DownloadReceiver`). A download traced to both sides goes through: the
+ * user may have started it, and stopping it would leave them no way to get
+ * a file whenever stella works on the same site. A confined page can only
+ * use that when the user's own tabs already reach the same address. A file
+ * is never deleted here: tracing cannot prove who started a download, so a
+ * finished one stays on disk and the user is told about it. Chrome holds
+ * each download until it is judged, so a finished one means Chrome skipped
+ * that step.
  */
 export const downloadAction = (
   owner: TracedOwner,
   state: chrome.downloads.DownloadItem["state"],
+  receiver: DownloadReceiver,
 ): DownloadAction => {
   switch (owner) {
     case "ambiguous":
     case "user":
       return "allow";
     case "contained":
+      return state === "complete" ? "keep-and-flag" : containedAction(receiver);
     case "unexplained":
     case "untraceable":
       return state === "complete" ? "keep-and-flag" : "cancel";
     default:
       owner satisfies never;
       return panic("Unhandled download owner");
+  }
+};
+
+type DownloadFacts = Pick<
+  chrome.downloads.DownloadItem,
+  "filename" | "finalUrl" | "mime" | "totalBytes" | "url"
+>;
+
+/** A desktop chat's downloads Chrome may run at once; another is stopped. */
+export const MAX_RUNNING_DELIVERIES = 4;
+
+const PDF_TYPES: ReadonlySet<string> = new Set([
+  "application/pdf",
+  "application/x-pdf",
+]);
+
+/** The last segment of a path or URL path, `/` or `\` separated. */
+const lastSegment = (value: string): string =>
+  value.split(/[/\\]/u).at(-1) ?? "";
+
+const urlFileName = (rawUrl: string): string => {
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? decodeURIComponent(lastSegment(url.pathname))
+      : "";
+  } catch {
+    return "";
+  }
+};
+
+/** The file name the page or server suggested; Chrome's, else the URL's. */
+export const suggestedDownloadName = (download: DownloadFacts): string =>
+  (
+    [
+      lastSegment(download.filename),
+      urlFileName(download.finalUrl),
+      urlFileName(download.url),
+    ].find((name) => name !== "") ?? ""
+  ).slice(0, BROWSER_CONTROL_LIMITS.downloadNameChars);
+
+/**
+ * Whether a download says it is a PDF, by its type or its name. It only
+ * decides whether Chrome may save it; stella desktop reads the saved
+ * file's first bytes before it takes it.
+ */
+const saysPdf = (download: DownloadFacts): boolean =>
+  PDF_TYPES.has(download.mime.split(";")[0]?.trim().toLowerCase() ?? "") ||
+  suggestedDownloadName(download).toLowerCase().endsWith(".pdf");
+
+/** Whether a desktop chat takes a download its tab started. */
+export const desktopDownloadVerdict = (
+  download: DownloadFacts,
+  running: number,
+): DesktopDownloadVerdict => {
+  if (!saysPdf(download)) {
+    return { reason: BROWSER_DOWNLOAD_STOP_REASON.notPdf, type: "stop" };
+  }
+  if (download.totalBytes > BROWSER_CONTROL_LIMITS.downloadBytes) {
+    return { reason: BROWSER_DOWNLOAD_STOP_REASON.tooLarge, type: "stop" };
+  }
+  if (running >= MAX_RUNNING_DELIVERIES) {
+    return { reason: BROWSER_DOWNLOAD_STOP_REASON.tooMany, type: "stop" };
+  }
+  return { type: "deliver" };
+};
+
+/** Tells stella desktop about a download of a chat's tab. */
+export type DownloadReporter = (
+  chatId: string,
+  download: BrowserDownload,
+) => void;
+
+let reporter: DownloadReporter = () => undefined;
+
+/** Set once by the worker: the desktop link's report. */
+export const setDownloadReporter = (report: DownloadReporter): void => {
+  reporter = report;
+};
+
+/** A download a desktop chat takes, from its judgement until it settles. */
+type Delivery = {
+  chatId: string;
+  /** Where Chrome is told to save it, relative to its download folder. */
+  stagedPath: string;
+  sourceUrl: string;
+  suggestedName: string;
+};
+
+const deliveries = new Map<number, Delivery>();
+
+const sourceUrlOf = (download: DownloadFacts): string =>
+  (download.finalUrl === "" ? download.url : download.finalUrl).slice(
+    0,
+    BROWSER_CONTROL_LIMITS.urlChars,
+  );
+
+/** Who takes a download traced to chat's tabs, judged now. */
+const readDownloadReceiver = async (
+  download: DownloadFacts,
+): Promise<DownloadReceiver> => {
+  const holder = await readControlHolder();
+  switch (holder.transport) {
+    case CONTROL_TRANSPORT.web:
+      return NO_DOWNLOAD_RECEIVER;
+    case CONTROL_TRANSPORT.desktop: {
+      const chatId = desktopChatId(holder.controllerId);
+      if (
+        chatId === null ||
+        (await readDesktopLinkState()) !== DESKTOP_LINK_STATE.connected
+      ) {
+        return NO_DOWNLOAD_RECEIVER;
+      }
+      return {
+        chatId,
+        type: "desktop",
+        verdict: desktopDownloadVerdict(download, deliveries.size),
+      };
+    }
+    default:
+      holder satisfies never;
+      return panic("Unhandled control transport");
   }
 };
 
@@ -190,6 +366,16 @@ const keepFinishedDownload = async (downloadId: number): Promise<void> => {
   await recordDownloadNotice("kept");
 };
 
+/** Stops a download; one that finished first is kept and noted. */
+const cancelDownload = async (downloadId: number): Promise<void> => {
+  stopped.add(downloadId);
+  await chrome.downloads.cancel(downloadId).catch(() => undefined);
+  const [after] = await chrome.downloads.search({ id: downloadId });
+  await (after?.state === "complete"
+    ? keepFinishedDownload(downloadId)
+    : recordDownloadNotice("stopped"));
+};
+
 const runJudgement = async (
   download: chrome.downloads.DownloadItem,
   clock: TraceClock,
@@ -199,21 +385,50 @@ const runJudgement = async (
     return;
   }
   const owner = await traceDownload(download, scope, clock);
+  const receiver =
+    owner === "contained"
+      ? await readDownloadReceiver(download)
+      : NO_DOWNLOAD_RECEIVER;
   const [current] = await chrome.downloads.search({ id: download.id });
-  const action = downloadAction(owner, current?.state ?? download.state);
-  if (action === "allow") {
-    return;
+  const action = downloadAction(
+    owner,
+    current?.state ?? download.state,
+    receiver,
+  );
+  switch (action) {
+    case "allow":
+      return;
+    case "keep-and-flag":
+      await keepFinishedDownload(download.id);
+      return;
+    case "deliver":
+      if (receiver.type === "desktop") {
+        deliveries.set(download.id, {
+          chatId: receiver.chatId,
+          sourceUrl: sourceUrlOf(download),
+          stagedPath: browserDownloadStagedPath(crypto.randomUUID()),
+          suggestedName: suggestedDownloadName(download),
+        });
+      }
+      return;
+    case "refuse":
+      if (receiver.type === "desktop" && receiver.verdict.type === "stop") {
+        reporter(receiver.chatId, {
+          outcome: "stopped",
+          reason: receiver.verdict.reason,
+          sourceUrl: sourceUrlOf(download),
+          suggestedName: suggestedDownloadName(download),
+        });
+      }
+      await cancelDownload(download.id);
+      return;
+    case "cancel":
+      await cancelDownload(download.id);
+      return;
+    default:
+      action satisfies never;
+      panic("Unhandled download action");
   }
-  if (action === "keep-and-flag") {
-    await keepFinishedDownload(download.id);
-    return;
-  }
-  stopped.add(download.id);
-  await chrome.downloads.cancel(download.id).catch(() => undefined);
-  const [after] = await chrome.downloads.search({ id: download.id });
-  await (after?.state === "complete"
-    ? keepFinishedDownload(download.id)
-    : recordDownloadNotice("stopped"));
 };
 
 /**
@@ -260,24 +475,78 @@ export const enforceStoppedDownload = async (
   await chrome.downloads.cancel(delta.id).catch(() => undefined);
 };
 
+/** `suggest` as `onDeterminingFilename` hands it over. */
+export type SuggestFilename = (
+  suggestion?: chrome.downloads.FilenameSuggestion,
+) => void;
+
 /**
  * Holds a download at its file name until its judgement, started here or
  * by an earlier event, is done. Chrome writes nothing before `suggest` is
- * called; returns true so Chrome waits for it.
+ * called; returns true so Chrome waits for it. A download a desktop chat
+ * takes is saved under a fresh name in the staging folder, whatever name
+ * the page suggested; that name only travels with the report.
  */
 export const holdDownloadForJudgement = (
   download: chrome.downloads.DownloadItem,
-  suggest: () => void,
+  suggest: SuggestFilename,
   clock: TraceClock = systemTraceClock,
 ): boolean => {
   judgeDownload(download, clock)
     .catch(() => undefined)
     .then(() => {
-      suggest();
+      const delivery = deliveries.get(download.id);
+      if (delivery === undefined) {
+        suggest();
+        return undefined;
+      }
+      // Chrome names the file only here; the earlier event may not have.
+      deliveries.set(download.id, {
+        ...delivery,
+        suggestedName: suggestedDownloadName(download),
+      });
+      suggest({ conflictAction: "uniquify", filename: delivery.stagedPath });
       return undefined;
     })
     .catch(() => undefined);
   return true;
+};
+
+/**
+ * Called for every download change: a download a desktop chat takes is
+ * reported once it settles, saved or not. Where Chrome saved it is
+ * reported as Chrome says; stella desktop checks the file itself.
+ */
+export const reportDeliveredDownload = async (
+  delta: chrome.downloads.DownloadDelta,
+): Promise<void> => {
+  const delivery = deliveries.get(delta.id);
+  const settled = delta.state?.current;
+  if (
+    delivery === undefined ||
+    (settled !== "complete" && settled !== "interrupted")
+  ) {
+    return;
+  }
+  deliveries.delete(delta.id);
+  const [item] = await chrome.downloads.search({ id: delta.id });
+  if (item?.state !== "complete" || item.filename === "") {
+    reporter(delivery.chatId, {
+      outcome: "stopped",
+      reason: BROWSER_DOWNLOAD_STOP_REASON.interrupted,
+      sourceUrl: delivery.sourceUrl,
+      suggestedName: delivery.suggestedName,
+    });
+    return;
+  }
+  reporter(delivery.chatId, {
+    bytes: Math.max(0, item.fileSize > 0 ? item.fileSize : item.bytesReceived),
+    mime: item.mime.slice(0, 255),
+    outcome: "saved",
+    path: item.filename.slice(0, BROWSER_CONTROL_LIMITS.downloadPathChars),
+    sourceUrl: sourceUrlOf(item),
+    suggestedName: delivery.suggestedName,
+  });
 };
 
 /**
