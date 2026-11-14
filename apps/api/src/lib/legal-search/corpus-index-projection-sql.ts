@@ -68,6 +68,78 @@ export const corpusIndexProjectionAppendIsUnblocked = ({
 export const corpusIndexProjectionIsBlocked = (workStatus: SQLWrapper) =>
   sql`${workStatus} = 'blocked'`;
 
+type CorpusProjectionServedColumns = {
+  revisionId: SQLWrapper;
+  appliedRevision: SQLWrapper;
+  desiredAction: SQLWrapper;
+  appliedAction: SQLWrapper;
+};
+
+/** Readers are served this revision: an upsert state names it as applied. */
+export const corpusIndexProjectionStateServesRevision = ({
+  revisionId,
+  appliedRevision,
+  desiredAction,
+  appliedAction,
+}: CorpusProjectionServedColumns) => sql`(
+  ${appliedRevision} = ${revisionId}
+  AND ${desiredAction} = 'upsert'
+  AND ${appliedAction} = 'upsert'
+)`;
+
+type CorpusProjectionRestoreColumns = CorpusProjectionServedColumns & {
+  revisionEpoch: SQLWrapper;
+  cleanupAttempts: SQLWrapper;
+  revisionAppliedAt: SQLWrapper;
+  lastError: SQLWrapper;
+  revisionUpdatedAt: SQLWrapper;
+  appliedEpoch: SQLWrapper;
+  desiredAt: SQLWrapper;
+};
+
+/**
+ * A `cleanup_pending` revision that may return to `applied`: its state still
+ * serves it, and the copy readers are served is provably the one it held.
+ *
+ * - `cleanup_attempts = 0`: no claim ever took it, and only a claim leads to
+ *   an engine delete (the claim counts the attempt before the delete is sent,
+ *   and the count never decreases).
+ * - `last_error IS NULL` and `applied_at IS NOT NULL`: replacement
+ *   preparation queued it from `applied`; erasure, drift repair and every
+ *   other cleanup writer record why.
+ * - `desired_at < updated_at`: the desired value is the one it was queued
+ *   under, so no erasure came in between. Strict, so two writes the clock
+ *   cannot tell apart count as a change. `desired_at` is the desired write's
+ *   statement start, and a write that started before the queueing and
+ *   committed after it waited on the state row lock the preparation held. If
+ *   it wrote an erasure, the state is not an upsert and nothing is restored.
+ *   If it wrote an upsert, restoring is harmless, unless an erasure came
+ *   before it, and that cannot carry an early stamp too: every desired writer
+ *   locks the canonical row before its state statement, so a second write
+ *   only starts that statement once the first has committed, which is after
+ *   the preparation committed.
+ *
+ * The database guard on `cleanup_pending -> applied` repeats this predicate.
+ */
+export const corpusIndexProjectionRevisionIsRestorable = ({
+  revisionEpoch,
+  cleanupAttempts,
+  revisionAppliedAt,
+  lastError,
+  revisionUpdatedAt,
+  appliedEpoch,
+  desiredAt,
+  ...served
+}: CorpusProjectionRestoreColumns) => sql`(
+  ${corpusIndexProjectionStateServesRevision(served)}
+  AND ${cleanupAttempts} = 0
+  AND ${revisionAppliedAt} IS NOT NULL
+  AND ${lastError} IS NULL
+  AND ${appliedEpoch} = ${revisionEpoch}
+  AND ${desiredAt} IS NOT NULL
+  AND ${desiredAt} < ${revisionUpdatedAt}
+)`;
+
 /** One source of truth for the partial append-epoch uniqueness boundary. */
 export const corpusIndexProjectionProducesAppend = (status: SQLWrapper) =>
   sql`${status} IN (${sqlLiteralValues(CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES)})`;

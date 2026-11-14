@@ -19,6 +19,7 @@ const report = {
   sourceAges: [{ source: "cz-ns", ageSeconds: 19 }],
   convergence: "pending",
   lastCompletedIdentifierPass: { repairs: 2, ageSeconds: 120 },
+  waitingReplacements: [],
 } as const;
 
 test("an incomplete oldest age emits no age record", () => {
@@ -53,6 +54,37 @@ test("emits one record per metric with bounded top-level fields", () => {
     { CaseLawDecisionIdentifierRepairs: 2 },
     { CaseLawDecisionIdentifierPassAgeSeconds: 120 },
     { CaseLawProjectionConvergence: 1, status: "pending" },
+  ]);
+});
+
+test("waiting replacements emit a count and an oldest age per index", () => {
+  const records: Record<string, unknown>[] = [];
+  setMetricLineSinkForTesting((line) => {
+    records.push(JSON.parse(line));
+  });
+  emitCaseLawFreshnessReport({
+    ...report,
+    waitingReplacements: [
+      {
+        generation: "case_law_v7",
+        indexId: "case_law_v7_cs_sk",
+        count: 12,
+        oldestSeconds: 3600,
+      },
+    ],
+  });
+
+  expect(records.slice(-2)).toEqual([
+    {
+      CaseLawProjectionWaitingReplacements: 12,
+      generation: "case_law_v7",
+      index: "case_law_v7_cs_sk",
+    },
+    {
+      CaseLawProjectionWaitingReplacementOldestSeconds: 3600,
+      generation: "case_law_v7",
+      index: "case_law_v7_cs_sk",
+    },
   ]);
 });
 

@@ -19,6 +19,8 @@ import {
   buildCaseLawProjectionBacklogMetric,
   buildCaseLawProjectionConvergenceMetric,
   buildCaseLawSourceSyncAgeMetric,
+  buildCaseLawWaitingReplacementOldestMetric,
+  buildCaseLawWaitingReplacementsMetric,
   writeMetricLine,
 } from "@/api/lib/observability/request-metrics";
 import { isRecord } from "@/api/lib/type-guards";
@@ -59,6 +61,7 @@ type CaseLawFreshnessReport = {
     repairs: number;
     ageSeconds: number;
   } | null;
+  waitingReplacements: readonly CaseLawWaitingReplacements[];
 };
 const requiredNumber = (row: unknown, key: string): number => {
   if (!isRecord(row) || typeof row[key] !== "number") {
@@ -211,6 +214,116 @@ export const readServedCaseLawBacklogTx = async (
   };
 };
 
+/** Rows one index's waiting-replacement count reads, at most. */
+const CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP = 10_000;
+
+/**
+ * Replacements of one served index that are still served at their previous
+ * revision: the desired epoch moved past the applied one. Nothing appends a
+ * replacement before its applied revision settles, and nothing queues a
+ * served revision for cleanup, so these wait, visible but stale. `count`
+ * stops at the cap; the oldest is exact however long the queue, since the
+ * walk reads it first.
+ */
+type CaseLawWaitingReplacements = {
+  generation: string;
+  indexId: string;
+  count: number;
+  /** Since the longest-untouched waiting state was last written. */
+  oldestSeconds: number;
+};
+
+/**
+ * One generation's waiting replacements per desired index. The distinct
+ * indexes come from a loose scan and each index's window from a bounded walk,
+ * both on `corpus_index_projection_states_replacement_route_idx`, whose
+ * predicate this one spells out literally so the planner can match it.
+ */
+export const caseLawWaitingReplacementsQuery = (generation: string) => {
+  const waiting = (alias: string) =>
+    sql.raw(`${alias}.desired_action = 'upsert'
+        AND ${alias}.applied_action = 'upsert'
+        AND ${alias}.applied_revision IS NOT NULL
+        AND ${alias}.applied_index_id IS NOT NULL
+        AND ${alias}.desired_epoch > ${alias}.applied_epoch`);
+  return sql`
+    WITH RECURSIVE indexes(index_id) AS (
+      (
+        SELECT first.desired_index_id
+        FROM ${corpusIndexProjectionStates} first
+        WHERE first.family = 'case_law'
+          AND first.generation = ${generation}
+          AND ${waiting("first")}
+        ORDER BY first.desired_index_id
+        LIMIT 1
+      )
+      UNION ALL
+      SELECT (
+        SELECT following.desired_index_id
+        FROM ${corpusIndexProjectionStates} following
+        WHERE following.family = 'case_law'
+          AND following.generation = ${generation}
+          AND ${waiting("following")}
+          AND following.desired_index_id > indexes.index_id
+        ORDER BY following.desired_index_id
+        LIMIT 1
+      )
+      FROM indexes
+      WHERE indexes.index_id IS NOT NULL
+    )
+    SELECT indexes.index_id AS index_id,
+      window_rows.count AS count,
+      window_rows.age AS age
+    FROM indexes
+    CROSS JOIN LATERAL (
+      SELECT count(*)::int AS count,
+        coalesce(extract(epoch FROM clock_timestamp() - min(walked.updated_at)), 0)::float8 AS age
+      FROM (
+        SELECT state.updated_at
+        FROM ${corpusIndexProjectionStates} state
+        WHERE state.family = 'case_law'
+          AND state.generation = ${generation}
+          AND state.desired_index_id = indexes.index_id
+          AND ${waiting("state")}
+        ORDER BY state.updated_at, state.entity_id
+        LIMIT ${CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP + 1}
+      ) AS walked
+    ) AS window_rows
+    WHERE indexes.index_id IS NOT NULL
+    ORDER BY indexes.index_id
+  `;
+};
+
+const requiredText = (row: unknown, key: string): string => {
+  if (!isRecord(row) || typeof row[key] !== "string") {
+    return panic(`Malformed case-law freshness query result: ${key}`);
+  }
+  return row[key];
+};
+
+const readCaseLawWaitingReplacementsTx = async (
+  tx: Transaction,
+  generations: readonly string[],
+): Promise<CaseLawWaitingReplacements[]> => {
+  const reports: CaseLawWaitingReplacements[] = [];
+  for (const generation of generations) {
+    const rows = executedRows(
+      // db-await-in-loop: one bounded read per served generation, a handful at most
+      await tx.execute(caseLawWaitingReplacementsQuery(generation)),
+    );
+    for (const row of rows) {
+      const count = requiredNumber(row, "count");
+      reports.push({
+        generation,
+        indexId: requiredText(row, "index_id"),
+        count: Math.min(count, CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP),
+        oldestSeconds: requiredNumber(row, "age"),
+      });
+    }
+  }
+  return reports;
+};
+
 const oldestUnpublishedAgeOf = (
   backlog: { age: number; ageSource: PendingSinceSource | "none" },
   capped: boolean,
@@ -248,15 +361,19 @@ export const readCaseLawFreshnessReportTx = async (
     `),
   ]);
   const served = Result.isOk(serving) ? serving.value : null;
-  const backlog =
+  const servedGenerations =
     served === null
-      ? { ...NO_BACKLOG, capped: false }
-      : await readServedCaseLawBacklogTx(tx, [
+      ? []
+      : [
           ...new Set([
             served.serving.generation,
             ...served.flipped.map(([, generation]) => generation),
           ]),
-        ]);
+        ];
+  const backlog =
+    served === null
+      ? { ...NO_BACKLOG, capped: false }
+      : await readServedCaseLawBacklogTx(tx, servedGenerations);
   const convergence =
     served === null
       ? null
@@ -271,6 +388,10 @@ export const readCaseLawFreshnessReportTx = async (
     sourceAges: sourceRows,
     convergence,
     lastCompletedIdentifierPass,
+    waitingReplacements: await readCaseLawWaitingReplacementsTx(
+      tx,
+      servedGenerations,
+    ),
   };
 };
 
@@ -318,6 +439,21 @@ export const emitCaseLawFreshnessReport = (
   if (report.convergence !== null) {
     writeMetricLine(
       buildCaseLawProjectionConvergenceMetric(report.convergence),
+    );
+  }
+  for (const waiting of report.waitingReplacements) {
+    const dimensions = {
+      generation: waiting.generation,
+      index: waiting.indexId,
+    };
+    writeMetricLine(
+      buildCaseLawWaitingReplacementsMetric(dimensions, waiting.count),
+    );
+    writeMetricLine(
+      buildCaseLawWaitingReplacementOldestMetric(
+        dimensions,
+        waiting.oldestSeconds,
+      ),
     );
   }
 };

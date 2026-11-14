@@ -20,6 +20,7 @@ import {
   corpusProjectionAcceptedAppendCleanupFence,
   corpusProjectionAppendIsPublished,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import { logger } from "@/api/lib/observability/logger";
 import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -209,9 +210,11 @@ type RepairAppliedCorpusProjectionDriftOptions = {
 };
 
 /**
- * Fence still-authoritative broken revisions into exact cleanup. The explicit
- * repair state makes the unchanged desired epoch runnable again only after
- * that cleanup settles, without moving applied history backward.
+ * Fence still-authoritative broken revisions into exact cleanup and stop
+ * serving them. The state is marked `repair_scheduled` first because the
+ * intent guard admits retiring a revision at its own desired epoch only for
+ * that state; it is un-named last because the state guard admits that only
+ * once the revision has left `applied`.
  */
 export const repairAppliedCorpusProjectionDriftTx = async (
   tx: Transaction,
@@ -299,12 +302,46 @@ export const repairAppliedCorpusProjectionDriftTx = async (
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
+  // The one writer that stops naming an upsert's copy without a successor:
+  // the copy is drift, so the state becomes a first append, which keeps it in
+  // the work queue whatever a failed re-append charges. A state left naming
+  // the retired revision would leave no queue holding it once a failure
+  // overwrote `repair_scheduled`, and no census reading it again. The entity
+  // stays hidden until the re-append lands; that waits for the retired
+  // revision to settle.
+  // audit: skip - applied-state bookkeeping on the derived public corpus projection
+  const unnamed = await tx
+    .update(corpusIndexProjectionStates)
+    .set({
+      appliedAction: null,
+      appliedEpoch: null,
+      appliedRevision: null,
+      appliedFingerprint: null,
+      appliedIndexId: null,
+      appliedAt: null,
+      updatedAt: repairAt,
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, options.family),
+        eq(corpusIndexProjectionStates.generation, options.generation),
+        inArray(corpusIndexProjectionStates.appliedRevision, revisions),
+      ),
+    )
+    .returning({ entityId: corpusIndexProjectionStates.entityId });
   if (
     scheduled.length !== candidates.length ||
-    retired.length !== candidates.length
+    retired.length !== candidates.length ||
+    unnamed.length !== candidates.length
   ) {
     return panic("Corpus projection census repair lost its state fence");
   }
+  logger.info("corpus_projection.repair_pending_reappend", {
+    family: options.family,
+    generation: options.generation,
+    index: options.indexId,
+    revisions: unnamed.length,
+  });
   return retired.length;
 };
 

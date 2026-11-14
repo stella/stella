@@ -19,7 +19,9 @@ import {
   lockCaseLawProjectionRepairIdentifiers,
   lockCaseLawProjectionRepairRows,
   lockCaseLawProjectionRepairStates,
+  lockCorpusProjectionRevisionsAfterStates,
 } from "@/api/lib/db/aggregate-lock";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
@@ -27,6 +29,7 @@ import {
   CORPUS_INDEX_MANIFESTS,
   type CorpusIndexManifest,
   corpusIndexManifestCoversJurisdiction,
+  requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   type CaseLawProjectionInput,
@@ -35,7 +38,9 @@ import {
   deriveCorpusIndexProjectionDescriptor,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE } from "@/api/lib/legal-search/corpus-index-projection-intent-transition-spec";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
+import { corpusProjectionAcceptedAppendCleanupFence } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
@@ -862,6 +867,149 @@ export const buildCorpusIndexProjectionDesiredStateValues = ({
   desiredIndexId: descriptor.action === "upsert" ? descriptor.indexId : null,
 });
 
+type DesiredStateKey = Pick<
+  typeof corpusIndexProjectionStates.$inferSelect,
+  "family" | "generation" | "entityId"
+>;
+
+const desiredStateKeys = (keys: readonly DesiredStateKey[]) =>
+  or(
+    ...keys.map(({ family, generation, entityId }) =>
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.entityId, entityId),
+      ),
+    ),
+  );
+
+/**
+ * States this write takes from a desired erasure back to an upsert while they
+ * still name a copy. Read before the write, since the write replaces the
+ * erasure it is undoing; every desired writer holds the canonical row first,
+ * so no other desired write can move these states in between.
+ */
+const readUndoneErasuresTx = async (
+  tx: Transaction,
+  values: readonly (typeof corpusIndexProjectionStates.$inferInsert)[],
+): Promise<DesiredStateKey[]> => {
+  const keys = desiredStateKeys(
+    values.filter(({ desiredAction }) => desiredAction === "upsert"),
+  );
+  if (keys === undefined) {
+    return [];
+  }
+  return await tx
+    .select({
+      family: corpusIndexProjectionStates.family,
+      generation: corpusIndexProjectionStates.generation,
+      entityId: corpusIndexProjectionStates.entityId,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        keys,
+        eq(corpusIndexProjectionStates.desiredAction, "erase"),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+      ),
+    );
+};
+
+const UNDONE_ERASURE_CLEANUP_REASON =
+  "projection revision retired by an undone erasure";
+
+/**
+ * An undone erasure never brings the pre-erasure copy back: the copy still
+ * named is queued for cleanup if it is still `applied`, then the state stops
+ * naming it, so the entity is appended anew. Runs after the desired write,
+ * which holds these state rows; the revisions are locked after them, in the
+ * projection lock order.
+ */
+const retireUndoneErasureCopiesTx = async (
+  tx: Transaction,
+  undone: readonly DesiredStateKey[],
+): Promise<void> => {
+  const keys = desiredStateKeys(undone);
+  if (keys === undefined) {
+    return;
+  }
+  const named = await tx
+    .select({
+      family: corpusIndexProjectionStates.family,
+      generation: corpusIndexProjectionStates.generation,
+      revision: corpusIndexProjectionStates.appliedRevision,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        keys,
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+      ),
+    );
+  const revisions = named.flatMap(({ family, generation, revision }) =>
+    revision === null ? [] : [{ family, generation, revision }],
+  );
+  if (revisions.length === 0) {
+    return;
+  }
+  await lockCorpusProjectionRevisionsAfterStates(
+    tx,
+    revisions.map(({ revision }) => revision),
+  );
+  const transitionAt = sql<Date>`clock_timestamp()`;
+  const generations = Map.groupBy(
+    revisions,
+    ({ family, generation }) => `${family}/${generation}`,
+  );
+  for (const group of generations.values()) {
+    const first = group.at(0) ?? panic("Empty undone erasure group");
+    // db-await-in-loop: one statement per generation, each with that generation's publish fence
+    await transitionBatch({
+      tx,
+      spec: CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE,
+      ids: group.map(({ revision }) => revision),
+      options: {
+        to: "cleanup_pending",
+        from: ["applied"],
+        set: {
+          leaseToken: null,
+          leaseExpiresAt: null,
+          ...corpusProjectionAcceptedAppendCleanupFence(
+            requireCorpusIndexManifest(first.family, first.generation),
+            transitionAt,
+          ),
+          lastError: UNDONE_ERASURE_CLEANUP_REASON,
+          updatedAt: transitionAt,
+        },
+      },
+      // Bookkeeping on the derived public corpus projection: no tenant data
+      // and no actor; the canonical write that undid the erasure is audited.
+      recordTransitionAuditEvent: () => undefined,
+    });
+  }
+  const unname = replayWrite(corpusIndexProjectionStates, {
+    appliedAction: null,
+    appliedEpoch: null,
+    appliedRevision: null,
+    appliedFingerprint: null,
+    appliedIndexId: null,
+    appliedAt: null,
+  });
+  // audit: skip - applied-state bookkeeping on the derived public corpus projection
+  await tx
+    .update(corpusIndexProjectionStates)
+    .set(unname.set)
+    .where(
+      and(
+        keys,
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+        unname.setWhere,
+      ),
+    );
+};
+
 export const writeDesiredStates = async (
   tx: Transaction,
   values: (typeof corpusIndexProjectionStates.$inferInsert)[],
@@ -869,6 +1017,7 @@ export const writeDesiredStates = async (
   if (values.length === 0) {
     return;
   }
+  const undone = await readUndoneErasuresTx(tx, values);
   const desiredStateUnchanged = sql`(
     ${corpusIndexProjectionStates.desiredAction},
     ${corpusIndexProjectionStates.desiredEpoch},
@@ -914,6 +1063,7 @@ export const writeDesiredStates = async (
         },
       ),
     });
+  await retireUndoneErasureCopiesTx(tx, undone);
 };
 
 type DesiredStateSnapshot = {
