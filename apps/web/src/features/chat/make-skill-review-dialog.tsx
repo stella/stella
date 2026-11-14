@@ -23,7 +23,11 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { resourceMutation } from "@/lib/workspace-realtime";
 
-import { saveSkillDraft, useMakeSkillReviewStore } from "./make-skill-review";
+import {
+  saveSkillDraft,
+  type SkillDraftSaveOutcome,
+  useMakeSkillReviewStore,
+} from "./make-skill-review";
 import {
   mergeApprovedNames,
   replaceDraftNames,
@@ -69,6 +73,13 @@ export const MakeSkillReviewDialog = () => {
   );
 };
 
+/** A reviewed draft as it was saved, with the names approved so far. */
+type ReviewedSave = {
+  approvedNow: string[];
+  reviewed: SkillDraft;
+  outcome: SkillDraftSaveOutcome;
+};
+
 const MakeSkillReviewBody = ({
   approved,
   draft,
@@ -112,7 +123,7 @@ const MakeSkillReviewBody = ({
         };
       },
     }),
-    onSuccess: ({ approvedNow, reviewed, outcome }) => {
+    onSuccess: ({ approvedNow, reviewed, outcome }: ReviewedSave) => {
       if (outcome.type === "saved") {
         onDone();
         openSaved(outcome.skill.id);

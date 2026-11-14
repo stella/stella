@@ -15,7 +15,11 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { resourceMutation } from "@/lib/workspace-realtime";
 
-import { saveSkillDraft, useMakeSkillReviewStore } from "./make-skill-review";
+import {
+  saveSkillDraft,
+  type SkillDraftSaveOutcome,
+  useMakeSkillReviewStore,
+} from "./make-skill-review";
 import type { SkillDraft } from "./make-skill-review.logic";
 
 type MakeSkillTarget = {
@@ -72,7 +76,7 @@ export const useSaveDraftedSkill = () => {
       scope: { type: "organization" },
       mutationFn: async (draft: SkillDraft) => await saveSkillDraft(draft, []),
     }),
-    onSuccess: (outcome, draft) => {
+    onSuccess: (outcome: SkillDraftSaveOutcome, draft: SkillDraft) => {
       if (outcome.type === "saved") {
         openSaved(outcome.skill.id);
         return;

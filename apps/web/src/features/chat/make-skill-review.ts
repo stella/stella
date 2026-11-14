@@ -51,3 +51,6 @@ export const saveSkillDraft = async (
       }),
     ),
   );
+
+/** What storing a draft answers: the saved skill, or names still to review. */
+export type SkillDraftSaveOutcome = Awaited<ReturnType<typeof saveSkillDraft>>;
