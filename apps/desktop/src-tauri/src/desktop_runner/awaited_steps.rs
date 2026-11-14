@@ -123,6 +123,47 @@ pub(super) enum Pass {
   Later,
 }
 
+/// What the sending task does next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Next {
+  /// Not connected: wait for the runner's connection. It may be another
+  /// account's, so every run is asked about again after it.
+  AwaitConnection,
+  /// Look at the stores now.
+  Pass,
+}
+
+/// When the stores are looked at: only while the runner is connected.
+pub(super) fn next_step(connected: bool) -> Next {
+  if connected {
+    Next::Pass
+  } else {
+    Next::AwaitConnection
+  }
+}
+
+/// How long the sending task rests after a pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Rest {
+  /// Nothing is left: until the connection ends, or this long at most.
+  UntilDisconnected(Duration),
+  /// Something is left for later: this long, whatever the connection does.
+  Pause(Duration),
+}
+
+/// The rest a pass earns. A pass that left nothing ends the growing pauses;
+/// one that left something lengthens the next. `unit` is uniform in
+/// `[0, 1)`.
+pub(super) fn rest_after(pass: Pass, backoff: &mut Backoff, unit: f64) -> Rest {
+  match pass {
+    Pass::Idle => {
+      backoff.reset();
+      Rest::UntilDisconnected(LOOK_AGAIN_AFTER)
+    }
+    Pass::Later => Rest::Pause(backoff.next_delay(unit)),
+  }
+}
+
 /// Sends one step to the API.
 pub(super) trait StepSender: Send + Sync + 'static {
   fn send<'a>(
@@ -474,24 +515,19 @@ impl AwaitedSteps {
     let mut backoff = Backoff::new(RETRY_BASE, RETRY_CAP);
     loop {
       let connected = *states.borrow() == RunnerState::Connected;
-      if !connected {
+      if next_step(connected) == Next::AwaitConnection {
         self.ask_about_every_run_again();
         until_connected(&mut states, true).await;
       }
-      match self.pass().await {
-        Pass::Idle => {
-          backoff.reset();
+      let pass = self.pass().await;
+      match rest_after(pass, &mut backoff, (self.random)()) {
+        Rest::UntilDisconnected(at_most) => {
           let disconnected = until_connected(&mut states, false);
-          if tokio::time::timeout(LOOK_AGAIN_AFTER, disconnected)
-            .await
-            .is_ok()
-          {
+          if tokio::time::timeout(at_most, disconnected).await.is_ok() {
             self.ask_about_every_run_again();
           }
         }
-        Pass::Later => {
-          tokio::time::sleep(backoff.next_delay((self.random)())).await;
-        }
+        Rest::Pause(pause) => tokio::time::sleep(pause).await,
       }
     }
   }
@@ -861,6 +897,33 @@ mod tests {
     assert!(!left_too_long(now - DAY, now));
     assert!(left_too_long(now - LEFT_FOR - Duration::from_secs(1), now));
     assert!(!left_too_long(now + DAY, now));
+  }
+
+  #[test]
+  fn the_stores_are_looked_at_only_while_connected_and_trouble_spaces_the_looks() {
+    assert_eq!(next_step(false), Next::AwaitConnection);
+    assert_eq!(next_step(true), Next::Pass);
+    let mut backoff = Backoff::new(RETRY_BASE, RETRY_CAP);
+    // Something left for later: each pause is longer, up to the cap.
+    let mut pauses = Vec::new();
+    for _ in 0..8 {
+      match rest_after(Pass::Later, &mut backoff, 1.0) {
+        Rest::Pause(pause) => pauses.push(pause),
+        Rest::UntilDisconnected(_) => panic!("a pass that left steps pauses"),
+      }
+    }
+    assert_eq!(pauses.first(), Some(&RETRY_BASE));
+    assert!(pauses.windows(2).all(|pair| pair[0] <= pair[1]));
+    assert_eq!(pauses.last(), Some(&RETRY_CAP));
+    // Nothing left: look again after a while, and trouble starts over.
+    assert_eq!(
+      rest_after(Pass::Idle, &mut backoff, 1.0),
+      Rest::UntilDisconnected(LOOK_AGAIN_AFTER)
+    );
+    assert_eq!(
+      rest_after(Pass::Later, &mut backoff, 1.0),
+      Rest::Pause(RETRY_BASE)
+    );
   }
 
   #[test]
