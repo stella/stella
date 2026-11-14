@@ -1,6 +1,5 @@
 import { useHeaderHeight } from "expo-router/react-navigation";
 import { KeyboardAvoidingView, Platform } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
 import { ChatThreadView } from "@/components/chat-thread-view";
@@ -14,6 +13,7 @@ import type {
   TaskSelection,
   ThreadSelection,
 } from "@/components/selection";
+import { SafeAreaView } from "@/components/ui/safe-area-view";
 import { useSession } from "@/connection/session-provider";
 
 /**
@@ -75,7 +75,7 @@ export const TaskPane = ({ task }: { task: TaskSelection }) => {
   const { state } = useSession();
 
   return state.status === "signed-in" ? (
-    <SafeAreaView className="flex-1" edges={["top"]}>
+    <SafeAreaView edges={["top"]}>
       <EntityDetailSheet
         entityId={task.entityId}
         source={state.source}

@@ -1,6 +1,6 @@
 {
   "grantSeconds": 300,
-  "maxBytes": 1048576,
+  "maxBytes": { "text": 1048576, "image": 10485760 },
   "headers": {
     "grantExpiresAt": "x-stella-bridge-grant",
     "totalBytes": "x-stella-output-bytes"

@@ -5065,6 +5065,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "stella-desktop-signing-core",
+ "tracing",
 ]
 
 [[package]]

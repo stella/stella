@@ -5,7 +5,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
-  CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
+  CHAT_LOCAL_RUN_STEP_MAX_BYTES,
   type ChatLocalRunConversationEntry,
 } from "@stll/api-contract/chat-local-run-step-output";
 import {
@@ -20,6 +20,7 @@ import { cn } from "@stll/ui/utils";
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import { isRunningToolPart } from "@/components/chat/chat-ui-tools";
 import { CopyControl } from "@/components/copy-control";
+import { MarkdownPreview } from "@/components/markdown-preview";
 import {
   localRunStepImageOptions,
   localRunStepOutputOptions,
@@ -99,8 +100,9 @@ const CONVERSATION_ROLE_LABEL_KEYS = {
 
 /**
  * A subagent's kept conversation: what it was told, what it wrote, what it
- * reported. Plain text throughout: it came from a model, so none of it is
- * rendered as markup.
+ * reported, formatted as the answer it belongs to is. It came from a model,
+ * so opening it must not make a request it names: `MarkdownPreview` draws no
+ * image from an address, only its alternative text.
  */
 const ConversationText = ({ text }: { text: string }) => {
   const t = useTranslations();
@@ -115,12 +117,11 @@ const ConversationText = ({ text }: { text: string }) => {
                 {t(labelKey)}
               </span>
             )}
-            <p
-              className="text-foreground-muted text-xs leading-5 wrap-break-word whitespace-pre-wrap"
-              dir="auto"
-            >
-              {said}
-            </p>
+            <div className="text-foreground-muted wrap-break-word" dir="auto">
+              <MarkdownPreview className="text-xs leading-5" mode="static">
+                {said}
+              </MarkdownPreview>
+            </div>
           </li>
         );
       })}
@@ -217,7 +218,7 @@ const LocalRunStepOutput = ({
   const cut = isLocalRunStepOutputCut(output.totalBytes) && (
     <Note>
       {t("chat.toolCall.localOutput.cut", {
-        kept: formatFileSize(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES, format),
+        kept: formatFileSize(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text, format),
         total: formatFileSize(output.totalBytes, format),
       })}
     </Note>
@@ -336,7 +337,7 @@ const LocalRunStepImage = ({
       return (
         <Note>
           {t("chat.toolCall.localOutput.imageTooLarge", {
-            kept: formatFileSize(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES, format),
+            kept: formatFileSize(CHAT_LOCAL_RUN_STEP_MAX_BYTES.image, format),
             total: formatFileSize(image.totalBytes, format),
           })}
         </Note>

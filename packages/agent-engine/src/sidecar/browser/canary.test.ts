@@ -284,6 +284,7 @@ const browse = async (
     launch: PLAIN_LAUNCH,
     workspaceDir,
     cacheDir: path.join(root, "agent-package-cache"),
+    unreadablePaths: [],
     stepOutputDir: path.join(root, "runs", "chat.step-outputs"),
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the notice period decision." }],

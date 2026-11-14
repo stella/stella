@@ -6,6 +6,12 @@ import {
 } from "@stll/api-contract/browser-control";
 
 import {
+  CONTROL_TRANSPORT,
+  type ControlHolder,
+  type ControlTransport,
+  readControlOwner,
+} from "./control-holder";
+import {
   BROWSER_CONTROL_OWNER_STORAGE_KEY,
   BROWSER_CONTROLLED_TAB_STORAGE_KEY,
 } from "./storage-keys";
@@ -23,23 +29,6 @@ import { releaseContainedTabs } from "./tab-containment";
  * to open, and the member takes it back for the web connection by pairing
  * or handing a tab over from the popup.
  */
-
-export const CONTROL_TRANSPORT = {
-  desktop: "desktop",
-  web: "web",
-} as const;
-
-type ControlTransport =
-  (typeof CONTROL_TRANSPORT)[keyof typeof CONTROL_TRANSPORT];
-
-/** The desktop chat holding the browser; `null` while the web connection does. */
-export const readControlOwner = async (): Promise<string | null> => {
-  const stored = await chrome.storage.session.get(
-    BROWSER_CONTROL_OWNER_STORAGE_KEY,
-  );
-  const owner: unknown = stored[BROWSER_CONTROL_OWNER_STORAGE_KEY];
-  return typeof owner === "string" ? owner : null;
-};
 
 /** Whether `controllerId` holds the browser now. */
 const holdsControl = async (
@@ -87,11 +76,6 @@ export const admitControl = async ({
     ? CONTROL_ADMISSION.takesOver
     : CONTROL_ADMISSION.refused;
 };
-
-/** Who takes the browser: a desktop chat by its id, or the web connection. */
-export type ControlHolder =
-  | { transport: typeof CONTROL_TRANSPORT.desktop; controllerId: string }
-  | { transport: typeof CONTROL_TRANSPORT.web };
 
 /**
  * Hands the browser to `holder`: the previous holder's controlled tab stops

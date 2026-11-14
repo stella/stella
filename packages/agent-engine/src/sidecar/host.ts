@@ -1172,6 +1172,7 @@ export class SidecarHost {
       threadId: message.threadId,
       workspaceDir: message.workspaceDir,
       cacheDir: message.cacheDir,
+      unreadablePaths: message.unreadablePaths,
       skillFolders: message.skillFolders,
       networkHosts: declared.hosts,
       toolPath: message.toolPath,
@@ -1209,6 +1210,7 @@ export class SidecarHost {
       approvals: message.policy.approvals,
       approve: run.approvals.request,
       stopped: run.browserStop.signal,
+      workspaceDir: message.workspaceDir,
     };
     if (taken === null) {
       return browser.register(browserRun);
