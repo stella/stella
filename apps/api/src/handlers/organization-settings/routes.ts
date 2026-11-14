@@ -69,6 +69,13 @@ export const organizationSettingsRoute = mount(
         ],
       },
     ),
+    routes(
+      { "/": { POST: updateVerificationDecisionModel } },
+      {
+        prefix: "/verification-decision-model",
+        middleware: [deploymentFeatureGate("FEATURE_LEGAL_LISTS")],
+      },
+    ),
     routes({
       "/correspondence/data-boxes": {
         GET: getOrganizationDataBoxes,
@@ -96,9 +103,6 @@ export const organizationSettingsRoute = mount(
       },
       "/sanctions-monitoring": { POST: updateSanctionsMonitoring },
       "/local-runs": { POST: updateLocalRunApprovalCeiling },
-      "/verification-decision-model": {
-        POST: updateVerificationDecisionModel,
-      },
       "/practice-jurisdictions": { POST: updatePracticeJurisdictions },
       "/preview": { POST: previewOrganizationSettings },
       "/ai-availability": { GET: readAIAvailability },

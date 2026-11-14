@@ -5,7 +5,7 @@ import type { VerificationClaim } from "@/features/avt/types";
 type VerdictDecider = VerificationClaim["decider"];
 
 /** A decision model id as a person reads it: `jev-1.14` is "Jev 1.14". */
-export const decisionModelLabel = (model: string): string => {
+const decisionModelLabel = (model: string): string => {
   const jev = /^jev(?:-(.+))?$/u.exec(model);
   if (jev === null) {
     return model;

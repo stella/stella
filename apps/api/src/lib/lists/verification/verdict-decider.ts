@@ -34,6 +34,7 @@ import type {
 import { admitVerificationDispatch } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import { graderQualifierFits } from "@/api/lib/lists/verification/qualifiers";
+import { admittedDispatchSignal } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { decideWithoutRecovery } from "@/api/lib/workflow/decisions/decide";
 import type { Decision } from "@/api/lib/workflow/decisions/decide";
 import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
@@ -130,7 +131,7 @@ export const resolveVerdictDecider = ({
     : LLM_DECIDER;
 
 /** A claim the grader graded, as the decision model reads it. */
-export type VerdictCandidate = {
+type VerdictCandidate = {
   promptId: string;
   claim: string;
   passage: string;
@@ -148,9 +149,11 @@ const citedFacts = (
   const stances = new Map<SafeId<"entity">, string>(
     grade.refs.map((ref) => [ref.factEntityId, FACT_STANCES[ref.rel]]),
   );
-  for (const factEntityId of grade.recordConflict?.factEntityIds ?? []) {
-    if (!stances.has(factEntityId)) {
-      stances.set(factEntityId, "disputed record");
+  if (grade.recordConflict !== null) {
+    for (const factEntityId of grade.recordConflict.factEntityIds) {
+      if (!stances.has(factEntityId)) {
+        stances.set(factEntityId, "disputed record");
+      }
     }
   }
   return [...stances].flatMap(([factEntityId, stance]) => {
@@ -165,6 +168,10 @@ const citedFacts = (
         text: fact.text,
         stance,
         date: fact.occurredOn,
+        // A month or year date is stored as its first day; say so, as the
+        // grader's fact lines do, so it does not read as an exact day.
+        date_precision:
+          fact.occurredOn === null ? null : (fact.occurredOnPrecision ?? "day"),
         confidence: fact.confidence,
         interpretation_note: fact.interpretationNote,
       },
@@ -196,7 +203,7 @@ const isScoredState = (
  * two records. Null when the grade cannot carry that verdict (a record
  * conflict the grader never named, a scored verdict with nothing cited).
  */
-export const applyDecidedVerdict = (
+const applyDecidedVerdict = (
   grade: ClaimGrade,
   answer: ChoiceAnswer<VerdictOutcome>,
 ): ClaimGrade | null => {
@@ -261,7 +268,7 @@ const fellBack = (
 });
 
 /** One claim's grade under one decision. */
-export const settleVerdict = (
+const settleVerdict = (
   grade: ClaimGrade,
   decision: Decision<ChoiceAnswer<VerdictOutcome>>,
 ): DecidedClaimGrade => {
@@ -347,7 +354,13 @@ export const decideVerdicts = async ({
       candidates.map(({ promptId }) => [promptId, verdictQuestion(promptId)]),
     ),
     confidencePurpose: "verdict",
-    abortSignal: deps.abortSignal,
+    // The admission's signal too: a run that loses its lease stops here.
+    abortSignal: admittedDispatchSignal({
+      userId: deps.admission.userId,
+      organizationId: deps.organizationId,
+      admission: deps.admission,
+      abortSignal: deps.abortSignal,
+    }),
     client: decider.model,
     usageMetering: { ...deps.usageMetering, callId: Bun.randomUUIDv7() },
   });

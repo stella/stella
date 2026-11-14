@@ -13,7 +13,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { updateVerificationDecisionModel } from "@/api/lib/lists/verification/verdict-decider-setting";
 
-export const VERIFICATION_DECISION_MODEL_UNAVAILABLE_ERROR_CODE =
+const VERIFICATION_DECISION_MODEL_UNAVAILABLE_ERROR_CODE =
   "verification_decision_model_unavailable";
 
 const config = {

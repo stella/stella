@@ -8,6 +8,7 @@ import { Switch } from "@stll/ui/switch";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { aiConfigKeys } from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
@@ -35,11 +36,19 @@ export const VerificationDecisionModelCard = ({
       type: "handler",
       handlerId: "VerificationDecisionModelCard.mutation.useSettingsMutation",
     },
+    // The organization's AI policy is an administrator's click, never an
+    // agent's, so this write has no capability.
     mutationFn: async (enabled: boolean) =>
-      unwrapApiResponse(
-        await api["organization-settings"]["verification-decision-model"].post({
-          enabled,
-        }),
+      await invokeAppOnlyWrite(
+        "organization-settings.verification-decision-model.update",
+        async () =>
+          unwrapApiResponse(
+            await api["organization-settings"][
+              "verification-decision-model"
+            ].post({
+              enabled,
+            }),
+          ),
       ),
     invalidate: aiConfigKeys.all,
     // A refused or raced save reads the stored setting again.

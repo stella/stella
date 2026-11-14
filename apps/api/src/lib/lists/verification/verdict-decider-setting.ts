@@ -21,7 +21,7 @@ import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model"
 type SettingsReader = Pick<Transaction, "select">;
 
 /** The switch as stored now. */
-export const readVerificationDecisionModelEnabled = async (
+const readVerificationDecisionModelEnabled = async (
   tx: SettingsReader,
   organizationId: SafeId<"organization">,
 ): Promise<boolean> =>

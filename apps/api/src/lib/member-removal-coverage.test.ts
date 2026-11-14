@@ -163,6 +163,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_claims.record_conflict",
   // A closed qualifier kind and the grader's explanation; no member id.
   "legal_list_claims.qualifiers",
+  // Which model decided the verdict, a fallback reason and a confidence;
+  // no member id.
+  "legal_list_claims.decider",
   "legal_list_generation_candidate_sources.locator",
   "legal_list_item_sources.locator",
   "legal_list_verification_runs.evidence",

@@ -22,11 +22,13 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { readVerdictDecider } from "@/api/lib/lists/verification/verdict-decider-setting";
 import {
   hasMemberPermission,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
 import {
   createTestHandlerContext,
   NO_AUDIT,
@@ -57,6 +59,12 @@ testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  // The switch belongs to Anchor Verification, which the organization has.
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
+  testState.setConfig(
+    "API_FEATURE_ACCESS_GRANTS",
+    organizationFeatureGrants(ids.orgA, [LIST_VERIFICATION_FEATURE_ID]),
+  );
 });
 
 afterAll(releaseTestDb);

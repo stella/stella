@@ -43,7 +43,9 @@ const mount = ({
         setting={{ enabled, available }}
         canEdit={canEdit}
         pending={pending}
-        onChange={(next) => changes.push(next)}
+        onChange={(next) => {
+          changes.push(next);
+        }}
       />
     </IntlProvider>,
   );
