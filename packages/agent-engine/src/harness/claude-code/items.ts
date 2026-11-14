@@ -234,8 +234,8 @@ const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(["Agent", "Task"]);
 
 /**
  * What a subagent was told when `use` started it, or `null` when the call
- * starts none or carries no prompt. It stays on this computer, with the
- * rest of the subagent's conversation.
+ * starts none or carries no prompt. It is part of the step's content, with
+ * the rest of the subagent's conversation.
  */
 export const subagentPromptOf = ({
   name,
@@ -290,7 +290,7 @@ const nativeDetail = (
 ): ChatLocalRunToolDetail | undefined => {
   if (SUBAGENT_TOOLS.has(name)) {
     // The few words the agent gave the task and the kind of agent it
-    // chose; the prompt stays here.
+    // chose; the prompt is part of the step's content.
     const agentType = optionalStringField(input, "subagent_type");
     return {
       kind: "subagent",
@@ -507,7 +507,7 @@ export const toolResultFor = (
   switch (kind) {
     case "command":
       // The status only: Claude reports no exit code, and the command's
-      // output stays here.
+      // output is the step's content.
       return {
         content: chatLocalRunToolResultContent({
           name: HARNESS_TOOL_NAMES.commandExecution,

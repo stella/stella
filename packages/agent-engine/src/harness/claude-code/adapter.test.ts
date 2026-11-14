@@ -456,8 +456,8 @@ describe("Claude Code adapter over stream-json stdio", () => {
           name: "command_execution",
           input: { command: "ls" },
         },
-        // The command's output stays on the computer: kept for the member to
-        // open there, never in what the turn reports.
+        // The command's output is the step's content: kept and sent beside the
+        // turn's events, never in what the turn reports.
         result: {
           content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
@@ -2291,8 +2291,8 @@ describe("Claude Code skill folders", () => {
       }),
       expect.objectContaining({
         toolCall: expect.objectContaining({ input: { command: "ls" } }),
-        // The command's output stays on the computer; a step on the skill
-        // keeps none, even there.
+        // The command's output is the step's content; a step on the skill
+        // keeps none.
         result: {
           content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
