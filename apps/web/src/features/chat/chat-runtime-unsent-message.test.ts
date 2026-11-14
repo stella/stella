@@ -206,7 +206,7 @@ const serve = (initial: Refusal | null) => {
 const forwardedPropsOf = (posted: Record<string, unknown> | undefined) => {
   const props = posted?.["forwardedProps"];
   return typeof props === "object" && props !== null
-    ? Object.fromEntries(Object.entries(props))
+    ? Object.fromEntries<unknown>(Object.entries(props))
     : {};
 };
 const intentOf = (posted: Record<string, unknown> | undefined): unknown =>
