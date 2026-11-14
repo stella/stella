@@ -39,6 +39,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import {
   withAggregateLock,
@@ -235,7 +236,7 @@ export const readTurnFolderRestore = async (
   const run = await readTurnRun(db, options);
   const restore = await readTurnRestore(db, options);
   // As the undo itself decides: only the thread's newest turn is undone.
-  const newest = !(await readNewerTurn(db, options));
+  const newest = await readIsNewestTurn(db, options);
   return {
     undoable: newest && run?.state === "finished" && run.tookCheckpoint,
     restore: restore === null ? null : viewOf(restore, options.now),
@@ -293,15 +294,14 @@ const readThreadBusy = async (
 };
 
 /**
- * A later turn of the owner's in the thread. The turn's start is read by id
- * inside the comparison: it holds microseconds, which a time read out and
- * sent back would drop, and the turn would then count as later than itself.
+ * Whether the turn is the newest of the owner's in the thread, in the order
+ * turns were accepted (`NEWEST_CHAT_TURN_FIRST`).
  */
-const readNewerTurn = async (
+const readIsNewestTurn = async (
   db: Pick<DesktopRunnerDb, "select">,
   { owner, threadId, turnId }: TurnOptions,
 ) => {
-  const [newer] = await db
+  const [newest] = await db
     .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(
@@ -309,11 +309,11 @@ const readNewerTurn = async (
         eq(chatTurns.organizationId, owner.organizationId),
         eq(chatTurns.userId, owner.userId),
         eq(chatTurns.threadId, threadId),
-        sql`(${chatTurns.createdAt}, ${chatTurns.id}) > (select t.created_at, t.id from chat_turns t where t.id = ${turnId})`,
       ),
     )
+    .orderBy(...NEWEST_CHAT_TURN_FIRST)
     .limit(1);
-  return newer !== undefined;
+  return newest?.id === turnId;
 };
 
 /**
@@ -361,7 +361,7 @@ export const requestFolderRestore = async (
       ) {
         return { type: "existing", restore: viewOf(existing, now) };
       }
-      if (await readNewerTurn(tx, options)) {
+      if (!(await readIsNewestTurn(tx, options))) {
         return { type: "refused", reason: "not_newest" };
       }
       if (await readThreadBusy(tx, options)) {
