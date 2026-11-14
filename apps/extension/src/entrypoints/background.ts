@@ -367,7 +367,10 @@ const runDesktopCommand = async (
         case CONTROL_ADMISSION.takesOver:
           return {
             takeOver: async () => {
-              await takeOverControl(controllerId);
+              await takeOverControl({
+                controllerId,
+                transport: CONTROL_TRANSPORT.desktop,
+              });
             },
             type: "admitted",
           };
@@ -522,7 +525,7 @@ const handlePopupRequest = async (
           })) === CONTROL_ADMISSION.holds
             ? null
             : async () => {
-                await takeOverControl(controllerId);
+                await takeOverControl({ transport: CONTROL_TRANSPORT.web });
               },
         );
         if (adopted.status === "unsupported-page") {
@@ -566,16 +569,14 @@ export default defineBackground(() => {
     desktopLink.connect().catch(() => undefined);
   });
   chrome.permissions.onRemoved.addListener(() => {
-    hasDesktopLinkAccess()
-      .then(async (allowed) => {
-        if (!allowed) {
-          // A desktop command already running stops and answers on the
-          // still-open link before it closes.
-          await session.change(async () => {
-            await desktopLink.disconnect();
-          });
+    // A desktop command already running stops and answers on the
+    // still-open link before it closes. Access is read once that work has
+    // settled: granted again meanwhile, the open link stays.
+    session
+      .change(async () => {
+        if (!(await hasDesktopLinkAccess())) {
+          await desktopLink.disconnect();
         }
-        return undefined;
       })
       .catch(() => undefined);
   });

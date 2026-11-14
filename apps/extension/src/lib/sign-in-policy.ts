@@ -23,9 +23,10 @@ export type SignInPolicy = (typeof SIGN_IN_POLICY)[keyof typeof SIGN_IN_POLICY];
  * Hosts whose pages are identity providers' sign-in and consent screens: a
  * page on one is the member's to complete, whatever fields it shows. A
  * leading dot matches the host's subdomains (tenant sign-in pages), never
- * the bare domain.
+ * the bare domain. The page script gets the list too and matches each frame
+ * the same way, for a provider's page embedded in another.
  */
-const IDENTITY_PROVIDER_HOSTS = [
+export const IDENTITY_PROVIDER_HOSTS = [
   "accounts.google.com",
   "login.microsoftonline.com",
   "login.microsoft.com",

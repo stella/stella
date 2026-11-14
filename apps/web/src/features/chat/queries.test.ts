@@ -1949,6 +1949,8 @@ describe("chat runtime", () => {
       reloadThread: () => {},
     });
 
+    expect(runtime.getSnapshot().turnsStarted).toBe(0);
+
     await runtime.reload();
 
     expect(requests).toHaveLength(1);
@@ -1958,6 +1960,8 @@ describe("chat runtime", () => {
         turnIntent: CHAT_TURN_INTENT.regenerate,
       },
     });
+    // A retry is a turn the page started, which the turn announcer reads.
+    expect(runtime.getSnapshot().turnsStarted).toBe(1);
   });
 
   test("streams reasoning-first chunks through tanstack ChatClient", async () => {
@@ -3705,6 +3709,10 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
     expect(afterRefetch).not.toBe(handoff);
+    // Replacing the runtime is not a turn: the page's count of the turns it
+    // started on the thread goes on, so the turn announcer hears no change.
+    expect(handoff.getSnapshot().turnsStarted).toBe(1);
+    expect(afterRefetch.getSnapshot().turnsStarted).toBe(1);
   });
 
   test("replaces an errored runtime with a stranded tool part", async () => {
@@ -3749,10 +3757,22 @@ describe("acquireChatRuntime reconcile", () => {
       type: "tool-call",
     });
 
+    // The server accepted the turn before it failed, so the stored thread
+    // holds the message the page sent.
     const reconciled = acquireChatRuntime({
       activeOrganizationId,
       context: { allowMissingThread: true },
-      data: newerThreadData(),
+      data: buildThreadData({
+        lastActivityAt: "2026-07-08T10:00:00.000Z",
+        messages: [
+          createMessage("22222222-2222-4222-8222-2222222222e1"),
+          {
+            id: assistantMessageId,
+            role: "assistant",
+            parts: [{ type: "text", content: "Ahoj!" }],
+          },
+        ],
+      }),
       key: threadRef,
       queryClient,
     });

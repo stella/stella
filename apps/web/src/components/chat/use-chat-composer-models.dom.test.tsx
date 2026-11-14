@@ -1,9 +1,10 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import {
+  type ChatLocalRunReadiness,
   type ChatLocalRunTarget,
   type ChatRunTarget,
   chatRunTargetSchema,
@@ -22,12 +23,18 @@ const { default: messages } = await import("@/i18n/langs/en.json");
 const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 const { rememberRunTarget, useChatRunOnPreferenceStore } =
   await import("@/features/chat/run-on-preference-store");
+const { localRunnersOptions } = await import("@/features/chat/queries");
 const { useChatComposerModels } = await import("./use-chat-composer-models");
+const desktopBridge = await import("@/lib/desktop-bridge");
+const { getDesktopLaunch } = await import("@/features/chat/desktop-launch");
+const { DESKTOP_PING_URL } =
+  await import("@/features/chat/desktop-launch.logic");
 
 afterEach(() => {
   cleanup();
   useChatRunOnPreferenceStore.setState({ byOrganization: {} });
   globalThis.fetch = previousFetch;
+  mock.restore();
 });
 afterAll(async () => {
   await unregisterDomEnvironment();
@@ -58,7 +65,12 @@ const patchBodySchema = v.object({
  * The server: each model PATCH is held until the test releases it, so a test
  * can act while a write is still in flight.
  */
-const serve = () => {
+const serve = ({
+  computers,
+}: {
+  /** The member's computers as the API reads them now; unread otherwise. */
+  computers?: () => ChatLocalRunReadiness;
+} = {}) => {
   const patches: v.InferOutput<typeof patchBodySchema>[] = [];
   const held: PromiseWithResolvers<undefined>[] = [];
   globalThis.fetch = Object.assign(
@@ -72,6 +84,9 @@ const serve = () => {
         held.push(release);
         await release.promise;
         return Response.json(body);
+      }
+      if (pathname.endsWith("/chat/local-runners") && computers) {
+        return Response.json(computers());
       }
       return Response.json(
         { message: `Unexpected request: ${pathname}` },
@@ -367,4 +382,88 @@ test("a thread page shows what its thread stores, whatever the member chose last
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
 
   expect(result.current.getRunTarget()).toEqual({ kind: "cloud" });
+});
+
+/**
+ * The member's one computer, connected only once stella desktop was opened:
+ * opening it is what connects it, as on a real machine.
+ */
+const computerConnectingOnOpen = () => {
+  const computer = (connected: boolean): ChatLocalRunReadiness => ({
+    status: "enabled",
+    runners: [
+      {
+        desktopId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        connected,
+        lastSeenAt: "2026-11-12T10:00:00.000Z",
+        harnesses: [],
+        linkedFolders: [],
+      },
+    ],
+    maxApprovals: "full_auto",
+  });
+  let opened = false;
+  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(() => {
+    opened = true;
+  });
+  return { open, computers: () => computer(opened) };
+};
+
+test("a new chat on the remembered computer opens nothing by itself; its send opens stella desktop once", async () => {
+  const desktop = computerConnectingOnOpen();
+  serve({ computers: desktop.computers });
+  rememberRunTarget(ORGANIZATION_ID, CODEX);
+  const { result, queryClient } = renderNewChat();
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+  // The composer read the computers for the remembered target: offline.
+  await waitFor(() =>
+    expect(
+      queryClient.getQueryData(localRunnersOptions(ORGANIZATION_ID).queryKey),
+    ).toBeDefined(),
+  );
+  expect(desktop.open).not.toHaveBeenCalled();
+
+  act(() => {
+    result.current.openDesktopForSend();
+  });
+  const launching = getDesktopLaunch().pending();
+
+  expect(desktop.open).toHaveBeenCalledTimes(1);
+  expect(desktop.open).toHaveBeenCalledWith(DESKTOP_PING_URL);
+  expect(await launching?.outcome).toBe("connected");
+  expect(desktop.open).toHaveBeenCalledTimes(1);
+});
+
+test("a send on stella, or on a computer that is connected, opens nothing", async () => {
+  const desktop = computerConnectingOnOpen();
+  serve({ computers: desktop.computers });
+  const { result } = await renderReadyComposer();
+
+  act(() => {
+    result.current.openDesktopForSend();
+  });
+
+  expect(desktop.open).not.toHaveBeenCalled();
+});
+
+test("choosing the computer while none is connected opens stella desktop on that pick, once", async () => {
+  const desktop = computerConnectingOnOpen();
+  const server = serve({ computers: desktop.computers });
+  const { result, queryClient } = await renderReadyComposer();
+  await queryClient.query(localRunnersOptions(ORGANIZATION_ID));
+  const runOn = result.current.models.runTarget;
+  if (runOn.type !== "choice") {
+    throw new Error("The composer offers no Run on choice");
+  }
+
+  act(() => {
+    runOn.select(CODEX);
+  });
+  const launching = getDesktopLaunch().pending();
+
+  expect(desktop.open).toHaveBeenCalledTimes(1);
+  expect(desktop.open).toHaveBeenCalledWith(DESKTOP_PING_URL);
+  expect(await launching?.outcome).toBe("connected");
+  await server.releaseNext();
+  expect(desktop.open).toHaveBeenCalledTimes(1);
 });

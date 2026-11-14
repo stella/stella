@@ -92,6 +92,10 @@ const LOCAL_RUNNER_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
   [AI_FAILURE_CODES.local_runner_not_reached, "local_runner_not_reached"],
   [AI_FAILURE_CODES.local_runner_relinked, "local_runner_relinked"],
   [AI_FAILURE_CODES.local_runner_restoring, "local_runner_restoring"],
+  [
+    AI_FAILURE_CODES.local_runner_folder_unavailable,
+    "local_runner_folder_unavailable",
+  ],
   [AI_FAILURE_CODES.provider_unavailable, "provider_unavailable"],
 ]);
 
@@ -619,6 +623,7 @@ const AI_FAILURE_CAN_CLEAR_ON_RETRY = {
   local_runner_not_reached: true,
   local_runner_relinked: true,
   local_runner_restoring: true,
+  local_runner_folder_unavailable: false,
   unknown: true,
 } as const satisfies Record<AIErrorKind, boolean>;
 
@@ -807,6 +812,7 @@ const aiKindHandlerError = (
     case "local_runner_not_reached":
     case "local_runner_relinked":
     case "local_runner_restoring":
+    case "local_runner_folder_unavailable":
     case "unknown":
       return new HandlerError({ ...fallback, code, cause: error });
     default: {
