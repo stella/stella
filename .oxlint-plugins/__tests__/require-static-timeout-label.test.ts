@@ -37,3 +37,7 @@ test("checks only timeout-named calls", async () => {
     await lint(`const id = read();\nawait other({ label: \`job-\${id}\` });`),
   ).toEqual([]);
 });
+
+test("a module constant bound to a runtime value is not a static label", async () => {
+  expect(await lint(`const LABEL = read();\n${call("LABEL")}`)).toEqual([2]);
+});

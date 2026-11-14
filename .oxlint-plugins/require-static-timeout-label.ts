@@ -169,6 +169,9 @@ export default eslintCompatPlugin({
         };
         return {
           Program(node) {
+            // createOnce reuses these sets across the files one worker lints.
+            staticLabelTables.clear();
+            staticLabelConstants.clear();
             for (const statement of node.body) {
               const declaration =
                 statement.type === "ExportNamedDeclaration"
