@@ -16,6 +16,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import {
+  CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
+  chatLocalRunStepsAwaitedSchema,
+} from "@stll/api-contract/chat-local-run-step-content";
 import { parseChatLocalRunConversation } from "@stll/api-contract/chat-local-run-step-output";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import { repoRelativePath } from "@stll/portable-path";
@@ -1908,7 +1912,10 @@ describe("harness holder over its socket", () => {
      * the API: what happened in order, the API's requests among the
      * messages the host sent.
      */
-    const runWithSteps = async (answer: () => Response) => {
+    const runWithSteps = async (
+      answer: () => Response,
+      reach: "reachable" | "away" = "reachable",
+    ) => {
       const root = mkdtempSync(path.join(tmpdir(), "stella-sidecar-steps-"));
       const configDir = path.join(root, "codex-home");
       const workspaceDir = path.join(root, "workspace");
@@ -1916,6 +1923,8 @@ describe("harness holder over its socket", () => {
       mkdirSync(workspaceDir, { recursive: true });
       const order: string[] = [];
       const puts: { path: string; kind: string | null; body: string }[] = [];
+      /** What the run announced it still has to send, if it did. */
+      const awaited: unknown[] = [];
       const api = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
@@ -1931,12 +1940,24 @@ describe("harness holder over its socket", () => {
         },
       });
       const apiOrigin = `http://127.0.0.1:${String(api.port)}`;
+      if (reach === "away") {
+        // Nothing listens there any more: the API cannot be reached.
+        await api.stop(true);
+      }
       const { promise: finished, resolve } =
         Promise.withResolvers<
           Extract<SidecarHostOutput, { type: "run.finished" }>
         >();
       const host = new SidecarHost({
         send: (message) => {
+          if (
+            message.type === "run.event" &&
+            message.chunk["name"] === CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT
+          ) {
+            awaited.push(message.chunk["value"]);
+            order.push("awaited");
+            return true;
+          }
           order.push(
             message.type === "run.event" &&
               message.chunk.type === "TOOL_CALL_RESULT"
@@ -1993,11 +2014,18 @@ describe("harness holder over its socket", () => {
           expiresAt: "2026-10-28T12:00:00.000Z",
         },
       });
-      return { finished: await finished, order, puts, runId, stepOutputDir };
+      return {
+        finished: await finished,
+        order,
+        puts,
+        awaited,
+        runId,
+        stepOutputDir,
+      };
     };
 
     test("is sent to the API, each step before its result and all before the run's finish", async () => {
-      const { finished, order, puts, runId, stepOutputDir } =
+      const { finished, order, puts, awaited, runId, stepOutputDir } =
         await runWithSteps(() => Response.json({ state: "stored" }));
       expect(finished.outcome).toBe("completed");
       // Each kept step was put once, under the run's own step path.
@@ -2026,8 +2054,39 @@ describe("harness holder over its socket", () => {
       expect(
         order.findLastIndex((entry) => entry.startsWith("put ")),
       ).toBeLessThan(order.indexOf("run.finished"));
-      // Nothing is left waiting, and the kept files are still there.
+      // Nothing is left waiting or announced, and the kept files are still
+      // there.
+      expect(awaited).toEqual([]);
       expect(readdirSync(stepOutputDir)).toEqual([runId]);
+    });
+
+    test("that the API could not be reached for is announced before the run's finish, keys only, and stays on disk", async () => {
+      const { finished, order, awaited, runId, stepOutputDir } =
+        await runWithSteps(() => new Response(null), "away");
+      expect(finished.outcome).toBe("completed");
+      const pendingDir = path.join(stepOutputDir, `${runId}.pending`);
+      const left = readdirSync(pendingDir).toSorted();
+      expect(left).toEqual(
+        expect.arrayContaining(
+          ["call-heredoc", "call-long", "call-edit"].map((toolCallId) =>
+            path.basename(stepOutputPath({ stepOutputDir, runId, toolCallId })),
+          ),
+        ),
+      );
+      // One announcement, of exactly the steps left on disk and nothing of
+      // their content, before the run's finish.
+      expect(awaited).toHaveLength(1);
+      const announced = v.parse(chatLocalRunStepsAwaitedSchema, awaited.at(0));
+      expect(announced.stepKeys.toSorted()).toEqual(left);
+      expect(announced.more).toBe(0);
+      expect(order.filter((entry) => entry === "awaited")).toHaveLength(1);
+      expect(order.indexOf("awaited")).toBeLessThan(
+        order.indexOf("run.finished"),
+      );
+      // Every announced step still has its kept file to send.
+      expect(readdirSync(path.join(stepOutputDir, runId))).toEqual(
+        expect.arrayContaining(left),
+      );
     });
 
     test("an API that cannot take a step at first is asked again before the run's finish", async () => {

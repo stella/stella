@@ -5,6 +5,10 @@ import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import {
+  CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
+  CHAT_LOCAL_RUN_STEPS_AWAITED_MAX,
+} from "@stll/api-contract/chat-local-run-step-content";
 import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import type {
   DESKTOP_RUNNER_RUN_OUTCOMES,
@@ -455,6 +459,8 @@ type RunStepsOptions = {
   message: { stepOutputDir: string; workspaceDir: string };
   runId: string;
   log: SidecarHostOptions["log"];
+  /** Sends one of the run's messages to the desktop app. */
+  send: (message: SidecarHostOutput) => void;
 };
 
 /**
@@ -467,6 +473,7 @@ const openRunSteps = ({
   message: { stepOutputDir, workspaceDir },
   runId,
   log,
+  send,
 }: RunStepsOptions) => {
   const runDir = stepOutputRunDir(stepOutputDir, runId);
   const uploads = createStepUploads({
@@ -501,10 +508,12 @@ const openRunSteps = ({
       }
     },
     /**
-     * Send what the steps still have to send, before the event that ends the
-     * turn: a run that finished takes nothing more. `signal` ends the wait.
+     * The turn ends. Before its last event: send what the steps still have
+     * to send (`signal` ends the wait), then stop sending and announce the
+     * steps this computer still holds. A run that finished takes nothing
+     * more, except the steps it named before its finish.
      */
-    drain: async (
+    end: async (
       end: keyof typeof STEP_UPLOAD_END_WAIT_MS,
       signal?: AbortSignal,
     ) => {
@@ -513,8 +522,27 @@ const openRunSteps = ({
         retryEveryMs: STEP_UPLOAD_RETRY_MS,
         ...(signal === undefined ? {} : { signal }),
       });
+      const left = await uploads.leave(CHAT_LOCAL_RUN_STEPS_AWAITED_MAX);
+      if (Result.isError(left)) {
+        // What cannot be listed is not named, so it is not sent later.
+        log("a run's unsent step content could not be listed");
+        return;
+      }
+      if (left.value.stepKeys.length === 0 && left.value.more === 0) {
+        return;
+      }
+      send({
+        type: "run.event",
+        runId,
+        chunk: {
+          type: EventType.CUSTOM,
+          name: CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
+          value: left.value,
+          timestamp: Temporal.Now.instant().epochMilliseconds,
+        },
+      });
     },
-    /** The run is over: nothing more is sent, and what waited is dropped. */
+    /** The run is over: what waited and was not announced is dropped. */
     close: uploads.close,
   };
 };
@@ -1361,7 +1389,13 @@ export class SidecarHost {
     };
 
     const { options } = this;
-    const steps = openRunSteps({ config, message, runId, log: options.log });
+    const steps = openRunSteps({
+      config,
+      message,
+      runId,
+      log: options.log,
+      send,
+    });
     /**
      * The adapter's events with harness request ids replaced by runner UUIDs.
      * An approval request is announced after the chunks of its event: the
@@ -1401,19 +1435,19 @@ export class SidecarHost {
           case "turn.completed":
             outcome.value = "completed";
             // A stop ends the wait: a stopped run does not wait to send.
-            await steps.drain("completed", run.outputSharing.signal);
+            await steps.end("completed", run.outputSharing.signal);
             await shareRunOutputs();
             yield event;
             break;
           case "turn.interrupted":
             outcome.value =
               run.stop === RUN_STOP.cancel ? "cancelled" : "interrupted";
-            await steps.drain("stopped");
+            await steps.end("stopped");
             yield event;
             break;
           case "turn.failed":
             outcome.value = HARNESS_FAILURE_OUTCOME[event.failure.type];
-            await steps.drain("stopped");
+            await steps.end("stopped");
             yield event;
             break;
           case "tool.completed":

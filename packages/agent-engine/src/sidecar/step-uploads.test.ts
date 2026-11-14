@@ -1,6 +1,14 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -341,6 +349,100 @@ describe("sending what a run's steps produced", () => {
     await uploads.drain({ waitMs: 1000, retryEveryMs: 1 });
     expect(calls).toBe(before);
     expect(await pending()).toEqual([]);
+  });
+
+  test("a run's end names the steps still waiting and leaves them to be sent after it", async () => {
+    let calls = 0;
+    const uploads = uploadsWith(async () => {
+      calls += 1;
+      return await Promise.resolve("away");
+    });
+    const first = await keep("call-1", "one");
+    const second = await keep("call-2", "two");
+    await uploads.send(first, 1000);
+    await uploads.send(second, 1000);
+    const left = (await uploads.leave(10)).unwrap();
+    expect(sorted(left.stepKeys)).toEqual(
+      sorted([first.stepKey, second.stepKey]),
+    );
+    expect(left.more).toBe(0);
+    // Nothing is sent from here once the run named what it holds.
+    const before = calls;
+    await uploads.send(await keep("call-3", "late"), 1000);
+    await uploads.drain({ waitMs: 1000, retryEveryMs: 1 });
+    await uploads.close();
+    expect(calls).toBe(before);
+    // The named markers and their kept files outlive the run.
+    expect(await pending()).toEqual(sorted(left.stepKeys));
+    const keptDir = stepOutputRunDir(root, RUN_ID);
+    expect(await readdir(keptDir)).toEqual(
+      expect.arrayContaining([first.stepKey, second.stepKey]),
+    );
+  });
+
+  test("past the bound a run's end names a count, and keeps only the steps it named", async () => {
+    const uploads = uploadsWith(async () => await Promise.resolve("away"));
+    const kept: string[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      const step = await keep(`call-${String(index)}`, "out");
+      kept.push(step.stepKey);
+      await uploads.send(step, 1000);
+    }
+    const left = (await uploads.leave(2)).unwrap();
+    expect(left.stepKeys).toHaveLength(2);
+    expect(left.more).toBe(3);
+    expect(kept).toEqual(expect.arrayContaining(left.stepKeys));
+    await uploads.close();
+    expect(await pending()).toEqual(sorted(left.stepKeys));
+  });
+
+  test("a run's end with nothing waiting names nothing and leaves no folder", async () => {
+    const uploads = uploadsWith(async () => await Promise.resolve("done"));
+    await uploads.send(await keep("call-1", "out"), 1000);
+    expect((await uploads.leave(10)).unwrap()).toEqual({
+      stepKeys: [],
+      more: 0,
+    });
+    expect(await readdir(root)).toEqual([RUN_ID]);
+    await uploads.close();
+    expect(await readdir(root)).toEqual([RUN_ID]);
+  });
+
+  test("a run's end names markers only: anything else in the folder is removed, a link is not followed", async () => {
+    const uploads = uploadsWith(async () => await Promise.resolve("away"));
+    const step = await keep("call-1", "out");
+    await uploads.send(step, 1000);
+    const outside = path.join(root, "outside.txt");
+    await writeFile(outside, "not a step");
+    const linked = "a".repeat(64);
+    await symlink(outside, path.join(pendingDir(), linked));
+    await writeFile(path.join(pendingDir(), "notes.txt"), "text");
+    await mkdir(path.join(pendingDir(), "b".repeat(64)));
+    const left = (await uploads.leave(10)).unwrap();
+    expect(left).toEqual({ stepKeys: [step.stepKey], more: 0 });
+    expect(await pending()).toEqual([step.stepKey]);
+    expect(await readFile(outside, "utf-8")).toBe("not a step");
+  });
+
+  test("a run's end stops a send that is under way and names its step", async () => {
+    const started = Promise.withResolvers<null>();
+    const hand = handTimer();
+    const uploads = uploadsWith(async (_step, signal) => {
+      started.resolve(null);
+      const aborted = Promise.withResolvers<StepUploadOutcome>();
+      signal.addEventListener("abort", () => {
+        aborted.resolve("away");
+      });
+      return await aborted.promise;
+    }, hand.timer);
+    const step = await keep("call-1", "out");
+    const sent = uploads.send(step, 1000);
+    await started.promise;
+    const left = (await uploads.leave(10)).unwrap();
+    hand.pass();
+    await sent;
+    expect(left).toEqual({ stepKeys: [step.stepKey], more: 0 });
+    expect(await pending()).toEqual([step.stepKey]);
   });
 
   test("a marker that names no kept step is dropped, never sent", async () => {
