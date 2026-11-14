@@ -1,5 +1,5 @@
 import type { SkillDraftNameKind } from "@stll/api-contract";
-import { slugify } from "@stll/text-normalize";
+import { escapeRegExp, slugify } from "@stll/text-normalize";
 
 /** A skill draft as the API returns it for review. */
 export type SkillDraft = {
@@ -10,15 +10,23 @@ export type SkillDraft = {
 /** One name of a person or organization the draft holds. */
 export type SkillDraftName = { kind: SkillDraftNameKind; value: string };
 
+/**
+ * Every key replaced by its value in one pass, the longest key where two
+ * start at the same place. A replacement is never replaced again, so a path
+ * renamed to one another file had cannot be renamed a second time.
+ */
 const replaceAll = (
   text: string,
   replacements: ReadonlyMap<string, string>,
 ) => {
-  let next = text;
-  for (const [from, to] of replacements) {
-    next = next.split(from).join(to);
+  const keys = [...replacements.keys()]
+    .filter((key) => key !== "")
+    .toSorted((left, right) => right.length - left.length);
+  if (keys.length === 0) {
+    return text;
   }
-  return next;
+  const pattern = new RegExp(keys.map(escapeRegExp).join("|"), "gu");
+  return text.replace(pattern, (found) => replacements.get(found) ?? found);
 };
 
 /** Longer than any name a skill file path holds. */
@@ -95,7 +103,8 @@ export const replaceDraftNames = (
       renames.set(path, next);
     }
   }
-  // Links first, while they still read as the old paths.
+  // Paths and names in one pass: a link is renamed whole, never by a name
+  // or a shorter path inside it.
   const replacements = new Map([
     ...renames,
     ...longestFirst.map(({ kind, value }) => [value, roleOf(kind)] as const),

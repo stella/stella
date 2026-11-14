@@ -1921,10 +1921,6 @@
       "failed": "Z této konverzace se nepodařilo vytvořit dovednost",
       "review": {
         "description": "Návrh dovednosti obsahuje tato jména. Může je vidět kdokoli, kdo má k této dovednosti přístup.",
-        "kind": {
-          "organization": "Organizace",
-          "person": "Osoba"
-        },
         "replaceHint": "Zrušte zaškrtnutí jména a nahradí se obecným zástupným textem.",
         "role": {
           "organization": "název organizace",

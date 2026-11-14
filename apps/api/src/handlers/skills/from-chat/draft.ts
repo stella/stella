@@ -22,6 +22,10 @@ import {
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import {
+  generateArtefact,
+  readUnsourcedArtefact,
+} from "@/api/lib/ai-generation/provenance";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -31,6 +35,7 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
@@ -47,7 +52,7 @@ const fromChatBodySchema = v.object({
   threadId: resourceIdSchema("chatThread"),
   workspaceId: v.optional(resourceIdSchema("workspace")),
   intent: v.optional(
-    v.pipe(v.string(), v.minLength(1), v.maxLength(INTENT_MAX_CHARS)),
+    v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(INTENT_MAX_CHARS)),
   ),
 });
 
@@ -65,6 +70,45 @@ const config = {
     modelTask: "short-text",
   },
 } satisfies HandlerConfig;
+
+const generationFailed = (cause: unknown) =>
+  new HandlerError({
+    status: 502,
+    code: "upstream_unavailable",
+    message: "Could not draft a skill from this chat. Please try again.",
+    cause,
+  });
+
+/**
+ * One model call for the draft. The chat is read through its withdrawn-copy
+ * projection and refused before this when it holds a withdrawn copy. The
+ * draft goes back for review and is never stored as generated: the member
+ * saves it as a skill they author.
+ */
+const generateDraft = async <T>({
+  aiAnalytics,
+  generate,
+}: {
+  aiAnalytics: { captureError: (cause: unknown) => void };
+  generate: () => Promise<T>;
+}): Promise<Result<T, HandlerError>> => {
+  const generation = await Result.tryPromise({
+    try: async () =>
+      await generateArtefact({
+        generator: "apps/api/src/handlers/skills/from-chat/draft.ts",
+        sources: { decisionIds: [], inputs: [] },
+        generate,
+      }),
+    catch: (cause) => {
+      aiAnalytics.captureError(cause);
+      return generationFailed(cause);
+    },
+  });
+  if (Result.isError(generation)) {
+    return Result.err(generation.error);
+  }
+  return generation.value.map(readUnsourcedArtefact).mapError(generationFailed);
+};
 
 /**
  * Draft a skill from one of the caller's own chats. The chat is read as the
@@ -212,8 +256,9 @@ const draftSkillFromChat = createSafeRootHandler(
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });
-    const generation = await Result.tryPromise({
-      try: async () =>
+    const generated = await generateDraft({
+      aiAnalytics,
+      generate: async () =>
         await generateTanStackObjectForTask({
           userId: user.id,
           dataClass: "customer",
@@ -238,21 +283,12 @@ const draftSkillFromChat = createSafeRootHandler(
             sourceTranscript: transcript,
           }),
         }),
-      catch: (cause) => {
-        aiAnalytics.captureError(cause);
-        return new HandlerError({
-          status: 502,
-          code: "upstream_unavailable",
-          message: "Could not draft a skill from this chat. Please try again.",
-          cause,
-        });
-      },
     });
-    if (Result.isError(generation)) {
-      return Result.err(generation.error);
+    if (Result.isError(generated)) {
+      return Result.err(generated.error);
     }
 
-    const { draft, parsed } = parseSkillDraft(generation.value);
+    const { draft, parsed } = parseSkillDraft(generated.value);
     if (parsed.isErr()) {
       return Result.err(
         new HandlerError({
@@ -274,5 +310,11 @@ const draftSkillFromChat = createSafeRootHandler(
     return Result.ok({ draft, names });
   },
 );
+
+declareAggregateMutation(draftSkillFromChat, {
+  type: "independent",
+  reason:
+    "Drafts a skill from a chat the caller owns and stores nothing; writes only its own usage rows, with no cross-row invariant.",
+});
 
 export default draftSkillFromChat;

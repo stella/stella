@@ -16,6 +16,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { LIMITS } from "@/api/lib/limits";
 import { installSkill } from "@/api/lib/skills/install";
 
@@ -123,5 +124,11 @@ const saveSkillDraft = createSafeRootHandler(
     return Result.ok<SaveDraftOutcome>({ type: "saved", skill: installed });
   },
 );
+
+declareAggregateMutation(saveSkillDraft, {
+  type: "independent",
+  reason:
+    "Installs one private skill through installSkill, which serializes the install caps under its own advisory locks in one transaction.",
+});
 
 export default saveSkillDraft;

@@ -1921,10 +1921,6 @@
       "failed": "Sellest vestlusest ei õnnestunud oskust luua",
       "review": {
         "description": "Oskuse mustand sisaldab neid nimesid. Neid võib näha igaüks, kellel on sellele oskusele juurdepääs.",
-        "kind": {
-          "organization": "Organisatsioon",
-          "person": "Isik"
-        },
         "replaceHint": "Eemalda nimelt linnuke, et asendada see üldise kohatäitjaga.",
         "role": {
           "organization": "organisatsiooni nimi",

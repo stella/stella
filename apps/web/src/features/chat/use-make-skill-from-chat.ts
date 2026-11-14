@@ -66,32 +66,38 @@ export const useMakeSkillFromChat = () => {
         ? saved
         : { type: "review" as const, draft: drafted.draft, names: saved.names };
     },
+    // On the mutation, not on `mutate`: these run even when the composer that
+    // asked has unmounted, so the toast closes and the draft still reaches
+    // review or opens as saved.
+    onMutate: () => ({
+      toastId: stellaToast.loading(t("chat.makeSkill.drafting")),
+    }),
+    onSuccess: (outcome, _target, started) => {
+      stellaToast.close(started.toastId);
+      if (outcome.type === "saved") {
+        openSaved(outcome.skill.id);
+        return;
+      }
+      openReview({
+        draft: outcome.draft,
+        names: outcome.names,
+        approved: [],
+      });
+    },
+    onError: (error, _target, started) => {
+      if (started !== undefined) {
+        stellaToast.close(started.toastId);
+      }
+      notifyUserError(error, t("chat.makeSkill.failed"), {
+        description: userErrorFromThrown(error, t("chat.makeSkill.failed")),
+      });
+    },
   });
 
   return (target: MakeSkillTarget) => {
     if (make.isPending) {
       return;
     }
-    const toastId = stellaToast.loading(t("chat.makeSkill.drafting"));
-    make.mutate(target, {
-      onSuccess: (outcome) => {
-        stellaToast.close(toastId);
-        if (outcome.type === "saved") {
-          openSaved(outcome.skill.id);
-          return;
-        }
-        openReview({
-          draft: outcome.draft,
-          names: outcome.names,
-          approved: [],
-        });
-      },
-      onError: (error) => {
-        stellaToast.close(toastId);
-        notifyUserError(error, t("chat.makeSkill.failed"), {
-          description: userErrorFromThrown(error, t("chat.makeSkill.failed")),
-        });
-      },
-    });
+    make.mutate(target);
   };
 };

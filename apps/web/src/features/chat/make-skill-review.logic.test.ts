@@ -85,6 +85,26 @@ describe("replacing names in a skill draft", () => {
     });
   });
 
+  test("a link to a longer path is renamed whole, not by a shorter path inside it", () => {
+    const named = {
+      markdown: "See references/acme.md-extra.md and references/acme.md.",
+      resources: [
+        { path: "references/acme.md", content: "" },
+        { path: "references/acme.md-extra.md", content: "" },
+        { path: "references/organization.md-extra.md", content: "" },
+      ],
+    };
+    expect(
+      replaceDraftNames(
+        named,
+        [{ kind: "organization", value: "Acme" }],
+        roleOf,
+      ).markdown,
+    ).toBe(
+      "See references/organization.md-extra-2.md and references/organization.md.",
+    );
+  });
+
   test("a name written with diacritics is found in its ASCII path slug", () => {
     const renamed = replaceDraftNames(
       {

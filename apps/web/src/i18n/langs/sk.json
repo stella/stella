@@ -1921,10 +1921,6 @@
       "failed": "Z tejto konverzácie sa nepodarilo vytvoriť zručnosť",
       "review": {
         "description": "Návrh zručnosti obsahuje tieto mená. Môže ich vidieť ktokoľvek, kto má k tejto zručnosti prístup.",
-        "kind": {
-          "organization": "Organizácia",
-          "person": "Osoba"
-        },
         "replaceHint": "Zrušte označenie mena a nahradí sa všeobecným zástupným textom.",
         "role": {
           "organization": "názov organizácie",

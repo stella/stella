@@ -10,6 +10,7 @@ import {
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -17,6 +18,7 @@ import {
 } from "@stll/ui/dialog";
 import { Label } from "@stll/ui/label";
 
+import { useMountEffect } from "@/hooks/use-effect";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
@@ -37,6 +39,11 @@ import { useOpenSavedSkill } from "./use-make-skill-from-chat";
 export const MakeSkillReviewDialog = () => {
   const pending = useMakeSkillReviewStore((store) => store.pending);
   const close = useMakeSkillReviewStore((store) => store.close);
+  // The signed-in frame unmounts on any change of user; a draft waiting for
+  // review leaves with it, so the next member never sees its names.
+  useMountEffect(() => () => {
+    useMakeSkillReviewStore.getState().close();
+  });
   return (
     <Dialog
       onOpenChange={(open) => {
@@ -130,6 +137,10 @@ const MakeSkillReviewBody = ({
 
   return (
     <DialogPopup className="sm:max-w-lg">
+      <DialogFormState
+        dirty={kept.size !== names.length}
+        onDiscard={() => setKept(new Set(names.map(({ value }) => value)))}
+      />
       <DialogHeader>
         <DialogTitle>{tReview("title")}</DialogTitle>
         <DialogDescription>{tReview("description")}</DialogDescription>
@@ -149,8 +160,8 @@ const MakeSkillReviewBody = ({
                   <span>{value}</span>
                   <span className="text-muted-foreground ms-2 text-xs">
                     {kind === "person"
-                      ? tReview("kind.person")
-                      : tReview("kind.organization")}
+                      ? t("common.anonymizationLabels.person")
+                      : t("common.anonymizationLabels.organization")}
                   </span>
                 </Label>
               </li>
@@ -173,7 +184,7 @@ const MakeSkillReviewBody = ({
         >
           {kept.size === names.length
             ? tReview("saveAll")
-            : tReview("saveReplacing", { count: names.length - kept.size })}
+            : tReview("saveReplacing")}
         </Button>
       </DialogFooter>
     </DialogPopup>

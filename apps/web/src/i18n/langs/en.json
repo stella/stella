@@ -1921,10 +1921,6 @@
       "failed": "Could not make a skill from this conversation",
       "review": {
         "description": "The drafted skill holds these names. Anyone with access to this skill may see them.",
-        "kind": {
-          "organization": "Organization",
-          "person": "Person"
-        },
         "replaceHint": "Untick a name to replace it with a general placeholder.",
         "role": {
           "organization": "organization name",

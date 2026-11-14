@@ -1921,10 +1921,6 @@
       "failed": "Nepavyko sukurti įgūdžio iš šio pokalbio",
       "review": {
         "description": "Įgūdžio juodraštyje yra šie vardai. Juos gali matyti visi, turintys prieigą prie šio įgūdžio.",
-        "kind": {
-          "organization": "Organizacija",
-          "person": "Asmuo"
-        },
         "replaceHint": "Panaikinkite vardo žymėjimą, kad jis būtų pakeistas bendru vietos rezervavimo ženklu.",
         "role": {
           "organization": "organizacijos pavadinimas",

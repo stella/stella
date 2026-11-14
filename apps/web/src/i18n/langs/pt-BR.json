@@ -1921,10 +1921,6 @@
       "failed": "Não foi possível criar uma habilidade a partir desta conversa",
       "review": {
         "description": "O rascunho da habilidade contém estes nomes. Qualquer pessoa com acesso a esta habilidade poderá vê-los.",
-        "kind": {
-          "organization": "Organização",
-          "person": "Pessoa"
-        },
         "replaceHint": "Desmarque um nome para substituí-lo por um marcador genérico.",
         "role": {
           "organization": "nome da organização",

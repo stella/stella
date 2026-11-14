@@ -1921,10 +1921,6 @@
       "failed": "Ebből a beszélgetésből nem sikerült készséget létrehozni",
       "review": {
         "description": "A készség vázlata tartalmazza ezeket a neveket. Bárki láthatja őket, aki hozzáfér ehhez a készséghez.",
-        "kind": {
-          "organization": "Szervezet",
-          "person": "Személy"
-        },
         "replaceHint": "Vegye ki a pipát egy név elől, hogy általános helyőrzőre cserélje.",
         "role": {
           "organization": "szervezet neve",

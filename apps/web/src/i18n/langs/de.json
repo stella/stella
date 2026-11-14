@@ -1921,10 +1921,6 @@
       "failed": "Aus dieser Konversation konnte kein Skill erstellt werden",
       "review": {
         "description": "Der Skill-Entwurf enthält diese Namen. Jeder mit Zugriff auf diesen Skill kann sie sehen.",
-        "kind": {
-          "organization": "Organisation",
-          "person": "Person"
-        },
         "replaceHint": "Entfernen Sie das Häkchen bei einem Namen, um ihn durch einen allgemeinen Platzhalter zu ersetzen.",
         "role": {
           "organization": "Name der Organisation",

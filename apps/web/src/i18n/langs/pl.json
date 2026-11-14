@@ -1921,10 +1921,6 @@
       "failed": "Nie udało się utworzyć umiejętności z tej rozmowy",
       "review": {
         "description": "Szkic umiejętności zawiera te nazwiska i nazwy. Może je zobaczyć każdy, kto ma dostęp do tej umiejętności.",
-        "kind": {
-          "organization": "Organizacja",
-          "person": "Osoba"
-        },
         "replaceHint": "Odznacz pozycję, aby zastąpić ją ogólnym symbolem zastępczym.",
         "role": {
           "organization": "nazwa organizacji",

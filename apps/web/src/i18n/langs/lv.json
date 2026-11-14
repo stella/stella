@@ -1921,10 +1921,6 @@
       "failed": "No šīs sarunas neizdevās izveidot prasmi",
       "review": {
         "description": "Prasmes melnrakstā ir šie vārdi. Tos var redzēt ikviens, kam ir piekļuve šai prasmei.",
-        "kind": {
-          "organization": "Organizācija",
-          "person": "Persona"
-        },
         "replaceHint": "Noņemiet atzīmi pie vārda, lai to aizstātu ar vispārīgu vietturi.",
         "role": {
           "organization": "organizācijas nosaukums",

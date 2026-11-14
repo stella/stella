@@ -1921,10 +1921,6 @@
       "failed": "Impossible de créer une compétence à partir de cette conversation",
       "review": {
         "description": "Le brouillon de la compétence contient ces noms. Toute personne ayant accès à cette compétence pourra les voir.",
-        "kind": {
-          "organization": "Organisation",
-          "person": "Personne"
-        },
         "replaceHint": "Décochez un nom pour le remplacer par un espace réservé générique.",
         "role": {
           "organization": "nom de l'organisation",

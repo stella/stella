@@ -1921,10 +1921,6 @@
       "failed": "No se pudo crear una habilidad a partir de esta conversación",
       "review": {
         "description": "El borrador de la habilidad contiene estos nombres. Cualquier persona con acceso a esta habilidad podrá verlos.",
-        "kind": {
-          "organization": "Organización",
-          "person": "Persona"
-        },
         "replaceHint": "Desmarca un nombre para sustituirlo por un marcador genérico.",
         "role": {
           "organization": "nombre de la organización",

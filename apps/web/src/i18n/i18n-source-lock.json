@@ -1530,8 +1530,6 @@
   "chat.makeSkill.emptyThread": "Send a message first, then a skill can be made from the conversation.",
   "chat.makeSkill.failed": "Could not make a skill from this conversation",
   "chat.makeSkill.review.description": "The drafted skill holds these names. Anyone with access to this skill may see them.",
-  "chat.makeSkill.review.kind.organization": "Organization",
-  "chat.makeSkill.review.kind.person": "Person",
   "chat.makeSkill.review.replaceHint": "Untick a name to replace it with a general placeholder.",
   "chat.makeSkill.review.role.organization": "organization name",
   "chat.makeSkill.review.role.person": "person name",
