@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import {
+  claimParagraphNumbers,
   passageContext,
   resolveParagraphScope,
   scopedBlockContext,
@@ -227,5 +228,108 @@ describe("scopePassages", () => {
         end: { blockId: "c", offset: 999 },
       }),
     ).toBeNull();
+  });
+});
+
+describe("claimParagraphNumbers", () => {
+  const at = (blockId: string, start = 0) =>
+    ({ type: "docx-block", blockId, start, end: start + 1 }) as const;
+
+  test("numbers a claim by the printed paragraph it sits in, as a range of that number reads it", () => {
+    const blocks = [
+      docx("t", "Witness statement of a sample witness", { heading: true }),
+      docx("a", "I am a director of the company.", { label: "1." }),
+      docx("b", "I met the buyer in March.", { label: "2." }),
+      docx("b2", "He asked for the July drawdown."),
+      docx("h", "The payment", { heading: true }),
+      docx("c", "The payment was made on 10 August.", { label: "3." }),
+      docx("d", "I did not approve it.", { label: "4." }),
+      docx("x", "Annex A", { heading: true }),
+      docx("y", "The bank statement shows a transfer on 11 August."),
+    ];
+    const paragraphOf = claimParagraphNumbers(blocks);
+    expect(paragraphOf(at("a", 5))).toBe(1);
+    expect(paragraphOf(at("b"))).toBe(2);
+    // Unnumbered text after a paragraph is that paragraph's.
+    expect(paragraphOf(at("b2", 4))).toBe(2);
+    expect(paragraphOf(at("c", 12))).toBe(3);
+    expect(paragraphOf(at("d"))).toBe(4);
+    // A title before the numbering, the heading that opens a section and an
+    // annex the numbering does not reach belong to no paragraph.
+    expect(paragraphOf(at("t"))).toBeNull();
+    expect(paragraphOf(at("h"))).toBeNull();
+    expect(paragraphOf(at("x"))).toBeNull();
+    expect(paragraphOf(at("y"))).toBeNull();
+    // A block the run did not read names no paragraph.
+    expect(paragraphOf(at("gone"))).toBeNull();
+    // The number agrees with the text a range of that number reads.
+    const range = resolveParagraphScope(blocks, { from: 2, to: 2 });
+    expect(range.type === "resolved" && range.scope).toMatchObject({
+      start: { blockId: "b", offset: 0 },
+      end: { blockId: "h", offset: 0 },
+    });
+  });
+
+  test("counts by position when the document numbers no paragraphs", () => {
+    const blocks = [
+      docx("t", "Letter of instruction", { heading: true }),
+      docx("a", "We act for the claimant."),
+      docx("b", "The contract was signed in May."),
+      docx("c", "Payment fell due in June."),
+    ];
+    const paragraphOf = claimParagraphNumbers(blocks);
+    expect(paragraphOf(at("a"))).toBe(1);
+    expect(paragraphOf(at("c", 8))).toBe(3);
+    expect(paragraphOf(at("t"))).toBeNull();
+  });
+
+  test("names no number when the document's numbering is unclear", () => {
+    const blocks = [
+      docx("a", "9. My roles before the pandemic were these:"),
+      docx("b", "a) In 2016 I became a parliamentary secretary;"),
+      docx("c", "b) In 2018 I became a vice chair."),
+      docx("d", "10. From February 2020 I served as a minister:"),
+      docx("e", "a) for adult social care."),
+      docx("f", "11. I left that role in September 2021."),
+    ];
+    const paragraphOf = claimParagraphNumbers(blocks);
+    for (const block of blocks) {
+      expect(paragraphOf(at(block.id, 3))).toBeNull();
+    }
+  });
+
+  test("reads a page's lines back into paragraphs and finds a claim's offset in them", () => {
+    const page = [
+      "1. I am a director of the company and I make this statement from",
+      "my own knowledge.",
+      "",
+      "2. I met the buyer in March 2021 at the offices of the company in",
+      "the presence of the finance director.",
+      "",
+      "3. I did not approve the payment.",
+    ].join("\n");
+    const blocks: VerificationBlock[] = [
+      {
+        id: "P1",
+        text: page,
+        source: { type: "pdf-page", pageNumber: 1 },
+        structure: { type: "pdf-lines", boxes: null },
+      },
+    ];
+    const paragraphOf = claimParagraphNumbers(blocks);
+    const claimAt = (words: string, pageNumber = 1) => {
+      const start = page.indexOf(words);
+      return {
+        type: "pdf-page",
+        pageNumber,
+        start,
+        end: start + words.length,
+      } as const;
+    };
+    expect(paragraphOf(claimAt("my own knowledge"))).toBe(1);
+    expect(paragraphOf(claimAt("the finance director"))).toBe(2);
+    expect(paragraphOf(claimAt("approve the payment"))).toBe(3);
+    // A page the run did not read names no paragraph.
+    expect(paragraphOf(claimAt("my own knowledge", 2))).toBeNull();
   });
 });
