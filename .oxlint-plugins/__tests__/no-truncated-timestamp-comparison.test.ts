@@ -172,3 +172,58 @@ lt(rows.createdAt,new Date(Date.now() - STALE_MS));`,
     ),
   ).toEqual([]);
 });
+
+const lintDateUnderCast = async (source: string) =>
+  await lintSingleRule("no-date-under-timestamp-cast", source, {
+    plugin: "no-truncated-timestamp-comparison",
+  });
+
+test("rejects a stored timestamp read under an explicit cast", async () => {
+  expect(
+    await lintDateUnderCast(
+      `import {sql,gt} from "drizzle-orm";
+import {chatTurns} from "./schema";
+function newer(turn: {id: string; createdAt: Date}) {
+  return sql\`(\${chatTurns.createdAt}, \${chatTurns.id}) > (\${turn.createdAt}::timestamptz, \${turn.id}::uuid)\`;
+}
+sql\`\${chatTurns.updatedAt} IS NOT DISTINCT FROM \${row.updatedAt}::timestamptz\`;
+sql\`created_at > \${row.createdAt.toISOString()}::timestamptz\`;
+sql\`\${chatTurns.createdAt} > \${new Date(row.createdAt)}::timestamptz\`;
+gt(chatTurns.createdAt, sql\`\${cursor.createdAt}::timestamptz\`);
+const boundary = row.createdAt;
+sql\`\${chatTurns.createdAt} <= (\${boundary}::timestamp AT TIME ZONE 'UTC')\`;`,
+    ),
+  ).toEqual([4, 6, 7, 8, 9, 11]);
+});
+
+test("rejects any Date rendering in a keyset tuple under an explicit cast", async () => {
+  expect(
+    await lintDateUnderCast(
+      `import {sql} from "drizzle-orm";
+import {events} from "./schema";
+sql\`(\${events.createdAt}, \${events.id}) > (\${afterTime.toISOString()}::timestamptz, \${afterId}::uuid)\`;
+sql\`(\${events.createdAt}, \${events.id}) < (\${new Date(after)}::timestamptz, \${afterId}::uuid)\`;`,
+    ),
+  ).toEqual([3, 4]);
+});
+
+test("allows in-database boundaries, text tokens, cutoffs and columns under a cast", async () => {
+  expect(
+    await lintDateUnderCast(
+      `import {sql,gt} from "drizzle-orm";
+import {chatTurns} from "./schema";
+const local = pgTable("local", {});
+sql\`(\${chatTurns.createdAt}, \${chatTurns.id}) > (select t.created_at, t.id from chat_turns t where t.id = \${turnId})\`;
+sql\`(\${chatTurns.createdAt}, \${chatTurns.id}) < (\${pgTimestampCursorBoundary(cursor)}, \${id})\`;
+sql\`(\${chatTurns.createdAt}, \${chatTurns.id}) < (\${token}::timestamptz, \${id}::uuid)\`;
+sql\`\${chatTurns.createdAt} > \${thread.updatedAtToken}::timestamptz\`;
+sql\`\${chatTurns.createdAt} <= \${cutoff.toISOString()}::timestamptz\`;
+sql\`\${chatTurns.settledAt} >= \${chatTurns.createdAt}::timestamptz\`;
+sql\`\${local.settledAt} >= \${local.createdAt}::timestamptz\`;
+const live = (table = session) => sql\`\${table.expiresAt} > \${table.lastSeenAt}::timestamptz\`;
+sql\`UPDATE chat_turns SET settled_at = \${row.settledAt}::timestamptz\`;
+gt(chatTurns.createdAt, sql\`\${cutoff}::timestamptz\`);
+sql\`\${chatTurns.createdAt} > \${row.createdAt}\`;`,
+    ),
+  ).toEqual([]);
+});
