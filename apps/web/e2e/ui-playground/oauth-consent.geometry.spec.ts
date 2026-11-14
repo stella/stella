@@ -46,7 +46,13 @@ type CardGeometry = {
 const readGeometry = async (page: Page): Promise<CardGeometry> => {
   await waitForStableGeometry(page, page.locator(CARD));
   return await page.evaluate(
-    ({ bodySelector, barSelector }) => {
+    ({ cardSelector, bodySelector, barSelector }) => {
+      // Align the card's page with the top of the viewport in the same task
+      // that measures it, after fonts and layout have settled.
+      document
+        .querySelector(cardSelector)
+        ?.closest("main")
+        ?.scrollIntoView({ block: "start" });
       const body = document.querySelector(bodySelector);
       const bar = document.querySelector(barSelector);
       if (!(body instanceof HTMLElement) || !(bar instanceof HTMLElement)) {
@@ -70,7 +76,7 @@ const readGeometry = async (page: Page): Promise<CardGeometry> => {
         windowHeight: window.innerHeight,
       };
     },
-    { bodySelector: BODY, barSelector: BAR },
+    { cardSelector: CARD, bodySelector: BODY, barSelector: BAR },
   );
 };
 

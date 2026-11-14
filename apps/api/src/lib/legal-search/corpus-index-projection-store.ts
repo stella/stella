@@ -35,10 +35,11 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
-  corpusIndexUnknownAppendBarrierAt,
+  type CorpusProjectionPresenceProof,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   corpusProjectionAcceptedAppendCleanupFence,
+  corpusProjectionAppendPublishBarrier,
   corpusProjectionUnrecordedAppendCleanupFence,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { lockCorpusIndexProjectionMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
@@ -957,8 +958,8 @@ export const abandonCorpusProjectionAppendTx = async (
   if (intent.appendStartedAt === null) {
     return panic(`Started projection intent has no start time: ${intent.id}`);
   }
-  const barrier = corpusIndexUnknownAppendBarrierAt(
-    intent.appendStartedAt,
+  const barrier = corpusProjectionAppendPublishBarrier(
+    { type: "unknown", appendStartedAt: intent.appendStartedAt },
     manifest,
   );
   const transitionAt = testNow ?? (await readPostgresClock(tx));
@@ -1124,9 +1125,9 @@ export const unparkCorpusProjectionAppendTx = async (
 };
 
 type CommitCorpusProjectionAppendOptions = {
-  intentId: ProjectionIntentId;
+  /** Names the revision and the exact document count the census found. */
+  proof: CorpusProjectionPresenceProof;
   leaseToken: string;
-  documentCount: number;
   testNow?: Date;
 };
 
@@ -1136,23 +1137,17 @@ export type CommitCorpusProjectionAppendResult =
   | { status: "lease_lost" };
 
 /**
- * Finalize a published, presence-confirmed append and its authoritative state
- * in one transaction. The executor confirms outside this transaction.
+ * Finalize a published append and its authoritative state in one
+ * transaction. Only presence evidence reaches it: the census that constructs
+ * the proof runs outside this transaction.
  * A desired-state race cannot publish: the exact new revision is redirected to
  * cleanup instead, behind the barrier that makes that cleanup exact.
  */
 export const commitCorpusProjectionAppendTx = async (
   tx: Transaction,
-  {
-    intentId,
-    leaseToken,
-    documentCount,
-    testNow,
-  }: CommitCorpusProjectionAppendOptions,
+  { proof, leaseToken, testNow }: CommitCorpusProjectionAppendOptions,
 ): Promise<CommitCorpusProjectionAppendResult> => {
-  if (!Number.isSafeInteger(documentCount) || documentCount < 1) {
-    return panic("Projection append document count must be a positive integer");
-  }
+  const { revision: intentId, documentCount } = proof;
   const identities = await tx
     .select({
       family: corpusIndexProjectionIntents.family,
@@ -1193,6 +1188,9 @@ export const commitCorpusProjectionAppendTx = async (
   const intent = intents.at(0);
   if (intent === undefined) {
     return { status: "lease_lost" };
+  }
+  if (intent.indexId !== proof.indexId) {
+    return panic(`Projection presence proof names another index: ${intent.id}`);
   }
   if (
     intent.expectedDocumentCount !== null &&
