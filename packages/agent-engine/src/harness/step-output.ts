@@ -8,12 +8,13 @@ import {
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 /**
- * What a native step produced that the member may open on this computer: a
- * command's output, the diff of each file a change wrote, a subagent's own
- * conversation (what it was told, wrote and reported), or the image file a
- * step viewed. It stays here: the sidecar keeps it in the store `run.start`
- * names (`sidecar/step-outputs.ts`) and the desktop serves it to a page on
- * this computer. It is never part of what a turn reports.
+ * What a native step produced that the member may open: a command's output,
+ * the diff of each file a change wrote, a subagent's own conversation (what
+ * it was told, wrote and reported), or the image file a step viewed. The
+ * sidecar keeps it in the store `run.start` names
+ * (`sidecar/step-outputs.ts`) and sends it to stella, which stores it with
+ * the conversation (`sidecar/step-uploads.ts`). It is never part of what a
+ * turn reports: it travels beside the turn's events, not in them.
  */
 export type HarnessStepOutput =
   | { type: "command"; output: string }
