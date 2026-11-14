@@ -32,7 +32,7 @@ const PRIVATE_FOLDER_MODE = 0o700;
 const UPLOAD_TIMEOUT_MS = 60_000;
 
 /** A step waiting to be sent, as its marker names it. */
-export type SpooledStep = {
+type SpooledStep = {
   /** SHA-256 hex of the step's chat call id. */
   stepKey: string;
   kind: ChatLocalRunStepContentKind;
