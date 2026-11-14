@@ -8,7 +8,7 @@ const CONSTRAINT_NAME = "folio_collab_rooms_checkpoint_size_check";
 
 /**
  * The checkpoint size check migration
- * 20261112223000_folio_collab_checkpoint_document_limit replaces NOT VALID
+ * 20261114103300_folio_collab_checkpoint_document_limit replaces NOT VALID
  * with a higher bound. It only widens the check, so existing rows already
  * pass.
  */
@@ -17,7 +17,7 @@ export const FOLIO_COLLAB_CHECKPOINT_CONSTRAINTS = [
 ] as const satisfies readonly OnlineConstraintValidation[];
 
 export const FOLIO_COLLAB_CHECKPOINT_CONSTRAINT_VALIDATION = {
-  introducedBy: "20261112223000_folio_collab_checkpoint_document_limit",
+  introducedBy: "20261114103300_folio_collab_checkpoint_document_limit",
   name: CONSTRAINT_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
