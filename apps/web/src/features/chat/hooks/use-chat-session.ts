@@ -105,7 +105,10 @@ import {
   sendThreadChatMessage,
   sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
-import { showStoredChatThread } from "@/features/chat/chat-runtime-registry";
+import {
+  resendLatestChatMessage,
+  showStoredChatThread,
+} from "@/features/chat/chat-runtime-registry";
 import {
   chatToolGrantsOptions,
   projectChatToolGrants,
@@ -907,7 +910,8 @@ export const useChatSession = ({
         return;
       }
 
-      await chat.reload(
+      await resendLatestChatMessage(
+        chat,
         sendMode === undefined ? undefined : { body: { sendMode } },
       );
     },

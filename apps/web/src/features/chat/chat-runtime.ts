@@ -227,7 +227,15 @@ export type ChatRuntime = ChatActivitySession & {
     answers: ChatLocalRunQuestionReply["answers"] | null,
   ) => Promise<LocalRunAnswerDelivery>;
   getSnapshot: () => ChatRuntimeSnapshot;
+  /** Answer the latest message again: a regeneration, which the server
+   *  takes only for a message it stores. */
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
+  /**
+   * Send the page's latest message again as the new message it still is,
+   * for a send the server refused before it stored anything. The registry
+   * decides between this and `reload` (`resendLatestChatMessage`).
+   */
+  sendLatestMessageAgain: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
   /** Show the thread as the server stores it, after a request the server did
    *  not accept: its messages replace the page's, and the request's error
@@ -1565,6 +1573,18 @@ export const createChatRuntime = ({
     }
   };
 
+  /** Start a turn on the page's latest user message again. The body says
+   *  what the request is: a regeneration, or the message sent anew. */
+  const postLatestMessageAgain = async (
+    options: ChatSendMessageOptions,
+  ): Promise<void> => {
+    startTurn();
+    browserTool.resume();
+    await withBody(options, async () => {
+      await client.reload();
+    });
+  };
+
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
     reportedUnknownActivityTypes: new Set<string>(),
@@ -1659,19 +1679,15 @@ export const createChatRuntime = ({
     },
     getSnapshot: () => snapshot,
     reload: async (options) => {
-      startTurn();
-      browserTool.resume();
-      await withBody(
-        {
-          body: {
-            ...options?.body,
-            turnIntent: CHAT_TURN_INTENT.regenerate,
-          },
+      await postLatestMessageAgain({
+        body: {
+          ...options?.body,
+          turnIntent: CHAT_TURN_INTENT.regenerate,
         },
-        async () => {
-          await client.reload();
-        },
-      );
+      });
+    },
+    sendLatestMessageAgain: async (options) => {
+      await postLatestMessageAgain({ body: { ...options?.body } });
     },
     setMessages: showMessages,
     showStoredMessages,
