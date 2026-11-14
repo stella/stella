@@ -8,7 +8,7 @@ import {
   mock,
   test,
 } from "bun:test";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -28,6 +28,7 @@ import {
   createChatAttachmentPart,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
+import type { PersistedChatMessageContent } from "@/api/handlers/chat/types";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -56,10 +57,6 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 import getMessages from "../messages/list";
 import getThreads from "../threads/list";
 import { createForkThread } from "./create";
-
-beforeEach(() => {
-  indexChatThreadMock.mockClear();
-});
 
 // Search indexing writes through the root (unscoped) database, which this
 // fixture deliberately does not stand up; the handler takes it as an injectable
@@ -125,6 +122,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
+  indexChatThreadMock.mockClear();
   fakeS3 = startFakeS3();
 });
 
@@ -364,10 +362,75 @@ const messageAt = (seeded: SeededThread, index: number) => {
   return id;
 };
 
+test("a fork copies what a newer release stored exactly, parts and fields this release cannot read included", async () => {
+  // A row a newer release wrote: a part type, a nested field and a top-level
+  // field this release has never seen.
+  const answer = {
+    data: [
+      {
+        content: "Answer one",
+        laterField: { nested: true },
+        type: "text",
+      },
+      { quote: "Clause 4", type: "citation" },
+    ],
+    version: 3,
+  };
+  const source = await seedThread({ texts: ["Ask one", "Answer one"] });
+  const answerId = messageAt(source, 1);
+  await testDb
+    .update(chatMessages)
+    .set({ content: asTestRaw<PersistedChatMessageContent>(answer) })
+    .where(eq(chatMessages.id, answerId));
+  const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  seededThreadIds.push(newThreadId);
+
+  await expectForked(
+    forkThread.handler(
+      forkContext({
+        newThreadId,
+        threadId: source.threadId,
+        upToMessageId: answerId,
+      }),
+    ),
+  );
+
+  // Read past the stored-content codec: what the database holds.
+  const storedText = async (threadId: SafeId<"chatThread">) =>
+    (
+      await testDb
+        .select({ content: sql<string>`${chatMessages.content}::text` })
+        .from(chatMessages)
+        .where(eq(chatMessages.threadId, threadId))
+        .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+    ).map((row): unknown => JSON.parse(row.content));
+  const copied = await storedText(newThreadId);
+  const original = await storedText(source.threadId);
+  expect(copied).toEqual(original);
+  expect(copied.at(1)).toEqual(answer);
+});
+
 test("copies the prefix, preserves the title, and projects fork provenance", async () => {
   const source = await seedThread({
     texts: ["Ask one", "Answer one", "Ask two", "Answer two"],
   });
+  const generationProvenance = {
+    version: 1,
+    slots: {
+      title: {
+        type: "generated",
+        generator: "apps/api/src/handlers/chat/generate-thread-title.ts",
+        decisionIds: [],
+        coverage: "legacy-input",
+      },
+    },
+  } satisfies NonNullable<
+    (typeof chatThreads.$inferSelect)["generationProvenance"]
+  >;
+  await testDb
+    .update(chatThreads)
+    .set({ titleSource: "ai", generationProvenance })
+    .where(eq(chatThreads.id, source.threadId));
   const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   seededThreadIds.push(newThreadId);
 
@@ -408,10 +471,19 @@ test("copies the prefix, preserves the title, and projects fork provenance", asy
     forkedFromMessageId: messageAt(source, 1),
     parentThreadId: source.threadId,
     title: "Termination clause",
-    titleSource: "user",
+    titleSource: "ai",
     webSearchEnabled: true,
     workspaceId: null,
   });
+
+  const storedTitleProof = await testDb
+    .select({ generationProvenance: chatThreads.generationProvenance })
+    .from(chatThreads)
+    .where(eq(chatThreads.id, newThreadId))
+    .limit(1);
+  expect(storedTitleProof.at(0)?.generationProvenance).toEqual(
+    generationProvenance,
+  );
 
   // The source is untouched.
   expect(messageTexts(original)).toEqual([

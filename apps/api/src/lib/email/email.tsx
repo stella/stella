@@ -1,4 +1,3 @@
-import { render } from "@react-email/render";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
@@ -14,6 +13,7 @@ import { subject as productFeedbackSubject } from "@stll/transactional/emails/pr
 import * as ReportExportStatus from "@stll/transactional/emails/report-export-status";
 import type { ReportExportEmailStatus } from "@stll/transactional/emails/report-export-status";
 import { subject as reportExportStatusSubject } from "@stll/transactional/emails/report-export-status-subject";
+import { renderEmail } from "@stll/transactional/render";
 
 import { env } from "@/api/env";
 import {
@@ -167,10 +167,7 @@ export const sendOTPEmail = async ({
   lang,
 }: SendOTPEmailProps) => {
   const node = <BetterAuthOTP.Email lang={lang} otp={otp} type={type} />;
-  const [html, text] = await Promise.all([
-    render(node),
-    render(node, { plainText: true }),
-  ]);
+  const { html, text } = renderEmail(node);
 
   await getTransport().send({
     from: getTransactionalEmailFrom(),
@@ -207,10 +204,7 @@ export const sendNewDeviceLoginEmail = async ({
       time={time}
     />
   );
-  const [html, text] = await Promise.all([
-    render(node),
-    render(node, { plainText: true }),
-  ]);
+  const { html, text } = renderEmail(node);
 
   await getTransport().send({
     from: getTransactionalEmailFrom(),
@@ -244,10 +238,7 @@ export const sendOrganizationInvitation = async ({
       organizationName={organizationName}
     />
   );
-  const [html, text] = await Promise.all([
-    render(node),
-    render(node, { plainText: true }),
-  ]);
+  const { html, text } = renderEmail(node);
 
   await getTransport().send({
     from: getTransactionalEmailFrom(),
@@ -283,10 +274,7 @@ export const sendFeedbackEmail = async ({
       serverVersion={serverVersion}
     />
   );
-  const [html, text] = await Promise.all([
-    render(node),
-    render(node, { plainText: true }),
-  ]);
+  const { html, text } = renderEmail(node);
 
   await getTransport().send({
     from: getTransactionalEmailFrom(),
@@ -307,7 +295,7 @@ type RenderReportExportStatusEmailOptions = {
   status: ReportExportEmailStatus;
 };
 
-export const renderReportExportStatusEmail = async ({
+export const renderReportExportStatusEmail = ({
   appUrl,
   lang,
   status,
@@ -315,10 +303,7 @@ export const renderReportExportStatusEmail = async ({
   const node = (
     <ReportExportStatus.Email appUrl={appUrl} lang={lang} status={status} />
   );
-  const [html, text] = await Promise.all([
-    render(node),
-    render(node, { plainText: true }),
-  ]);
+  const { html, text } = renderEmail(node);
   return {
     html,
     subject: reportExportStatusSubject(lang, status),
@@ -337,7 +322,7 @@ export const sendReportExportStatusEmail = async ({
   lang,
   status,
 }: SendReportExportStatusEmailOptions) => {
-  const rendered = await renderReportExportStatusEmail({
+  const rendered = renderReportExportStatusEmail({
     appUrl,
     lang,
     status,

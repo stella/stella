@@ -66,4 +66,56 @@ describe("case-law read normalization", () => {
 
     expect(normalizeCaseLawDecisionAst(ast)).toBe(ast);
   });
+
+  const headingTexts = (ast: DocumentAst) =>
+    ast.blocks
+      .filter((block) => block.type === "heading")
+      .map(({ plainText }) => plainText);
+
+  const reasoningHeading = (): Block => ({
+    id: "reasoning",
+    anchorId: "reasoning",
+    type: "heading",
+    level: 2,
+    inlines: [{ type: "text", text: "Odůvodnění" }],
+    plainText: "Odůvodnění",
+  });
+
+  test("keeps a quoted verdict run out of the outline", () => {
+    const ast = documentWith([
+      reasoningHeading(),
+      paragraph("h1", "I. Dosavadní průběh řízení"),
+      paragraph(
+        "intro",
+        "Soud prvního stupně rozhodl rozsudkem, kterým uložil povinnost tak, že:",
+      ),
+      paragraph(
+        "v1",
+        "I. Žalovaný je povinen zaplatit žalobci částku 1 000 Kč",
+      ),
+      paragraph("v2", "II. Ve zbytku se žaloba zamítá"),
+      paragraph("v3", "III. Žádný z účastníků nemá právo na náhradu nákladů"),
+      paragraph("h2", "II. Posouzení odvolacím soudem"),
+      paragraph("v4", "III. Rozsudek se mění ve výroku o nákladech"),
+    ]);
+
+    expect(headingTexts(normalizeCaseLawDecisionAst(ast))).toEqual([
+      "Odůvodnění",
+      "I. Dosavadní průběh řízení",
+      "II. Posouzení odvolacím soudem",
+    ]);
+  });
+
+  test("keeps a run after takto: out of the outline", () => {
+    const ast = documentWith([
+      reasoningHeading(),
+      paragraph("intro", "Okresní soud rozhodl takto:"),
+      paragraph("v1", "I. Návrh na zahájení řízení"),
+      paragraph("v2", "II. Podání"),
+    ]);
+
+    expect(headingTexts(normalizeCaseLawDecisionAst(ast))).toEqual([
+      "Odůvodnění",
+    ]);
+  });
 });

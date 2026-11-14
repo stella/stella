@@ -9,10 +9,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  defaultVarcharSchema,
-  resourceIdSchema,
-} from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { readStyleSetFile } from "@/api/lib/style-sets";
 import {
@@ -21,7 +18,7 @@ import {
 } from "@/api/lib/templates/create-template";
 
 const bodySchema = v.object({
-  name: defaultVarcharSchema,
+  name: displayNameSchema(),
   styleSetId: resourceIdSchema("styleSet"),
   categoryId: v.exactOptional(resourceIdSchema("templateCategory")),
 });

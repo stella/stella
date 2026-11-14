@@ -90,7 +90,10 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { resolveAnalysisInput } from "./analysis-input";
+import {
+  type AnalysisInputResolution,
+  resolveAnalysisInput,
+} from "./analysis-input";
 import {
   type AnalysisOutput,
   analysisOutputSchema,
@@ -141,6 +144,17 @@ export const ANALYSIS_FAILURE_CODE_BY_KIND = {
   provider_credentials_rejected: "provider_refused",
   model_unavailable: "provider_refused",
   provider_unavailable: "provider_unavailable",
+  // Analysis never runs on a computer; read as the provider reasons they are.
+  local_runner_needs_login: "provider_refused",
+  local_runner_limit_reached: "provider_refused",
+  local_runner_unavailable: "provider_unavailable",
+  local_runner_turn_too_large: "provider_refused",
+  // Output grown past what one delivered run holds is an incomplete answer.
+  turn_too_large: "answer_incomplete",
+  local_runner_not_reached: "provider_unavailable",
+  local_runner_relinked: "provider_unavailable",
+  local_runner_restoring: "provider_unavailable",
+  local_runner_folder_unavailable: "provider_unavailable",
   unknown: "failed",
 } as const satisfies Record<AIErrorKind, AnalysisFailureCode>;
 
@@ -158,6 +172,15 @@ const ANALYSIS_INCOMPLETE_REASON_BY_KIND = {
   provider_credentials_rejected: null,
   model_unavailable: null,
   provider_unavailable: null,
+  local_runner_needs_login: null,
+  local_runner_limit_reached: null,
+  local_runner_unavailable: null,
+  local_runner_turn_too_large: null,
+  turn_too_large: "incomplete_output",
+  local_runner_not_reached: null,
+  local_runner_relinked: null,
+  local_runner_restoring: null,
+  local_runner_folder_unavailable: null,
   unknown: null,
 } as const satisfies Record<
   AIErrorKind,
@@ -695,6 +718,33 @@ const analysisStartFailure = (cause: unknown) =>
     cause,
   });
 
+type UnavailableAnalysisInput = Exclude<
+  AnalysisInputResolution,
+  { kind: "resolved" }
+>;
+
+const unavailableAnalysisInputResponse = (
+  resolution: UnavailableAnalysisInput,
+) => {
+  switch (resolution.kind) {
+    case "decision-not-found":
+      return unavailable("decision_not_found", "Decision not found");
+    case "unparseable-document":
+      return unavailable(
+        "document_unparseable",
+        "Decision has no parseable AST",
+      );
+    case "unsupported-language":
+      return unavailable(
+        "language_unsupported",
+        `Analysis is not available for decisions in language "${resolution.language}"`,
+      );
+    default:
+      resolution satisfies never;
+      return panic(`Unhandled resolution: ${String(resolution)}`);
+  }
+};
+
 export const generateAnalysis = async ({
   admitModelAction,
   startModelAction,
@@ -714,27 +764,19 @@ export const generateAnalysis = async ({
   Result<GenerateAnalysisResponse, ActionAdmissionError | HandlerError>
 > => {
   // audit: skip — background AI analysis output
-  const resolution = await resolveAnalysisInput({ decisionId, scopedDb });
-  switch (resolution.kind) {
-    case "decision-not-found":
-      return Result.ok(unavailable("decision_not_found", "Decision not found"));
-    case "unparseable-document":
-      return Result.ok(
-        unavailable("document_unparseable", "Decision has no parseable AST"),
-      );
-    case "unsupported-language":
-      return Result.ok(
-        unavailable(
-          "language_unsupported",
-          `Analysis is not available for decisions in language "${resolution.language}"`,
-        ),
-      );
-    case "resolved":
-      break;
-    default: {
-      resolution satisfies never;
-      return panic(`Unhandled resolution: ${String(resolution)}`);
-    }
+  const resolved = await resolveAnalysisInput({ decisionId, scopedDb });
+  if (Result.isError(resolved)) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: resolved.error.message,
+        cause: resolved.error,
+      }),
+    );
+  }
+  const resolution = resolved.value;
+  if (resolution.kind !== "resolved") {
+    return Result.ok(unavailableAnalysisInputResponse(resolution));
   }
   const { anchorIds, decision, input } = resolution;
   const reader = readerKeyOf({ orgAIConfig, organizationId });
@@ -753,17 +795,18 @@ export const generateAnalysis = async ({
       // moved costs one indexed query.
       if (derivedAi && promptCachingEnabled !== null) {
         detached(
-          refreshSignificance({
-            admitModelAction,
-            analysis: stored.analysis,
-            contentHash: decision.contentHash,
-            derivedAi,
-            decisionId,
-            orgAIConfig,
-            orgAIConfigStatus,
-            organizationId,
-            promptCachingEnabled,
-          }),
+          async () =>
+            refreshSignificance({
+              admitModelAction,
+              analysis: stored.analysis,
+              contentHash: decision.contentHash,
+              derivedAi,
+              decisionId,
+              orgAIConfig,
+              orgAIConfigStatus,
+              organizationId,
+              promptCachingEnabled,
+            }),
           "analysis-generate.refresh-significance",
         );
       }
@@ -789,8 +832,8 @@ export const generateAnalysis = async ({
   if (!derivedAi) {
     return Result.ok(
       unavailable(
-        "analysis_unavailable",
-        "Analysis is unavailable for this decision",
+        "analysis_disabled",
+        "Analysis generation is disabled on this deployment",
       ),
     );
   }
@@ -833,8 +876,8 @@ export const generateAnalysis = async ({
   if (!allowsDerivedAiAnalysis(decision)) {
     return Result.ok(
       unavailable(
-        "analysis_unavailable",
-        "Analysis is unavailable for this decision",
+        "source_restricted",
+        "The source does not permit AI analysis",
       ),
     );
   }
@@ -943,7 +986,7 @@ const config = {
     "from it. Returns status done with the stored analysis and aiDisclosure, " +
     "generating while a run is in flight (poll until it is done), or error " +
     "with a code: decision_not_found, document_unparseable, " +
-    "language_unsupported or analysis_unavailable when no analysis can be " +
+    "language_unsupported, analysis_disabled or source_restricted when no analysis can be " +
     "made; answer_incomplete, timed_out, provider_refused, " +
     "provider_unavailable or failed when the last run failed, with key " +
     "naming whose AI key it used (the organization's own, or the platform's). " +

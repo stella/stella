@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { DocxEditorProps, DocxEditorRef } from "./app-docx-editor";
 
@@ -244,13 +244,13 @@ test("a narrow real editor starts with a collapsed outline, fits the page, and o
       expect(
         mounted.container.querySelector(
           '[data-folio-outline-surface="expanded"]',
-        ),
-      ).toBeNull();
+        ) === null,
+      ).toBe(true);
       expect(
         mounted.container.querySelector(
           '[data-folio-outline-surface="column"]',
-        ),
-      ).toBeNull();
+        ) === null,
+      ).toBe(true);
       expect(editor.getZoom()).toBeLessThan(1);
       expect(pageWidth * editor.getZoom()).toBeLessThanOrEqual(scrollWidth());
       expect(pageWidth * editor.getZoom()).toBeGreaterThan(scrollWidth() - 40);

@@ -1,0 +1,6 @@
+{
+  "create-table-references": "The link table is created with its foreign keys, so no existing rows are scanned while the short catalog lock on the referenced tables is held.",
+  "add-foreign-key": "The new conflict check table is empty, so its organization and user foreign keys validate no existing rows. The referenced organization and user tables take a bounded lock under the 1s lock_timeout and 5s statement_timeout.",
+  "row-level-security": "Row security is enabled and forced on the two new empty tables before application code can write them.",
+  "create-policy": "Policies are catalog-only additions to the two new empty tables and run under the migration's one-second lock timeout."
+}

@@ -22,10 +22,6 @@ import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
-beforeEach(() => {
-  suggestTemplateFieldsMock.mockClear();
-});
-
 const PROVIDER_ERROR = new Error(
   "upstream provider rejected request: invalid api key sk-live-abc123",
 );
@@ -39,6 +35,7 @@ const suggestTemplateFieldsMock = mock(async () => {
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  suggestTemplateFieldsMock.mockClear();
   analytics = installRecordingAnalytics();
 });
 
@@ -51,9 +48,9 @@ const userId = toSafeId<"user">("user-test");
 // SAFETY: test double — usage metering only touches `safeDb` on a real
 // model step, which never runs here (`suggestTemplateFields` is mocked to
 // reject before any metering call).
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 const stubSafeDb = (() => {
   throw new Error("safeDb stub must not be called");
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 }) as unknown as SafeDb;
 
 type SuggestFieldsExecute = (

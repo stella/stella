@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { dkimSign } from "mailauth";
 import { generateKeyPairSync } from "node:crypto";
 
@@ -56,6 +56,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -113,6 +114,8 @@ const processUpload = async ({
   await fileUploadedMail({
     bytes,
     mimeType,
+    // These fixture files have no stored version; no generation is fenced.
+    sourceFileId: "unversioned-file",
     scope: { organizationId, workspaceId, entityId },
     database: db,
     scopedDbForUploader: (scope) =>
@@ -195,7 +198,7 @@ if (!databaseUrl || !runPostgresTests) {
     const gated = openGatedTestDatabase(databaseUrl);
     db = gated.db;
     gated.cleanUp(async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       for (const id of [uploaderId, outsiderId]) {
         await db.delete(user).where(eq(user.id, id));
       }
@@ -671,7 +674,23 @@ if (!databaseUrl || !runPostgresTests) {
       await processUpload({ entityId, bytes: emlFile(GOLDEN_MESSAGE) });
       expect(await records()).toHaveLength(1);
 
-      await db.delete(entities).where(eq(entities.id, entityId));
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT
+          set_config('app.correspondence_source_organization_id', 'outer-organization', true),
+          set_config('app.correspondence_source_workspace_id', ${otherWorkspaceId}, true),
+          set_config('app.correspondence_source_record_id', ${createSafeId<"correspondence">()}, true),
+          set_config('app.correspondence_source_entity_id', ${createSafeId<"entity">()}, true)
+        `);
+        const scope = sql`SELECT
+          current_setting('app.correspondence_source_organization_id', true) AS organization_id,
+          current_setting('app.correspondence_source_workspace_id', true) AS workspace_id,
+          current_setting('app.correspondence_source_record_id', true) AS record_id,
+          current_setting('app.correspondence_source_entity_id', true) AS entity_id
+        `;
+        const before = await tx.execute(scope);
+        await tx.delete(entities).where(eq(entities.id, entityId));
+        expect(await tx.execute(scope)).toEqual(before);
+      });
 
       expect(await records()).toHaveLength(0);
       expect(await filers()).toHaveLength(0);
@@ -889,13 +908,25 @@ if (!databaseUrl || !runPostgresTests) {
             .insert(correspondence)
             .values({ ...recordRow(), ...uploadProvenance(entityId) }),
       );
+      const otherEntityId = await storeEmailFile({ createdBy: uploaderId });
+      const otherRecord = recordRow();
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(correspondence).values({
+            ...otherRecord,
+            ...uploadProvenance(otherEntityId),
+          }),
+      );
+      // Insertion with a new dedup key is a source-generation transition.
+      // Updating another record isolates the source-pointer uniqueness guard.
       const duplicate = await Result.tryPromise(
         async () =>
           await fixtureScoped()(
             async (tx) =>
               await tx
-                .insert(correspondence)
-                .values({ ...recordRow(), ...uploadProvenance(entityId) }),
+                .update(correspondence)
+                .set({ sourceEntityId: entityId })
+                .where(eq(correspondence.id, otherRecord.id)),
           ),
       );
       expect(

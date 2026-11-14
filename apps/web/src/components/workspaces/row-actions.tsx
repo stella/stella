@@ -8,15 +8,6 @@ import { useTranslations } from "use-intl";
 
 import { isDocumentTranslationSourceEligible } from "@stll/api-contract/document-translation";
 import { fetchWithTimeout } from "@stll/fetch";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
@@ -56,6 +47,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
@@ -67,6 +59,7 @@ import {
   type DownloadRendition,
   type DownloadVariant,
   getDownloadRenditions,
+  getPrimaryDownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
@@ -115,6 +108,7 @@ import {
   type RowMenuSection,
   type RowMenuSubject,
 } from "@/components/workspaces/row-actions.logic";
+import { RowDeleteDialog } from "@/components/workspaces/row-delete-dialog";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { PDF_MIME_TYPE } from "@/consts";
@@ -1137,7 +1131,7 @@ export const RowActions = ({
             aria-label={t("common.actions")}
             className={cn(
               triggerClassName ??
-                "opacity-0! transition-opacity group-hover/row:opacity-100!",
+                "opacity-0! transition-opacity group-hover/row:opacity-100! pointer-coarse:opacity-100!",
             )}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -1356,7 +1350,7 @@ const RowDuplicatePrimaryAction = ({
 
   return (
     <Button
-      className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
+      className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
       disabled={pending}
       onClick={(event) => {
         event.stopPropagation();
@@ -1474,9 +1468,12 @@ export const RowOcrMenuActions = ({
                     {...capabilityProps}
                   >
                     <ScanTextIcon />
-                    <BidiText as="span" className="max-w-64 truncate">
+                    <TruncatedText
+                      className="max-w-64"
+                      render={<BidiText as="span" />}
+                    >
                       {source.fileName}
-                    </BidiText>
+                    </TruncatedText>
                   </MenuItem>
                 )}
               </CapabilityAction>
@@ -1821,7 +1818,10 @@ const RowFileOperationsMenu = ({
       {hasAnyFile && (
         <MenuItem
           onClick={() =>
-            detached(onDownload("original"), "row-actions.download")
+            detached(
+              onDownload(getPrimaryDownloadVariant(downloadRenditions)),
+              "row-actions.download",
+            )
           }
         >
           <DownloadIcon />
@@ -1863,9 +1863,12 @@ const RowFileOperationsMenu = ({
                 <MenuSub key={source.fieldId}>
                   <MenuSubTrigger>
                     <ScanTextIcon />
-                    <BidiText as="span" className="max-w-64 truncate">
+                    <TruncatedText
+                      className="max-w-64"
+                      render={<BidiText as="span" />}
+                    >
                       {source.fileName}
-                    </BidiText>
+                    </TruncatedText>
                   </MenuSubTrigger>
                   <MenuSubPopup>{renderOcrExport(source)}</MenuSubPopup>
                 </MenuSub>
@@ -1900,56 +1903,6 @@ const RowFileOperationsMenu = ({
         {t("common.delete")}
       </MenuItem>
     </>
-  );
-};
-
-type RowDeleteDialogProps = {
-  isBulk: boolean;
-  name: string;
-  onConfirm: () => void;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-  selectedCount: number;
-};
-
-const RowDeleteDialog = ({
-  isBulk,
-  name,
-  onConfirm,
-  onOpenChange,
-  open,
-  selectedCount,
-}: RowDeleteDialogProps) => {
-  const t = useTranslations();
-  return (
-    <AlertDialog onOpenChange={onOpenChange} open={open}>
-      <AlertDialogPopup>
-        <AlertDialogHeader>
-          <AlertDialogTitle>
-            {isBulk
-              ? t("workspaces.deleteItems", { count: selectedCount })
-              : t("workspaces.deleteItem")}
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            {isBulk
-              ? t("workspaces.deleteItemsDescription", {
-                  count: selectedCount,
-                })
-              : t("common.deleteConfirmDescription", { name })}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogClose render={<Button variant="ghost" />}>
-            {t("common.cancel")}
-          </AlertDialogClose>
-          <AlertDialogClose
-            render={<Button onClick={onConfirm} variant="destructive" />}
-          >
-            {t("common.delete")}
-          </AlertDialogClose>
-        </AlertDialogFooter>
-      </AlertDialogPopup>
-    </AlertDialog>
   );
 };
 

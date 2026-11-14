@@ -20,6 +20,7 @@ import { Button } from "@stll/ui/button";
 import { Columns3Icon, SearchIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -283,7 +284,7 @@ const FindChipLabel = ({ columns, selection, term }: FindChipLabelProps) => {
     <>
       {/* User text, and a case name is long: it truncates rather than pushing
           the rest of the toolbar off screen. */}
-      <span className="max-w-48 truncate">{term}</span>
+      <TruncatedText className="max-w-48">{term}</TruncatedText>
       {narrowedTo !== null && (
         <span className="text-muted-foreground">
           {soleColumn?.label ??
@@ -381,19 +382,17 @@ const FindColumnRow = ({
   onClick,
   title,
 }: FindColumnRowProps) => (
-  <button
+  <Button
     aria-pressed={checked}
-    className={cn(
-      "flex items-center gap-2 rounded px-2 py-1 text-start text-sm",
-      disabled ? "opacity-56" : "hover:bg-accent cursor-pointer",
-    )}
     disabled={disabled}
     onClick={onClick}
-    title={title}
-    type="button"
+    size="row"
+    // Why a column cannot be searched, reachable while the row is disabled.
+    tooltip={title}
+    variant="ghost"
   >
     {icon}
-    <span className="min-w-0 flex-1 truncate">{label}</span>
+    <TruncatedText className="flex-1">{label}</TruncatedText>
     {checked && <span className="text-primary">{"✓"}</span>}
-  </button>
+  </Button>
 );

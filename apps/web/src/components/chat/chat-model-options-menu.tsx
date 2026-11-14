@@ -1,9 +1,14 @@
 import { useId, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import {
+  CHAT_CLOUD_RUN_TARGET,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import { groupReasoningEfforts } from "@stll/chat/model-selector";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -22,6 +27,7 @@ import {
   MenuSubTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -29,11 +35,15 @@ import {
   type ProviderValue,
 } from "@/components/ai-config-role-models.logic";
 import { AIProviderIcon } from "@/components/ai-provider-icons";
-import { getModelPickerView } from "@/components/chat/chat-model-options-menu.logic";
+import {
+  EFFORT_LABEL_KEY,
+  getModelPickerView,
+} from "@/components/chat/chat-model-options-menu.logic";
 import type {
   ModelPickerEntry,
   ModelRecommendation,
 } from "@/components/chat/chat-model-options-menu.logic";
+import { LocalModelOptions } from "@/components/chat/chat-run-target-menu";
 import {
   ComposerSubmenuSearch,
   useFocusSearchOnOpen,
@@ -42,37 +52,66 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { modelOptionsOptions } from "@/features/chat/queries";
 import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { TranslationKey } from "@/i18n/types";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { queryView } from "@/lib/query-view.logic";
 
 export const CHAT_MODEL_MENU_POPUP_CLASS_NAME =
   "w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)";
 
-export const EFFORT_LABEL_KEY = {
-  none: "chat.modelSelector.effortValues.none",
-  minimal: "chat.modelSelector.effortValues.minimal",
-  low: "chat.modelSelector.effortValues.low",
-  medium: "chat.modelSelector.effortValues.medium",
-  high: "chat.modelSelector.effortValues.high",
-  xhigh: "chat.modelSelector.effortValues.xhigh",
-  max: "chat.modelSelector.effortValues.max",
-} as const satisfies Record<ReasoningEffort, TranslationKey>;
-
 export type ComposerModelsMenuProps = {
   activeOrganizationId: string;
   threadRef: ChatThreadRef;
+  /**
+   * `loading` until the stored choice is known; the menu is disabled until
+   * then, so no pick composes on a choice not yet read.
+   */
+  state: "loading" | "ready";
   /** Current per-thread override ("provider::modelId"), or null when the
    *  thread uses the org default. */
   selectedModel: string | null;
   selectedReasoningEffort: ReasoningEffort | null;
-  /** Persist the chosen model (see `useChatModelSelection`). Fire-and-forget
+  /** Persist the chosen model (see `useChatComposerModels`). Fire-and-forget
    *  here: the caller's own send path is what awaits the outcome via
    *  `awaitPendingSelection`, not this menu. */
   selectModel: (selection: {
     model: string | null;
     reasoningEffort: ReasoningEffort | null;
   }) => void;
+  /** Where the thread's turns run; see `ChatRunOn`. */
+  runTarget: ChatRunOn;
+};
+
+/**
+ * Where a composer's turns run, as its model menu offers it. Required on
+ * every menu, so a surface that starts or continues a thread cannot drop
+ * the Run on choice by leaving a prop out: it takes the choice from
+ * `useChatComposerModels`, or states `cloud_only` because its turns depend
+ * on tools only stella's own models drive in this page (the live document
+ * editor's suggestions, say).
+ */
+export type ChatRunOn =
+  | {
+      type: "choice";
+      selected: ChatRunTarget;
+      select: (target: ChatRunTarget) => void;
+    }
+  | { type: "cloud_only" };
+
+export const CHAT_RUN_ON_CLOUD_ONLY = {
+  type: "cloud_only",
+} as const satisfies ChatRunOn;
+
+/** The target a composer's next turn runs on. */
+export const chatRunOnTarget = (runOn: ChatRunOn): ChatRunTarget => {
+  switch (runOn.type) {
+    case "choice":
+      return runOn.selected;
+    case "cloud_only":
+      return CHAT_CLOUD_RUN_TARGET;
+    default:
+      runOn satisfies never;
+      return panic("Unknown Run on choice");
+  }
 };
 
 type ModelOption = {
@@ -95,8 +134,33 @@ type ChatModelOptionsMenuProps = {
   open: boolean;
 };
 
-/** The single model-picker body shared by the composer (+) menu and dock. */
+/**
+ * The single model-picker body shared by the composer (+) menu and the model
+ * chip: the models of the place the chat runs, which the where chip picks.
+ * In the cloud, Auto or one of stella's models; on the member's computer,
+ * the models its coding agent offers.
+ */
 export const ChatModelOptionsMenu = ({
+  enabled,
+  models,
+  open,
+}: ChatModelOptionsMenuProps) => {
+  const { runTarget } = models;
+  if (runTarget.type === "choice" && runTarget.selected.kind === "local") {
+    return (
+      <LocalModelOptions
+        activeOrganizationId={models.activeOrganizationId}
+        enabled={enabled}
+        onSelect={runTarget.select}
+        selected={runTarget.selected}
+      />
+    );
+  }
+  return <CloudModelOptions enabled={enabled} models={models} open={open} />;
+};
+
+/** stella's own models: Auto routing or an explicit model and effort. */
+const CloudModelOptions = ({
   enabled,
   models,
   open,
@@ -325,11 +389,11 @@ const ModelOptionRow = ({
           />
           <span className="flex min-w-0 flex-col">
             <span className="flex min-w-0 items-center gap-1.5">
-              <BidiText as="span" className="truncate">
+              <TruncatedText render={<BidiText as="span" />}>
                 {option.displayName}
-              </BidiText>
+              </TruncatedText>
               {recommendation === "new" && (
-                <span className="bg-muted text-muted-foreground text-2xs shrink-0 rounded px-1.5 py-px font-medium">
+                <span className="bg-muted text-muted-foreground text-2xs shrink-0 rounded-sm px-1.5 py-px font-medium">
                   {t("chat.modelSelector.newModel")}
                 </span>
               )}

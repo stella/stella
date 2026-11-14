@@ -3,11 +3,15 @@ import { describe, expect, test } from "bun:test";
 import {
   countProcessWork,
   getChatToolActivityCategory,
+} from "@stll/api-contract/chat-tool-activity";
+import type { KnownChatToolName } from "@stll/api-contract/chat-tool-activity";
+
+import {
   getLatestCompletedResearchPartIndex,
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
 import { projectCanonicalChatUIMessages } from "@/components/chat/chat-ui-tools";
-import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatMessage, ChatUITools } from "@/components/chat/chat-ui-tools";
 
 // Fixtures cross the same projection boundary the thread renders through.
 const projectParts = (parts: ChatMessage["parts"]) =>
@@ -16,6 +20,16 @@ const projectParts = (parts: ChatMessage["parts"]) =>
   ]).flatMap((message) => message.parts);
 
 describe("chat tool activity", () => {
+  test("knows every tool the web's messages carry", () => {
+    // Typecheck refuses this record while a registered tool has no shared
+    // kind and title, which would leave its steps reading "Unknown tool".
+    const unlabelled: Record<
+      Exclude<keyof ChatUITools, KnownChatToolName>,
+      true
+    > = {};
+    expect(Object.keys(unlabelled)).toEqual([]);
+  });
+
   test("classifies evidence gathering as research", () => {
     for (const toolName of [
       "web_search",
@@ -214,5 +228,17 @@ describe("thread activity", () => {
         hasVisibleContent: true,
       }),
     ).toBeNull();
+  });
+});
+
+describe("tool names a model or a newer server sends", () => {
+  test("an inherited object name is categorized as the unknown tool it is", () => {
+    const unknown = getChatToolActivityCategory("no_such_tool");
+    for (const name of [
+      ...Object.getOwnPropertyNames(Object.prototype),
+      "__proto__",
+    ]) {
+      expect(getChatToolActivityCategory(name)).toBe(unknown);
+    }
   });
 });

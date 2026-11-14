@@ -1,3 +1,8 @@
+import {
+  type VisibleWorkspaceStatus,
+  WORKSPACE_STATUS,
+} from "@stll/api-contract/workspace-status";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -6,6 +11,7 @@ type WorkspaceListQueryOptions = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
   query?: string;
+  status?: VisibleWorkspaceStatus;
   limit: number;
 };
 
@@ -13,6 +19,7 @@ export const readWorkspaceListRows = ({
   tx,
   organizationId,
   query,
+  status = WORKSPACE_STATUS.active,
   limit,
 }: WorkspaceListQueryOptions) =>
   tx.query.workspaces.findMany({
@@ -26,7 +33,7 @@ export const readWorkspaceListRows = ({
             ],
           }
         : {}),
-      status: { eq: "active" },
+      status: { eq: status },
     },
     columns: {
       id: true,

@@ -18,6 +18,7 @@ import type {
   KanbanGroup,
 } from "@stll/ui/kanban";
 import type { OptionColor } from "@stll/ui/option-color";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
@@ -377,7 +378,7 @@ const WorkspaceKanbanColumnHeading = ({
         dragHandle={
           canEdit ? (
             <div
-              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
+              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100 pointer-coarse:opacity-100"
               ref={dragHandleRef}
             >
               <GripVerticalIcon className="size-3.5" />
@@ -443,14 +444,18 @@ const SubgroupIdentity = ({ group }: { group: KanbanGroup }) => {
           className="size-2.5 shrink-0 rounded-full"
           style={{ backgroundColor: group.color }}
         />
-        <span className="truncate text-sm font-medium">{group.label}</span>
+        <TruncatedText className="text-sm font-medium">
+          {group.label}
+        </TruncatedText>
       </span>
     );
   }
   return (
     <span className="flex max-w-80 items-center gap-2">
       <Rows3Icon className="text-muted-foreground size-4 shrink-0" />
-      <span className="truncate text-sm font-medium">{group.label}</span>
+      <TruncatedText className="text-sm font-medium">
+        {group.label}
+      </TruncatedText>
     </span>
   );
 };

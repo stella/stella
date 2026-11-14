@@ -2,7 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 
 import { declareFingerprintFields } from "@stll/errors";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 /** An upstream record that cannot safely become a decision. */
 export type RejectedCaseLawIngestionRecord = {

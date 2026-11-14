@@ -39,11 +39,16 @@ import {
 
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
+const displayOnlySourceId = createSafeId<"caseLawSource">();
+const displayOnlyId = createSafeId<"caseLawDecision">();
 const supremeId = createSafeId<"caseLawDecision">();
 const administrativeId = createSafeId<"caseLawDecision">();
 const listingOnlyId = createSafeId<"caseLawDecision">();
 const restrictedId = createSafeId<"caseLawDecision">();
 const reportedId = createSafeId<"caseLawDecision">();
+const plenaryId = createSafeId<"caseLawDecision">();
+/** As the Constitutional Court publishes it: the ordinal's `Pl` is mixed case. */
+const plenaryEcli = "ECLI:CZ:US:2025:Pl.US.32.25.1";
 const euSourceId = createSafeId<"caseLawSource">();
 const euEcli = "ECLI:EU:C:2019:801";
 const euVersions = [
@@ -151,8 +156,33 @@ beforeAll(
         id: closedSourceId,
         name: "closed",
       }),
+      caseLawSourceRow({
+        adapterKey: "display-only",
+        descriptor: {
+          allowsDerivedAi: false,
+          allowsRedistribution: true,
+          attribution: "Publisher",
+          license: "permitted-redistribution",
+        },
+        id: displayOnlySourceId,
+        name: "display only",
+      }),
     ]);
     await db.insert(caseLawDecisions).values([
+      {
+        id: displayOnlyId,
+        sourceId: displayOnlySourceId,
+        caseNumber: "4 Tdo 7/2021",
+        citationKey: citationKeyOf("4 Tdo 7/2021"),
+        court: "Nejvyšší soud",
+        country: "CZE",
+        decisionDate: "2021-02-03",
+        ecli: null,
+        language: "cs",
+        languageGroupKey: "lookup-display-only",
+        slug: "4-tdo-7-2021",
+        metadata: { keywords: ["podvod", "škoda"] },
+      },
       {
         id: supremeId,
         sourceId: openSourceId,
@@ -207,6 +237,20 @@ beforeAll(
         country: "CZE",
         language: "cs",
         languageGroupKey: "lookup-restricted",
+      },
+      {
+        // Its ECLI is held in the column alone, with no identifier row.
+        id: plenaryId,
+        sourceId: openSourceId,
+        caseNumber: "Pl.ÚS 32/25",
+        citationKey: citationKeyOf("Pl.ÚS 32/25"),
+        court: "Ústavní soud",
+        country: "CZE",
+        decisionDate: "2025-12-10",
+        ecli: plenaryEcli,
+        language: "cs",
+        languageGroupKey: "lookup-plenary",
+        slug: "pl-us-32-25",
       },
       {
         id: reportedId,
@@ -362,6 +406,24 @@ test("an ECLI held only in the identifier rows resolves", async () => {
   });
 
   expect(rows.map(({ id }) => id)).toEqual([administrativeId]);
+});
+
+test("an ECLI held only in the column resolves in any letter case", async () => {
+  for (const value of [
+    plenaryEcli,
+    plenaryEcli.toUpperCase(),
+    plenaryEcli.toLowerCase(),
+  ]) {
+    const rows = await lookupDecisionsByIdentity({
+      caseLawDb,
+      country: "CZE",
+      locator: { kind: "ecli", value },
+    });
+    expect(
+      rows.map(({ id }) => id),
+      value,
+    ).toEqual([plenaryId]);
+  }
 });
 
 test("a decision with several parallel identifiers is one candidate", async () => {
@@ -602,6 +664,16 @@ test("identity candidates carry bounded first-line publisher classifications", a
     locator: docketLocator("8 As 1/2019"),
   });
   expect(administrative.at(0)?.subjectSummary).toBe("x".repeat(400));
+});
+
+test("a source that withholds derived AI resolves without its publisher classification", async () => {
+  const displayOnly = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: docketLocator("4 Tdo 7/2021"),
+  });
+  expect(displayOnly.map(({ id }) => id)).toEqual([displayOnlyId]);
+  expect(displayOnly.at(0)?.subjectSummary).toBeNull();
 });
 
 test("identity response work stays fixed as unrelated corpus rows grow from 10 to 200", async () => {

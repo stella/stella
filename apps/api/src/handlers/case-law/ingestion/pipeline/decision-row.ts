@@ -3,6 +3,11 @@ import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
+import {
+  CASE_LAW_DECISIONS_SLUG_UIDX,
+  CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
+  onlineUniqueIndexTarget,
+} from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -12,6 +17,7 @@ import {
 } from "@/api/db/schema";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+import { settleReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
@@ -150,7 +156,10 @@ const insertDecisionRowTx = async (
       // The slug index is `(slug) WHERE slug IS NOT NULL`; the predicate
       // lets Postgres infer it as the only arbiter.
       .onConflictDoNothing({
-        target: caseLawDecisions.slug,
+        target: onlineUniqueIndexTarget(
+          CASE_LAW_DECISIONS_SLUG_UIDX,
+          caseLawDecisions,
+        ),
         where: isNotNull(caseLawDecisions.slug),
       })
       .returning({ id: caseLawDecisions.id });
@@ -185,7 +194,11 @@ const finishInsertedRowTx = async (
   } = write;
   await writeDecisionJudges(tx, write, insertedId);
 
-  await announceDecisionIdentifiers(tx, write, insertedId, identifierRows);
+  // The row and its identifiers are stored, so the citations that were
+  // waiting for this decision are answered here rather than by the walk.
+  await settleReopenedCitations(tx, [
+    await announceDecisionIdentifiers(tx, write, insertedId, identifierRows),
+  ]);
 
   switch (citations.disposition) {
     case "annotation-only":
@@ -286,7 +299,7 @@ const writeDecisionRow = async (
       composition,
       composedSupplements,
       shape: { preservesExistingDetail },
-      plan: { payloadColumns, storedPayloadUnchanged },
+      plan: { payloadColumns, replacedBlockAnchors, storedPayloadUnchanged },
       inputProvenance,
     } = write;
     let existing = plannedExisting;
@@ -364,7 +377,9 @@ const writeDecisionRow = async (
         // against.
         return await lostRowWriteStatus(tx, write, existing.id, {
           payloadFenced:
-            storedPayloadUnchanged || inputProvenance.type === "stored",
+            storedPayloadUnchanged ||
+            replacedBlockAnchors !== null ||
+            inputProvenance.type === "stored",
         });
       }
 
@@ -512,7 +527,7 @@ export const writeDecisionRowWithSlug = async (
     isPgConstraintError(
       rowWrite.error,
       PG_ERROR.UNIQUE_VIOLATION,
-      "case_law_decisions_slug_uidx",
+      CASE_LAW_DECISIONS_SLUG_UIDX,
     )
   ) {
     // Only the ladder's last candidate can raise on the slug index.
@@ -535,7 +550,7 @@ export const isConcurrentIdentityInsert = (error: unknown): boolean =>
   isPgConstraintError(
     error,
     PG_ERROR.UNIQUE_VIOLATION,
-    "case_law_decisions_source_document_idx",
+    CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
   ) ||
   isPgConstraintError(
     error,

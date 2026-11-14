@@ -31,8 +31,15 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { KanbanColumnHeader } from "@stll/ui/kanban";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import {
+  Menu,
+  MenuAnchor,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import type {
@@ -141,6 +148,7 @@ export const KanbanColumn = ({
 
   // Context menu state
   const [ctxOpen, setCtxOpen] = useState(false);
+  const [ctxOpener, setCtxOpener] = useState<HTMLElement | null>(null);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -150,6 +158,9 @@ export const KanbanColumn = ({
       return;
     }
     e.preventDefault();
+    setCtxOpener(
+      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+    );
     const x = e.clientX;
     const y = e.clientY;
     setCtxAnchor({
@@ -309,7 +320,7 @@ export const KanbanColumn = ({
         dragHandle={
           isDraggable ? (
             <div
-              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
+              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100 pointer-coarse:opacity-100"
               ref={dragHandleRef}
             >
               <GripVerticalIcon className="size-3.5" />
@@ -409,11 +420,11 @@ export const KanbanColumn = ({
           }}
           open={ctxOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
-          <MenuPopup anchor={ctxAnchor ?? undefined}>
+          <MenuAnchor />
+          <MenuPopup
+            anchor={ctxAnchor ?? undefined}
+            finalFocus={() => ctxOpener}
+          >
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />
               {t("tasks.newTask")}
@@ -612,20 +623,22 @@ export const KanbanColumnTitle = ({
 
   if (!onStartEditing) {
     return (
-      <span className="overflow-hidden text-sm font-medium text-ellipsis whitespace-pre">
+      <TruncatedText className="text-sm font-medium whitespace-pre">
         {title}
-      </span>
+      </TruncatedText>
     );
   }
 
   return (
-    <button
-      className="overflow-hidden text-start text-sm font-medium text-ellipsis whitespace-pre"
+    <Button
+      className="flex min-w-0 shrink overflow-hidden"
       onClick={onStartEditing}
-      type="button"
+      variant="plain"
     >
-      {title}
-    </button>
+      <TruncatedText className="text-sm font-medium whitespace-pre">
+        {title}
+      </TruncatedText>
+    </Button>
   );
 };
 
@@ -663,19 +676,21 @@ export const KanbanColumnSwatch = ({
       moreLabel={t("common.showMore")}
       onSelect={onSelect}
       side="bottom"
+      trigger={
+        <Button
+          aria-label={t("common.changeColor")}
+          className="flex shrink-0"
+          shape="round"
+          variant="plain"
+        >
+          <span
+            className="block size-2.5 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+        </Button>
+      }
       value={optionColor}
-    >
-      <button
-        aria-label={t("common.changeColor")}
-        className="shrink-0 cursor-pointer"
-        type="button"
-      >
-        <span
-          className="block size-2.5 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-      </button>
-    </ColorPicker>
+    />
   );
 };
 
@@ -723,7 +738,7 @@ export const ColumnCalculations = ({
         />
       ))}
       {onChange && properties.length > 0 && (
-        <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100">
+        <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
           <CalculationPicker
             labels={labels}
             onChange={onChange}

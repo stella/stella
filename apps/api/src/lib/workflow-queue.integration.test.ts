@@ -103,6 +103,7 @@ const executionPlan: ExecutionLevel[] = [
         {
           id: extractedPropertyId,
           status: "stale",
+          answerShape: "value",
           content: { version: 1, type: "text" },
           tool: extractedTool,
           dependencies: [],
@@ -305,6 +306,7 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
         aiJustifications: [],
         skippedPropertyIds: [],
         unsupportedPropertyIds: [],
+        withheld: [],
         settlements: new Map(
           batch.properties.map((property) => [
             property.id,
@@ -355,6 +357,7 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
           aiJustifications: [],
           skippedPropertyIds: [],
           unsupportedPropertyIds: [],
+          withheld: [],
           settlements: new Map(
             batch.properties.map((property) => [property.id, outcome]),
           ),
@@ -392,6 +395,7 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
           aiJustifications: [],
           skippedPropertyIds: [],
           unsupportedPropertyIds: [],
+          withheld: [],
           settlements: new Map(
             batch.properties.map((property) => [property.id, "answered"]),
           ),
@@ -423,6 +427,7 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
         aiJustifications: [],
         skippedPropertyIds: batch.properties.map((property) => property.id),
         unsupportedPropertyIds: [],
+        withheld: [],
         settlements: new Map(),
       }),
     );
@@ -471,6 +476,7 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
         aiJustifications: [],
         skippedPropertyIds: [],
         unsupportedPropertyIds: [],
+        withheld: [],
         settlements: new Map([
           [batch.properties[0]?.id ?? panic("first property"), "notStated"],
           [batch.properties[1]?.id ?? panic("second property"), "refused"],
@@ -597,6 +603,7 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
         aiJustifications: [],
         skippedPropertyIds: [],
         unsupportedPropertyIds: [],
+        withheld: [],
         settlements: new Map(
           batch.properties.map((property) => [
             property.id,
@@ -662,6 +669,7 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
         aiJustifications: [],
         skippedPropertyIds: [],
         unsupportedPropertyIds: [],
+        withheld: [],
         settlements: new Map(
           batch.properties.map((property) => [
             property.id,

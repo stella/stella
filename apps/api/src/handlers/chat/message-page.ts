@@ -12,6 +12,7 @@ import {
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
+import { clientVisibleChatPart } from "@/api/handlers/chat/client-visible-chat-part";
 import type {
   ChatMessageMetadata,
   ChatMessageRole,
@@ -109,6 +110,48 @@ export type ChatMessagePage = {
    *  row), or null when the page is empty. For the most-recent page this is
    *  the thread's last-activity timestamp. */
   lastActivityAt: string | null;
+};
+
+/** A thread's newest turn and the answer it wrote, if it wrote one yet. */
+export type NewestChatTurn = {
+  id: SafeId<"chatTurn">;
+  assistantMessageId: SafeId<"chatMessage"> | null;
+};
+
+/**
+ * The member's newest turn of the thread: the one whose file changes on
+ * their computer the page may offer to undo, since only the newest turn can
+ * be undone.
+ */
+export const readNewestChatTurnOnTx = async ({
+  tx,
+  organizationId,
+  threadId,
+  userId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+}): Promise<NewestChatTurn | null> => {
+  const [turn] = await tx
+    .select({
+      id: chatTurns.id,
+      assistantMessageId: chatTurns.assistantMessageId,
+    })
+    .from(chatTurns)
+    // Leads with the member's turns of the thread, newest first
+    // (`chat_turns_org_user_thread_created_idx`), so one index row answers.
+    .where(
+      and(
+        eq(chatTurns.organizationId, organizationId),
+        eq(chatTurns.userId, userId),
+        eq(chatTurns.threadId, threadId),
+      ),
+    )
+    .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+    .limit(1);
+  return turn ?? null;
 };
 
 /**
@@ -319,7 +362,9 @@ export const clientMessageFromPageRow = (
     ...(metadata === undefined ? {} : { metadata }),
     role: message.role,
     revision: row.revision,
-    parts: attachPlaceholders(message.parts, placeholderById),
+    parts: attachPlaceholders(message.parts, placeholderById).map(
+      clientVisibleChatPart,
+    ),
   };
 };
 

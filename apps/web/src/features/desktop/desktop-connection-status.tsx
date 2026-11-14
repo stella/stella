@@ -5,11 +5,15 @@ import { Button } from "@stll/ui/button";
 
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
 import type { DesktopConnectionState } from "@/features/desktop/desktop-connection-store.logic";
+import { DESKTOP_LINK_REFUSAL_MESSAGE } from "@/features/desktop/desktop-link-refusal";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
+import { openDesktopUrl } from "@/lib/desktop-bridge";
 
 type DesktopConnectionStatusProps = {
   /** Omitted where the surface already offers its own connect control. */
   onRetry?: () => void;
+  /** Asks the app linked to another account to switch to this one. */
+  onSwitchAccount: () => void;
   state: DesktopConnectionState;
 };
 
@@ -19,6 +23,7 @@ type DesktopConnectionStatusProps = {
  */
 export const DesktopConnectionStatus = ({
   onRetry,
+  onSwitchAccount,
   state,
 }: DesktopConnectionStatusProps) => {
   const t = useTranslations();
@@ -30,6 +35,24 @@ export const DesktopConnectionStatus = ({
     case "connecting":
       return (
         <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+      );
+    case "opening":
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-muted-foreground text-sm">
+            {t("settings.account.desktopCardOpeningTitle")}
+          </p>
+          <Button
+            onClick={() => {
+              openDesktopUrl(state.desktopUrl);
+            }}
+            size="xs"
+            type="button"
+            variant="link"
+          >
+            {t("settings.account.desktopOpenApp")}
+          </Button>
+        </div>
       );
     case "connected":
       return (
@@ -47,6 +70,24 @@ export const DesktopConnectionStatus = ({
             {t("workspaces.files.desktopEdit.updateRequiredTitle")}
           </p>
           <DesktopDownloadButtons platform={platform} />
+        </div>
+      );
+    case "refused":
+      return (
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-muted-foreground text-sm text-pretty">
+            {t(DESKTOP_LINK_REFUSAL_MESSAGE[state.reason])}
+          </p>
+          {state.reason === "account_conflict" ? (
+            <Button
+              onClick={onSwitchAccount}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {t("settings.account.desktopSwitchAccount")}
+            </Button>
+          ) : null}
         </div>
       );
     case "error":

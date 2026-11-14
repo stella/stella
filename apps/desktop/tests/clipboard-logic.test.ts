@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  activeClipboardSearchOptionCount,
   adjacentClipboardIndex,
   adjacentClipboardScope,
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  clipboardActionItems,
   clipboardCardRenderFormat,
   clipboardControlsKeyAction,
   clipboardDraggedGroupId,
@@ -21,19 +23,22 @@ import {
   clipboardSourceTintIndex,
   clipboardTimelineKeyAction,
   clipboardUntitledName,
+  DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
   highlightClipboardText,
   isClipboardCopyShortcut,
+  isClipboardDictation,
   isClipboardNameInput,
+  isClipboardSearchConfirm,
   NO_CLIPBOARD_PASTE_PREVIEW,
   quickCopyIndex,
   refreshClipboardEditorName,
-  shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
 } from "../src/clipboard/clipboard-logic";
+import type { ClipboardSearchOptions } from "../src/clipboard/clipboard-logic";
 import type {
   ClipboardCopyFormat,
   ClipboardItem,
@@ -283,6 +288,84 @@ describe("diacritic-insensitive search", () => {
       { match: false, start: 0, text: "Karel " },
       { match: true, start: 6, text: "Čapek" },
     ]);
+  });
+});
+
+describe("clipboard search options", () => {
+  const ENTITY_ITEM = {
+    copiedAt: "2026-08-23T10:03:00Z",
+    groupId: null,
+    groupedAt: null,
+    id: "four",
+    name: null,
+    plainText: "ČEZ ESCO, a.s., se sídlem Duhová 1444/2, Praha 4",
+    sourceApp: null,
+    type: "text",
+  } satisfies ClipboardItem;
+  const PREFIX_ITEM = {
+    ...ENTITY_ITEM,
+    id: "five",
+    plainText: "Čezký dodavatel, Praha",
+  } satisfies ClipboardItem;
+  const items = [ENTITY_ITEM, PREFIX_ITEM];
+  const search = (query: string, options: Partial<ClipboardSearchOptions>) =>
+    filterClipboardItems(items, query, null, {
+      ...DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+      ...options,
+    }).map(({ id }) => id);
+
+  test("an exact phrase needs the words together and in order", () => {
+    expect(search("praha čez", {})).toEqual(["four", "five"]);
+    expect(search("praha čez", { exactPhrase: true })).toEqual([]);
+    expect(search("duhová 1444", { exactPhrase: true })).toEqual(["four"]);
+  });
+
+  test("whole words drops a match inside a longer word", () => {
+    expect(search("čez", { wholeWords: true })).toEqual(["four"]);
+    expect(search("čez praha", { wholeWords: true })).toEqual(["four"]);
+  });
+
+  test("match case and match diacritics narrow the folds", () => {
+    expect(search("čez", { matchCase: true })).toEqual([]);
+    expect(search("ČEZ", { matchCase: true })).toEqual(["four"]);
+    expect(search("cez", { matchDiacritics: true })).toEqual([]);
+    expect(search("čez", { matchDiacritics: true })).toEqual(["four", "five"]);
+  });
+
+  test("switching options re-folds a cached clip", () => {
+    expect(search("cez", {})).toEqual(["four", "five"]);
+    expect(search("cez", { matchDiacritics: true })).toEqual([]);
+    expect(search("cez", {})).toEqual(["four", "five"]);
+  });
+
+  test("highlights and previews follow the options", () => {
+    const options = {
+      ...DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+      wholeWords: true,
+    };
+    expect(
+      highlightClipboardText("Čezký ČEZ", "čez", options).filter(
+        ({ match }) => match,
+      ),
+    ).toEqual([{ match: true, start: 6, text: "ČEZ" }]);
+    const plainText = `${"čezký ".repeat(30)}ČEZ`;
+    expect(clipboardSearchPreviewText({ plainText }, "čez", options)).toEqual({
+      text: `${"čezký ".repeat(3)}ČEZ`,
+      truncated: true,
+    });
+  });
+
+  test("counts the active options for the toggle badge", () => {
+    expect(
+      activeClipboardSearchOptionCount(DEFAULT_CLIPBOARD_SEARCH_OPTIONS),
+    ).toBe(0);
+    expect(
+      activeClipboardSearchOptionCount({
+        ...DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+        matchCase: true,
+        wholeWords: true,
+      }),
+    ).toBe(2);
   });
 });
 
@@ -594,9 +677,9 @@ describe("clipboard input keyboard handling", () => {
     expect(isClipboardNameInput({})).toBe(false);
   });
 
-  test("Enter in a clip name editor never triggers timeline copy", () => {
+  test("Enter in a clip name editor is not a search confirm", () => {
     expect(
-      shouldCopyFromClipboardInput({
+      isClipboardSearchConfirm({
         dataset: { clipboardNameInput: "" },
         isComposing: false,
         key: "Enter",
@@ -604,21 +687,29 @@ describe("clipboard input keyboard handling", () => {
     ).toBe(false);
   });
 
-  test("Enter in search copies unless an input method is composing", () => {
+  test("Enter in search only confirms, unless an input method is composing", () => {
     expect(
-      shouldCopyFromClipboardInput({
+      isClipboardSearchConfirm({
         dataset: {},
         isComposing: false,
         key: "Enter",
       }),
     ).toBe(true);
     expect(
-      shouldCopyFromClipboardInput({
+      isClipboardSearchConfirm({
         dataset: {},
         isComposing: true,
         key: "Enter",
       }),
     ).toBe(false);
+  });
+
+  test("only the clips scope lets search-field keys act on a clip", () => {
+    const items = [TEXT_ITEM];
+    expect(clipboardActionItems("clips", items)).toEqual(items);
+    // Registry scope hides the rail: Enter there must never copy and close
+    // on a clip, even before the registry results arrive.
+    expect(clipboardActionItems("registry", items)).toEqual([]);
   });
 
   test("ArrowRight leaves search for the groups only from the end of the text", () => {
@@ -990,7 +1081,7 @@ describe("clipboardItemLink", () => {
 });
 
 describe("clipboardUntitledName", () => {
-  const KIND_LABELS = { image: "Image", text: "Text" };
+  const KIND_LABELS = { dictation: "Dictation", image: "Image", text: "Text" };
   const BROWSER_SOURCE = {
     identifier: "com.google.Chrome",
     name: "Google Chrome",
@@ -1033,6 +1124,19 @@ describe("clipboardUntitledName", () => {
       ),
     ).toBe("Text");
   });
+
+  test("labels a dictation as one, whatever its text looks like", () => {
+    const dictation = {
+      ...TEXT_ITEM,
+      name: null,
+      origin: "dictation",
+      plainText: "https://court.example/decision",
+    } satisfies ClipboardItem;
+    expect(isClipboardDictation(dictation)).toBe(true);
+    expect(clipboardUntitledName(dictation, KIND_LABELS)).toBe("Dictation");
+    expect(isClipboardDictation(TEXT_ITEM)).toBe(false);
+    expect(isClipboardDictation(IMAGE_ITEM)).toBe(false);
+  });
 });
 
 describe("clipboard editor name ownership", () => {
@@ -1051,7 +1155,10 @@ describe("clipboard editor name ownership", () => {
       for (const externalName of ["Timeline rename", null]) {
         expect(
           refreshClipboardEditorName({ type: "edited", value }, externalName),
-        ).toEqual({ type: "edited", value });
+        ).toEqual({
+          type: "edited",
+          value,
+        });
       }
     }
   });

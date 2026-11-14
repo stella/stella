@@ -1,5 +1,3 @@
-import { useRef } from "react";
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
@@ -16,10 +14,10 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectionsOptions } from "@/lib/knowledge/queries";
 import {
-  type McpOAuthOutcome,
-  openMcpOAuthWindow,
-  subscribeToMcpOAuthOutcome,
+  subscribeToMcpConnectionRefresh,
+  useMcpOAuthWindow,
 } from "@/lib/mcp-oauth-channel";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 type McpReconnectButtonProps = {
   slug: string;
@@ -30,10 +28,7 @@ type McpReconnectButtonProps = {
 export const useMcpConnectionOAuthRefresh = (enabled = true) => {
   const queryClient = useQueryClient();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const onConnected = useLatestCallback((outcome: McpOAuthOutcome) => {
-    if (outcome.status !== "connected") {
-      return;
-    }
+  const onConnected = useLatestCallback(() => {
     detached(
       queryClient.invalidateQueries({
         queryKey: mcpConnectionsOptions(activeOrganizationId, userId).queryKey,
@@ -45,7 +40,7 @@ export const useMcpConnectionOAuthRefresh = (enabled = true) => {
     if (!enabled) {
       return undefined;
     }
-    return subscribeToMcpOAuthOutcome(onConnected);
+    return subscribeToMcpConnectionRefresh(onConnected);
   }, [enabled, onConnected]);
 };
 
@@ -58,7 +53,6 @@ export const McpReconnectButton = ({
   useMcpConnectionOAuthRefresh(
     oauthRefresh === "self" && authType === "oauth2",
   );
-  const awaitingOAuth = useRef(false);
   const handleError = (error: unknown) => {
     notifyUserError(error, t("knowledge.mcp.errorTitle"), {
       description: userErrorFromThrown(
@@ -67,29 +61,26 @@ export const McpReconnectButton = ({
       ),
     });
   };
-  const onOutcome = useLatestCallback((outcome: McpOAuthOutcome) => {
-    if (!awaitingOAuth.current) {
-      return;
-    }
-    awaitingOAuth.current = false;
+  const openOAuthWindow = useMcpOAuthWindow((outcome) => {
     if (outcome.status === "error") {
       handleError(undefined);
     }
   });
-  useExternalSyncEffect(() => {
-    if (authType !== "oauth2") {
-      return undefined;
-    }
-    return subscribeToMcpOAuthOutcome(onOutcome);
-  }, [authType, onOutcome]);
-  const reconnect = useMutation({
+  const queryClient = useQueryClient();
+  // Built outside useMutation so the connection start's result types the
+  // mutation instead of being inferred back from useMutation's own generics.
+  const reconnectMutationFn = resourceMutation({
+    mutation: "connectMcpServer",
+    queryClient,
+    scope: { type: "organization" },
     mutationFn: async () => await mcpConnectorConnection.start(slug),
+  });
+  const reconnect = useMutation({
+    mutationFn: reconnectMutationFn,
     onSuccess: (data) => {
       switch (data.type) {
         case "oauth2":
-          awaitingOAuth.current = true;
-          if (openMcpOAuthWindow(data.authorizeUrl) === "invalid") {
-            awaitingOAuth.current = false;
+          if (openOAuthWindow(data.authorizeUrl) === "invalid") {
             handleError(undefined);
           }
           return;
@@ -115,7 +106,7 @@ export const McpReconnectButton = ({
           size="xs"
           variant="outline"
         >
-          {t("knowledge.mcp.reconnect")}
+          {t("common.reconnect")}
         </Button>
       );
     case "oauth2":
@@ -128,7 +119,7 @@ export const McpReconnectButton = ({
           type="button"
           variant="outline"
         >
-          {t("knowledge.mcp.reconnect")}
+          {t("common.reconnect")}
         </Button>
       );
     default:

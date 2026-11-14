@@ -5,6 +5,7 @@ import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 
 const GATE_HOLD_CAUSE = "admission_held";
 
@@ -31,7 +32,11 @@ export const sourceStoredTotalHoldHeartbeat = ({
   Backfill: "caseLaw.sourceStoredTotal",
   BackfillYielded: heldSince === null ? 0 : 1,
   heldSince: heldSince?.getTime() ?? null,
-  heldTooLong: isHeldTooLong({ heldSince: heldSince?.getTime() ?? null }, now),
+  heldTooLong: isHeldTooLong(
+    { heldSince: heldSince?.getTime() ?? null },
+    now,
+    loadGateHealthConfig(),
+  ),
   holdCause: heldSince === null ? "none" : GATE_HOLD_CAUSE,
 });
 

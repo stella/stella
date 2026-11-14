@@ -40,20 +40,12 @@
     "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
   },
   {
-    "id": "job:caseLaw.refreshSitemapShards.hourly",
-    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
-  },
-  {
     "id": "job:organizations.recordMissingAccessStates.hourly",
     "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
   },
   {
     "id": "job:reviewOrganization.reset.nightly",
     "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
-  },
-  {
-    "id": "job:caseLaw.refreshBrowseFacets.hourly",
-    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
   },
   {
     "id": "job:legislation.refreshSitemapShards.hourly",

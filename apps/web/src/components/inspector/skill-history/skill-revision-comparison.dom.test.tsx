@@ -1,8 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 // Happy DOM omits the legacy editing API that the EditContext polyfill wraps.
@@ -69,11 +70,11 @@ test("clicking retry recovers a selected read and replaces the error with conten
       </QueryClientProvider>
     </IntlProvider>,
   );
-  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeNull());
+  await waitFor(() => expect(screen.queryByRole("alert") === null).toBe(false));
   expect(attempts).toBe(1);
   readStatus = "available";
   fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
-  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("alert") === null).toBe(true));
   expect(attempts).toBe(2);
   expect(screen.getByText("Recovered revision")).toBeTruthy();
   cleanup();

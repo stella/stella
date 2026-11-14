@@ -2,7 +2,17 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 
 type EcsReadinessOutcome =
-  { status: "ready" } | { status: "environment-unavailable"; reason: string };
+  | { status: "ready" }
+  | { status: "unrecorded"; reason: string }
+  | { status: "environment-unavailable"; reason: string };
+
+/**
+ * No deployment produces the receipt yet. Until one does, the proof relies on
+ * the promote, which fails unless the ECS rollout converged on the deployed
+ * task revision, and on the exact-commit, exact-environment readiness check.
+ */
+export const RECEIPT_NOT_PRODUCED =
+  "ECS readiness receipt not produced by infra; using promote convergence + /ready exact-commit/environment.";
 
 const unavailable = (reason: string): EcsReadinessOutcome => ({
   status: "environment-unavailable",
@@ -18,7 +28,7 @@ export const readStagingEcsReadiness = async (
   expectedCommit: string,
 ): Promise<EcsReadinessOutcome> => {
   if (!existsSync(receiptPath)) {
-    return unavailable("Deployment ECS readiness receipt is unavailable.");
+    return { status: "unrecorded", reason: RECEIPT_NOT_PRODUCED };
   }
   const receipt: unknown = JSON.parse(await readFile(receiptPath, "utf-8"));
   if (

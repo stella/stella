@@ -18,6 +18,7 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
@@ -212,15 +213,15 @@ export const RunLauncher = ({
             </p>
           )}
           {filteredEntities?.map((entity) => (
-            <label className="flex items-center gap-2 text-sm" key={entity.id}>
+            <Label className="flex" key={entity.id}>
               <Checkbox
                 checked={selectedEntityIds.includes(entity.id)}
                 onCheckedChange={(checked) => toggleEntity(entity.id, checked)}
               />
-              <span className="truncate" dir="auto">
+              <TruncatedText className="text-sm font-normal" dir="auto">
                 {entity.name}
-              </span>
-            </label>
+              </TruncatedText>
+            </Label>
           ))}
         </div>
         {exceedsInputEntitiesLimit && (

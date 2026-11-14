@@ -41,7 +41,7 @@ test("weak storage matches content without merging same-day same-type cohort mem
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     });
   const insert = async (input: ReturnType<typeof publication>) => {
-    const identity = decisionStorageIdentity(input);
+    const identity = decisionStorageIdentity(input).unwrap();
     const id = createSafeId<"caseLawDecision">();
     await db.insert(caseLawDecisions).values({
       id,
@@ -77,7 +77,9 @@ test("weak storage matches content without merging same-day same-type cohort mem
       const row = await db.query.caseLawDecisions.findFirst({
         where: {
           sourceId: { eq: sourceId },
-          ...decisionStorageIdentityMatch(decisionStorageIdentity(input)),
+          ...decisionStorageIdentityMatch(
+            decisionStorageIdentity(input).unwrap(),
+          ),
         },
         columns: { id: true },
       });

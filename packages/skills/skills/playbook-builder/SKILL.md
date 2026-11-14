@@ -88,16 +88,19 @@ before it is read, and a subagent cannot ask them.
 - **Look for them:** only when the user asks, whether at the open or once
   positions are saved, and always in this order:
   1. Call `list_matters` once, then ask which matters to search: one
-     question, each matter an option by name, plus one to search all they
-     can access. With many matters, offer the most recently active; the
-     user can still name another. Never call `list_documents` or search
+     multiple-choice question (with `ask-user`, `selection: "multiple"`),
+     each matter an option by name. Add no option for all of them: the user
+     can tick every matter listed. With many matters, offer the most
+     recently active and say so in the question; the user can still name
+     others in their own words. Never call `list_documents` or search
      before this answer.
   2. For the chosen matters, list their documents with `list_documents`.
      `search_across_matters` spans every matter the user can access, so use
-     it only when they chose all.
-  3. Ask the user to pick from the candidates: one question, each document an
-     option named with its matter, plus one option to use every candidate
-     listed.
+     it only when they chose every one: all of them when every matter was
+     listed, or in their own words.
+  3. Ask the user to pick from the candidates: one multiple-choice question,
+     each document an option named with its matter. Add no option for every
+     candidate: the user can tick them all.
   4. Read only the documents the user picked, at most eight. Never read one
      they did not pick, however relevant it looks: a search also returns
      drafts and the counterparty's paper, and a playbook is visible to the
@@ -124,7 +127,8 @@ theirs. A customer is not a buyer and a supplier is not a seller: a
 customer, supplier, recipient, discloser, controller, or processor gets no
 `scope.perspective`. Keep the
 returned `playbook_id` and `updatedAt`. The user sees the playbook fill in
-as you save, so do not hold positions back to save them all at the end.
+as you save, so keep saving as positions settle and do not hold them back to
+save them all at the end.
 
 ## 4. Build positions
 
@@ -163,10 +167,13 @@ them.
 
 ## Saving rules
 
-- Save each position when it settles, one position per call, written in the
-  playbook's language; never put several positions in one call, not even
-  the first. After the first save, pass `playbook_id` and the latest
-  `updatedAt` as `expected_updated_at`.
+- The first save carries one position. After it, save the positions that
+  settled since your last save together in one call, at most 5 positions
+  per call: for example after a round of the user's answers, or after
+  reading their contracts. Every save asks the user for approval, so
+  group settled positions instead of saving them one by one. Write them in
+  the playbook's language. After the first save, pass `playbook_id` and the
+  latest `updatedAt` as `expected_updated_at`.
 - Send only positions that are new or changed. Never resend the playbook or a
   position you did not change.
 - To change a stored position, pass its `sourceId` as `source_id`; to add one,

@@ -72,14 +72,16 @@ test("expansion enrichment preserves its row before post-contract sibling storag
     input: Parameters<typeof processDecision>[0]["input"],
   ) => {
     observationOrder += 1n;
-    const outcome = await processDecision({
-      input,
-      scopedDb,
-      sourceId,
-      corpus,
-      observationOrder,
-      observedAt: new Date("2026-10-29T08:00:00Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input,
+        scopedDb,
+        sourceId,
+        corpus,
+        observationOrder,
+        observedAt: new Date("2026-10-29T08:00:00Z"),
+      })
+    ).unwrap();
     expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   };
   const stored = async () =>
@@ -182,14 +184,16 @@ test.each(["ecli", "sheet-number"] as const)(
       });
     let observationOrder = 0n;
     const ingest = async (member?: string) => {
-      const outcome = await processDecision({
-        input: publication(member),
-        scopedDb,
-        sourceId,
-        corpus,
-        observationOrder: ++observationOrder,
-        observedAt: new Date("2026-10-29T08:00:00Z"),
-      });
+      const outcome = (
+        await processDecision({
+          input: publication(member),
+          scopedDb,
+          sourceId,
+          corpus,
+          observationOrder: ++observationOrder,
+          observedAt: new Date("2026-10-29T08:00:00Z"),
+        })
+      ).unwrap();
       expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
     };
     const rows = async () =>
@@ -259,14 +263,16 @@ test.each(["ecli", "sheet-number"] as const)(
       });
     let observationOrder = 0n;
     const ingest = async (member?: string) => {
-      const outcome = await processDecision({
-        input: publication(member),
-        scopedDb,
-        sourceId,
-        corpus,
-        observationOrder: ++observationOrder,
-        observedAt: new Date("2026-10-29T08:00:00Z"),
-      });
+      const outcome = (
+        await processDecision({
+          input: publication(member),
+          scopedDb,
+          sourceId,
+          corpus,
+          observationOrder: ++observationOrder,
+          observedAt: new Date("2026-10-29T08:00:00Z"),
+        })
+      ).unwrap();
       expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
     };
     const rows = async () =>
@@ -341,14 +347,16 @@ test("sheet and normalized ECLI aliases enrich one row in both observation order
     });
   let observationOrder = 0n;
   const ingest = async (input: ReturnType<typeof publication>) => {
-    const result = await processDecision({
-      input,
-      sourceId,
-      scopedDb,
-      corpus,
-      observationOrder: ++observationOrder,
-      observedAt: new Date("2026-10-29T08:00:00Z"),
-    });
+    const result = (
+      await processDecision({
+        input,
+        sourceId,
+        scopedDb,
+        corpus,
+        observationOrder: ++observationOrder,
+        observedAt: new Date("2026-10-29T08:00:00Z"),
+      })
+    ).unwrap();
     expect(result.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   };
   try {
@@ -425,16 +433,18 @@ test("legacy content proof adopts a corrected weak date on its original row", as
       language: input.language,
       decisionDate: "2025-04-18",
       fulltext: input.fulltext,
-      contentHash: corpusContentHash(caseLawCanonicalPayload(input)),
+      contentHash: corpusContentHash(caseLawCanonicalPayload(input).unwrap()),
     });
-    const result = await processDecision({
-      input,
-      sourceId,
-      scopedDb,
-      corpus,
-      observationOrder: 1n,
-      observedAt: new Date("2026-10-29T08:00:00Z"),
-    });
+    const result = (
+      await processDecision({
+        input,
+        sourceId,
+        scopedDb,
+        corpus,
+        observationOrder: 1n,
+        observedAt: new Date("2026-10-29T08:00:00Z"),
+      })
+    ).unwrap();
     expect(result.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
     expect(
       await db
@@ -486,14 +496,16 @@ test("legacy ECLI spelling changes adopt the original no-ID row", async () => {
       ecli: "ecli : cz : oscr : 2025 : 104.c.16.2024.1",
       fulltext: input.fulltext,
     });
-    const result = await processDecision({
-      input,
-      sourceId,
-      scopedDb,
-      corpus,
-      observationOrder: 1n,
-      observedAt: new Date("2026-10-29T08:00:00Z"),
-    });
+    const result = (
+      await processDecision({
+        input,
+        sourceId,
+        scopedDb,
+        corpus,
+        observationOrder: 1n,
+        observedAt: new Date("2026-10-29T08:00:00Z"),
+      })
+    ).unwrap();
     expect(result.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
     expect(
       await db
@@ -555,21 +567,25 @@ test("a pre-expansion textless publication receives its document on the original
       cohort: null,
       hash: null,
     });
-    const outcome = await processDecision({
-      sourceId,
-      scopedDb,
-      corpus,
-      observationOrder: 1n,
-      observedAt: new Date("2026-10-29T08:00:00Z"),
-      input: plainTextIngestionResult({
-        ...fields,
-        fulltext: "Published full ruling.",
-        rawHash: "full-detail",
-        metadata: { publicationLabel: "same", newDetail: "stated" },
-        documentAst: EMPTY_AST,
-        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      }),
-    });
+    const outcome = (
+      await processDecision({
+        sourceId,
+        scopedDb,
+        corpus,
+        observationOrder: 1n,
+        observedAt: new Date("2026-10-29T08:00:00Z"),
+        input: plainTextIngestionResult({
+          ...fields,
+          fulltext: "Published full ruling.",
+          rawHash: "full-detail",
+          metadata: { publicationLabel: "same", newDetail: "stated" },
+          documentAst: EMPTY_AST,
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+        }),
+      })
+    ).unwrap();
     expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
     expect(
       await db
@@ -640,26 +656,28 @@ test("post-contract overlapping full observations cannot overwrite one textless 
         }
         return value;
       };
-      return await processDecision(
-        {
-          sourceId,
-          scopedDb: actorDb,
-          corpus,
-          observationOrder,
-          observedAt: new Date("2026-10-29T08:00:00Z"),
-          input: plainTextIngestionResult({
-            ...fields,
-            fulltext: text,
-            rawHash: text,
-            metadata: {},
-            documentAst: EMPTY_AST,
-            textFields: absentDecisionTextFields(
-              TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-            ),
-          }),
-        },
-        async () => contract,
-      );
+      return (
+        await processDecision(
+          {
+            sourceId,
+            scopedDb: actorDb,
+            corpus,
+            observationOrder,
+            observedAt: new Date("2026-10-29T08:00:00Z"),
+            input: plainTextIngestionResult({
+              ...fields,
+              fulltext: text,
+              rawHash: text,
+              metadata: {},
+              documentAst: EMPTY_AST,
+              textFields: absentDecisionTextFields(
+                TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+              ),
+            }),
+          },
+          async () => contract,
+        )
+      ).unwrap();
     };
     const outcomes = await Promise.all([
       ingest("First full ruling.", 1n),
@@ -714,14 +732,16 @@ test.each(["ecli", "sheet-number"] as const)(
       });
     let order = 0n;
     const ingest = async (member: string, text: string) => {
-      const outcome = await processDecision({
-        sourceId,
-        scopedDb,
-        corpus,
-        observationOrder: ++order,
-        observedAt: new Date("2026-10-29T08:00:00Z"),
-        input: observation(member, text),
-      });
+      const outcome = (
+        await processDecision({
+          sourceId,
+          scopedDb,
+          corpus,
+          observationOrder: ++order,
+          observedAt: new Date("2026-10-29T08:00:00Z"),
+          input: observation(member, text),
+        })
+      ).unwrap();
       expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
     };
     try {
@@ -768,7 +788,9 @@ test.each(["ecli", "sheet-number"] as const)(
           fallbackPublicationHash: null,
           fallbackDocumentHash: null,
           contentHash: corpusContentHash(
-            caseLawCanonicalPayload(observation("1", "First member document.")),
+            caseLawCanonicalPayload(
+              observation("1", "First member document."),
+            ).unwrap(),
           ),
         })
         .where(eq(caseLawDecisions.id, original.id));

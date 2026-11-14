@@ -6,6 +6,7 @@ import {
   ENTITY_VIEW_ROW_KIND,
   ENTITY_VIEW_WORK_RISK,
 } from "@stll/api-contract/entity-views";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 
 import {
   inboxEntityCondition,
@@ -111,7 +112,7 @@ const listRows = createSafeRootHandler(
         const access = yield* Result.await(
           Result.tryPromise(async () => await getWorkspaceAccess(matterId)),
         );
-        if (!access || access.status === "deleting") {
+        if (!access || !workspaceIsVisible(access.status)) {
           return Result.err(
             new HandlerError({ status: 404, message: "Matter not found" }),
           );

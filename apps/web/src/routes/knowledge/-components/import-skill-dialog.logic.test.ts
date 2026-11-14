@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   listSkippedImportFiles,
+  pickSkillPackFile,
   summarizeSkillImportFailures,
 } from "./import-skill-dialog.logic";
 
@@ -87,5 +88,32 @@ describe("files an import left out", () => {
         skillName: "https://example.test/c",
       },
     ]);
+  });
+});
+
+describe("picking the skill pack from a drop", () => {
+  const file = (name: string) => ({ name });
+
+  test("installs a .zip pack, whatever else was dropped with it", () => {
+    const pack = file("Apr-Replies.ZIP");
+    expect(pickSkillPackFile([file("SKILL.md"), pack, file("notes.txt")])).toBe(
+      pack,
+    );
+  });
+
+  test("installs a markdown skill dropped on its own", () => {
+    const skill = file("SKILL.md");
+    expect(pickSkillPackFile([skill])).toBe(skill);
+  });
+
+  test("refuses a dropped folder without a .zip rather than install part of it", () => {
+    expect(
+      pickSkillPackFile([file("SKILL.md"), file("references/checks.md")]),
+    ).toBeNull();
+  });
+
+  test("refuses a drop that holds no skill", () => {
+    expect(pickSkillPackFile([file("brief.docx")])).toBeNull();
+    expect(pickSkillPackFile([])).toBeNull();
   });
 });

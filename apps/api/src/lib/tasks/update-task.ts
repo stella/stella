@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
@@ -27,6 +28,7 @@ import type {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import {
@@ -40,6 +42,7 @@ import {
   decideGateForTask,
   gateDecisionForTaskStatus,
 } from "@/api/lib/flows/review-gate-task";
+import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
 import {
   agendaFieldsBodySchema,
   validateAgendaFields,
@@ -193,7 +196,7 @@ const taskUpdateValues = ({
   body,
   listItemType,
 }: TaskUpdateValuesOptions) => ({
-  ...(body.name !== undefined && { name: body.name }),
+  ...(body.name !== undefined && { name: normalizeEntityName(body.name) }),
   ...(agendaKind !== null && { agendaKind }),
   ...(body.status !== undefined && { status: body.status }),
   ...(body.priority !== undefined && { priority: body.priority }),
@@ -838,6 +841,13 @@ const applyTaskUpdate = async function* ({
           tx,
           workspaceId,
         });
+        // An item that becomes a fact brings its Spots into the matter graph.
+        if (listItemType === LIST_ITEM_TYPE.FACT) {
+          await writeFactSourceEdges(tx, workspaceId, {
+            type: "item-became-fact",
+            itemEntityId: body.taskId,
+          });
+        }
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,

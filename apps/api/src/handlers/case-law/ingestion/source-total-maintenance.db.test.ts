@@ -21,6 +21,7 @@ import {
   remainingCycleMs,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { withFreshIndicatorDatabase } from "@/api/tests/database-load-indicator-fixture";
 import {
@@ -270,7 +271,11 @@ describe.skipIf(!enabled)(
             const warnings = spyOn(logger, "warn");
             let counts = 0;
             czNsAdapter.fetchPage = async () =>
-              Result.ok({ decisions: [], nextCursor: null });
+              Result.ok({
+                decisions: [],
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+                nextCursor: null,
+              });
             const run = async () => {
               const lease = await acquireCaseLawSourceIngestionLease({
                 scopedDb,

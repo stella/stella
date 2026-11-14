@@ -7,6 +7,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { resolveReferenceEdit } from "@stll/api-contract/matter-reference-edit";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
@@ -23,12 +24,12 @@ import { CopyPlusIcon, DuplicateIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import { LeadSection } from "@/components/workspaces/lead-section";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
-import { resolveReferenceEdit } from "@/components/workspaces/matter-metadata-sheet.logic";
 import { MembersSection } from "@/components/workspaces/members-section";
 import { PartiesSection } from "@/components/workspaces/parties-section";
 import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";
@@ -341,9 +342,9 @@ export const MatterMetadataPanel = ({
             TOOLBAR_ROW_HEIGHT,
           )}
         >
-          <span className="text-muted-foreground truncate text-sm font-medium">
+          <TruncatedText className="text-muted-foreground text-sm font-medium">
             {t("common.name")}
-          </span>
+          </TruncatedText>
           <Input
             className="rounded-md shadow-none"
             disabled={updateWorkspace.isPending}
@@ -369,9 +370,9 @@ export const MatterMetadataPanel = ({
 
         {/* Reference */}
         <section className="grid shrink-0 grid-cols-[8rem_minmax(0,1fr)] items-center gap-x-3 border-b px-3">
-          <span className="text-muted-foreground truncate text-sm font-medium">
+          <TruncatedText className="text-muted-foreground text-sm font-medium">
             {t("workspaces.reference")}
-          </span>
+          </TruncatedText>
           <div
             className={cn(
               "flex min-w-0 items-center gap-2",
@@ -467,20 +468,24 @@ export const MatterMetadataPanel = ({
 
           {/* Danger zone */}
           {canDeleteWorkspace && (
-            <button
-              className={cn(
-                "text-destructive hover:bg-accent flex w-full shrink-0 items-center gap-2 border-t px-3 text-sm font-medium",
-                TOOLBAR_ROW_HEIGHT,
-              )}
+            <Button
+              className="block w-full shrink-0"
               disabled={deleteWorkspace.isPending}
               onClick={() => setDeleteDialogOpen(true)}
-              type="button"
+              variant="plain"
             >
-              <span className={MATTER_INFO_ICON_SLOT_CLASS}>
-                <TrashIcon className="size-4" />
+              <span
+                className={cn(
+                  "text-destructive hover:bg-accent flex w-full items-center gap-2 border-t px-3 text-sm font-medium",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+              >
+                <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                  <TrashIcon className="size-4" />
+                </span>
+                {t("workspaces.deleteWorkspace")}
               </span>
-              {t("workspaces.deleteWorkspace")}
-            </button>
+            </Button>
           )}
         </div>
       </div>

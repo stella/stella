@@ -1,30 +1,34 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: Page publisher-request status affects ingestion freshness, not decision fields parsed from stored XML.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
-import { load } from "cheerio";
 import * as slimdom from "slimdom";
 import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { GBR_EWHC_DIVISIONS } from "@stll/api-contract/decision-docket-grammar";
+import { load } from "@stll/html";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   defineSourceAdapter,
   excludedSourceSurface,
+  PUBLISHER_REQUEST,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
   storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
   SourceFieldDisposition,
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+} from "@/api/lib/legal-search/ingestion-types";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 import { publisherRequestIntervalMs } from "./publisher-policy";
@@ -296,6 +300,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
         case "tip":
           return Result.ok({
             decisions,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             sourceUrl,
             nextCursor: JSON.stringify(
               reached
@@ -312,6 +317,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
           if (listed.next !== null) {
             return Result.ok({
               decisions,
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               sourceUrl,
               nextCursor: JSON.stringify({
                 type: "sweep",
@@ -341,6 +347,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
           ) {
             return Result.ok({
               decisions,
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               sourceUrl,
               nextCursor: JSON.stringify(state),
             });
@@ -363,6 +370,67 @@ const storedFeedField = {
   disposition: "stored",
   target: { type: "metadata", key: "feedFields" },
 } as const satisfies SourceFieldDisposition;
+type UkFclPublisherRecord = Readonly<
+  Record<
+    | "{http://www.w3.org/2005/Atom}title"
+    | "{http://www.w3.org/2005/Atom}published"
+    | "{http://www.w3.org/2005/Atom}updated"
+    | "{http://www.w3.org/2005/Atom}author"
+    | "{http://www.w3.org/2005/Atom}name"
+    | "{http://www.w3.org/2005/Atom}id"
+    | "{http://www.w3.org/2005/Atom}link"
+    | "{https://caselaw.nationalarchives.gov.uk}uri"
+    | "{https://caselaw.nationalarchives.gov.uk}identifier"
+    | "{https://caselaw.nationalarchives.gov.uk}contenthash"
+    | "{https://caselaw.nationalarchives.gov.uk}assets_base"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}akomaNtoso"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}judgment"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}meta"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}identification"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRWork"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRthis"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRuri"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRdate"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRauthor"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRcountry"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRnumber"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRname"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRExpression"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRlanguage"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRManifestation"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}references"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}TLCOrganization"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}TLCPerson"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}TLCRole"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}proprietary"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}court"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}year"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}number"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}cite"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}parser"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}hash"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}tna-enrichment-engine"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}header"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}p"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}neutralCitation"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}party"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}judge"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}docDate"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}block"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}ref"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}judgmentBody"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}decision"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}level"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}heading"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}paragraph"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}num"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}content"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}b"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}img",
+    unknown
+  >
+>;
+
 export const UK_FCL_SOURCE_FIELDS = {
   "{http://www.w3.org/2005/Atom}title": storedFeedField,
   "{http://www.w3.org/2005/Atom}published": storedFeedField,
@@ -433,7 +501,7 @@ export const UK_FCL_SOURCE_FIELDS = {
   "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}content": storedXmlField,
   "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}b": storedXmlField,
   "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}img": storedXmlField,
-} as const satisfies Record<string, SourceFieldDisposition>;
+} as const satisfies Record<keyof UkFclPublisherRecord, SourceFieldDisposition>;
 const SOURCE_SURFACES = [
   "listing",
   "document",

@@ -7,7 +7,10 @@ import {
   type BrowserControlResult,
 } from "@stll/api-contract/browser-control";
 
-import { createBrowserApprovalStore } from "./browser-approval-mode";
+import {
+  type BrowserApprovalProvenance,
+  createBrowserApprovalStore,
+} from "./browser-approval-mode";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
 
 const success = {
@@ -17,6 +20,13 @@ const success = {
     elements: [],
     revision: "revision-1",
     tabId: 7,
+    tabs: [
+      {
+        active: true,
+        tabId: 7,
+        url: "https://example.com/",
+      },
+    ],
     text: "Ready",
     textOffset: 0,
     textTotalChars: 5,
@@ -34,6 +44,7 @@ const redirected = {
 } satisfies BrowserControlResult;
 
 const untracked = () => () => undefined;
+const answeredByUser = (): BrowserApprovalProvenance => ({ type: "person" });
 
 const RUN = { signal: new AbortController().signal, turnId: "turn-1" };
 
@@ -45,11 +56,15 @@ const sessionStore = () =>
 describe("chat browser tool execution cache", () => {
   test("concurrent and later retries execute one real browser action", async () => {
     let calls = 0;
-    const cache = createBrowserToolExecutionCache(async () => {
-      calls += 1;
-      await Promise.resolve();
-      return success;
-    }, untracked);
+    const cache = createBrowserToolExecutionCache(
+      async () => {
+        calls += 1;
+        await Promise.resolve();
+        return success;
+      },
+      untracked,
+      answeredByUser,
+    );
 
     const first = cache.executeOnce(
       "call-1",
@@ -73,10 +88,14 @@ describe("chat browser tool execution cache", () => {
 
   test("different tool-call ids remain independent", async () => {
     let calls = 0;
-    const cache = createBrowserToolExecutionCache(async () => {
-      calls += 1;
-      return success;
-    }, untracked);
+    const cache = createBrowserToolExecutionCache(
+      async () => {
+        calls += 1;
+        return success;
+      },
+      untracked,
+      answeredByUser,
+    );
 
     await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
     await cache.executeOnce("call-2", { action: "snapshot" }, RUN);
@@ -89,6 +108,7 @@ describe("chat browser tool execution cache", () => {
     const cache = createBrowserToolExecutionCache(
       async () => results.shift() ?? success,
       store.beginCommand,
+      answeredByUser,
     );
 
     await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
@@ -117,6 +137,7 @@ describe("chat browser tool execution cache", () => {
           answer = resolve;
         }),
       store.beginCommand,
+      answeredByUser,
     );
 
     const pending = cache.executeOnce("call-1", { action: "snapshot" }, RUN);
@@ -132,6 +153,7 @@ describe("chat browser tool execution cache", () => {
     const cache = createBrowserToolExecutionCache(
       async () => await Promise.reject(new Error("postMessage failed")),
       store.beginCommand,
+      answeredByUser,
     );
 
     const outcome = await cache
@@ -145,13 +167,115 @@ describe("chat browser tool execution cache", () => {
   });
 });
 
+describe("commands a website approval answered", () => {
+  const landedOn = (url: string): BrowserControlResult => ({
+    ...success,
+    snapshot: { ...success.snapshot, url },
+  });
+  const allowed = (): BrowserApprovalProvenance => ({
+    type: "site-grant",
+    origin: "https://example.com",
+  });
+
+  test("a page on an allowed website is handed back", async () => {
+    const store = sessionStore();
+    const cache = createBrowserToolExecutionCache(
+      async () => landedOn("https://example.com/results"),
+      store.beginCommand,
+      allowed,
+    );
+
+    expect(
+      await cache.executeOnce("call-1", { action: "snapshot" }, RUN),
+    ).toEqual(landedOn("https://example.com/results"));
+    expect(store.lastCommandSucceeded()).toBe(true);
+  });
+
+  test("a page elsewhere is withheld and the next command asks", async () => {
+    for (const url of [
+      "https://sub.example.com/",
+      "https://example.com:8443/",
+      "https://other.test/",
+    ]) {
+      const store = sessionStore();
+      const cache = createBrowserToolExecutionCache(
+        async () => landedOn(url),
+        store.beginCommand,
+        allowed,
+      );
+
+      const result = await cache.executeOnce(
+        "call-1",
+        { action: "go-back" },
+        RUN,
+      );
+      expect(result).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.redirected,
+        status: "error",
+      });
+      expect(JSON.stringify(result)).not.toContain("Ready");
+      expect(store.lastCommandSucceeded()).toBe(false);
+    }
+  });
+
+  test("who answered is read before the command runs, and unknown withholds the page", async () => {
+    const store = sessionStore();
+    let provenance: BrowserApprovalProvenance = {
+      type: "site-grant",
+      origin: "https://example.com",
+    };
+    const cache = createBrowserToolExecutionCache(
+      async () => {
+        // The record is cleared while the command runs.
+        provenance = { type: "person" };
+        return landedOn("https://other.test/");
+      },
+      store.beginCommand,
+      () => provenance,
+    );
+    expect(
+      await cache.executeOnce("call-1", { action: "go-back" }, RUN),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.redirected });
+
+    const unreadable = createBrowserToolExecutionCache(
+      async () => landedOn("https://example.com/"),
+      store.beginCommand,
+      () => ({ type: "unreadable" }),
+    );
+    const withheld = await unreadable.executeOnce(
+      "call-2",
+      { action: "snapshot" },
+      RUN,
+    );
+    expect(withheld).toMatchObject({ status: "error" });
+    expect(JSON.stringify(withheld)).not.toContain("Ready");
+  });
+
+  test("a command the user answered is not held to the allowed websites", async () => {
+    const store = sessionStore();
+    const cache = createBrowserToolExecutionCache(
+      async () => landedOn("https://other.test/"),
+      store.beginCommand,
+      answeredByUser,
+    );
+
+    expect(
+      await cache.executeOnce("call-1", { action: "snapshot" }, RUN),
+    ).toEqual(landedOn("https://other.test/"));
+  });
+});
+
 describe("chat browser tool run", () => {
   test("passes the chat turn and stop signal to the executor", async () => {
     const runs: unknown[] = [];
-    const cache = createBrowserToolExecutionCache(async (_input, _id, run) => {
-      runs.push(run);
-      return success;
-    }, untracked);
+    const cache = createBrowserToolExecutionCache(
+      async (_input, _id, run) => {
+        runs.push(run);
+        return success;
+      },
+      untracked,
+      answeredByUser,
+    );
 
     await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
     expect(runs).toEqual([RUN]);

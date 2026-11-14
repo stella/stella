@@ -36,6 +36,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   FLOW_SCHEDULE_FREQUENCIES,
@@ -61,6 +62,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { flowDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { WEEKDAY_NAME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -317,6 +319,7 @@ const FlowEditorForm = ({
   onBack,
   onSaved,
 }: FlowEditorFormProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const isEdit = flowId !== null;
@@ -420,7 +423,11 @@ const FlowEditorForm = ({
     setSaving(true);
     const response =
       flowId === null
-        ? await api.flows.post(body)
+        ? await idempotentSubmit.run({
+            operation: "api.flows",
+            body,
+            send: async (input) => api.flows.post(input),
+          })
         : await api
             .flows({ flowId: toSafeId<"flowDefinition">(flowId) })
             .put(body);
@@ -976,32 +983,32 @@ const FileUploadConfig = ({
     <div className="grid gap-3 rounded-lg border p-3">
       <div className="grid gap-1.5">
         <Label>{t("common.matters")}</Label>
-        <label className="flex items-center gap-2 text-sm">
+        <Label className="flex">
           <Checkbox
             checked={fileUpload.workspaceScope.type === "all"}
             onCheckedChange={toggleAllWorkspaces}
           />
-          {t("flows.fileUpload.allWorkspaces")}
-        </label>
+          <span className="font-normal">
+            {t("flows.fileUpload.allWorkspaces")}
+          </span>
+        </Label>
         {fileUpload.workspaceScope.type === "selected" && (
           <div className="mt-1 grid max-h-48 gap-1 overflow-y-auto rounded-md border p-2">
             <WorkspaceOptionsNotice workspaces={workspaces} />
             {workspaces.status === "ready" &&
               workspaces.items.map((workspace) => (
-                <label
-                  className="flex items-center gap-2 text-sm"
-                  key={workspace.id}
-                >
+                // Dense rows: the picker scrolls inside a short box.
+                <Label className="flex" key={workspace.id}>
                   <Checkbox
                     checked={isWorkspaceSelected(workspace.id)}
                     onCheckedChange={(checked) =>
                       toggleWorkspace(workspace.id, checked)
                     }
                   />
-                  <span className="truncate" dir="auto">
+                  <TruncatedText className="font-normal" dir="auto">
                     {workspace.name}
-                  </span>
-                </label>
+                  </TruncatedText>
+                </Label>
               ))}
           </div>
         )}
@@ -1009,13 +1016,15 @@ const FileUploadConfig = ({
 
       <div className="grid gap-1.5">
         <Label>{t("flows.fileUpload.extensions")}</Label>
-        <label className="flex items-center gap-2 text-sm">
+        <Label className="flex">
           <Checkbox
             checked={fileUpload.extensionScope.type === "any"}
             onCheckedChange={toggleAnyExtension}
           />
-          {t("flows.fileUpload.anyExtension")}
-        </label>
+          <span className="font-normal">
+            {t("flows.fileUpload.anyExtension")}
+          </span>
+        </Label>
         {fileUpload.extensionScope.type === "selected" && (
           <FlowExtensionInput
             extensions={fileUpload.extensionScope.extensions}
@@ -1204,15 +1213,17 @@ const FlowStepEditor = ({
               value={step.prompt}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm">
+          <Label className="flex">
             <Checkbox
               checked={step.includeDocuments}
               onCheckedChange={(checked) =>
                 onUpdate({ ...step, includeDocuments: checked })
               }
             />
-            {t("flows.steps.includeDocuments")}
-          </label>
+            <span className="font-normal">
+              {t("flows.steps.includeDocuments")}
+            </span>
+          </Label>
         </>
       )}
 

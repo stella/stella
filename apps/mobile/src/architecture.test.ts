@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -11,9 +21,18 @@ import {
   MOBILE_UPDATE_SIGNING_KEY_ID,
   MOBILE_UPDATES_PATH,
 } from "@stll/api-contract/mobile-updates";
+import { UI_LOCALES } from "@stll/locales";
 
-import { appConfigFor, UPDATE_SIGNING_CERTIFICATE } from "../app.config";
+import {
+  appConfigFor,
+  BAR_GLYPHS_FOLDER,
+  copyBarGlyphs,
+  SHARE_EXTENSION_FOLDER,
+  SHARE_ROUTE,
+  UPDATE_SIGNING_CERTIFICATE,
+} from "../app.config";
 import manifest from "../package.json" with { type: "json" };
+import { BAR_GLYPHS } from "./bar-glyphs.gen";
 
 const RUNTIME_VERSION = "2965817a6ba1e5b803427be6ba77a293ad958df4";
 
@@ -31,9 +50,12 @@ const DEVICE_MODULES = new Set([
   "session-provider.tsx",
 ]);
 
+/** What a module imports or re-exports, including imports run only for their effect. */
 const importsOf = (source: string): string[] =>
   [
-    ...source.matchAll(/^\s*(?:import|export)[^;]*?from\s+["']([^"']+)["']/gmu),
+    ...source.matchAll(
+      /^\s*(?:(?:import|export)[^;]*?from\s+|import\s+)["']([^"']+)["']/gmu,
+    ),
   ].map((match) => match[1] ?? "");
 
 const connectionModules = readdirSync(path.join(SOURCE_ROOT, "connection"))
@@ -102,11 +124,26 @@ describe("the app's builds", () => {
       expect(config.extra).toEqual({
         liveActivities: true,
         pushNotifications: true,
+        shareInbox: {
+          appGroup: `group.${String(config.ios?.bundleIdentifier)}`,
+          folder: "ShareInbox",
+        },
         variant,
       });
       expect(config.ios?.bundleIdentifier).toBe(config.android?.package);
       expect(config.ios?.buildNumber).toBe("7");
       expect(config.android?.versionCode).toBe(7);
+    },
+  );
+
+  // iOS opens an app only in a language its bundle declares, so every build
+  // declares every interface language the app ships, and nothing else.
+  test.each(configs)(
+    "$variant declares every interface language to iOS",
+    ({ config }) => {
+      const declared: unknown =
+        config.ios?.infoPlist?.["CFBundleLocalizations"];
+      expect(declared).toEqual([...UI_LOCALES]);
     },
   );
 
@@ -121,8 +158,10 @@ describe("the app's builds", () => {
     expect(signed.extra).toEqual({
       liveActivities: false,
       pushNotifications: false,
+      shareInbox: null,
       variant: "preview",
     });
+    expect(signed.ios?.entitlements).toBeUndefined();
     expect(
       signed.plugins?.some(
         (plugin) =>
@@ -146,6 +185,8 @@ describe("the app's builds", () => {
     expect(signed.extra).toEqual({
       liveActivities: true,
       pushNotifications: true,
+      // The share extension waits for a profile of its own.
+      shareInbox: null,
       variant: "preview",
     });
     expect(signed.plugins).toContainEqual([
@@ -153,8 +194,69 @@ describe("the app's builds", () => {
       {
         bundleIdentifier: "app.stll.mobile.preview.widgets",
         groupIdentifier: "group.app.stll.mobile.preview",
+        enablePushNotifications: true,
       },
     ]);
+  });
+
+  test("a release with the share profile carries the share extension and its App Group", () => {
+    const signed = appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signing: {
+        profileUuid: "profile",
+        shareProfileUuid: "share",
+        teamId: "TEAM",
+        widgetsProfileUuid: "widgets",
+      },
+      signingCertificatePresent: true,
+      variant: "preview",
+    });
+    expect(signed.extra?.["shareInbox"]).toEqual({
+      appGroup: "group.app.stll.mobile.preview",
+      folder: "ShareInbox",
+    });
+    expect(signed.ios?.entitlements).toEqual({
+      "com.apple.security.application-groups": [
+        "group.app.stll.mobile.preview",
+      ],
+    });
+  });
+
+  test("the share extension opens a route the app has, and reads only settings the config sets", () => {
+    expect(
+      existsSync(path.join(SOURCE_ROOT, "app", SHARE_ROUTE, "[shareId].tsx")),
+    ).toBe(true);
+    const extension = path.join(SOURCE_ROOT, "..", SHARE_EXTENSION_FOLDER);
+    const plist = readFileSync(
+      path.join(extension, "StellaShare-Info.plist"),
+      "utf-8",
+    );
+    const config = readFileSync(
+      path.join(SOURCE_ROOT, "..", "app.config.ts"),
+      "utf-8",
+    );
+    const settings = [
+      ...plist.matchAll(/\$\((STELLA_[A-Z_]+)\)/gu),
+      ...readFileSync(
+        path.join(extension, "StellaShare.entitlements"),
+        "utf-8",
+      ).matchAll(/\$\((STELLA_[A-Z_]+)\)/gu),
+    ].map((match) => match[1] ?? "");
+    expect(settings.length).toBeGreaterThan(0);
+    for (const setting of settings) {
+      expect(config).toContain(`${setting}: `);
+    }
+    const keys = [
+      ...readFileSync(
+        path.join(extension, "ShareViewController.swift"),
+        "utf-8",
+      ).matchAll(/info\["(\w+)"\]/gu),
+    ].map((match) => match[1] ?? "");
+    expect(keys.length).toBeGreaterThan(0);
+    for (const key of keys) {
+      expect(plist).toContain(`<key>${key}</key>`);
+    }
   });
 
   test("no two builds share a store identity, a scheme or a name", () => {
@@ -197,6 +299,36 @@ describe("the app's builds", () => {
   });
 });
 
+describe("the bar glyphs", () => {
+  test("prebuild puts every one in the app's asset catalog, replacing an earlier copy", () => {
+    const projectRoot = mkdtempSync(path.join(tmpdir(), "stella-bar-glyphs-"));
+    try {
+      const sourceRoot = path.join(projectRoot, "ios", "stella");
+      const catalog = path.join(sourceRoot, "Images.xcassets", "BarGlyphs");
+      mkdirSync(path.join(catalog, "lucide-dropped.imageset"), {
+        recursive: true,
+      });
+      writeFileSync(path.join(sourceRoot, "AppDelegate.swift"), "");
+      cpSync(
+        path.join(SOURCE_ROOT, "..", BAR_GLYPHS_FOLDER),
+        path.join(projectRoot, BAR_GLYPHS_FOLDER),
+        { recursive: true },
+      );
+
+      copyBarGlyphs(projectRoot);
+
+      expect(readdirSync(catalog).toSorted()).toEqual(
+        [
+          "Contents.json",
+          ...Object.values(BAR_GLYPHS).map((name) => `${name}.imageset`),
+        ].toSorted(),
+      );
+    } finally {
+      rmSync(projectRoot, { force: true, recursive: true });
+    }
+  });
+});
+
 /** Every module the app bundles: tests run under Bun, never on the phone. */
 const appModules = readdirSync(SOURCE_ROOT, { recursive: true })
   .map(String)
@@ -217,6 +349,32 @@ describe("the app's JavaScript engine", () => {
       ).toEqual([]);
     },
   );
+});
+
+describe("the app's plurals", () => {
+  // Hermes has no Intl.PluralRules either. Without it use-intl cannot format
+  // an ICU plural and shows the message's key: a scan's page count read
+  // "scan.pages", which looks like a file in Apple's Pages format.
+  test("installs plural rules before the catalogues format a message", () => {
+    expect(
+      importsOf(
+        readFileSync(path.join(SOURCE_ROOT, "i18n", "index.tsx"), "utf-8"),
+      )[0],
+    ).toBe("@/i18n/plural-rules");
+  });
+
+  test("has the plural rules of every UI locale", () => {
+    const loaded = importsOf(
+      readFileSync(path.join(SOURCE_ROOT, "i18n", "plural-rules.ts"), "utf-8"),
+    );
+    expect(loaded).toContain("@formatjs/intl-pluralrules/polyfill.js");
+    expect(
+      UI_LOCALES.map(
+        (locale) =>
+          `@formatjs/intl-pluralrules/locale-data/${locale.split("-")[0] ?? locale}.js`,
+      ).filter((data) => !loaded.includes(data)),
+    ).toEqual([]);
+  });
 });
 
 describe("the app's dates", () => {
@@ -296,15 +454,47 @@ describe("the app's colours", () => {
   });
 });
 
+describe("the app's links", () => {
+  /**
+   * The modules that may hand a link to the system: the opener, which opens
+   * only what `state/links.ts` accepted and shows a web link's host first,
+   * and the decision reader, which opens the court's own web pages through
+   * `isWebUrl` from the same module.
+   */
+  const OPENERS = new Set([
+    path.join("components", "open-link.ts"),
+    path.join("components", "decision-reader.tsx"),
+  ]);
+
+  const opensLinks = (source: string): string[] =>
+    source.match(/\bopenURL\s*\(|\bopenURL\b(?=\s*[,}])/gu) ?? [];
+
+  test("finds the opener, and the scan sees the calls it forbids elsewhere", () => {
+    for (const name of OPENERS) {
+      expect(appModules).toContain(name);
+      expect(
+        opensLinks(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).not.toEqual([]);
+    }
+    expect(opensLinks("const { openURL } = Linking;")).not.toEqual([]);
+  });
+
+  // A link from an answer or a document can name any scheme: a call, a
+  // message, another app. Opening one anywhere else would skip the rule.
+  test.each(appModules.filter((name) => !OPENERS.has(name)))(
+    "%s opens no link itself",
+    (name) => {
+      expect(
+        opensLinks(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).toEqual([]);
+    },
+  );
+});
+
 describe("the app's text", () => {
   const screens = readdirSync(SOURCE_ROOT, { recursive: true })
     .map(String)
-    .filter(
-      (name) =>
-        name.endsWith(".tsx") &&
-        !name.includes(".test.") &&
-        name !== path.join("components", "ui", "text.tsx"),
-    )
+    .filter((name) => name.endsWith(".tsx") && !name.includes(".test."))
     .toSorted();
 
   test("finds the screens to scan", () => {
@@ -312,7 +502,7 @@ describe("the app's text", () => {
   });
 
   // React Native's own Text has neither the web's typeface nor its colours;
-  // the app's Text (components/ui/text.tsx) has both.
+  // @stll/ui's Text, Input and Textarea have both.
   test.each(screens)("%s sets text through the app's Text", (name) => {
     const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
     const fromReactNative = [

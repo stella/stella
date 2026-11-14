@@ -47,7 +47,7 @@ test.skipIf(!enabled)(
         );
         const migration = await Bun.file(
           new URL(
-            "../../../drizzle/20261029142200_case_law_fallback_identity/migration.sql",
+            "../../../drizzle/20261114120000_case_law_fallback_identity/migration.sql",
             import.meta.url,
           ),
         ).text();
@@ -137,7 +137,7 @@ test.skipIf(!enabled)(
             ),
           });
           const columns = decisionFallbackState({
-            storage: decisionStorageIdentity(published),
+            storage: decisionStorageIdentity(published).unwrap(),
           }).columns;
           await client.unsafe(
             `INSERT INTO ${table} (id,source_id,case_number,country,court,language,decision_date,decision_type,fallback_identity_key,fallback_cohort_key,fallback_content_hash)

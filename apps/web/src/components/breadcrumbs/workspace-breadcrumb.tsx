@@ -7,20 +7,21 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
-import { BidiText } from "@stll/ui/bidi-text";
+import { resolveReferenceEdit } from "@stll/api-contract/matter-reference-edit";
+import { BidiText, stripDirectionalControls } from "@stll/ui/bidi-text";
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
+import { Button } from "@stll/ui/button";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { MatterSwitcher } from "@/components/breadcrumbs/matter-switcher";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { MatterNumberHint } from "@/components/matter-number-hint";
-import Tooltip from "@/components/tooltip";
 import {
   MatterColorContextPicker,
   MatterColorPicker,
 } from "@/components/workspaces/matter-color-picker";
-import { resolveReferenceEdit } from "@/components/workspaces/matter-metadata-sheet.logic";
 import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
@@ -164,7 +165,8 @@ export const WorkspaceBreadcrumb = ({
   }
   const workspace = workspaceView.items;
 
-  const displayName = workspace.name;
+  // Also a `title`, which the browser shows outside any isolating element.
+  const displayName = stripDirectionalControls(workspace.name);
 
   const startEditingName = () => {
     nameRename.startEditing(displayName);
@@ -181,21 +183,16 @@ export const WorkspaceBreadcrumb = ({
   const changeColorLabel = t("common.changeColor");
 
   const colorPicker = match ? (
-    <MatterColorPicker matter={workspace}>
-      <Tooltip
-        content={changeColorLabel}
-        render={
-          <button
-            aria-label={changeColorLabel}
-            className="hover:bg-muted cursor-pointer rounded p-0.5"
-            type="button"
-          >
-            <MatterIcon
-              className="size-3.5 shrink-0"
-              matter={{ id: workspaceId, color: workspace.color }}
-            />
-          </button>
-        }
+    // Held to the breadcrumb's glyph scale so the trail does not grow a
+    // taller row.
+    <MatterColorPicker
+      className="size-5 sm:size-5"
+      label={changeColorLabel}
+      matter={workspace}
+    >
+      <MatterIcon
+        className="size-3.5 shrink-0"
+        matter={{ id: workspaceId, color: workspace.color }}
       />
     </MatterColorPicker>
   ) : (
@@ -210,7 +207,7 @@ export const WorkspaceBreadcrumb = ({
     <>
       <BreadcrumbItem className="min-w-8 shrink">
         <Link
-          className="hover:text-foreground min-w-0 truncate"
+          className="hover:text-foreground min-w-0"
           onClick={() => {
             // Clear active filters and group by client so the full grouped
             // list is shown; the route then scrolls to and flashes this
@@ -219,10 +216,11 @@ export const WorkspaceBreadcrumb = ({
             updateMattersConfig({ groupBy: "client", filters: {} });
           }}
           search={{ focusClient: client.id }}
-          title={client.displayName}
           to="/workspaces"
         >
-          <BidiText>{client.displayName}</BidiText>
+          <TruncatedText render={<BidiText />}>
+            {client.displayName}
+          </TruncatedText>
         </Link>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
@@ -231,14 +229,13 @@ export const WorkspaceBreadcrumb = ({
     <>
       <BreadcrumbItem className="min-w-8 shrink">
         <Link
-          className="hover:text-foreground text-muted-foreground min-w-0 truncate"
+          className="hover:text-foreground text-muted-foreground min-w-0"
           onClick={() => {
             updateMattersConfig({ clientFilter: null });
           }}
           to="/workspaces"
-          title={t("workspaces.parties.personalLabel")}
         >
-          {t("workspaces.parties.personalLabel")}
+          <TruncatedText>{t("workspaces.parties.personalLabel")}</TruncatedText>
         </Link>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
@@ -265,13 +262,15 @@ export const WorkspaceBreadcrumb = ({
     }
     if (showMatterNumber && workspace.reference) {
       return (
-        <button
-          className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm whitespace-pre"
+        <Button
+          className="cursor-text"
           onClick={() => refRename.startEditing(workspace.reference)}
-          type="button"
+          variant="plain"
         >
-          {workspace.reference}
-        </button>
+          <span className="text-foreground-muted hover:text-muted-foreground text-sm whitespace-pre">
+            {workspace.reference}
+          </span>
+        </Button>
       );
     }
     return null;
@@ -303,12 +302,13 @@ export const WorkspaceBreadcrumb = ({
       <>
         <BreadcrumbQueryContent view={workspaceView} />
         {clientSegment}
-        <BreadcrumbItem className="shrink-0">
+        <BreadcrumbItem className="group/crumb shrink-0">
           {(() => {
             if (isEditing) {
               return (
                 <>
                   <MatterColorContextPicker
+                    className="pointer-coarse:size-6"
                     label={changeColorLabel}
                     matter={workspace}
                   >
@@ -337,6 +337,7 @@ export const WorkspaceBreadcrumb = ({
             return (
               <>
                 <MatterColorContextPicker
+                  className="pointer-coarse:size-6"
                   label={changeColorLabel}
                   matter={workspace}
                 >
@@ -353,7 +354,7 @@ export const WorkspaceBreadcrumb = ({
                   activeProps={{
                     className: "text-foreground font-semibold",
                   }}
-                  className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold"
+                  className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5 font-semibold"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     startEditingName();
@@ -361,15 +362,14 @@ export const WorkspaceBreadcrumb = ({
                   params={{
                     workspaceId,
                   }}
-                  title={displayName}
                   to="/workspaces/$workspaceId"
                 >
-                  <BidiText
-                    as="span"
-                    className="overflow-hidden text-ellipsis whitespace-pre"
+                  <TruncatedText
+                    className="whitespace-pre"
+                    render={<BidiText as="span" />}
                   >
                     {displayName}
-                  </BidiText>
+                  </TruncatedText>
                   {showMatterNumber && workspace.reference && !isEditingRef ? (
                     <span
                       className="text-foreground-muted shrink-0 text-sm whitespace-pre"
@@ -383,7 +383,9 @@ export const WorkspaceBreadcrumb = ({
                     </span>
                   ) : null}
                 </Link>
-                {isEditingRef ? null : <MatterSwitcher matter={workspace} />}
+                {isEditingRef ? null : (
+                  <MatterSwitcher matter={workspace} revealOnHover />
+                )}
               </>
             );
           })()}
@@ -430,7 +432,7 @@ export const WorkspaceBreadcrumb = ({
         <Link
           activeOptions={{ exact: true, includeSearch: false }}
           activeProps={{ className: "text-foreground font-semibold" }}
-          className="hover:text-foreground max-w-80 overflow-hidden font-semibold text-ellipsis whitespace-pre"
+          className="hover:text-foreground max-w-80 min-w-0 font-semibold"
           dir="auto"
           onClick={() => {
             startEditingName();
@@ -440,10 +442,14 @@ export const WorkspaceBreadcrumb = ({
             startEditingName();
           }}
           params={{ workspaceId }}
-          title={displayName}
           to="/workspaces/$workspaceId"
         >
-          {displayName}
+          <TruncatedText
+            className="whitespace-pre"
+            render={<BidiText as="span" />}
+          >
+            {displayName}
+          </TruncatedText>
         </Link>
         {referenceSegment}
         {isEditingRef ? null : <MatterSwitcher matter={workspace} />}

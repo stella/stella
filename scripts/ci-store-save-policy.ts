@@ -92,7 +92,7 @@ const platformIdentity = (runner: unknown) => {
     case "ubuntu-latest":
     case "ubuntu-24.04":
       return { platform: "linux", arch: "x64" };
-    case "macos-14":
+    case "macos-15":
       return { platform: "darwin", arch: "arm64" };
     case "windows-latest":
       return { platform: "win32", arch: "x64" };

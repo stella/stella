@@ -31,7 +31,8 @@ export const usePaletteEntities = (): PaletteEntities => {
     let current = true;
     void Promise.all([
       listMatters({ fetch, source }),
-      listChatThreads({ fetch, source }),
+      // Pinned or not, the most recent ones.
+      listChatThreads({ fetch, pinState: undefined, source }),
     ]).then(([matters, chats]) => {
       if (current) {
         setEntities({

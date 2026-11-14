@@ -32,6 +32,7 @@ import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -53,6 +54,7 @@ import {
 } from "@/lib/drag-and-drop/element-registration";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -129,6 +131,7 @@ export const ExistingFileOrganizerDialog = ({
   open,
   onOpenChange,
 }: ExistingFileOrganizerDialogProps) => {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   // organize-suggestions caps locale at 16 chars; send the base language.
   const locale = useI18nStore((s) => s.loadedLang);
@@ -418,6 +421,7 @@ export const ExistingFileOrganizerDialog = ({
 
     const run = async () => {
       const folderIds = await ensureFolders({
+        submit,
         workspaceId,
         rows: rowsSnapshot,
         existingFolders: existingFoldersSnapshot,
@@ -845,29 +849,31 @@ const UserInstructionsSection = ({
   return (
     <div className="mb-3 rounded-md border">
       <div className="flex items-center gap-2 px-3 py-2 text-sm">
-        <button
+        <Button
           aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2 text-start"
+          className="min-w-0 flex-1"
           onClick={onToggle}
-          type="button"
+          variant="plain"
         >
-          {expanded ? (
-            <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
-          ) : (
-            <DirectionalIcon
-              className="text-muted-foreground size-3.5 shrink-0"
-              icon={ChevronRightIcon}
-            />
-          )}
-          <span className="shrink-0 font-medium">
-            {t("workspaces.importOrganizer.instructionsTitle")}
-          </span>
-          {!expanded && (
-            <span className="text-muted-foreground truncate text-xs">
-              {summary}
+          <span className="flex w-full min-w-0 items-center gap-2">
+            {expanded ? (
+              <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
+            ) : (
+              <DirectionalIcon
+                className="text-muted-foreground size-3.5 shrink-0"
+                icon={ChevronRightIcon}
+              />
+            )}
+            <span className="shrink-0 font-medium">
+              {t("workspaces.importOrganizer.instructionsTitle")}
             </span>
-          )}
-        </button>
+            {!expanded && (
+              <TruncatedText className="text-muted-foreground text-xs">
+                {summary}
+              </TruncatedText>
+            )}
+          </span>
+        </Button>
         {expanded && (
           <Button
             disabled={disabled}
@@ -1189,23 +1195,29 @@ const OrganizerFolderNode = ({
         )}
         ref={headerRef}
       >
-        <button
-          aria-label={
-            isExpanded
-              ? t("workspaces.importOrganizer.collapseFolder")
-              : t("workspaces.importOrganizer.expandFolder")
-          }
-          className="text-muted-foreground hover:text-foreground flex size-4 shrink-0 items-center justify-center"
-          disabled={!hasChildren}
-          onClick={() => setIsExpanded((prev) => !prev)}
-          type="button"
-        >
-          {isExpanded ? (
-            <ChevronDownIcon className="size-3.5" />
-          ) : (
-            <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
-          )}
-        </button>
+        {hasChildren ? (
+          <Button
+            aria-label={
+              isExpanded
+                ? t("workspaces.importOrganizer.collapseFolder")
+                : t("workspaces.importOrganizer.expandFolder")
+            }
+            className="shrink-0"
+            onClick={() => setIsExpanded((prev) => !prev)}
+            size="icon-xs"
+            variant="muted"
+          >
+            {isExpanded ? (
+              <ChevronDownIcon className="size-3.5" />
+            ) : (
+              <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
+            )}
+          </Button>
+        ) : (
+          // A leaf folder has nothing to expand: keep the toggle's column so
+          // names line up, without a focusable control that does nothing.
+          <span aria-hidden="true" className="size-7 shrink-0 sm:size-6" />
+        )}
         <div
           className={cn(
             "flex shrink-0 items-center",
@@ -1229,13 +1241,15 @@ const OrganizerFolderNode = ({
             value={folder.name}
           />
         ) : (
-          <button
-            className="hover:bg-muted/40 truncate rounded-sm px-1 text-start"
+          <Button
+            className="min-w-0 shrink"
             onClick={() => setIsEditing(true)}
-            type="button"
+            variant="plain"
           >
-            {folder.name}
-          </button>
+            <TruncatedText className="hover:bg-muted/40 rounded-sm px-1 font-medium">
+              {folder.name}
+            </TruncatedText>
+          </Button>
         )}
         <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
           {countFilesInFolder(folder)}
@@ -1338,9 +1352,12 @@ const OrganizerFileNode = ({
           value={row.suggestedName}
         />
         {secondaryParts.length > 0 && (
-          <p className="text-muted-foreground truncate ps-3 text-xs">
+          <TruncatedText
+            className="text-muted-foreground ps-3 text-xs"
+            render={<p />}
+          >
             {secondaryParts.join(" · ")}
-          </p>
+          </TruncatedText>
         )}
       </div>
     </li>
@@ -1414,33 +1431,35 @@ const DeleteFoldersSection = ({
 
   return (
     <div className="mt-3 rounded-md border">
-      <button
+      <Button
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2 px-3 py-2 text-sm"
+        className="block w-full"
         onClick={onToggle}
-        type="button"
+        variant="plain"
       >
-        {expanded ? (
-          <ChevronDownIcon className="text-muted-foreground size-3.5" />
-        ) : (
-          <DirectionalIcon
-            className="text-muted-foreground size-3.5"
-            icon={ChevronRightIcon}
-          />
-        )}
-        <Trash2Icon className="text-muted-foreground size-4" />
-        <span className="font-medium">
-          {t("workspaces.importOrganizer.emptyFoldersToDelete", {
-            count: folders.length,
-          })}
+        <span className="flex w-full items-center gap-2 px-3 py-2 text-sm">
+          {expanded ? (
+            <ChevronDownIcon className="text-muted-foreground size-3.5" />
+          ) : (
+            <DirectionalIcon
+              className="text-muted-foreground size-3.5"
+              icon={ChevronRightIcon}
+            />
+          )}
+          <Trash2Icon className="text-muted-foreground size-4" />
+          <span className="font-medium">
+            {t("workspaces.importOrganizer.emptyFoldersToDelete", {
+              count: folders.length,
+            })}
+          </span>
+          <span className="text-muted-foreground ms-auto text-xs tabular-nums">
+            {t("workspaces.importOrganizer.selectedOfTotal", {
+              selected: selectedCount,
+              total: folders.length,
+            })}
+          </span>
         </span>
-        <span className="text-muted-foreground ms-auto text-xs tabular-nums">
-          {t("workspaces.importOrganizer.selectedOfTotal", {
-            selected: selectedCount,
-            total: folders.length,
-          })}
-        </span>
-      </button>
+      </Button>
       {expanded && (
         <ul className="border-t">
           {folders.map((folder) => (
@@ -1457,7 +1476,9 @@ const DeleteFoldersSection = ({
                 }
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{folder.folderPath}</p>
+                <TruncatedText className="font-medium" render={<p />}>
+                  {folder.folderPath}
+                </TruncatedText>
                 <p className="text-muted-foreground text-xs">{folder.reason}</p>
               </div>
             </li>
@@ -1531,6 +1552,7 @@ const sortFolderNode = (node: FolderPreviewNode, locale: string): void => {
 };
 
 type EnsureFoldersOptions = {
+  submit: ReturnType<typeof useIdempotentSubmit>;
   workspaceId: string;
   rows: readonly FileNameSuggestion[];
   existingFolders: readonly ExistingImportFolder[];
@@ -1544,6 +1566,7 @@ type EnsureFoldersOptions = {
 // keeps the user's existing structure intact, and an empty path means
 // "place at workspace root".
 const ensureFolders = async ({
+  submit,
   workspaceId,
   rows,
   existingFolders,
@@ -1579,14 +1602,18 @@ const ensureFolders = async ({
 
       const parentSafeId =
         currentParentId === null ? null : toSafeId<"entity">(currentParentId);
-      // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- each folder is created under the id the previous iteration returned
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({
+      const response = await submit.run({
+        operation: `organizer-folder:${workspaceId}:${pathKey}`,
+        body: {
           kind: "folder",
           name: segment,
           parentId: parentSafeId,
-        });
+        } as const,
+        send: async (body) =>
+          api
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .put(body),
+      });
 
       const newEntityId: string = unwrapApiResponse(response).entityId;
       currentParentId = newEntityId;

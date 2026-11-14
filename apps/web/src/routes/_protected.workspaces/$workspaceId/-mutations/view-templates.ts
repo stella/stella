@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
@@ -29,11 +30,14 @@ export const useCreateViewTemplate = () => {
     select: (ctx) => ctx.user.id,
   });
 
-  return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: CreateViewTemplateVars) => {
+  return useIdempotentMutation({
+    mutationFn: async (
+      { workspaceId, ...body }: CreateViewTemplateVars,
+      request,
+    ) => {
       const response = await api["view-templates"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
-      }).put(body);
+      }).put(body, request);
       return { data: unwrapApiResponse(response), workspaceId };
     },
     onSuccess: () => {

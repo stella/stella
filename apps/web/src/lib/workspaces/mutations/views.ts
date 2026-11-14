@@ -8,9 +8,10 @@ import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
-import type { ViewLayout, ViewTemplateProperty } from "@/lib/types";
+import type { ViewLayout } from "@/lib/types";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 import { viewsKeys, viewsOptions } from "@/lib/workspaces/queries/views";
 import { isWorkspaceViewAvailable } from "@/lib/workspaces/queries/views.logic";
@@ -22,22 +23,24 @@ import {
   viewOrderCache,
 } from "./views.logic";
 
-type CreateViewVars = {
-  id: string;
-  name: string;
-  layout: ViewLayout;
-  templateProperties?: ViewTemplateProperty[];
-};
+type CreateViewVars = Omit<
+  Parameters<ReturnType<typeof api.views>["put"]>[0],
+  "id"
+> & { id: string };
 
 export const useCreateView = (workspaceId: string) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIdempotentMutation({
+    idempotencyScope: workspaceId,
     mutationFn: async (body: CreateViewVars) => {
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({ ...body, id: toSafeId<"workspaceView">(body.id) });
+        .put({
+          ...body,
+          id: toSafeId<"workspaceView">(body.id),
+        });
       return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {

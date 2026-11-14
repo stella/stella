@@ -26,17 +26,9 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  EMPTY_AST,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceFieldDisposition,
-  SourceFieldTarget,
-  SourceRawParts,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   getSourceRegistration,
   listSourceRegistrations,
@@ -50,8 +42,16 @@ import { composeDecisionWithSupplements } from "@/api/handlers/case-law/ingestio
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
+  decodeSourceRawEnvelope,
+  EMPTY_AST,
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceFieldDisposition,
+  SourceFieldTarget,
+  SourceRawParts,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,
@@ -59,7 +59,9 @@ import {
 } from "@/api/lib/legal-search/metadata-urls";
 import { entityResiduesInStoredText } from "@/api/lib/legal-search/parsers/entity-residue";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { sourceExclusionCensus } from "@/api/lib/legal-search/source-exclusion-census";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
+import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import {
   CASE_LAW_CONFORMANCE_FIXTURES,
@@ -74,11 +76,15 @@ import {
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
-const originalFetch = globalThis.fetch;
+import legacySourceExclusions from "./legacy-source-exclusions.json";
+
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
@@ -88,6 +94,27 @@ const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
 const adapterFor = (key: SourceRegistrationKey) =>
   getSourceRegistration(key)?.source ??
   panic(`${key} is declared but not registered`);
+
+test("every exclusion is visible and legacy exclusions match the migration census exactly", () => {
+  const census = Object.fromEntries(
+    DECLARED_ADAPTER_KEYS.map((key) => [
+      key,
+      sourceExclusionCensus(adapterFor(key).sourceFields),
+    ]),
+  );
+  const legacy = Object.fromEntries(
+    Object.entries(census).flatMap(([key, rows]) => {
+      const fields = Object.fromEntries(
+        rows
+          .filter(({ policy }) => policy === "legacy")
+          .map(({ field, reason }) => [field, reason]),
+      );
+      return Object.keys(fields).length === 0 ? [] : [[key, fields]];
+    }),
+  );
+  expect(legacy).toEqual(legacySourceExclusions);
+  expect(census).toMatchSnapshot();
+});
 
 /** The registry and the fixture census must agree even after runtime widening. */
 const plainTextFixtureFor = (key: SourceRegistrationKey) => {
@@ -218,7 +245,13 @@ describe("every adapter accounts for the fields its source states", () => {
       const observed = new Set<string>();
       for (const buildFixture of fixtures) {
         const evidence = buildFixture();
-        const decision = await evidence.buildDecision();
+        const decision = await guardParser(evidence.buildDecision)();
+        if ("blocks" in decision.documentAst) {
+          expect(
+            headMatterPrecedesBody(decision.documentAst.blocks),
+            `${key}: head matter follows the decision body`,
+          ).toBe(true);
+        }
         const schema = metadataUrlSchemaForAdapter(key);
         // The branded contract covers every registered source with no field debt.
         const normalized = plainTextIngestionResult(decision, schema);
@@ -387,11 +420,16 @@ describe("the display-text census classifies exactly the metadata adapters emit"
     const emitted = new Set<string>();
     for (const key of DECLARED_ADAPTER_KEYS) {
       // Fixtures stub the global fetch, so they build one at a time.
-      const decision =
-        await CASE_LAW_CONFORMANCE_FIXTURES[key]().buildDecision();
-      globalThis.fetch = originalFetch;
-      for (const metadataKey of Object.keys(decision.metadata)) {
-        emitted.add(metadataKey);
+      const fixtures =
+        key === ADAPTER_KEYS.CZ_NSS
+          ? [CASE_LAW_CONFORMANCE_FIXTURES[key], nssRecoveryFixture]
+          : [CASE_LAW_CONFORMANCE_FIXTURES[key]];
+      for (const fixture of fixtures) {
+        const decision = await fixture().buildDecision();
+        testFetchState.restore();
+        for (const metadataKey of Object.keys(decision.metadata)) {
+          emitted.add(metadataKey);
+        }
       }
     }
     const judgment = await plCourtsFixture().buildDecision();
@@ -647,4 +685,45 @@ describe("the display-text census classifies exactly the metadata adapters emit"
       ),
     ).toEqual(["metadata.relatedDecisions.0"]);
   });
+});
+
+type PublisherRecord = {
+  id: string;
+  court?: { name: string; location: { longitude: number } | null } | null;
+  references: readonly { docket: string }[];
+  keywords?: readonly string[] | null;
+  raw?: unknown;
+  attachments?: readonly unknown[];
+};
+
+const fields = {
+  id: "stored",
+  "court.name": "stored",
+  "court.location.longitude": "stored",
+  "references[].docket": "stored",
+  keywords: "stored",
+  raw: "stored",
+  attachments: "stored",
+} as const satisfies Record<SourceRecordPaths<PublisherRecord>, "stored">;
+
+test("publisher fields require a disposition across nested records and arrays", () => {
+  expect(Object.keys(fields)).toEqual([
+    "id",
+    "court.name",
+    "court.location.longitude",
+    "references[].docket",
+    "keywords",
+    "raw",
+    "attachments",
+  ]);
+
+  const { id: _id, ...missingField } = fields;
+  // @ts-expect-error Deleting a publisher field's disposition is rejected.
+  missingField satisfies Record<SourceRecordPaths<PublisherRecord>, "stored">;
+
+  // @ts-expect-error A publisher schema addition requires a disposition.
+  fields satisfies Record<
+    SourceRecordPaths<PublisherRecord & { publication: { date: string } }>,
+    "stored"
+  >;
 });

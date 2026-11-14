@@ -1,3 +1,5 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a failed validateAst verdict still fails the parse; only the logging moved to the pipeline.
 /**
  * Reader for the decision XML the data-protection authority's portal serves.
  *
@@ -14,9 +16,17 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import {
+  type AnyNode,
+  type Element,
+  isCDATA,
+  isTag,
+  isText,
+} from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -27,12 +37,14 @@ import type {
   ParagraphListDepth,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import { isPlRecitalLine } from "@stll/legal-ast/polish-document-roles";
 
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   buildValidationHtml,
-  validateAndLog,
+  validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { appendTextInline, inlinesToPlainText } from "./shared-inlines";
@@ -97,6 +109,48 @@ const markerOf = ($: cheerio.CheerioAPI, unit: Element): string => {
     return "";
   }
   return `${text}${name?.attribs["xSffx"] ?? ""}`;
+};
+
+/** Unit types that divide the decision into its parts and chapters. */
+const SECTION_UNIT_TYPES = new Set(["bran", "chpt", "part"]);
+
+/** A paragraph unit's name when it is a plain running number (`12`). */
+const PARAGRAPH_NUMBER_NAME_RE = /^\d{1,4}$/u;
+
+/**
+ * The authority's own number of a paragraph of its reasons. The portal sets
+ * every numbered paragraph as a `pass` unit naming its number (`<xName
+ * xSffx=".">12</xName>`). Placed straight in a branch or chapter of the
+ * reasons, it is the decision's running paragraph numbering, which the
+ * authority cites; nested in another unit (a list a sentence announces, a
+ * quoted provision) it numbers that list only, and stays a printed marker.
+ * The operative part's points are the ruling, not paragraphs of reasons.
+ */
+const paragraphNumberOf = ({
+  $,
+  unit,
+  parentType,
+  role,
+}: {
+  $: cheerio.CheerioAPI;
+  unit: Element;
+  parentType: string | undefined;
+  role: ParagraphRole | undefined;
+}): number | undefined => {
+  if (
+    unit.attribs["xType"] !== "pass" ||
+    parentType === undefined ||
+    !SECTION_UNIT_TYPES.has(parentType) ||
+    role !== "argumentation"
+  ) {
+    return undefined;
+  }
+  const name = ownText($, childElements(unit, "xName").at(0));
+  if (!PARAGRAPH_NUMBER_NAME_RE.test(name)) {
+    return undefined;
+  }
+  const number = parseIntegerToken(name, { sign: "unsigned", min: 1 });
+  return number.isOk() ? number.value : undefined;
 };
 
 /** Trim the outer edges of a paragraph's inline run, and nothing inside. */
@@ -213,12 +267,14 @@ const inlinesOf = (state: ParseState, node: AnyNode): Inline[] => {
   } else {
     walk(node, inlines);
   }
-  return trimInlines(inlines);
+  return trimInlines(readInlineLetterSpacing(inlines));
 };
 
 type ParagraphContext = {
   role: ParagraphRole | undefined;
   listDepth: number;
+  /** The type of the unit the walk is inside, read by a unit nested in it. */
+  parentType?: string | undefined;
 };
 
 const pushParagraph = (
@@ -329,14 +385,41 @@ const walkUnit = (
 ): void => {
   const { $ } = state;
   const type = unit.attribs["xType"] ?? "";
-  const enumerated = ENUMERATED_UNIT_TYPES.has(type);
-  const marker = markerOf($, unit);
   const nameNode = childElements(unit, "xName").at(0);
   const titleNode = childElements(unit, "xTitle").at(0);
   const title = ownText($, titleNode);
+  const firstContent = unit.children.find(
+    (child): child is Element =>
+      isTag(child) && child !== nameNode && child !== titleNode,
+  );
+  // A numbered paragraph keeps its number as structure, on the text that
+  // opens it; a unit that opens on anything else keeps its printed marker.
+  let pendingNumber =
+    title === "" &&
+    firstContent?.tagName === "xText" &&
+    ownText($, firstContent) !== ""
+      ? paragraphNumberOf({
+          $,
+          unit,
+          parentType: context.parentType,
+          role: context.role,
+        })
+      : undefined;
+  const enumerated =
+    pendingNumber === undefined && ENUMERATED_UNIT_TYPES.has(type);
+  const marker = pendingNumber === undefined ? markerOf($, unit) : "";
   const unitContext: ParagraphContext = {
     role: type === "cite" ? "quote" : context.role,
     listDepth: enumerated ? context.listDepth + 1 : context.listDepth,
+    parentType: type,
+  };
+  const numbered = (): Partial<ParagraphBlock> => {
+    if (pendingNumber === undefined) {
+      return {};
+    }
+    const number = pendingNumber;
+    pendingNumber = undefined;
+    return { number };
   };
 
   if (title !== "") {
@@ -388,7 +471,7 @@ const walkUnit = (
         pendingMarker = "";
         pushParagraph(state, opened, unitContext);
       } else {
-        pushParagraph(state, inlines, unitContext);
+        pushParagraph(state, inlines, unitContext, numbered());
       }
       continue;
     }
@@ -410,18 +493,38 @@ const walkUnit = (
 };
 
 /**
+ * The head matter an operative branch opens with, before its first point:
+ * the legal basis the authority decides on and the recital naming the
+ * proceedings. The portal prints them as unmarked units of the same branch;
+ * they introduce the ruling and are not part of it.
+ */
+const markOperativeLeadIn = (blocks: readonly Block[]): void => {
+  for (const block of blocks) {
+    if (block.type !== "paragraph" || !isPlRecitalLine(block.plainText)) {
+      return;
+    }
+    block.role = "intro";
+  }
+};
+
+/**
  * The branches of the decision. The one without a title is the operative
- * part, which is what the reader sets as the holding; a titled branch is the
- * reasons, read as body text.
+ * part, which is what the reader sets as the holding once its lead-in is
+ * read off; a titled branch is the reasons, read as the authority's
+ * argumentation.
  */
 const walkBranches = (state: ParseState, block: Element): void => {
   for (const branch of block.children) {
     if (isTag(branch) && branch.tagName === "xUnit") {
       const titled = ownText(state.$, childElements(branch, "xTitle").at(0));
+      const start = state.blocks.length;
       walkUnit(state, branch, 0, {
-        role: titled === "" ? "holding" : undefined,
+        role: titled === "" ? "holding" : "argumentation",
         listDepth: 0,
       });
+      if (titled === "") {
+        markOperativeLeadIn(state.blocks.slice(start));
+      }
       continue;
     }
     if (isTag(branch) && branch.tagName === "xText") {
@@ -529,7 +632,7 @@ const sourceTextsOf = ($: cheerio.CheerioAPI, root: Element): string[] => {
 
 /** What the validator measures a parse against, read from the XML alone. */
 export const plUodoSourceTexts = (xml: string): string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const root = $("xPart").get(0);
   return root === undefined ? [] : sourceTextsOf($, root);
 };
@@ -537,7 +640,7 @@ export const plUodoSourceTexts = (xml: string): string[] => {
 export const parsePlUodoDecisionXml = (
   input: ParsePlUodoDecisionInput,
 ): Result<ParsePlUodoDecisionOutput, ParseXmlError> => {
-  const $ = cheerio.load(input.xml, { xml: true });
+  const $ = load(input.xml, { xml: true });
   const root = $("xPart").get(0);
   if (root === undefined) {
     return Result.err(
@@ -612,13 +715,10 @@ export const parsePlUodoDecisionXml = (
     );
   }
 
-  const validation = validateAndLog(
-    {
-      parser: "pl-uodo",
-      caseNumber: input.caseNumber,
-      language: "pl",
-      url: input.sourceUrl,
-    },
+  // Measured, not logged: a failed verdict fails the parse, which the adapter
+  // reports as a document parse failure, and the pipeline reports retention
+  // for every document it stores.
+  const validation = validateAst(
     buildValidationHtml(sourceTextsOf($, root)),
     state.blocks,
   );

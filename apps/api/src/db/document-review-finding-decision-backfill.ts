@@ -1,4 +1,5 @@
-import { DOCUMENT_REVIEW_FINDING_DECISION } from "@/api/lib/document-review/run-contract";
+import { REVIEW_STATUS_DECISION } from "@stll/api-contract/review-decision";
+
 import { SQL_NULL, sqlCaseExpression } from "@/api/lib/sql-case-expression";
 
 import type { OnlineRepair } from "./online-migration-connection";
@@ -14,7 +15,7 @@ const PENDING_DECISIONS = `
 
 /** The shared decision for each stored word, from the one map that owns it. */
 const DECISION_SQL = sqlCaseExpression({
-  branches: Object.entries(DOCUMENT_REVIEW_FINDING_DECISION).map(
+  branches: Object.entries(REVIEW_STATUS_DECISION.finding).map(
     ([stored, decision]) =>
       `WHEN finding.decision = '${stored}' THEN ${decision === null ? SQL_NULL : `'${decision}'`}`,
   ),
@@ -26,15 +27,27 @@ const DECISION_SQL = sqlCaseExpression({
  * The baseline event takes its finding's id, as the decide handler's does,
  * so a finding changed while this runs keeps exactly one baseline. */
 export const DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL = {
+  introducedBy: "20261028130100_document_review_finding_decision_history",
   name: "document-review-finding-decisions",
   readCompletion: async (connection) => {
     const pending = await connection.query(
       `SELECT finding.id ${PENDING_DECISIONS} LIMIT 1`,
       [],
     );
+    // The anti-join is a durable checkpoint: every committed batch stays
+    // done, and the decide handler writes a missing baseline itself when it
+    // next changes the finding. So a missing baseline is resumable pending
+    // work, never a reason to refuse boot: a live write that decides a
+    // finding without its event must not stop every new API task.
     return pending.length === 0
       ? { type: "complete" }
-      : { type: "incomplete", reason: "Finding decision history is pending" };
+      : {
+          type: "pending",
+          reason: "Finding decision history is pending",
+          cursor: null,
+          holdUntil: null,
+          heldSince: null,
+        };
   },
   repair: async (connection) => {
     for (;;) {

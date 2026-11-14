@@ -7,6 +7,7 @@ import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { PopoverClose, PopoverTitle } from "@stll/ui/popover";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
@@ -277,8 +278,8 @@ const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
       {/* The panel steps aside for the decision it sent the reader to. */}
       <PopoverClose
         render={
-          <button
-            className="hover:bg-muted/60 -mx-1.5 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-start"
+          <Button
+            className="-mx-2 w-auto flex-1"
             onClick={() => {
               inspector.open(
                 createCaseDecisionViewTab({
@@ -292,7 +293,8 @@ const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
                 }),
               );
             }}
-            type="button"
+            size="row"
+            variant="ghost"
           />
         }
       >
@@ -301,20 +303,20 @@ const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
           title={`${row.decision.caseNumber} · ${row.decision.court}`}
         />
         <span className="flex min-w-0 flex-1 flex-col">
-          <BidiText
-            as="span"
-            className="text-foreground-strong-muted truncate text-xs font-medium"
+          <TruncatedText
+            className="text-foreground-strong-muted text-xs font-medium"
+            render={<BidiText as="span" />}
           >
             {citedDecisionLabel(row.decision)}
-          </BidiText>
-          <BidiText
-            as="span"
-            className="text-muted-foreground truncate text-[0.7rem]"
+          </TruncatedText>
+          <TruncatedText
+            className="text-muted-foreground text-[0.7rem]"
+            render={<BidiText as="span" />}
           >
             {year === null
               ? row.decision.court
               : `${row.decision.court} · ${formatYear(format, year)}`}
-          </BidiText>
+          </TruncatedText>
         </span>
         <span
           className={cn(

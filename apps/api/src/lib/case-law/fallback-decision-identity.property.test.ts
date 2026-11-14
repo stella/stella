@@ -156,11 +156,15 @@ const publishedDecision = (fulltext: string, decisionDate = "2025-04-18") =>
   });
 
 test("same-day same-type weak decisions deduplicate by document and preserve different content", () => {
-  const first = decisionStorageIdentity(publishedDecision("Prvé uznesenie."));
-  const replay = decisionStorageIdentity(publishedDecision("Prvé uznesenie."));
+  const first = decisionStorageIdentity(
+    publishedDecision("Prvé uznesenie."),
+  ).unwrap();
+  const replay = decisionStorageIdentity(
+    publishedDecision("Prvé uznesenie."),
+  ).unwrap();
   const sibling = decisionStorageIdentity(
     publishedDecision("Druhé uznesenie."),
-  );
+  ).unwrap();
   expect(first.type).toBe("content");
   expect(replay).toEqual(first);
   if (first.type !== "content" || sibling.type !== "content") {
@@ -179,10 +183,10 @@ test("same-day same-type weak decisions deduplicate by document and preserve dif
 test("weak metadata changes move the cohort without changing document identity", () => {
   const first = decisionStorageIdentity(
     publishedDecision("Rovnaké uznesenie.", "2025-04-18"),
-  );
+  ).unwrap();
   const corrected = decisionStorageIdentity(
     publishedDecision("Rovnaké uznesenie.", "2025-05-28"),
-  );
+  ).unwrap();
   if (first.type !== "content" || corrected.type !== "content") {
     return expect.unreachable("Weak source evidence must use content identity");
   }
@@ -214,22 +218,28 @@ test("strong ECLI identity excludes date and type from the unique key", () => {
 });
 
 test("metadata-only publications retain the different stated records", () => {
-  const first = decisionStorageIdentity(publishedDecision("", "2025-04-18"));
-  const second = decisionStorageIdentity(publishedDecision("", "2025-05-28"));
+  const first = decisionStorageIdentity(
+    publishedDecision("", "2025-04-18"),
+  ).unwrap();
+  const second = decisionStorageIdentity(
+    publishedDecision("", "2025-05-28"),
+  ).unwrap();
   if (first.type !== "content" || second.type !== "content") {
     return expect.unreachable(
       "Weak publication records must use content identity",
     );
   }
   expect(first.contentHash).not.toBe(second.contentHash);
-  expect(decisionStorageIdentity(publishedDecision("", "2025-04-18"))).toEqual(
-    first,
-  );
+  expect(
+    decisionStorageIdentity(publishedDecision("", "2025-04-18")).unwrap(),
+  ).toEqual(first);
 });
 
 test("publication identity remains stable across document enrichment", () => {
-  const metadata = decisionStorageIdentity(publishedDecision(""));
-  const detail = decisionStorageIdentity(publishedDecision("Prvé uznesenie."));
+  const metadata = decisionStorageIdentity(publishedDecision("")).unwrap();
+  const detail = decisionStorageIdentity(
+    publishedDecision("Prvé uznesenie."),
+  ).unwrap();
   if (metadata.type !== "content" || detail.type !== "content") {
     return expect.unreachable(
       "Weak observations must have publication fingerprints",
@@ -247,13 +257,13 @@ test("textless same-cohort publications retain distinct stated metadata", () => 
       ...publishedDecision(""),
       metadata: { record: "first" },
     }),
-  );
+  ).unwrap();
   const second = decisionStorageIdentity(
     plainTextIngestionResult({
       ...publishedDecision(""),
       metadata: { record: "second" },
     }),
-  );
+  ).unwrap();
   if (first.type !== "content" || second.type !== "content") {
     return expect.unreachable("Expected weak records");
   }

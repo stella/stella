@@ -15,4 +15,6 @@ export const GRADED_HANDLER_CODE_REASON = {
   action_admission_lease_lost: "admission_lease_lost",
   PUBLIC_READ_TIMEOUT: "public_read_timeout",
   upstream_unavailable: "upstream_unavailable",
+  // A token endpoint's refusal: only new credentials or configuration fix it.
+  mcp_oauth_refresh_refused: "upstream_unavailable",
 } as const satisfies Record<string, FailureReason>;

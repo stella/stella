@@ -4,10 +4,19 @@ import { panic, Result, UnhandledException } from "better-result";
 import * as v from "valibot";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import {
+  parseResourceMutationId,
+  RESOURCE_MUTATION_ID_HEADER,
+} from "@stll/api-contract";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import type { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract/mcp";
+import type { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
+import type { FailureGrade } from "@stll/errors";
 import type { PermissionInput } from "@stll/permissions";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -35,9 +44,11 @@ import {
   authenticateSession,
   authorizeWorkspace,
 } from "@/api/lib/auth";
-import type { WorkspaceStatusAccess } from "@/api/lib/auth";
+import type { WorkspaceStatusAccess } from "@/api/lib/auth/accessible-workspace";
 import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import type { AccountAccess } from "@/api/lib/auth/account-access";
+import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
+import type { AccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type {
@@ -52,6 +63,7 @@ import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import { requestAbortRefusal } from "@/api/lib/errors/request-abort";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -78,6 +90,10 @@ import {
 } from "@/api/lib/files/content-delivery";
 import type { ContentDelivery } from "@/api/lib/files/content-delivery";
 import {
+  fingerprintHttpRequest,
+  runWithRequestReceipt,
+} from "@/api/lib/idempotency/request-receipts";
+import {
   publicReadTimeoutError,
   runPublicReadRequest,
 } from "@/api/lib/legal-search/public-read-timeout";
@@ -90,6 +106,7 @@ import {
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
+  answeredFailureSeverity,
   legacyChannelOf,
   observeShadow,
   SHADOW_SINKS,
@@ -209,6 +226,11 @@ export type { McpToolName };
  *   `assistant_chat`.
  * - `notification_inbox`: the caller's own notifications (list, mark one
  *   read). Mark-all and announcements stay `internal` under `native_tool_ui`.
+ * - `cross_matter_search`: the search screen's results across the matters the
+ *   caller can open, by text, result type, editor, file type and date. The
+ *   curated `search` and `search_across_matters` tools are separate, narrower
+ *   knowledge searches; facets, preview and the AI helpers stay `internal`
+ *   under `search_ui`.
  */
 type McpCapabilityReason =
   | "template_authoring_ui"
@@ -229,7 +251,10 @@ type McpCapabilityReason =
   | "correspondence"
   | "personal_history"
   | "assistant_memory"
-  | "notification_inbox";
+  | "notification_inbox"
+  | "organization_management"
+  | "organization_admin"
+  | "cross_matter_search";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from
@@ -278,6 +303,15 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `organization_export`: starting or downloading a whole-organization data
+ *   export; a person performs it in the app, never an agent, because it hands
+ *   over the firm's privileged material in one action.
+ * - `native_device`: a native app registering the device it runs on (push
+ *   alert delivery). Only the signed-in app holds the device token; an agent
+ *   that could register one could route a person's alerts elsewhere.
+ * - `agent_autonomy_ceiling`: an organization's limit on how much an agent
+ *   may do without asking. An agent that could change it could raise its
+ *   own limit, so only an administrator in the app sets it.
  */
 type McpInternalReason =
   | "auth_plumbing"
@@ -301,7 +335,10 @@ type McpInternalReason =
   | "document_processing"
   | "native_tool_ui"
   | "billing_ui"
-  | "compound_consent";
+  | "compound_consent"
+  | "native_device"
+  | "organization_export"
+  | "agent_autonomy_ceiling";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler
@@ -327,6 +364,8 @@ export type McpExposure =
   | {
       type: "capability";
       reason: McpCapabilityReason;
+      /** Curated wrapper that delegates to this capability. */
+      by?: McpToolName;
       consumesServices: ServiceClassification;
       confirmation?: "required";
       readClass?: McpReadClass;
@@ -383,10 +422,9 @@ export type UsageMeteringConfig = {
  * (`v.pipe(v.string(), v.description("..."))`), which the same exporter carries
  * into the catalog's `inputSchema`.
  *
- * Optional only until the remaining gaps are closed. Every capability without
- * one is listed by id in `apps/api/capability-description-ledger.json`; a new
- * capability may not join that list, and authoring prose means deleting its
- * line in the same change (see apps/api/scripts/capability-description-guard.ts).
+ * Optional in the type, required by
+ * apps/api/scripts/capability-description-guard.ts, which fails a capability
+ * without one.
  */
 type CapabilityDescription = {
   description?: string;
@@ -455,6 +493,8 @@ export type HandlerConfig = InputSchema &
     accountAccess: AccountAccess;
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
+    /** Scoped DB mutations only; external side effects require owner-specific receipt integration. */
+    idempotency?: { type: "replay" };
     requiresUsage?: UsageMeteringConfig;
     featureAccess?: FeatureAccessRequirement;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
@@ -569,19 +609,37 @@ export const getSafeHandlerAccessMetadata = (handler: unknown) =>
     ? safeHandlerAccountAccess.get(handler)
     : undefined;
 
+type AccountCapabilityScope =
+  | (typeof ACCOUNT_EXPORT_SCOPES)[keyof typeof ACCOUNT_EXPORT_SCOPES]
+  | typeof ORGANIZATION_CREATE_SCOPE;
+
+type SessionCapabilityAuthority =
+  | { mcp: Extract<McpExposure, { type: "internal" }>; accountScope?: never }
+  | {
+      mcp: Exclude<McpExposure, { type: "internal" }>;
+      accountScope: AccountCapabilityScope;
+    };
+
 export type SessionHandlerConfig = InputSchema &
+  SessionCapabilityAuthority &
   WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     accountAccess: AccountAccess;
-    mcp: McpExposure;
+    idempotency?: { type: "replay" };
+    /**
+     * Session handlers run outside an organization scope, so they can only
+     * state that a successful call announces no resource sets.
+     */
+    realtime?: NoResourceSetUpdates;
   };
 
 type SessionHandlerContext<
   TConfig extends SessionHandlerConfig = SessionHandlerConfig,
 > = RouteContext<TConfig> & {
+  accountAuthority?: AccountCapabilityAuthority;
   user: {
     id: SafeId<"user">;
     email: string;
@@ -632,6 +690,8 @@ type SafeErrorBody = {
   retryAfterMs?: number;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
+  /** Matter destination for a scope correction the caller may follow. */
+  workspaceId?: string;
   /**
    * Structured fields surfaced on specific error responses. Today
    * only the 402 UsageLimitExceeded path uses them so the
@@ -1010,6 +1070,7 @@ const runSafeHandlerInDeliveryScope = async <
     const error = result.error;
 
     const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
@@ -1082,6 +1143,7 @@ const runSafeHandlerInDeliveryScope = async <
     // BYOK key for) gets reported to the user as "Internal
     // server error" with no actionable detail.
     const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
@@ -1159,11 +1221,24 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   ? unknown
   : never;
 
-type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
+type NonJsonReplayPayload<T> =
+  T extends HttpStatusResponse<infer _Code, infer Body>
+    ? NonJsonReplayPayload<Body>
+    : Extract<
+        T,
+        Response | ReadableStream | Blob | ArrayBuffer | ArrayBufferView
+      >;
+
+type ConfiguredFiniteHandlerGuard<TConfig, TResult> = (TConfig extends {
+  idempotency: { type: "replay" };
 }
-  ? NoInfer<FiniteHandlerGuard<TResult>>
-  : unknown;
+  ? NoInfer<[NonJsonReplayPayload<TResult>] extends [never] ? unknown : never>
+  : unknown) &
+  (TConfig extends {
+    actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
+  }
+    ? NoInfer<FiniteHandlerGuard<TResult>>
+    : unknown);
 
 type FiniteActionContext = SafeHandlerLogContext & {
   user: { id: SafeId<"user"> };
@@ -1310,7 +1385,8 @@ export const admitFiniteAction = async function* <
   });
 };
 
-type HandlerAdmissionDependencies = {
+type HandlerAdmissionDependencies<TContext> = {
+  authorize?: (ctx: TContext) => Promise<Result<void, HandlerError>>;
   admit?: typeof withActionAdmission;
   checkAccountOperation?: typeof checkRestrictedAccountOperation;
   announce?: typeof announceResourceSetUpdates;
@@ -1332,6 +1408,7 @@ type ScopedOperationInput<
   config: TConfig;
   handler: SafeHandlerFn<TContext, TResult>;
   admit: typeof withActionAdmission;
+  authorize?: HandlerAdmissionDependencies<TContext>["authorize"];
 };
 
 export const runCheckedScopedHandler = async <
@@ -1352,29 +1429,98 @@ export const runCheckedScopedHandler = async <
   /** The live request's response state; the proof's copy by default. */
   responseSet: ResponseSet = scratch.ctx.set,
 ): Promise<SafeHandlerResult<TResult>> => {
-  const { ctx, config, handler, admit } = cloneOperationInput(
+  const { ctx, config, handler, admit, authorize } = cloneOperationInput(
     proof.input.value,
   );
   const admission = config.actionAdmission;
+  const run = async (handlerContext: TContext) =>
+    await runSafeHandler({
+      ctx: {
+        ...handlerContext,
+        // Response state belongs to the live request, outside the proof copy.
+        set: responseSet,
+        ...(usageLane === undefined ? {} : { usageLane }),
+      },
+      contentDelivery: config.contentDelivery,
+      handler:
+        admission === undefined
+          ? handler
+          : (context) =>
+              runAdmittedFiniteHandler({
+                ctx: context,
+                handler,
+                admit,
+                actionKind: admission.actionKind,
+              }),
+    });
+  const request = ctx.request;
+  const key = request.headers.get("Idempotency-Key");
+  if (key === null) {
+    if (authorize !== undefined) {
+      const authorization = await authorize(ctx);
+      if (authorization.isErr()) {
+        return toSafeStatusResponse(
+          authorization.error.status,
+          safeErrorBody(authorization.error),
+        );
+      }
+    }
+    return await run(ctx);
+  }
+  if (config.idempotency === undefined) {
+    return await runSafeHandler({
+      ctx: { ...ctx, set: responseSet },
+      contentDelivery: undefined,
+      async *handler() {
+        return yield* Result.await(
+          Promise.resolve(
+            Result.err(
+              new HandlerError({
+                status: 400,
+                message:
+                  "This endpoint does not support Idempotency-Key. Omit the header and use its documented submission flow.",
+              }),
+            ),
+          ),
+        );
+      },
+    });
+  }
   return await runSafeHandler({
-    ctx: {
-      ...ctx,
-      // Response state is mutable request output, never an authorization
-      // input: the handler writes to the live request's, not the proof copy's.
-      set: responseSet,
-      ...(usageLane === undefined ? {} : { usageLane }),
-    },
-    contentDelivery: config.contentDelivery,
-    handler:
-      admission === undefined
-        ? handler
-        : (context) =>
-            runAdmittedFiniteHandler({
-              ctx: context,
-              handler,
-              admit,
-              actionKind: admission.actionKind,
+    ctx: { ...ctx, set: responseSet },
+    contentDelivery: undefined,
+    async *handler() {
+      const result = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await runWithRequestReceipt({
+              ...(authorize === undefined
+                ? {}
+                : { authorize: async () => await authorize(ctx) }),
+              scopedDb: ctx.scopedDb,
+              organizationId: ctx.session.activeOrganizationId,
+              userId: ctx.user.id,
+              key,
+              route: ctx.route,
+              fingerprint: await fingerprintHttpRequest({
+                method: request.method,
+                route: ctx.route,
+                body: ctx.body,
+                params: ctx.params,
+                query: ctx.query,
+              }),
+              run: async (scopedDb) =>
+                await run({
+                  ...ctx,
+                  scopedDb,
+                  safeDb: safeDbFromScoped(scopedDb),
+                }),
+              responseStatus: () => responseSet.status ?? 200,
             }),
+        ),
+      );
+      return result;
+    },
   });
 };
 
@@ -1514,10 +1660,11 @@ const createSafeScopedHandler = <
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
   {
+    authorize,
     admit = withActionAdmission,
     checkAccountOperation = checkRestrictedAccountOperation,
     announce = announceResourceSetUpdates,
-  }: HandlerAdmissionDependencies = {},
+  }: HandlerAdmissionDependencies<TContext> = {},
 ): SafeHandlerCore<TConfig, TContext, TResult> =>
   recordSafeHandler({
     config,
@@ -1592,7 +1739,13 @@ const createSafeScopedHandler = <
         let usageLane = ctx.usageLane;
         const authorization = await authorizeOperation({
           kind: HANDLER_USAGE_ALLOWED,
-          input: { ctx, config, handler, admit },
+          input: {
+            ctx,
+            config,
+            handler,
+            admit,
+            ...(authorize === undefined ? {} : { authorize }),
+          },
           check: async ({
             ctx: checkedContext,
             config: checkedConfig,
@@ -1642,14 +1795,22 @@ const createSafeScopedHandler = <
           config.realtime.scope !== "none" &&
           isSuccessfulHandlerResult(result)
         ) {
-          const announcement = Result.try(() =>
+          const mutationId = parseResourceMutationId(
+            ctx.request.headers.get(RESOURCE_MUTATION_ID_HEADER),
+          );
+          const announcement = await Result.tryPromise(async () => {
+            const mutationDigest =
+              mutationId === undefined
+                ? undefined
+                : await resourceMutationDigest(mutationId);
             announce({
               realtime: config.realtime,
+              ...(mutationDigest === undefined ? {} : { mutationDigest }),
               result,
               organizationId: ctx.session.activeOrganizationId,
               workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
-            }),
-          );
+            });
+          });
           if (Result.isError(announcement)) {
             observeFailure(announcement.error, {
               sink: REALTIME_ANNOUNCEMENT_FAILURE,
@@ -2067,6 +2228,7 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
     ? {}
     : { retryAfterMs: error.retryAfterMs }),
   ...(error.issues ? { issues: error.issues } : {}),
+  ...(error.workspaceId ? { workspaceId: error.workspaceId } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).
   ...(error.usage
@@ -2091,6 +2253,11 @@ type RootHandlerConfig = HandlerConfig & {
   realtime?: OrganizationResourceSetUpdates | NoResourceSetUpdates;
 };
 
+const rootReplayAuthorizations = new WeakSet<object>();
+
+export const hasRootReplayAuthorization = (definition: object) =>
+  rootReplayAuthorizations.has(definition);
+
 export const createSafeRootHandler = <
   TConfig extends RootHandlerConfig,
   TResult extends SafeHandlerPayload,
@@ -2098,10 +2265,31 @@ export const createSafeRootHandler = <
   config: TConfig,
   handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult> &
     ConfiguredFiniteHandlerGuard<TConfig, TResult>,
-  dependencies?: HandlerAdmissionDependencies,
+  ...dependencies: "idempotency" extends keyof TConfig
+    ? [
+        dependencies: HandlerAdmissionDependencies<
+          RootHandlerContext<TConfig>
+        > & {
+          authorize: NonNullable<
+            HandlerAdmissionDependencies<
+              RootHandlerContext<TConfig>
+            >["authorize"]
+          >;
+        },
+      ]
+    : [dependencies?: HandlerAdmissionDependencies<RootHandlerContext<TConfig>>]
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> => {
-  const core = createSafeScopedHandler("member", config, handler, dependencies);
-  return { ...core, run: memberRun(config, core.handler) };
+  const admission = dependencies.at(0);
+  const authorizesBeforeReplay = admission?.authorize !== undefined;
+  if (config.idempotency !== undefined && !authorizesBeforeReplay) {
+    panic("Replay-enabled root handlers require pre-replay authorization");
+  }
+  const core = createSafeScopedHandler("member", config, handler, admission);
+  const definition = { ...core, run: memberRun(config, core.handler) };
+  if (config.idempotency !== undefined && admission?.authorize !== undefined) {
+    rootReplayAuthorizations.add(definition);
+  }
+  return definition;
 };
 
 export const createSafeHandler = <
@@ -2111,7 +2299,7 @@ export const createSafeHandler = <
   config: TConfig,
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
     ConfiguredFiniteHandlerGuard<TConfig, TResult>,
-  dependencies?: HandlerAdmissionDependencies,
+  dependencies?: HandlerAdmissionDependencies<WorkspaceHandlerContext<TConfig>>,
 ): SafeHandlerDefinition<
   TConfig,
   WorkspaceHandlerContext<TConfig>,
@@ -2127,6 +2315,7 @@ export const createSafeHandler = <
 };
 
 type SessionHandlerDependencies = {
+  authenticate?: typeof authenticateSession;
   checkAccountOperation?: typeof checkRestrictedAccountOperation;
 };
 
@@ -2137,6 +2326,7 @@ export const createSafeSessionHandler = <
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
   {
+    authenticate = authenticateSession,
     checkAccountOperation = checkRestrictedAccountOperation,
   }: SessionHandlerDependencies = {},
 ): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> => {
@@ -2147,6 +2337,19 @@ export const createSafeSessionHandler = <
       ctx: SessionHandlerContext<TConfig>,
     ): Promise<SafeHandlerResult<TResult>> =>
       await withSafeHandlerExceptionScope(ctx, async () => {
+        if (
+          config.accountScope !== undefined &&
+          ctx.accountAuthority !== undefined &&
+          !hasAccountCapabilityAuthority(
+            ctx.accountAuthority,
+            config.accountScope,
+          )
+        ) {
+          return toSafeStatusResponse(403, {
+            code: "missing_scope",
+            message: `This operation requires ${config.accountScope} consent.`,
+          });
+        }
         if (requiresAccountCheck(config.accountAccess)) {
           const accountAccess = checkAccountOperation(
             ctx.user.email,
@@ -2169,7 +2372,7 @@ export const createSafeSessionHandler = <
   return {
     ...core,
     run: async (request) => {
-      const account = await authenticateSession(request.ctx, config);
+      const account = await authenticate(request.ctx, config);
       if (!account.ok) {
         return account.answer;
       }
@@ -2554,18 +2757,19 @@ const logAndCaptureSafeError = ({
   }
   const reqCtx = getRequestContext();
   const evidence = readEvidence(error);
-  const severity =
-    statusCode >= 500 &&
-    !(
-      HandlerError.is(error) &&
-      error.code === ACTION_ADMISSION_CODES.featureDisabled
-    )
-      ? "ERROR"
-      : "WARN";
+  const featureDisabled =
+    HandlerError.is(error) &&
+    error.code === ACTION_ADMISSION_CODES.featureDisabled;
+  const severityFor = (grade: FailureGrade | undefined) =>
+    featureDisabled ? "WARN" : answeredFailureSeverity(statusCode, grade);
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.handler,
-    channel: legacyChannelOf({ severity, capture: telemetry === "capture" }),
+    channel: ({ grade }) =>
+      legacyChannelOf({
+        severity: severityFor(grade),
+        capture: telemetry === "capture",
+      }),
     request,
     route,
     requestState: { answeredStatus: statusCode },
@@ -2617,12 +2821,11 @@ const logAndCaptureSafeError = ({
     attributes["enduser.organization_id"] = reqCtx.organizationId;
   }
 
-  // The owner's grade rides along in shadow; it decides nothing here yet.
   Object.assign(attributes, shadowFields(grading));
 
   // Operator feature refusals retain 503 on the wire while remaining an
-  // expected warning. Other server failures keep their error severity.
-  if (severity === "ERROR") {
+  // expected warning. Other server failures take their grade's severity.
+  if (severityFor(grading?.grade) === "ERROR") {
     logger.error("request.failed", attributes);
   } else {
     logger.warn("request.failed", attributes);

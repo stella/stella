@@ -27,11 +27,13 @@ export const PUBLIC_CORPUS_ROUTE_POLICY = {
   // Adding facets to listing requires updating this classifier and its guard.
   "GET /case/decisions": "browse",
   "GET /case/decisions/facets": "aggregate",
+  "GET /case/decisions/filter-validation": "search",
   "GET /case/decisions/status": "browse",
   "GET /case/decisions/latest": "browse",
   "GET /case/decisions/by-slug/:slug": "browse",
   "GET /case/decisions/:decisionId/summary": "browse",
   "GET /case/decisions/:decisionId": "browse",
+  "GET /case/decisions/:decisionId/anchor-redirects": "browse",
   "GET /case/decisions/:decisionId/citations": "browse",
   "GET /case/decisions/:decisionId/citations/summary": "browse",
   "GET /case/decisions/:decisionId/citations/leading": "browse",

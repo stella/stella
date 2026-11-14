@@ -24,7 +24,9 @@ import {
   SEARCH_HISTORY_IMPORT_MAX,
   SEARCH_HISTORY_TITLE_MAX_LENGTH,
   SEARCH_QUERY_MAX_LENGTH,
+  SKILL_RESOURCE_UPLOAD_MAX_BYTES,
   TIME_ENTRIES_APPROVAL_BATCH_MAX,
+  UPLOAD_DOCUMENT_MAX_BYTES,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
@@ -45,6 +47,7 @@ export {
 } from "@/api/lib/rate-limit/budget-config";
 
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
+const SITEMAP_PROTOCOL_URL_LIMIT = 50_000;
 
 export const LIMITS = {
   matterNumberPatternMinLength: 1,
@@ -241,6 +244,8 @@ export const LIMITS = {
   agentSkillResourcesPerSkill: SKILL_PACKAGE_LIMITS.resourcesPerSkillMax,
   agentSkillResourcePathMaxChars: SKILL_PACKAGE_LIMITS.resourcePathMaxChars,
   agentSkillResourceMaxChars: SKILL_PACKAGE_LIMITS.resourceMaxChars,
+  agentSkillResourceModelContextMaxChars:
+    SKILL_PACKAGE_LIMITS.resourceModelContextMaxChars,
   /** Prose a proposal author writes to explain the change. */
   agentSkillProposalSummaryMaxChars: 2000,
   /** Quoted source a comment anchors to, kept so the comment can be
@@ -269,10 +274,23 @@ export const LIMITS = {
   oauthConnectionsPageSizeMax: 100,
   /** Default/max page sizes for the MCP `list_matters`-style list tools. */
   mcpListPageSizeDefault: 25,
+  mcpListPageSizeMin: 1,
   mcpListPageSizeMax: 100,
   /** Default/max page sizes for the MCP search tools. */
   mcpSearchPageSizeDefault: 10,
   mcpSearchPageSizeMax: 20,
+  /** Smallest page an MCP list or search tool takes. */
+  mcpPageSizeMin: 1,
+  /** Shortest value a required MCP text or list input takes: not empty. */
+  mcpNonEmptyMin: 1,
+  softLawAuthorityMaxLength: 64,
+  softLawJurisdictionMinLength: 2,
+  softLawJurisdictionMaxLength: 3,
+  isoDateLength: 10,
+  /** Characters of a language code an MCP filter takes (`cs`, `pt-BR`). */
+  mcpLanguageCodeMaxChars: 8,
+  /** Characters of an ISO calendar date an MCP filter takes (YYYY-MM-DD). */
+  mcpIsoDateMaxChars: 10,
   /** Default page size for the OpenAI-compatible MCP search tool. */
   mcpCompatSearchPageSizeDefault: 8,
   /**
@@ -304,6 +322,13 @@ export const LIMITS = {
    *  interval of the sweep that ends every stream whose session or other
    *  credential no longer holds. */
   sseCredentialRecheckMs: 15_000,
+  /** Event streams one session may hold open on one workspace or user feed
+   *  per process. Opening another closes that session's oldest, so a client
+   *  that reconnects keeps its newest stream. */
+  sseStreamsPerSession: 32,
+  /** Event streams one desktop edit session may hold open per process; one
+   *  editor reads them, so a reconnect replaces the oldest. */
+  desktopEditSessionStreams: 8,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
   /** OOXML numbering levels are zero-based and bounded to nine levels. */
@@ -370,6 +395,9 @@ export const LIMITS = {
    *  version, read whole when the reader opens the document. */
   readerAnnotationsPageSizeDefault: 100,
   readerAnnotationsPageSizeMax: 100,
+  /** Mark rows a downloaded copy of a matter document's PDF carries, read in
+   *  one query; far above what readers leave on one document. */
+  markedPdfMarkRowsMax: 10_000,
   decisionReaderPageMaxChars: READER_PAGE_MAX_CHARS,
   decisionReaderPageContentChars: 50_000,
   decisionReaderOpenTextChars: 8000,
@@ -427,9 +455,37 @@ export const LIMITS = {
    * Conservative until the engine's term-set cost is measured at scale; a
    * provision cited more widely is checked candidate by candidate instead.
    */
-  caseLawProvisionIdSetMax: 5000,
+  caseLawProvisionIdSetMax: 2000,
+  /**
+   * Physical citation links one provision scope read examines before it
+   * calls the provision broad. Larger than the id-set bound, so links of other
+   * countries, levels or unpublished decisions do not make a narrow citing
+   * set broad, and small because the walk runs on every provision-filtered
+   * search, before any of the work that search is for.
+   */
+  caseLawProvisionScopeLinkScanMax: 4000,
+  /**
+   * Each statement of a provision scope read. Past it the provision is read
+   * as broad, which the candidate-by-candidate path answers correctly, so a
+   * cold index costs the request this much rather than its whole budget.
+   */
+  caseLawProvisionScopeStatementBudgetMs: 1500,
+  /** Physical citation rows examined by one correlated provision probe. */
+  caseLawProvisionLinkProbeMax: 128,
+  /**
+   * Rank-index rows a broad provision-list request examines, counted before
+   * the request's own filters.
+   */
+  caseLawProvisionCandidateBudget: 5000,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
+  /**
+   * One page of the search palette's case-law section, split across the
+   * countries it asks. Small: the section is a glance beside the matter
+   * results, and the full case-law search pages further.
+   */
+  searchCaseLawSectionPageSizeDefault: 10,
+  searchCaseLawSectionPageSizeMax: 20,
   /** Maximum visible text returned by any global-search preview response. */
   searchPreviewResponseCharacterLimit: 16_000,
   /** Messages surrounding the best match in a global-search chat preview. */
@@ -441,6 +497,8 @@ export const LIMITS = {
   searchChatCandidateBytesMax: 8 * 1024 * 1024,
   savedSearchesPerUser: 100,
   savedSearchesPageSizeDefault: 50,
+  conflictChecksPageSizeDefault: 50,
+  conflictChecksPageSizeMax: 100,
   savedSearchesPageSizeMax: 100,
   savedTimeNarrativesPerUser: 100,
   /**
@@ -530,6 +588,14 @@ export const LIMITS = {
   extractionTimeoutMs: 30_000,
   /** Hard timeout for durable background document extraction. */
   documentProcessingExtractionTimeoutMs: 2 * 60_000,
+  /**
+   * Largest file the API process extracts itself. Parsing runs in a subprocess
+   * but the bytes pass through this process, so the bound protects its memory;
+   * larger files wait for the scheduled batch worker.
+   */
+  documentProcessingInlineMaxBytes: 5 * 1024 * 1024,
+  /** Runs one inline extraction tick takes, one after another. */
+  documentProcessingInlineBatchSize: 5,
   /** Wall-clock ceiling for one document-processing object-storage read. */
   documentProcessingObjectReadTimeoutMs: 30_000,
   /** Wall-clock ceiling (ms) for the live DOCX-to-Markdown read path in
@@ -537,12 +603,16 @@ export const LIMITS = {
    *  folio conversion of a single document. Mirrors `extractionTimeoutMs`'s
    *  budget for the same class of work (one document-sized file). */
   docxMarkdownConversionTimeoutMs: 30_000,
+  /** Bounded process-local Markdown and session-redacted window sources. */
+  mcpWindowTextCacheMaxBytes: 64 * 1024 * 1024,
+  mcpWindowAnonymizationCacheMaxBytes: 64 * 1024 * 1024,
   /** Wall-clock ceiling for writing one generated chat export to object storage. */
   chatExportObjectIoTimeoutMs: 30_000,
   clauseExportLimit: 500,
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,
   caseLawMatterLinksPerWorkspace: 1000,
+  legislationMatterLinksPerWorkspace: 1000,
   /** An empty coverage country reads as unset: all jurisdictions. */
   caseLawCoverageCountryMinLength: 1,
   /**
@@ -597,6 +667,10 @@ export const LIMITS = {
   caseLawAgentCitationPageSizeDefault: 20,
   /** Citing paragraph sent with a citation, centred on the citation itself. */
   caseLawCitationPassageChars: 1200,
+  /** The same passage in a compact citation read: a cue, not a quotation. */
+  caseLawCitationCompactPassageChars: 240,
+  /** Length of the words a citation read filters its citing paragraphs by. */
+  caseLawCitationPassageQueryChars: 256,
   /** Decision ASTs fetched at once while resolving one page of passages. */
   caseLawCitationPassageConcurrency: 6,
   /**
@@ -605,6 +679,12 @@ export const LIMITS = {
    * their pages; past a handful the merged page stops being one question.
    */
   caseLawSearchQueriesMax: 5,
+  /** Characters of one court name a case-law search filter takes. */
+  caseLawCourtNameMaxChars: 512,
+  /** Courts one case-law search may filter by at once. */
+  caseLawCourtsFilterMax: 16,
+  /** Characters of a publisher category or decision type filter value. */
+  caseLawFilterValueMaxChars: 128,
   /** Decisions one batch read may ask for. */
   caseLawDecisionBatchMax: 20,
   /**
@@ -619,11 +699,20 @@ export const LIMITS = {
    * token itself is shorter; the bound leaves room to change it.
    */
   caseLawDecisionTextVersionMaxLength: 24,
+  /** Characters of one docket register, such as "Cdo". */
+  caseLawDocketRegisterMaxChars: 16,
+  /** Registers one search may list. */
+  caseLawDocketRegistersFilterMax: 8,
+  /** Bounds of the senate number a docket opens with. */
+  caseLawSenateMin: 1,
+  caseLawSenateMax: 999,
   /**
    * Characters of one case reference. A docket, an ECLI or a reporter
    * citation; anything longer is prose and belongs in a text search.
    */
   caseLawIdentifierMaxLength: 256,
+  /** Characters of the cursor a `query` read issues. */
+  caseLawDecisionQueryCursorMaxLength: 128,
   /**
    * Decisions listed when a reference names more than one. Past a handful the
    * reference names a list of decisions rather than a decision, and the
@@ -646,9 +735,11 @@ export const LIMITS = {
    *  malformed/over-merged group key cannot load an unbounded set. */
   caseLawLanguageAlternatesPerGroupMax: 30,
   /** Max URL entries in one sitemap file by protocol. */
-  caseLawSitemapUrlLimit: 50_000,
-  /** Conservative per-shard case-law sitemap cap; leaves room for hreflang alternates under the XML byte limit. */
-  caseLawSitemapShardUrlLimit: 5000,
+  caseLawSitemapUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
+  /** URL ceiling; XML serialization separately enforces the byte ceiling. */
+  caseLawSitemapShardUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
+  /** Hreflang groups reserve room for their language alternates. */
+  caseLawSitemapMultilingualShardUrlLimit: 5000,
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawSourceFacetCountCap: 1000,
@@ -729,6 +820,10 @@ export const LIMITS = {
    * legislation tools and the compat id vocabulary) reads it from here.
    */
   legislationEliMaxChars: 512,
+  /** Characters of a publisher provision anchor (`par_1729-odst_2-pism_a`). */
+  legislationAnchorMaxChars: 256,
+  /** Characters of the shortest consolidation language code (`cs`). */
+  legislationLanguageMinChars: 2,
   /**
    * Characters of one provision's text. A provision is a section, not a
    * statute, so this sits far below the document text window: a batch read
@@ -741,6 +836,9 @@ export const LIMITS = {
    * rather than one request per item.
    */
   legislationProvisionReadConcurrency: 6,
+  /** Estimated heap retained for parsed decisions and compact section references. */
+  caseLawDecisionAstCacheMaxHeapBytes: 96 * 1024 * 1024,
+  caseLawDecisionSectionCacheMaxHeapBytes: 16 * 1024 * 1024,
   /**
    * Estimated heap the process keeps for parsed consolidation ASTs between
    * requests. A large code's consolidation parses to roughly 10 MiB, so this
@@ -785,6 +883,22 @@ export const LIMITS = {
   corpusIndexSearchMaxRounds: 3,
   /** Bound per-document passage searches and their per-split fan-out. */
   corpusIndexHighlightConcurrency: 8,
+  /**
+   * Corpus search reads one API process sends the engine at once
+   * (`corpus-index-admission.ts`). Sized to the search node's cores across
+   * the API replicas: past that, reads only slow each other down.
+   */
+  corpusIndexSearchConcurrency: 3,
+  /**
+   * Reads one process holds queued behind those; a read past this is
+   * refused at once as the index being unavailable, retryable, rather than
+   * left to wait out a queue it would not reach the front of in time. Ten
+   * agent searches' worth of first rounds (five phrasings, a scan and an
+   * aggregation each).
+   */
+  corpusIndexSearchQueueMax: 100,
+  /** Longest any queued read waits; its own timeout normally ends it first. */
+  corpusIndexSearchQueueMaxWaitMs: 30_000,
   /**
    * Folded groups (the acts of a legislation search) a cursor may carry past
    * capped scan windows, so none is shown again from a deeper member. A
@@ -851,6 +965,10 @@ export const LIMITS = {
   chatThreadListPageSizeDefault: 50,
   /** Max page size for the user's chat thread history. */
   chatThreadListPageSizeMax: 100,
+  /** Default page size for the caller's unfinished chat runs. */
+  chatActiveRunsPageSizeDefault: 100,
+  /** Max page size for the caller's unfinished chat runs. */
+  chatActiveRunsPageSizeMax: 100,
   /** Default page size for one chat thread's message history. The reader
    *  loads the most recent page first and fetches older pages on demand
    *  as the user scrolls up, so a long conversation never loads in full. */
@@ -894,11 +1012,13 @@ export const LIMITS = {
 
 export const FILE_SIZE_LIMIT_BYTES = {
   /** General document uploads (entities, templates). */
-  document: 50 * 1024 * 1024,
+  document: UPLOAD_DOCUMENT_MAX_BYTES,
   /** Structured data imports (clause JSON, contact sheets). */
   dataImport: 10 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */
-  skillPack: 2 * 1024 * 1024,
+  skillPack: 50 * 1024 * 1024,
+  /** One file uploaded into an existing skill as a resource. */
+  skillResource: SKILL_RESOURCE_UPLOAD_MAX_BYTES,
   /** Chat context file attachments. */
   chatContextFile: CHAT_CONTEXT_FILE_MAX_BYTES,
 } as const;
@@ -1030,10 +1150,11 @@ export const getPublicCorpusLimits = (
         global: aggregateGlobal,
       },
       sitemap: {
-        address: addressBudget({
-          configuredMax: 10,
-          globalMax: sitemapGlobal.max,
-        }),
+        // Shared crawler origins keep an address quota independent of fleet capacity.
+        address: {
+          duration: 60_000,
+          max: Math.min(600, sitemapGlobal.max - 1),
+        },
         global: sitemapGlobal,
       },
       browse: { address: API_RATE_LIMITS.api },

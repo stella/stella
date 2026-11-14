@@ -1,0 +1,1606 @@
+import * as v from "valibot";
+
+import { browseAsAgent, claudeMcpEndpoints } from "./fake-browser";
+import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
+import {
+  FAKE_STELLA_ANSWER,
+  FAKE_STELLA_SERVER,
+  FAKE_STELLA_STEPS,
+} from "./fake-stella-turn";
+
+/**
+ * A stand-in for the Claude Code CLI in stream-json mode that replays a
+ * handwritten transcript over real stdio, so the adapter's process, framing
+ * and protocol handling run unmodified in tests without a model provider.
+ * Its startup (arguments, working directory, the environment variables the
+ * adapter controls) and every message it receives are appended to
+ * `$FAKE_HARNESS_LOG` for the test to inspect. A user message whose content
+ * the Messages API would refuse ends it with code 96.
+ *
+ * Usage: `bun scripts/fake-claude-code-cli.ts <scenario> [CLI arguments]`.
+ */
+
+export type FakeStep =
+  /**
+   * Wait for the client's next control request of this subtype; answer it,
+   * with `respond` reading the request when the answer depends on it.
+   */
+  | {
+      expect: string;
+      response?: unknown;
+      respond?: (request: Record<string, unknown>) => unknown;
+      error?: string;
+    }
+  /** Wait for the client's next user message. */
+  | { expectUser: true }
+  | { emit: object }
+  /** Send a control request and wait for the client's response. */
+  | { control: object }
+  /** Withdraw the last control request sent. */
+  | { cancelLast: true }
+  | { raw: string }
+  | { sleep: number }
+  | { exit: number }
+  /**
+   * Play `approved` when the client allowed the last control request,
+   * `denied` otherwise.
+   */
+  | {
+      byDecision: {
+        approved: readonly FakeStep[];
+        denied: readonly FakeStep[];
+      };
+    }
+  /**
+   * Browse the fixture library through the browser and stella MCP servers
+   * `mcp_set_servers` registered, and report each call and the answer.
+   */
+  | { browse: true };
+
+/** A scenario that starts differently when the client resumes a session. */
+type FakeScenario =
+  | readonly FakeStep[]
+  | { resume: readonly FakeStep[]; fresh: readonly FakeStep[] };
+
+export const FAKE_CLAUDE_VERSION = "2.1.309";
+/** The server name the holder registers the browser tools under. */
+const FAKE_BROWSER_SERVER = "stella_browser";
+export const FAKE_RESUMED_SESSION_ID = "4f1d2c3b-5a6e-4b7c-8d9e-0f1a2b3c4d5e";
+
+const SUBSCRIPTION = {
+  email: "user@example.test",
+  subscriptionType: "max",
+  tokenSource: "claude.ai",
+  apiKeySource: "none",
+  apiProvider: "firstParty",
+};
+
+/** A default model the CLI's own list leaves out. */
+export const FAKE_UNLISTED_DEFAULT = "claude-test-9";
+
+/** The CLI's default row, which names the model it resolves to. */
+const defaultRow = (resolvedModel: string) => ({
+  value: "default",
+  resolvedModel,
+  displayName: "Default (recommended)",
+  description: "",
+  supportsEffort: true,
+  supportedEffortLevels: ["low", "medium", "high"],
+});
+
+const SONNET = {
+  value: "sonnet",
+  resolvedModel: "claude-test-2",
+  displayName: "Sonnet",
+  description: "",
+};
+
+const MODELS = [
+  defaultRow(SONNET.resolvedModel),
+  {
+    value: "opus",
+    resolvedModel: "claude-test-1",
+    displayName: "Opus",
+    description: "",
+    supportedEffortLevels: ["low", "medium", "high"],
+  },
+  SONNET,
+];
+
+const initialize = (
+  account: object = SUBSCRIPTION,
+  models: readonly object[] = MODELS,
+): FakeStep => ({
+  expect: "initialize",
+  response: {
+    commands: [],
+    agents: [],
+    output_style: "default",
+    available_output_styles: [],
+    models,
+    account,
+    claude_code_version: FAKE_CLAUDE_VERSION,
+  },
+});
+
+/** Every server the client registers is added. */
+const registerStella: FakeStep = {
+  expect: "mcp_set_servers",
+  respond: (request) => ({
+    added: Object.keys(
+      typeof request["servers"] === "object" && request["servers"] !== null
+        ? request["servers"]
+        : {},
+    ),
+    removed: [],
+    errors: {},
+  }),
+};
+
+const freshTurn = (): FakeStep[] => [
+  initialize(),
+  registerStella,
+  { expectUser: true },
+  { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
+];
+
+const assistant = (
+  id: string,
+  content: readonly object[],
+  extra: object = {},
+  message: object = {},
+): FakeStep => ({
+  emit: {
+    type: "assistant",
+    message: { id, role: "assistant", content, stop_reason: null, ...message },
+    parent_tool_use_id: null,
+    session_id: "s",
+    uuid: `${id}-uuid`,
+    ...extra,
+  },
+});
+
+/** The model the fake answers with, and the context window it reports. */
+const FAKE_CLAUDE_MODEL = "claude-sonnet-4-5-20250929";
+export const FAKE_CLAUDE_CONTEXT_WINDOW = 200_000;
+
+/** What one request of the fake read and wrote. */
+const requestUsage = (cacheRead: number, output: number) => ({
+  model: FAKE_CLAUDE_MODEL,
+  usage: {
+    input_tokens: 4,
+    cache_creation_input_tokens: 600,
+    cache_read_input_tokens: cacheRead,
+    output_tokens: output,
+  },
+});
+
+const toolUse = (id: string, name: string, input: object) => ({
+  type: "tool_use",
+  id,
+  name,
+  input,
+});
+
+const toolResult = (
+  toolUseId: string,
+  content: string | readonly object[],
+  isError = false,
+  extra: object = {},
+): FakeStep => ({
+  emit: {
+    type: "user",
+    message: {
+      role: "user",
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: toolUseId,
+          content,
+          is_error: isError,
+        },
+      ],
+    },
+    parent_tool_use_id: null,
+    session_id: "s",
+    ...extra,
+  },
+});
+
+const result = (extra: object = {}): FakeStep => ({
+  emit: {
+    type: "result",
+    subtype: "success",
+    is_error: false,
+    result: "done",
+    num_turns: 1,
+    session_id: "s",
+    usage: {
+      input_tokens: 100,
+      cache_creation_input_tokens: 10,
+      cache_read_input_tokens: 20,
+      output_tokens: 30,
+    },
+    ...extra,
+  },
+});
+
+const stream = (event: object): FakeStep => ({
+  emit: {
+    type: "stream_event",
+    event,
+    parent_tool_use_id: null,
+    session_id: "s",
+  },
+});
+
+const canUseTool = (
+  toolUseId: string,
+  toolName: string,
+  input: object,
+  extra: object = {},
+): FakeStep => ({
+  control: {
+    subtype: "can_use_tool",
+    tool_name: toolName,
+    input,
+    tool_use_id: toolUseId,
+    ...extra,
+  },
+});
+
+/** A connector tool: any MCP server other than the stella binding. */
+export const FAKE_MCP_CALL = {
+  id: "call-mcp",
+  name: "mcp__docs__search",
+  input: { query: "lease" },
+};
+
+/** The reason the CLI wrote for its terminal, with color escapes. */
+/** Text a built-in tool's input carries that chat must never show. */
+export const FAKE_PRIVATE_TEXT = {
+  heredoc: "Tenant owes 4,200 in arrears.",
+  oldString: "Rent is due monthly.",
+  newString: "Rent is due quarterly.",
+  written: "Confidential settlement terms.",
+  fetchPrompt: "Summarise the termination rules",
+  activeForm: "Working through the private plan",
+  subagentPrompt: "Read the lease and list every clause on arrears.",
+  subagentText: "Clause 4 covers arrears.",
+  subagentThinking: "The arrears clause may be void.",
+  subagentReport: "Report: clause 4 caps arrears at 4,200.",
+  imageData: "aW1hZ2UgYnl0ZXM=",
+} as const;
+
+/** The call that starts the subagent in the subagent scenario. */
+export const FAKE_SUBAGENT_CALL = "call-agent";
+
+/** One message of the subagent `FAKE_SUBAGENT_CALL` started. */
+const inSubagent = { parent_tool_use_id: FAKE_SUBAGENT_CALL };
+
+/** A command longer than chat shows. */
+export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
+
+/** What `approval_outcome` answers once the command ran, or did not. */
+const FAKE_APPROVED_ANSWER = "Removed draft.md.";
+const FAKE_DENIED_ANSWER = "Left the draft in place.";
+
+export const FAKE_APPROVAL_REASON = "\u001B[33mDeletes a file\u001B[0m";
+
+export const FAKE_PERMISSION_SUGGESTION = {
+  type: "addRules",
+  rules: [{ toolName: "Bash", ruleContent: "rm draft.md" }],
+  behavior: "allow",
+  destination: "localSettings",
+};
+
+/** The plan the plan scenarios propose, as the CLI adds it to the call. */
+export const FAKE_PLAN = "## Plan\n\n1. Read the lease.\n2. Draft the notice.";
+
+/** What the CLI suggests remembering when it asks about a plan in plan mode. */
+const SET_MODE_SUGGESTION = {
+  type: "setMode",
+  mode: "acceptEdits",
+  destination: "session",
+};
+
+/** A plan longer than chat shows (20,000 UTF-16 code units). */
+export const FAKE_LONG_PLAN = `## Plan\n\n${"1. Read the lease.\n".repeat(1200)}`;
+
+/** The plan call as the CLI asks about it: the model's input plus the plan. */
+const proposePlan = (
+  toolUseId: string,
+  plan: string | null = FAKE_PLAN,
+): FakeStep[] => [
+  assistant("msg-plan", [toolUse(toolUseId, "ExitPlanMode", {})]),
+  canUseTool(
+    toolUseId,
+    "ExitPlanMode",
+    plan === null
+      ? { planFilePath: "/plans/lease.md" }
+      : { plan, planFilePath: "/plans/lease.md" },
+    { permission_suggestions: [SET_MODE_SUGGESTION] },
+  ),
+];
+
+/** The host a sandboxed command reaches in the sandbox scenarios. */
+export const FAKE_SANDBOX_HOST = "registry.example.test";
+
+/** A command that writes outside the workspace, so it asks to leave the sandbox. */
+export const FAKE_ESCAPE_COMMAND = "touch ~/.config/example-tool/settings.json";
+
+/** What the CLI writes when the sandbox it was told to require cannot start. */
+export const FAKE_SANDBOX_REFUSAL =
+  "Sandbox required but unavailable: sandbox-exec is missing. Set sandbox.failIfUnavailable=false to allow unsandboxed execution.";
+
+const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
+
+/** The CLI's whole set of live background tasks, as task id and kind. */
+const backgroundTasks = (
+  tasks: readonly (readonly [string, string])[],
+): FakeStep => ({
+  emit: {
+    type: "system",
+    subtype: "background_tasks_changed",
+    tasks: tasks.map(([taskId, taskType]) => ({
+      task_id: taskId,
+      task_type: taskType,
+      description: "bun run dev",
+    })),
+    uuid: "tasks-uuid",
+    session_id: "s",
+  },
+});
+
+/** A dev server the agent runs with the Bash tool in the background. */
+const devServer: FakeStep[] = [
+  assistant("msg-serve", [
+    toolUse("call-serve", "Bash", {
+      command: "bun run dev",
+      run_in_background: true,
+    }),
+  ]),
+  toolResult("call-serve", "Command running in background with ID: task-serve"),
+];
+
+export const FAKE_SCENARIOS = {
+  /** The local browser canary: a search, a result, a sign-in, a citation. */
+  browse: [...freshTurn(), { browse: true }, result()],
+  /**
+   * A turn that leaves a dev server running in the background; the chat's
+   * next user message continues in this process, and the server exits
+   * during that turn.
+   */
+  background_command: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([["task-serve", "local_bash"]]),
+    assistant("msg-1", [{ type: "text", text: "The server runs." }]),
+    result(),
+    // The next turn first sets the process to its own mode.
+    { expect: "set_permission_mode", response: {} },
+    { expectUser: true },
+    { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
+    backgroundTasks([]),
+    assistant("msg-2", [{ type: "text", text: "It stopped." }]),
+    result(),
+  ],
+  /**
+   * A turn that leaves a dev server and a sub-agent running in the
+   * background. The sub-agent is stopped at the turn's end, and the turn
+   * the CLI then opens itself to report it is interrupted.
+   */
+  background_own_turn: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([
+      ["task-serve", "local_bash"],
+      ["task-watch", "local_bash"],
+      ["task-agent", "local_agent"],
+    ]),
+    result(),
+    { expect: "stop_task", response: {} },
+    // Once the process is kept, not while it is being kept.
+    { sleep: 200 },
+    assistant("msg-own", [{ type: "text", text: "The watcher exited." }]),
+    { expect: "interrupt", response: {} },
+    // Only once the interrupt came: the client sees it as its signal.
+    backgroundTasks([["task-serve", "local_bash"]]),
+    result({
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Request was aborted."],
+    }),
+  ],
+  /**
+   * A turn the CLI opens itself between stella's turns that takes a while to
+   * end once interrupted; the chat's next user message comes meanwhile.
+   */
+  background_own_turn_late: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([
+      ["task-serve", "local_bash"],
+      ["task-watch", "local_bash"],
+    ]),
+    result(),
+    { sleep: 200 },
+    assistant("msg-own", [{ type: "text", text: "The watcher exited." }]),
+    { expect: "interrupt", response: {} },
+    // The client's signal that the interrupt went out; the result is late.
+    backgroundTasks([["task-serve", "local_bash"]]),
+    { sleep: 300 },
+    result({
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Request was aborted."],
+    }),
+    // The next turn first sets the process to its own mode.
+    { expect: "set_permission_mode", response: {} },
+    { expectUser: true },
+    { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
+    backgroundTasks([]),
+    assistant("msg-2", [{ type: "text", text: "It stopped." }]),
+    result(),
+  ],
+  /**
+   * A turn that leaves a dev server and a sub-agent running, where the
+   * sub-agent cannot be stopped at the turn's end.
+   */
+  background_agent_unstoppable: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([
+      ["task-serve", "local_bash"],
+      ["task-agent", "local_agent"],
+    ]),
+    result(),
+    { expect: "stop_task", error: "The task could not be stopped." },
+  ],
+  /**
+   * A turn the CLI opens itself while the completed turn's sub-agent is
+   * still being stopped; the chat's next user message comes before it ends.
+   */
+  background_own_turn_while_stopping: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([
+      ["task-serve", "local_bash"],
+      ["task-watch", "local_bash"],
+      ["task-agent", "local_agent"],
+    ]),
+    result(),
+    assistant("msg-own", [{ type: "text", text: "The agent stopped." }]),
+    { expect: "stop_task", response: {} },
+    { expect: "interrupt", response: {} },
+    { sleep: 300 },
+    result({
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Request was aborted."],
+    }),
+    // The next turn first sets the process to its own mode.
+    { expect: "set_permission_mode", response: {} },
+    { expectUser: true },
+    { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
+    backgroundTasks([]),
+    assistant("msg-2", [{ type: "text", text: "It stopped." }]),
+    result(),
+  ],
+  /** A dev server left running that exits while the chat waits. */
+  background_command_exits: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([["task-serve", "local_bash"]]),
+    result(),
+    { sleep: 200 },
+    backgroundTasks([]),
+  ],
+  /** A dev server left running until the client ends it. */
+  background_command_kept: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([["task-serve", "local_bash"]]),
+    result(),
+  ],
+  /**
+   * The shared stella tool calls through the stella MCP binding, step by
+   * step: one assistant message per call of a step (the CLI writes one per
+   * completed block), then their results. Then an answer.
+   */
+  stella_tools: [
+    ...freshTurn(),
+    ...FAKE_STELLA_STEPS.flatMap((step, index) => [
+      ...step.map((call) =>
+        assistant(`msg-step-${String(index)}`, [
+          toolUse(
+            call.id,
+            `mcp__${FAKE_STELLA_SERVER}__${call.tool}`,
+            call.arguments,
+          ),
+        ]),
+      ),
+      ...step.map((call) =>
+        toolResult(call.id, [
+          { type: "text", text: JSON.stringify(call.output) },
+        ]),
+      ),
+    ]),
+    assistant("msg-answer", [{ type: "text", text: FAKE_STELLA_ANSWER }]),
+    result(),
+  ],
+  /**
+   * Built-in tools, kinds Stella drops, kinds newer than the pinned
+   * protocol, a subagent's own messages, a registry name that names a
+   * different chat tool, and a failed stella call.
+   */
+  harness_items: [
+    ...freshTurn(),
+    { emit: { type: "keep_alive" } },
+    {
+      emit: {
+        type: "tool_progress",
+        tool_use_id: "call-grep",
+        elapsed_time_seconds: 1,
+      },
+    },
+    { emit: { type: "system", subtype: "status", status: "requesting" } },
+    assistant("msg-1", [
+      toolUse("call-grep", "Bash", {
+        command: "rg lease",
+        description: "Search",
+      }),
+    ]),
+    toolResult("call-grep", "notes.md: lease\n"),
+    assistant("msg-2", [
+      toolUse("call-edit", "Edit", {
+        file_path: "/workspace/notes.md",
+        old_string: "a",
+        new_string: "+x",
+      }),
+    ]),
+    toolResult("call-edit", "The file was updated."),
+    assistant("msg-3", [
+      toolUse("call-web", "WebSearch", { query: "civil code lease" }),
+    ]),
+    toolResult("call-web", "Web search results: never forwarded"),
+    assistant("msg-4", [
+      toolUse("call-read", "Read", { file_path: "/workspace/notes.md" }),
+    ]),
+    toolResult("call-read", "1→lease"),
+    { emit: { type: "holographic_event", payload: "never forwarded" } },
+    {
+      emit: {
+        type: "system",
+        subtype: "quantum_banner",
+        payload: "never forwarded",
+      },
+    },
+    assistant("msg-5", [
+      { type: "server_tool_use", id: "srv-1", name: "web_search", input: {} },
+    ]),
+    // A subagent's own work stays inside the harness.
+    assistant(
+      "msg-sub",
+      [{ type: "text", text: "subagent text never forwarded" }],
+      { parent_tool_use_id: "call-task" },
+    ),
+    assistant("msg-6", [
+      toolUse(
+        "call-read-document",
+        `mcp__${FAKE_STELLA_SERVER}__read_document`,
+        { id: "doc-1" },
+      ),
+    ]),
+    toolResult("call-read-document", [
+      { type: "text", text: JSON.stringify({ text: "Lease" }) },
+    ]),
+    assistant("msg-7", [
+      toolUse("call-failed", `mcp__${FAKE_STELLA_SERVER}__search_case_law`, {
+        query: "",
+      }),
+    ]),
+    toolResult(
+      "call-failed",
+      [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: { code: "invalid_input", message: "Query is empty." },
+          }),
+        },
+      ],
+      true,
+    ),
+    result({ usage: undefined }),
+  ],
+  /**
+   * Each built-in tool chat names beyond its name, as the CLI reports it:
+   * the fields stella shows sit next to text it must never forward.
+   */
+  native_tools: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-heredoc", "Bash", {
+        command: `cat > notes.md <<'EOF'\n${FAKE_PRIVATE_TEXT.heredoc}\nEOF`,
+        description: "Write the notes",
+      }),
+    ]),
+    toolResult("call-heredoc", ""),
+    assistant("msg-2", [
+      toolUse("call-long", "Bash", { command: FAKE_LONG_COMMAND }),
+    ]),
+    toolResult("call-long", "ok"),
+    assistant("msg-3", [
+      toolUse("call-edit", "Edit", {
+        file_path: "/workspace/drafts/lease.md",
+        old_string: FAKE_PRIVATE_TEXT.oldString,
+        new_string: FAKE_PRIVATE_TEXT.newString,
+      }),
+    ]),
+    toolResult("call-edit", "The file was updated."),
+    assistant("msg-4", [
+      toolUse("call-multi", "MultiEdit", {
+        file_path: "/workspace/drafts/lease.md",
+        edits: [
+          {
+            old_string: FAKE_PRIVATE_TEXT.oldString,
+            new_string: FAKE_PRIVATE_TEXT.newString,
+          },
+        ],
+      }),
+    ]),
+    toolResult("call-multi", "Applied 1 edit."),
+    assistant("msg-5", [
+      toolUse("call-write", "Write", {
+        file_path: "/elsewhere/out.md",
+        content: FAKE_PRIVATE_TEXT.written,
+      }),
+    ]),
+    toolResult("call-write", "File created."),
+    assistant("msg-6", [
+      toolUse("call-notebook", "NotebookEdit", {
+        notebook_path: "/workspace/analysis.ipynb",
+        new_source: FAKE_PRIVATE_TEXT.written,
+      }),
+    ]),
+    toolResult("call-notebook", "Updated cell."),
+    assistant("msg-7", [
+      toolUse("call-read", "Read", {
+        file_path: "/workspace/drafts/lease.md",
+        offset: 1,
+        limit: 20,
+      }),
+    ]),
+    toolResult("call-read", "1→lease"),
+    assistant("msg-8", [
+      toolUse("call-grep", "Grep", {
+        pattern: "termination",
+        path: "/workspace/drafts",
+        output_mode: "content",
+      }),
+    ]),
+    toolResult("call-grep", "lease.md: termination"),
+    assistant("msg-9", [toolUse("call-glob", "Glob", { pattern: "**/*.md" })]),
+    toolResult("call-glob", "drafts/lease.md"),
+    assistant("msg-10", [
+      toolUse("call-search", "WebSearch", { query: "civil code lease" }),
+    ]),
+    toolResult("call-search", "Web search results"),
+    assistant("msg-11", [
+      toolUse("call-fetch", "WebFetch", {
+        url: "https://example.test/civil-code",
+        prompt: FAKE_PRIVATE_TEXT.fetchPrompt,
+      }),
+    ]),
+    toolResult("call-fetch", "A page."),
+    assistant("msg-12", [
+      toolUse("call-todo", "TodoWrite", {
+        todos: [
+          {
+            content: "Read the lease",
+            status: "completed",
+            activeForm: FAKE_PRIVATE_TEXT.activeForm,
+          },
+          {
+            content: "Draft the notice",
+            status: "in_progress",
+            activeForm: FAKE_PRIVATE_TEXT.activeForm,
+          },
+        ],
+      }),
+    ]),
+    toolResult("call-todo", "Todos updated."),
+    assistant("msg-13", [toolUse("call-skill", "Skill", { skill: "review" })]),
+    toolResult("call-skill", "Done."),
+    result(),
+  ],
+  /**
+   * A subagent: the call that starts it, then its own messages, which name
+   * that call. It reads a file, asks to run a command, views an image and
+   * calls a connector tool; what it was told, wrote, thought and reported
+   * sits next to the steps stella shows.
+   */
+  subagent: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse(FAKE_SUBAGENT_CALL, "Agent", {
+        description: "Check the lease",
+        subagent_type: "Explore",
+        prompt: FAKE_PRIVATE_TEXT.subagentPrompt,
+      }),
+    ]),
+    {
+      emit: {
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: FAKE_PRIVATE_TEXT.subagentPrompt }],
+        },
+        session_id: "s",
+        ...inSubagent,
+      },
+    },
+    {
+      emit: {
+        type: "stream_event",
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: FAKE_PRIVATE_TEXT.subagentText },
+        },
+        session_id: "s",
+        ...inSubagent,
+      },
+    },
+    assistant(
+      "msg-sub-1",
+      [
+        { type: "thinking", thinking: FAKE_PRIVATE_TEXT.subagentThinking },
+        { type: "text", text: FAKE_PRIVATE_TEXT.subagentText },
+        toolUse("call-sub-read", "Read", {
+          file_path: "/workspace/drafts/lease.md",
+        }),
+      ],
+      inSubagent,
+      requestUsage(900_000, 5),
+    ),
+    toolResult("call-sub-read", "1→lease", false, inSubagent),
+    assistant(
+      "msg-sub-2",
+      [toolUse("call-sub-rm", "Bash", { command: "rm draft.md" })],
+      inSubagent,
+    ),
+    canUseTool("call-sub-rm", "Bash", { command: "rm draft.md" }),
+    toolResult("call-sub-rm", "", false, inSubagent),
+    assistant(
+      "msg-sub-3",
+      [
+        toolUse("call-sub-image", "Read", {
+          file_path: "/workspace/scans/Lease Page 1.PNG",
+        }),
+      ],
+      inSubagent,
+    ),
+    toolResult(
+      "call-sub-image",
+      [
+        {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: "image/png",
+            data: FAKE_PRIVATE_TEXT.imageData,
+          },
+        },
+      ],
+      false,
+      inSubagent,
+    ),
+    assistant(
+      "msg-sub-4",
+      [toolUse("call-sub-docs", FAKE_MCP_CALL.name, FAKE_MCP_CALL.input)],
+      inSubagent,
+    ),
+    toolResult("call-sub-docs", "2 results", false, inSubagent),
+    toolResult(FAKE_SUBAGENT_CALL, [
+      { type: "text", text: FAKE_PRIVATE_TEXT.subagentReport },
+    ]),
+    assistant(
+      "msg-2",
+      [{ type: "text", text: "The lease caps arrears." }],
+      {},
+      requestUsage(1000, 5),
+    ),
+    result({
+      modelUsage: {
+        [FAKE_CLAUDE_MODEL]: { contextWindow: FAKE_CLAUDE_CONTEXT_WINDOW },
+      },
+    }),
+  ],
+  /** Streamed text, reasoning, a connector call, a command, an answer. */
+  tool_calls: [
+    ...freshTurn(),
+    stream({ type: "message_start", message: { id: "msg-1" } }),
+    stream({
+      type: "content_block_start",
+      index: 0,
+      content_block: { type: "thinking", thinking: "" },
+    }),
+    stream({
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "thinking_delta", thinking: "Searching" },
+    }),
+    assistant(
+      "msg-1",
+      [
+        {
+          type: "thinking",
+          thinking: "Searching the matter.",
+          signature: "sig",
+        },
+      ],
+      {},
+      requestUsage(9000, 50),
+    ),
+    assistant(
+      "msg-1",
+      [toolUse(FAKE_MCP_CALL.id, FAKE_MCP_CALL.name, FAKE_MCP_CALL.input)],
+      {},
+      requestUsage(9000, 50),
+    ),
+    toolResult(FAKE_MCP_CALL.id, [{ type: "text", text: "2 results" }]),
+    assistant("msg-2", [toolUse("call-cmd", "Bash", { command: "ls" })]),
+    toolResult("call-cmd", "notes.md\n"),
+    stream({ type: "message_start", message: { id: "msg-3" } }),
+    stream({
+      type: "content_block_start",
+      index: 0,
+      content_block: { type: "text", text: "" },
+    }),
+    stream({
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "text_delta", text: "Found" },
+    }),
+    stream({
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "text_delta", text: " two" },
+    }),
+    assistant(
+      "msg-3",
+      [{ type: "text", text: "Found two leases." }],
+      {},
+      requestUsage(10_000, 40),
+    ),
+    stream({ type: "content_block_stop", index: 0 }),
+    stream({ type: "message_stop" }),
+    result({
+      // A smaller model the CLI used on the side reports its own window.
+      modelUsage: {
+        "claude-haiku-4-5": { inputTokens: 300, contextWindow: 100_000 },
+        [FAKE_CLAUDE_MODEL]: {
+          inputTokens: 4,
+          cacheReadInputTokens: 19_000,
+          contextWindow: FAKE_CLAUDE_CONTEXT_WINDOW,
+        },
+      },
+    }),
+  ],
+  /** A read and a command on the skill folder `FAKE_SKILL_PATH` names. */
+  reads_skill: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-read", "Read", {
+        file_path: `${FAKE_SKILL_PATH}/SKILL.md`,
+      }),
+    ]),
+    toolResult("call-read", "Licensed commentary."),
+    assistant("msg-2", [
+      toolUse("call-cmd", "Bash", {
+        command: `bun ${FAKE_SKILL_PATH}/scripts/run.ts`,
+      }),
+    ]),
+    toolResult("call-cmd", "Licensed output."),
+    assistant("msg-3", [toolUse("call-ls", "Bash", { command: "ls" })]),
+    toolResult("call-ls", "notes.md\n"),
+    result(),
+  ],
+  approvals: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-rm", "Bash", { command: "rm draft.md" }),
+    ]),
+    canUseTool(
+      "call-rm",
+      "Bash",
+      { command: "rm draft.md" },
+      {
+        decision_reason: FAKE_APPROVAL_REASON,
+        permission_suggestions: [FAKE_PERMISSION_SUGGESTION],
+      },
+    ),
+    toolResult("call-rm", "The user denied this action.", true),
+    assistant("msg-2", [
+      toolUse("call-out", "Write", {
+        file_path: "/elsewhere/out.md",
+        content: "x",
+      }),
+    ]),
+    canUseTool(
+      "call-out",
+      "Write",
+      { file_path: "/elsewhere/out.md", content: "x" },
+      {
+        permission_suggestions: [FAKE_PERMISSION_SUGGESTION],
+      },
+    ),
+    toolResult("call-out", "File created."),
+    assistant("msg-3", [{ type: "text", text: "Left the draft in place." }]),
+    result(),
+  ],
+  /** The command runs when the client allows it and not otherwise. */
+  approval_outcome: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-rm", "Bash", { command: "rm draft.md" }),
+    ]),
+    canUseTool(
+      "call-rm",
+      "Bash",
+      { command: "rm draft.md" },
+      { decision_reason: FAKE_APPROVAL_REASON },
+    ),
+    {
+      byDecision: {
+        approved: [
+          toolResult("call-rm", ""),
+          assistant("msg-2", [{ type: "text", text: FAKE_APPROVED_ANSWER }]),
+          result(),
+        ],
+        denied: [
+          toolResult("call-rm", "The user denied this action.", true),
+          assistant("msg-2", [{ type: "text", text: FAKE_DENIED_ANSWER }]),
+          result(),
+        ],
+      },
+    },
+  ],
+  /** An approved plan, then the turn continues in its approved mode. */
+  plan_approved: [
+    ...freshTurn(),
+    ...proposePlan("call-plan"),
+    toolResult("call-plan", "User has approved your plan."),
+    { expect: "set_permission_mode" },
+    assistant("msg-2", [{ type: "text", text: "Drafting the notice." }]),
+    result(),
+  ],
+  /**
+   * A subagent that plans: its plan is asked about like any other, and
+   * approving it is not the turn's own plan being approved.
+   */
+  subagent_plan: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse(FAKE_SUBAGENT_CALL, "Agent", {
+        description: "Plan the notice",
+        subagent_type: "Plan",
+        prompt: FAKE_PRIVATE_TEXT.subagentPrompt,
+      }),
+    ]),
+    assistant(
+      "msg-sub-plan",
+      [toolUse("call-sub-plan", "ExitPlanMode", {})],
+      inSubagent,
+    ),
+    canUseTool(
+      "call-sub-plan",
+      "ExitPlanMode",
+      { plan: FAKE_PLAN, planFilePath: "/plans/notice.md" },
+      { permission_suggestions: [SET_MODE_SUGGESTION] },
+    ),
+    toolResult(
+      "call-sub-plan",
+      "User has approved your plan.",
+      false,
+      inSubagent,
+    ),
+    toolResult(FAKE_SUBAGENT_CALL, "Done."),
+    assistant("msg-2", [{ type: "text", text: "The subagent has a plan." }]),
+    // Long enough for a mode switch, were one sent, to arrive before the end.
+    { sleep: 200 },
+    result(),
+  ],
+  /** A declined plan: the CLI stays in plan mode and the turn ends. */
+  plan_declined: [
+    ...freshTurn(),
+    ...proposePlan("call-plan"),
+    toolResult("call-plan", "The user denied this action.", true),
+    assistant("msg-2", [{ type: "text", text: "Waiting for a new plan." }]),
+    result(),
+  ],
+  /** A plan call without a plan: refused without asking. */
+  plan_missing: [
+    ...freshTurn(),
+    ...proposePlan("call-plan", null),
+    toolResult("call-plan", "No plan was given.", true),
+    assistant("msg-2", [{ type: "text", text: "Writing the plan out." }]),
+    result(),
+  ],
+  /** A plan too long to show: refused without asking, the CLI stays in plan mode. */
+  plan_too_long: [
+    ...freshTurn(),
+    ...proposePlan("call-plan", FAKE_LONG_PLAN),
+    toolResult("call-plan", "The plan is too long.", true),
+    assistant("msg-2", [{ type: "text", text: "Shortening the plan." }]),
+    result(),
+  ],
+  /** An approval without suggested rules offers no session-wide decision. */
+  one_off_approval: [
+    ...freshTurn(),
+    // The prompt arrives before the call's own message.
+    canUseTool("call-docs", FAKE_MCP_CALL.name, FAKE_MCP_CALL.input),
+    toolResult("call-docs", "2 results"),
+    result(),
+  ],
+  question: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("ask-1", "AskUserQuestion", {
+        questions: [
+          {
+            question: "Which law governs the lease?",
+            header: "Governing law",
+            options: [
+              { label: "Czech", description: "Czech Civil Code" },
+              { label: "Slovak", description: "Slovak Civil Code" },
+            ],
+            multiSelect: false,
+          },
+        ],
+      }),
+    ]),
+    canUseTool("ask-1", "AskUserQuestion", {
+      questions: [
+        {
+          question: "Which law governs the lease?",
+          header: "Governing law",
+          options: [
+            { label: "Czech", description: "Czech Civil Code" },
+            { label: "Slovak", description: "Slovak Civil Code" },
+          ],
+          multiSelect: false,
+        },
+      ],
+    }),
+    toolResult("ask-1", "User answered: Czech"),
+    assistant("msg-2", [{ type: "text", text: "Using Czech law." }]),
+    result(),
+  ],
+  /** The CLI withdraws a prompt it no longer needs answered. */
+  withdrawn_prompt: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-rm", "Bash", { command: "rm draft.md" }),
+    ]),
+    {
+      emit: {
+        type: "control_request",
+        request_id: "cli-withdrawn",
+        request: {
+          subtype: "can_use_tool",
+          tool_name: "Bash",
+          input: { command: "rm draft.md" },
+          tool_use_id: "call-rm",
+        },
+      },
+    },
+    { sleep: 50 },
+    { cancelLast: true },
+    { sleep: 50 },
+    result(),
+  ],
+  interrupt: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-long", "Bash", { command: "sleep 100" }),
+    ]),
+    { expect: "interrupt", response: {} },
+    result({
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Request was aborted."],
+    }),
+  ],
+  resume_missing: {
+    resume: [
+      {
+        emit: {
+          type: "result",
+          subtype: "error_during_execution",
+          is_error: true,
+          num_turns: 0,
+          session_id: FAKE_RESUMED_SESSION_ID,
+          errors: [
+            `No conversation found with session ID: ${FAKE_RESUMED_SESSION_ID}`,
+          ],
+        },
+      },
+      { exit: 1 },
+    ],
+    fresh: [...freshTurn(), result()],
+  },
+  resume_ok: [...freshTurn(), result()],
+  signed_out: [initialize({ tokenSource: "none", apiProvider: "firstParty" })],
+  /** A key from a Console sign-in would bill the API, not the plan. */
+  api_key: [
+    initialize({ tokenSource: "none", apiKeySource: "/login managed key" }),
+  ],
+  auth_expired: [
+    ...freshTurn(),
+    assistant(
+      "msg-err",
+      [{ type: "text", text: "Not logged in · Please run /login" }],
+      { error: "authentication_failed" },
+    ),
+    result({ is_error: true, result: "Not logged in · Please run /login" }),
+  ],
+  usage_limit: [
+    ...freshTurn(),
+    {
+      emit: {
+        type: "system",
+        subtype: "api_retry",
+        attempt: 1,
+        max_retries: 10,
+        retry_delay_ms: 500,
+        error_status: 529,
+        error: "overloaded",
+      },
+    },
+    {
+      emit: {
+        type: "rate_limit_event",
+        rate_limit_info: {
+          status: "rejected",
+          resetsAt: 1_793_196_000,
+          rateLimitType: "five_hour",
+        },
+      },
+    },
+    {
+      emit: {
+        type: "rate_limit_event",
+        rate_limit_info: {
+          status: "rejected",
+          resetsAt: 1_793_900_000,
+          rateLimitType: "seven_day_opus",
+        },
+      },
+    },
+    assistant("msg-err", [{ type: "text", text: "You've hit your limit" }], {
+      error: "rate_limit",
+    }),
+    result({ is_error: true, result: "You've hit your limit · resets 2pm" }),
+  ],
+  mcp_unreachable: [
+    initialize(),
+    {
+      expect: "mcp_set_servers",
+      response: {
+        added: [FAKE_STELLA_SERVER],
+        removed: [],
+        errors: { [FAKE_STELLA_SERVER]: "ECONNREFUSED" },
+      },
+    },
+  ],
+  malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
+  /** Alive but silent: `initialize` is never answered. */
+  unresponsive: [{ sleep: 60_000 }],
+  crash: [
+    ...freshTurn(),
+    assistant("msg-1", [toolUse("call-x", "Bash", { command: "ls" })]),
+    { exit: 3 },
+  ],
+  /** Requests stella never enables are answered at once, not left pending. */
+  unanswerable_requests: [
+    ...freshTurn(),
+    { control: { subtype: "future_request" } },
+    { control: { subtype: "hook_callback", callback_id: "h-1", input: {} } },
+    { control: { subtype: "mcp_message", server_name: "x", message: {} } },
+    {
+      control: {
+        subtype: "elicitation",
+        mcp_server_name: FAKE_STELLA_SERVER,
+        message: "Open this",
+        mode: "url",
+        url: "https://example.test",
+      },
+    },
+    result(),
+  ],
+  probe: [
+    initialize(),
+    {
+      expect: "get_usage",
+      response: {
+        session: {},
+        subscription_type: "max",
+        rate_limits_available: true,
+        rate_limits: {
+          five_hour: {
+            utilization: 100,
+            resets_at: "2099-10-28T14:00:00+00:00",
+          },
+          seven_day: {
+            utilization: 40,
+            resets_at: "2026-11-02T10:00:00+00:00",
+          },
+          seven_day_opus: {
+            utilization: 100,
+            resets_at: "2026-11-04T10:00:00+00:00",
+          },
+        },
+      },
+    },
+  ],
+  probe_available: [
+    initialize(),
+    {
+      expect: "get_usage",
+      response: {
+        session: {},
+        subscription_type: "max",
+        rate_limits_available: true,
+        rate_limits: {
+          five_hour: {
+            utilization: 12,
+            resets_at: "2026-10-28T14:00:00+00:00",
+          },
+          seven_day: null,
+        },
+      },
+    },
+  ],
+  /**
+   * Full auto: a sandboxed command reaches a new host, then a command asks
+   * to run outside the sandbox.
+   */
+  sandbox_network: [
+    ...freshTurn(),
+    canUseTool("call-net", "SandboxNetworkAccess", { host: FAKE_SANDBOX_HOST }),
+    canUseTool(
+      "call-escape",
+      "Bash",
+      { command: FAKE_ESCAPE_COMMAND, dangerouslyDisableSandbox: true },
+      { decision_reason: "Run outside of the sandbox" },
+    ),
+    result(),
+  ],
+  /** The CLI refuses to start: the sandbox it must use cannot start. */
+  sandbox_unavailable: [
+    {
+      emit: {
+        type: "result",
+        subtype: "error_during_execution",
+        is_error: true,
+        num_turns: 0,
+        session_id: "s",
+        errors: [FAKE_SANDBOX_REFUSAL],
+      },
+    },
+    { exit: 1 },
+  ],
+  /** A full window whose reset has already passed: the snapshot is stale. */
+  probe_reset_passed: [
+    initialize(),
+    {
+      expect: "get_usage",
+      response: {
+        session: {},
+        subscription_type: "max",
+        rate_limits_available: true,
+        rate_limits: {
+          five_hour: {
+            utilization: 100,
+            resets_at: "2020-01-01T00:00:00+00:00",
+          },
+          seven_day: null,
+        },
+      },
+    },
+  ],
+  probe_signed_out: [
+    initialize({ tokenSource: "none", apiProvider: "firstParty" }),
+  ],
+  /** The default row resolves to a model the CLI does not list. */
+  probe_default_unlisted: [
+    initialize(SUBSCRIPTION, [defaultRow(FAKE_UNLISTED_DEFAULT), SONNET]),
+    {
+      expect: "get_usage",
+      response: {
+        session: {},
+        rate_limits_available: false,
+        rate_limits: null,
+      },
+    },
+  ],
+} as const satisfies Record<string, FakeScenario>;
+
+export type FakeScenarioName = keyof typeof FAKE_SCENARIOS;
+
+const isScenario = (name: string): name is FakeScenarioName =>
+  Object.hasOwn(FAKE_SCENARIOS, name);
+
+export const stepsFor = (
+  scenario: FakeScenario,
+  args: readonly string[],
+): readonly FakeStep[] => {
+  if (!("resume" in scenario)) {
+    return scenario;
+  }
+  return args.includes("--resume") ? scenario.resume : scenario.fresh;
+};
+
+const IncomingSchema = v.looseObject({
+  type: v.string(),
+  request_id: v.optional(v.string()),
+  request: v.optional(v.looseObject({ subtype: v.string() })),
+  response: v.optional(v.looseObject({ request_id: v.optional(v.string()) })),
+});
+
+const Base64Schema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.regex(/^[A-Za-z0-9+/]+={0,2}$/u),
+);
+
+/** A user message's content as the Messages API takes it from the CLI. */
+const UserContentSchema = v.union([
+  v.string(),
+  v.array(
+    v.variant("type", [
+      v.strictObject({ type: v.literal("text"), text: v.string() }),
+      v.strictObject({
+        type: v.literal("image"),
+        source: v.strictObject({
+          type: v.literal("base64"),
+          media_type: v.picklist([
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/webp",
+          ]),
+          data: Base64Schema,
+        }),
+      }),
+      v.strictObject({
+        type: v.literal("document"),
+        source: v.strictObject({
+          type: v.literal("base64"),
+          media_type: v.literal("application/pdf"),
+          data: Base64Schema,
+        }),
+      }),
+    ]),
+  ),
+]);
+
+const UserInputSchema = v.looseObject({
+  message: v.strictObject({
+    role: v.literal("user"),
+    content: UserContentSchema,
+  }),
+});
+
+/** Environment variables the adapter sets or must drop, as the CLI saw them. */
+const OBSERVED_ENV =
+  /^(?:ANTHROPIC_|CLAUDE|AWS_BEARER_TOKEN_BEDROCK$|DISABLE_AUTOUPDATER$|ENABLE_CLAUDEAI_MCP_SERVERS$|FAKE_KEEP$|BUN_INSTALL_CACHE_DIR$|npm_config_cache$|PIP_CACHE_DIR$|UV_CACHE_DIR$|PLAYWRIGHT_BROWSERS_PATH$|XDG_CACHE_HOME$)/u;
+
+/** A permission answer as the client sends it. */
+const PermissionAnswerSchema = v.looseObject({
+  response: v.looseObject({
+    response: v.looseObject({ behavior: v.string() }),
+  }),
+});
+
+export const run = async (
+  steps: readonly FakeStep[],
+  log: (entry: object) => void,
+) => {
+  const { reading, take, write } = openFakeHarnessPeer({
+    schema: IncomingSchema,
+    queueOf: (message) => {
+      switch (message.type) {
+        case "control_request":
+          return "requests";
+        case "control_response":
+          return "responses";
+        case "user":
+          if (!v.is(UserInputSchema, message)) {
+            log({ refusedInput: "user" });
+            process.exit(96);
+          }
+          return "users";
+        default:
+          return null;
+      }
+    },
+    log,
+  });
+
+  let cliRequestId = 0;
+  let registeredServers: unknown = undefined;
+  /** The client's answer to the last control request a step sent. */
+  let lastResponse: { response?: unknown } | null = null;
+  const queue = [...steps];
+  for (let step = queue.shift(); step !== undefined; step = queue.shift()) {
+    if ("expect" in step) {
+      const message = await take("requests");
+      if (message === null) {
+        return;
+      }
+      if (message.request?.subtype !== step.expect) {
+        log({ unexpected: message.request?.subtype, wanted: step.expect });
+        process.exit(97);
+      }
+      if (step.expect === "mcp_set_servers") {
+        registeredServers = message.request["servers"];
+      }
+      write({
+        type: "control_response",
+        response:
+          step.error === undefined
+            ? {
+                subtype: "success",
+                request_id: message.request_id,
+                response:
+                  step.respond?.(message.request) ?? step.response ?? {},
+              }
+            : {
+                subtype: "error",
+                request_id: message.request_id,
+                error: step.error,
+              },
+      });
+    } else if ("expectUser" in step) {
+      if ((await take("users")) === null) {
+        return;
+      }
+    } else if ("emit" in step) {
+      write(step.emit);
+    } else if ("control" in step) {
+      cliRequestId += 1;
+      write({
+        type: "control_request",
+        request_id: `cli-${String(cliRequestId)}`,
+        request: step.control,
+      });
+      lastResponse = await take("responses");
+      if (lastResponse === null) {
+        return;
+      }
+    } else if ("byDecision" in step) {
+      const answer = v.safeParse(PermissionAnswerSchema, lastResponse);
+      const approved =
+        answer.success && answer.output.response.response.behavior === "allow";
+      log({
+        decision: answer.success ? answer.output.response.response : null,
+      });
+      queue.unshift(
+        ...(approved ? step.byDecision.approved : step.byDecision.denied),
+      );
+    } else if ("cancelLast" in step) {
+      write({ type: "control_cancel_request", request_id: "cli-withdrawn" });
+    } else if ("raw" in step) {
+      process.stdout.write(`${step.raw}\n`);
+    } else if ("sleep" in step) {
+      await Bun.sleep(step.sleep);
+    } else if ("browse" in step) {
+      const browsed = await browseAsAgent({
+        browserServer: FAKE_BROWSER_SERVER,
+        endpoints: claudeMcpEndpoints(registeredServers),
+        stellaServer: FAKE_STELLA_SERVER,
+      });
+      // Kept on this computer, for the test to see what the agent read.
+      log({ pageCanaries: browsed.read });
+      for (const call of browsed.steps) {
+        write({
+          type: "assistant",
+          message: {
+            id: `msg-${call.id}`,
+            role: "assistant",
+            content: [
+              {
+                type: "tool_use",
+                id: call.id,
+                name: `mcp__${call.server}__${call.tool}`,
+                input: call.arguments,
+              },
+            ],
+            stop_reason: null,
+          },
+          parent_tool_use_id: null,
+          session_id: "s",
+          uuid: `msg-${call.id}-uuid`,
+        });
+        write({
+          type: "user",
+          message: {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: call.id,
+                content: [{ type: "text", text: call.text }],
+                is_error: call.isError,
+              },
+            ],
+          },
+          parent_tool_use_id: null,
+          session_id: "s",
+        });
+      }
+      write({
+        type: "assistant",
+        message: {
+          id: "msg-browse-answer",
+          role: "assistant",
+          content: [{ type: "text", text: browsed.answer }],
+          stop_reason: null,
+        },
+        parent_tool_use_id: null,
+        session_id: "s",
+        uuid: "msg-browse-answer-uuid",
+      });
+    } else {
+      process.exit(step.exit);
+    }
+  }
+  // The CLI exits once its client closes stdin. Until then it still stops
+  // the background tasks it is asked to; anything else stays unanswered, as
+  // the script left it.
+  for (;;) {
+    // await-in-loop: one request at a time, in the order they arrived.
+    const message = await take("requests");
+    if (message === null) {
+      break;
+    }
+    if (message.request?.subtype === "stop_task") {
+      log({ stoppedTask: message.request["task_id"] });
+      write({
+        type: "control_response",
+        response: {
+          subtype: "success",
+          request_id: message.request_id,
+          response: {},
+        },
+      });
+    }
+  }
+  await reading;
+};
+
+if (import.meta.main) {
+  const scenario = process.argv[2] ?? "";
+  const args = process.argv.slice(3);
+  const log = fakeHarnessLog();
+  log({
+    startup: {
+      args,
+      cwd: process.cwd(),
+      path: process.env["PATH"],
+      env: Object.fromEntries(
+        Object.entries(process.env).filter(([name]) => OBSERVED_ENV.test(name)),
+      ),
+    },
+  });
+  if (!isScenario(scenario)) {
+    log({ unknownScenario: scenario });
+    process.exit(98);
+  }
+  await run(stepsFor(FAKE_SCENARIOS[scenario], args), log);
+  process.exit(0);
+}

@@ -11,7 +11,7 @@
  * transaction that approved the subject.
  */
 import { panic } from "better-result";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
@@ -31,6 +31,7 @@ import type {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -43,7 +44,10 @@ export type DecisionCitationDigest = {
   /** At most `CITATION_DIGEST_TOP_CITING`, most authoritative first. */
   topCiting: TopCitingDecisionsResult;
   /** The first page of what this decision cites, unresolved rows included. */
-  cites: (Omit<DecisionCitationRow, "citationText" | "evidenceQuote"> & {
+  cites: (Omit<
+    DecisionCitationRow,
+    "citationText" | "evidenceQuote" | "printedBy"
+  > & {
     citationText: string | null;
     textWithheldReason: DecisionTextWithheldReason | null;
   })[];
@@ -88,30 +92,54 @@ export const readGatedDecisionCitationDigest = async ({
       if (!("items" in cites)) {
         return panic("A first citation page cannot carry an invalid cursor");
       }
-      const [source] = await subject.tx
-        .select({ descriptor: caseLawSources.descriptor })
-        .from(publishedCaseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-        )
-        .where(eq(publishedCaseLawDecisions.id, subject.id))
-        .limit(1);
-      if (source === undefined) {
-        return panic(`No source for gated decision ${String(subject.id)}`);
+      const printingIds = [
+        ...new Set(cites.items.map(({ printedBy }) => printedBy)),
+      ];
+      const sourceRead =
+        printingIds.length === 0
+          ? { type: "complete" as const, rows: [] }
+          : await readBounded(
+              subject.tx
+                .select({
+                  id: publishedCaseLawDecisions.id,
+                  descriptor: caseLawSources.descriptor,
+                })
+                .from(publishedCaseLawDecisions)
+                .innerJoin(
+                  caseLawSources,
+                  eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+                )
+                .where(inArray(publishedCaseLawDecisions.id, printingIds)),
+              printingIds.length,
+            );
+      if (sourceRead.type === "overflow") {
+        return panic("Citation source lookup exceeded its printing decisions");
       }
-      const textWithheldReason = decisionTextWithheldReason(source.descriptor);
+      const policies = new Map(
+        sourceRead.rows.map(({ id, descriptor }) => [
+          id,
+          decisionTextWithheldReason(descriptor),
+        ]),
+      );
       return {
         summary,
         doctrineSummary,
         topCiting,
         cites: cites.items.map(
-          ({ evidenceQuote: _evidenceQuote, ...item }) => ({
-            ...item,
-            citationText:
-              textWithheldReason === null ? item.citationText : null,
-            textWithheldReason,
-          }),
+          ({ evidenceQuote: _evidenceQuote, printedBy, ...item }) => {
+            const textWithheldReason = policies.get(printedBy);
+            if (textWithheldReason === undefined) {
+              return panic(
+                `No source for citation printing decision ${String(printedBy)}`,
+              );
+            }
+            return {
+              ...item,
+              citationText:
+                textWithheldReason === null ? item.citationText : null,
+              textWithheldReason,
+            };
+          },
         ),
         citesMore: cites.nextCursor !== null,
       };
