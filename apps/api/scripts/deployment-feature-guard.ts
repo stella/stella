@@ -85,6 +85,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "The Outlook add-in's email summary and reply draft are available on every deployment and enforce their email-assist kill switch, model availability and usage admission",
   ],
   [
+    "/v1/skills/from-chat",
+    "Drafting a skill from the caller's own chat is available on every deployment and enforces the skills kill switch, model availability and usage admission",
+  ],
+  [
+    "/v1/skills/save-draft",
+    "Storing a reviewed skill draft is a private skill create under the skill create permission on every deployment",
+  ],
+  [
     "/v1/dictation/transcribe",
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
   ],

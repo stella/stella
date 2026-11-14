@@ -561,6 +561,20 @@ type ExecuteRunArgs = {
   execution?: VerificationExecutionBoundaries;
 };
 
+/** The code a run fails with when a model call fails: a cap or revoked
+ *  access says so, anything else is the phase's own failure. */
+const modelCallFailure = (
+  cause: unknown,
+  phaseFailure: "extraction_failed" | "grading_failed",
+): VerificationRunErrorCode => {
+  if (cause instanceof ModelRunCapError) {
+    return "run_limit_reached";
+  }
+  return cause instanceof ListVerificationAccessRevokedError
+    ? "access_revoked"
+    : phaseFailure;
+};
+
 const executeRun = async ({
   actor,
   admission,
@@ -690,14 +704,9 @@ const executeRun = async ({
 
   const extracted = await extractClaims({ passages, deps });
   if (Result.isError(extracted)) {
-    if (extracted.error.cause instanceof ModelRunCapError) {
-      return "run_limit_reached";
-    }
-    return extracted.error.cause instanceof ListVerificationAccessRevokedError
-      ? "access_revoked"
-      : "extraction_failed";
+    return modelCallFailure(extracted.error.cause, "extraction_failed");
   }
-  const claims = extracted.value;
+  const { claims, unread } = extracted.value;
   const graded = await gradeClaims({
     claims: claims.flatMap((claim, position) =>
       claim.type === "fact"
@@ -720,12 +729,7 @@ const executeRun = async ({
     deps,
   });
   if (Result.isError(graded)) {
-    if (graded.error.cause instanceof ModelRunCapError) {
-      return "run_limit_reached";
-    }
-    return graded.error.cause instanceof ListVerificationAccessRevokedError
-      ? "access_revoked"
-      : "grading_failed";
+    return modelCallFailure(graded.error.cause, "grading_failed");
   }
   if (graded.value.type === "incomplete") {
     return "grading_failed";
@@ -763,6 +767,7 @@ const executeRun = async ({
       workspaceId: actor.workspaceId,
       blocks: passages.map((passage) => passage.block),
       claims: rows,
+      unreadParts: unread,
     });
   });
   return null;
