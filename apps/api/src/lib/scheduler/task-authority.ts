@@ -189,7 +189,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
   ),
   "documentReviews.reconcileQueuedRuns": platform(
     "document-review-run-reconcile.ts",
-    "Hands queued runs back to their queue, whose worker resolves the requester's run actor.",
+    "Fails stuck runs and hands queued runs back to their queue, whose worker resolves the requester's run actor.",
   ),
   "entityBuffers.reconcileIntents": platform(
     "buffer-intent-reconciliation.ts",
