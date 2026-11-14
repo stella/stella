@@ -21,8 +21,6 @@ const QUESTION_MODELS = {
 
 /** The chat's read of its thread, which follows every settled turn. */
 const THREAD_MESSAGES = /\/v1\/chat\/threads\/[^/]+\/messages(?:\?|$)/u;
-/** The chat's read of a paused or running turn it joins again. */
-const TURN_RESUME = /\/v1\/chat\/threads\/[^/]+\/turns\/[^/]+\/resume$/u;
 
 test.beforeEach(async ({ request }) => {
   await setComputerOnline(request, true);
@@ -39,17 +37,9 @@ for (const agent of ["codex", "claude-code"] as const) {
       agent,
       model: QUESTION_MODELS[agent],
     });
-    // The chat reads the paused turn again once the question is stored. A
-    // pick made before that is lost (the expected failure below), so this
-    // member answers after it.
-    const turnReadAgain = page.waitForResponse(
-      (response) => TURN_RESUME.test(response.url()),
-      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
-    );
     await send(page, "Which law applies?");
 
     const card = transcript(page).locator("[data-local-run-question]");
-    await turnReadAgain;
     await expect(card).toContainText("Which law governs the lease?", {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
@@ -78,10 +68,6 @@ for (const agent of ["codex", "claude-code"] as const) {
 test("an option picked as soon as a question shows holds while the chat reads the thread again", async ({
   page,
 }) => {
-  test.fail(
-    true,
-    "The pick is lost: the thread read that follows the pause replaces the chat's runtime, the question leaves the page until the turn is read again, and its card comes back empty.",
-  );
   // Thread reads are held from the moment the question shows, so the pick
   // lands before the read that follows the pause.
   const hold = { active: false, held: 0 };
@@ -99,10 +85,6 @@ test("an option picked as soon as a question shows holds while the chat reads th
     agent: "codex",
     model: QUESTION_MODELS.codex,
   });
-  const turnReadAgain = page.waitForResponse(
-    (response) => TURN_RESUME.test(response.url()),
-    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
-  );
   await send(page, "Which law applies?");
 
   const card = transcript(page).locator("[data-local-run-question]");
@@ -116,13 +98,18 @@ test("an option picked as soon as a question shows holds while the chat reads th
   // The read that follows the pause is waiting: the pick came first.
   await expect.poll(() => hold.held).toBeGreaterThan(0);
 
+  const threadRead = page.waitForResponse(
+    (response) => THREAD_MESSAGES.test(response.url()),
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
+  );
   released.resolve(null);
-  await turnReadAgain;
+  await threadRead;
 
   await expect(czech).toHaveAttribute("aria-pressed", "true");
-  await expect(
-    card.getByRole("button", { name: "Submit answers" }),
-  ).toBeEnabled();
+  await card.getByRole("button", { name: "Submit answers" }).click();
+  await expect(transcript(page)).toContainText("Using Czech law.", {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
 });
 
 test("a computer turn that reaches the agent's usage limit says when it resets", async ({

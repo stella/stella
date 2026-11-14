@@ -204,8 +204,12 @@ test("the first send of a new chat while no computer is connected says why and k
   // And after the page has drawn what it read.
   await page.evaluate(
     async () =>
-      await new Promise((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      await new Promise<null>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve(null);
+          });
+        });
       }),
   );
   expect(await transcript(page).textContent()).toContain("Are you there?");
