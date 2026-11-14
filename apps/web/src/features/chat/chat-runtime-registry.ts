@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { isChatTurnInFlight } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -18,7 +18,7 @@ import {
   createChatRuntime,
   resetChatRequestStateForTests,
 } from "./chat-runtime";
-import type { ChatRuntime } from "./chat-runtime";
+import type { ChatRuntime, ChatSendMessageOptions } from "./chat-runtime";
 import {
   chatContextCapabilityFingerprint,
   chatThreadCacheKey,
@@ -73,12 +73,13 @@ const chatThreadIdentity = ({
  * data's signal diverges from this frozen seed → idle rebuild from
  * server-authoritative messages.
  *
- * The sole exception is an authoritative refresh that confirms the same
- * pending approval already held by the runtime. That acknowledgement
- * advances every alias of the runtime to the persisted approval's seed,
- * so resolving the approval locally cannot rebuild from that now-stale
- * pending transcript before the continuation refetch lands. Updating the
- * seed from stream progress itself would break the normal divergence
+ * The sole exception is an authoritative refresh the runtime is kept
+ * across: one that confirms the pending approval it already holds, or one
+ * that does not hold the message it could not send. That acknowledgement
+ * advances every alias of the runtime to the refreshed thread's seed, so
+ * resolving the approval (or sending the message again) cannot rebuild from
+ * that now-stale transcript before the turn's own refetch lands. Updating
+ * the seed from stream progress itself would break the normal divergence
  * detection above.
  */
 type ChatRuntimeSeedSignal = {
@@ -139,12 +140,64 @@ const getPendingToolApprovalIds = (
   );
 };
 
+/**
+ * The message the page sent that the server never stored: the latest user
+ * message of a runtime whose turn failed, absent from the stored thread.
+ * The server refused that send before it accepted the turn (no computer
+ * connected, no capacity, a request it rejected), so the page holds the only
+ * copy of what the member wrote. A failed turn the server did accept stores
+ * its message, and is not this.
+ */
+const unsentMessageIdOf = (
+  runtime: ChatRuntime,
+  storedMessages: readonly PersistedChatMessage[],
+): string | null => {
+  const { error, messages } = runtime.getSnapshot();
+  if (error === undefined) {
+    return null;
+  }
+  const latest = messages.findLast((message) => message.role === "user");
+  if (
+    latest === undefined ||
+    storedMessages.some((message) => message.id === latest.id)
+  ) {
+    return null;
+  }
+  return latest.id;
+};
+
 const CHAT_RUNTIME_RECONCILE_DISPOSITION = {
   idle: "idle",
   replaceStaleApproval: "replace-stale-approval",
   retainInFlight: "retain-in-flight",
   retainPendingApproval: "retain-pending-approval",
+  retainUnsentMessage: "retain-unsent-message",
 } as const;
+
+type ChatRuntimeReconcileDisposition =
+  (typeof CHAT_RUNTIME_RECONCILE_DISPOSITION)[keyof typeof CHAT_RUNTIME_RECONCILE_DISPOSITION];
+
+/**
+ * Whether the disposition keeps the runtime across a thread read that
+ * differs from the one it was built on, acknowledging that read: the seed
+ * moves to it. A runtime in flight is kept without acknowledging anything.
+ */
+const acknowledgesRefresh = (
+  disposition: ChatRuntimeReconcileDisposition,
+): boolean => {
+  switch (disposition) {
+    case CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval:
+    case CHAT_RUNTIME_RECONCILE_DISPOSITION.retainUnsentMessage:
+      return true;
+    case CHAT_RUNTIME_RECONCILE_DISPOSITION.idle:
+    case CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval:
+    case CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight:
+      return false;
+    default:
+      disposition satisfies never;
+      return panic("Unhandled chat runtime reconcile disposition");
+  }
+};
 
 /**
  * Whether a runtime has live work in flight that a rebuild would kill:
@@ -180,9 +233,15 @@ const getChatRuntimeReconcileDisposition = ({
   data: ChatThreadFetched;
   hasAuthoritativeRefresh: boolean;
   runtime: ChatRuntime;
-}) => {
+}): ChatRuntimeReconcileDisposition => {
   if (hasInFlightChatRuntimeWork(runtime)) {
     return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight;
+  }
+
+  // Rebuilding from a thread that does not hold the message would drop what
+  // the member wrote and why it was refused.
+  if (unsentMessageIdOf(runtime, data.messages) !== null) {
+    return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainUnsentMessage;
   }
 
   const pendingApprovalIds = getPendingToolApprovalIds(
@@ -283,7 +342,38 @@ export const showStoredChatThread = async (
   runtime.showStoredMessages(stored.value.messages);
 };
 
-const advanceAcknowledgedApprovalSeed = ({
+/**
+ * Send the page's latest message again after its turn failed. A message the
+ * stored thread holds is answered again in place: a regeneration, which
+ * replaces the failed answer. One it does not hold was refused before the
+ * server stored anything, so there is nothing to regenerate (the server
+ * refuses a regeneration of a message it does not store): it goes out as the
+ * new message it still is.
+ *
+ * The thread query is read again to tell the two apart, since only the
+ * server knows whether it accepted the turn before the request failed. When
+ * that read fails, or the runtime was built with no thread query to read,
+ * the resend stays a regeneration: the server refuses it for a message it
+ * does not hold, where a new send of one it does hold would answer it twice.
+ */
+export const resendLatestChatMessage = async (
+  runtime: ChatRuntime,
+  options?: ChatSendMessageOptions,
+): Promise<void> => {
+  const read = storedThreadReaders.get(runtime);
+  const stored = read === undefined ? undefined : await Result.tryPromise(read);
+  if (
+    stored !== undefined &&
+    Result.isOk(stored) &&
+    unsentMessageIdOf(runtime, stored.value.messages) !== null
+  ) {
+    await runtime.sendLatestMessageAgain(options);
+    return;
+  }
+  await runtime.reload(options);
+};
+
+const advanceAcknowledgedSeed = ({
   runtime,
   seed,
   threadIdentity,
@@ -358,16 +448,12 @@ const findBusyChatRuntimeEntryForThread = ({
     });
     if (
       disposition !== CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight &&
-      disposition !== CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
+      !acknowledgesRefresh(disposition)
     ) {
       continue;
     }
-    if (
-      disposition ===
-        CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval &&
-      hasAuthoritativeRefresh
-    ) {
-      advanceAcknowledgedApprovalSeed({
+    if (acknowledgesRefresh(disposition) && hasAuthoritativeRefresh) {
+      advanceAcknowledgedSeed({
         runtime: entry.runtime,
         seed,
         threadIdentity,
@@ -486,6 +572,9 @@ export type AcquireChatRuntimeArgs = {
  *      A pending approval is retained while the query still carries the
  *      runtime's pre-send seed, or when a refreshed transcript contains every
  *      pending tool-call id. A refreshed mismatch replaces stale local state.
+ *      A runtime holding a message the server never stored (its send was
+ *      refused) is retained while the thread read does not hold that message:
+ *      see `unsentMessageIdOf`.
  *   2. Runtime with in-flight work under ANY other registry key for the
  *      same THREAD
  *      (any fingerprint, any query key — the inspector's active-skill
@@ -558,11 +647,11 @@ export const acquireChatRuntime = ({
   }
   if (
     existing !== undefined &&
-    existingDisposition ===
-      CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
+    existingDisposition !== null &&
+    acknowledgesRefresh(existingDisposition)
   ) {
     if (!seedSignalsEqual(existing.seed, seed)) {
-      advanceAcknowledgedApprovalSeed({
+      advanceAcknowledgedSeed({
         runtime: existing.runtime,
         seed,
         threadIdentity,
