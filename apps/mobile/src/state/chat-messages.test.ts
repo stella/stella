@@ -324,3 +324,106 @@ describe("reading a thread", () => {
     ).toEqual(["a", "b", "c", "d"]);
   });
 });
+
+describe("an answer whose turn failed", () => {
+  const LOCAL = {
+    kind: "local",
+    harness: "codex",
+    model: "gpt-5-codex",
+    approvals: "ask",
+    reasoningEffort: null,
+  } as const;
+  const ASKED = {
+    id: "u1",
+    role: "user",
+    createdAt: CREATED_AT,
+    parts: [{ type: "text", content: "Which leases end this year?" }],
+  };
+  const failedAnswer = (error: unknown) => ({
+    id: "a1",
+    role: "assistant",
+    createdAt: CREATED_AT,
+    parts: [],
+    metadata: { turnOutcome: { type: "failed", error } },
+  });
+  const latestPage = async (
+    messages: readonly unknown[],
+    runTarget?: unknown,
+  ) => {
+    const fetch: Fetch = async () =>
+      Response.json({
+        messages,
+        olderCursor: null,
+        activeTurnId: null,
+        ...(runTarget === undefined ? {} : { runTarget }),
+      });
+    const page = await readChatThread({
+      fetch,
+      matterId: undefined,
+      source: sourceFor(fetch),
+      threadId: "t1",
+    });
+    return page.isOk() ? page.value : undefined;
+  };
+
+  test("draws with the reason it failed, though it has no parts, and a kind this build does not know reads as unknown", () => {
+    for (const [error, failure] of [
+      ["local_runner_no_computer", "local_runner_no_computer"],
+      ["a_kind_from_a_newer_server", "unknown"],
+      [undefined, "unknown"],
+    ] as const) {
+      expect(toChatEntry(failedAnswer(error))).toMatchObject({
+        id: "a1",
+        role: "assistant",
+        blocks: [],
+        failure,
+      });
+    }
+    // A turn that did not fail still leaves out an answer with nothing to draw.
+    expect(
+      toChatEntry({
+        ...failedAnswer("unknown"),
+        metadata: { turnOutcome: { type: "completed" } },
+      }),
+    ).toBeUndefined();
+  });
+
+  test("the latest page offers to answer the person's message again, on the thread's computer", async () => {
+    const page = await latestPage(
+      [ASKED, failedAnswer("local_runner_no_computer")],
+      LOCAL,
+    );
+    expect(page?.entries.map(({ id, failure }) => ({ id, failure }))).toEqual([
+      { id: "u1", failure: undefined },
+      { id: "a1", failure: "local_runner_no_computer" },
+    ]);
+    expect(page?.retry).toEqual({
+      answerId: "a1",
+      messageId: "u1",
+      parts: ASKED.parts,
+      runTarget: LOCAL,
+    });
+    // A thread on stella's own models names no target.
+    expect(
+      (
+        await latestPage([ASKED, failedAnswer("provider_unavailable")], {
+          kind: "cloud",
+        })
+      )?.retry?.runTarget,
+    ).toBeUndefined();
+  });
+
+  test("no retry is offered once a later answer did not fail", async () => {
+    const answered = {
+      id: "a2",
+      role: "assistant",
+      createdAt: CREATED_AT,
+      parts: [{ type: "text", content: "Two of them." }],
+      metadata: { turnOutcome: { type: "completed" } },
+    };
+    expect((await latestPage([ASKED, answered]))?.retry).toBeNull();
+    expect(
+      (await latestPage([failedAnswer("unknown"), ASKED, answered]))?.retry,
+    ).toBeNull();
+  });
+});
