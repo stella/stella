@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 /**
  * The messages a member queued in a chat, kept by the server: it sends the
@@ -61,11 +62,16 @@ export const chatQueueOptions = ({
   userId,
   threadId,
 }: ChatQueueThread) =>
-  queryOptions({
-    queryKey: chatKeys.queue(activeOrganizationId, userId, threadId),
-    queryFn: async ({ signal }): Promise<ChatQueue> =>
-      await readChatQueue(threadId, signal),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: chatKeys.queue(activeOrganizationId, userId, threadId),
+      queryFn: async ({ signal }): Promise<ChatQueue> =>
+        await readChatQueue(threadId, signal),
+    }),
+    // Read again on the user stream's `CHAT_QUEUES` and after this page's own
+    // queue writes; no resource event names a queue.
+    { type: "independent" },
+  );
 
 export type QueuedChatSend = Parameters<
   ReturnType<typeof queueRoutes>["post"]
