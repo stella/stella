@@ -23,6 +23,7 @@ import type {
   HarnessLiveSession,
   HarnessProbe,
   HarnessStartError,
+  HarnessSteerInput,
   HarnessTurn,
 } from "../harness/adapter";
 import {
@@ -85,6 +86,7 @@ import {
   type SidecarProbeOutcome,
   type SidecarRejection,
   type SidecarRestoreOutcome,
+  type SidecarRunInput,
   type SidecarRunStart,
 } from "./protocol";
 import { keepStepOutput, stepOutputRunDir } from "./step-outputs";
@@ -238,6 +240,8 @@ type HeldRun = {
   /** The run's folder, resolved: no restore touches it while the run is held. */
   readonly workspaceDir: string;
   turn: HarnessTurn | null;
+  /** Steering messages that came before the turn opened; it takes them then. */
+  heldInputs: HarnessSteerInput[];
   /** Set before the turn starts too: a turn that opens later stops at once. */
   stop: RunStop;
   /** Ends the attachment copy that comes before the turn. */
@@ -679,6 +683,11 @@ export class SidecarHost {
       case "run.start":
         this.start(message, config);
         return;
+      case "run.input":
+        this.withRun(message, (run) => {
+          this.steer(run, message);
+        });
+        return;
       case "run.approval":
         this.withRun(message, (run) => {
           // A browser tool's question about one of its steps is answered here.
@@ -897,6 +906,7 @@ export class SidecarHost {
     const run: HeldRun = {
       workspaceDir: path.resolve(message.workspaceDir),
       turn: null,
+      heldInputs: [],
       // A run that starts while the host stops is cancelled like the held ones.
       stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
       stopCopying: new AbortController(),
@@ -1101,6 +1111,32 @@ export class SidecarHost {
     if (run.turn !== null) {
       this.detached(run.turn.interrupt(), "sidecar.interrupt");
     }
+  }
+
+  /**
+   * Hand a steering message to the run's turn, or hold it until the turn
+   * opens. The turn reports what became of it on the run's stream; a turn
+   * that already ended reports nothing, and the run's finish follows.
+   */
+  private steer(run: HeldRun, message: SidecarRunInput) {
+    const input = { inputId: message.inputId, text: message.message.content };
+    if (run.turn === null) {
+      run.heldInputs.push(input);
+      return;
+    }
+    this.handInput(run.turn, input);
+  }
+
+  private handInput(turn: HarnessTurn, input: HarnessSteerInput) {
+    const hand = async () => {
+      const steered = await turn.steer(input);
+      if (Result.isError(steered)) {
+        this.options.log(
+          `a steer reached an ended turn: ${steered.error.reason}`,
+        );
+      }
+    };
+    this.detached(hand(), "sidecar.steer");
   }
 
   /**
@@ -1494,6 +1530,7 @@ export class SidecarHost {
           case "reasoning.completed":
           case "tool.started":
           case "retrying":
+          case "input.settled":
           case "model.rerouted":
             yield event;
             break;
@@ -1509,6 +1546,9 @@ export class SidecarHost {
       run.turn = opened.value;
       if (run.stop !== RUN_STOP.none) {
         this.detached(opened.value.interrupt(), "sidecar.interrupt");
+      }
+      for (const input of run.heldInputs.splice(0)) {
+        this.handInput(opened.value, input);
       }
       events = run.approvals.withEvents(opened.value.events);
     } else if (run.stop !== RUN_STOP.none) {

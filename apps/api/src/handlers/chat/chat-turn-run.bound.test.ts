@@ -200,6 +200,7 @@ const createComputer = () => {
     answerQuestion: async () => panic("No question is asked here"),
     pairAppCall: async () => panic("No app call is reported here"),
     readRunOutputFile: async () => panic("No output file is reported here"),
+    readRunInputText: async () => panic("No steer is reported here"),
   };
   const context: LocalRunContext = {
     control,
