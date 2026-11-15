@@ -161,7 +161,7 @@ describe("sub-agent parts in the chat message table", () => {
       buildServedSnapshot([{ id, parts, role: "assistant" }]),
     );
     if (snapshot.type !== EventType.MESSAGES_SNAPSHOT) {
-      return panic("Expected a messages snapshot");
+      throw new TypeError("Expected a messages snapshot");
     }
     const live = asTestRaw<UIMessage>(
       snapshot.messages.find((message) => message.id === id),
@@ -224,7 +224,7 @@ describe("sub-agent parts in the chat message table", () => {
       role: "assistant",
     }).parts.at(0);
     if (part?.type !== "subagent") {
-      return panic("Expected the subagent part to be read");
+      throw new TypeError("Expected the subagent part to be read");
     }
     await testDb
       .update(chatMessages)

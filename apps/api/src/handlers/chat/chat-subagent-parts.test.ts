@@ -116,7 +116,7 @@ describe("a sub-agent part stores and reloads as the browser shows it", () => {
       buildServedSnapshot([{ id: MESSAGE_ID, parts, role: "assistant" }]),
     );
     if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
-      return panic("Expected a messages snapshot");
+      throw new TypeError("Expected a messages snapshot");
     }
     const streamed = asTestRaw<UIMessage>(
       chunk.messages.find((message) => message.id === MESSAGE_ID),
@@ -159,7 +159,7 @@ describe("a sub-agent part stores and reloads as the browser shows it", () => {
       buildServedSnapshot([{ id: MESSAGE_ID, parts, role: "assistant" }]),
     );
     if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
-      return panic("Expected a messages snapshot");
+      throw new TypeError("Expected a messages snapshot");
     }
     const streamed = asTestRaw<UIMessage>(
       chunk.messages.find((message) => message.id === MESSAGE_ID),
@@ -201,7 +201,7 @@ describe("a sub-agent part stores and reloads as the browser shows it", () => {
 
     const chunk = clientVisibleStreamChunk(snapshot);
     if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
-      return panic("Expected a messages snapshot");
+      throw new TypeError("Expected a messages snapshot");
     }
     const streamed = JSON.stringify(childRows(chunk.messages));
     for (const page of [0, 1, 2]) {
@@ -552,7 +552,7 @@ describe("a child part a newer release stored", () => {
     });
     const part = message.parts.at(0);
     if (part?.type !== "subagent") {
-      return panic("Expected the subagent part to be read");
+      throw new TypeError("Expected the subagent part to be read");
     }
     expect(
       part.subagent.messages.at(0)?.parts.some(isUnsupportedChatPart),
