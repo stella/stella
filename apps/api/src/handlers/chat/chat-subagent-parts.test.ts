@@ -453,7 +453,7 @@ describe("a child's parts are kept by the rule a message's own parts follow", ()
     toolName: "tool",
     type: "ui-resource",
   };
-  const text = { content: "Hotovo.", type: "text" };
+  const text: ChatPart = { content: "Hotovo.", type: "text" };
   const withChildParts = (parts: readonly unknown[]): unknown => {
     const { subagent } = browsingChild("finished", 1);
     return {

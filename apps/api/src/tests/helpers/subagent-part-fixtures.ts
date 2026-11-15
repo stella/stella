@@ -29,14 +29,20 @@ const pageResult = (label: string): BrowserControlResult =>
     snapshot: {
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       elements: [],
+      elementsLeftOut: false,
+      facts: { meta: [] },
       revision: `rev-${label}`,
       tabId: 7,
       tabs: [{ active: true, tabId: 7, url: `https://example.cz/${label}` }],
       text: `Stránka ${label} ${"ž".repeat(BROWSER_CONTROL_LIMITS.pageTextChars - 40)}`,
-      textOffset: 0,
-      textTotalChars: 120_000,
       title: `Page ${label}`,
       url: `https://example.cz/${label}`,
+      window: {
+        cursor: `r1.window-${label}`,
+        fromPercent: 0,
+        next: `r1.next-${label}`,
+        toPercent: 40,
+      },
     },
     status: "success",
   });
