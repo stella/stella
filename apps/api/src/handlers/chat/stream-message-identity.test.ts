@@ -19,6 +19,7 @@ import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 import { declineToolCall } from "@/api/handlers/chat/chat-message-parts";
 import {
   attachSnapshotMessageOwners,
+  ensureAssistantMessageStart,
   keepDeniedApprovalsOnScreen,
   remapOutgoingMessageIds,
 } from "@/api/handlers/chat/stream-message-identity";
@@ -391,4 +392,67 @@ test("real SDK snapshot middleware owns result segments without changing provide
       toolCalls: [{ id: "old" }],
     });
   }
+});
+
+test("distinct signed reasoning blocks retain their ids under one assistant owner", async () => {
+  const owner = toSafeId<"chatMessage">("assistant-owner");
+  const blocks = ["thinking-first", "thinking-next"];
+  async function* source(): AsyncIterable<StreamChunk> {
+    yield { type: EventType.RUN_STARTED, runId: "run", threadId: "thread" };
+    for (const messageId of blocks) {
+      yield { type: EventType.REASONING_START, messageId };
+      yield {
+        type: EventType.REASONING_MESSAGE_START,
+        messageId,
+        role: "reasoning",
+      };
+      yield {
+        type: EventType.REASONING_MESSAGE_CONTENT,
+        messageId,
+        delta: messageId,
+      };
+      yield {
+        type: EventType.REASONING_ENCRYPTED_VALUE,
+        subtype: "message",
+        entityId: messageId,
+        encryptedValue: `signature-${messageId}`,
+      };
+      yield { type: EventType.REASONING_MESSAGE_END, messageId };
+      yield { type: EventType.REASONING_END, messageId };
+    }
+    yield { type: EventType.RUN_FINISHED, runId: "run", threadId: "thread" };
+  }
+  const chunks = await collect(
+    ensureAssistantMessageStart({
+      getOrCreateMessageId: () => owner,
+      source: remapOutgoingMessageIds({
+        mapMessageId: () => owner,
+        source: source(),
+      }),
+    }),
+  );
+  expect(
+    chunks.flatMap((chunk) =>
+      chunk.type === EventType.REASONING_MESSAGE_CONTENT
+        ? [chunk.messageId]
+        : [],
+    ),
+  ).toEqual(blocks);
+  const processor = new StreamProcessor();
+  for (const chunk of chunks) {
+    processor.processChunk(chunk);
+  }
+  expect(processor.getMessages().map(({ id }) => id)).toEqual([owner]);
+  expect(
+    processor
+      .getMessages()
+      .flatMap(({ parts }) => parts.filter((part) => part.type === "thinking")),
+  ).toEqual(
+    blocks.map((stepId) => ({
+      type: "thinking",
+      stepId,
+      content: stepId,
+      signature: `signature-${stepId}`,
+    })),
+  );
 });

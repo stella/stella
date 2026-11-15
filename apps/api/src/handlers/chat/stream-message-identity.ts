@@ -408,6 +408,16 @@ export const ensureAssistantMessageStart = async function* ({
   let hasAssistantMessageStart = false;
 
   for await (const chunk of source) {
+    if (
+      chunk.type === EventType.RUN_STARTED ||
+      chunk.type === EventType.MESSAGES_SNAPSHOT
+    ) {
+      // A new model run needs its own routing binding. Snapshots reset the
+      // SDK's routing state; resumed tool results may precede RUN_STARTED.
+      hasAssistantMessageStart = false;
+      yield chunk;
+      continue;
+    }
     if (chunk.type === EventType.TEXT_MESSAGE_START) {
       hasAssistantMessageStart = true;
       yield chunk;
@@ -429,6 +439,16 @@ export const ensureAssistantMessageStart = async function* ({
   }
 };
 
+/** Reasoning ids identify signed blocks, not the assistant row owning them. */
+const isReasoningEvent = (chunk: PublicStreamChunk): boolean =>
+  chunk.type === EventType.REASONING_START ||
+  chunk.type === EventType.REASONING_MESSAGE_START ||
+  chunk.type === EventType.REASONING_MESSAGE_CONTENT ||
+  chunk.type === EventType.REASONING_MESSAGE_END ||
+  chunk.type === EventType.REASONING_END ||
+  chunk.type === EventType.REASONING_ENCRYPTED_VALUE ||
+  chunk.type === EventType.REASONING_MESSAGE_CHUNK;
+
 const getAssistantStartMessageId = ({
   chunk,
   getOrCreateMessageId,
@@ -436,6 +456,9 @@ const getAssistantStartMessageId = ({
   chunk: PublicStreamChunk;
   getOrCreateMessageId: () => SafeId<"chatMessage">;
 }): string | null => {
+  if (isReasoningEvent(chunk)) {
+    return getOrCreateMessageId();
+  }
   if (hasMessageId(chunk)) {
     return chunk.messageId;
   }
@@ -809,9 +832,10 @@ const remapChunkMessageId = ({
     existingMessageIds.has(messageId)
       ? messageId
       : (snapshotMessageIds.get(messageId) ?? mapMessageId(messageId));
-  const remappedChunk = hasMessageId(chunk)
-    ? { ...chunk, messageId: remapMessageId(chunk.messageId) }
-    : chunk;
+  const remappedChunk =
+    !isReasoningEvent(chunk) && hasMessageId(chunk)
+      ? { ...chunk, messageId: remapMessageId(chunk.messageId) }
+      : chunk;
 
   const remappedParentChunk =
     "parentMessageId" in remappedChunk &&
