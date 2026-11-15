@@ -244,7 +244,8 @@
         "imageTooLargeToStore": "Ez a kép {total} méretű. A {kept} méretnél nagyobb képek nem kerülnek mentésre, ezért nem jeleníthető meg.",
         "loadFailed": "Nem sikerült betölteni.",
         "showMore": "Több megjelenítése"
-      }
+      },
+      "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}",
@@ -253,7 +254,8 @@
       "analyses": "{count, plural, one {# elemzés} other {# elemzés}}"
     },
     "stepCount": "{count, plural, one {# lépés} other {# lépés}}",
-    "reasoning": "Érvelés"
+    "reasoning": "Érvelés",
+    "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe."
   },
   "tasks": {
     "emptyTitle": "Nincsenek nyitott feladatok",

@@ -244,7 +244,8 @@
         "imageTooLargeToStore": "Šio paveikslėlio dydis – {total}. Didesni nei {kept} paveikslėliai nesaugomi, todėl jo parodyti negalima.",
         "loadFailed": "Nepavyko įkelti.",
         "showMore": "Rodyti daugiau"
-      }
+      },
+      "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}",
@@ -253,7 +254,8 @@
       "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}"
     },
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių} many {# žingsnių}}",
-    "reasoning": "Mąstymas"
+    "reasoning": "Mąstymas",
+    "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį."
   },
   "tasks": {
     "emptyTitle": "Atvirų užduočių nėra",
