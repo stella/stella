@@ -76,8 +76,7 @@ export const createOriginPolicy = ({
   const parseControllableUrl = (rawUrl: string): URL | null => {
     const url = URL.parse(rawUrl);
     if (
-      url === null ||
-      url.protocol !== "https:" ||
+      url?.protocol !== "https:" ||
       url.username !== "" ||
       url.password !== "" ||
       !isPublicHostname(url.hostname) ||

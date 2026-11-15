@@ -199,6 +199,7 @@ export const realBrowserProcesses: BrowserProcesses = {
     // `ps` on macOS and Linux alike; -ww keeps the whole line.
     const read = spawnSync("ps", ["-ww", "-o", "command=", "-p", String(pid)], {
       encoding: "utf-8",
+      maxBuffer: 1024 * 1024,
       timeout: 5000,
     });
     return read.status === 0 ? read.stdout.trim() : null;

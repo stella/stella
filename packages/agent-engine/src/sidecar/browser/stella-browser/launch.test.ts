@@ -154,7 +154,10 @@ describe("the browser's launch", () => {
     );
     chmodSync(browser, 0o755);
     const listed = () =>
-      spawnSync("/bin/sh", ["-c", "ls /dev/fd"], { encoding: "utf-8" })
+      spawnSync("/bin/sh", ["-c", "ls /dev/fd"], {
+        encoding: "utf-8",
+        maxBuffer: 64 * 1024,
+      })
         .stdout.split("\n")
         .filter((line) => line !== "")
         .toSorted();

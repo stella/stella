@@ -3185,21 +3185,12 @@ jobs:
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Test the stella browser host
-        # The holder's own browser host against the runner's installed
-        # Chrome: a window under a virtual display, its sandbox on. It runs
-        # when the agent engine or the shared page code is in the test scope.
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web' }}
+        # The runner's Chrome, headful under a virtual display, sandbox on.
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web' && (steps.affected.outputs.flag == '' || contains(needs.ci-plan.outputs.test_scope, '@stll/agent-engine')) }}
         timeout-minutes: 5
         env:
-          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-          TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
           STELLA_BROWSER_E2E_EXECUTABLE: /opt/google/chrome/chrome
-        run: |
-          if [[ -n "$AFFECTED_FLAG" && "$TEST_SCOPE" != *"@stll/agent-engine"* && "$TEST_SCOPE" != *"@stll/browser-page"* ]]; then
-            echo "Neither the agent engine nor the shared page code is in scope."
-            exit 0
-          fi
-          xvfb-run --auto-servernum bun test packages/agent-engine/src/sidecar/browser/hosts.e2e.test.ts
+        run: xvfb-run -a bun test packages/agent-engine/src/sidecar/browser/hosts.e2e.test.ts
 
       - name: Upload failed API or rest test output
         if: failure() && steps.test-api-or-rest.outcome == 'failure'

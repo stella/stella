@@ -96,7 +96,8 @@ echo "Current tag $current_tag is on channel '$current_channel'" >&2
 #   - packages/ui/                           the settings UI's workspace
 #                                            dep (verified: no transitive
 #                                            runtime workspace deps)
-#   - packages/agent-engine/, packages/errors/, packages/fetch/ and the api-contract
+#   - packages/agent-engine/, packages/browser-page/, packages/errors/,
+#     packages/fetch/ and the api-contract
 #     modules listed below                   the bundled harness sidecar;
 #                                            build-sidecar.test.ts checks
 #                                            every workspace file the
@@ -126,6 +127,7 @@ rebuild_paths=(
   "apps/desktop/"
   "packages/ui/"
   "packages/agent-engine/"
+  "packages/browser-page/"
   "packages/errors/"
   "packages/fetch/"
   "packages/portable-path/"

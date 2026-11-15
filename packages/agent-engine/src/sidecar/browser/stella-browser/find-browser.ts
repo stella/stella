@@ -55,7 +55,7 @@ const plutilIdentifier = (plist: string): string | null => {
   const read = spawnSync(
     "/usr/bin/plutil",
     ["-extract", "CFBundleIdentifier", "raw", "-o", "-", plist],
-    { encoding: "utf-8", timeout: 5000 },
+    { encoding: "utf-8", maxBuffer: 64 * 1024, timeout: 5000 },
   );
   return read.status === 0 ? read.stdout.trim() : null;
 };

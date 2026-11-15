@@ -362,7 +362,8 @@ const mcpCall = async (
       "content-type": "application/json",
     },
     body: JSON.stringify({ id, jsonrpc: "2.0", method, params }),
-    signal: AbortSignal.timeout(10_000),
+    // A first open starts the stella browser, which takes a while on a busy runner.
+    signal: AbortSignal.timeout(60_000),
   });
   const body: unknown = await response.json();
   return typeof body === "object" && body !== null
