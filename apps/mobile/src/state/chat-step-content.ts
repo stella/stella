@@ -28,7 +28,7 @@ import type { ApiError } from "@/state/api-request";
  * How the phone loads a stored image: the API's address for the chat file,
  * which sends the image on to storage, and the token it takes.
  */
-export type StepImageSource = {
+type StepImageSource = {
   readonly uri: string;
   readonly headers: { readonly Authorization: string };
 };
