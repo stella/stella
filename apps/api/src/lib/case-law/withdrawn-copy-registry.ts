@@ -251,6 +251,7 @@ export const WITHDRAWN_COPY_REGISTRY = {
       "compactionEpoch",
       "lastReadAt",
       "pinnedAt",
+      "lastTurnOrdinal",
       "createdAt",
       "updatedAt",
     ],

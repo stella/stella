@@ -69,6 +69,7 @@ const ORIGINAL_REQUESTS = {
     authorization: `Bearer ${REQUEST_API_KEY}`,
     apiKey: null,
     body: {
+      include: ["reasoning.encrypted_content"],
       max_output_tokens: 64,
       model,
       input: [
@@ -518,6 +519,7 @@ describe("provider request policy", () => {
           apiKey: expected.apiKey,
         };
         const chatOptions = {
+          threadId: "provider-data-policy-test",
           model,
           logger: resolveDebugOption(false),
           messages: [{ role: "user" as const, content: REQUEST_TEXT }],
@@ -628,6 +630,7 @@ describe("provider request policy", () => {
           MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId,
         );
         for await (const _chunk of model.adapter.chatStream({
+          threadId: "provider-data-policy-test",
           model: model.modelId,
           logger: resolveDebugOption(false),
           messages: [{ role: "user", content: REQUEST_TEXT }],
@@ -779,6 +782,7 @@ describe("provider request policy", () => {
             "not/in-the-catalog",
           ]) {
             const chatOptions = {
+              threadId: "provider-data-policy-test",
               model: invalidModel,
               messages: [{ role: "user" as const, content: REQUEST_TEXT }],
               logger: resolveDebugOption(false),
@@ -995,6 +999,7 @@ describe("provider request policy", () => {
                   },
             )(model);
             const chatOptions = {
+              threadId: "provider-data-policy-test",
               model,
               logger: resolveDebugOption(false),
               messages: [{ role: "user" as const, content: "Reply with OK." }],

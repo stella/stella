@@ -294,6 +294,8 @@
       "reopened": "Erneut geöffnet, Prüfung ausstehend",
       "reopenedTooltip": "Ein Prüfer hat dies als überprüfbaren Fakt neu klassifiziert; der Live-Abgleich mit dem Bestand steht noch aus.",
       "sourceCount": "{count, plural, one {# Quelle} other {# Quellen}}",
+      "verdictBy": "Ergebnis von {model}",
+      "verdictByGenerativeModel": "Ergebnis vom generativen Modell; das Entscheidungsmodell hat es nicht bestimmt",
       "whyVerdict": "Begründung des Ergebnisses – Ankerfakten"
     },
     "claimTypes": {
@@ -2332,9 +2334,14 @@
       "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
       "use-browser": "Ihren Browser verwenden",
       "use_connector_secret": "Zugangsdaten des Connectors verwenden",
+      "user_message": "Während der Arbeit des Agenten gesendet",
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {
+      "browserClick": "„{target}“ auf {url} anklicken",
+      "browserPressKey": "Taste {key} in „{target}“ auf {url} drücken",
+      "browserSelect": "„{option}“ in „{target}“ auf {url} auswählen",
+      "browserType": "Text in „{target}“ auf {url} eingeben",
       "characterCount": "{count, plural, one {# Zeichen} other {# Zeichen}}",
       "commandExited": "{command} (Exit-Code {code})",
       "consoleLogs": "Konsolenausgabe",
@@ -2344,17 +2351,17 @@
       "input": "Eingabe",
       "interrupted": "Vor Abschluss unterbrochen",
       "localOutput": {
+        "arriving": "Wird noch vom Computer übertragen, auf dem der Schritt lief",
         "conversation": "Unterhaltung des Subagenten",
         "conversationPrompt": "Aufgabe",
         "conversationReport": "Bericht",
         "cut": "Die ersten {kept} von {total} werden angezeigt",
         "diff": "Dateiänderungen",
-        "elsewhere": "Auf dem Computer öffnen, auf dem der Schritt lief",
         "empty": "Keine Ausgabe",
-        "failed": "Die stella-Desktop-App auf diesem Computer konnte dies nicht anzeigen.",
-        "imageTooLarge": "Dieses Bild ist {total} groß. Bilder über {kept} werden auf diesem Computer nicht gespeichert, daher kann es hier nicht angezeigt werden.",
-        "notKept": "Von diesem Schritt ist auf diesem Computer nichts gespeichert",
-        "reading": "Wird von diesem Computer gelesen"
+        "imageTooLargeToStore": "Dieses Bild ist {total} groß. Bilder über {kept} werden nicht gespeichert, daher kann es nicht angezeigt werden.",
+        "notCopied": "Noch nicht in diesen Chat kopiert",
+        "notStored": "Von diesem Schritt wurde nichts gespeichert",
+        "runBudgetReached": "Nicht gespeichert: Dieser Lauf hatte bereits so viel gespeichert, wie ein Lauf darf"
       },
       "output": "Ausgabe",
       "patternInPath": "{pattern} unter {path}",
@@ -2377,6 +2384,10 @@
       "needsInputTitle": "stella braucht Ihre Eingabe",
       "replyReadyBody": "stella hat in Ihrem Chat fertig geantwortet.",
       "replyReadyTitle": "Antwort fertig"
+    },
+    "turnPaused": {
+      "continue": "Fortsetzen",
+      "status": "Nach {count, plural, one {# Tool-Aufruf} other {# Tool-Aufrufen}} pausiert"
     },
     "turnStatus": {
       "answerFailed": "Die Antwort konnte nicht fertiggestellt werden",
@@ -3409,6 +3420,7 @@
       "invitationRoleNotAllowed": "Sie können niemanden mit dieser Rolle einladen. Wählen Sie eine andere Rolle.",
       "invoiceNumberSeriesMissing": "Richten Sie in den Organisationseinstellungen unter Nummernkreise einen Standard-Nummernkreis für Rechnungen ein und stellen Sie die Rechnung dann aus.",
       "invoiceSellerProfileMissing": "Legen Sie in den Organisationseinstellungen unter Abrechnungsprofile ein Verkäuferprofil an und stellen Sie die Rechnung dann aus.",
+      "legalHoldActive": "Das Löschen ist gesperrt, da diese Unterlagen aufbewahrt werden müssen.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
       "matterContactCapacityExceeded": "Diese Akte enthält mehr Kontakte, als angezeigt werden können. Entfernen Sie sichtbare Kontaktverknüpfungen, um die übrigen Kontakte anzuzeigen.",
@@ -5889,6 +5901,8 @@
       "auditLogsSentenceDownload": "{resource} heruntergeladen.",
       "auditLogsSentenceExecute": "{resource} ausgeführt.",
       "auditLogsSentenceIssued": "{resource} ausgestellt.",
+      "auditLogsSentenceLegalHoldPlaced": "{resource} angeordnet.",
+      "auditLogsSentenceLegalHoldReleased": "{resource} aufgehoben.",
       "auditLogsSentenceRedeemed": "{resource} eingelöst.",
       "auditLogsSentenceRefused": "{resource} abgelehnt.",
       "auditLogsSentenceReview": "{resource} geprüft.",
@@ -5940,6 +5954,7 @@
         "flow_run": "Workflowlauf",
         "folio_collab_room": "Folio-Kollaborationsraum",
         "invoice": "Rechnung",
+        "legal_hold": "rechtliche Aufbewahrung",
         "legal_list": "Rechtsliste",
         "legal_list_generation": "Rechtslistenerstellung",
         "legal_list_item": "Rechtslisteneintrag",
@@ -6099,7 +6114,13 @@
       "usageStatusTrialing": "Testphase",
       "usageUnitCount": "{count, plural, one {# Einheit} other {# Einheiten}}",
       "usageUnitsBalanceTemplate": "{remaining} Einheiten verfügbar",
-      "usageUnitsThisPeriod": "Nutzungseinheiten in diesem Zeitraum"
+      "usageUnitsThisPeriod": "Nutzungseinheiten in diesem Zeitraum",
+      "verificationDecisionModel": {
+        "description": "Wird ein Dokument anhand der Fakten einer Liste geprüft, wählt das Entscheidungsmodell das Ergebnis für jede Aussage. Das generative Modell findet und zitiert weiterhin die Fakten. Ist das Entscheidungsmodell nicht sicher genug, gilt das Ergebnis des generativen Modells.",
+        "title": "Ergebnisse der Dokumentprüfung",
+        "unavailable": "Für diese Organisation ist kein Entscheidungsmodell verfügbar.",
+        "updated": "Prüfeinstellung aktualisiert"
+      }
     }
   },
   "sharepoint": {
@@ -6340,6 +6361,7 @@
       "previewBody5": "Vor der Umwandlung berechtigt ein Verkauf oder eine Börsennotierung den Investor zum höheren Betrag aus dem Kaufbetrag und dem Erlös, der auf umgewandelter Basis zahlbar wäre.",
       "previewBody6": "Die Gesellschaft ist ordnungsgemäß gegründet, zum Abschluss dieser Vereinbarung befugt und wird alle für ihre Durchführung erforderlichen Genehmigungen einholen.",
       "previewBody7": "Diese Vereinbarung enthält die vollständige Vereinbarung zwischen den Parteien und darf nur schriftlich mit der erforderlichen Zustimmung geändert werden.",
+      "previewDocument": "Stilset-Vorschau",
       "previewFailed": "Die Vorschau konnte nicht erstellt werden.",
       "previewIntroduction": "Diese Vereinbarung wird zwischen Example Labs Ltd. (die „Gesellschaft“) und dem auf der Unterschriftsseite genannten Investor (der „Investor“) geschlossen.",
       "previewLevel1": "Investition",

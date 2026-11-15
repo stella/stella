@@ -247,6 +247,7 @@ export const App = () => {
       <main className="flex flex-1 overflow-hidden">
         <DocxEditor
           ref={editorRef}
+          accessibleName={fileName}
           document={documentBuffer ? null : currentDocument}
           documentBuffer={documentBuffer}
           author="Folio User"

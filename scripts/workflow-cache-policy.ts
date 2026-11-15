@@ -25,9 +25,9 @@ const triggers = (on: unknown): string[] => {
 // and a reusable workflow they call must be one reviewed for that.
 const DEFAULT_SCOPE_EVENTS = ["pull_request_target", "workflow_run"];
 const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
-  "stella/.github/.github/workflows/pr-lint.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8":
+  "stella/.github/.github/workflows/pr-lint.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804":
     "title, label, size and assignee actions only; no cache",
-  "stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d":
+  "stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804":
     "checkout, artifact download, setup-node without a cache input, hardened publish action from the pinned release-tooling checkout; no cache",
 };
 const DESKTOP_WINDOWS_BUILD_CACHE_USE =

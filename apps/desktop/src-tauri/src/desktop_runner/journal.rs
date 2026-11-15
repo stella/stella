@@ -711,11 +711,13 @@ fn numbered(run_id: String, seq: NonZeroU32, output: RunOutput) -> DesktopMessag
     RunOutput::Finished {
       outcome,
       harness_session_id,
+      harness_boundary,
     } => DesktopMessage::RunFinished(RunFinished {
       run_id,
       seq,
       outcome,
       harness_session_id,
+      harness_boundary,
     }),
   }
 }

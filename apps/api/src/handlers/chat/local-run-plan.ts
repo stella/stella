@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 
 import {
   CHAT_LOCAL_RUN_REFUSAL,
@@ -8,7 +8,6 @@ import {
 } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_FEATURE_ID,
-  DESKTOP_RUNNER_LINKED_FOLDER_STATE,
   type DesktopRunnerApprovalMode,
 } from "@stll/api-contract/desktop-runner";
 
@@ -17,7 +16,6 @@ import {
   createLocalChatRun,
   type LocalChatRun,
   type LocalRunContext,
-  type LocalRunPlan,
 } from "@/api/handlers/chat/local-run-chunks";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
@@ -68,16 +66,23 @@ export const readOpenLocalRunThread = async (
 ) => await runtime.control.readOpenRunChatThread(options);
 
 const refuse = (
-  status: 400 | 403 | 409,
+  status: 400 | 403,
   code: (typeof CHAT_LOCAL_RUN_REFUSAL)[keyof typeof CHAT_LOCAL_RUN_REFUSAL],
   message: string,
 ) => Result.err(new HandlerError({ status, code, message }));
 
 /**
- * Route a turn bound for the member's computer before anything about it is
- * stored. A computer that cannot take the turn refuses it with a typed code;
- * the turn never falls back to stella's own models. A resumed turn is not
- * routed: it answers the run that paused, on whichever computer holds it.
+ * Check that a turn bound for the member's computer may be asked for at all,
+ * before anything about it is stored: the request does not also ask for the
+ * agent sandbox, local runs are enabled for the member, and the approval mode
+ * is within the organization's ceiling. These depend on the request and the
+ * member alone, so a refusal here repeats however often it is sent.
+ *
+ * Which computer takes the turn is decided once the turn is stored, as its
+ * run starts (`routeLocalRun`): a computer that cannot take it ends the turn
+ * as a failed turn the member reads on every client. The turn never falls
+ * back to stella's own models. A resumed turn answers the run that paused, on
+ * whichever computer holds it.
  */
 export const resolveChatLocalRun = async ({
   runTarget,
@@ -118,11 +123,10 @@ export const resolveChatLocalRun = async ({
       "Running chat turns on a computer is not available.",
     );
   }
-  const owner = { userId, organizationId };
   const context: LocalRunContext = {
     control: runtime.control,
     runBell: runtime.runBell,
-    owner,
+    owner: { userId, organizationId },
     chatThreadId,
     workspaceIds,
     mcp: { serverName: MCP_SERVER_NAME, url: getMcpResourceUrl() },
@@ -135,8 +139,8 @@ export const resolveChatLocalRun = async ({
       }),
     );
   }
-  // The organization's ceiling holds whichever computer would take the turn.
-  // A resumed run was held to it when it started and keeps its mode.
+  // The organization's ceiling holds whichever computer takes the turn. A
+  // resumed run was held to it when it started and keeps its mode.
   const ceiling = await readApprovalCeiling();
   if (ceiling.isErr()) {
     return Result.err(ceiling.error);
@@ -148,99 +152,7 @@ export const resolveChatLocalRun = async ({
       "Your organization does not let a run on your computer do that much without asking.",
     );
   }
-  const { folder } = runTarget;
-  // A turn in a linked folder runs on the computer the folder is on.
-  const picked = await runtime.control.pickDesktop({
-    owner,
-    harness: runTarget.harness,
-    ...(folder === undefined ? {} : { desktopId: folder.desktopId }),
-  });
-  if (picked.isErr()) {
-    return Result.err(picked.error);
-  }
-  const desktop = picked.value;
-  switch (desktop.type) {
-    case "no_computer":
-      return folder === undefined
-        ? refuse(
-            409,
-            CHAT_LOCAL_RUN_REFUSAL.noComputer,
-            "None of your computers is connected.",
-          )
-        : refuse(
-            409,
-            CHAT_LOCAL_RUN_REFUSAL.folderUnavailable,
-            "The computer the chat's folder is on is not connected.",
-          );
-    case "harness_unavailable":
-      return refuse(
-        409,
-        CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable,
-        "The harness on your computer cannot take a turn right now.",
-      );
-    case "available": {
-      const model = desktop.harness.models.find(
-        ({ id }) => id === runTarget.model,
-      );
-      if (model === undefined) {
-        return refuse(
-          409,
-          CHAT_LOCAL_RUN_REFUSAL.modelUnavailable,
-          "The harness on your computer does not offer that model.",
-        );
-      }
-      if (
-        runTarget.reasoningEffort !== null &&
-        !model.reasoningEfforts.includes(runTarget.reasoningEffort)
-      ) {
-        return refuse(
-          409,
-          CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable,
-          "The harness on your computer does not offer that reasoning effort for the model.",
-        );
-      }
-      if (!desktop.harness.approvalModes.includes(runTarget.approvals)) {
-        return refuse(
-          409,
-          CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable,
-          "Your computer cannot run the harness with those permissions.",
-        );
-      }
-      if (folder !== undefined) {
-        const linked = desktop.linkedFolders.find(
-          ({ id }) => id === folder.linkId,
-        );
-        if (linked?.state !== DESKTOP_RUNNER_LINKED_FOLDER_STATE.available) {
-          return refuse(
-            409,
-            CHAT_LOCAL_RUN_REFUSAL.folderUnavailable,
-            "The chat's folder is not available on your computer.",
-          );
-        }
-        if (!desktop.approvedFolderIds.includes(folder.linkId)) {
-          return refuse(
-            409,
-            CHAT_LOCAL_RUN_REFUSAL.folderNotApproved,
-            "Allow the agent to work in the chat's folder first.",
-          );
-        }
-      }
-      const plan: LocalRunPlan = {
-        type: "start",
-        destination: {
-          desktopId: desktop.desktopId,
-          harness: runTarget.harness,
-          harnessVersion: desktop.harness.version,
-          model: runTarget.model,
-          reasoningEffort: runTarget.reasoningEffort,
-          approvals: runTarget.approvals,
-          linkedFolderId: folder?.linkId ?? null,
-        },
-      };
-      return Result.ok(createLocalChatRun(context, plan));
-    }
-    default:
-      desktop satisfies never;
-      return panic("Unknown computer pick");
-  }
+  return Result.ok(
+    createLocalChatRun(context, { type: "start", target: runTarget }),
+  );
 };

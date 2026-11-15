@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { createTestState } from "@stll/test-state";
 
 import type { ChatInputMentionSource } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
@@ -12,8 +13,8 @@ import messages from "@/i18n/langs/en.json";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] ??= "https://api.example.test";
+const state = createTestState({ file: import.meta.path, config: {} });
+state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 const { act } = await import("react");
 const { cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
@@ -45,11 +46,6 @@ afterEach(cleanup);
 afterAll(async () => {
   await act(async () => {});
   await unregisterDomEnvironment();
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-  } else {
-    process.env["VITE_API_URL"] = previousApiUrl;
-  }
 });
 const organizationId = "composer-org";
 const user = {

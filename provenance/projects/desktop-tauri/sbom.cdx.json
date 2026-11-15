@@ -515,7 +515,7 @@
       "version": "0.4.0"
     },
     {
-      "bom-ref": "pkg:cargo/ammonia@4.2.4",
+      "bom-ref": "pkg:cargo/ammonia@4.2.5",
       "evidence": {
         "identity": [
           {
@@ -536,7 +536,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "1f45dfa685e1ec33b1bf1a3b93b8047cbdbef41b6040deebbe6bea7720a45574"
+          "content": "b34ca49e407c06daac53f0c4debe8ff5df9cc2a4e9369d164a5d86ef8c219319"
         }
       ],
       "licenses": [
@@ -558,9 +558,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/ammonia@4.2.4",
+      "purl": "pkg:cargo/ammonia@4.2.5",
       "type": "library",
-      "version": "4.2.4"
+      "version": "4.2.5"
     },
     {
       "bom-ref": "pkg:cargo/android_system_properties@0.1.6",
@@ -33357,7 +33357,7 @@
         "pkg:cargo/maplit@1.0.2",
         "pkg:cargo/url@2.5.8"
       ],
-      "ref": "pkg:cargo/ammonia@4.2.4"
+      "ref": "pkg:cargo/ammonia@4.2.5"
     },
     {
       "dependsOn": [
@@ -36660,7 +36660,7 @@
     {
       "dependsOn": [
         "pkg:cargo/aes-gcm@0.11.1",
-        "pkg:cargo/ammonia@4.2.4",
+        "pkg:cargo/ammonia@4.2.5",
         "pkg:cargo/apple-native-keyring-store@1.0.2",
         "pkg:cargo/axum@0.8.9",
         "pkg:cargo/base64@0.23.1",
@@ -36753,7 +36753,8 @@
         "pkg:cargo/core-foundation@0.10.1",
         "pkg:cargo/security-framework-sys@2.17.0",
         "pkg:cargo/security-framework@3.7.0",
-        "pkg:cargo/stella-desktop-signing-core@0.0.1"
+        "pkg:cargo/stella-desktop-signing-core@0.0.1",
+        "pkg:cargo/tracing@0.1.44"
       ],
       "ref": "pkg:cargo/stella-desktop-macos-signing@0.0.1"
     },

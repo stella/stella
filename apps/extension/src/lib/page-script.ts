@@ -128,6 +128,8 @@ export type PageOperation =
       signInPolicies: typeof SIGN_IN_POLICY;
     }
   | { kind: "locate" }
+  /** The document's type as Chrome loaded it, and its address. */
+  | { kind: "document-type" }
   | (ReadOnlyOperationBase & {
       /** The page's canonical link, language and citation meta entries. */
       facts: boolean;
@@ -148,8 +150,21 @@ export type PageOperation =
     });
 
 export const pageScript = (pageOperation: PageOperation) => {
-  if (pageOperation.kind === "locate") {
-    return { origin: window.origin, url: window.location.href };
+  // The operations that only describe the document, answered in one place.
+  type DocumentQuery = Extract<
+    PageOperation,
+    { kind: "document-type" | "locate" }
+  >;
+  const asksAboutDocument = (
+    operation: PageOperation,
+  ): operation is DocumentQuery =>
+    operation.kind === "locate" || operation.kind === "document-type";
+  const answerAboutDocument = (operation: DocumentQuery) =>
+    operation.kind === "locate"
+      ? { origin: window.origin, url: window.location.href }
+      : { contentType: document.contentType, url: window.location.href };
+  if (asksAboutDocument(pageOperation)) {
+    return answerAboutDocument(pageOperation);
   }
   if (
     pageOperation.kind !== "action" &&
@@ -169,6 +184,18 @@ export const pageScript = (pageOperation: PageOperation) => {
   const { limits, metadataType, shadowSegment } = pageOperation;
   const SKIPPED_TAGS = new Set(["NOSCRIPT", "SCRIPT", "STYLE", "TEMPLATE"]);
   const normalize = (value: string) => value.replaceAll(/\s+/gu, " ").trim();
+  // A select's option by its value, or else by its visible label, case and
+  // spacing ignored.
+  const optionNamed = (
+    options: readonly HTMLOptionElement[],
+    named: string,
+  ) => {
+    const label = (text: string) => normalize(text).toLowerCase();
+    return (
+      options.find((option) => option.value === named) ??
+      options.find((option) => label(option.label) === label(named))
+    );
+  };
   // A computed style is live: one per element serves the whole run.
   const styles = new Map<Element, CSSStyleDeclaration>();
   const styleOf = (element: Element) => {
@@ -2927,7 +2954,20 @@ export const pageScript = (pageOperation: PageOperation) => {
     if (isSensitiveTarget) {
       return sensitiveFieldRefusal;
     }
-    Reflect.set(HTMLSelectElement.prototype, "value", action.value, target);
+    // `:disabled` also covers an option inside a disabled group.
+    const options = [...target.options].filter((option) => !isDisabled(option));
+    const chosen = optionNamed(options, action.value);
+    if (chosen === undefined) {
+      // Labels are page text: redacted as every read redacts it.
+      return {
+        code: errorCode.executionFailed,
+        error: `The select has no option with this label or value. Its options: ${options
+          .map((option) => JSON.stringify(redact(normalize(option.label))))
+          .join(", ")}`,
+        ok: false,
+      };
+    }
+    target.selectedIndex = chosen.index;
     target.dispatchEvent(new Event("input", { bubbles: true }));
     target.dispatchEvent(new Event("change", { bubbles: true }));
     return { ok: true };

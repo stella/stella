@@ -309,7 +309,7 @@ describe("migration ledger adoption", () => {
     );
   });
 
-  test("the migration ledger design is pinned to Drizzle rc.4", async () => {
+  test("the migration ledger design is pinned to Drizzle rc.5", async () => {
     expect(
       await Bun.file(
         nodePath.resolve(
@@ -317,7 +317,7 @@ describe("migration ledger adoption", () => {
           "../../../../../node_modules/drizzle-orm/package.json",
         ),
       ).json(),
-    ).toMatchObject({ version: "1.0.0-rc.4" });
+    ).toMatchObject({ version: "1.0.0-rc.5" });
   });
 });
 

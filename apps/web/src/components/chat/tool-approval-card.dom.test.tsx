@@ -36,8 +36,16 @@ const pendingWebSearch = {
 
 const renderPendingCard = (
   confirmStoredApprovalGrant: () => Promise<boolean>,
+  {
+    approvalIdsAwaitedAtOpen = new Set<string>(),
+    blockedApprovalTools,
+  }: {
+    approvalIdsAwaitedAtOpen?: ReadonlySet<string>;
+    blockedApprovalTools?: ReadonlySet<"web_search">;
+  } = {},
 ) => {
   const approved: string[] = [];
+  const denied: string[] = [];
   const queryClient = new QueryClient();
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -45,11 +53,16 @@ const renderPendingCard = (
         <ChatApprovalContext
           value={{
             ...testChatApprovalContextValue,
+            approvalIdsAwaitedAtOpen,
             conversationApprovedTools: new Set(["web_search"]),
             confirmStoredApprovalGrant,
             handleApprove: (id: string) => {
               approved.push(id);
             },
+            handleDeny: (id: string) => {
+              denied.push(id);
+            },
+            blockedApprovalTools,
           }}
         >
           <ToolApprovalCard
@@ -61,7 +74,7 @@ const renderPendingCard = (
       </IntlProvider>
     </QueryClientProvider>,
   );
-  return { approved, queryClient, view };
+  return { approved, denied, queryClient, view };
 };
 
 test("a cached grant the API no longer holds does not answer a new card", async () => {
@@ -87,6 +100,53 @@ test("a grant the API confirms answers the card", async () => {
       expect(approved).toEqual(["pending-approval"]);
     });
   });
+  queryClient.clear();
+});
+
+test("a card already waiting when the thread opened waits for the user, whatever grant covers it", async () => {
+  const confirmations: string[] = [];
+  const { approved, queryClient, view } = renderPendingCard(
+    async () => {
+      confirmations.push("asked");
+      return await Promise.resolve(true);
+    },
+    { approvalIdsAwaitedAtOpen: new Set(["pending-approval"]) },
+  );
+
+  // An automatic answer starts with the grant confirmation, which the card
+  // asks for as soon as it renders; the reopened card must not even ask, so
+  // no tool runs without the user.
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(confirmations).toEqual([]);
+  expect(approved).toEqual([]);
+
+  // The user's own click still answers it.
+  act(() => {
+    view
+      .getByRole("button", { name: messages.chat.approval.allowOnce })
+      .click();
+  });
+  await waitFor(() => {
+    expect(approved).toEqual(["pending-approval"]);
+  });
+  queryClient.clear();
+});
+
+test("a blocked card waiting when the thread opened is still denied, so it never strands its batch", async () => {
+  const { approved, denied, queryClient } = renderPendingCard(
+    async () => await Promise.resolve(true),
+    {
+      approvalIdsAwaitedAtOpen: new Set(["pending-approval"]),
+      blockedApprovalTools: new Set(["web_search"]),
+    },
+  );
+
+  await waitFor(() => {
+    expect(denied).toEqual(["pending-approval"]);
+  });
+  expect(approved).toEqual([]);
   queryClient.clear();
 });
 

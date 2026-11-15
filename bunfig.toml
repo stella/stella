@@ -23,6 +23,7 @@ minimumReleaseAgeExcludes = [
   # First-party @stll packages are on public npm (open source). They share a
   # release cadence and would otherwise be blocked on every publish cycle.
   # Permanent exclusions record their original introduction for auditability.
+  "cargo:ammonia", # quarantine-expires: 2026-11-18T05:25:55.933Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick", # quarantine-excluded-since: 2026-10-17T16:30:00.000Z
@@ -43,6 +44,7 @@ minimumReleaseAgeExcludes = [
   "@stll/anonymize-win32-x64-msvc", # quarantine-excluded-since: 2026-08-21T20:53:15.999Z
   "@stll/conditions", # quarantine-excluded-since: 2026-08-11T09:34:37.000Z
   "@stll/docx-core", # quarantine-excluded-since: 2026-07-13T12:21:46.000Z
+  "@stll/docx-utils", # quarantine-excluded-since: 2026-10-17T10:23:38.836Z
   "@stll/folio-agents", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/mcp-kit", # quarantine-excluded-since: 2026-09-30T00:00:00.000Z
   "@stll/folio-core", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z

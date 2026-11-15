@@ -61,7 +61,7 @@ use endpoint::Endpoints;
 pub(crate) use protocol::{
   BackgroundTasks, CHECKPOINT_STORE_SUFFIX, FolderRestore as SidecarFolderRestore,
   HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
-  RestoreOutcome, SidecarRunStart, SkillFolderRef,
+  RestoreOutcome, SidecarRunSession, SidecarRunStart, SkillFolderRef,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProbeFailure,
@@ -71,7 +71,7 @@ use protocol::{
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessModel, HarnessReport,
   HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, ReasoningEffort,
-  RejectReason, RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh,
+  RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunRef, RunTokenRefresh,
   SignedOutHarness, UnavailableHarness, UnsupportedHarness,
 };
 
@@ -221,6 +221,7 @@ pub(crate) enum SidecarRunOutput {
   Finished {
     outcome: RunOutcome,
     harness_session_id: Option<String>,
+    harness_boundary: Option<String>,
   },
 }
 
@@ -476,6 +477,12 @@ impl HarnessSidecar {
     approval: RunApproval,
   ) -> Result<(), SidecarUnavailable> {
     self.forward(approval.run_id.clone(), &HostMessage::RunApproval(approval))
+  }
+
+  /// A user message for the run's running turn; the run's stream says
+  /// whether its harness took it.
+  pub(crate) fn input(&self, input: RunInput) -> Result<(), SidecarUnavailable> {
+    self.forward(input.run_id.clone(), &HostMessage::RunInput(input))
   }
 
   /// Answers to a blocking question the run asked.
@@ -1554,6 +1561,7 @@ impl Supervisor {
           SidecarRunOutput::Finished {
             outcome: finished.outcome,
             harness_session_id: finished.harness_session_id,
+            harness_boundary: finished.harness_boundary,
           },
         );
       }
@@ -1810,6 +1818,7 @@ fn finish_failed(outputs: mpsc::UnboundedSender<SidecarDelivery>) {
     output: SidecarRunOutput::Finished {
       outcome: RunOutcome::Failed,
       harness_session_id: None,
+      harness_boundary: None,
     },
   });
 }

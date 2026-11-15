@@ -348,6 +348,7 @@ const desktopRustRequired = (files: readonly string[]) =>
     "packages/api-contract/src/desktop-edit-file-types.ts",
     "packages/api-contract/src/desktop-registry.ts",
     "packages/api-contract/src/desktop-rpc.gen.ts",
+    "packages/api-contract/src/chat-local-run-step-content.fixtures.json",
   ]);
 
 const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {

@@ -15,6 +15,7 @@ import {
 const CONFIG = {
   intervalMs: 100,
   key: "publisher-test",
+  publisherCode: "cellar-eu",
   publisher: "test",
   cooldown: "shared",
 } as const;

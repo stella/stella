@@ -206,7 +206,7 @@ export const finalizeReviewRun = async (
     return { type: "incomplete", committed };
   }
 
-  const carried = await carryOverDecisions({
+  const { carried } = await carryOverDecisions({
     tx,
     workspaceId,
     runId,

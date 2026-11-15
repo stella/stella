@@ -187,11 +187,8 @@ async function* recordingProduced(
   step: { signatures: string[]; toolCallIds: string[] },
 ): AsyncGenerator<AdapterYieldChunk> {
   for await (const chunk of chunks) {
-    if (
-      chunk.type === EventType.STEP_FINISHED &&
-      chunk.signature !== undefined
-    ) {
-      step.signatures.push(chunk.signature);
+    if (chunk.type === EventType.REASONING_ENCRYPTED_VALUE) {
+      step.signatures.push(chunk.encryptedValue);
     }
     if (chunk.type === EventType.TOOL_CALL_START) {
       step.toolCallIds.push(chunk.toolCallId);
@@ -212,7 +209,7 @@ const adapter: AnyTextAdapter = {
     threadId,
     tools,
   }) {
-    const scripts = threadId === undefined ? undefined : threads.get(threadId);
+    const scripts = threads.get(threadId);
     scripts?.modelOptions.push(modelOptions);
     scripts?.requests.push({
       earlierSteps: [...scripts.produced],
@@ -224,18 +221,14 @@ const adapter: AnyTextAdapter = {
       recordToolResults(scripts, messages);
       scripts.prompts.push(promptOf(messages));
     }
-    if (
-      threadId === undefined ||
-      runId === undefined ||
-      scripts === undefined
-    ) {
+    if (runId === undefined || scripts === undefined) {
       yield* scriptedTurnChunks(
         { finishReason: "stop", text: SIDE_CALL_TEXT, type: "text" },
         {
           index: 0,
           model,
           runId: runId ?? "side-run",
-          threadId: threadId ?? "side-thread",
+          threadId,
         },
       );
       return;

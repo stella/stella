@@ -1754,10 +1754,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
-  // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
+  // Scheduled journey checks: endpoint overrides, bounded request/retry timing,
+  // and the clock and busy windows file the coverage check reads (fixtures pin them).
+  "JOURNEY_BUSY_WINDOWS_FILE",
   "JOURNEY_CLI_URL",
   "JOURNEY_MAIN_REF",
   "JOURNEY_MCP_URL",
+  "JOURNEY_NOW_EPOCH",
   "JOURNEY_NPM_REGISTRY_URL",
   "JOURNEY_PROBE_RUN_SECONDS",
   "JOURNEY_PROBE_SLOT",
@@ -1915,7 +1918,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_COLD_SEARCH_CONTAINER",
   "STELLA_COLD_SEARCH_DROP_PAGE_CACHE",
   "STELLA_COLD_SEARCH_MODE",
+  // The engine container and loopback Postgres metastore of a corpus suite
+  // whose engine keeps its metastore in Postgres, and that metastore's image.
+  "STELLA_CORPUS_ENGINE_TEST_CONTAINER",
   "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
+  "STELLA_CORPUS_METASTORE_IMAGE",
+  "STELLA_CORPUS_METASTORE_TEST_URL",
   "STELLA_DESKTOP_DOWNLOAD_BASE_URL",
   "STELLA_DESKTOP_NOW_EPOCH",
   "STELLA_DESKTOP_RELEASE_API_PATH",

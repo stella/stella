@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
@@ -21,7 +21,6 @@ import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
 import { chatLimitReminderScalingScenario } from "./chat-limit-reminder";
 import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunStepContentScalingScenario } from "./chat-local-run-step-content";
-import { chatLocalRunStepOutputGrantScalingScenario } from "./chat-local-run-step-output-grant";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
 import { chatPinnedThreadsScalingScenario } from "./chat-threads";
@@ -48,6 +47,7 @@ import {
 } from "./document-annotations";
 import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
+import { legalHoldScalingScenarios } from "./legal-holds";
 import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
@@ -85,6 +85,7 @@ import {
   verificationChronologyScalingScenarios,
   verificationGraphScalingScenarios,
 } from "./verification-graph";
+import { verifyQuoteApiScalingScenario } from "./verify-quote";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -92,6 +93,7 @@ const measuredApiScenarios = [
   ...dataExportReadScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
+  verifyQuoteApiScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
   exactIconScalingScenario,
@@ -103,7 +105,6 @@ const measuredApiScenarios = [
   chatLocalRunnersScalingScenario,
   chatLocalFilesUndoScalingScenario,
   chatBackgroundTasksScalingScenario,
-  chatLocalRunStepOutputGrantScalingScenario,
   chatLocalRunStepContentScalingScenario,
   chatActiveRunsScalingScenario,
   chatPinnedThreadsScalingScenario,
@@ -130,6 +131,7 @@ const measuredApiScenarios = [
   memberCandidatesScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  ...legalHoldScalingScenarios,
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   desktopDictationModelsScalingScenario,
@@ -206,6 +208,7 @@ test("previously measured scenarios retain their handler or tool identity", asyn
       scenarioMembershipViolations({
         base: readScenarioRegistry({ ...registry, readSource: readBaseSource }),
         current,
+        handlerExists: (file) => existsSync(path.join(repoRoot, file)),
       }),
     ).toEqual([]);
   }

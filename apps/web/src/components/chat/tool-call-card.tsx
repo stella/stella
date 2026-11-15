@@ -9,7 +9,6 @@ import { useTranslations } from "use-intl";
 import {
   isLocalRunInterruptedOutput,
   localRunStepFailed,
-  localRunToolSubtitleText,
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import { Temporal } from "@stll/time";
@@ -36,6 +35,7 @@ import {
   LOCAL_RUN_TITLE_KEYS,
 } from "@/components/chat/chat-ui-tools";
 import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
+import { useLocalRunSubtitleText } from "@/components/chat/local-run-subtitle";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
 import {
   advanceToolCallTiming,
@@ -474,6 +474,7 @@ const ToolCallCardComponent = ({
   turnStatus = "finished",
   part,
   showDetails,
+  threadId,
 }: {
   action?: ToolCallAction | undefined;
   activeOrganizationId: string;
@@ -483,8 +484,11 @@ const ToolCallCardComponent = ({
   part: ToolPart;
   /** Open rich tool details initially in development surfaces. */
   showDetails?: boolean;
+  /** The thread the call belongs to; a local run's step reads its content by it. */
+  threadId?: string | undefined;
 }) => {
   const t = useTranslations();
+  const localRunSubtitleText = useLocalRunSubtitleText();
   const format = useFormatter();
   const queryClient = useQueryClient();
   const user = useMaybeAuthenticatedUser();
@@ -533,10 +537,7 @@ const ToolCallCardComponent = ({
           part,
           toolName: name,
         })
-      : localRunToolSubtitleText(localRunTool.subtitle, {
-          patternInPath: (values) => t("chat.toolCall.patternInPath", values),
-          commandExited: (values) => t("chat.toolCall.commandExited", values),
-        });
+      : localRunSubtitleText(localRunTool.subtitle);
 
   const isLoading = isRunningToolPart(part);
   const [timing, setTiming] = useState(() =>
@@ -766,6 +767,7 @@ const ToolCallCardComponent = ({
           <LocalRunStepOutputDetails
             activeOrganizationId={activeOrganizationId}
             part={part}
+            threadId={threadId}
           />
         </div>
       )}
