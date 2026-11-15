@@ -5,8 +5,6 @@ import type { AUTHORED_DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
 import { MARKED_PDF_EXPORT_MODES } from "@stll/api-contract/marked-pdf-export";
 
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
-import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
-import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
@@ -18,11 +16,8 @@ import {
   OCR_EXPORT_FORMATS,
   readOcrExport,
 } from "@/api/handlers/files/ocr-export";
-import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
-import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
-import { routes } from "@/api/http/route";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
@@ -78,7 +73,7 @@ export const readFileEndpoint = createSafeHandler(
   },
 );
 
-const readEmailHtmlPreviewEndpoint = createSafeHandler(
+export const readEmailHtmlPreviewEndpoint = createSafeHandler(
   {
     contract: "patch",
     contentDelivery: {
@@ -115,7 +110,7 @@ const readEmailHtmlPreviewEndpoint = createSafeHandler(
   },
 );
 
-const printPdfEndpoint = createSafeHandler(
+export const printPdfEndpoint = createSafeHandler(
   {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,
@@ -149,7 +144,7 @@ const printPdfEndpoint = createSafeHandler(
   },
 );
 
-const stampedDownloadEndpoint = createSafeHandler(
+export const stampedDownloadEndpoint = createSafeHandler(
   {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,
@@ -186,7 +181,7 @@ const stampedDownloadEndpoint = createSafeHandler(
   },
 );
 
-const readDocumentPropertiesEndpoint = createSafeHandler(
+export const readDocumentPropertiesEndpoint = createSafeHandler(
   {
     contract: "patch",
     contentDelivery: {
@@ -256,7 +251,7 @@ const AUTHORED_PROPERTY_BODY = {
   typeof documentPropertyValue
 >;
 
-const updateDocumentPropertiesEndpoint = createSafeHandler(
+export const updateDocumentPropertiesEndpoint = createSafeHandler(
   {
     contract: "patch",
     contentDelivery: {
@@ -301,7 +296,7 @@ const updateDocumentPropertiesEndpoint = createSafeHandler(
   },
 );
 
-const scrubbedDownloadEndpoint = createSafeHandler(
+export const scrubbedDownloadEndpoint = createSafeHandler(
   {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,
@@ -379,7 +374,7 @@ export const markedDownloadEndpoint = createSafeHandler(
   },
 );
 
-const ocrExportEndpoint = createSafeHandler(
+export const ocrExportEndpoint = createSafeHandler(
   {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,
@@ -417,31 +412,4 @@ const ocrExportEndpoint = createSafeHandler(
     );
     return Result.ok(response);
   },
-);
-
-export const filesRoute = routes(
-  {
-    "/url/:fieldId": { GET: readFileEndpoint },
-    "/email-html/:fieldId": { GET: readEmailHtmlPreviewEndpoint },
-    "/office-citation/:entityId/:fieldId/:blockId": {
-      GET: officeCitationEndpoint,
-    },
-    "/print-pdf/:fieldId": { GET: printPdfEndpoint },
-    "/stamped/:fieldId": { GET: stampedDownloadEndpoint },
-    "/ocr-export/:fieldId": { GET: ocrExportEndpoint },
-    "/document-properties/:fieldId": {
-      GET: readDocumentPropertiesEndpoint,
-      PATCH: updateDocumentPropertiesEndpoint,
-    },
-    "/scrubbed/:fieldId": { GET: scrubbedDownloadEndpoint },
-    "/marked/:fieldId": { GET: markedDownloadEndpoint },
-    "/thumbnail/:fieldId": { GET: readFileThumbnailEndpoint },
-    "/email-attachment/:fieldId/:attachmentId": {
-      GET: emailAttachmentEndpoint,
-    },
-    "/email-attachment/:fieldId/:attachmentId/save": {
-      POST: saveEmailAttachmentEndpoint,
-    },
-  },
-  { prefix: "/files/:workspaceId" },
 );
