@@ -38,10 +38,10 @@ load_registered_keys() {
   else
     command -v gh >/dev/null 2>&1 || return 1
     local login
-    login=$("${gh_retry_script}" api user --jq .login 2>/dev/null) || return 1
+    login=$(bash "${gh_retry_script}" api user --jq .login 2>/dev/null) || return 1
     [[ -n "${login}" ]] || return 1
-    ssh_keys=$("${gh_retry_script}" api "users/${login}/ssh_signing_keys" --jq '.[].key' 2>/dev/null) || return 1
-    gpg_ids=$("${gh_retry_script}" api "users/${login}/gpg_keys" --jq '.[] | .key_id, .subkeys[].key_id' 2>/dev/null) || return 1
+    ssh_keys=$(bash "${gh_retry_script}" api --paginate "users/${login}/ssh_signing_keys" --jq '.[].key' 2>/dev/null) || return 1
+    gpg_ids=$(bash "${gh_retry_script}" api --paginate "users/${login}/gpg_keys" --jq '.[] | .key_id, .subkeys[].key_id' 2>/dev/null) || return 1
   fi
   : > "${work}/allowed_signers"
   while read -r key; do
@@ -64,7 +64,11 @@ signed_by_registered_key() {
       verify-commit "${commit}" >/dev/null 2>&1
     return
   fi
-  local key_id
+  # A registered key ID on a bad, expired or uncheckable signature proves
+  # nothing: GitHub verifies the signature too.
+  local status key_id
+  status=$(git log -n 1 --format=%G? "${commit}" 2>/dev/null)
+  [[ "${status}" == G || "${status}" == U ]] || return 1
   key_id=$(git log -n 1 --format=%GK "${commit}" 2>/dev/null | tr '[:lower:]' '[:upper:]')
   [[ -n "${key_id}" ]] && grep -qx -- "${key_id}" "${work}/gpg_ids"
 }
