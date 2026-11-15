@@ -38,6 +38,7 @@ import {
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
   CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+  type CorpusIndexAppendFault,
   type CorpusIndexIntentStatus,
   type CorpusIndexProjectionAppendMode,
   type CorpusIndexProjectionFailureKind,
@@ -855,9 +856,10 @@ const deliveredTogetherTx = async (
  * keeps its run from publishing is alone after at most floor(log2 N)
  * withdrawals from a request of N, where a withdrawal is charged like any
  * isolated document fault and blocks the entity at the attempt limit: at
- * most floor(log2 N) + 5 deliveries, 18 for a request of 8192. A refused or
- * killed run of many entities leaves each of them in requests of half the
- * size, still batched.
+ * most floor(log2 N) + 5 deliveries, 18 for a request of 8192. A killed run
+ * of many entities, or one that failed on what its file held, leaves each of
+ * them in requests of half the size, still batched; a refused, undelivered or
+ * crashed one says nothing about its documents and halves nothing.
  */
 const corpusProjectionOfflineRequestCap = (
   fewestDeliveredWithdrawn: number | null,
@@ -868,8 +870,9 @@ const corpusProjectionOfflineRequestCap = (
 
 /**
  * Each lease's request cap (`corpusProjectionOfflineRequestCap`), from the
- * withdrawn revisions of its entity at its epoch and the number each one's
- * request actually delivered. Those rows are history, so the cap survives
+ * withdrawn revisions of its entity at its epoch whose delivery could have
+ * failed on its documents, and the number each one's request actually
+ * delivered. Those rows are history, so the cap survives
  * any crash, and the lease is the entity's only outstanding revision, so it
  * cannot shrink while the lease is held.
  */
@@ -904,6 +907,12 @@ export const readCorpusProjectionOfflineRequestCapsTx = async (
           ...new Set(leases.map(({ entityId }) => entityId)),
         ]),
         eq(corpusIndexProjectionIntents.status, "withdrawn"),
+        // A withdrawal whose delivery said nothing about its documents (a
+        // refusal, a crash, a failure outside the indexer) halves nothing.
+        inArray(corpusIndexProjectionIntents.appendFault, [
+          "documents",
+          "killed",
+        ]),
       ),
     );
   const delivered = await readOfflineDeliveredCountsTx(
@@ -1630,6 +1639,14 @@ type AcceptedProjectionAppend = {
 type RecordAcceptedCorpusProjectionAppendsOptions = {
   /** Revisions of one index whose append the engine accepted. */
   accepted: readonly AcceptedProjectionAppend[];
+  /**
+   * How every revision of the batch travelled; each must have started so.
+   * An offline record states what a failure of its revisions is charged to
+   * (`CORPUS_INDEX_APPEND_FAULTS`), stored with the commit for any prover.
+   */
+  delivery:
+    | { type: "ingest_api" }
+    | { type: "offline_indexer"; fault: CorpusIndexAppendFault };
   testNow?: Date | undefined;
 };
 
@@ -1737,7 +1754,7 @@ const validateAcceptedBatch = (intentIds: readonly ProjectionIntentId[]) => {
  */
 export const recordAcceptedCorpusProjectionAppendsTx = async (
   tx: Transaction,
-  { accepted, testNow }: RecordAcceptedCorpusProjectionAppendsOptions,
+  { accepted, delivery, testNow }: RecordAcceptedCorpusProjectionAppendsOptions,
 ): Promise<RecordedCorpusProjectionAppend[]> => {
   // audit: skip - append bookkeeping on the derived public corpus projection
   validateAcceptedBatch(accepted.map(({ intentId }) => intentId));
@@ -1764,6 +1781,11 @@ export const recordAcceptedCorpusProjectionAppendsTx = async (
       intent.leaseToken !== leaseToken
     ) {
       return { status: "lease_lost", intentId, documentCount } as const;
+    }
+    if (intent.appendDelivery !== delivery.type) {
+      return panic(
+        `Projection append recorded as ${delivery.type} started as ${intent.appendDelivery}: ${intent.id}`,
+      );
     }
     if (
       intent.appendDelivery === "offline_indexer" &&
@@ -1851,6 +1873,8 @@ export const recordAcceptedCorpusProjectionAppendsTx = async (
           () => sql`${STALE_ACCEPTED_APPEND_MESSAGE}`,
           sql`${corpusIndexProjectionIntents.lastError}`,
         ),
+        appendFault:
+          delivery.type === "offline_indexer" ? delivery.fault : null,
         updatedAt: transitionAt,
       })
       .where(
@@ -1896,13 +1920,6 @@ type ProveAcceptedCorpusProjectionAppendsOptions = {
   /** One exact census of committed revisions of `indexId`. */
   census: CorpusProjectionPresenceCensus;
   timing: CorpusProjectionProofTiming;
-  /**
-   * Revisions whose delivery failed for a reason outside their documents (an
-   * indexer killed at its deadline, refused, never run, or a broken engine):
-   * a withdrawal or retirement of one is never charged to its entity, alone
-   * in its request or not.
-   */
-  uncharged?: ReadonlySet<ProjectionIntentId> | undefined;
   testNow?: Date | undefined;
 };
 
@@ -1988,7 +2005,6 @@ type SettleCommittedCorpusProjectionAppendsOptions = {
   proofs: readonly CorpusProjectionPresenceProof[];
   unproven: readonly UnprovenCommittedRevision[];
   timing: CorpusProjectionProofTiming;
-  uncharged?: ReadonlySet<ProjectionIntentId> | undefined;
   testNow?: Date | undefined;
 };
 
@@ -2008,7 +2024,6 @@ const settleCommittedCorpusProjectionAppendsTx = async (
     proofs,
     unproven,
     timing,
-    uncharged = new Set(),
     testNow,
   }: SettleCommittedCorpusProjectionAppendsOptions,
 ): Promise<AcceptedCorpusProjectionAppendProof[]> => {
@@ -2042,7 +2057,6 @@ const settleCommittedCorpusProjectionAppendsTx = async (
     manifest,
     timing,
     transitionAt,
-    uncharged,
     delivered: await readOfflineDeliveredCountsTx(
       tx,
       [...intents.values()].flatMap(({ appendRequestId }) =>
@@ -2093,8 +2107,6 @@ type ProofContext = {
   transitionAt: Date;
   /** Revisions each offline request of the proof delivered together. */
   delivered: ReadonlyMap<string, number>;
-  /** Revisions whose failure is never charged (an infrastructure fault). */
-  uncharged: ReadonlySet<ProjectionIntentId>;
 };
 
 /** Outcomes of a revision this proof can no longer act on, or null. */
@@ -2143,6 +2155,31 @@ const censusFollowsOfflineEnd = (
     corpusProjectionOfflineIndexerEndedAt(startedAt, manifest).getTime() <=
     timing.censusStart.at.getTime()
   );
+};
+
+/**
+ * Whether a failure of this revision may be charged to its documents: always
+ * for an ingest revision, whose request's own outcome decides, and for an
+ * offline one only when its commit recorded that the indexer ran to its own
+ * verdict (`CORPUS_INDEX_APPEND_FAULTS`).
+ */
+const offlineFaultIsDocuments = (intent: CommittedIntentRow): boolean => {
+  if (intent.appendDelivery !== "offline_indexer") {
+    return true;
+  }
+  const fault =
+    intent.appendFault ??
+    panic(`Committed offline projection intent has no fault: ${intent.id}`);
+  switch (fault) {
+    case "documents":
+      return true;
+    case "killed":
+    case "none":
+      return false;
+    default:
+      fault satisfies never;
+      return panic(`Unhandled append fault: ${String(fault)}`);
+  }
 };
 
 const committedBarrierOf = (intent: CommittedIntentRow) =>
@@ -2225,15 +2262,18 @@ const decideUnprovenRevision = (
       appendRequestRevisionCount: deliveredTogether,
       transitionAt,
       rejection,
-      fault: context.uncharged.has(committed.id) ? "engine" : fault,
+      // An offline revision's commit stored what its failure costs: only a
+      // delivery the indexer ran to its own verdict charges the documents.
+      fault: offlineFaultIsDocuments(committed) ? fault : "engine",
     });
   // Nothing of the revision reached the index and nothing can any more, so no
   // delete is owed, and no maturity waited for: the entity may be reserved
-  // again once its retry is due. An empty run cannot tell a refused or killed
-  // delivery from a revision at fault, so a withdrawal from a request of
-  // several revisions charges no one and keeps the entity batched; its next
-  // request is capped instead (`corpusProjectionOfflineRequestCap`). Alone in
-  // its request, it is a document fault like any other. A state that moved on
+  // again once its retry is due. An empty run of several revisions cannot say
+  // which, if any, was at fault, so such a withdrawal charges no one and keeps
+  // the entity batched; its next request is capped instead
+  // (`corpusProjectionOfflineRequestCap`). Alone in a request its indexer ran
+  // to a verdict, it is a document fault like any other; one whose delivery
+  // says nothing about its documents is never charged. A state that moved on
   // has nothing to retry.
   if (offlineFinal && revision.observedDocumentCount === 0) {
     const isolated = deliveredTogether === 1;
@@ -2335,7 +2375,6 @@ export const proveAcceptedCorpusProjectionAppendsTx = async (
     indexId,
     census: { proofs, unproven },
     timing,
-    uncharged,
     testNow,
   }: ProveAcceptedCorpusProjectionAppendsOptions,
 ): Promise<AcceptedCorpusProjectionAppendProof[]> =>
@@ -2344,7 +2383,6 @@ export const proveAcceptedCorpusProjectionAppendsTx = async (
     proofs,
     unproven,
     timing,
-    uncharged,
     testNow,
   });
 

@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, gt, inArray, max, min, sql } from "drizzle-orm";
+import { and, count, eq, gt, inArray, max, min, sql } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 import { rm } from "node:fs/promises";
 
@@ -24,6 +24,7 @@ import {
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { recoverExpiredCorpusProjectionIntentsTx } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
+import type { CorpusIndexAppendFault } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   proveCorpusProjectionRevisionsPresent,
@@ -37,6 +38,7 @@ import {
   corpusProjectionOfflineNextShardClass,
   corpusProjectionOfflinePageLimit,
   type CorpusProjectionOfflinePlan,
+  corpusProjectionOfflineRateCannotIndex,
   corpusProjectionOfflineShardCapAfterKill,
   corpusProjectionOfflineShardClass,
   corpusProjectionOfflineShardIsClosed,
@@ -101,19 +103,31 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
  * published in part goes to cleanup.
  *
  * Only the census moves a revision. A delivery's outcome decides what its
- * failure costs and whether the run goes on:
+ * failure costs, stored on each revision with its record
+ * (`CORPUS_INDEX_APPEND_FAULTS`) so every prover decides it alike, and
+ * whether the run goes on:
  * - `ingested`, or killed at its deadline with every revision exact (a merge
- *   at exit ran over): nothing failed.
- * - killed at its deadline with any revision short: the shard was too large
- *   for the true rate. Its revisions are never charged, and the shard byte
- *   cap halves (`corpusProjectionOfflineShardCapAfterKill`); a cap that can
- *   no longer hold the largest revision stops the run (`rate_too_slow`).
- * - refused past its deadline, never delivered after the lock was lost, a
- *   failure the runner reports as infrastructure, or a census that cannot
- *   answer: nothing about the documents is known. Its revisions are never
- *   charged and the run stops (`infrastructure_failed`).
+ *   at exit ran over): nothing failed (`documents`).
  * - a failure the runner reports as the indexer's: the documents decide, and
- *   the usual rules charge a revision only when it travelled alone.
+ *   the usual rules charge a revision only when it travelled alone
+ *   (`documents`).
+ * - a shard of several killed at its deadline with any revision short: too
+ *   large for the true rate, or held up by one revision. Its revisions are
+ *   never charged and their next requests halve (`killed`); the shard byte
+ *   cap halves too (`corpusProjectionOfflineShardCapAfterKill`), and a cap
+ *   that can no longer hold the largest revision stops the run
+ *   (`rate_too_slow`).
+ * - a lone revision killed short: its own fault (`documents`), charged like
+ *   a lone indexer failure, unless the rate the run measured on earlier
+ *   shards cannot index its bytes in the kill budget
+ *   (`corpusProjectionOfflineRateCannotIndex`); then nothing is charged
+ *   (`none`) and the run stops (`rate_too_slow`).
+ * - refused past its deadline, never delivered (a lost lock, a generation
+ *   no longer building, no kill budget left), a failure the runner reports
+ *   as infrastructure, or a census that cannot answer: nothing about the
+ *   documents is known (`none`). Nobody is charged, no request halves, and
+ *   the run stops (`infrastructure_failed`). A start that expires unrecorded
+ *   (a crash, a rejected delivery) is committed by the sweep as `none` too.
  *
  * One shard file is one start request, admitted once and started in short
  * transactions inside the start window. An empty delivery cannot say which
@@ -131,8 +145,11 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
  * another actor held) keeps its place in the queue, behind the walk's cursor,
  * so once a pass reaches the end of the queue the run drains its deliveries
  * and proofs and walks again from the head. It stops when a pass reserves
- * nothing (`drained`), starts nothing (`no_progress`), or after
- * `CORPUS_PROJECTION_OFFLINE_MAX_WALK_PASSES` (`walk_pass_limit`).
+ * nothing, starts nothing (`no_progress`), or after
+ * `CORPUS_PROJECTION_OFFLINE_MAX_WALK_PASSES` (`walk_pass_limit`). A pass
+ * that reserves nothing ends the run `drained` only once nothing of the route
+ * is outstanding either (no revision started or committed and undecided);
+ * what it cannot settle by the deadline ends it `awaiting_proof`.
  *
  * What the caller provides:
  * - The route lock (`lock`) lives on a session of its own. `runInTransaction`
@@ -141,7 +158,9 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
  *   holds any lock (`requireFreshReadCommittedStartTx`), and runs in read
  *   committed.
  * - `deliver` resolves only once its indexer has exited, been killed or been
- *   refused. One indexer identity per slot is exclusive in time: a run starts
+ *   refused, and enforces the shard's `killAfterMs` with a monotonic timer
+ *   started before it launches the indexer, never by comparing its own clock
+ *   with `killDeadline`. One indexer identity per slot is exclusive in time: a run starts
  *   delivering only after every offline run an earlier holder of the route
  *   started has certainly ended, and a run that fails keeps the lock until
  *   every delivery it handed out has certainly ended.
@@ -169,11 +188,20 @@ export type CorpusProjectionOfflineShard = {
   slot: number;
   /**
    * The instant, on the database clock, by which the indexer must have been
-   * killed. The caller enforces it outside this process, so neither this
-   * process nor its death can extend it, and refuses a delivery that reaches
-   * the indexer after it.
+   * killed. For records and logs only: the caller's host clock may differ
+   * from the database's, so it enforces `killAfterMs` instead.
    */
   killDeadline: Date;
+  /**
+   * How long the indexer may run, measured on the database clock right
+   * before the hand-off: `killDeadline` less that reading, always positive.
+   * The caller starts a monotonic timer before it launches the indexer and
+   * kills it when the timer reaches this, outside this process, so neither
+   * this process nor its death can extend it, and no clock skew between the
+   * hosts can either. The margin after `killDeadline` then only has to cover
+   * a publish already in flight.
+   */
+  killAfterMs: number;
   revisionCount: number;
   documentCount: number;
   bytes: number;
@@ -204,7 +232,7 @@ export type CorpusProjectionOfflineDeliveryOutcome =
       startedAt: Date;
       endedAt: Date;
     }
-  /** The indexer refused the shard: its kill deadline had already passed. */
+  /** The indexer refused the shard: its kill budget was already spent. */
   | { type: "deadline_passed"; refusedAt: Date };
 
 /**
@@ -302,6 +330,11 @@ export type CorpusProjectionOfflineBuildProgress = {
     lastPassStarted: number;
   };
   reserved: number;
+  /**
+   * The most built blocks held at once for a later shard of their class: at
+   * most one reservation page, since a page is reserved only while none wait.
+   */
+  waitingPeak: number;
   /** Reservations that ended before a start, and why. */
   notStarted: {
     /** Material or desired state moved, or the lease was too short to start. */
@@ -324,8 +357,10 @@ export type CorpusProjectionOfflineBuildProgress = {
     ingested: number;
     /** Killed at the deadline with every revision exact: a merge ran over. */
     mergeOverruns: number;
-    /** Killed with revisions short: the shard was too large. */
+    /** Shards of several killed with revisions short: too large. */
     killedTooLarge: number;
+    /** Lone revisions killed short, charged as their own fault. */
+    killedAlone: number;
     /** Failed on what the file held. */
     indexerFailures: number;
     /** Refused, undelivered, or failed outside the documents. */
@@ -338,6 +373,12 @@ export type CorpusProjectionOfflineBuildProgress = {
      */
     attemptedBytes: number;
     attemptedMs: number;
+    /**
+     * Bytes and indexer time of every shard the indexer ran to its own end:
+     * the rate it achieved, which judges a lone revision's kill.
+     */
+    completedBytes: number;
+    completedMs: number;
     /** The shard byte cap now; it halves after a shard killed too large. */
     shardByteCap: number;
   };
@@ -363,6 +404,12 @@ export type CorpusProjectionOfflineBuildProgress = {
   superseded: number;
   /** Recorded revisions still waiting for a final census at the end. */
   awaitingProof: number;
+  /**
+   * Revisions of the route, by any actor, still started or committed and
+   * undecided, counted (up to a cap) once a pass reserved nothing. Zero
+   * whenever the run ends `drained`.
+   */
+  outstanding: number;
   censusFailures: number;
   /**
    * Rows of earlier runs this run settled: expired leases its sweep
@@ -373,7 +420,11 @@ export type CorpusProjectionOfflineBuildProgress = {
 
 export type CorpusProjectionOfflineBuildOutcome = {
   /**
-   * - `drained`: a full pass over the queue reserved nothing.
+   * - `drained`: a full pass over the queue reserved nothing, and nothing of
+   *   the route is outstanding.
+   * - `awaiting_proof`: a full pass reserved nothing, but revisions of the
+   *   route are still started or committed and undecided at the deadline, or
+   *   no proof can decide them yet (`progress.outstanding`).
    * - `no_progress`: a full pass reserved work but started none of it.
    * - `walk_pass_limit`: the run walked the queue its most times and the
    *   last pass still found work.
@@ -383,6 +434,7 @@ export type CorpusProjectionOfflineBuildOutcome = {
    */
   status:
     | "drained"
+    | "awaiting_proof"
     | "no_progress"
     | "walk_pass_limit"
     | "deadline_reached"
@@ -485,6 +537,17 @@ const SWEEP_MAX_PAGES = 8;
 const SWEEP_EVERY_SHARDS = 8;
 /** Proof cycles a run takes at its start for an earlier run's revisions. */
 const RECOVERY_PROOF_MAX_PASSES = 8;
+/**
+ * The most outstanding revisions of a route one statement counts before a
+ * run may call it drained; the count only has to tell zero from more.
+ */
+const CORPUS_PROJECTION_OFFLINE_OUTSTANDING_COUNT_CAP = 10_000;
+/**
+ * Rounds of sweep and recovery a run spends settling what is outstanding on
+ * its route before it reports `drained`; a round that settles nothing ends
+ * them at once.
+ */
+const SETTLE_OUTSTANDING_MAX_ROUNDS = 8;
 
 const emptyProgress = (
   cursor: CorpusProjectionReservationQueueKey | null,
@@ -493,6 +556,7 @@ const emptyProgress = (
   cursor,
   walk: { passes: 1, lastPassReserved: 0, lastPassStarted: 0 },
   reserved: 0,
+  waitingPeak: 0,
   notStarted: {
     cancelled: 0,
     leaseLost: 0,
@@ -506,11 +570,14 @@ const emptyProgress = (
     ingested: 0,
     mergeOverruns: 0,
     killedTooLarge: 0,
+    killedAlone: 0,
     indexerFailures: 0,
     infrastructureFailures: 0,
     capped: 0,
     attemptedBytes: 0,
     attemptedMs: 0,
+    completedBytes: 0,
+    completedMs: 0,
     shardByteCap,
   },
   recorded: 0,
@@ -521,6 +588,7 @@ const emptyProgress = (
   blockedByProof: 0,
   superseded: 0,
   awaitingProof: 0,
+  outstanding: 0,
   censusFailures: 0,
   recovered: 0,
 });
@@ -542,8 +610,11 @@ type CarriedBlock = {
   shardClass: number;
 };
 
+/** A shard before its hand-off, which measures its kill budget. */
+type StartedShardFile = Omit<CorpusProjectionOfflineShard, "killAfterMs">;
+
 type StartedShard = {
-  shard: CorpusProjectionOfflineShard;
+  shard: StartedShardFile;
   entries: ShardEntry[];
   startedAt: Date;
   shardClass: number;
@@ -555,18 +626,14 @@ type PendingProof = {
   notBeforeMs: number;
   /** When its indexer has certainly ended, on the database clock. */
   endedAtMs: number;
-  /** Revisions its start request held; a retirement from more isolates it. */
+  /** Revisions its start request held. */
   requestSize: number;
-  /** Its delivery failed outside its documents: never charged. */
-  uncharged: boolean;
+  /**
+   * What its record stored a failure is charged to; a retirement from a
+   * request of several isolates the entity only when it is `documents`.
+   */
+  fault: CorpusIndexAppendFault;
 };
-
-/**
- * What one delivery's failure costs. Only `indexer` is a fault of the
- * documents; every other class leaves the revisions uncharged.
- */
-type DeliveryClass =
-  "ingested" | "merge_overrun" | "too_large" | "indexer" | "infrastructure";
 
 type Stop = Exclude<CorpusProjectionOfflineBuildOutcome["status"], "drained">;
 
@@ -706,6 +773,11 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
    * A run that fails keeps its lock until the latest of them has passed.
    */
   readonly #inFlight = new Map<string, Date>();
+  /**
+   * Final files of started shards not yet removed: one never delivered, or
+   * whose delivery failed, is removed when the run ends.
+   */
+  readonly #shardFiles = new Set<string>();
   /** The proof pass in flight, if any; the next one waits for it. */
   #proving: Promise<void> = Promise.resolve();
 
@@ -792,6 +864,13 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
         // certainly ended.
         await this.#outliveDeliveries();
       }
+      // Every indexer that could read a file of this run has ended now.
+      await Promise.all(
+        [...this.#shardFiles].map(
+          async (file) => await rm(file, { force: true }),
+        ),
+      );
+      this.#shardFiles.clear();
     }
   }
 
@@ -842,8 +921,70 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     await slots.raiseFailure();
     await this.#releaseWaiting();
     await this.#drainProofs();
+    const status = this.#stop ?? (await this.#confirmDrained());
     this.#report();
-    return this.#stop ?? "drained";
+    return status;
+  }
+
+  /**
+   * A pass from the head reserved nothing, so the run would end drained; it
+   * does only once nothing of the route is outstanding either. Each round
+   * sweeps and proves what an earlier run, a crash or this run left, until
+   * nothing is outstanding, the deadline passes, or a round settles nothing.
+   */
+  async #confirmDrained(): Promise<"drained" | "awaiting_proof"> {
+    for (let round = 0; round < SETTLE_OUTSTANDING_MAX_ROUNDS; round += 1) {
+      const step = await this.#settleOutstandingRound();
+      if (step !== "settling") {
+        return step;
+      }
+    }
+    this.#progress.outstanding = await this.#countOutstanding();
+    return this.#progress.outstanding === 0 ? "drained" : "awaiting_proof";
+  }
+
+  async #settleOutstandingRound(): Promise<
+    "drained" | "awaiting_proof" | "settling"
+  > {
+    const outstanding = await this.#countOutstanding();
+    this.#progress.outstanding = outstanding;
+    if (outstanding === 0) {
+      return "drained";
+    }
+    if ((await this.#nowMs()) >= this.#options.deadline.getTime()) {
+      return "awaiting_proof";
+    }
+    const before = this.#progress.recovered;
+    await this.#recover();
+    return this.#progress.recovered === before ? "awaiting_proof" : "settling";
+  }
+
+  /**
+   * Revisions of the route started or committed and not decided yet, by any
+   * actor, up to a cap: one bounded statement.
+   */
+  async #countOutstanding(): Promise<number> {
+    const { runInTransaction, family, generation, indexId } = this.#options;
+    const [row] = await runInTransaction(async (tx) => {
+      const outstanding = tx
+        .select({ id: corpusIndexProjectionIntents.id })
+        .from(corpusIndexProjectionIntents)
+        .where(
+          and(
+            eq(corpusIndexProjectionIntents.family, family),
+            eq(corpusIndexProjectionIntents.generation, generation),
+            eq(corpusIndexProjectionIntents.indexId, indexId),
+            inArray(corpusIndexProjectionIntents.status, [
+              "append_started",
+              "append_committed",
+            ]),
+          ),
+        )
+        .limit(CORPUS_PROJECTION_OFFLINE_OUTSTANDING_COUNT_CAP)
+        .as("outstanding");
+      return await tx.select({ count: count() }).from(outstanding);
+    });
+    return row?.count ?? 0;
   }
 
   /**
@@ -1117,6 +1258,9 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
         requestId: shardId,
         stopReservingAtMs,
       });
+      if (started !== null) {
+        this.#shardFiles.add(started.shard.path);
+      }
       return started;
     } finally {
       // Nothing started, or the shard failed: its staging file goes.
@@ -1156,7 +1300,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     const file = await staging.finish(
       started.entries.map(({ range }) => range),
     );
-    const shard: CorpusProjectionOfflineShard = {
+    const shard: StartedShardFile = {
       name,
       path: file.path,
       indexId: this.#options.indexId,
@@ -1258,6 +1402,10 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       // db-await-in-loop: a page walk: one reservation page of a bounded size per pass
       const built = await this.#reserveAndBuildPage(limit);
       this.#waiting.push(...(await placeAll(built)));
+      this.#progress.waitingPeak = Math.max(
+        this.#progress.waitingPeak,
+        this.#waiting.length,
+      );
     }
     return entries;
   }
@@ -1598,10 +1746,12 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
    * Deliver a started shard and record every started revision with the count
    * its start stored, whatever the delivery reported: a strict rejection can
    * exit zero, and a killed run may have published whole splits. The census
-   * decides each revision; the delivery's class decides what a failure costs.
-   * A run that lost its lock does not deliver, since another process may hold
-   * the slot's indexer identity; it still records, and the census then finds
-   * nothing and withdraws, uncharged.
+   * decides each revision; the delivery decides what a failure costs, stored
+   * with the record. A run that lost its lock does not deliver, since another
+   * process may hold the slot's indexer identity, and neither does one whose
+   * generation is no longer building, or whose kill budget is already spent:
+   * it still records, as `none`, and the census then finds nothing and
+   * withdraws, uncharged.
    */
   async #deliverAndRecord(started: StartedShard): Promise<void> {
     const { shard } = started;
@@ -1609,57 +1759,109 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     if (started.shardClass < this.#plan.shardRevisionCap) {
       shards.capped += 1;
     }
-    let deliveryClass: DeliveryClass = "infrastructure";
-    if (await this.#hold.stillHeld()) {
+    const handoff = await this.#handoff(started);
+    let fault: CorpusIndexAppendFault = "none";
+    if (handoff.type === "deliver") {
       this.#inFlight.set(shard.name, shard.killDeadline);
       const outcome = validateDeliveryOutcome(
-        await this.#options.deliver(shard),
+        await this.#options.deliver(handoff.shard),
       );
       this.#inFlight.delete(shard.name);
       shards.delivered += 1;
-      deliveryClass = await this.#classify(started, outcome);
+      fault = await this.#classify(started, outcome);
     } else {
       shards.infrastructureFailures += 1;
-      this.#stop ??= "lock_lost";
+      this.#stop ??= handoff.stop;
     }
-    await this.#record(started, deliveryClass);
+    await this.#record(started, fault);
     await rm(shard.path, { force: true });
+    this.#shardFiles.delete(shard.path);
     this.#shardsSinceSweep += 1;
     await this.#proveDue();
     this.#report();
   }
 
+  /**
+   * Whether a started shard may reach the indexer now, and with how long a
+   * kill budget: the lock still held, the generation still building, and
+   * budget left on the database clock read right before the hand-off.
+   */
+  async #handoff(
+    started: StartedShard,
+  ): Promise<
+    | { type: "deliver"; shard: CorpusProjectionOfflineShard }
+    | { type: "withheld"; stop: Stop }
+  > {
+    if (!(await this.#hold.stillHeld())) {
+      return { type: "withheld", stop: "lock_lost" };
+    }
+    if (!(await this.#generationIsBuilding())) {
+      return { type: "withheld", stop: "generation_not_building" };
+    }
+    const killAfterMs =
+      started.shard.killDeadline.getTime() - (await this.#databaseNowMs());
+    if (killAfterMs <= 0) {
+      return { type: "withheld", stop: "infrastructure_failed" };
+    }
+    return { type: "deliver", shard: { ...started.shard, killAfterMs } };
+  }
+
   async #classify(
     { shard, entries }: StartedShard,
     outcome: CorpusProjectionOfflineDeliveryOutcome,
-  ): Promise<DeliveryClass> {
+  ): Promise<CorpusIndexAppendFault> {
     const shards = this.#progress.shards;
+    // The rate achieved on earlier shards, before this one counts.
+    const completed = {
+      bytes: shards.completedBytes,
+      ms: shards.completedMs,
+    };
+    const ranMs =
+      outcome.type === "deadline_passed"
+        ? 0
+        : Math.max(0, outcome.endedAt.getTime() - outcome.startedAt.getTime());
     const attempted = () => {
-      if (outcome.type === "deadline_passed") {
-        return;
-      }
       shards.attemptedBytes += shard.bytes;
-      shards.attemptedMs += Math.max(
-        0,
-        outcome.endedAt.getTime() - outcome.startedAt.getTime(),
-      );
+      shards.attemptedMs += ranMs;
+    };
+    const ranToItsEnd = () => {
+      attempted();
+      shards.completedBytes += shard.bytes;
+      shards.completedMs += ranMs;
     };
     switch (outcome.type) {
       case "ingested":
-        attempted();
+        ranToItsEnd();
         shards.ingested += 1;
-        return "ingested";
+        return "documents";
       case "killed_at_deadline": {
         attempted();
         const census = await this.#censusShard(entries);
         if (census === "exact") {
           shards.mergeOverruns += 1;
-          return "merge_overrun";
+          return "documents";
         }
         if (census === "census_failed") {
           shards.infrastructureFailures += 1;
           this.#stop ??= "infrastructure_failed";
-          return "infrastructure";
+          return "none";
+        }
+        if (entries.length === 1) {
+          // Alone, the revision held its run up itself, unless what the run
+          // measured says the engine could not index it in time at all.
+          if (
+            corpusProjectionOfflineRateCannotIndex(
+              completed,
+              shard.bytes,
+              this.#plan.killBudgetMs,
+            )
+          ) {
+            shards.infrastructureFailures += 1;
+            this.#stop ??= "rate_too_slow";
+            return "none";
+          }
+          shards.killedAlone += 1;
+          return "documents";
         }
         shards.killedTooLarge += 1;
         const next = corpusProjectionOfflineShardCapAfterKill(
@@ -1672,21 +1874,22 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           this.#plan = { ...this.#plan, shardByteCap: next.shardByteCap };
           shards.shardByteCap = next.shardByteCap;
         }
-        return "too_large";
+        return "killed";
       }
       case "failed":
-        attempted();
         if (outcome.cause === "indexer") {
+          ranToItsEnd();
           shards.indexerFailures += 1;
-          return "indexer";
+          return "documents";
         }
+        attempted();
         shards.infrastructureFailures += 1;
         this.#stop ??= "infrastructure_failed";
-        return "infrastructure";
+        return "none";
       case "deadline_passed":
         shards.infrastructureFailures += 1;
         this.#stop ??= "infrastructure_failed";
-        return "infrastructure";
+        return "none";
       default:
         outcome satisfies never;
         return panic(`Unhandled offline delivery: ${String(outcome)}`);
@@ -1695,14 +1898,9 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
 
   async #record(
     { entries, startedAt }: StartedShard,
-    deliveryClass: DeliveryClass,
+    fault: CorpusIndexAppendFault,
   ): Promise<void> {
     const requestSize = entries.length;
-    // A shard that ingested, even with revisions short, failed on its
-    // documents if at all; one too large or failed outside its documents
-    // says nothing about them.
-    const uncharged =
-      deliveryClass === "too_large" || deliveryClass === "infrastructure";
     const { runInTransaction } = this.#options;
     // Each revision's proof waits for the end counted from its own start, and
     // the request's transactions all began within the start window of the
@@ -1728,6 +1926,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
                   leaseToken: lease.leaseToken,
                   documentCount,
                 })),
+                delivery: { type: "offline_indexer", fault },
                 testNow,
               }),
           ),
@@ -1741,7 +1940,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
               notBeforeMs: nowMs,
               endedAtMs,
               requestSize,
-              uncharged,
+              fault,
             });
             break;
           case "stale_cleanup_pending":
@@ -1750,12 +1949,13 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
             break;
           case "lease_lost":
             // The sweep or an erasure moved it first; a census still decides
-            // it if the sweep committed it, so it stays this run's to prove.
+            // it if the sweep committed it (as `none`), so it stays this
+            // run's to prove.
             this.#pending.set(intentId, {
               notBeforeMs: nowMs,
               endedAtMs,
               requestSize,
-              uncharged,
+              fault: "none",
             });
             break;
           default:
@@ -1794,9 +1994,6 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
     )) {
       const testNow = await this.#testNow();
-      const uncharged = new Set(
-        batch.filter((revision) => this.#pending.get(revision)?.uncharged),
-      );
       const proof = await this.#admit(
         { phase: "prove", revisions: batch.length },
         async () =>
@@ -1807,7 +2004,6 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
             generation,
             indexId,
             revisions: batch,
-            uncharged,
             testNow,
           }),
       );
@@ -1846,9 +2042,14 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           break;
         case "unproven_cleanup_pending":
           progress.sentToCleanup += 1;
-          // Retired from a shared request, the entity goes to single
-          // requests, which only the per-row path sends.
-          if ((pending?.requestSize ?? 1) > 1) {
+          // Retired from a shared request its indexer ran to a verdict, the
+          // entity goes to single requests, which only the per-row path
+          // sends; a kill or a failure outside the documents keeps it batched.
+          if (
+            pending !== undefined &&
+            pending.requestSize > 1 &&
+            pending.fault === "documents"
+          ) {
             progress.perRowHandoffs += 1;
           }
           break;

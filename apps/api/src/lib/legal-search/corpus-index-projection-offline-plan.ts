@@ -396,6 +396,22 @@ export const corpusProjectionOfflineShardCapAfterKill = (
 };
 
 /**
+ * Whether the rate a run achieved cannot index `bytes` within the kill
+ * budget: the run's evidence that a lone revision killed at its deadline was
+ * too slow for the engine rather than at fault itself. The measurement is
+ * every shard the indexer ran to its own end before this one (ingested, or
+ * failed on what it held), never a killed one: a kill bounds the rate only
+ * from above, and the revision under judgement may be what held it up. With
+ * no such measurement there is no evidence, and the kill is the revision's.
+ */
+export const corpusProjectionOfflineRateCannotIndex = (
+  completed: { bytes: number; ms: number },
+  bytes: number,
+  killBudgetMs: number,
+): boolean =>
+  completed.ms > 0 && completed.bytes * killBudgetMs < bytes * completed.ms;
+
+/**
  * How many leases the next reservation page may take, so the blocks it
  * builds stay within one shard's bytes: by the average block of the run so
  * far, and a small first page while no block has been measured. Memory per

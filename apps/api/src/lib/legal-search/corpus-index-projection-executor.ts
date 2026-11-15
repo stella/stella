@@ -568,6 +568,7 @@ const acceptAndProveProjectionAppend = async ({
               leaseToken: material.lease.leaseToken,
               documentCount,
             })),
+            delivery: { type: "ingest_api" },
           }),
       ),
     (elapsedMs) => {

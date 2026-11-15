@@ -325,8 +325,8 @@ type DeliveredShard = {
 /**
  * The batch runner's side of the job contract, against the engine's own
  * container: the file is written under its shard name, a job whose kill
- * deadline has passed is refused, and the indexer runs under the slot's
- * identity, killed by `timeout -s KILL` at the deadline. In the kill scenario
+ * budget is spent by then is refused, and the indexer runs under the slot's
+ * identity, killed by `timeout -s KILL` when the budget left runs out. In the kill scenario
  * the publish is held on its index row until the deadline has come, the
  * indexer is killed there, and only then is the row released.
  */
@@ -336,6 +336,8 @@ const engineDelivery =
     delivered: DeliveredShard[],
   ): CorpusProjectionOfflineDelivery =>
   async (shard) => {
+    // The kill budget runs from the hand-off on this side's own clock.
+    const receivedAtMs = (await now()).getTime();
     const scenario = scenarios.shift() ?? "ingest";
     const ndjson = await readFile(shard.path, "utf-8");
     const revisions = revisionsOf(ndjson);
@@ -351,7 +353,8 @@ const engineDelivery =
       stdin: ndjson,
     });
     const startedAt = await now();
-    const remainingMs = shard.killDeadline.getTime() - startedAt.getTime();
+    const remainingMs =
+      shard.killAfterMs - (startedAt.getTime() - receivedAtMs);
     if (remainingMs <= 0) {
       const outcome = {
         type: "deadline_passed",

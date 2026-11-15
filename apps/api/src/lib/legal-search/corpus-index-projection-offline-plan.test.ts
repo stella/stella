@@ -28,6 +28,7 @@ import {
   corpusProjectionOfflineLeaseCanStart,
   corpusProjectionOfflineNextShardClass,
   corpusProjectionOfflinePageLimit,
+  corpusProjectionOfflineRateCannotIndex,
   corpusProjectionOfflineReserveToStartMs,
   corpusProjectionOfflineShardCapAfterKill,
   corpusProjectionOfflineShardClass,
@@ -571,6 +572,51 @@ describe("offline build plan", () => {
             // Below it the run either settles or stops typed, never loops.
             expect(stopped || !killedBy(cap)).toBe(true);
           }
+        },
+      ),
+    );
+  });
+
+  test("a lone kill is the engine's only when the measured rate cannot index the revision in the kill budget", () => {
+    const budgetMs = 600_000;
+    // Nothing measured yet: no evidence the engine is too slow.
+    expect(
+      corpusProjectionOfflineRateCannotIndex(
+        { bytes: 0, ms: 0 },
+        1_000_000,
+        budgetMs,
+      ),
+    ).toBe(false);
+    // 1 MB in 60 s: 10 MB in the budget, so a 4 MB revision fits.
+    const measured = { bytes: 1_000_000, ms: 60_000 };
+    expect(
+      corpusProjectionOfflineRateCannotIndex(measured, 4_000_000, budgetMs),
+    ).toBe(false);
+    expect(
+      corpusProjectionOfflineRateCannotIndex(measured, 10_000_000, budgetMs),
+    ).toBe(false);
+    expect(
+      corpusProjectionOfflineRateCannotIndex(measured, 10_000_001, budgetMs),
+    ).toBe(true);
+    assertProperty(
+      "offline-build.lone-kill-rate",
+      fc.property(
+        fc.integer({ min: 1, max: 2 ** 30 }),
+        fc.integer({ min: 1, max: 60 * 60_000 }),
+        fc.integer({ min: 1, max: 2 ** 27 }),
+        fc.integer({ min: 1, max: 60 * 60_000 }),
+        (attemptedBytes, attemptedMs, bytes, killBudgetMs) => {
+          // Exactly when the measured rate indexes fewer bytes in the budget.
+          expect(
+            corpusProjectionOfflineRateCannotIndex(
+              { bytes: attemptedBytes, ms: attemptedMs },
+              bytes,
+              killBudgetMs,
+            ),
+          ).toBe(
+            BigInt(attemptedBytes) * BigInt(killBudgetMs) <
+              BigInt(bytes) * BigInt(attemptedMs),
+          );
         },
       ),
     );

@@ -213,8 +213,6 @@ type ProveCorpusProjectionRevisionsOptions = {
   indexId: string;
   /** At most one census of revisions, all of `indexId`. */
   revisions: readonly ProjectionRevision[];
-  /** Of `revisions`, those whose failure is never charged to the entity. */
-  uncharged?: ReadonlySet<ProjectionRevision> | undefined;
   /** Deterministic database-test clock; production reads PostgreSQL. */
   testNow?: Date | undefined;
 };
@@ -233,7 +231,6 @@ export const proveCorpusProjectionRevisions = async ({
   generation,
   indexId,
   revisions,
-  uncharged,
   testNow,
 }: ProveCorpusProjectionRevisionsOptions): Promise<CorpusProjectionRevisionProofResult> => {
   const committed = await runInTransaction(
@@ -274,7 +271,6 @@ export const proveCorpusProjectionRevisions = async ({
         indexId,
         census: census.value,
         timing: { type: "after_barrier", censusStart: committed.censusStart },
-        uncharged,
         testNow,
       }),
   );

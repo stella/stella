@@ -24,7 +24,11 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import type { CorpusIndexIntentStatus } from "@/api/lib/legal-search/corpus-index-projection-contract";
+import { recoverExpiredCorpusProjectionIntentsTx } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
+import {
+  CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+  type CorpusIndexIntentStatus,
+} from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
@@ -46,13 +50,17 @@ import {
   type CorpusProjectionOfflineBuildPolicy,
   planCorpusProjectionOfflineBuild,
 } from "@/api/lib/legal-search/corpus-index-projection-offline-plan";
+import { executeCorpusProjectionProofCycle } from "@/api/lib/legal-search/corpus-index-projection-prover";
 import {
   CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
   CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
+  CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   type CorpusProjectionIntentLease,
   readCorpusProjectionOfflineRequestCapsTx,
+  reserveCorpusProjectionIntentsTx,
+  startCorpusProjectionAppendBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { corpusProjectionLegacyFixture } from "@/api/tests/helpers/corpus-projection-legacy-fixture";
@@ -324,6 +332,10 @@ const readIntents = async (entityIds: readonly string[]) =>
       expectedDocumentCount: corpusIndexProjectionIntents.expectedDocumentCount,
       appendPublishBarrierAt:
         corpusIndexProjectionIntents.appendPublishBarrierAt,
+      appendFault: corpusIndexProjectionIntents.appendFault,
+      epoch: corpusIndexProjectionIntents.epoch,
+      fingerprint: corpusIndexProjectionIntents.fingerprint,
+      indexId: corpusIndexProjectionIntents.indexId,
     })
     .from(corpusIndexProjectionIntents)
     .where(inArray(corpusIndexProjectionIntents.entityId, [...entityIds]));
@@ -376,6 +388,9 @@ const deliverer =
     shard: CorpusProjectionOfflineShard,
   ): Promise<CorpusProjectionOfflineDeliveryOutcome> => {
     model.shards.push(shard);
+    // The budget was measured on the database clock at the hand-off.
+    expect(shard.killAfterMs).toBeGreaterThan(0);
+    expect(shard.killAfterMs).toBeLessThanOrEqual(PLAN.killBudgetMs);
     await onDelivery?.();
     const behaviour = deliveries.shift() ?? "ingest";
     const lines = await linesOf(shard);
@@ -648,6 +663,10 @@ type RunCommand = {
   startUnits?: number[];
   /** Called as each shard reaches the indexer. */
   onDelivery?: () => Promise<void>;
+  /** The process dies right before the run's first proof of its own. */
+  dieBeforeProof?: boolean;
+  /** The generation starts serving once the first request has started. */
+  serveAfterStart?: boolean;
 };
 
 type Command = RunCommand | { type: "advance"; ms: number };
@@ -724,6 +743,9 @@ const admissionOf = (
         await changeDesired(entity);
       }
     }
+    if (unit.phase === "prove" && command.dieBeforeProof === true) {
+      crashIf(model, true, "before the run's own proof");
+    }
     if (unit.phase === "record" && !changedBeforeRecord) {
       const entity = await entityIn(model, "append_started");
       if (entity !== undefined) {
@@ -741,6 +763,12 @@ const admissionOf = (
       return await work();
     } finally {
       model.inStartAdmission = false;
+      if (command.serveAfterStart === true) {
+        await db
+          .update(corpusIndexGenerations)
+          .set({ status: "serving" })
+          .where(eq(corpusIndexGenerations.generation, TARGET.generation));
+      }
     }
   };
 };
@@ -765,22 +793,7 @@ const runBuild = async (
     try: async () =>
       await buildCorpusProjectionRouteOffline({
         runInTransaction: transactionRunner(model),
-        client: {
-          aggregate: async ({ query }) =>
-            Result.ok({
-              projection_revisions: {
-                buckets: Array.from(model.published, ([key, count]) => ({
-                  key,
-                  doc_count: count,
-                })).filter(
-                  ({ key, doc_count }) =>
-                    doc_count > 0 && query.includes(`"${key}"`),
-                ),
-                doc_count_error_upper_bound: 0,
-                sum_other_doc_count: 0,
-              },
-            }),
-        },
+        client: engineClientOf(model),
         ...TARGET,
         indexId: await routeOf(model),
         runId: "model",
@@ -822,6 +835,53 @@ const runBuild = async (
     return null;
   }
   return outcome.value;
+};
+
+/** The engine's census of what the fake indexer published. */
+const engineClientOf = (model: Model) => ({
+  aggregate: async ({ query }: { query: string }) =>
+    Result.ok({
+      projection_revisions: {
+        buckets: Array.from(model.published, ([key, count]) => ({
+          key,
+          doc_count: count,
+        })).filter(
+          ({ key, doc_count }) => doc_count > 0 && query.includes(`"${key}"`),
+        ),
+        doc_count_error_upper_bound: 0,
+        sum_other_doc_count: 0,
+      },
+    }),
+});
+
+/**
+ * Another prover than the run: the expired-lease sweep and the append
+ * cycle's proof cycle over the route, once every indexer has ended, with
+ * none of what the run knew in memory.
+ */
+const proveAsAnotherActor = async (model: Model) => {
+  model.offsetMs += Math.max(PLAN.leaseMs, PLAN.endedAfterMs) + 60_000;
+  await expirePassedLeases(model);
+  const testNow = await now(model);
+  await db.transaction(
+    async (tx) =>
+      await recoverExpiredCorpusProjectionIntentsTx(
+        asTestRaw<Transaction>(tx),
+        {
+          ...TARGET,
+          limit: 128,
+          testNow,
+        },
+      ),
+  );
+  return await executeCorpusProjectionProofCycle({
+    runInTransaction: transactionRunner(model),
+    client: engineClientOf(model),
+    ...TARGET,
+    scope: { type: "route", indexId: await routeOf(model) },
+    afterIndexId: null,
+    testNow: await now(model),
+  });
 };
 
 const routeOf = async (model: Model) =>
@@ -1128,9 +1188,14 @@ describe("offline route build", () => {
               );
             }
             // An empty delivery keeps its entities batched, in smaller
-            // requests, so later runs serve every entity.
+            // requests, so later runs serve every entity, except one whose
+            // lone revision kept being killed: that is charged like any
+            // isolated document fault, and blocked at the attempt limit.
             for (const state of states) {
               expect(state.appendMode).toBe("batchable");
+              if (state.workStatus === "blocked") {
+                continue;
+              }
               const served = intents.find(
                 ({ id }) => id === state.appliedRevision,
               );
@@ -1261,7 +1326,7 @@ describe("offline route build", () => {
     propertyTestTimeout(600_000),
   );
 
-  test("a refused shard of many entities leaves them batched, and the next run delivers them in halves", async () => {
+  test("a refused shard of many entities leaves them batched and uncharged, and the next run delivers them all together", async () => {
     const model = await newModel();
     const first = await runBuild(model, {
       ...QUIET_RUN,
@@ -1282,14 +1347,17 @@ describe("offline route build", () => {
         failureAttempts: 0,
       });
     }
+    // A refusal says nothing about the documents: no request halves.
+    for (const intent of await readIntents(model.entityIds)) {
+      expect(intent.appendFault).toBe("none");
+    }
     model.offsetMs += 60_000;
     const second = await runBuild(model, {
       ...QUIET_RUN,
       maxShardRevisions: 8,
     });
     expect(model.deliveries.slice(1)).toEqual([
-      { revisions: ENTITIES / 2, poisoned: false },
-      { revisions: ENTITIES / 2, poisoned: false },
+      { revisions: ENTITIES, poisoned: false },
     ]);
     expect(second?.progress.proved).toBe(ENTITIES);
   });
@@ -1386,20 +1454,21 @@ describe("offline route build", () => {
     }
     const intents = await readIntents(model.entityIds);
     // Nothing of the crashed request reached the engine: its revisions are
-    // withdrawn, and each entity was delivered later in a request of at most
-    // half of what that request delivered (checked by the fake indexer).
+    // withdrawn by the sweep's `none`, so nobody is charged and no request
+    // halves; the entities are delivered later in requests as large as any.
     for (const { id } of crashed) {
-      expect(intents.find((intent) => intent.id === id)?.status).toBe(
-        "withdrawn",
-      );
+      const intent = intents.find((candidate) => candidate.id === id);
+      expect(intent?.status).toBe("withdrawn");
+      expect(intent?.appendFault).toBe("none");
     }
     for (const state of await readStates(model.entityIds)) {
       expect(state.appliedRevision).not.toBeNull();
       expect(state.appendMode).toBe("batchable");
+      expect(state.failureAttempts).toBe(0);
     }
     expect(
       Math.max(...model.deliveries.map(({ revisions }) => revisions)),
-    ).toBeLessThanOrEqual(256);
+    ).toBeGreaterThan(256);
   });
 
   test("a request handed back mid-run by a closed start window is delivered by the same run, which walks again from the head", async () => {
@@ -1683,21 +1752,219 @@ describe("offline route build", () => {
     }
   });
 
-  test("a shard killed too large is never charged, and a cap that cannot shrink further stops the run typed", async () => {
+  test("a shard of several killed short is never charged, halves its revisions' requests, and a byte cap that cannot shrink further stops the run typed", async () => {
     const model = await newModel();
     const outcome = await runBuild(model, {
       ...QUIET_RUN,
       deliveries: ["kill_before_publish"],
-      maxShardRevisions: 1,
+      maxShardRevisions: 2,
     });
     // A shard this small killed means a rate below the slowest the plan
     // accepts: half of it cannot hold the largest revision.
     expect(outcome?.status).toBe("rate_too_slow");
     expect(outcome?.progress.shards.killedTooLarge).toBe(1);
-    expect(outcome?.progress.withdrawn).toBe(1);
+    expect(outcome?.progress.withdrawn).toBe(2);
+    const killed = (await readIntents(model.entityIds)).filter(
+      ({ status }) => status === "withdrawn",
+    );
+    expect(killed.map(({ appendFault }) => appendFault)).toEqual([
+      "killed",
+      "killed",
+    ]);
     for (const state of await readStates(model.entityIds)) {
       expect(state.failureAttempts).toBe(0);
       expect(state.workStatus).not.toBe("blocked");
+      expect(state.appendMode).toBe("batchable");
+    }
+  });
+
+  test("a lone revision killed at its deadline is its own fault: charged like a lone indexer failure, and blocked at the attempt limit", async () => {
+    const model = await newModel(1);
+    let killedAlone = 0;
+    for (let launch = 0; launch < 8; launch += 1) {
+      model.offsetMs += 10 * 60_000;
+      // db-await-in-loop: one whole run per relaunch, each after the last
+      const outcome = await runBuild(model, {
+        ...QUIET_RUN,
+        deliveries: Array.from(
+          { length: 8 },
+          () => "kill_before_publish" as const,
+        ),
+        maxShardRevisions: 1,
+      });
+      // No earlier shard measured a rate too slow for it, so each kill is
+      // the revision's: charged, with no byte cap halved and no stop.
+      expect(outcome?.status).toBe("drained");
+      expect(outcome?.progress.shards.killedTooLarge).toBe(0);
+      expect(outcome?.progress.shards.shardByteCap).toBe(PLAN.shardByteCap);
+      killedAlone += outcome?.progress.shards.killedAlone ?? 0;
+      if ((await readStates(model.entityIds)).at(0)?.workStatus === "blocked") {
+        break;
+      }
+    }
+    const [state] = await readStates(model.entityIds);
+    expect(state?.workStatus).toBe("blocked");
+    expect(state?.failureAttempts).toBe(
+      CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
+    );
+    expect(killedAlone).toBe(CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT);
+    for (const intent of await readIntents(model.entityIds)) {
+      expect(intent.appendFault).toBe("documents");
+    }
+  });
+
+  test("whatever prover decides them, revisions whose delivery said nothing about their documents are never charged", async () => {
+    const refused = await newModel();
+    // Alone, where a document fault would be charged; the run dies before
+    // its own proof, so another actor decides them.
+    expect(
+      await runBuild(refused, {
+        ...QUIET_RUN,
+        deliveries: ["broken", "refuse"],
+        maxShardRevisions: 1,
+        dieBeforeProof: true,
+      }),
+    ).toBeNull();
+    const decided = await proveAsAnotherActor(refused);
+    expect(decided).toMatchObject({ status: "proved", withdrawn: 1 });
+    const intents = await readIntents(refused.entityIds);
+    expect(
+      intents
+        .filter(({ status }) => status === "withdrawn")
+        .map(({ appendFault }) => appendFault),
+    ).toEqual(["none"]);
+    for (const state of await readStates(refused.entityIds)) {
+      expect(state.failureAttempts).toBe(0);
+      expect(state.appendMode).toBe("batchable");
+    }
+  });
+
+  test.each(["crash_before", "throw"] as const)(
+    "a lone revision whose delivery ended in %s is committed by the sweep as uncharged, and another prover charges nothing",
+    async (delivery) => {
+      const model = await newModel();
+      const run = runBuild(model, {
+        ...QUIET_RUN,
+        deliveries: [delivery],
+        maxShardRevisions: 1,
+      });
+      if (delivery === "throw") {
+        expect(await rejectionOf(run)).toMatchObject({
+          message: expect.stringContaining("lost its connection"),
+        });
+        model.lockHeld = false;
+      } else {
+        expect(await run).toBeNull();
+      }
+      expect(
+        (await readIntents(model.entityIds)).filter(
+          ({ status }) => status === "append_started",
+        ),
+      ).toHaveLength(1);
+      const decided = await proveAsAnotherActor(model);
+      expect(decided).toMatchObject({ status: "proved", withdrawn: 1 });
+      const withdrawn =
+        (await readIntents(model.entityIds)).find(
+          ({ status }) => status === "withdrawn",
+        ) ?? panic("Nothing was withdrawn");
+      expect(withdrawn.appendFault).toBe("none");
+      for (const state of await readStates(model.entityIds)) {
+        expect(state.failureAttempts).toBe(0);
+        expect(state.workStatus).not.toBe("blocked");
+      }
+      // Nothing was halved: the entity's next request may be as large as any.
+      const caps = await db.transaction(
+        async (tx) =>
+          await readCorpusProjectionOfflineRequestCapsTx(
+            asTestRaw<Transaction>(tx),
+            [
+              {
+                intentId: withdrawn.id,
+                family: TARGET.family,
+                generation: TARGET.generation,
+                entityId: withdrawn.entityId,
+                epoch: withdrawn.epoch,
+                fingerprint: withdrawn.fingerprint,
+                indexId: withdrawn.indexId,
+                leaseToken: Bun.randomUUIDv7(),
+                leaseExpiresAt: await now(model),
+                appendMode: "batchable",
+              },
+            ],
+          ),
+      );
+      expect([...caps.values()]).toEqual([
+        CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+      ]);
+    },
+  );
+
+  test("a full-size shard that only capped revisions reach is closed after one page: the run holds at most one page of waiting blocks", async () => {
+    const entities = 16;
+    const model = await newModel(entities);
+    // Two shards of eight fail on what they hold: each revision may next
+    // start only in a request of four. The same run walks again and finds
+    // only capped revisions while its next shard is a full one.
+    const run = await runBuild(model, {
+      ...QUIET_RUN,
+      deliveries: ["empty", "empty"],
+      maxShardRevisions: 8,
+    });
+    expect(model.deliveries.map(({ revisions }) => revisions)).toEqual([
+      8, 8, 4, 4, 4, 4,
+    ]);
+    expect(run?.status).toBe("drained");
+    // One page of the empty full-size shard, never the whole capped backlog.
+    expect(run?.progress.waitingPeak).toBeGreaterThan(0);
+    expect(run?.progress.waitingPeak).toBeLessThanOrEqual(8);
+    for (const state of await readStates(model.entityIds)) {
+      expect(state.appliedRevision).not.toBeNull();
+    }
+  });
+
+  test("a run ends drained only with nothing of its route outstanding", async () => {
+    const model = await newModel();
+    // Another actor holds one entity's revision started, its lease alive.
+    const held = model.entityIds.at(0) ?? panic("No entity");
+    const testNow = await now(model);
+    await db.transaction(async (raw) => {
+      const tx = asTestRaw<Transaction>(raw);
+      const leases = await reserveCorpusProjectionIntentsTx(tx, {
+        ...TARGET,
+        scope: {
+          type: "subjects",
+          entityIds: [toSafeId<"legislationDocument">(held)],
+        },
+        limit: 1,
+        leaseMs: PLAN.leaseMs,
+        testNow,
+      });
+      await startCorpusProjectionAppendBatchTx(tx, { leases, testNow });
+    });
+    const run = await runBuild(model, QUIET_RUN);
+    expect(run?.status).toBe("awaiting_proof");
+    expect(run?.progress.outstanding).toBe(1);
+    expect(run?.progress.proved).toBe(ENTITIES - 1);
+  });
+
+  test("a shard started while its generation was building is not delivered once it serves", async () => {
+    const model = await newModel();
+    const outcome = await runBuild(model, {
+      ...QUIET_RUN,
+      maxShardRevisions: 8,
+      serveAfterStart: true,
+    });
+    await db
+      .update(corpusIndexGenerations)
+      .set({ status: "building" })
+      .where(eq(corpusIndexGenerations.generation, TARGET.generation));
+    expect(outcome?.status).toBe("generation_not_building");
+    expect(model.deliveries).toEqual([]);
+    for (const intent of await readIntents(model.entityIds)) {
+      expect(intent.appendFault).toBe("none");
+    }
+    for (const state of await readStates(model.entityIds)) {
+      expect(state.failureAttempts).toBe(0);
     }
   });
 
@@ -1743,7 +2010,10 @@ describe("offline route build", () => {
         deliveredAt.push((await now(model)).getTime());
       },
     });
-    expect(outcome?.status).toBe("drained");
+    // The dead holder's two starts keep their leases past their indexer's
+    // end, so no sweep may commit them yet: the route is not drained.
+    expect(outcome?.status).toBe("awaiting_proof");
+    expect(outcome?.progress.outstanding).toBe(2);
     expect(model.shards.length).toBeGreaterThan(delivered);
     expect(Math.min(...deliveredAt)).toBeGreaterThanOrEqual(endedAtMs);
   });
