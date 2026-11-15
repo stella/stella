@@ -252,6 +252,7 @@ export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "apps/desktop/*",
   "packages/agent-engine/package.json",
   "packages/agent-engine/scripts/build-sidecar.ts",
+  "apps/desktop/scripts/build-pkcs11-helper.ts",
   "scripts/desktop-*",
   "scripts/*tauri*",
   "scripts/detect-desktop-*",
