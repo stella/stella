@@ -127,13 +127,17 @@ export const openCorpusProjectionShardStaging = async (
       }
       const target = await open(finalPath, "wx");
       let position = 0;
-      for (const range of ranges) {
-        const block = await readAll(handle, range);
-        await writeAll(target, block, position);
-        position += block.length;
+      try {
+        for (const range of ranges) {
+          const block = await readAll(handle, range);
+          await writeAll(target, block, position);
+          position += block.length;
+        }
+        await target.sync();
+      } finally {
+        // Closed on failure too: `discard` then removes the partial file.
+        await target.close();
       }
-      await target.sync();
-      await target.close();
       await close();
       await rm(stagingPath, { force: true });
       return { path: finalPath, bytes: position };

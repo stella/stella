@@ -380,21 +380,28 @@ const engineDelivery =
         inputPath,
       ],
       env: { QW_DATA_DIR: dataDir, QW_NODE_ID: nodeId },
-      timeoutMs: (killAfterSecs + 30) * 1000,
+      timeoutMs: (killAfterSecs + 30) * 1000, // timeout: the shard's own kill deadline plus 30 s for the engine exec to return
     });
     if (hold !== null) {
-      await waitForLockWaiters(true);
-      // The deadline arrives while the publish waits: the run is killed there.
-      offsetMs += Math.max(
-        0,
-        shard.killDeadline.getTime() - (await now()).getTime(),
-      );
-      await engineExecOk({
-        args: ["sh", "-c", 'kill -KILL "$(cat "$1")"', "kill", pidFile],
-      });
-      const killed = await exited;
-      expect(killed.exitCode).toBe(SIGKILL_EXIT);
-      await hold.release();
+      let killed: Awaited<typeof exited>;
+      try {
+        await waitForLockWaiters(true);
+        // The deadline arrives while the publish waits: the run is killed
+        // there.
+        offsetMs += Math.max(
+          0,
+          shard.killDeadline.getTime() - (await now()).getTime(),
+        );
+        await engineExecOk({
+          args: ["sh", "-c", 'kill -KILL "$(cat "$1")"', "kill", pidFile],
+        });
+        killed = await exited;
+        expect(killed.exitCode).toBe(SIGKILL_EXIT);
+      } finally {
+        // Released on a failed step too, so the suite's teardown never waits
+        // on the open transaction.
+        await hold.release();
+      }
       await waitForLockWaiters(false);
       const outcome = {
         type: "killed_at_deadline",

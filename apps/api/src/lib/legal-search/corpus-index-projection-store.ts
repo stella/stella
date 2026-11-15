@@ -61,7 +61,10 @@ import {
   corpusProjectionOfflineRequestLeaseFloor,
   corpusProjectionUnrecordedAppendCleanupFence,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
-import { lockCorpusIndexProjectionMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import {
+  lockCorpusIndexProjectionMutationsTx,
+  lockCorpusIndexProjectionWriterTx,
+} from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   type CorpusProjectionAppendScopedWorkOptions,
@@ -205,8 +208,11 @@ export const reserveCorpusProjectionRoutePageTx = async <
   }: ReserveCorpusProjectionRoutePageOptions<Family>,
 ): Promise<CorpusProjectionRoutePage | { type: "generation_not_building" }> => {
   // The queue admits a serving generation too; a route build reserves only
-  // while its generation is still building, checked in the reserving
-  // transaction itself.
+  // while its generation is still building. The status is read under the
+  // projection mutation fence the reservation itself holds: a promotion takes
+  // that fence exclusively, so it either committed before this read or waits
+  // for the reservation to commit.
+  await lockCorpusIndexProjectionWriterTx(tx);
   const [generationRow] = await tx
     .select({ status: corpusIndexGenerations.status })
     .from(corpusIndexGenerations)

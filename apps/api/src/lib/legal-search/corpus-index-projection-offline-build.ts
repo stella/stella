@@ -26,7 +26,6 @@ import {
 import { recoverExpiredCorpusProjectionIntentsTx } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-  corpusProjectionAppendIngestBudgetMs,
   proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { readReservedCorpusProjectionMaterialsTx } from "@/api/lib/legal-search/corpus-index-projection-materials";
@@ -571,6 +570,11 @@ type DeliveryClass =
 
 type Stop = Exclude<CorpusProjectionOfflineBuildOutcome["status"], "drained">;
 
+/** The causes a runner may report; anything else is a malformed outcome. */
+const DELIVERY_FAILURE_CAUSES: ReadonlySet<string> = new Set<
+  Extract<CorpusProjectionOfflineDeliveryOutcome, { type: "failed" }>["cause"]
+>(["indexer", "infrastructure"]);
+
 const validateDeliveryOutcome = (
   outcome: CorpusProjectionOfflineDeliveryOutcome,
 ): CorpusProjectionOfflineDeliveryOutcome => {
@@ -588,7 +592,7 @@ const validateDeliveryOutcome = (
       return instant(outcome.startedAt) &&
         instant(outcome.endedAt) &&
         Number.isSafeInteger(outcome.exitCode) &&
-        (outcome.cause === "indexer" || outcome.cause === "infrastructure")
+        DELIVERY_FAILURE_CAUSES.has(outcome.cause)
         ? outcome
         : panic("Offline delivery outcome is malformed: failed");
     case "deadline_passed":
@@ -608,18 +612,23 @@ const validateDeliveryOutcome = (
  */
 class SlotPool {
   readonly #free: number[];
+  /** Each running slot's settlement, which never rejects. */
   readonly #running = new Map<number, Promise<void>>();
-  #failure: { error: unknown } | null = null;
+  /**
+   * The first slot whose work rejected. Awaiting it raises that same
+   * failure again; nothing else is thrown.
+   */
+  #failed: Promise<void> | null = null;
 
   constructor(slots: number) {
     this.#free = Array.from({ length: slots }, (_, slot) => slot);
   }
 
   async acquire(): Promise<number> {
-    this.rethrow();
+    await this.raiseFailure();
     while (this.#free.length === 0) {
       await Promise.race(this.#running.values());
-      this.rethrow();
+      await this.raiseFailure();
     }
     return this.#free.shift() ?? panic("No free offline delivery slot");
   }
@@ -631,26 +640,35 @@ class SlotPool {
 
   run(slot: number, work: () => Promise<void>): void {
     const running = (async () => {
+      try {
+        await work();
+      } finally {
+        this.#running.delete(slot);
+        this.release(slot);
+      }
+    })();
+    // The pool observes every slot, so a failure waits for `raiseFailure`
+    // rather than surfacing as an unhandled rejection.
+    const settled = (async () => {
       const outcome = await Result.tryPromise({
-        try: work,
+        try: async () => await running,
         catch: (cause: unknown) => cause,
       });
       if (outcome.isErr()) {
-        this.#failure ??= { error: outcome.error };
+        this.#failed ??= running;
       }
-      this.#running.delete(slot);
-      this.release(slot);
     })();
-    this.#running.set(slot, running);
+    this.#running.set(slot, settled);
   }
 
   async drain(): Promise<void> {
     await Promise.all(this.#running.values());
   }
 
-  rethrow(): void {
-    if (this.#failure !== null) {
-      throw this.#failure.error;
+  /** Raise the first slot failure, if any, with its own error. */
+  async raiseFailure(): Promise<void> {
+    if (this.#failed !== null) {
+      await this.#failed;
     }
   }
 }
@@ -664,8 +682,8 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   readonly #pending = new Map<ProjectionRevision, PendingProof>();
   /**
    * Built blocks waiting for a shard of their class, in reservation order.
-   * Capped classes are served before any page is reserved again, so this
-   * holds at most what one page brought besides the shard it filled.
+   * A page is reserved only while this is empty, and the next shards serve
+   * what it holds, so it holds at most one page: one shard's bytes.
    */
   #waiting: CarriedBlock[] = [];
   /** The current pass reached the end of the queue. */
@@ -762,18 +780,19 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   }
 
   async run(): Promise<CorpusProjectionOfflineBuildOutcome["status"]> {
-    const outcome = await Result.tryPromise({
-      try: async () => await this.#runPasses(),
-      catch: (cause: unknown) => cause,
-    });
-    if (outcome.isErr()) {
-      // A delivery the caller never resolved may still run its indexer: keep
-      // the route, and with it every slot's identity, until it has certainly
-      // ended.
-      await this.#outliveDeliveries();
-      throw outcome.error;
+    let returned = false;
+    try {
+      const status = await this.#runPasses();
+      returned = true;
+      return status;
+    } finally {
+      if (!returned) {
+        // A delivery the caller never resolved may still run its indexer:
+        // keep the route, and with it every slot's identity, until it has
+        // certainly ended.
+        await this.#outliveDeliveries();
+      }
     }
-    return outcome.value;
   }
 
   async #runPasses(): Promise<CorpusProjectionOfflineBuildOutcome["status"]> {
@@ -797,7 +816,6 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           }
           continue;
         }
-        // db-await-in-loop: one slot per shard; it waits only while every slot delivers
         const slot = await slots.acquire();
         // db-await-in-loop: one shard per pass: proofs due before more work is reserved, batched per census
         await this.#proveDue();
@@ -808,18 +826,20 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           slots.release(slot);
           break;
         }
-        // db-await-in-loop: one shard per pass, its pages bounded by bytes
         const started = await this.#produceShard(slot, stopReservingAtMs);
         if (started === null) {
           slots.release(slot);
           continue;
         }
+        // A slot that failed while this shard was produced ends the run: the
+        // shard is not delivered, and its started rows are left to the sweep.
+        await slots.raiseFailure();
         slots.run(slot, async () => await this.#deliverAndRecord(started));
       }
     } finally {
       await slots.drain();
     }
-    slots.rethrow();
+    await slots.raiseFailure();
     await this.#releaseWaiting();
     await this.#drainProofs();
     this.#report();
@@ -835,7 +855,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     stopReservingAtMs: number,
   ): Promise<"drained" | "next"> {
     await slots.drain();
-    slots.rethrow();
+    await slots.raiseFailure();
     await this.#drainProofs();
     const walk = this.#progress.walk;
     walk.lastPassReserved = this.#passReserved;
@@ -894,7 +914,6 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
               eq(corpusIndexProjectionStates.desiredIndexId, indexId),
               eq(corpusIndexProjectionStates.workStatus, "retry_scheduled"),
               eq(corpusIndexProjectionStates.appendMode, "batchable"),
-              // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- a cutoff from a clock read, not a round-tripped row instant: a retry due within the millisecond is taken by the pass either way
               gt(corpusIndexProjectionStates.retryNotBefore, new Date(nowMs)),
             ),
           ),
@@ -954,7 +973,6 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
    */
   async #outlivePreviousIndexers(): Promise<void> {
     const { runInTransaction, family, generation, indexId } = this.#options;
-    const killBudgetMs = corpusProjectionAppendIngestBudgetMs(this.#manifest);
     const nowMs = await this.#databaseNowMs();
     const [row] = await runInTransaction(
       async (tx) =>
@@ -968,18 +986,11 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
               eq(corpusIndexProjectionIntents.family, family),
               eq(corpusIndexProjectionIntents.generation, generation),
               eq(corpusIndexProjectionIntents.indexId, indexId),
+              // One probe of the route's offline start index: the latest
+              // start decides, however old; one long ended waits nothing.
               eq(
                 corpusIndexProjectionIntents.appendDelivery,
                 "offline_indexer",
-              ),
-              gt(
-                corpusIndexProjectionIntents.appendStartedAt,
-                // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- a cutoff a kill budget before a clock read, not a round-tripped row instant: a millisecond either way only moves a row that ended long ago
-                new Date(
-                  nowMs -
-                    killBudgetMs -
-                    CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
-                ),
               ),
             ),
           ),
@@ -1098,24 +1109,21 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       this.#options.shardDirectory,
       name,
     );
-    const outcome = await Result.tryPromise({
-      try: async () =>
-        await this.#fillAndStart(staging, {
-          slot,
-          name,
-          requestId: shardId,
-          stopReservingAtMs,
-        }),
-      catch: (cause: unknown) => cause,
-    });
-    if (outcome.isErr()) {
-      await staging.discard();
-      throw outcome.error;
+    let started: StartedShard | null = null;
+    try {
+      started = await this.#fillAndStart(staging, {
+        slot,
+        name,
+        requestId: shardId,
+        stopReservingAtMs,
+      });
+      return started;
+    } finally {
+      // Nothing started, or the shard failed: its staging file goes.
+      if (started === null) {
+        await staging.discard();
+      }
     }
-    if (outcome.value === null) {
-      await staging.discard();
-    }
-    return outcome.value;
   }
 
   async #fillAndStart(
@@ -1207,7 +1215,6 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           left.push(block);
           continue;
         }
-        // db-await-in-loop: appends one block to the shard's staging file, no database work
         const range = await staging.append(block.block);
         entries.push({
           lease: block.lease,
@@ -1226,8 +1233,14 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     if (shardClass < this.#plan.shardRevisionCap) {
       return entries;
     }
-    while (!this.#passExhausted && this.#stop === null) {
-      // db-await-in-loop: a page walk: one bounded reservation page per pass
+    // A page is reserved only while nothing waits: a block this shard cannot
+    // take (another class, or too large for the bytes left) closes the shard,
+    // and the next one serves it. So the wait holds at most one page.
+    while (
+      !this.#passExhausted &&
+      this.#stop === null &&
+      this.#waiting.length === 0
+    ) {
       const nowMs = await this.#nowMs();
       if (
         nowMs >= stopReservingAtMs ||
@@ -1457,7 +1470,6 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
             handBack.push(...chunk);
             continue;
           }
-          // db-await-in-loop: one request's start transactions run one after another, each one store batch
           const testNow = await this.#testNow();
           const result = await runInTransaction(async (tx) => {
             await requireFreshReadCommittedStartTx(tx);
@@ -1563,7 +1575,6 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       [...entries],
       CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
     )) {
-      // db-await-in-loop: one census request per batch of the shard's revisions, no database work
       const census = await proveCorpusProjectionRevisionsPresent({
         client: this.#options.client,
         indexId: this.#options.indexId,
@@ -1705,7 +1716,6 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       [...entries],
       CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
     )) {
-      // db-await-in-loop: one record transaction per store batch of the shard
       const testNow = await this.#testNow();
       const recorded = await this.#admit(
         { phase: "record", revisions: chunk.length },
@@ -1783,7 +1793,6 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       due,
       CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
     )) {
-      // db-await-in-loop: one census and proof transaction per batch of due revisions
       const testNow = await this.#testNow();
       const uncharged = new Set(
         batch.filter((revision) => this.#pending.get(revision)?.uncharged),
