@@ -1,5 +1,17 @@
 # @stll/text-normalize
 
+## 0.8.0
+
+### Minor Changes
+
+- [#8245](https://github.com/stella/stella/pull/8245) [`74bfae6`](https://github.com/stella/stella/commit/74bfae60cecf3be82e6d9554cf3448ef9a3c17eb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/text-normalize/hungarian-letters` adds `restoreHungarianLetters`, which reads the Latin-1 stand-ins "õ" and "û" (and their capitals) as the Hungarian "ő" and "ű".
+
+## 0.7.0
+
+### Minor Changes
+
+- [#8098](https://github.com/stella/stella/pull/8098) [`c1f546a`](https://github.com/stella/stella/commit/c1f546aff35c2c7e3d97a380642161b0c79799ba) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/text-normalize` reads letter-spaced text in one place: `collapseLetterSpacing`, `documentWordCounts`, `isLetterSpacedEmphasis`, `letterSpacingJoins`, `letterGapCounts` and `joinWordSeams` are added, and `collapseSpacedLetters` is now that reading with spaces squeezed. A short spaced word beside a spaced word reads as a word, a row of one-letter words a sentence writes stays apart, and a no-break space separates words. `spacedLetterRunRegex` is removed from `@stll/text-normalize`; use `letterSpacingJoins` for the gaps a fold removes.
+
 ## 0.6.0
 
 ### Minor Changes

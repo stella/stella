@@ -365,6 +365,14 @@ const CENSUS: readonly CensusEntry[] = [
     why: "Reads the stored courts a court filter is matched against; without them the filter runs as sent and the search reports filter_unread.",
   },
   {
+    site: "apps/api/src/handlers/case-law/decisions/search.ts#CASE_LAW_RELAXED_TOP_UP_BUDGET_MS",
+    path: "request",
+    tools: ["search", "search_case_law"],
+    bound: "own",
+    onExpiry: "degrades",
+    why: "Tops up a short strict page with partial matches; without it the strict page is answered alone.",
+  },
+  {
     site: "apps/api/src/mcp/case-law-court-catalog-tool.ts#LIST_CASE_LAW_COURTS_READ_BUDGET_MS",
     path: "request",
     tools: ["list_case_law_courts"],
@@ -455,6 +463,16 @@ const CENSUS: readonly CensusEntry[] = [
     site: "apps/api/src/mcp/static-cli-metadata.ts#330_000",
     path: "off-request",
     why: "The generated CLI's client transport deadline; the server does not wait on it.",
+  },
+  {
+    site: "apps/api/src/mcp/public-read-continuation.ts#PUBLIC_READ_RUN_BUDGET_MS",
+    why: "Bounds a continued read, which runs detached from the call that started it; that call answers at its response deadline.",
+    path: "off-request",
+  },
+  {
+    site: "apps/api/src/mcp/public-read-continuation.ts#statementBudgetMs",
+    why: "The statement budget of a continued read, inside its detached run.",
+    path: "off-request",
   },
   {
     site: "apps/api/src/mcp/tool-freshness.ts#this.#reprojectionDeadlineMs",

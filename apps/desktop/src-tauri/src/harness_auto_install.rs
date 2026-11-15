@@ -1,9 +1,9 @@
-//! Keeps the managed agent CLIs on the releases this build pins while the
-//! local agents feature is on.
+//! Keeps the managed agent CLIs and tools on the releases this build pins while
+//! the local agents feature is on.
 //!
 //! Turning the feature on, which the first feature decision after startup
-//! also does, installs every harness whose active release is not the pinned
-//! one, one harness at a time. An older install counts as not pinned, so a
+//! also does, installs everything whose active release is not the pinned
+//! one, one at a time. An older install counts as not pinned, so a
 //! raised pin updates it. A failed install is tried again after each of
 //! [`RETRY_DELAYS`] and then stays failed until the user retries it from the
 //! settings. Platforms without a pinned release, a removal in progress and a
@@ -20,7 +20,7 @@ use std::{
 use crate::harness_installation::{
   HarnessError, HarnessInstallState, HarnessInstallation,
 };
-use crate::harness_release::ManagedHarness;
+use crate::harness_release::ManagedInstall;
 
 /// The waits before each retry of a failed install; none after the last.
 pub const RETRY_DELAYS: [Duration; 3] = [
@@ -72,8 +72,8 @@ impl HarnessAutoInstall {
     let installation = self.installation.clone();
     let wait = Arc::clone(&self.wait);
     *pass = Some(tauri::async_runtime::spawn(async move {
-      for harness in ManagedHarness::ALL {
-        keep_pinned(&installation, harness, &wait).await;
+      for managed in ManagedInstall::ALL {
+        keep_pinned(&installation, managed, &wait).await;
       }
     }));
   }
@@ -93,14 +93,14 @@ impl HarnessAutoInstall {
 
 async fn keep_pinned(
   installation: &HarnessInstallation,
-  harness: ManagedHarness,
+  managed: ManagedInstall,
   wait: &Wait,
 ) {
   let mut delays = RETRY_DELAYS.into_iter();
-  while install_pinned(installation, harness).await == Attempt::Failed {
+  while install_pinned(installation, managed).await == Attempt::Failed {
     let Some(delay) = delays.next() else {
       tracing::warn!(
-        harness = harness.id(),
+        managed = managed.id(),
         "managed harness install failed; left for a manual retry"
       );
       return;
@@ -119,18 +119,18 @@ enum Attempt {
 /// Starts the pinned install, or joins the one running, and waits for it.
 async fn install_pinned(
   installation: &HarnessInstallation,
-  harness: ManagedHarness,
+  managed: ManagedInstall,
 ) -> Attempt {
   // Subscribed first, so the end of a quick install is not missed.
-  let mut changes = installation.subscribe(harness);
-  let started = match installation.start(harness) {
+  let mut changes = installation.subscribe(managed);
+  let started = match installation.start(managed) {
     Ok(state) => state,
     Err(HarnessError::UnsupportedPlatform | HarnessError::Busy) => {
       return Attempt::Settled;
     }
     Err(error) => {
       tracing::warn!(
-        harness = harness.id(),
+        managed = managed.id(),
         ?error,
         "managed harness install did not start"
       );
@@ -161,7 +161,7 @@ mod tests {
     Serve, claude_code_archive, claude_code_release, codex_archive, failed, install,
     open, ready, release, run, serve,
   };
-  use crate::harness_release::{HarnessRelease, HarnessReleases};
+  use crate::harness_release::{HarnessRelease, HarnessReleases, ManagedHarness};
   use tokio::sync::{mpsc, oneshot};
 
   fn open_both(
@@ -175,6 +175,7 @@ mod tests {
       HarnessReleases {
         codex: Some(codex),
         claude_code: Some(claude_code),
+        bun: None,
       },
     )
     .unwrap()

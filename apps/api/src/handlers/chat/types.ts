@@ -14,8 +14,11 @@ import type {
 } from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
+import type { ChatLocalFilesUndone } from "@stll/api-contract/chat-local-files-undo";
 import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import type { ChatTurnPauseReason } from "@stll/chat-limits";
 import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 import type {
@@ -41,7 +44,6 @@ import type {
   ChatClientToolsFor,
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
-import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import type {
   persistedChatMessageContentV3Proof,
   PersistedJsonObject,
@@ -198,7 +200,24 @@ export type ChatTurnOutcome =
   | {
       type: "interrupted";
       reason: ChatTurnInterruptionReason;
+    }
+  /**
+   * The turn reached a cap of its budget (`CHAT_TURN_BUDGET`) at a step
+   * boundary: every call it started has its result, and nothing runs until
+   * the user sends a message (the page's Continue sends one).
+   */
+  | {
+      type: "paused";
+      reason: ChatTurnPauseReason;
+      /** Tool calls the turn ran before it paused. */
+      toolCalls: number;
     };
+
+/** What an assistant turn spent of its budget, over every request of it. */
+export type ChatTurnSpend = {
+  /** Prompt tokens its model calls read, summed over every call. */
+  promptTokens: number;
+};
 
 /**
  * What the server found for one quotation (a Markdown blockquote) of an
@@ -275,6 +294,10 @@ export type ChatMessageMetadata = {
   /** Server-owned terminal state. Incoming client metadata validation
    * deliberately does not accept this field. */
   turnOutcome?: ChatTurnOutcome | undefined;
+  /** Server-owned: what the assistant turn has spent of its budget, which a
+   * later request of the same turn (an approval's answer) adds to. Incoming
+   * client metadata validation deliberately does not accept this field. */
+  turnSpend?: ChatTurnSpend | undefined;
   /** Model that owns an assistant turn, including its approval resumes. */
   turnModel?:
     | {
@@ -290,6 +313,12 @@ export type ChatMessageMetadata = {
    * harness reported both. Server-owned; absent on a cloud turn.
    */
   localRunContext?: ChatLocalRunContext | undefined;
+  /**
+   * The turn's file changes on the member's computer were undone. Written by
+   * the server when the computer reports the restore; incoming client
+   * metadata validation deliberately does not accept this field.
+   */
+  localFilesUndone?: ChatLocalFilesUndone | undefined;
 };
 
 // UIMessage's other fields do not depend on its tool map. Omitting from the

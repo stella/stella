@@ -386,7 +386,7 @@ describe("handleMcpHttpRequest", () => {
       dependencyTimeoutMs = requestBoundedTimeoutMs(60_000);
       const step = await runBoundedRequestStep(
         async () => await Promise.withResolvers<never>().promise,
-        { label: "slow-dependency", budgetMs: 60_000 },
+        { label: "case-law-admitted-courts", budgetMs: 60_000 },
       );
       endedAfterRequestStartMs = performance.now() - requestStartedAt;
       return { content: [{ type: "text", text: step.status }] };
@@ -1452,6 +1452,7 @@ describe("handleMcpHttpRequest", () => {
         "case_law_coverage",
         "read_case_law_decision",
         "read_case_law_citations",
+        "verify_quote",
         "open_case_law_decision",
         "read_case_law_decision_blocks",
         "preview_cited_provision",
@@ -1460,6 +1461,8 @@ describe("handleMcpHttpRequest", () => {
         "read_statute",
         "read_statute_provisions",
         "read_provision_history",
+        "search_guidance",
+        "read_guidance",
         "resolve_case_law_decision",
         "resolve_law_citation",
       ]);

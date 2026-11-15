@@ -2,11 +2,12 @@
 
 The action tries the upstream release first, then the public
 [`stella/.github` mirror](https://github.com/stella/.github/releases).
-Both sources must match the pinned installer hash; the verified installer
-supplies the binary hash. Cache hits are verified too. A hash mismatch fails
+Both sources must match the pinned installer hash, and the verified installer
+must carry the pinned binary hash. A cached binary is verified against the
+binary pin alone, so a warm job downloads nothing from GitHub releases. A hash mismatch fails
 installation rather than trying another source.
 
-Before changing the action's pinned `version` and `sha256`, publish
+Before changing the action's pinned `version`, `sha256` and `binary-sha256`, publish
 `mirror-safe-chain-<version>` in `stella/.github` with the byte-identical
 `install-safe-chain.sh` and `safe-chain-linuxstatic-x64`, upstream `LICENSE`,
 and the corresponding source archive. Verify the installer against the new

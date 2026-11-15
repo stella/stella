@@ -6,6 +6,7 @@ import fc from "fast-check";
 import { IntlProvider } from "use-intl";
 
 import { GENERATED_VISUAL_MIME_TYPE } from "@stll/api-contract/generated-visual";
+import { STELLA_MCP_APP_MIME_TYPE } from "@stll/api-contract/stella-mcp-app";
 import { assertProperty } from "@stll/property-testing";
 
 import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
@@ -151,6 +152,31 @@ describe("rich chat message parts", () => {
     expect(renderMediaPart(unknown)).toContain(
       messages.chat.richContentUnavailable,
     );
+  });
+
+  test("keeps a stella app out of the inline MCP renderer and off the server render", () => {
+    const app = {
+      type: "ui-resource",
+      resource: {
+        uri: "ui://stella/case-law-results",
+        mimeType: STELLA_MCP_APP_MIME_TYPE,
+        text: JSON.stringify({
+          input: { query: "unfair dismissal" },
+          result: { structuredContent: { results: [] } },
+        }),
+      },
+      toolCallId: "app-call-one",
+      toolName: "search_case_law",
+    } as const satisfies RichChatPart;
+    expect(normalizeUiResourcePart(app)).toBeNull();
+    for (const part of [
+      app,
+      { ...app, resource: { ...app.resource, text: "<script></script>" } },
+    ]) {
+      const rendered = renderMediaPart(part);
+      expect(rendered).toContain(messages.chat.richContentUnavailable);
+      expect(rendered).not.toContain("<iframe");
+    }
   });
 
   test("normalizes base64 MCP App HTML without weakening its contract", () => {

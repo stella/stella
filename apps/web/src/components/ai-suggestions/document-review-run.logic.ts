@@ -547,3 +547,23 @@ export const resolveReviewRunFreshness = ({
     currentEntityVersionId !== run.entityVersionId,
   playbook: playbookFreshness(run),
 });
+
+export type ReviewRunWithheldSource = {
+  charactersWithheld: number;
+  charactersTotal: number;
+};
+
+/** The share of a run's source text left out for length, or null for none. */
+export const withheldTextShare = (
+  sources: readonly ReviewRunWithheldSource[],
+): number | null => {
+  const withheld = sources.reduce(
+    (total, source) => total + source.charactersWithheld,
+    0,
+  );
+  const total = sources.reduce(
+    (sum, source) => sum + source.charactersTotal,
+    0,
+  );
+  return withheld === 0 || total === 0 ? null : withheld / total;
+};

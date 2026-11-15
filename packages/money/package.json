@@ -1,6 +1,6 @@
 {
   "name": "@stll/money",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Branded minor-unit monetary amounts and currency-safe billing arithmetic.",
   "keywords": [
     "billing",
@@ -38,8 +38,8 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/money",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/money",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/money",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/money",
     "prepack": "bun run build"
   },
   "dependencies": {

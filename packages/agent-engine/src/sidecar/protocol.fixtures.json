@@ -1,12 +1,13 @@
 {
   "vocabulary": {
-    "protocol": 3,
+    "protocol": 7,
     "maxLineBytes": 8388608,
     "maxHeldRuns": 1000,
     "hostMessageTypes": [
       "hello",
       "harness.probe",
       "run.start",
+      "run.input",
       "run.approval",
       "run.answer",
       "run.interrupt",
@@ -15,6 +16,7 @@
       "ack",
       "resume",
       "harness.process_granted",
+      "folder.restore",
       "drain",
       "shutdown"
     ],
@@ -25,6 +27,8 @@
       "run.event",
       "run.approval_request",
       "run.finished",
+      "folder.restored",
+      "background.tasks",
       "rejected"
     ],
     "rejections": [
@@ -45,13 +49,21 @@
       "protocol_violation",
       "unsupported"
     ],
-    "holderModes": ["serving", "draining"]
+    "holderModes": ["serving", "draining"],
+    "restoreOutcomes": [
+      "restored",
+      "no_checkpoint",
+      "not_newest",
+      "folder_busy",
+      "failed"
+    ],
+    "checkpointStoreSuffix": ".checkpoints"
   },
   "valid": {
     "host": [
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 7,
         "secret": "abababababababababababababababababababababababababababababababab",
         "appVersion": "1.4.0",
         "apiOrigin": "https://api.example.test",
@@ -59,7 +71,7 @@
       },
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 7,
         "secret": "abababababababababababababababababababababababababababababababab",
         "appVersion": "1.4.0",
         "apiOrigin": "http://127.0.0.1:3000",
@@ -111,7 +123,17 @@
         "workspaceDir": "C:\\data\\runs\\0b6f5c8e",
         "attachments": [],
         "cacheDir": "C:\\data\\agent-package-cache",
+        "unreadablePaths": ["C:\\data\\agent-runs", "C:\\data"],
+        "stepOutputDir": "C:\\data\\runs\\0b6f5c8e.step-outputs",
+        "skillFolders": [
+          {
+            "name": "fixture-skill",
+            "path": "C:\\skills\\fixture-skill"
+          }
+        ],
+        "toolPath": ["C:\\data\\harness\\bun\\1.4.4\\package\\bin"],
         "model": "gpt-test",
+        "reasoningEffort": "high",
         "instructions": "Answer briefly.",
         "messages": [
           {
@@ -119,7 +141,7 @@
             "content": "Find the lease decision."
           }
         ],
-        "harnessSessionId": null,
+        "session": { "type": "fresh" },
         "policy": {
           "network": "open",
           "fs": "workspace",
@@ -149,7 +171,12 @@
         "workspaceDir": "/data/runs/0b6f5c8e",
         "attachments": [],
         "cacheDir": "/data/agent-package-cache",
+        "unreadablePaths": ["/data/runs", "/data", "/home/member/.ssh"],
+        "stepOutputDir": "/data/runs/0b6f5c8e.step-outputs",
+        "skillFolders": [],
+        "toolPath": [],
         "model": "gpt-test",
+        "reasoningEffort": null,
         "instructions": "",
         "messages": [
           {
@@ -165,7 +192,7 @@
             "content": "Second question."
           }
         ],
-        "harnessSessionId": "thread-old",
+        "session": { "type": "resume", "sessionId": "thread-old" },
         "policy": {
           "network": "open",
           "fs": "workspace",
@@ -177,6 +204,67 @@
           "token": "run-token-1",
           "expiresAt": "2026-10-28T12:00:00.000Z"
         }
+      },
+      {
+        "type": "run.start",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "threadId": "thread-1",
+        "harness": "codex",
+        "executable": "/data/harness/codex/0.165.0/codex",
+        "configDir": "/data/harness-home/codex",
+        "launch": {
+          "configOverrides": [],
+          "environment": {},
+          "removedEnvironment": [],
+          "clientName": null,
+          "processGrant": false
+        },
+        "workspaceDir": "/data/runs/0b6f5c8e",
+        "attachments": [],
+        "cacheDir": "/data/agent-package-cache",
+        "unreadablePaths": ["/data/runs", "/data", "/home/member/.ssh"],
+        "stepOutputDir": "/data/runs/0b6f5c8e.step-outputs",
+        "skillFolders": [],
+        "toolPath": [],
+        "model": "gpt-test",
+        "reasoningEffort": null,
+        "instructions": "",
+        "messages": [
+          {
+            "role": "user",
+            "content": "First question."
+          },
+          {
+            "role": "assistant",
+            "content": "First answer."
+          },
+          {
+            "role": "user",
+            "content": "Second question."
+          }
+        ],
+        "session": {
+          "type": "fork",
+          "sessionId": "thread-old",
+          "boundary": "019a5e1c-7f3d-7c2a-9b4e-2f6d8a1c3e5b"
+        },
+        "policy": {
+          "network": "open",
+          "fs": "workspace",
+          "approvals": "ask"
+        },
+        "mcp": {
+          "serverName": "stella",
+          "url": "https://api.example.test/mcp",
+          "token": "run-token-1",
+          "expiresAt": "2026-10-28T12:00:00.000Z"
+        }
+      },
+      {
+        "type": "run.input",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "inputId": "7a2d3e4f-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+        "message": { "role": "user", "content": "Also check the annex." }
       },
       {
         "type": "run.approval",
@@ -222,6 +310,12 @@
         "id": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f"
       },
       {
+        "type": "folder.restore",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "workspaceDir": "/data/runs/0b6f5c8e",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f"
+      },
+      {
         "type": "drain"
       },
       {
@@ -231,14 +325,14 @@
     "sidecar": [
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 7,
         "sidecarVersion": "1.4.0",
         "mode": "serving",
         "runs": []
       },
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 7,
         "sidecarVersion": "1.3.2",
         "mode": "draining",
         "runs": [
@@ -267,7 +361,8 @@
             {
               "id": "gpt-test",
               "label": "GPT Test",
-              "isDefault": true
+              "isDefault": true,
+              "reasoningEfforts": ["low", "medium", "high", "xhigh"]
             }
           ]
         }
@@ -342,19 +437,41 @@
         "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
         "seq": 3,
         "outcome": "completed",
-        "harnessSessionId": "thread-a"
+        "harnessSessionId": "thread-a",
+        "harnessBoundary": "019a5e1c-7f3d-7c2a-9b4e-2f6d8a1c3e5b"
       },
       {
         "type": "run.finished",
         "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
         "seq": 1,
         "outcome": "failed",
-        "harnessSessionId": null
+        "harnessSessionId": null,
+        "harnessBoundary": null
+      },
+      {
+        "type": "folder.restored",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "outcome": "restored"
+      },
+      {
+        "type": "folder.restored",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "outcome": "folder_busy"
+      },
+      {
+        "type": "background.tasks",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "count": 2
+      },
+      {
+        "type": "background.tasks",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "count": 0
       },
       {
         "type": "rejected",
         "reason": "unknown_type",
-        "messageType": "run.input",
+        "messageType": "run.pause",
         "runId": null
       },
       {
@@ -379,8 +496,13 @@
       },
       {
         "name": "unknown type",
-        "line": "{\"type\":\"run.input\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\"}",
+        "line": "{\"type\":\"run.pause\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\"}",
         "reason": "unknown_type"
+      },
+      {
+        "name": "input without text",
+        "line": "{\"type\":\"run.input\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"inputId\":\"7a2d3e4f-5b6c-4d7e-8f90-a1b2c3d4e5f6\",\"message\":{\"role\":\"user\",\"content\":\"\"}}",
+        "reason": "invalid"
       },
       {
         "name": "relative executable",
@@ -459,16 +581,73 @@
       },
       {
         "name": "run.start with a relative cache directory",
-        "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"cacheDir\":\"agent-package-cache\",\"model\":\"gpt-test\",\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"harnessSessionId\":\"thread-old\",\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"ask\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"}}",
+        "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"cacheDir\":\"agent-package-cache\",\"stepOutputDir\":\"/data/runs/0b6f5c8e.step-outputs\",\"model\":\"gpt-test\",\"reasoningEffort\":null,\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"session\":{\"type\":\"resume\",\"sessionId\":\"thread-old\"},\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"ask\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"}}",
+        "reason": "invalid"
+      },
+      {
+        "name": "run.start with a relative step output directory",
+        "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"cacheDir\":\"/data/agent-package-cache\",\"stepOutputDir\":\"0b6f5c8e.step-outputs\",\"model\":\"gpt-test\",\"reasoningEffort\":null,\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"session\":{\"type\":\"resume\",\"sessionId\":\"thread-old\"},\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"ask\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"}}",
         "reason": "invalid"
       },
       {
         "name": "run.start with an unknown approval mode",
-        "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"cacheDir\":\"/data/agent-package-cache\",\"model\":\"gpt-test\",\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"harnessSessionId\":\"thread-old\",\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"bypass\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"}}",
+        "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"cacheDir\":\"/data/agent-package-cache\",\"stepOutputDir\":\"/data/runs/0b6f5c8e.step-outputs\",\"model\":\"gpt-test\",\"reasoningEffort\":null,\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"session\":{\"type\":\"resume\",\"sessionId\":\"thread-old\"},\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"bypass\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"}}",
+        "reason": "invalid"
+      },
+      {
+        "name": "run.start forking without a boundary",
+        "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"cacheDir\":\"/data/agent-package-cache\",\"stepOutputDir\":\"/data/runs/0b6f5c8e.step-outputs\",\"model\":\"gpt-test\",\"reasoningEffort\":null,\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"session\":{\"type\":\"fork\",\"sessionId\":\"thread-old\"},\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"ask\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"}}",
+        "reason": "invalid"
+      },
+      {
+        "name": "run.start with a boundary that reads as a flag",
+        "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"cacheDir\":\"/data/agent-package-cache\",\"stepOutputDir\":\"/data/runs/0b6f5c8e.step-outputs\",\"model\":\"gpt-test\",\"reasoningEffort\":null,\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"session\":{\"type\":\"fork\",\"sessionId\":\"thread-old\",\"boundary\":\"--dangerously-skip-permissions\"},\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"ask\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"}}",
+        "reason": "invalid"
+      },
+      {
+        "name": "run.start with an unknown reasoning effort",
+        "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"cacheDir\":\"/data/agent-package-cache\",\"stepOutputDir\":\"/data/runs/0b6f5c8e.step-outputs\",\"model\":\"gpt-test\",\"reasoningEffort\":\"turbo\",\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"session\":{\"type\":\"resume\",\"sessionId\":\"thread-old\"},\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"ask\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"}}",
+        "reason": "invalid"
+      },
+      {
+        "name": "run.start with a field this holder does not know",
+        "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"attachments\":[],\"cacheDir\":\"/data/agent-package-cache\",\"unreadablePaths\":[\"/data/runs\",\"/data\",\"/home/member/.ssh\"],\"stepOutputDir\":\"/data/runs/0b6f5c8e.step-outputs\",\"skillFolders\":[],\"toolPath\":[],\"model\":\"gpt-test\",\"reasoningEffort\":null,\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"session\":{\"type\":\"resume\",\"sessionId\":\"thread-old\"},\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"ask\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"},\"readLimits\":[]}",
+        "reason": "invalid"
+      },
+      {
+        "name": "folder restore with a relative folder",
+        "line": "{\"type\":\"folder.restore\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"workspaceDir\":\"runs/0b6f5c8e\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\"}",
+        "reason": "invalid"
+      },
+      {
+        "name": "folder restore without a run",
+        "line": "{\"type\":\"folder.restore\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"workspaceDir\":\"/data/runs/0b6f5c8e\"}",
         "reason": "invalid"
       }
     ],
     "sidecar": [
+      {
+        "name": "model listing an unknown reasoning effort",
+        "message": {
+          "type": "harness.probed",
+          "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+          "harness": "codex",
+          "outcome": {
+            "type": "ready",
+            "version": "0.165.0",
+            "capabilities": ["approvals"],
+            "approvalModes": ["ask"],
+            "models": [
+              {
+                "id": "gpt-test",
+                "label": "GPT Test",
+                "isDefault": true,
+                "reasoningEfforts": ["turbo"]
+              }
+            ]
+          }
+        }
+      },
       {
         "name": "unknown type",
         "message": {
@@ -500,7 +679,7 @@
         "name": "unknown holder mode",
         "message": {
           "type": "hello",
-          "protocol": 3,
+          "protocol": 7,
           "sidecarVersion": "1.4.0",
           "mode": "paused",
           "runs": []
@@ -560,6 +739,44 @@
         "message": {
           "type": "harness.process",
           "pid": 48213
+        }
+      },
+      {
+        "name": "unknown restore outcome",
+        "message": {
+          "type": "folder.restored",
+          "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+          "outcome": "partly"
+        }
+      },
+      {
+        "name": "restore answer without a request",
+        "message": {
+          "type": "folder.restored",
+          "outcome": "restored"
+        }
+      },
+      {
+        "name": "negative background count",
+        "message": {
+          "type": "background.tasks",
+          "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+          "count": -1
+        }
+      },
+      {
+        "name": "fractional background count",
+        "message": {
+          "type": "background.tasks",
+          "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+          "count": 1.5
+        }
+      },
+      {
+        "name": "background count without a run",
+        "message": {
+          "type": "background.tasks",
+          "count": 1
         }
       }
     ]

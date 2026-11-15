@@ -1,18 +1,19 @@
 import type { QueryKey } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
 
 import {
   parseOrganizationRealtimeEvent,
   parseUserRealtimeEvent,
-  REALTIME_EVENT_TYPE,
   RESOURCE_TYPE,
   resourceSetUpdatedRealtimeEvent,
+  USER_EVENT_READ,
+  USER_EVENT_READS,
 } from "@stll/api-contract";
-import type { UserRealtimeEvent } from "@stll/api-contract";
+import type { UserEventRead, UserRealtimeEvent } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import { activeChatRunsOptions } from "@/features/chat/active-runs";
+import { chatKeys } from "@/features/chat/chat-query-contract";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { apiUrl } from "@/lib/api-url";
@@ -184,22 +185,31 @@ export const useUserEventRefreshes = ({
       userId,
     }).queryKey,
   });
+  // Rows carry the reader's read and pin states.
+  const chatThreadLists = (): UserEventRefresh => ({
+    queryKey: chatKeys.groupedThreadLists(organizationId, userId),
+  });
+
+  // Each open chat that ran on a computer reads its own count again.
+  const backgroundTasks = (): UserEventRefresh => ({
+    queryKey: chatKeys.backgroundTaskCounts(organizationId, userId),
+  });
+
+  const refreshes = {
+    [USER_EVENT_READ.ACTIVE_CHAT_RUNS]: activeChatRuns,
+    [USER_EVENT_READ.CHAT_BACKGROUND_TASKS]: backgroundTasks,
+    [USER_EVENT_READ.CHAT_THREADS]: chatThreadLists,
+    [USER_EVENT_READ.NOTIFICATIONS]: notifications,
+  } satisfies Record<UserEventRead, () => UserEventRefresh>;
 
   useUserEventsSSE(organizationId, {
-    onEvent: ({ type: eventType }) => {
-      switch (eventType) {
-        case REALTIME_EVENT_TYPE.NEW_NOTIFICATION:
-          return [notifications()];
-        case REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED:
-          return [activeChatRuns()];
-        default:
-          eventType satisfies never;
-          return panic("Unhandled user realtime event");
-      }
-    },
+    onEvent: ({ type }) =>
+      USER_EVENT_READS[type].map((read) => refreshes[read]()),
     onResync: () => [
       notifications(),
       activeChatRuns(),
+      chatThreadLists(),
+      backgroundTasks(),
       ...organizationEventQueryKeys(
         resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.CONTACT),
         organizationId,

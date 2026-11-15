@@ -163,9 +163,11 @@ export const getMcpResourceScopes = (mode: McpMode) =>
  * The OAuth resource set Better Auth is configured with, one entry per
  * audience.
  *
- * Adding an audience or a scope widens this set, and the startup census
- * (`ensureBetterAuthOAuthPolicy`) refuses to boot until the database covers
- * it. Covering is enough: scopes and audiences a newer release stored are
+ * Adding an audience or a scope widens this set, and the deploy's repair
+ * (`better-auth-oauth-resource-repair.ts`) refuses to finish until the
+ * database covers it; the startup census (`ensureBetterAuthOAuthPolicy`)
+ * reports a gap as an error, while Better Auth refuses the affected requests.
+ * Covering is enough: scopes and audiences a newer release stored are
  * tolerated, and the auth adapter narrows every stored resource to this set
  * before the provider reads it (`withConfiguredOAuthResources`), so this code
  * never grants what it does not configure here. Startup does not repair an

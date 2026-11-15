@@ -341,8 +341,8 @@ describe("a citation card in the decision text", () => {
       ]);
       await waitFor(() => {
         expect(
-          document.querySelector('[data-slot="popover-popup"]'),
-        ).toBeNull();
+          document.querySelector('[data-slot="popover-popup"]') === null,
+        ).toBe(true);
       });
     } finally {
       scroll.mockRestore();
@@ -384,7 +384,9 @@ describe("a citation card in the decision text", () => {
       fireEvent.keyDown(card, { key: "Escape" });
     });
     await waitFor(() => {
-      expect(document.querySelector('[data-slot="popover-popup"]')).toBeNull();
+      expect(
+        document.querySelector('[data-slot="popover-popup"]') === null,
+      ).toBe(true);
       expect(document.activeElement).toBe(trigger);
     });
     expect(

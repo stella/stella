@@ -46,15 +46,6 @@ import {
 
 import { createDuplicateWorkspace } from "./duplicate";
 
-beforeEach(() => {
-  enqueueDocumentProcessingRunMock.mockClear();
-  enqueueEntitySearchRepairsMock.mockClear();
-  enqueueWorkspaceSearchRepairsMock.mockClear();
-  flushEntitySearchRepairsMock.mockClear();
-  flushWorkspaceSearchRepairsMock.mockClear();
-  requestNativeExtractionRunsMock.mockClear();
-});
-
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
     requests.map((_, index) =>
@@ -159,6 +150,12 @@ const readDuplicatedWorkspaceId = (result: unknown): SafeId<"workspace"> => {
 
 let previousLegalListsFlag = env.FEATURE_LEGAL_LISTS;
 beforeEach(() => {
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueWorkspaceSearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  flushWorkspaceSearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
   previousLegalListsFlag = env.FEATURE_LEGAL_LISTS;
   env.FEATURE_LEGAL_LISTS = true;
   fake = startFakeS3();

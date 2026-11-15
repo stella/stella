@@ -1,4 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
+import { EmptyFilter } from "drizzle-orm/relations";
 
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
@@ -222,7 +223,7 @@ const resolveCurrentExtractedRowsFromDatabase = async (
     where: {
       entityId: { in: entityIds },
       organizationId: { eq: organizationId },
-      workspaceId: workspaceIds ? { in: [...workspaceIds] } : undefined,
+      workspaceId: workspaceIds ? { in: [...workspaceIds] } : EmptyFilter,
     },
     columns: {
       entityId: true,

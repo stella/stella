@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { createDetached } from "@stll/errors";
 
 import { startHarnessProcess } from "../src/harness/harness-process";
+import { PROTOCOL_LOG_OFF } from "../src/protocol-log";
 
 /**
  * A holder that starts one harness process and never ends it, for a test to
@@ -29,6 +30,7 @@ const started = startHarnessProcess<number, Error>({
   }),
   deadlines: { requestMs: 60_000, terminateMs: 300 },
   name: "fake-holder",
+  protocol: { channel: "codex", log: PROTOCOL_LOG_OFF },
   unanswered: (_reason, message) => new Error(message),
   message: (value) => {
     if (

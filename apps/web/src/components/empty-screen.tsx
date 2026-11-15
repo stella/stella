@@ -6,6 +6,7 @@ import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { CircleHelpIcon, ExternalLinkIcon } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { GuideAnchorProps } from "@/features/guides/guide-anchor";
@@ -188,9 +189,9 @@ const EmptyScreenMedia = ({ preview }: EmptyScreenMediaProps) => {
   return (
     <div className="border-border/80 bg-card/80 relative overflow-hidden rounded-xl border shadow-xs">
       <div className="border-border/70 bg-muted/40 flex h-8 items-center gap-1.5 border-b px-3">
-        <span className="text-muted-foreground truncate text-xs">
+        <TruncatedText className="text-muted-foreground text-xs">
           {tCommon("preview")}
-        </span>
+        </TruncatedText>
       </div>
       <div className="bg-muted/40 relative aspect-video">
         {preview ?? <DefaultEmptyPreview />}

@@ -4,6 +4,7 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
+  canUndoLocalFilesOf,
   isChatTurnGenerating,
 } from "@/components/chat/chat-user-actions";
 import type { UnnamedChatSessionHandler } from "@/components/chat/chat-user-actions";
@@ -79,6 +80,42 @@ describe("assistant message actions", () => {
         ),
       ),
     ).toEqual([true, true, true, false]);
+  });
+});
+
+describe("undoing a local turn's file changes", () => {
+  test("is offered only while nothing runs and no prompt follows the answer", () => {
+    const answered = [message("u1", "user"), message("a1", "assistant")];
+    expect(
+      canUndoLocalFilesOf({
+        isGenerating: false,
+        messageId: "a1",
+        messages: answered,
+      }),
+    ).toBe(true);
+    // A send appends the member's prompt before its turn starts.
+    const sent = [...answered, message("u2", "user")];
+    expect(
+      canUndoLocalFilesOf({
+        isGenerating: false,
+        messageId: "a1",
+        messages: sent,
+      }),
+    ).toBe(false);
+    expect(
+      canUndoLocalFilesOf({
+        isGenerating: true,
+        messageId: "a1",
+        messages: answered,
+      }),
+    ).toBe(false);
+    expect(
+      canUndoLocalFilesOf({
+        isGenerating: false,
+        messageId: "missing",
+        messages: answered,
+      }),
+    ).toBe(false);
   });
 });
 

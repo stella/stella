@@ -1169,9 +1169,9 @@ test("malformed ledger and dependency schemas fail in both measurement roles", (
   withClone((root) => {
     for (const { relative, contents, diagnostic } of [
       {
-        relative: "scripts/internal-module-mock-ledger.json",
-        contents: "{}",
-        diagnostic: "internal-module-mock ledger must be a JSON array",
+        relative: "scripts/instruction-enforcement-ledger.json",
+        contents: "[]",
+        diagnostic: "instruction-enforcement ledger must hold reviewOnlyRules",
       },
       {
         relative: "packages/invalid/package.json",

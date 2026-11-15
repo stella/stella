@@ -659,6 +659,30 @@
   --option-empty: color-mix(in oklch, #4c566a 60%, #d8dee9);
 }
 
+/* ---- Topic swatches ----
+ * Time no matter claimed yet, grouped by what it was spent on (a document, a
+ * window, an app). A fixed low chroma, a fraction of the default matter
+ * swatches', and no matter edge where they are drawn, so a topic never reads
+ * as a matter; the hues only tell neighbouring topics apart. Lightness is set
+ * per colour scheme so the tint mixed from it stays readable under text. */
+:root {
+  --topic-sand: oklch(0.68 0.05 80);
+  --topic-sage: oklch(0.68 0.05 150);
+  --topic-mist: oklch(0.68 0.05 220);
+  --topic-heather: oklch(0.68 0.05 320);
+  --topic-clay: oklch(0.68 0.05 40);
+  --topic-slate: oklch(0.68 0.05 265);
+}
+
+.dark {
+  --topic-sand: oklch(0.7 0.05 80);
+  --topic-sage: oklch(0.7 0.05 150);
+  --topic-mist: oklch(0.7 0.05 220);
+  --topic-heather: oklch(0.7 0.05 320);
+  --topic-clay: oklch(0.7 0.05 40);
+  --topic-slate: oklch(0.7 0.05 265);
+}
+
 /* ---- Derived backgrounds and foregrounds: light ---- */
 :root {
   --option-red-bg: color-mix(in srgb, var(--option-red) 12%, var(--background));

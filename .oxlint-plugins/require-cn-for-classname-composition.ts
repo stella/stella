@@ -631,18 +631,20 @@ export default eslintCompatPlugin({
           return visited;
         };
 
+        type PatternValueOptions = {
+          pattern: unknown;
+          source: unknown;
+          target: Variable;
+          visitedVariables: Set<Variable>;
+          readPosition: number;
+        };
+
         type LocalValueResolver = {
           memberValue: (
             value: unknown,
             visitedVariables?: Set<Variable>,
           ) => unknown;
-          patternValue: (
-            pattern: unknown,
-            source: unknown,
-            target: Variable,
-            visitedVariables: Set<Variable>,
-            readPosition: number,
-          ) => unknown;
+          patternValue: (options: PatternValueOptions) => unknown;
           propertyValue: (
             source: unknown,
             propertyName: string,
@@ -1840,13 +1842,13 @@ export default eslintCompatPlugin({
                   ],
                 } satisfies LocalPossibleValues);
           },
-          patternValue(
+          patternValue({
             pattern,
             source,
             target,
             visitedVariables,
             readPosition,
-          ) {
+          }: PatternValueOptions) {
             if (!isAstNode(pattern)) {
               return null;
             }
@@ -1863,41 +1865,41 @@ export default eslintCompatPlugin({
                   type: "LocalPossibleValues",
                   values: source.values.flatMap((possibleValue) =>
                     possibleValues(
-                      this.patternValue(
+                      this.patternValue({
                         pattern,
-                        possibleValue,
+                        source: possibleValue,
                         target,
-                        new Set(visitedVariables),
+                        visitedVariables: new Set(visitedVariables),
                         readPosition,
-                      ),
+                      }),
                     ),
                   ),
                 } satisfies LocalPossibleValues;
               }
               if (isProvablyUndefined(source)) {
-                return this.patternValue(
-                  pattern.left,
-                  pattern.right,
+                return this.patternValue({
+                  pattern: pattern.left,
+                  source: pattern.right,
                   target,
                   visitedVariables,
                   readPosition,
-                );
+                });
               }
-              const selected = this.patternValue(
-                pattern.left,
+              const selected = this.patternValue({
+                pattern: pattern.left,
                 source,
                 target,
                 visitedVariables,
                 readPosition,
-              );
+              });
               if (isLocalOpaqueValue(source)) {
-                const fallback = this.patternValue(
-                  pattern.left,
-                  pattern.right,
+                const fallback = this.patternValue({
+                  pattern: pattern.left,
+                  source: pattern.right,
                   target,
                   visitedVariables,
                   readPosition,
-                );
+                });
                 return {
                   type: "LocalPossibleValues",
                   values: [selected, fallback],
@@ -1905,13 +1907,13 @@ export default eslintCompatPlugin({
               }
               return (
                 selected ??
-                this.patternValue(
-                  pattern.left,
-                  pattern.right,
+                this.patternValue({
+                  pattern: pattern.left,
+                  source: pattern.right,
                   target,
                   visitedVariables,
                   readPosition,
-                )
+                })
               );
             }
             if (
@@ -1978,13 +1980,13 @@ export default eslintCompatPlugin({
                     : propertyResolution.type === "absent"
                       ? LOCAL_ABSENT_VALUE
                       : LOCAL_OPAQUE_VALUE;
-                return this.patternValue(
-                  property.value,
-                  propertyValue,
+                return this.patternValue({
+                  pattern: property.value,
+                  source: propertyValue,
                   target,
                   visitedVariables,
                   readPosition,
-                );
+                });
               }
               return null;
             }
@@ -2008,17 +2010,18 @@ export default eslintCompatPlugin({
                     new Set(visitedVariables),
                     readPosition,
                   );
-                  return this.patternValue(
-                    element,
-                    propertyResolution.type === "found"
-                      ? propertyResolution.value
-                      : propertyResolution.type === "absent"
-                        ? LOCAL_ABSENT_VALUE
-                        : LOCAL_OPAQUE_VALUE,
+                  return this.patternValue({
+                    pattern: element,
+                    source:
+                      propertyResolution.type === "found"
+                        ? propertyResolution.value
+                        : propertyResolution.type === "absent"
+                          ? LOCAL_ABSENT_VALUE
+                          : LOCAL_OPAQUE_VALUE,
                     target,
                     visitedVariables,
                     readPosition,
-                  );
+                  });
                 }
               }
             }
@@ -2180,13 +2183,13 @@ export default eslintCompatPlugin({
                 definition.parent.type === "VariableDeclaration" &&
                 definition.parent.kind === "const"
               ) {
-                return this.patternValue(
-                  definition.node.id,
-                  definition.node.init,
-                  variable,
+                return this.patternValue({
+                  pattern: definition.node.id,
+                  source: definition.node.init,
+                  target: variable,
                   visitedVariables,
-                  definition.node.range[1],
-                );
+                  readPosition: definition.node.range[1],
+                });
               }
             }
             return null;

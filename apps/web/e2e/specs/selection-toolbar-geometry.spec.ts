@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { respond, staticBody } from "../helpers/route-mock";
 import {
   expect,
   stableBoundingBox,
@@ -132,10 +133,13 @@ for (const [name, selectionCase] of Object.entries(cases)) {
     ).href;
     await stylesheetPage.close();
     await page.route(fixtureUrl, async (route) => {
-      await route.fulfill({
-        contentType: "text/html",
-        body: `<!doctype html><head>${styles}</head><body><div id="fixture"></div></body>`,
-      });
+      await respond(
+        route,
+        staticBody({
+          contentType: "text/html",
+          body: `<!doctype html><head>${styles}</head><body><div id="fixture"></div></body>`,
+        }),
+      );
     });
     await page.goto(fixtureUrl, { waitUntil: "domcontentloaded" });
     await expect

@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET } from "@stll/api-contract/search";
+
 import { LIMITS } from "@/api/lib/limits";
 import {
   COMPAT_SEARCH_OUTPUT_SCHEMA,
@@ -8,7 +10,7 @@ import {
 import {
   hasMoreCorpusPages,
   resolveCompatCorpusCountries,
-  searchCompatCorpus,
+  waitForCompatCorpus,
 } from "@/api/mcp/compat-corpus";
 import {
   COMPAT_CORPUS_ID_HINT,
@@ -148,7 +150,7 @@ const handleLawCompatSearchTool: McpToolHandler<
     return pageLimitResult;
   }
 
-  const corpus = await searchCompatCorpus({
+  const corpus = await waitForCompatCorpus({
     context,
     countries: await resolveCompatCorpusCountries(context),
     cursors: position.corpus,
@@ -156,6 +158,19 @@ const handleLawCompatSearchTool: McpToolHandler<
   });
   if (corpus.type === "failed") {
     return corpus.result;
+  }
+  if (corpus.type === "still_running") {
+    // Nothing here says "running", so the page says it is cut short and its
+    // cursor runs the same page again.
+    return {
+      egress: "compatSearch",
+      paginationOutcome: SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+      nextCursor: encodeCompatSearchCursor({
+        matter: null,
+        corpus: position.corpus,
+      }),
+      results: [],
+    };
   }
 
   // The corpus results are public law, so the egress pipeline passes them

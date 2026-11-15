@@ -2,10 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
-import {
-  invalidateDeletedEntityQueries,
-  invalidateRenamedEntityQueries,
-} from "@/lib/workspaces/mutations/entities.logic";
+import { invalidateDeletedEntityQueries } from "@/lib/workspaces/mutations/entities.logic";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import { taskKeys } from "@/lib/workspaces/queries/tasks.logic";
@@ -70,29 +67,5 @@ describe("deleted entity cache invalidation", () => {
     expect(isInvalidated(queryClient, taskDetailKey)).toBe(true);
     expect(isInvalidated(queryClient, overviewKey)).toBe(true);
     expect(isInvalidated(queryClient, otherWorkspaceKey)).toBe(false);
-  });
-});
-
-describe("renamed entity cache invalidation", () => {
-  test("marks the entity and every collection stale, never other entities", async () => {
-    const queryClient = new QueryClient();
-    const entityDetailKey = entitiesKeys.detail(WORKSPACE, ENTITY);
-    const untouchedEntityKey = entitiesKeys.detail(WORKSPACE, OTHER_ENTITY);
-    seed(queryClient, [entityDetailKey, untouchedEntityKey, ...collectionKeys]);
-
-    await invalidateRenamedEntityQueries({
-      queryClient,
-      workspaceId: WORKSPACE,
-      entityId: ENTITY,
-    });
-
-    expect(isInvalidated(queryClient, entityDetailKey)).toBe(true);
-    expect(isInvalidated(queryClient, untouchedEntityKey)).toBe(false);
-    for (const key of collectionKeys) {
-      expect({ key, invalidated: isInvalidated(queryClient, key) }).toEqual({
-        key,
-        invalidated: true,
-      });
-    }
   });
 });

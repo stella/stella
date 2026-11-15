@@ -10,7 +10,9 @@ import {
 } from "bun:test";
 
 import {
+  chatBackgroundTasksChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
   newNotificationRealtimeEvent,
   type OrganizationRealtimeEvent,
@@ -48,6 +50,7 @@ import {
   desktopEditSessionCloseSignal,
   isDesktopEditSessionCloseSignal,
 } from "@/api/lib/desktop-edit-session-notifications";
+import { LIMITS } from "@/api/lib/limits";
 import {
   broadcast,
   broadcastSessionEvent,
@@ -128,7 +131,12 @@ const FANOUT_CASES: { [C in RealtimeChannel]: readonly ChannelEvent[C][] } = {
     },
   ],
   organization: [resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY)],
-  user: [newNotificationRealtimeEvent(), chatRunsChangedRealtimeEvent()],
+  user: [
+    newNotificationRealtimeEvent(),
+    chatBackgroundTasksChangedRealtimeEvent(),
+    chatRunsChangedRealtimeEvent(),
+    chatThreadsChangedRealtimeEvent(),
+  ],
   session: [
     {
       type: REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED,
@@ -264,11 +272,20 @@ type Audience = {
   workspaceId: SafeId<"workspace">;
 };
 
-/** Each seeded member's live sign-in; every stream is opened on it. */
-const sessionOf = new Map<SafeId<"user">, string>();
+/**
+ * Live sign-ins per seeded member: enough that a member's largest stream set
+ * stays within the streams one session may hold.
+ */
+const SESSIONS_PER_MEMBER = Math.ceil(
+  (LARGE_AUDIENCE + 1) / LIMITS.sseStreamsPerSession,
+);
 
-const sessionFor = (userId: SafeId<"user">): string => {
-  const sessionId = sessionOf.get(userId);
+/** Each seeded member's live sign-ins; every stream is opened on one of them. */
+const sessionsOf = new Map<SafeId<"user">, string[]>();
+
+const sessionFor = (userId: SafeId<"user">, index = 0): string => {
+  const sessionIds = sessionsOf.get(userId) ?? [];
+  const sessionId = sessionIds.at(index % SESSIONS_PER_MEMBER);
   if (sessionId === undefined) {
     throw new Error(`No session was seeded for ${userId}`);
   }
@@ -277,7 +294,7 @@ const sessionFor = (userId: SafeId<"user">): string => {
 
 /**
  * One organization with one matter and `size` members assigned to it, each
- * signed in on one live session.
+ * signed in on SESSIONS_PER_MEMBER live sessions.
  */
 const seedAudience = async (size: number): Promise<Audience> => {
   const organizationId = toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`);
@@ -303,15 +320,17 @@ const seedAudience = async (size: number): Promise<Audience> => {
       emailVerified: true,
     })),
   );
-  const sessions = userIds.map((userId) => ({
-    id: `session_${Bun.randomUUIDv7()}`,
-    token: Bun.randomUUIDv7(),
-    userId,
-    expiresAt: new Date(Date.now() + 86_400_000),
-  }));
+  const sessions = userIds.flatMap((userId) =>
+    Array.from({ length: SESSIONS_PER_MEMBER }, () => ({
+      id: `session_${Bun.randomUUIDv7()}`,
+      token: Bun.randomUUIDv7(),
+      userId,
+      expiresAt: new Date(Date.now() + 86_400_000),
+    })),
+  );
   await testDb.insert(session).values(sessions);
   for (const row of sessions) {
-    sessionOf.set(row.userId, row.id);
+    sessionsOf.set(row.userId, [...(sessionsOf.get(row.userId) ?? []), row.id]);
   }
   await testDb.insert(member).values(
     userIds.map((userId) => ({
@@ -404,10 +423,10 @@ const userStreams = ({
   count,
   signal,
 }: UserStreamsOptions) =>
-  Array.from({ length: count }, () =>
+  Array.from({ length: count }, (_unused, index) =>
     subscribeUser({
       organizationId,
-      sessionId: sessionFor(userId),
+      holder: { id: sessionFor(userId, index), kind: "session" },
       signal,
       userId,
     }),
@@ -471,6 +490,8 @@ type Subscribers = {
 type ChannelHarness<C extends RealtimeChannel> = {
   /** Statements one publish may issue, whatever the audience size. */
   statementsPerPublish: number;
+  /** The largest audience the channel admits, when below LARGE_AUDIENCE. */
+  largestAudience?: number;
   open: (
     shape: { entitled: number; excluded: boolean },
     signal: AbortSignal,
@@ -593,6 +614,7 @@ const HARNESSES: { [C in RealtimeChannel]: ChannelHarness<C> } = {
   // clients.
   session: {
     statementsPerPublish: 0,
+    largestAudience: LIMITS.desktopEditSessionStreams,
     delivery: (event) =>
       isDesktopEditSessionCloseSignal(event) ? "closed" : "frame",
     open: async ({ entitled, excluded }) => ({
@@ -735,11 +757,12 @@ describe("one live-update publish costs the same for 1 and for 50 subscribers", 
         excluded: false,
       },
     });
+    const largeAudience = harness.largestAudience ?? LARGE_AUDIENCE;
     const many = await measurePublish({
       channel,
       event,
       shape: {
-        entitled: LARGE_AUDIENCE,
+        entitled: largeAudience,
         excluded: false,
       },
     });
@@ -750,7 +773,7 @@ describe("one live-update publish costs the same for 1 and for 50 subscribers", 
     expectDeliveredOnce({
       measurement: many,
       delivery,
-      audienceSize: LARGE_AUDIENCE,
+      audienceSize: largeAudience,
     });
     const frameBytes = single.frames.map((frame) => frame.byteLength);
     expect(frameBytes.every((bytes) => bytes > 0)).toBe(true);

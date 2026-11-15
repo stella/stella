@@ -11,6 +11,7 @@ import {
   PreviewCardPopup,
   PreviewCardTrigger,
 } from "@stll/ui/preview-card";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { UserIdentityAvatar } from "@/components/user-avatar";
 import { FieldValue } from "@/components/workspaces/field-value";
@@ -81,7 +82,7 @@ export const CellOverrideCard = ({
               image={override.editedByImage}
               name={override.editedByName}
             />
-            <span className="truncate">
+            <TruncatedText>
               {override.editedByName ? (
                 <>
                   <BidiText>{override.editedByName}</BidiText>
@@ -89,7 +90,7 @@ export const CellOverrideCard = ({
                 </>
               ) : null}
               {formatRelativeTime(override.editedAt)}
-            </span>
+            </TruncatedText>
           </span>
           <OverrideReason
             entityId={entity.entityId}

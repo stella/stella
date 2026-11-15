@@ -574,10 +574,9 @@ const findExistingDecisionTx = async (
           orderBy: { id: "asc" },
           limit: MAX_LEGACY_DOCKET_CANDIDATES,
         });
-  // ECLIs compare the way identifiers are looked up: an adapter release
-  // may spell the same identifier with different case or separators.
-  // Every legacy candidate is already pinned to this document's docket;
-  // each one is proved on its own, since siblings share that docket.
+  // ECLIs compare as identifiers do, case and separators aside. Each legacy
+  // candidate is proved alone: siblings share the docket that found them, and
+  // only a URL holding the document id overrides a contradicting ECLI.
   const incomingEcliKeys = [observed.ecli, observed.legacyEcli].flatMap(
     (ecli) => {
       const key = ecli === undefined ? undefined : ecliComparisonKey(ecli);
@@ -594,7 +593,8 @@ const findExistingDecisionTx = async (
       incomingEcliKeys.length > 0 &&
       !ecliMatches;
     const sourceUrlMatches =
-      !legacyEcliContradicts &&
+      (!legacyEcliContradicts ||
+        legacy.sourceUrl?.includes(observed.sourceDocumentId ?? "") === true) &&
       legacy.sourceUrl !== null &&
       observed.legacySourceUrls?.includes(legacy.sourceUrl) === true;
     return ecliMatches || sourceUrlMatches;

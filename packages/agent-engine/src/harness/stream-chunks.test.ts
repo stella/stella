@@ -13,6 +13,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
@@ -39,6 +40,7 @@ import {
 const MODEL = "gpt-test";
 const RUN_ID = "run-1";
 const THREAD_ID = "thread-1";
+const WORKSPACE_DIR = "/workspace";
 
 const counter = () => {
   let next = 0;
@@ -46,6 +48,35 @@ const counter = () => {
     next += 1;
     return `id-${next}`;
   };
+};
+
+/**
+ * A cloud turn's parts as a local turn keeps them: a command's output stays
+ * on the member's computer, so its result keeps only its exit code and
+ * status, in the same order.
+ */
+const withoutCommandOutput = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    if (!value.includes('"aggregated_output"')) {
+      return value;
+    }
+    const { aggregated_output: _output, ...kept } = v.parse(
+      v.record(v.string(), v.unknown()),
+      JSON.parse(value),
+    );
+    return JSON.stringify(kept);
+  }
+  if (Array.isArray(value)) {
+    return value.map(withoutCommandOutput);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "aggregated_output")
+        .map(([key, entry]) => [key, withoutCommandOutput(entry)]),
+    );
+  }
+  return value;
 };
 
 async function* from<T>(items: readonly T[]): AsyncGenerator<T> {
@@ -61,6 +92,7 @@ const localChunks = async (events: readonly HarnessEvent[]) => {
     model: MODEL,
     runId: RUN_ID,
     threadId: THREAD_ID,
+    workspaceDir: WORKSPACE_DIR,
     generateId: counter(),
     now: () => 0,
   })) {
@@ -216,13 +248,17 @@ describe("local harness chunks", () => {
           reasoningOutputTokens: 5,
           context: null,
         },
+        boundary: null,
       },
     ];
 
     const cloudStored = storedParts(fold(await cloudChunks(cloud)));
     const localStream = await localChunks(local);
     expect(cloudStored.flatMap(({ parts }) => parts).length).toBeGreaterThan(3);
-    expect(storedParts(fold(localStream))).toEqual(cloudStored);
+    expect(withoutCommandOutput(cloudStored)).toEqual(
+      storedParts(fold(localStream)),
+    );
+    expect(JSON.stringify(localStream)).not.toContain("aggregated_output");
 
     // Usage and finish reason match; each stream stamps its own time.
     const finish = (chunks: readonly StreamChunk[]) => {
@@ -270,7 +306,7 @@ describe("local harness chunks", () => {
         },
       },
       { type: "text.completed", messageId: "m-2", text: "Left it in place." },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ];
     const chunks = await localChunks(events);
     const pauseIndex = chunks.findIndex(
@@ -305,6 +341,50 @@ describe("local harness chunks", () => {
     expect(finished).toContainEqual(
       expect.objectContaining({ type: "text", content: "Left it in place." }),
     );
+  });
+
+  test("an approval's call carries the same bounded input as the call it pauses on", async () => {
+    const write = {
+      id: "call-write",
+      name: "command_execution",
+      input: {
+        command:
+          "cat > /workspace/notes.md <<'EOF'\nPrivate settlement terms\nEOF",
+      },
+    } as const satisfies HarnessToolCall;
+    const chunks = await localChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("native-3"),
+        continuation: { type: "fresh" },
+      },
+      {
+        type: "approval.requested",
+        request: {
+          requestId: "approval-1",
+          kind: "command",
+          toolCall: write,
+          reason: null,
+          options: [{ id: "accept", decision: "approve" }],
+        },
+      },
+    ]);
+    const shown = { command: "cat > /workspace/notes.md <<'EOF'…" };
+    const pause = chunks.find(
+      (chunk) =>
+        chunk.type === EventType.RUN_FINISHED &&
+        chunk.outcome?.type === "interrupt",
+    );
+    expect(pause).toMatchObject({
+      outcome: { interrupts: [{ metadata: { input: shown } }] },
+    });
+    const call = fold(chunks)
+      .flatMap(({ parts }) => parts)
+      .find((part) => part.type === "tool-call" && part.id === write.id);
+    expect(call).toMatchObject({
+      input: shown,
+      arguments: JSON.stringify(shown),
+    });
   });
 
   test("a question answered by the next message completes its call without pausing", async () => {
@@ -342,7 +422,7 @@ describe("local harness chunks", () => {
           ],
         },
       },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     expect(
       chunks.some(
@@ -408,6 +488,36 @@ describe("local harness chunks", () => {
     );
   });
 
+  test("a call the harness reports it did not run because of a stop is stored cancelled, not failed", async () => {
+    const chunks = await localChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("native-5"),
+        continuation: { type: "resumed" },
+      },
+      { type: "tool.started", toolCall: commandCall },
+      {
+        type: "tool.completed",
+        toolCall: commandCall,
+        // What the adapter built from the harness's error flag.
+        result: {
+          content: JSON.stringify({ status: "failed" }),
+          status: "cancelled",
+        },
+      },
+      { type: "turn.interrupted" },
+    ]);
+    expect(fold(chunks).flatMap(({ parts }) => parts)).toContainEqual(
+      expect.objectContaining({
+        type: "tool-result",
+        toolCallId: commandCall.id,
+        content: JSON.stringify({ status: "interrupted" }),
+        state: "error",
+        outcome: "cancelled",
+      }),
+    );
+  });
+
   test("each failure kind ends the run with its own error code", async () => {
     const failures = {
       auth_required: { type: "auth_required", message: "Sign in again." },
@@ -415,6 +525,10 @@ describe("local harness chunks", () => {
         type: "usage_limit",
         message: "Limit reached.",
         resetsAt: "2026-10-28T14:00:00.000Z",
+      },
+      model_at_capacity: {
+        type: "model_at_capacity",
+        message: "Selected model is at capacity.",
       },
       provider_error: {
         type: "provider_error",
@@ -435,6 +549,14 @@ describe("local harness chunks", () => {
         type: "sandbox_unavailable",
         message: "The sandbox could not start.",
       },
+      retry_stalled: {
+        type: "retry_stalled",
+        message: "The harness kept retrying the provider without progress.",
+      },
+      tools_unavailable: {
+        type: "tools_unavailable",
+        message: "The harness could not connect to the stella MCP server.",
+      },
     } as const satisfies {
       [Type in HarnessFailure["type"]]: Extract<HarnessFailure, { type: Type }>;
     };
@@ -450,6 +572,22 @@ describe("local harness chunks", () => {
       codes.add(String(last.code));
     }
     expect(codes.size).toBe(Object.keys(failures).length);
+  });
+
+  test("a model at capacity ends the run with the chat's code for a provider outage", async () => {
+    const chunks = await localChunks([
+      {
+        type: "turn.failed",
+        failure: {
+          type: "model_at_capacity",
+          message: "Selected model is at capacity.",
+        },
+      },
+    ]);
+    expect(chunks.at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: AI_FAILURE_CODES.provider_unavailable,
+    });
   });
 
   test("a usage limit says when it resets, and only a limit with a known reset", async () => {
@@ -501,6 +639,7 @@ describe("local harness chunks", () => {
               reasoningOutputTokens: 0,
               context,
             },
+            boundary: null,
           },
         ])
       ).findLast((chunk) => chunk.type === EventType.RUN_FINISHED);
@@ -577,6 +716,11 @@ describe("approval messages", () => {
   });
 });
 
+/** A normalised chunk that names the model it was written by. */
+const NAMES_MODEL = v.object({
+  metadata: v.object({ tanstack: v.object({ model: v.string() }) }),
+});
+
 describe("chunk stream invariants", () => {
   const toolCall = fc
     .constantFrom("a", "b", "c")
@@ -629,9 +773,16 @@ describe("chunk stream invariants", () => {
       requestId: `approval-${call.id}`,
     })),
     fc.constant<HarnessEvent>({ type: "retrying", message: "retry" }),
+    fc
+      .constantFrom("gpt-rerouted", "claude-fallback")
+      .map((model) => ({ type: "model.rerouted" as const, model })),
   );
   const terminal: fc.Arbitrary<HarnessEvent | null> = fc.oneof(
-    fc.constant<HarnessEvent>({ type: "turn.completed", usage: null }),
+    fc.constant<HarnessEvent>({
+      type: "turn.completed",
+      usage: null,
+      boundary: null,
+    }),
     fc.constant<HarnessEvent>({ type: "turn.interrupted" }),
     fc.constant<HarnessEvent>({
       type: "turn.failed",
@@ -639,6 +790,55 @@ describe("chunk stream invariants", () => {
     }),
     fc.constant(null),
   );
+
+  test("every chunk names the model the turn ran on when it was written", async () => {
+    await assertProperty(
+      "every chunk names the model the turn ran on when it was written",
+      fc.asyncProperty(
+        fc.array(event, { maxLength: 25 }),
+        terminal,
+        async (body, end) => {
+          const events = end === null ? body : [...body, end];
+          // The model each chunk should name: the one asked for until a
+          // reroute, then the newest reroute's, as of the event it came from.
+          let ranOn = MODEL;
+          let terminalNamed = 0;
+          async function* tracked() {
+            for (const item of events) {
+              if (item.type === "model.rerouted") {
+                ranOn = item.model;
+              }
+              yield item;
+            }
+          }
+          for await (const chunk of harnessEventsToChunks(tracked(), {
+            harness: "codex",
+            model: MODEL,
+            runId: RUN_ID,
+            threadId: THREAD_ID,
+            workspaceDir: WORKSPACE_DIR,
+            generateId: counter(),
+            now: () => 0,
+          })) {
+            // The normaliser keeps the model under `metadata.tanstack`, on
+            // the chunks that carry it.
+            const named = v.safeParse(NAMES_MODEL, chunk);
+            if (named.success) {
+              expect(named.output.metadata.tanstack.model).toBe(ranOn);
+            }
+            if (
+              chunk.type === EventType.RUN_FINISHED ||
+              chunk.type === EventType.RUN_ERROR
+            ) {
+              expect(named.success).toBe(true);
+              terminalNamed += 1;
+            }
+          }
+          expect(terminalNamed).toBeGreaterThan(0);
+        },
+      ),
+    );
+  });
 
   test("runs alternate, every tool call is paired and exactly one terminal chunk ends the stream", async () => {
     await assertProperty(

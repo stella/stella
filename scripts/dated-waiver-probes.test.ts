@@ -201,7 +201,7 @@ test("suppression removal deletes the waiver and only its anchored directive rul
     changed.flatMap(({ after }) => after.match(/\d{4}-\d{2}-\d{2}/gu) ?? []),
   ).toEqual([]);
 });
-test("test quarantine removal unmasks only its exact dated test and removes its deadline", () => {
+test("removing a test quarantine unmasks only its exact dated test and removes its deadline", () => {
   const source =
     '// test-quarantine-expires: 2026-10-05T00:00:00.000Z\ntest.skip("case", () => {});\ntest.skip("other", () => {});';
   const entry = readTestQuarantines({ "a.test.ts": source }).at(0);
@@ -234,7 +234,7 @@ test("command launch failures become private red evidence for all N samples", as
   expect(evidence.output).not.toContain("private details");
 });
 
-test("test green requires exactly one named passing selected receipt", async () => {
+test("a green test requires exactly one named passing selected receipt", async () => {
   for (const [output, expected] of [
     ["0 pass\n0 fail", "red"],
     ["1 pass\n0 skip\n0 fail", "red"],

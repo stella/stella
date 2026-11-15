@@ -1,4 +1,7 @@
-import { desktopRunnerRuns } from "@/api/db/schema";
+import {
+  desktopRunnerFolderRestores,
+  desktopRunnerRuns,
+} from "@/api/db/schema";
 import { defineLifecycle } from "@/api/lib/db/transitions";
 
 /**
@@ -38,6 +41,33 @@ export const DESKTOP_RUNNER_RUN_TRANSITIONS = defineLifecycle({
         lost: [],
       },
       terminal: ["finished", "rejected", "lost"],
+    },
+  },
+});
+
+/**
+ * Where a folder restore may move, from the store's writes:
+ *
+ * - `queued` → `sent` when a socket of its computer takes it; → `expired`
+ *   when no socket took it in time. It is marked sent before it goes out, so
+ *   no answer comes for a queued one.
+ * - `sent` → `restored` or `refused` with the computer's answer, however
+ *   late; it is sent again on every new socket until then; → `expired` when
+ *   a relink retired its computer's device key, so no answer can come.
+ */
+export const DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS = defineLifecycle({
+  table: desktopRunnerFolderRestores,
+  key: "id",
+  graphs: {
+    state: {
+      edges: {
+        queued: ["sent", "expired"],
+        sent: ["restored", "refused", "expired"],
+        restored: [],
+        refused: [],
+        expired: [],
+      },
+      terminal: ["restored", "refused", "expired"],
     },
   },
 });

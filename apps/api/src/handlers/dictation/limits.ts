@@ -5,6 +5,7 @@ import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
+import type { BudgetName } from "@/api/lib/rate-limit/budget-observability";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import {
   createRedisRateLimit,
@@ -21,29 +22,60 @@ const getContext = () =>
     failurePolicy: "fail_closed",
   })).context;
 
+type DictationOperation = "transcribe" | "cleanup";
+
+/** Each operation counts in budgets of its own: a dictation cleaned up after
+ *  desktop transcription never spends the server transcription budget. */
+const OPERATIONS = {
+  transcribe: {
+    counterPrefix: "dictation",
+    userBudget: "dictation.user",
+    organizationBudget: "dictation.organization",
+    refusal: "Too many transcription requests",
+  },
+  cleanup: {
+    counterPrefix: "dictation-cleanup",
+    userBudget: "dictation_cleanup.user",
+    organizationBudget: "dictation_cleanup.organization",
+    refusal: "Too many dictation cleanup requests",
+  },
+} as const satisfies Record<
+  DictationOperation,
+  {
+    counterPrefix: string;
+    userBudget: BudgetName;
+    organizationBudget: BudgetName;
+    refusal: string;
+  }
+>;
+
 type DictationLimitOptions = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
+  operation?: DictationOperation;
   context?: Pick<RateLimitContext, "increment" | "decrement" | "complete">;
 };
 
 export const consumeDictationLimit = async ({
   userId,
   organizationId,
+  operation = "transcribe",
   context = getContext(),
 }: DictationLimitOptions): Promise<Result<void, HandlerError<429 | 503>>> => {
+  const { counterPrefix, userBudget, organizationBudget, refusal } =
+    OPERATIONS[operation];
   const budgets = (
     [
       {
-        counterKey: `dictation:user:${userId}`,
+        counterKey: `${counterPrefix}:user:${userId}`,
         maximum: USER_REQUESTS,
-        name: "dictation.user",
+        name: userBudget,
         keyKind: "user",
       },
       {
-        counterKey: `dictation:organization:${organizationId}`,
+        counterKey: `${counterPrefix}:organization:${organizationId}`,
         maximum: ORGANIZATION_REQUESTS,
-        name: "dictation.organization",
+        name: organizationBudget,
         keyKind: "organization",
       },
     ] as const
@@ -90,7 +122,7 @@ export const consumeDictationLimit = async ({
         new HandlerError({
           status: 429,
           code: "rate_limited",
-          message: "Too many transcription requests",
+          message: refusal,
           retryable: true,
           hint: "Wait one minute before retrying.",
         }),

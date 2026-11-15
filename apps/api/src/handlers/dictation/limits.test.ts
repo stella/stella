@@ -136,3 +136,28 @@ for (const failedBudget of ["user", "organization"] as const) {
     });
   }
 }
+
+test("cleanup counts in budgets of its own and refuses with its own message", async () => {
+  const keys: string[] = [];
+  const refused = await consumeDictationLimit({
+    userId,
+    organizationId,
+    operation: "cleanup",
+    context: {
+      increment: async (key) => {
+        keys.push(key);
+        return { count: 31, start: 0, nextReset: new Date(60_000) };
+      },
+      decrement: () => undefined,
+      complete: () => undefined,
+    },
+  });
+  expect(refused.isErr()).toBe(true);
+  if (refused.isOk()) {
+    throw new TypeError("Expected limiter refusal");
+  }
+  expect(refused.error.status).toBe(429);
+  expect(refused.error.message).toBe("Too many dictation cleanup requests");
+  expect(keys).toHaveLength(2);
+  expect(keys.every((key) => key.includes("dictation-cleanup:"))).toBe(true);
+});

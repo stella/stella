@@ -28,6 +28,7 @@ import {
 import { panic, Result } from "better-result";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 
+import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
   PROFESSIONAL_USE_REQUIRED_CODE,
@@ -377,7 +378,7 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
-import type { SseStreamBinding } from "@/api/lib/sse";
+import type { SseStreamBinding, UserConnectionAudience } from "@/api/lib/sse";
 import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
 import {
   isSyntheticPrincipal,
@@ -407,6 +408,7 @@ import {
   memberReachesMatterSql,
   readAuthorizedWorkspaces,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
 import {
   getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
@@ -1435,6 +1437,25 @@ export const mintWebHandoff = async (
   return null;
 };
 
+/** The answer an organization deletion gives when its storage teardown fails. */
+const organizationTeardownRefusal = (error: unknown): APIError => {
+  if (LegalHoldActiveError.is(error)) {
+    return new APIError("CONFLICT", {
+      error: LEGAL_HOLD_ACTIVE,
+      message: error.message,
+    });
+  }
+  if (error instanceof OrganizationStorageTeardownBoundError) {
+    return new APIError("BAD_REQUEST", {
+      error: "organization_storage_too_large",
+      message: error.message,
+    });
+  }
+  return new APIError("INTERNAL_SERVER_ERROR", {
+    message: "Failed to delete the organization's stored files",
+  });
+};
+
 export const createAuth = (
   roleAssignmentPolicy = assignableRoles,
   factoryOptions: CreateAuthOptions = {},
@@ -1892,20 +1913,17 @@ export const createAuth = (
           catch: (cause) => cause,
         });
         if (Result.isError(teardown)) {
-          captureError(
-            teardown.error,
-            handlerErrorContext("lib.beforeDeleteOrganization.teardown_error", {
-              organizationId,
-            }),
-          );
-          throw teardown.error instanceof OrganizationStorageTeardownBoundError
-            ? new APIError("BAD_REQUEST", {
-                error: "organization_storage_too_large",
-                message: teardown.error.message,
-              })
-            : new APIError("INTERNAL_SERVER_ERROR", {
-                message: "Failed to delete the organization's stored files",
-              });
+          // An active legal hold is a refusal the caller acts on, not a fault.
+          if (!LegalHoldActiveError.is(teardown.error)) {
+            captureError(
+              teardown.error,
+              handlerErrorContext(
+                "lib.beforeDeleteOrganization.teardown_error",
+                { organizationId },
+              ),
+            );
+          }
+          throw organizationTeardownRefusal(teardown.error);
         }
 
         if (teardown.value.type === "subscription_renews") {
@@ -3430,10 +3448,13 @@ export const isActiveOrganizationMember = async ({
 };
 
 /**
- * Whether one user-channel SSE stream may still receive events. Reads through
- * the owner connection for the same reason the workspace audience does: event
- * delivery must be able to evaluate a member whose access was just removed and
- * who can no longer open an RLS-scoped request of their own.
+ * Whether a user's user-channel SSE streams may still receive events: the
+ * membership every stream needs, and which browser sessions among
+ * `sessionIds` are live (an app token's stream has none to check). One
+ * statement answers both. Reads through the owner connection for the same
+ * reason the workspace audience does: event delivery must be able to evaluate
+ * a member whose access was just removed and who can no longer open an
+ * RLS-scoped request of their own.
  */
 export const resolveUserRealtimeAuthorization = async (
   {
@@ -3446,16 +3467,15 @@ export const resolveUserRealtimeAuthorization = async (
     userId: SafeId<"user">;
   },
   db: MemberAuthorizationDb,
-): Promise<ReadonlySet<string>> => {
+): Promise<UserConnectionAudience> => {
   const uniqueSessionIds = [...new Set(sessionIds)];
-  if (uniqueSessionIds.length === 0) {
-    return new Set();
-  }
 
+  // The member row comes back once per live session, or once with no session
+  // when none is live, so a member is never lost to the join.
   const rows = await db
     .select({ sessionId: authSession.id })
     .from(member)
-    .innerJoin(
+    .leftJoin(
       authSession,
       and(
         eq(authSession.userId, member.userId),
@@ -3466,9 +3486,14 @@ export const resolveUserRealtimeAuthorization = async (
     .where(
       and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
     )
-    .limit(uniqueSessionIds.length);
+    .limit(Math.max(1, uniqueSessionIds.length));
 
-  return new Set(rows.map((row) => row.sessionId));
+  return {
+    member: rows.length > 0,
+    liveSessionIds: new Set(
+      rows.flatMap(({ sessionId }) => (sessionId === null ? [] : [sessionId])),
+    ),
+  };
 };
 
 type WorkspaceRealtimeAudienceLookup = {
@@ -3555,7 +3580,7 @@ export const realtimeAuthorizers = {
  * Letting inference flow keeps the real (wide) transaction type, which is
  * what every handler's `ctx.scopedDb`/`ctx.safeDb` callback expects.
  */
-type ResolveValidateAuthOptions = {
+type ResolveRequestMemberOptions = {
   getSession?: AuthSessionReader | undefined;
   request: Request;
   /** The matched route pattern, which decides whether an API access token may open it. */
@@ -3725,7 +3750,7 @@ const resolveSessionIdentity = async ({
   initialWorkspaceId,
   responseHeaders,
 }: Omit<
-  ResolveValidateAuthOptions,
+  ResolveRequestMemberOptions,
   "route" | "server"
 >): Promise<IdentityResolution> => {
   const { sessionResult, memberAuthorizationResult } =
@@ -3792,7 +3817,7 @@ const resolveAccessTokenIdentity = async ({
   route,
   initialWorkspaceId,
   responseHeaders,
-}: Omit<ResolveValidateAuthOptions, "getSession" | "server"> & {
+}: Omit<ResolveRequestMemberOptions, "getSession" | "server"> & {
   token: string;
 }): Promise<IdentityResolution> => {
   const authenticated = await authenticateApiAccessToken(token, {
@@ -3899,36 +3924,26 @@ const resolveAccessTokenIdentity = async ({
   };
 };
 
-const resolveValidateAuth = async ({
-  getSession,
-  request,
-  route,
-  server,
+type ResolveValidateAuthOptions = {
+  identity: ResolvedIdentity;
+  initialWorkspaceId: SafeId<"workspace"> | null;
+  request: Request;
+  server: ResolveRequestMemberOptions["server"];
+};
+
+/**
+ * The member context handlers read, from an identity a credential proved:
+ * the professional-use gate, the role, feature access, organization
+ * settings, the member's own scoped connections, matter access and the audit
+ * recorder. Every way a member is proved builds it here, so none of them can
+ * hand a handler a context the others would not.
+ */
+export const resolveValidateAuth = async ({
+  identity,
   initialWorkspaceId,
-  responseHeaders,
+  request,
+  server,
 }: ResolveValidateAuthOptions) => {
-  // Told apart by shape, never by fallback: a request carrying a JWT bearer
-  // is judged on that token alone, so a rejected token cannot fall through to
-  // a browser session that happens to ride along.
-  const accessToken = readAccessTokenBearer(request.headers);
-  const resolved =
-    accessToken === undefined
-      ? await resolveSessionIdentity({
-          getSession,
-          request,
-          initialWorkspaceId,
-          responseHeaders,
-        })
-      : await resolveAccessTokenIdentity({
-          token: accessToken,
-          request,
-          route,
-          initialWorkspaceId,
-          responseHeaders,
-        });
-  if (!resolved.ok) {
-    return resolved;
-  }
   const {
     authorization,
     email,
@@ -3938,7 +3953,7 @@ const resolveValidateAuth = async ({
     stream,
     grantedScopes,
     userId,
-  } = resolved.identity;
+  } = identity;
   // A signed-in account uses the product only once it has accepted the
   // professional-use statement, whether it signed in here or in the browser
   // that granted an app its token. An account created where it was not
@@ -4107,10 +4122,48 @@ const resolveValidateAuth = async ({
   return { ok: true as const, value: caller };
 };
 
+const resolveRequestMember = async ({
+  getSession,
+  request,
+  route,
+  server,
+  initialWorkspaceId,
+  responseHeaders,
+}: ResolveRequestMemberOptions) => {
+  // Told apart by shape, never by fallback: a request carrying a JWT bearer
+  // is judged on that token alone, so a rejected token cannot fall through to
+  // a browser session that happens to ride along.
+  const accessToken = readAccessTokenBearer(request.headers);
+  const resolved =
+    accessToken === undefined
+      ? await resolveSessionIdentity({
+          getSession,
+          request,
+          initialWorkspaceId,
+          responseHeaders,
+        })
+      : await resolveAccessTokenIdentity({
+          token: accessToken,
+          request,
+          route,
+          initialWorkspaceId,
+          responseHeaders,
+        });
+  if (!resolved.ok) {
+    return resolved;
+  }
+  return await resolveValidateAuth({
+    identity: resolved.identity,
+    initialWorkspaceId,
+    request,
+    server,
+  });
+};
+
 /** The member a browser session proved for this request. */
 export type ValidateAuthValue = SessionMemberCaller;
 
-type ValidateAuthResolution = Awaited<ReturnType<typeof resolveValidateAuth>>;
+type ValidateAuthResolution = Awaited<ReturnType<typeof resolveRequestMember>>;
 
 const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
   const validateAuthResolutionCache = new WeakMap<
@@ -4134,7 +4187,7 @@ const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
       validateAuthResolutionCache,
       request,
       async () =>
-        await resolveValidateAuth({
+        await resolveRequestMember({
           getSession,
           request,
           route,

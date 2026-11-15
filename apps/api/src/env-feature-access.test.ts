@@ -70,7 +70,7 @@ test("the server closes its grants refresh with background workers", async () =>
   );
 });
 
-test("test fixtures can replace the snapshot while exercising strict access", () => {
+test("fixtures in tests can replace the snapshot while exercising strict access", () => {
   const initial = readFeatureAccessGrants();
   const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
   try {

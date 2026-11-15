@@ -165,10 +165,20 @@ jobs:
 
           bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
           if [[ -n "$UPSTREAM_RUN_ID" ]]; then
-            if ! bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA"; then
-              echo "::notice::No production promotion receipt for $REF; no desktop publication."
-              exit 0
-            fi
+            receipt_status=0
+            bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA" || receipt_status=$?
+            case "$receipt_status" in
+              0) ;;
+              1)
+                echo "::notice::No production promotion receipt for $REF; no desktop publication."
+                exit 0
+                ;;
+              *)
+                # An unreadable receipt must not pass as a run with nothing to publish.
+                echo "::error::The production promotion receipt for $REF could not be read"
+                exit 1
+                ;;
+            esac
           else
             [[ "$REF" != *-* ]] || { echo 'Desktop publication requires a stable promoted ref' >&2; exit 1; }
             # Manual recovery must target the commit production currently serves.
@@ -385,7 +395,7 @@ jobs:
       # ─── macOS: Developer ID + App Store Connect notarization ─
       - name: Import Apple Developer ID certificate into temporary keychain
         if: matrix.os == 'macos'
-        uses: apple-actions/import-codesign-certs@77ba2a2a8f5cfc8c405ebf3159f767c323e238f9 # v7.1.0
+        uses: apple-actions/import-codesign-certs@288b8ec97b82c66b6f2a6baaf7acc8dfbcbe331c # v7.2.0
         with:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -448,6 +458,50 @@ jobs:
           codesign --verify --verbose=2 \
             --test-requirement="$expected_requirement" \
             "${app_bundles[0]}"
+
+      # The PKCS #11 helper is signed before Tauri bundles the app, with its
+      # own entitlements (the desktop's build:pkcs11-helper script), and
+      # bundled as is; the app's signature seals it and Tauri notarizes both.
+      # Only the helper may load libraries signed by another team.
+      - name: Verify PKCS #11 helper signature
+        if: matrix.os == 'macos'
+        working-directory: apps/desktop
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [[ ! -f src-tauri/Pkcs11HelperEntitlements.plist ]]; then
+            echo "This release predates the PKCS #11 helper."
+            exit 0
+          fi
+          shopt -s nullglob
+          app_bundles=(src-tauri/target/"$TARGET"/release/bundle/macos/*.app)
+          app="${app_bundles[0]}"
+          helper="$app/Contents/MacOS/stella-pkcs11-helper"
+          if [[ ! -f "$helper" ]]; then
+            echo "::error::The app bundle has no PKCS #11 helper"
+            exit 1
+          fi
+          codesign --verify --strict --verbose=2 \
+            --test-requirement='=anchor apple generic and certificate leaf[subject.OU] = "4N3QVH454C"' \
+            "$helper"
+          # Read whole, then searched: `grep -q` closing a pipe early would
+          # fail the producer under pipefail.
+          helper_details=$(codesign --display --verbose=2 "$helper" 2>&1)
+          if ! grep -q 'flags=.*runtime' <<<"$helper_details"; then
+            echo "::error::The PKCS #11 helper is not signed with the hardened runtime"
+            exit 1
+          fi
+          entitlement=com.apple.security.cs.disable-library-validation
+          helper_entitlements=$(codesign --display --entitlements - --xml "$helper" 2>/dev/null)
+          if ! grep -q "$entitlement" <<<"$helper_entitlements"; then
+            echo "::error::The PKCS #11 helper lacks $entitlement"
+            exit 1
+          fi
+          app_entitlements=$(codesign --display --entitlements - --xml "$app" 2>/dev/null)
+          if grep -q "$entitlement" <<<"$app_entitlements"; then
+            echo "::error::The app itself must not carry $entitlement"
+            exit 1
+          fi
 
       - name: Build styled DMG without Finder automation
         if: matrix.os == 'macos'
@@ -800,3 +854,43 @@ jobs:
       - name: Promote release to latest
         timeout-minutes: 10
         run: bash scripts/promote-desktop-release.sh
+
+  release-complete:
+    needs:
+      [
+        resolve,
+        build,
+        verify-production,
+        manifest,
+        promote-latest,
+        carry-forward,
+      ]
+    if: ${{ always() && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all release jobs to complete
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        # The verdict is computed before it is read, so an unreadable needs
+        # record fails the job instead of reading as "nothing failed".
+        run: |
+          set -euo pipefail
+          unfinished=$(jq -nr '
+            input
+            | .resolve.outputs as $release
+            | to_entries[]
+            | select(.key != "resolve")
+            | select(if $release.should_build == "true" then
+                .key != "carry-forward"
+                and ($release.channel == "prod" or (.key != "verify-production" and .key != "promote-latest"))
+              else .key == "carry-forward" and $release.channel == "prod" end)
+            | select(.value.result != "success")
+            | [.key, .value.result] | @tsv' <<< "$NEEDS")
+          failed=0
+          while IFS=$'\t' read -r job result; do
+            [[ -n "$job" ]] || continue
+            echo "::error::Required desktop release job $job ended $result"
+            failed=1
+          done <<< "$unfinished"
+          exit "$failed"

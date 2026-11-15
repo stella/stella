@@ -260,13 +260,14 @@ describe("coalescing invariants", () => {
     let generated = 0;
     const source = (async function* () {
       yield* events;
-      yield { type: "turn.completed" as const, usage: null };
+      yield { type: "turn.completed" as const, usage: null, boundary: null };
     })();
     for await (const chunk of harnessEventsToChunks(source, {
       harness: "codex",
       model: "gpt-test",
       runId: "run-1",
       threadId: "thread-1",
+      workspaceDir: "/workspace",
       generateId: () => {
         generated += 1;
         return `id-${String(generated)}`;

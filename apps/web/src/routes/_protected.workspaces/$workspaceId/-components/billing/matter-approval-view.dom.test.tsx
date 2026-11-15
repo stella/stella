@@ -733,7 +733,9 @@ describe("returning checked time together", () => {
       ]),
     );
     await testing.waitFor(() =>
-      expect(testing.screen.queryByText("Narrative entry-a")).toBeNull(),
+      expect(testing.screen.queryByText("Narrative entry-a") === null).toBe(
+        true,
+      ),
     );
     expect(testing.screen.queryByText("Narrative entry-c")).toBeNull();
     expect(testing.screen.getByText("Narrative entry-b")).toBeTruthy();

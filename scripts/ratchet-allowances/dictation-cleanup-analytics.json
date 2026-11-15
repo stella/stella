@@ -1,0 +1,5 @@
+{
+  "metric": "ai-analytics-callback-seams",
+  "delta": 2,
+  "reason": "Desktop dictation cleanup (apps/api/src/handlers/dictation/cleanup.ts) follows the stateless short-text handler shape: a generation failure and an answer refused by the cleanup bounds are each reported once through the request's customer-data AI analytics callbacks, which also carry the generation bookkeeping and its redaction policy. Only the refusal reason is reported, never the transcript or the answer."
+}

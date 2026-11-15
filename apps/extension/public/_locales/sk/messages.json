@@ -5,8 +5,11 @@
   "adoptUnsupported": {
     "message": "So stellou možno používať iba verejné stránky na HTTPS."
   },
+  "usingTabs": {
+    "message": "Používa sa:"
+  },
   "downloadKept": {
-    "message": "Sťahovania dokončené počas ovládania karty stellou a ponechané: $COUNT$. Pred otvorením overte, odkiaľ pochádzajú.",
+    "message": "Ponechané sťahovania: $COUNT$, pred otvorením overte",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -14,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "Sťahovania zastavené stellou počas ovládania karty: $COUNT$.",
+    "message": "Zastavené sťahovania: $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -22,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "Počas ovládania karty stellou: zastavené sťahovania: $STOPPED$. Dokončené a ponechané sťahovania (pred otvorením overte, odkiaľ pochádzajú): $KEPT$.",
+    "message": "Zastavené sťahovania: $STOPPED$ · ponechané: $KEPT$, pred otvorením overte",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -42,15 +45,10 @@
     "message": "Otvorte kartu aplikácie stella a skúste to znova."
   },
   "connectionPurpose": {
-    "message": "Keď o to požiadate v chate, stella môže na samostatnej karte otvárať a čítať weby pomocou vašich prihlásení."
+    "message": "Otvára a číta weby pre chat s vašimi prihláseniami."
   },
   "statusConnected": {
-    "message": "Pripojené k $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
+    "message": "Pripojené"
   },
   "statusNotConnected": {
     "message": "Nepripojené"
@@ -60,14 +58,6 @@
   },
   "statusOpenStella": {
     "message": "Na pripojenie otvorte stellu"
-  },
-  "statusTabHandedOver": {
-    "message": "Karta odovzdaná stelle: $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
   },
   "allowAndConnect": {
     "message": "Povoliť prístup k webom a pripojiť"
@@ -84,22 +74,28 @@
   "disconnectTab": {
     "message": "Odpojiť"
   },
-  "disconnectDescription": {
-    "message": "stella prestane používať pripojenú kartu."
-  },
   "revokeAccess": {
-    "message": "Odobrať prístup k webom"
-  },
-  "revokeDescription": {
-    "message": "Odoberie povolenie otvárať a čítať weby."
+    "message": "Odobrať prístup"
   },
   "checkingAccess": {
     "message": "Kontrola pripojenia…"
   },
   "statusConnectedElsewhere": {
-    "message": "stella je pripojená na inej adrese"
+    "message": "Pripojené inde"
   },
   "connectStellaInstead": {
     "message": "Pripojiť stellu tu"
+  },
+  "allowDesktop": {
+    "message": "Používať so stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop: pripojené"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop: nebeží"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Aktualizujte stella desktop a toto rozšírenie"
   }
 }

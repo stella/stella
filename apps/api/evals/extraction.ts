@@ -467,6 +467,7 @@ const toAIBatchProperty = (fixture: PropertyFixture): AIBatchProperty => {
   return {
     id: toSafeId<"property">(fixture.key),
     status: "stale",
+    answerShape: "value",
     content: fixture.content,
     dependencies: [],
     tool,

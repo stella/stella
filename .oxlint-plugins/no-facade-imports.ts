@@ -14,6 +14,7 @@ const REMOVED_AST_FACADE_MODULE_IDS = new Set([
 ]);
 
 const ALLOWED_LEAF_IMPORTS = new Set([
+  "@/api/db/account-erasure-policies",
   "@/api/db/agent-auth-schema",
   "@/api/db/auth-schema",
   "@/api/db/backfill-runtime",
@@ -35,6 +36,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/json-utils",
   "@/api/db/indicator-query",
   "@/api/db/long-running-connection",
+  "@/api/db/organization-settings-constants",
   "@/api/db/online-migration-connection",
   "@/api/db/online-unique-indexes",
   "@/api/db/rls",

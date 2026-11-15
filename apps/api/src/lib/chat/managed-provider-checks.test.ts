@@ -28,6 +28,7 @@ const MODEL = BYOK_DEFAULT_MODELS.openrouter.chat.modelId;
 const chatOptions = {
   model: MODEL,
   messages: [{ role: "user" as const, content: "fixture request" }],
+  threadId: "managed-provider-checks-thread",
   logger: resolveDebugOption(false),
 };
 const structuredOptions = {
@@ -381,6 +382,7 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
             })(MODEL);
             const options = {
               ...chatOptions,
+              threadId: "managed-provider-checks-thread",
               logger,
               modelOptions: { models: ["fixture/fallback"] },
             };

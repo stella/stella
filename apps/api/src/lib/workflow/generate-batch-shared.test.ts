@@ -16,6 +16,7 @@ const batch: PropertyBatch = {
     {
       id: summaryId,
       status: "stale",
+      answerShape: "value",
       content: { version: 1, type: "text" },
       dependencies: [
         { dependsOnPropertyId: priceId, condition: null },
@@ -56,8 +57,12 @@ describe("prepareBatchInput", () => {
     );
 
     expect(Result.isOk(prepared) && prepared.value.textInputs).toEqual([
-      { propertyId: priceId, value: "1250000.50 CZK" },
-      { propertyId: ownerId, value: "Responsible lawyer" },
+      { propertyId: priceId, value: "1250000.50 CZK", valueKind: "content" },
+      {
+        propertyId: ownerId,
+        value: "Responsible lawyer",
+        valueKind: "content",
+      },
     ]);
   });
 });

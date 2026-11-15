@@ -21,6 +21,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCourtWeights: "case_law_court_weights",
   caseLawCoverageSlices: "case_law_coverage_slices",
   caseLawDecisionAliases: "case_law_decision_aliases",
+  caseLawDecisionAnchorRedirects: "case_law_decision_anchor_redirects",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
   publishedCaseLawDecisions: "case_law_published_decisions",
@@ -60,6 +61,9 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   legislationSources: "legislation_sources",
   legislationWorkNames: "legislation_work_names",
   legislationWorkIdentifiers: "legislation_work_identifiers",
+  softLawDocuments: "soft_law_documents",
+  softLawDocumentVersions: "soft_law_document_versions",
+  softLawDocumentLocators: "soft_law_document_locators",
   statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
@@ -111,7 +115,11 @@ export const LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
-/** Expanded before the follow-up release grants the reviewed doctrine capability. */
+/**
+ * The reviewed doctrine capability, granted by
+ * `20261112120000_public_law_reader_citation_doctrine` one release after the
+ * map first permitted it.
+ */
 export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
   case_law_citations: {
     citation_key: "permitted",
@@ -367,6 +375,12 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     retired_decision_id: "permitted",
     canonical_decision_id: "permitted",
   },
+  // Where an earlier document's anchor went; the redirect read answers from it.
+  case_law_decision_anchor_redirects: {
+    decision_id: "required",
+    from_anchor: "required",
+    to_anchor: "required",
+  },
   case_law_decision_identifiers: {
     decision_id: "required",
     type: "required",
@@ -387,17 +401,17 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   [CASE_LAW_DECISION_VIEWS[0]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   case_law_decision_citation_stats: {
-    decision_id: "permitted",
-    direction: "permitted",
-    related_year: "permitted",
-    related_country: "permitted",
-    related_source_id: "permitted",
-    polarity: "permitted",
-    count: "permitted",
+    decision_id: "required",
+    direction: "required",
+    related_year: "required",
+    related_country: "required",
+    related_source_id: "required",
+    polarity: "required",
+    count: "required",
   },
   case_law_decision_citation_stats_state: {
-    decision_id: "permitted",
-    status: "permitted",
+    decision_id: "required",
+    status: "required",
   },
   // The text-search configuration a language's query is parsed with. It is
   // read from the database whose search documents it has to match.
@@ -623,6 +637,10 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     expression_kind: "required",
     window_disposition: "required",
     window_disposition_basis: "required",
+    // What a consolidation changed against the one before it, served only
+    // while the row's payload revision is the one it was computed from.
+    change_summary: "required",
+    payload_revision: "required",
     fulltext: "required",
     sections: "required",
     document_ast: "required",
@@ -686,6 +704,33 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     source_id: "required",
     identifier: "required",
     eli: "required",
+  },
+  // Guidance as served; raw payloads, identity keys and run state stay with
+  // ingestion, and `soft_law_sources` is not readable at all.
+  soft_law_documents: {
+    id: "required",
+    jurisdiction: "required",
+    authority: "required",
+    kind: "required",
+    title: "required",
+    stated_reference: "required",
+    issued_on: "required",
+    listing_state: "required",
+    validity_state: "required",
+    validity_basis: "required",
+  },
+  soft_law_document_versions: {
+    document_id: "required",
+    metadata: "required",
+    extracted_text: "required",
+    extraction_quality: "required",
+    observed_to: "required",
+  },
+  soft_law_document_locators: {
+    document_id: "required",
+    url: "required",
+    state: "required",
+    last_seen_at: "required",
   },
   // The name lookup a legislation search places named acts first by: the
   // match keys and what they point at, not the names' text.

@@ -101,6 +101,8 @@ test("scaffolds the package files and registers the knip workspace", () => {
     scripts: {
       test: "bun test src",
       typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+      lint: "cd ../.. && bun scripts/lint.ts packages/matter-dates",
+      "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/matter-dates",
     },
     devDependencies: {
       "@stll/typescript-config": "workspace:*",

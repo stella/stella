@@ -1,7 +1,9 @@
 import { createContext } from "react";
 
-import type { LocalRunQuestionPause } from "@/components/chat/local-run-question.logic";
+import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
+
 import type { ChatRuntime } from "@/features/chat/chat-runtime";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
 /**
  * The question a run on the member's computer paused the thread's turn on,
@@ -12,6 +14,9 @@ import type { ChatRuntime } from "@/features/chat/chat-runtime";
 export type ChatLocalRunQuestionContextValue = {
   pause: LocalRunQuestionPause | null;
   answer: ChatRuntime["answerLocalRunQuestion"];
+  /** The thread whose composer keeps words typed into a question that
+   *  closed unsent. */
+  threadRef: ChatThreadRef;
 };
 
 export const ChatLocalRunQuestionContext =

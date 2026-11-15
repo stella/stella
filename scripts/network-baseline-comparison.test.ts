@@ -25,7 +25,9 @@ const routeTree = await (async () => {
   const revision = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
     cwd: repository,
   });
-  expect(revision.exitCode).toBe(0);
+  if (revision.exitCode !== 0) {
+    throw new Error(`git rev-parse HEAD failed: ${revision.stderr.toString()}`);
+  }
   const output = path.join(directory, "route-tree.ts");
   try {
     await generateRevisionRouteTree({

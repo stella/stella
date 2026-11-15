@@ -1,7 +1,4 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 
 import config from "../../oxlint.config.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
@@ -17,61 +14,9 @@ const MULTILINE_RELATIVE = [
   ");",
 ].join("\n");
 
-for (const { name, changedLines, diagnostics } of [
-  {
-    name: "unchanged during rollout",
-    changedLines: [],
-    diagnostics: [],
-  },
-  {
-    name: "changed inside the call during rollout",
-    changedLines: [4],
-    diagnostics: [2],
-  },
-]) {
-  test(`multiline raw relative call: ${name}`, async () => {
-    const directory = await mkdtemp(
-      path.join(tmpdir(), "portable-path-rollout-"),
-    );
-    const wrapper = path.join(directory, "plugin.ts");
-    const plugin = path.resolve(
-      import.meta.dirname,
-      "../no-raw-path-relative.ts",
-    );
-    const scope = path.resolve(
-      import.meta.dirname,
-      "../../scripts/guard-rollouts.ts",
-    );
-    const portablePath = path.resolve(
-      import.meta.dirname,
-      "../../packages/portable-path/src/index.ts",
-    );
-    const repository = path.resolve(import.meta.dirname, "../..");
-    // Inject diff inputs; oxlint still executes the production detector and scope helper.
-    await Bun.write(
-      wrapper,
-      `import { createPortablePathPlugin } from ${JSON.stringify(plugin)};
-import { guardEnforcesLine } from ${JSON.stringify(scope)};
-import { repoRelativePath } from ${JSON.stringify(portablePath)};
-export default createPortablePathPlugin((options) => guardEnforcesLine({
-  ...options,
-  rollouts: [{ id: "portable-path", type: "changed-lines", expiresAt: "2026-10-20T00:00:00.000Z", check: ["bun", "scripts/check-fixture.ts"] }],
-  changedLines: new Map([[repoRelativePath(${JSON.stringify(repository)}, options.file), new Set(${JSON.stringify(changedLines)})]]),
-}));
-`,
-    );
-    try {
-      expect(
-        await lintSingleRule("no-raw-path-relative", MULTILINE_RELATIVE, {
-          sourcePath: "scripts/path-consumer.ts",
-          pluginPath: wrapper,
-        }),
-      ).toEqual(diagnostics);
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
-  });
-}
+test("reports a raw relative call that spans lines", async () => {
+  expect(await lint(MULTILINE_RELATIVE)).toEqual([2]);
+});
 
 test("reports raw relative calls through identifiers", async () => {
   expect(

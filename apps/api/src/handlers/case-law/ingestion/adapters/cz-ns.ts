@@ -1,3 +1,5 @@
+// parser-output-unchanged: [cz-ns] replay reads identity from the stored listing row where the envelope keeps one; every row that replayed before builds the same decision.
+// parser-output-unchanged: [cz-ns] the legacy identity fields decide which row a document writes to; the parsed output is unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -70,12 +72,15 @@ import type {
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
+  ReconciliationListingItem,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
+  StoredRawRecaptureInput,
+  StoredRawRecaptureOutcome,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -142,6 +147,8 @@ type CzNsRawPart = (typeof CZ_NS_RAW_PART)[keyof typeof CZ_NS_RAW_PART];
 
 /** The Domino universal id as every NS listing and detail URL states it. */
 const CZ_NS_DOCUMENT_ID_PATTERN = /^[0-9a-f]{32}$/iu;
+/** The marker the court appends to a docket's later documents: "- II.". */
+const CZ_NS_SIBLING_DOCKET_SUFFIX = /-\s*[IVXLC]+\.?$/u;
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
@@ -596,6 +603,18 @@ const czNsIdentityFields = ({
  * HTML listings carry separate aliases. Preserve every docket while the
  * publisher's universal id continues to identify the document.
  */
+/**
+ * The docket a row was stored under before the court published a further
+ * decision under it and suffixed this one ("22 Cdo 120/2026- I."); undefined
+ * when the docket carries no suffix.
+ */
+const docketBeforeSiblingSuffix = (caseNumber: string): string | undefined => {
+  const suffix = CZ_NS_SIBLING_DOCKET_SUFFIX.exec(caseNumber);
+  return suffix === null
+    ? undefined
+    : caseNumber.slice(0, suffix.index).trimEnd();
+};
+
 const caseNumbersOf = ({
   caseNumber,
   additionalCaseNumbers,
@@ -716,6 +735,7 @@ const buildCzNsDecisionFromPages = ({
         }),
     sourceDocumentId: unid,
     legacySourceUrls: [webUrl],
+    legacyCaseNumber: docketBeforeSiblingSuffix(caseNumber),
     ecli: meta["ecli"],
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NS].country,
@@ -909,6 +929,119 @@ const storedAdditionalCaseNumbers = (
     : { type: "invalid" };
 };
 
+const isCzNsListingRow = (value: unknown): value is CzNsListingRow =>
+  isRecord(value) &&
+  typeof value["unid"] === "string" &&
+  typeof value["caseNumber"] === "string" &&
+  (value["additionalCaseNumbers"] === undefined ||
+    (Array.isArray(value["additionalCaseNumbers"]) &&
+      value["additionalCaseNumbers"].every(
+        (item) => typeof item === "string" && item.trim().length > 0,
+      )));
+
+/** The listing row a stored envelope keeps, where it keeps a readable one. */
+const listedRowOfStoredRaw = (raw: string): CzNsListingRow | null => {
+  const part = decodeSourceRawEnvelope(raw)?.[CZ_NS_RAW_PART.LISTING];
+  if (part === undefined) {
+    return null;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(part)).unwrapOr(null);
+  return isCzNsListingRow(parsed) ? parsed : null;
+};
+
+/** Domino prints a universal id in either case; it names the same document. */
+const sameUnid = (left: string, right: string): boolean =>
+  left.toUpperCase() === right.toUpperCase();
+
+/** The docket a row is stored under: the first of a legacy joined label. */
+const storedPrimaryDocket = (stored: StoredRawReparseInput): string =>
+  stored.caseNumber.split(CASE_NUMBER_SEPARATOR).at(0)?.trim() ?? "";
+
+/**
+ * Whether a listing row states the docket a row is stored under, directly or
+ * as the docket the court suffixed when it published a further decision.
+ */
+const listsStoredDocket = (
+  row: CzNsListingRow,
+  stored: StoredRawReparseInput,
+): boolean => {
+  const docket = storedPrimaryDocket(stored);
+  return caseNumbersOf(row).some(
+    (listed) =>
+      listed === docket || docketBeforeSiblingSuffix(listed) === docket,
+  );
+};
+
+type ReparseFromListedRowOptions = {
+  stored: StoredRawReparseInput;
+  raw: string;
+  listed: CzNsListingRow;
+};
+
+/**
+ * Rebuild from an envelope that keeps the listing row: the publisher's own
+ * statement of the document's id and dockets, which the row's columns only
+ * copied (and, for older rows, never held or held malformed). The row still
+ * has to be the document the envelope lists.
+ */
+const reparseFromListedRow = ({
+  stored,
+  raw,
+  listed,
+}: ReparseFromListedRowOptions): StoredRawReparseOutcome => {
+  if (
+    stored.sourceDocumentId !== null &&
+    !sameUnid(stored.sourceDocumentId, listed.unid)
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `the envelope lists ${listed.unid}, the row ${stored.sourceDocumentId}`,
+    };
+  }
+  if (!listsStoredDocket(listed, stored)) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `the envelope lists ${listed.caseNumber}, the row ${stored.caseNumber}`,
+    };
+  }
+  const parts = storedRawParts(raw);
+  if (parts === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: `no decision pages in the stored payload for ${stored.caseNumber}`,
+    };
+  }
+  const result = buildCzNsDecisionFromPages({
+    row: listed,
+    webHtml: parts.webHtml,
+    printHtml: parts.printHtml,
+  });
+  if (result === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `the envelope's listing row is invalid for ${stored.caseNumber}`,
+    };
+  }
+  return {
+    type: "parsed",
+    result: {
+      ...result,
+      rawHash: sourceFingerprint({ sourceRaw: raw }),
+      sourceRaw: raw,
+      sourceRawContentType: stored.contentType ?? undefined,
+    },
+    // A legacy joined label ("1 Cdo 1/2026, 1 Cdo 2/2026") or the docket
+    // before a sibling suffix is an older spelling of the listed docket.
+    ...(result.caseNumber === stored.caseNumber
+      ? {}
+      : { legacyCaseNumber: stored.caseNumber }),
+  };
+};
+
 /**
  * Rebuild a decision from either generation of the saved two-page payload.
  * Legacy rows carry their complete docket list in the joined `caseNumber`,
@@ -926,6 +1059,11 @@ const reparseStoredRaw = (
       rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
       detail: `stored content type ${stored.contentType}`,
     };
+  }
+  const raw = new TextDecoder().decode(stored.raw);
+  const listed = listedRowOfStoredRaw(raw);
+  if (listed !== null) {
+    return reparseFromListedRow({ stored, raw, listed });
   }
   if (stored.sourceDocumentId === null) {
     return {
@@ -950,7 +1088,6 @@ const reparseStoredRaw = (
     };
   }
 
-  const raw = new TextDecoder().decode(stored.raw);
   const parts = storedRawParts(raw);
   if (parts === null) {
     return {
@@ -1190,19 +1327,26 @@ export const czNsListingIdentity = (row: CzNsListingRow): ListingIdentity => {
  * short listing banked as a whole slice records `reported` below the truth
  * and reads ever after as fully collected.
  */
-const listCzNsSlicePage = async ({
-  page,
-  signal,
-  slice,
-}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
-  if (page !== 0) {
-    panic(`cz-ns slice page out of range: ${page}`);
-  }
+type ReadCzNsSearchListingOptions = {
+  /** The publisher's own search query. */
+  query: string;
+  /** What the query asks for, as errors and cursors name it. */
+  label: string;
+  signal?: AbortSignal | undefined;
+};
 
-  const date = czNsSliceDate(slice);
-  const query =
-    `[${PUBLICATION_DATE_FIELD}]>=${date} AND ` +
-    `[${PUBLICATION_DATE_FIELD}]<=${date}`;
+/**
+ * The rows one search lists, read whole or refused.
+ *
+ * The one reader of this publisher's search listing: a publication day and a
+ * docket are asked for through the same page, so the same rules decide
+ * whether a body is an answer.
+ */
+const readCzNsSearchListing = async ({
+  query,
+  label,
+  signal,
+}: ReadCzNsSearchListingOptions): Promise<CzNsListingRow[]> => {
   const url =
     `${SEARCH_URL}?SearchView&Query=${encodeURIComponent(query)}` +
     `&SearchMax=${SEARCH_MAX}` +
@@ -1222,7 +1366,7 @@ const listCzNsSlicePage = async ({
       outcome: listing,
       message: "CZ Supreme Court listing error",
       adapterKey: ADAPTER_KEYS.CZ_NS,
-      cursor: slice,
+      cursor: label,
     });
   }
 
@@ -1231,12 +1375,12 @@ const listCzNsSlicePage = async ({
 
   if (rows.length === 0) {
     if (html.includes(LISTING_EMPTY_MARKER)) {
-      return { items: [], totalPages: 0 };
+      return [];
     }
     throw new AdapterFetchError({
-      message: `CZ Supreme Court listing for ${slice} stated neither results nor emptiness`,
+      message: `CZ Supreme Court listing for ${label} stated neither results nor emptiness`,
       adapterKey: ADAPTER_KEYS.CZ_NS,
-      cursor: slice,
+      cursor: label,
     });
   }
 
@@ -1248,9 +1392,9 @@ const listCzNsSlicePage = async ({
   const matched = parseListingCount(html, LISTING_COUNT_PATTERN.MATCHED);
   if (matched !== undefined && matched !== rows.length) {
     throw new AdapterFetchError({
-      message: `CZ Supreme Court listing for ${slice} counts ${matched} decisions and carries ${rows.length}, against the ${CZ_NS_LISTING_WINDOW} one search addresses`,
+      message: `CZ Supreme Court listing for ${label} counts ${matched} decisions and carries ${rows.length}, against the ${CZ_NS_LISTING_WINDOW} one search addresses`,
       adapterKey: ADAPTER_KEYS.CZ_NS,
-      cursor: slice,
+      cursor: label,
     });
   }
 
@@ -1264,38 +1408,53 @@ const listCzNsSlicePage = async ({
   const shown = parseListingCount(html, LISTING_COUNT_PATTERN.SHOWN);
   if (shown === undefined ? rows.length > 1 : shown !== rows.length) {
     throw new AdapterFetchError({
-      message: `CZ Supreme Court listing for ${slice} states ${shown ?? "no"} decisions and carries ${rows.length}`,
+      message: `CZ Supreme Court listing for ${label} states ${shown ?? "no"} decisions and carries ${rows.length}`,
       adapterKey: ADAPTER_KEYS.CZ_NS,
-      cursor: slice,
+      cursor: label,
     });
   }
 
   if (rows.length >= CZ_NS_LISTING_WINDOW) {
     throw new AdapterFetchError({
-      message: `CZ Supreme Court listing for ${slice} filled the ${CZ_NS_LISTING_WINDOW} a search addresses`,
+      message: `CZ Supreme Court listing for ${label} filled the ${CZ_NS_LISTING_WINDOW} a search addresses`,
       adapterKey: ADAPTER_KEYS.CZ_NS,
-      cursor: slice,
+      cursor: label,
     });
   }
 
-  return {
-    items: rows.map((row) => ({
-      identity: czNsListingIdentity(row),
-      payload: row,
-    })),
-    totalPages: 1,
-  };
+  return rows;
 };
 
-const isCzNsListingRow = (value: unknown): value is CzNsListingRow =>
-  isRecord(value) &&
-  typeof value["unid"] === "string" &&
-  typeof value["caseNumber"] === "string" &&
-  (value["additionalCaseNumbers"] === undefined ||
-    (Array.isArray(value["additionalCaseNumbers"]) &&
-      value["additionalCaseNumbers"].every(
-        (item) => typeof item === "string" && item.trim().length > 0,
-      )));
+const listingPage = (
+  rows: readonly CzNsListingRow[],
+): ReconciliationSlicePage => ({
+  items: rows.map((row) => ({
+    identity: czNsListingIdentity(row),
+    payload: row,
+  })),
+  totalPages: rows.length === 0 ? 0 : 1,
+});
+
+const listCzNsSlicePage = async ({
+  page,
+  signal,
+  slice,
+}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+  if (page !== 0) {
+    panic(`cz-ns slice page out of range: ${page}`);
+  }
+
+  const date = czNsSliceDate(slice);
+  return listingPage(
+    await readCzNsSearchListing({
+      query:
+        `[${PUBLICATION_DATE_FIELD}]>=${date} AND ` +
+        `[${PUBLICATION_DATE_FIELD}]<=${date}`,
+      label: slice,
+      signal,
+    }),
+  );
+};
 
 /**
  * Rebuild a decision from a row the loop stored verbatim. The payload is
@@ -1433,6 +1592,159 @@ const readCzNsListPage = async ({
   };
 };
 
+// ── Recapture ───────────────────────────────────────────
+
+/** The docket field the publisher's search addresses. */
+const DOCKET_FIELD = "znacka";
+
+/**
+ * A row is looked up by its docket rather than by its publication day: the
+ * oldest part of this corpus was handed to the web on a few bulk days far
+ * larger than one search serves, so a day listing cannot reach those rows,
+ * and a docket search names a handful at most.
+ */
+const czNsRecaptureLookupOf = (
+  stored: StoredRawReparseInput,
+): string | null => {
+  if (storedRawParts(new TextDecoder().decode(stored.raw)) === null) {
+    return null;
+  }
+  const docket = storedPrimaryDocket(stored);
+  return docket.length === 0 || docket.includes('"') ? null : docket;
+};
+
+const listCzNsDocketPage = async ({
+  page,
+  signal,
+  slice: docket,
+}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+  if (page !== 0) {
+    panic(`cz-ns docket lookup page out of range: ${page}`);
+  }
+  return listingPage(
+    await readCzNsSearchListing({
+      query: `[${DOCKET_FIELD}]="${docket}"`,
+      label: docket,
+      signal,
+    }),
+  );
+};
+
+/** The universal id a document URL names: `/WebSearch/{unid}?openDocument`. */
+const URL_UNID =
+  /\/Web(?:Search|Print)\/(?<unid>[0-9A-Fa-f]{32})\?openDocument/u;
+
+/**
+ * The universal id a stored row names, wherever it kept one: its own column,
+ * or the document URLs a legacy row stored without that column still holds.
+ * Ids that disagree name no single decision.
+ */
+type CzNsHeldUnid =
+  | { type: "named"; unid: string }
+  | { type: "unnamed" }
+  | { type: "contradictory"; detail: string };
+
+const czNsHeldUnid = (stored: StoredRawReparseInput): CzNsHeldUnid => {
+  const named = [
+    stored.sourceDocumentId,
+    URL_UNID.exec(stored.sourceUrl ?? "")?.groups?.["unid"] ?? null,
+    URL_UNID.exec(stored.documentUrl ?? "")?.groups?.["unid"] ?? null,
+  ].filter((unid): unid is string => unid !== null);
+  const [first] = named;
+  if (first === undefined) {
+    return { type: "unnamed" };
+  }
+  const other = named.find((unid) => !sameUnid(unid, first));
+  return other === undefined
+    ? { type: "named", unid: first }
+    : {
+        type: "contradictory",
+        detail: `the row names both ${first} and ${other}`,
+      };
+};
+
+/**
+ * A listed row is the stored one when it states the universal id the row
+ * names, or, for a row that names none anywhere, its docket. A docket the
+ * court published several documents under matches each of them; the caller
+ * reports that as ambiguous rather than choosing.
+ */
+const czNsMatchesStored = (
+  { payload }: ReconciliationListingItem,
+  stored: StoredRawReparseInput,
+): boolean => {
+  if (!isCzNsListingRow(payload)) {
+    return false;
+  }
+  const held = czNsHeldUnid(stored);
+  if (held.type === "named") {
+    return sameUnid(payload.unid, held.unid);
+  }
+  // A row whose ids disagree matches nothing; one naming none, its docket.
+  return held.type === "unnamed" && listsStoredDocket(payload, stored);
+};
+
+/**
+ * The envelope a crawl stores for the listed row and the pages already held,
+ * built by {@link buildCzNsDecisionFromPages}, the builder the crawl uses.
+ */
+const recaptureCzNsStoredRaw = ({
+  listingPayload,
+  stored,
+}: StoredRawRecaptureInput): StoredRawRecaptureOutcome => {
+  if (!isCzNsListingRow(listingPayload)) {
+    return {
+      type: "not-recapturable",
+      detail: "the listed item is not a listing row",
+    };
+  }
+  const parts = storedRawParts(new TextDecoder().decode(stored.raw));
+  if (parts === null) {
+    return {
+      type: "not-recapturable",
+      detail: `no decision pages in the stored payload for ${stored.caseNumber}`,
+    };
+  }
+  const held = czNsHeldUnid(stored);
+  if (held.type === "contradictory") {
+    return { type: "identity-mismatch", detail: held.detail };
+  }
+  // Exact, as replay and the stored identity compare it: a row spelling its
+  // id in another case would rebuild to an identity replay then refuses.
+  if (held.type === "named" && listingPayload.unid !== held.unid) {
+    return {
+      type: "identity-mismatch",
+      detail: sameUnid(listingPayload.unid, held.unid)
+        ? `the listing spells ${listingPayload.unid}, the row ${held.unid}: the same id in another case`
+        : `the listing names ${listingPayload.unid}, the row ${held.unid}`,
+    };
+  }
+  if (!listsStoredDocket(listingPayload, stored)) {
+    return {
+      type: "identity-mismatch",
+      detail: `the listing states ${listingPayload.caseNumber}, the row ${stored.caseNumber}`,
+    };
+  }
+  const decision = buildCzNsDecisionFromPages({
+    row: listingPayload,
+    webHtml: parts.webHtml,
+    printHtml: parts.printHtml,
+  });
+  if (decision === null) {
+    return {
+      type: "not-recapturable",
+      detail: "the listed row states no universal id and docket",
+    };
+  }
+  return decision.sourceRaw === undefined
+    ? panic("The cz-ns builder built a decision without its envelope")
+    : {
+        type: "recaptured",
+        raw: decision.sourceRaw,
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      };
+};
+
 export const czNsAdapter = defineSourceAdapter({
   documentStage: "inline",
   key: ADAPTER_KEYS.CZ_NS,
@@ -1468,6 +1780,15 @@ export const czNsAdapter = defineSourceAdapter({
     firstSlice: CZ_NS_FIRST_SLICE,
     ...czNsDaySlices.walk,
     tipWindowDays: CZ_NS_TIP_WINDOW_DAYS,
+    // Rows stored before the envelope kept the listing row, or with no
+    // universal id or a malformed docket list, are upgraded from a docket
+    // search and then replay like a crawled row.
+    recapture: {
+      lookupOf: czNsRecaptureLookupOf,
+      listLookup: listCzNsDocketPage,
+      matchesStored: czNsMatchesStored,
+      recaptureStoredRaw: recaptureCzNsStoredRaw,
+    },
     listSlicePage: listCzNsSlicePage,
     buildDecision: buildCzNsFromPayload,
   },

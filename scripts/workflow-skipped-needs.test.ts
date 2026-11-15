@@ -12,10 +12,10 @@ import path from "node:path";
 
 const WORKFLOWS = path.resolve(import.meta.dirname, "../.github/workflows");
 const STATUS_FUNCTION = /\b(?:always|cancelled|failure|success)\(\)/u;
-// These let a job run after a skipped ancestor: `always()`, any `cancelled()`
-// test (`!cancelled()`), and a negated `failure()` or `success()`. A plain
-// `success()` skips with the ancestor; a plain `failure()` runs only after a
-// failure.
+// These let a job run after a skipped ancestor: `always()`, any
+// `cancelled()` test (`!cancelled()`), and a negated `failure()` or
+// `success()`. A plain `success()` skips with the ancestor; a plain
+// `failure()` runs only after a failure.
 const TOLERATES_SKIP =
   /\b(?:always|cancelled)\(\)|!\s*(?:failure|success)\(\)/u;
 
@@ -65,7 +65,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * Jobs without a status function that need a parent which states one and sits
  * below a conditionally skipped job.
  */
-export const skipsAfterTolerantParent = (
+const skipsAfterTolerantParent = (
   file: string,
   jobs: Readonly<Record<string, Job>>,
 ): string[] => {

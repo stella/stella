@@ -91,7 +91,10 @@ import type { ReaderMarksFilter } from "@/features/case-law/components/case-view
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { judgePortraitSrc } from "@/features/case-law/components/case-viewer/decision-judges";
 import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
-import { decisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
+import {
+  decisionParagraphLanding,
+  fragmentBlockAnchor,
+} from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
 import {
   clickOpensVisitorOffer,
   NOTES_FILTER_SHOWS_AI,
@@ -109,10 +112,12 @@ import { useDecisionCitationAnchors } from "@/features/case-law/components/case-
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader-provision-mode-toggle";
+import { heldAnchorTarget } from "@/features/case-law/decision-anchor-resolution.logic";
 import { withSeparateOpinion } from "@/features/case-law/decision-outline.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
+import { useHeldDecisionAnchors } from "@/features/case-law/use-held-decision-anchors";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
@@ -216,6 +221,52 @@ const NO_BLOCKS: DocumentAst["blocks"] = [];
 
 const decisionBlocks = (ast: DocumentAst | null): DocumentAst["blocks"] =>
   ast?.blocks ?? NO_BLOCKS;
+
+/** What a landing settled on, for keying it: its block, or its state. */
+const landingTargetKey = (
+  landing: ReturnType<typeof decisionParagraphLanding>,
+): string =>
+  landing.type === "anchor" && landing.anchorId !== undefined
+    ? landing.anchorId
+    : landing.type;
+
+type WorkspaceHeldAnchorsOptions = {
+  decisionId: string;
+  fragment: string | undefined;
+  answerParagraphIds: readonly string[];
+  blocks: DocumentAst["blocks"];
+};
+
+/**
+ * Anchors this reader holds from before the document's last reparse: the
+ * fragment it was opened at and the paragraphs its reader answers were made
+ * on, each resolved against the blocks shown now.
+ */
+const useWorkspaceHeldAnchors = ({
+  decisionId,
+  fragment,
+  answerParagraphIds,
+  blocks,
+}: WorkspaceHeldAnchorsOptions) => {
+  const fragmentAnchorId = fragmentBlockAnchor(fragment);
+  const resolve = useHeldDecisionAnchors({
+    decisionId,
+    anchors: [
+      ...(fragmentAnchorId === undefined ? [] : [fragmentAnchorId]),
+      ...answerParagraphIds,
+    ],
+    currentAnchors: new Set(blocks.map(({ anchorId }) => anchorId)),
+  });
+  return {
+    resolve,
+    fragmentAnchor:
+      fragmentAnchorId === undefined ? undefined : resolve(fragmentAnchorId),
+    // A paragraph a reparse moved sits under its new anchor; one it dropped
+    // keeps its id, and the answer's mark still finds its words by quote.
+    answerStartAnchor: (paragraphId: string) =>
+      heldAnchorTarget(resolve(paragraphId)) ?? paragraphId,
+  };
+};
 
 const MARKS_FOR_NOTES_FILTER = {
   ai: "none",
@@ -362,6 +413,16 @@ export const ReaderStatusNotices = ({
           )}
         </p>
       )}
+      {paragraphLanding.type === "anchor-gone" && (
+        <p
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="bg-muted text-muted-foreground px-4 py-2 text-sm"
+        >
+          {t("caseLaw.linkedPassageGone")}
+        </p>
+      )}
     </>
   );
 };
@@ -465,6 +526,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     answers.answers,
     MARKS_FOR_NOTES_FILTER[notesFilter],
   );
+  const heldAnchors = useWorkspaceHeldAnchors({
+    decisionId,
+    fragment: initialAnchorId,
+    answerParagraphIds: visibleAnswers.map(
+      (answer) => answer.anchor.spans[0].paragraphId,
+    ),
+    blocks: astBlocks,
+  });
   const [answerPlacement, setAnswerPlacement] = useState<"gutter" | "inline">(
     "gutter",
   );
@@ -556,7 +625,9 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const answerNotes: AnswerMarginItem[] = visibleAnswers.map((answer) => ({
     kind: "answer",
     id: answer.id,
-    startAnchorId: answer.anchor.spans[0].paragraphId,
+    startAnchorId: heldAnchors.answerStartAnchor(
+      answer.anchor.spans[0].paragraphId,
+    ),
     answer,
     languagePicker: answer.mine ? (
       <ReaderAnswerLanguagePicker
@@ -736,10 +807,16 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   // goes. A new decision starts the question over, and so does a new fragment
   // on the same one: stepping back to `#p-1` from `#p-2` keeps this component
   // mounted, so the decision alone cannot tell the two landings apart.
-  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}#${landingSessionId ?? ""}`;
-  const paragraphLanding = decisionParagraphLanding(ast, initialAnchorId);
+  // The resolved target is part of the key: a fragment whose redirect read
+  // answers after the first render lands then, once.
+  const paragraphLanding = decisionParagraphLanding(
+    ast,
+    initialAnchorId,
+    heldAnchors.resolve,
+  );
   const resolvedLandingAnchorId =
     paragraphLanding.type === "anchor" ? paragraphLanding.anchorId : undefined;
+  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}#${landingSessionId ?? ""}#${landingTargetKey(paragraphLanding)}`;
   const [landingAnchorId, setLandingAnchorId] = useState(
     resolvedLandingAnchorId,
   );
@@ -753,6 +830,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     containerRef: mainRef,
     documentAst: decision.documentAst,
     fragment: initialAnchorId,
+    fragmentAnchor: heldAnchors.fragmentAnchor,
     sessionId: landingSessionId,
   });
 

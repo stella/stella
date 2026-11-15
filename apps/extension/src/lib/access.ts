@@ -13,11 +13,25 @@ const SITE_ACCESS = {
   permissions: ["downloads", "webNavigation"],
 } satisfies chrome.permissions.Permissions;
 
-export const hasAllSiteAccess = async (): Promise<boolean> =>
+export const hasAllSiteAccess = async () =>
   await chrome.permissions.contains(SITE_ACCESS);
 
-export const requestAllSiteAccess = async (): Promise<boolean> =>
+export const requestAllSiteAccess = async () =>
   await chrome.permissions.request(SITE_ACCESS);
 
-export const removeAllSiteAccess = async (): Promise<boolean> =>
+export const removeAllSiteAccess = async () =>
   await chrome.permissions.remove(SITE_ACCESS);
+
+/**
+ * Talking to stella desktop on this computer, requested on its own from the
+ * popup: only members who run coding agents locally need it.
+ */
+const DESKTOP_LINK_ACCESS = {
+  permissions: ["nativeMessaging"],
+} satisfies chrome.permissions.Permissions;
+
+export const hasDesktopLinkAccess = async () =>
+  await chrome.permissions.contains(DESKTOP_LINK_ACCESS);
+
+export const requestDesktopLinkAccess = async () =>
+  await chrome.permissions.request(DESKTOP_LINK_ACCESS);

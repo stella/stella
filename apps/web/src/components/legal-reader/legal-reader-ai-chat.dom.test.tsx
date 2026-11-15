@@ -231,7 +231,7 @@ test("asking about a passage leaves the docked chat as the only composer", async
       });
     });
     await waitFor(() => {
-      expect(screen.queryAllByRole("textbox")).toEqual([]);
+      expect(screen.queryAllByRole("textbox").length).toBe(0);
     });
     expect(screen.getByText(READER_CONTENT)).toBeDefined();
     // Closing the docked chat hands the conversation back to the reader.

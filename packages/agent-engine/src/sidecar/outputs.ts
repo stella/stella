@@ -1,7 +1,7 @@
 import { EventType } from "@tanstack/ai";
 import { Result, TaggedError } from "better-result";
 import { lstatSync } from "node:fs";
-import { constants, open, readdir } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -12,6 +12,8 @@ import {
   desktopRunnerOutputPath,
   desktopRunnerOutputUploadedSchema,
 } from "@stll/api-contract/desktop-runner";
+
+import { readWorkspaceFile } from "./workspace-file";
 
 /**
  * A run's `outputs/` folder is what its agent hands to the member; everything
@@ -107,56 +109,17 @@ const isChanged = (entry: OutputEntry, before: OutputEntry | undefined) =>
   before.size !== entry.size ||
   before.mtimeMs !== entry.mtimeMs;
 
-/** Whether every folder from the outputs folder down to the file is a folder. */
-const hasPlainParents = (workspaceDir: string, entryPath: string) => {
-  let current = path.join(workspaceDir, OUTPUTS_FOLDER);
-  if (entryAt(current)?.isDirectory() !== true) {
-    return false;
-  }
-  for (const segment of entryPath.split("/").slice(0, -1)) {
-    current = path.join(current, segment);
-    if (entryAt(current)?.isDirectory() !== true) {
-      return false;
-    }
-  }
-  return true;
-};
-
-/** A flag the platform has, or none: Windows defines neither of these two. */
-const platformFlag = (name: "O_NOFOLLOW" | "O_NONBLOCK") =>
-  name in constants ? constants[name] : 0;
-
-/** Distinct bits, so their sum is their union. */
-const OUTPUT_OPEN_FLAGS =
-  platformFlag("O_NOFOLLOW") + platformFlag("O_NONBLOCK");
-
 /**
- * The file's bytes, or `null` when it may not leave the computer. The final
- * segment opens without following a link, and what was opened is what gets
- * judged and read, so a file swapped after the scan is refused too.
+ * The file's bytes, or `null` when it may not leave the computer: a link, a
+ * pipe, a file past the cap, or one on the way through a link.
  */
 const readOutput = async (workspaceDir: string, entryPath: string) => {
-  if (!hasPlainParents(workspaceDir, entryPath)) {
-    return null;
-  }
-  // Read-only is the zero flag, so this is read-only without following a link.
-  // Non-blocking too: a file the agent swapped for a pipe after the scan would
-  // otherwise hold this open, and the turn's finish with it, for as long as no
-  // one writes to it.
-  const handle = await open(
-    path.join(workspaceDir, OUTPUTS_FOLDER, entryPath),
-    OUTPUT_OPEN_FLAGS,
+  const read = await readWorkspaceFile(
+    workspaceDir,
+    `${OUTPUTS_FOLDER}/${entryPath}`,
+    DESKTOP_RUNNER_OUTPUT_MAX_BYTES,
   );
-  try {
-    const stat = await handle.stat();
-    if (!stat.isFile() || stat.size > DESKTOP_RUNNER_OUTPUT_MAX_BYTES) {
-      return null;
-    }
-    const bytes = await handle.readFile();
-    return bytes.byteLength > DESKTOP_RUNNER_OUTPUT_MAX_BYTES ? null : bytes;
-  } finally {
-    await handle.close();
-  }
+  return read.type === "read" ? read.bytes : null;
 };
 
 export class OutputUploadFailed extends TaggedError("OutputUploadFailed")<{

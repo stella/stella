@@ -3,6 +3,7 @@ import { and, asc, eq, gt, inArray, isNotNull, ne, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
+import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import type { Transaction } from "@/api/db/root";
@@ -28,6 +29,7 @@ import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
+import { readFactTiers } from "@/api/lib/lists/fact-tiers";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -61,9 +63,12 @@ const config = {
     "position, description, and review status, plus the values it holds for " +
     "the properties the list binds as columns. A fact item also carries its " +
     "evidential detail (date and precision, evidence kind, medium, " +
-    "confidence and interpretation note), null until it is set, and " +
+    "confidence and interpretation note), null until it is set, " +
     "its first source (document id, document name, locator), null when it " +
-    "has none.",
+    "has none, and its tier: `document` when a source records it, " +
+    "`testimony` when its sources are only witness accounts, `unsourced` " +
+    "without a source (null for other items and for a caller without list " +
+    "verification).",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -139,6 +144,34 @@ const withoutJoinKey = <T extends { itemEntityId: unknown }>(
   const { itemEntityId: _matched, ...rest } = details;
   return rest;
 };
+
+type ReadPageTiersArgs = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  listId: SafeId<"legalList">;
+  rows: readonly { id: SafeId<"entity">; itemType: string | null }[];
+  accessStatus: "available" | "unavailable";
+};
+
+/** Each fact's tier on the page, for a caller who may see verification
+ *  detail; null for any other caller. */
+const readPageTiers = async ({
+  tx,
+  workspaceId,
+  listId,
+  rows,
+  accessStatus,
+}: ReadPageTiersArgs) =>
+  accessStatus === "available"
+    ? await readFactTiers({
+        tx,
+        workspaceId,
+        listId,
+        factIds: rows
+          .filter((row) => row.itemType === LIST_ITEM_TYPE.FACT)
+          .map((row) => row.id),
+      })
+    : null;
 
 const readListItems = createSafeHandler(config, async function* (context) {
   const { safeDb, workspaceId, params, query } = context;
@@ -276,8 +309,19 @@ const readListItems = createSafeHandler(config, async function* (context) {
         readListPropertyIds({ tx, workspaceId, listId: params.listId }),
       ]);
       const entityIds = rows.map((row) => row.id);
+      const tiers = await readPageTiers({
+        tx,
+        workspaceId,
+        listId: params.listId,
+        rows,
+        accessStatus,
+      });
+      const withTier = <T extends { id: SafeId<"entity"> }>(row: T) => ({
+        ...row,
+        sourceTier: tiers?.get(row.id) ?? null,
+      });
       if (entityIds.length === 0 || propertyIds.length === 0) {
-        return rows.map((row) => Object.assign(row, { customFields: [] }));
+        return rows.map((row) => withTier({ ...row, customFields: [] }));
       }
       const fieldRows = await tx
         .select({
@@ -312,7 +356,8 @@ const readListItems = createSafeHandler(config, async function* (context) {
         ).push(field);
       }
       return rows.map((row) =>
-        Object.assign(row, {
+        withTier({
+          ...row,
           customFields:
             fieldsByEntity.get(row.id) ??
             panic(`Entity ${row.id} missing from field grouping`),

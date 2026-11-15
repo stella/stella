@@ -81,14 +81,11 @@ const renderBanner = (queryClient: InstanceType<typeof QueryClient>) => {
     React.createElement(
       QueryClientProvider,
       { client: queryClient },
-      React.createElement(IntlProvider, {
-        locale: "en",
-        messages,
-        timeZone: "UTC",
-        children: React.createElement(BannerForOrganization, {
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        {React.createElement(BannerForOrganization, {
           organizationId: "org-a",
-        }),
-      }),
+        })}
+      </IntlProvider>,
     ),
   );
   return {
@@ -98,14 +95,11 @@ const renderBanner = (queryClient: InstanceType<typeof QueryClient>) => {
         React.createElement(
           QueryClientProvider,
           { client: queryClient },
-          React.createElement(IntlProvider, {
-            locale: "en",
-            messages,
-            timeZone: "UTC",
-            children: React.createElement(BannerForOrganization, {
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            {React.createElement(BannerForOrganization, {
               organizationId,
-            }),
-          }),
+            })}
+          </IntlProvider>,
         ),
       ),
   };
@@ -194,7 +188,7 @@ test("a delayed access response stays in its organization cache and retry copy e
     await waitFor(() => {
       expect(view.getByRole("status").textContent).toContain("Payment issue");
     });
-    await waitFor(() => expect(view.queryByRole("status")).toBeNull());
+    await waitFor(() => expect(view.queryByRole("status") === null).toBe(true));
   } finally {
     oldResponse.resolve(Response.json(none));
     newResponse.resolve(Response.json(none));

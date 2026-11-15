@@ -358,7 +358,7 @@ const mountFilesView = async () => {
     </ToastProvider>,
   );
   await waitFor(() =>
-    expect(document.querySelectorAll("[data-entity-row]")).toHaveLength(2),
+    expect(document.querySelectorAll("[data-entity-row]").length).toBe(2),
   );
   return { mounted, client };
 };

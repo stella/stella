@@ -684,7 +684,7 @@ describe("my week", () => {
         submitCreateForm(dialog);
       });
       await waitFor(() => {
-        expect(screen.queryByRole("dialog")).toBeNull();
+        expect(screen.queryByRole("dialog") === null).toBe(true);
       });
       for (const path of ["/time-entries/me", "/time-entries/me/suggestions"]) {
         expect(

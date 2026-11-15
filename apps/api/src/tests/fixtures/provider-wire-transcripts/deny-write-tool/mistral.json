@@ -16,6 +16,7 @@
           "model": "mistral-medium-latest",
           "temperature": 0,
           "tools": [
+            "show_app",
             "ask-user",
             "request_secret",
             "use_connector_secret",
@@ -96,6 +97,7 @@
           "model": "mistral-medium-latest",
           "temperature": 0,
           "tools": [
+            "show_app",
             "ask-user",
             "request_secret",
             "use_connector_secret",

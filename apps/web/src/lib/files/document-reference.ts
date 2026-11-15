@@ -19,6 +19,7 @@
 import { Result } from "better-result";
 
 import { isVerificationCode } from "@stll/api-contract";
+import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
 import type { ZipArchive } from "@stll/docx-core/zip";
 
 const DOCX_MIME_TYPE =
@@ -27,15 +28,16 @@ const DOCX_MIME_TYPE =
 const DOCX_EXTENSION = ".docx";
 
 /**
- * Mirrors the API's `LIMITS.docxStampMaxBytes`. A larger file was never
- * stamped on the way out, so opening it could only ever answer `null` — at the
- * cost of inflating tens of megabytes on the main thread.
+ * The API stamps every stored DOCX (`LIMITS.docxStampMaxBytes` is the document
+ * limit), so a larger file was never stamped on the way out and opening it
+ * could only ever answer `null` — at the cost of inflating it on the main
+ * thread.
  *
  * The archive reader holds each entry to its declared size, and the
  * server-side equivalent (`docx-archive.ts`) is where a hostile archive would
  * actually matter, since a bomb opened here costs the user their own tab.
  */
-const MAX_REFERENCED_DOCX_BYTES = 50 * 1024 * 1024;
+const MAX_REFERENCED_DOCX_BYTES = UPLOAD_DOCUMENT_MAX_BYTES;
 
 const CUSTOM_PROPERTIES_PATH = "docProps/custom.xml";
 

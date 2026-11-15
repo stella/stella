@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { type Deferred, deferred } from "@stll/test-kit";
 
@@ -8,16 +8,17 @@ let redisDown = false;
 let stalledCommand: Deferred<unknown> | undefined;
 let invalidResponse = false;
 const redisCounters = new Map<string, { count: number; expiresAt: number }>();
+const sentCommands: string[] = [];
 
 class FakeRedisClient {
   async send(
-    command: "EVAL",
+    command: string,
     args: [string, "1", string, string, string],
   ): Promise<unknown> {
     if (redisDown) {
       throw new Error("redis unreachable");
     }
-    expect(command).toBe("EVAL");
+    sentCommands.push(command);
     const key = args[2];
     const windowMs = Number(args[3]);
     const max = Number(args[4]);
@@ -45,7 +46,12 @@ const createStorage = () =>
 const RULE = { max: 3, window: 60 } as const;
 
 describe("auth rate-limit storage", () => {
+  // The storage reaches Redis only through EVAL.
+  afterEach(() => {
+    expect(sentCommands.filter((command) => command !== "EVAL")).toEqual([]);
+  });
   beforeEach(() => {
+    sentCommands.length = 0;
     redisDown = false;
     stalledCommand = undefined;
     invalidResponse = false;

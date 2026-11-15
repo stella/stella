@@ -26,6 +26,7 @@ import { NumberInput } from "@stll/ui/number-input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { TextSeparator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { SKILL_CHIP_CATALOG } from "@/components/chat-editor-slash-items";
@@ -758,7 +759,7 @@ const ConditionReusePicker = ({
               size="row"
               variant="ghost"
             >
-              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+              <TruncatedText className="flex-1">{option.label}</TruncatedText>
               <code className="text-muted-foreground text-3xs shrink-0">
                 {option.ref}
               </code>

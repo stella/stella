@@ -157,6 +157,7 @@ export const VERIFIED_OAUTH_CLIENT_BRANDS = [
   "stella",
   "stella_ios",
   "stella_cli",
+  "stella_outlook",
   "claude",
   "claude_code",
   "chatgpt",

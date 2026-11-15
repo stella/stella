@@ -25,6 +25,7 @@ import enrolFeature from "@/api/handlers/organization-settings/feature-enrolment
 import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-enrolments/get";
 import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolments/unenrol";
 import readOrganizationSettings from "@/api/handlers/organization-settings/get";
+import updateLocalRunApprovalCeiling from "@/api/handlers/organization-settings/local-runs/update";
 import updatePracticeJurisdictions from "@/api/handlers/organization-settings/practice-jurisdictions/update";
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
 import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
@@ -35,6 +36,7 @@ import updateOrganizationSettings from "@/api/handlers/organization-settings/upd
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-key";
 import updateWebSearchKey from "@/api/handlers/organization-settings/update-web-search-key";
+import updateVerificationDecisionModel from "@/api/handlers/organization-settings/verification-decision-model/update";
 import { mount, routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
@@ -67,6 +69,13 @@ export const organizationSettingsRoute = mount(
         ],
       },
     ),
+    routes(
+      { "/": { POST: updateVerificationDecisionModel } },
+      {
+        prefix: "/verification-decision-model",
+        middleware: [deploymentFeatureGate("FEATURE_LEGAL_LISTS")],
+      },
+    ),
     routes({
       "/correspondence/data-boxes": {
         GET: getOrganizationDataBoxes,
@@ -93,6 +102,7 @@ export const organizationSettingsRoute = mount(
         DELETE: deleteBusinessRegistryCredential,
       },
       "/sanctions-monitoring": { POST: updateSanctionsMonitoring },
+      "/local-runs": { POST: updateLocalRunApprovalCeiling },
       "/practice-jurisdictions": { POST: updatePracticeJurisdictions },
       "/preview": { POST: previewOrganizationSettings },
       "/ai-availability": { GET: readAIAvailability },

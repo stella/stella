@@ -271,6 +271,21 @@ describe("toAPIError", () => {
     expect(error.rawMessage).toBe("Raw provider error");
   });
 
+  test("localizes an unreachable skill source instead of the generic 400", () => {
+    const error = toAPIError({
+      status: 400,
+      value: {
+        code: "skill_source_unreachable",
+        message: "Skill source returned HTTP 403",
+      },
+    });
+
+    expect(error.message).toBe(
+      "The skill source could not be loaded. Check that the link points to a public GitHub repository, or try again later.",
+    );
+    expect(error.rawMessage).toBe("Skill source returned HTTP 403");
+  });
+
   test.each([
     [
       "legal_source_entity_limit_reached",

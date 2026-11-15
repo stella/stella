@@ -147,6 +147,16 @@ describe("classifyAIError", () => {
     }
   });
 
+  test("names a local turn's model at capacity as the provider's outage", () => {
+    // The run error the computer reports once its retries are spent.
+    const runError = {
+      code: AI_FAILURE_CODES.provider_unavailable,
+      message: "Selected model is at capacity. Please try a different model.",
+    };
+    expect(classifyAIError(runError)).toBe("provider_unavailable");
+    expect(isAnticipatedAIFailure(runError, "provider_unavailable")).toBe(true);
+  });
+
   test("maps chat loop stops to a stable stream error kind", () => {
     const error = new ChatLoopDetectedError({
       message:
@@ -169,6 +179,25 @@ describe("classifyAIError", () => {
 
   test("maps a provider 404 to model_unavailable (retired/renamed model)", () => {
     expect(classifyAIError(apiCallError(404))).toBe("model_unavailable");
+  });
+
+  test("maps a provider 403 naming the model to model_unavailable", () => {
+    const body = { code: "model_not_found", type: "invalid_request_error" };
+
+    expect(classifyAIError({ status: 403, error: body })).toBe(
+      "model_unavailable",
+    );
+    expect(
+      classifyAIError(
+        new Error(`got status: 403. ${JSON.stringify({ error: body })}`),
+      ),
+    ).toBe("model_unavailable");
+    expect(
+      classifyAIError({
+        status: 403,
+        error: { code: "access_denied", type: "invalid_request_error" },
+      }),
+    ).toBe("unknown");
   });
 
   test("finds a model-not-found 404 through wrapped causes", () => {

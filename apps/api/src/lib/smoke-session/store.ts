@@ -15,8 +15,19 @@
  * organization settings API, exactly as a real owner would.
  */
 
+import { panic } from "better-result";
+import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+
+import { JOURNEY_PREREQUISITE_STATE } from "@stll/api-contract/journey-prerequisites";
+import type {
+  JourneyPrerequisiteId,
+  JourneyPrerequisiteReport,
+} from "@stll/api-contract/journey-prerequisites";
+
 import { member, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
@@ -24,12 +35,24 @@ import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { insertOrganizationWithEvaluation } from "@/api/lib/db/organization-creation";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
+import { sanctionsPublicReadDb } from "@/api/lib/lists/sanctions/public-read-owner";
 import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import {
+  JOURNEY_PREREQUISITES,
+  judgePrerequisiteRun,
+  unavailableSanctionsSources,
+} from "@/api/lib/smoke-session/journey-prerequisites";
+import type {
+  DeclaredSchedulerJobId,
+  JourneyPrerequisiteCheck,
+} from "@/api/lib/smoke-session/journey-prerequisites";
 import {
   newOrganizationEvaluation,
   recordNewOrganizationAccessState,
@@ -213,4 +236,221 @@ export const mintSmokeSession = async (
     cookieValue: createSignedSessionCookieValue(token, env.BETTER_AUTH_SECRET),
     expiresAt: expiresAt.toISOString(),
   };
+};
+
+/**
+ * The recurring jobs that read the public corpus. The staging release proof
+ * brings them forward and runs its MCP load while they run, because a heavy
+ * job and user traffic only interfere when they overlap.
+ */
+const RELEASE_LOAD_JOB_IDS = [
+  "caseLaw.reportFreshness.fiveMinute",
+  "caseLaw.refreshSitemapShards.hourly",
+  "caseLaw.refreshSourceArrivals.threeHourly",
+  "legislation.refreshSitemapShards.hourly",
+  "legislation.refreshFacetCounts.hourly",
+] as const satisfies readonly DeclaredSchedulerJobId[];
+
+const releaseLoadJobColumns = {
+  id: schedulerJobs.id,
+  lastRunAt: schedulerJobs.lastRunAt,
+  lockedAt: schedulerJobs.lockedAt,
+  nextRunAt: schedulerJobs.nextRunAt,
+};
+
+/**
+ * The recurring runs within this window are a handful per job (the listed
+ * jobs run hourly at most, plus one brought forward), so the cap only guards
+ * against a misconfigured schedule.
+ */
+
+const RELEASE_LOAD_RUN_CAP = 20 * RELEASE_LOAD_JOB_IDS.length;
+
+/**
+ * The scheduler's own records of the release-load jobs' runs that started in
+ * the last half hour: when each started and, once it has, finished.
+ */
+export const readReleaseLoadJobRuns = async () => {
+  const read = await readBounded(
+    rootDb
+      .select({
+        jobId: schedulerJobRuns.jobId,
+        status: schedulerJobRuns.status,
+        startedAt: schedulerJobRuns.startedAt,
+        finishedAt: schedulerJobRuns.finishedAt,
+      })
+      .from(schedulerJobRuns)
+      .where(
+        and(
+          inArray(schedulerJobRuns.jobId, RELEASE_LOAD_JOB_IDS),
+          // The cutoff is the database's own clock, at the column's precision.
+          sql`${schedulerJobRuns.startedAt} >= now() - interval '30 minutes'`,
+        ),
+      )
+      .orderBy(schedulerJobRuns.startedAt, schedulerJobRuns.jobId),
+    RELEASE_LOAD_RUN_CAP,
+  );
+  return read.type === "complete"
+    ? read.rows
+    : panic("More release-load job runs than their schedules allow", {
+        cap: read.cap,
+      });
+};
+
+/**
+ * Moves the listed jobs' next run to `dueAt` when they are enabled and not
+ * paused; the next scheduler sweep on any replica claims them through its
+ * usual lease. A job already running keeps its lease, and its finish sets its
+ * next slot as usual. The smoke routes' only write to the scheduler.
+ */
+const bringScheduledJobsForward = async (
+  jobIds: readonly DeclaredSchedulerJobId[],
+  dueAt: SQL,
+) =>
+  // audit: skip — scheduler system state on the staging deployment; the smoke route logs the ids it moved.
+  await rootDb
+    .update(schedulerJobs)
+    .set({ nextRunAt: dueAt })
+    .where(
+      and(
+        inArray(schedulerJobs.id, jobIds),
+        eq(schedulerJobs.enabled, true),
+        or(
+          isNull(schedulerJobs.pausedUntil),
+          lte(schedulerJobs.pausedUntil, sql`now()`),
+        ),
+      ),
+    )
+    .returning(releaseLoadJobColumns);
+
+/** Makes every enabled, unpaused release-load job due now. */
+export const bringReleaseLoadJobsForward = async () =>
+  await bringScheduledJobsForward(RELEASE_LOAD_JOB_IDS, sql`now()`);
+
+const journeyPrerequisiteJobIds = (journey: JourneyPrerequisiteId) =>
+  JOURNEY_PREREQUISITES[journey].map(({ jobId }) => jobId);
+
+/**
+ * Makes a journey's prerequisite jobs due ahead of every other due job. After
+ * staging was off, every recurring job is overdue and the runner claims the
+ * oldest first, one at a time per replica, so a slot at "now" would queue the
+ * journey's jobs behind all of them.
+ */
+export const bringJourneyPrerequisitesForward = async (
+  journey: JourneyPrerequisiteId,
+) =>
+  await bringScheduledJobsForward(
+    journeyPrerequisiteJobIds(journey),
+    sql`least(now(), (select min(${schedulerJobs.nextRunAt}) from ${schedulerJobs}) - interval '1 millisecond')`,
+  );
+
+/** What the checks read, loaded once per report. */
+type PrerequisiteCheckInputs = {
+  sanctions: Awaited<ReturnType<typeof readSanctionsFreshness>>;
+};
+
+const prerequisiteCheckFailures = (
+  check: JourneyPrerequisiteCheck,
+  inputs: PrerequisiteCheckInputs,
+): string[] =>
+  unavailableSanctionsSources(inputs.sanctions, check.sanctionsSources);
+
+/** Each job's latest run still running or finished at or after `since`. */
+const readLatestPrerequisiteRuns = async (
+  jobIds: readonly DeclaredSchedulerJobId[],
+  since: Date,
+) => {
+  const read = await readBounded(
+    rootDb
+      .selectDistinctOn([schedulerJobRuns.jobId], {
+        jobId: schedulerJobRuns.jobId,
+        status: schedulerJobRuns.status,
+        startedAt: schedulerJobRuns.startedAt,
+        finishedAt: schedulerJobRuns.finishedAt,
+        error: schedulerJobRuns.error,
+      })
+      .from(schedulerJobRuns)
+      .where(
+        and(
+          inArray(schedulerJobRuns.jobId, jobIds),
+          or(
+            isNull(schedulerJobRuns.finishedAt),
+            // The caller's instant, at millisecond precision, as a timestamptz.
+            sql`${schedulerJobRuns.finishedAt} >= ${since.toISOString()}::timestamptz`,
+          ),
+        ),
+      )
+      .orderBy(schedulerJobRuns.jobId, desc(schedulerJobRuns.startedAt)),
+    jobIds.length,
+  );
+  return read.type === "complete"
+    ? read.rows
+    : panic("More latest runs than prerequisite jobs", { cap: read.cap });
+};
+
+/**
+ * Each prerequisite of the journey judged from its scheduler row and its
+ * latest run since `since`, the instant the journey brought it forward; a
+ * successful run is then held to the journey's check.
+ */
+export const readJourneyPrerequisites = async (
+  journey: JourneyPrerequisiteId,
+  since: Date,
+): Promise<JourneyPrerequisiteReport[]> => {
+  const prerequisites = JOURNEY_PREREQUISITES[journey];
+  const read = await readBounded(
+    rootDb
+      .select({
+        id: schedulerJobs.id,
+        enabled: schedulerJobs.enabled,
+        lockedAt: schedulerJobs.lockedAt,
+        nextRunAt: schedulerJobs.nextRunAt,
+        pausedUntil: schedulerJobs.pausedUntil,
+      })
+      .from(schedulerJobs)
+      .where(inArray(schedulerJobs.id, journeyPrerequisiteJobIds(journey))),
+    prerequisites.length,
+  );
+  const jobs =
+    read.type === "complete"
+      ? read.rows
+      : panic("More prerequisite jobs than the journey declares", {
+          cap: read.cap,
+        });
+  const runs = await readLatestPrerequisiteRuns(
+    journeyPrerequisiteJobIds(journey),
+    since,
+  );
+  const now = new Date();
+  const verdicts = prerequisites.map(({ jobId, check }) => ({
+    jobId,
+    check,
+    verdict: judgePrerequisiteRun({
+      jobId,
+      job: jobs.find(({ id }) => id === jobId) ?? null,
+      run: runs.find((run) => run.jobId === jobId) ?? null,
+      now,
+    }),
+  }));
+  const inputs: PrerequisiteCheckInputs = {
+    // The lists as public screening sees them, through its read-only role.
+    sanctions: verdicts.some(({ verdict }) => verdict.state === "check")
+      ? await readSanctionsFreshness({ db: sanctionsPublicReadDb })
+      : [],
+  };
+  return verdicts.map(
+    ({ jobId, check, verdict }): JourneyPrerequisiteReport => {
+      if (verdict.state !== "check") {
+        return verdict;
+      }
+      const failures = prerequisiteCheckFailures(check, inputs);
+      return failures.length === 0
+        ? { jobId, state: JOURNEY_PREREQUISITE_STATE.ready }
+        : {
+            jobId,
+            state: JOURNEY_PREREQUISITE_STATE.failed,
+            detail: `${jobId} ran, but ${failures.join("; ")}`,
+          };
+    },
+  );
 };

@@ -1,0 +1,5 @@
+{
+  "add-foreign-key": "The new table is empty, so its organization and user foreign keys validate no existing rows. The referenced organization and user tables take a bounded lock under 1s lock_timeout and 5s statement_timeout.",
+  "row-level-security": "Enabling and forcing RLS changes only metadata on the new empty table, bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The owner and per user+org policies are metadata on the new empty table, bounded by 1s lock_timeout and 5s statement_timeout."
+}

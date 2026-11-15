@@ -865,14 +865,23 @@ const directStaticPropertyWrites = ({
   }));
 };
 
-const staticPropertyWrites = (
-  context: unknown,
-  binding: unknown,
-  propertyPath: readonly string[],
-  beforePosition: number,
+type StaticPropertyWritesOptions = {
+  context: unknown;
+  binding: unknown;
+  propertyPath: readonly string[];
+  beforePosition: number;
+  visitedBindings?: Set<unknown>;
+  boundary?: unknown;
+};
+
+const staticPropertyWrites = ({
+  context,
+  binding,
+  propertyPath,
+  beforePosition,
   visitedBindings = new Set<unknown>(),
   boundary = bindingScopeBlock(binding),
-): StaticPropertyWrite[] => {
+}: StaticPropertyWritesOptions): StaticPropertyWrite[] => {
   if (
     typeof binding !== "object" ||
     binding === null ||
@@ -944,14 +953,14 @@ const staticPropertyWrites = (
           context.sourceCode.getScope(selection.identifier),
           selection.identifier.name,
         );
-        const aliasWrites = staticPropertyWrites(
+        const aliasWrites = staticPropertyWrites({
           context,
-          aliasBinding,
-          remainingPropertyPath,
+          binding: aliasBinding,
+          propertyPath: remainingPropertyPath,
           beforePosition,
           visitedBindings,
           boundary,
-        );
+        });
         for (const write of aliasWrites) {
           writes.push(
             combinedPrefix.length === 0
@@ -1148,13 +1157,21 @@ const staticPropertyKey = (property: unknown): string | null => {
   return isStringLiteral(property.key) ? property.key.value : null;
 };
 
-const resolveStaticObjectProperty = (
-  context: unknown,
-  object: unknown,
-  propertyName: string,
-  visitedBindings: Set<unknown>,
+type ResolveStaticObjectPropertyOptions = {
+  context: unknown;
+  object: unknown;
+  propertyName: string;
+  visitedBindings: Set<unknown>;
+  beforePosition?: number;
+};
+
+const resolveStaticObjectProperty = ({
+  context,
+  object,
+  propertyName,
+  visitedBindings,
   beforePosition = Number.POSITIVE_INFINITY,
-): StaticPropertyResolution => {
+}: ResolveStaticObjectPropertyOptions): StaticPropertyResolution => {
   if (isStaticAbsentValue(object)) {
     return { type: "absent" };
   }
@@ -1179,22 +1196,22 @@ const resolveStaticObjectProperty = (
             expression.name,
           )
         : null;
-    const propertyWrites = staticPropertyWrites(
+    const propertyWrites = staticPropertyWrites({
       context,
       binding,
-      [propertyName],
+      propertyPath: [propertyName],
       beforePosition,
-    );
+    });
     const alias = constAlias(context, expression, visitedBindings);
     const baseResolution =
       alias?.type === "value"
-        ? resolveStaticObjectProperty(
+        ? resolveStaticObjectProperty({
             context,
-            alias.value,
+            object: alias.value,
             propertyName,
             visitedBindings,
             beforePosition,
-          )
+          })
         : { type: "opaque" as const };
     return applyStaticPropertyWrites(baseResolution, propertyWrites);
   }
@@ -1203,13 +1220,13 @@ const resolveStaticObjectProperty = (
     if (root === null) {
       return { type: "opaque" };
     }
-    return resolveStaticObjectPath(
+    return resolveStaticObjectPath({
       context,
-      root.object,
-      [...root.propertyPath, propertyName],
+      object: root.object,
+      propertyPath: [...root.propertyPath, propertyName],
       visitedBindings,
       beforePosition,
-    );
+    });
   }
   if (
     expression.type === "ArrayExpression" &&
@@ -1241,13 +1258,13 @@ const resolveStaticObjectProperty = (
       continue;
     }
     if (property.type === "SpreadElement") {
-      const spread = resolveStaticObjectProperty(
+      const spread = resolveStaticObjectProperty({
         context,
-        property.argument,
+        object: property.argument,
         propertyName,
-        new Set(visitedBindings),
+        visitedBindings: new Set(visitedBindings),
         beforePosition,
-      );
+      });
       objectResolution = overlayStaticResolution(objectResolution, spread);
       continue;
     }
@@ -1267,13 +1284,21 @@ const resolveStaticObjectProperty = (
   return objectResolution;
 };
 
-const resolveStaticObjectPath = (
-  context: unknown,
-  object: unknown,
-  propertyPath: readonly string[],
-  visitedBindings: Set<unknown>,
+type ResolveStaticObjectPathOptions = {
+  context: unknown;
+  object: unknown;
+  propertyPath: readonly string[];
+  visitedBindings: Set<unknown>;
+  beforePosition?: number;
+};
+
+const resolveStaticObjectPath = ({
+  context,
+  object,
+  propertyPath,
+  visitedBindings,
   beforePosition = Number.POSITIVE_INFINITY,
-): StaticPropertyResolution => {
+}: ResolveStaticObjectPathOptions): StaticPropertyResolution => {
   if (isStaticAbsentValue(object)) {
     return { type: "absent" };
   }
@@ -1298,34 +1323,34 @@ const resolveStaticObjectPath = (
     );
     const firstProperty = propertyPath.at(0);
     if (firstProperty !== undefined) {
-      const firstResolution = resolveStaticObjectProperty(
+      const firstResolution = resolveStaticObjectProperty({
         context,
-        expression,
-        firstProperty,
-        new Set(visitedBindings),
+        object: expression,
+        propertyName: firstProperty,
+        visitedBindings: new Set(visitedBindings),
         beforePosition,
-      );
+      });
       const remainingPath = propertyPath.slice(1);
       const branches =
         firstResolution.type === "found"
           ? [
-              resolveStaticObjectPath(
+              resolveStaticObjectPath({
                 context,
-                firstResolution.value,
-                remainingPath,
-                new Set(visitedBindings),
+                object: firstResolution.value,
+                propertyPath: remainingPath,
+                visitedBindings: new Set(visitedBindings),
                 beforePosition,
-              ),
+              }),
             ]
           : firstResolution.type === "possible"
             ? firstResolution.values.map((value) =>
-                resolveStaticObjectPath(
+                resolveStaticObjectPath({
                   context,
-                  value,
-                  remainingPath,
-                  new Set(visitedBindings),
+                  object: value,
+                  propertyPath: remainingPath,
+                  visitedBindings: new Set(visitedBindings),
                   beforePosition,
-                ),
+                }),
               )
             : [firstResolution];
       const baseResolution: StaticPropertyResolution = branches.some(
@@ -1350,18 +1375,23 @@ const resolveStaticObjectPath = (
         .slice(0, -1)
         .map((_, index) => propertyPath.slice(0, index + 1))
         .flatMap((ancestorPath) =>
-          staticPropertyWrites(context, binding, ancestorPath, beforePosition),
+          staticPropertyWrites({
+            context,
+            binding,
+            propertyPath: ancestorPath,
+            beforePosition,
+          }),
         );
       const ancestorCutoff = latestUnconditionalWritePosition(ancestorWrites);
       const descendantWrites = descendantWritesAfterAncestors({
         ancestorCutoff,
         ancestorWrites,
-        writes: staticPropertyWrites(
+        writes: staticPropertyWrites({
           context,
           binding,
           propertyPath,
           beforePosition,
-        ),
+        }),
       });
       return applyStaticPropertyWrites(baseResolution, descendantWrites);
     }
@@ -1370,33 +1400,33 @@ const resolveStaticObjectPath = (
   if (propertyName === undefined) {
     return { type: "found", value: object };
   }
-  const resolved = resolveStaticObjectProperty(
+  const resolved = resolveStaticObjectProperty({
     context,
     object,
     propertyName,
     visitedBindings,
     beforePosition,
-  );
+  });
   if (resolved.type === "found") {
-    return resolveStaticObjectPath(
+    return resolveStaticObjectPath({
       context,
-      resolved.value,
-      propertyPath.slice(1),
+      object: resolved.value,
+      propertyPath: propertyPath.slice(1),
       visitedBindings,
       beforePosition,
-    );
+    });
   }
   if (resolved.type !== "possible") {
     return resolved;
   }
   const branches = resolved.values.map((value) =>
-    resolveStaticObjectPath(
+    resolveStaticObjectPath({
       context,
-      value,
-      propertyPath.slice(1),
-      new Set(visitedBindings),
+      object: value,
+      propertyPath: propertyPath.slice(1),
+      visitedBindings: new Set(visitedBindings),
       beforePosition,
-    ),
+    }),
   );
   if (branches.some((branch) => branch.type === "opaque")) {
     return { type: "opaque" };
@@ -1639,13 +1669,13 @@ const cryptoObjectKind = (
   if (expression?.type === "MemberExpression") {
     const propertyName = staticMemberName(context, expression);
     if (propertyName !== null) {
-      const localProperty = resolveStaticObjectProperty(
+      const localProperty = resolveStaticObjectProperty({
         context,
-        expression.object,
+        object: expression.object,
         propertyName,
-        new Set(visitedBindings),
+        visitedBindings: new Set(visitedBindings),
         beforePosition,
-      );
+      });
       if (localProperty.type === "found" || localProperty.type === "possible") {
         const values =
           localProperty.type === "found"
@@ -1680,13 +1710,21 @@ const cryptoObjectKind = (
   return null;
 };
 
-const importedCryptoMemberKind = (
-  context: unknown,
-  object: unknown,
-  propertyName: string | null,
-  visitedBindings: Set<unknown>,
-  beforePosition: number,
-): string | null => {
+type ImportedCryptoMemberKindOptions = {
+  context: unknown;
+  object: unknown;
+  propertyName: string | null;
+  visitedBindings: Set<unknown>;
+  beforePosition: number;
+};
+
+const importedCryptoMemberKind = ({
+  context,
+  object,
+  propertyName,
+  visitedBindings,
+  beforePosition,
+}: ImportedCryptoMemberKindOptions): string | null => {
   const objectKind = cryptoObjectKind(
     context,
     object,
@@ -1724,27 +1762,36 @@ const valueIsProvablyUndefined = (
   );
 };
 
-const destructuredAliasOutcomes = (
-  context: unknown,
-  object: unknown,
-  propertyPath: readonly string[],
-  defaults: readonly DestructuredDefault[],
-  visitedBindings: Set<unknown>,
-  beforePosition: number,
-): readonly unknown[] => {
+type DestructuredAliasOutcomesOptions = {
+  context: unknown;
+  object: unknown;
+  propertyPath: readonly string[];
+  defaults: readonly DestructuredDefault[];
+  visitedBindings: Set<unknown>;
+  beforePosition: number;
+};
+
+const destructuredAliasOutcomes = ({
+  context,
+  object,
+  propertyPath,
+  defaults,
+  visitedBindings,
+  beforePosition,
+}: DestructuredAliasOutcomesOptions): readonly unknown[] => {
   let outcomes: readonly unknown[] = [object];
   for (const [index, propertyName] of propertyPath.entries()) {
     outcomes = outcomes.flatMap((outcome) => {
       if (isStaticOpaqueValue(outcome)) {
         return [STATIC_OPAQUE_VALUE];
       }
-      const resolution = resolveStaticObjectProperty(
+      const resolution = resolveStaticObjectProperty({
         context,
-        outcome,
+        object: outcome,
         propertyName,
-        new Set(visitedBindings),
+        visitedBindings: new Set(visitedBindings),
         beforePosition,
-      );
+      });
       return staticResolutionValues(resolution) ?? [STATIC_OPAQUE_VALUE];
     });
     const selectedPath = propertyPath.slice(0, index + 1);
@@ -1770,14 +1817,23 @@ const destructuredAliasOutcomes = (
   return outcomes;
 };
 
-const ambientPropertyPathKind = (
-  context: unknown,
-  object: unknown,
-  propertyPath: readonly string[],
-  visitedBindings: Set<unknown>,
-  beforePosition: number,
-  defaults: readonly DestructuredDefault[] = [],
-): string | null => {
+type AmbientPropertyPathKindOptions = {
+  context: unknown;
+  object: unknown;
+  propertyPath: readonly string[];
+  visitedBindings: Set<unknown>;
+  beforePosition: number;
+  defaults?: readonly DestructuredDefault[];
+};
+
+const ambientPropertyPathKind = ({
+  context,
+  object,
+  propertyPath,
+  visitedBindings,
+  beforePosition,
+  defaults = [],
+}: AmbientPropertyPathKindOptions): string | null => {
   const [firstKey, secondKey] = propertyPath;
   if (
     propertyPath.length === 1 &&
@@ -1801,13 +1857,13 @@ const ambientPropertyPathKind = (
     beforePosition,
   );
   if (propertyPath.length === 1) {
-    const importedKind = importedCryptoMemberKind(
+    const importedKind = importedCryptoMemberKind({
       context,
       object,
-      propertyPath.at(0) ?? null,
-      new Set(visitedBindings),
+      propertyName: propertyPath.at(0) ?? null,
+      visitedBindings: new Set(visitedBindings),
       beforePosition,
-    );
+    });
     if (importedKind !== null) {
       return importedKind;
     }
@@ -1823,22 +1879,22 @@ const ambientPropertyPathKind = (
   const localValues =
     defaults.length === 0
       ? staticResolutionValues(
-          resolveStaticObjectPath(
+          resolveStaticObjectPath({
             context,
             object,
             propertyPath,
-            new Set(visitedBindings),
+            visitedBindings: new Set(visitedBindings),
             beforePosition,
-          ),
+          }),
         )
-      : destructuredAliasOutcomes(
+      : destructuredAliasOutcomes({
           context,
           object,
           propertyPath,
           defaults,
-          new Set(visitedBindings),
+          visitedBindings: new Set(visitedBindings),
           beforePosition,
-        );
+        });
   if (localValues !== null) {
     for (const value of localValues) {
       const localKind = ambientCallKind(
@@ -1929,14 +1985,14 @@ const ambientCallKind = (
       );
     }
     if (alias?.type === "property") {
-      return ambientPropertyPathKind(
+      return ambientPropertyPathKind({
         context,
-        alias.object,
-        alias.propertyPath,
+        object: alias.object,
+        propertyPath: alias.propertyPath,
         visitedBindings,
-        invocationPosition,
-        alias.defaults,
-      );
+        beforePosition: invocationPosition,
+        defaults: alias.defaults,
+      });
     }
   }
   if (expression.type === "ConditionalExpression") {
@@ -1986,24 +2042,24 @@ const ambientCallKind = (
     return null;
   }
   const propertyName = staticMemberName(context, expression);
-  const importedKind = importedCryptoMemberKind(
+  const importedKind = importedCryptoMemberKind({
     context,
-    expression.object,
+    object: expression.object,
     propertyName,
-    new Set(visitedBindings),
-    invocationPosition,
-  );
+    visitedBindings: new Set(visitedBindings),
+    beforePosition: invocationPosition,
+  });
   if (importedKind !== null) {
     return importedKind;
   }
   if (propertyName !== null) {
-    const localProperty = resolveStaticObjectProperty(
+    const localProperty = resolveStaticObjectProperty({
       context,
-      expression.object,
+      object: expression.object,
       propertyName,
-      new Set(visitedBindings),
-      invocationPosition,
-    );
+      visitedBindings: new Set(visitedBindings),
+      beforePosition: invocationPosition,
+    });
     if (localProperty.type === "found" || localProperty.type === "possible") {
       const values =
         localProperty.type === "found"
@@ -2072,22 +2128,22 @@ const isAmbientDateConstructor = (
       const values =
         alias.defaults.length === 0
           ? (staticResolutionValues(
-              resolveStaticObjectPath(
+              resolveStaticObjectPath({
                 context,
-                alias.object,
-                alias.propertyPath,
+                object: alias.object,
+                propertyPath: alias.propertyPath,
                 visitedBindings,
-                expression.range[0],
-              ),
+                beforePosition: expression.range[0],
+              }),
             ) ?? [])
-          : destructuredAliasOutcomes(
+          : destructuredAliasOutcomes({
               context,
-              alias.object,
-              alias.propertyPath,
-              alias.defaults,
+              object: alias.object,
+              propertyPath: alias.propertyPath,
+              defaults: alias.defaults,
               visitedBindings,
-              expression.range[0],
-            );
+              beforePosition: expression.range[0],
+            });
       return values.some((candidate) =>
         isAmbientDateConstructor(context, candidate, new Set(visitedBindings)),
       );

@@ -321,6 +321,18 @@ describe("MCP tool refusal logs", () => {
     expect(attributes).not.toHaveProperty("refused_fields");
   });
 
+  test("a failure in plain text is logged as having no known code", async () => {
+    const attributes = await completedRecord({
+      content: [{ type: "text", text: "Forbidden" }],
+      isError: true,
+    });
+    expect(attributes).toMatchObject({
+      outcome: "tool_error",
+      "error.code": "unknown",
+    });
+    expect(JSON.stringify(attributes)).not.toContain("Forbidden");
+  });
+
   test("a successful call carries no refusal", async () => {
     const attributes = await completedRecord(result());
     expect(attributes).toMatchObject({ outcome: "ok" });

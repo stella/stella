@@ -24,6 +24,9 @@ import type { LoaderContract } from "./loader.shared";
 import type { MatterIcon } from "./matter-icon";
 import type { MatterIcon as NativeMatterIcon } from "./matter-icon.native";
 import type { MatterIconContract } from "./matter-icon.shared";
+import type { RunStateMark } from "./run-state-mark";
+import type { RunStateMark as NativeRunStateMark } from "./run-state-mark.native";
+import type { RunStateMarkContract } from "./run-state-mark.shared";
 import type { Separator } from "./separator";
 import type { Separator as NativeSeparator } from "./separator.native";
 import type { SeparatorContract } from "./separator.shared";
@@ -73,6 +76,10 @@ const CONTRACTS: Record<string, readonly [true, true]> = {
     Accepts<typeof MatterIcon, MatterIconContract>,
     Accepts<typeof NativeMatterIcon, MatterIconContract>,
   ],
+  "run-state-mark": [true, true] satisfies [
+    Accepts<typeof RunStateMark, RunStateMarkContract>,
+    Accepts<typeof NativeRunStateMark, RunStateMarkContract>,
+  ],
   separator: [true, true] satisfies [
     Accepts<typeof Separator, SeparatorContract>,
     Accepts<typeof NativeSeparator, SeparatorContract>,
@@ -96,7 +103,7 @@ const CONTRACTS: Record<string, readonly [true, true]> = {
 };
 
 test("each web and React Native renderer accepts its shared contract", () => {
-  expect(Object.keys(CONTRACTS)).toHaveLength(10);
+  expect(Object.keys(CONTRACTS)).toHaveLength(11);
 });
 
 test("the web button sizes exactly the shared sizes", () => {

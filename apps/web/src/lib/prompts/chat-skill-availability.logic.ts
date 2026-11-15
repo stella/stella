@@ -6,6 +6,11 @@ import {
   type ChatEditApplyMode,
   type ChatSkillContextNeed,
 } from "@stll/api-contract";
+import {
+  BROWSER_EXTENSION_STATUS,
+  type BrowserExtensionStatus,
+} from "@stll/api-contract/browser-control";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import type { ActiveDocxEditModeState } from "@/lib/chat-edit-mode";
@@ -35,6 +40,8 @@ export type ComposerSkillChatContext = {
   editApplyMode?: ChatEditApplyMode | undefined;
   /** Sets the open document's edits to manual review, where it can. */
   onReviewEdits?: (() => void) | undefined;
+  /** Where the next send runs; a turn on the member's computer has no browser. */
+  runTarget: ChatRunTarget;
   threadRef: ChatThreadRef;
   /** The thread's web search, or `null` while the thread is loading. */
   webSearch: { available: boolean; enabled: boolean } | null;
@@ -278,3 +285,26 @@ export const chatSkillAvailabilityKey = (
         query.fileFieldId ?? null,
         query.workspaceId ?? null,
       ];
+
+/**
+ * Whether the chat's next send can use the browser: the extension is
+ * connected and the turn runs on stella, not on the member's computer, where
+ * the agent cannot reach the extension.
+ */
+export const chatCanUseBrowser = ({
+  extensionStatus,
+  runTarget,
+}: {
+  extensionStatus: BrowserExtensionStatus;
+  runTarget: ChatRunTarget;
+}): boolean => {
+  switch (runTarget.kind) {
+    case "local":
+      return false;
+    case "cloud":
+      return extensionStatus === BROWSER_EXTENSION_STATUS.connected;
+    default:
+      runTarget satisfies never;
+      return panic("Unhandled chat run target");
+  }
+};

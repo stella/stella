@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
+import type { SanctionsEntry } from "./entry";
 import type { NameIndex } from "./name-match";
 import type { NameReading } from "./normalise";
-import type { ScreeningEntry } from "./screening-entries";
 
 type VocabularyWorkStats = { strings: number; maxLength: number };
 
@@ -34,7 +34,12 @@ function* vocabularyStats(
 
 export function* screeningWorkStatsSteps(
   names: NameIndex,
-  entries: { length: number; get: (id: number) => ScreeningEntry },
+  entries: {
+    length: number;
+    get: (
+      id: number,
+    ) => Pick<SanctionsEntry, "birthDates" | "nationalities" | "identifiers">;
+  },
 ): Generator<undefined, ScreeningWorkStats, void> {
   const folded = yield* vocabularyStats(names.folded);
   const raw =

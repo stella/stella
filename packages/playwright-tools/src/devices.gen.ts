@@ -3,7 +3,7 @@
 export const devices = Object.freeze({
   "Desktop Chrome": Object.freeze({
     userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.8078.4 Safari/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.8127.18 Safari/537.36",
     viewport: Object.freeze({ width: 1280, height: 720 } as const),
     screen: Object.freeze({ width: 1920, height: 1080 } as const),
     deviceScaleFactor: 1,
@@ -13,7 +13,7 @@ export const devices = Object.freeze({
   } as const),
   "Desktop Firefox": Object.freeze({
     userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:157.0) Gecko/20100101 Firefox/157.0",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0",
     viewport: Object.freeze({ width: 1280, height: 720 } as const),
     screen: Object.freeze({ width: 1920, height: 1080 } as const),
     deviceScaleFactor: 1,
@@ -37,6 +37,15 @@ export const devices = Object.freeze({
     viewport: Object.freeze({ width: 390, height: 664 } as const),
     screen: Object.freeze({ width: 390, height: 844 } as const),
     deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+    defaultBrowserType: "webkit",
+  } as const),
+  "iPhone SE (3rd gen)": Object.freeze({
+    userAgent:
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/27.2 Mobile/19E241 Safari/602.1",
+    viewport: Object.freeze({ width: 375, height: 667 } as const),
+    deviceScaleFactor: 2,
     isMobile: true,
     hasTouch: true,
     defaultBrowserType: "webkit",

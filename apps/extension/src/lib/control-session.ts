@@ -1,9 +1,14 @@
 type CommandOutcome<T> =
   { result: T; status: "completed" } | { status: "busy" };
 
-type AdmittedCommand = {
-  stop: AbortController;
+/** Whose command it is: the controller that sent it, and its chat turn. */
+type CommandIdentity = {
+  controllerId: string;
   turnId: string;
+};
+
+type AdmittedCommand = CommandIdentity & {
+  stop: AbortController;
 };
 
 /**
@@ -30,8 +35,11 @@ export const createControlSession = () => {
      * aborts that command, and never one admitted later, once the stop's
      * sender has been verified.
      */
-    stopTurn(turnId: string): () => void {
-      const target = admitted?.turnId === turnId ? admitted : null;
+    stopTurn({ controllerId, turnId }: CommandIdentity): () => void {
+      const target =
+        admitted?.controllerId === controllerId && admitted.turnId === turnId
+          ? admitted
+          : null;
       return () => {
         target?.stop.abort();
       };
@@ -50,13 +58,13 @@ export const createControlSession = () => {
      * so a stop sent after the command always finds it.
      */
     async runCommand<T>(
-      turnId: string,
+      { controllerId, turnId }: CommandIdentity,
       execute: (signal: AbortSignal) => Promise<T>,
     ): Promise<CommandOutcome<T>> {
       if (admitted !== null) {
         return { status: "busy" };
       }
-      const command = { stop: new AbortController(), turnId };
+      const command = { controllerId, stop: new AbortController(), turnId };
       admitted = command;
       try {
         const result = await serialize(

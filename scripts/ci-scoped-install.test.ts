@@ -330,7 +330,14 @@ const scopedInstallCoverageProblems = (source: unknown) => {
               ),
               {},
             ),
-            runs: v.object({ steps: v.array(v.unknown()) }),
+            // A node action runs one entry point; only composite actions have steps.
+            runs: v.variant("using", [
+              v.object({
+                using: v.literal("composite"),
+                steps: v.array(v.unknown()),
+              }),
+              v.object({ using: v.picklist(["node20", "node24"]) }),
+            ]),
           }),
           Bun.YAML.parse(
             readFileSync(path.join(root, uses.slice(2), "action.yml"), "utf-8"),
@@ -350,7 +357,9 @@ const scopedInstallCoverageProblems = (source: unknown) => {
             name,
           );
         }
-        for (const child of flattenWorkflowSteps(action.runs.steps)) {
+        const actionSteps =
+          action.runs.using === "composite" ? action.runs.steps : [];
+        for (const child of flattenWorkflowSteps(actionSteps)) {
           const expanded = { ...child };
           for (const key of ["run", "working-directory"]) {
             const text = expanded[key];
@@ -938,14 +947,16 @@ test("the dependency audit installs only the root workspace", () => {
 const installFreeJobs = [
   [".github/workflows/autofix.yml", "regenerate-scope"],
 ] as const;
+// setup-bun caches only the Bun executable, which an install-free job
+// still wants: no-cache would download Bun from GitHub releases every run.
 const setupSchema = v.looseObject({
   uses: v.string(),
-  with: v.looseObject({ "no-cache": v.literal(true) }),
+  with: v.looseObject({ "no-cache": v.optional(v.literal(false)) }),
 });
 const installCommand = /\bbun (?:ci|i|install)\b/u;
 
 for (const [file, job] of installFreeJobs) {
-  test(`${job} sets up Bun without restoring the package cache`, () => {
+  test(`${job} sets up a cached Bun and installs no packages`, () => {
     const steps = workflowJobSteps(workflowFile(file), job);
     const setups = steps.filter(
       (step) =>

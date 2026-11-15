@@ -97,6 +97,11 @@ export type ChatInputRefusalCode =
  *  stopped, superseded or already settled. */
 export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
 
+/** No chat thread of the caller under that id in the requested scope: another
+ *  person's, deleted, or a matter thread asked for without its matter. */
+export const CHAT_THREAD_NOT_FOUND_ERROR_CODE =
+  "chat_thread_not_found" as const;
+
 /**
  * Why the server refused to edit a user message and drop the turns after it.
  * After any of them the page reloads the thread as stored. Only `turnRunning`
@@ -169,6 +174,7 @@ export type ApiFileSecurityRejectionDetails = Omit<
  * and the client that branches on it cannot drift apart.
  */
 export const API_VERSION_CONFLICT_ERROR_CODE = "version_conflict" as const;
+export const DOCUMENT_TOO_LARGE_ERROR_CODE = "document_too_large" as const;
 
 /** A document already holds `DOCX_SUGGESTIONS_PENDING_MAX` pending suggestions. */
 export const DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE =

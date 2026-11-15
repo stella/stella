@@ -242,7 +242,7 @@ const CatalogueBrowser = ({
                         onClick={() => setImportSkillOpen(true)}
                       >
                         <FileDownIcon className="size-4" />
-                        {t("knowledge.agentSkills.importSkill")}
+                        {t("knowledge.agentSkills.importTitle")}
                       </MenuItem>
                     );
                   default: {

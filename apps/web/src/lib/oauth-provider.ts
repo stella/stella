@@ -61,6 +61,32 @@ export const hasOauthPrompt = (
     .split(" ")
     .includes(prompt);
 
+const DESTINATION_BASE = "https://destination.invalid";
+
+/**
+ * The page a sign-in destination resumes an authorization on, when the
+ * destination carries the signed OAuth request (in its fragment or query).
+ *
+ * Sign-in steps hand the request on inside `redirectTo`, where no auth call
+ * reads it. A page that receives such a destination goes there first, so the
+ * request is on the page itself before any step acts on it.
+ */
+export const getOauthContinuationHref = (
+  redirectTo: string | undefined,
+): string | null => {
+  if (redirectTo === undefined || !URL.canParse(redirectTo, DESTINATION_BASE)) {
+    return null;
+  }
+  const url = new URL(redirectTo, DESTINATION_BASE);
+  if (url.origin !== DESTINATION_BASE) {
+    return null;
+  }
+  const carriesRequest =
+    getSignedOauthQueryFromHash(url.hash) !== null ||
+    hasSignedOauthQuery(url.search);
+  return carriesRequest ? `${url.pathname}${url.search}${url.hash}` : null;
+};
+
 export const getOauthHashFragment = (query: string): string => {
   const fragment = new URLSearchParams();
   fragment.set(OAUTH_QUERY_HASH_PARAM, query);

@@ -104,7 +104,11 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           CREATE TABLE member (organization_id text, user_id text, role text);
           GRANT SELECT ON workspaces, member TO stella;
           CREATE TABLE user_files (id uuid, thread_id uuid);
-          ALTER TABLE workspaces OWNER TO ${owner}; ALTER TABLE member OWNER TO ${owner}; ALTER TABLE user_files OWNER TO ${owner}`);
+          CREATE TABLE organization (id text PRIMARY KEY);
+          CREATE TABLE legal_holds (LIKE public.legal_holds INCLUDING ALL);
+          ALTER TABLE workspaces OWNER TO ${owner}; ALTER TABLE member OWNER TO ${owner}; ALTER TABLE user_files OWNER TO ${owner};
+          ALTER TABLE organization OWNER TO ${owner}; ALTER TABLE legal_holds OWNER TO ${owner}`);
+        await client`INSERT INTO organization (id) VALUES (${organizationId})`;
         for (const { name } of columns.filter(
           ({ table }) => table === "workspaces",
         )) {

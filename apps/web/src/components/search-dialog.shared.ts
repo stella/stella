@@ -23,7 +23,7 @@ export const KIND_TRANSLATION_KEYS = {
   contact: "search.kinds.contact",
   "case-law": "search.kinds.caseLaw",
   document: "common.document",
-  folder: "search.kinds.folder",
+  folder: "common.folder",
   task: "search.kinds.task",
   message: "search.kinds.message",
   link: "search.kinds.link",

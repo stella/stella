@@ -3,14 +3,16 @@ import * as v from "valibot";
 import type { AgentHarness } from "./agent-harness";
 import { apiDateTimeSchema } from "./api-date";
 import {
-  DESKTOP_RUNNER_ANSWER_LIMITS,
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   DESKTOP_RUNNER_HARNESS_STATE,
+  DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH,
+  DESKTOP_RUNNER_REASONING_EFFORTS,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
-  desktopRunnerQuestionAnswersSchema,
-  desktopRunnerQuestionIdSchema,
+  type DesktopRunnerLinkedFolder,
 } from "./desktop-runner";
+import { displayNameSchema } from "./display-name";
 import { USER_FILE_URL_PREFIX } from "./user-file-url";
 
 /**
@@ -41,6 +43,18 @@ export const isChatLocalRunHarness = (
 /** Matches the runner protocol's model id bound. */
 const localModelSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
 
+/**
+ * A folder the member linked on one of their computers, which the chat's
+ * turns work in instead of the chat's own folder: the computer, the link's id
+ * there and the folder's name. Its path never leaves the computer.
+ */
+export const chatLocalRunFolderSchema = v.strictObject({
+  desktopId: v.pipe(v.string(), v.uuid()),
+  linkId: v.pipe(v.string(), v.uuid()),
+  name: displayNameSchema({ maxLength: 255 }),
+});
+export type ChatLocalRunFolder = v.InferOutput<typeof chatLocalRunFolderSchema>;
+
 export const chatLocalRunTargetSchema = v.strictObject({
   kind: v.literal("local"),
   harness: v.picklist(CHAT_LOCAL_RUN_HARNESSES),
@@ -53,8 +67,118 @@ export const chatLocalRunTargetSchema = v.strictObject({
     v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
     DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   ),
+  /**
+   * The linked folder the turns work in; absent for the chat's own folder.
+   * Turns then run only on that computer.
+   */
+  folder: v.optional(chatLocalRunFolderSchema),
+  /**
+   * The reasoning effort each turn asks the model for; `null`, or omitted,
+   * leaves it to the harness. Only an effort the computer reports for the
+   * model is accepted.
+   */
+  reasoningEffort: v.optional(
+    v.nullable(v.picklist(DESKTOP_RUNNER_REASONING_EFFORTS)),
+    null,
+  ),
 });
 export type ChatLocalRunTarget = v.InferOutput<typeof chatLocalRunTargetSchema>;
+
+/**
+ * The modes an organization can set as the most a local run may do without
+ * asking. Plan is not one: an approved plan continues as Ask, so every
+ * ceiling allows it.
+ */
+export const CHAT_LOCAL_RUN_APPROVAL_CEILINGS = [
+  "ask",
+  "auto",
+  "full_auto",
+] as const satisfies readonly DesktopRunnerApprovalMode[];
+export type ChatLocalRunApprovalCeiling =
+  (typeof CHAT_LOCAL_RUN_APPROVAL_CEILINGS)[number];
+
+/**
+ * How a harness's own web search runs at a permission level: without
+ * asking, after the member approves the search, or not at all.
+ */
+export const CHAT_LOCAL_RUN_WEB_SEARCH = {
+  unasked: "unasked",
+  asks: "asks",
+  off: "off",
+} as const;
+export type ChatLocalRunWebSearch =
+  (typeof CHAT_LOCAL_RUN_WEB_SEARCH)[keyof typeof CHAT_LOCAL_RUN_WEB_SEARCH];
+
+/**
+ * Web search follows the permission level. At Ask the member approves each
+ * search, with its query in the request. Claude Code asks like it does for any
+ * other tool; Codex searches at the model provider and cannot pause a search
+ * for approval, so its search is off at Ask. The adapters configure each
+ * harness from this table and the turn's prompt tells the agent the same.
+ */
+export const CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS = {
+  codex: {
+    // Codex never runs in plan.
+    plan: CHAT_LOCAL_RUN_WEB_SEARCH.off,
+    ask: CHAT_LOCAL_RUN_WEB_SEARCH.off,
+    auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+    full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+  },
+  "claude-code": {
+    // Plan allows nothing ahead, a search included.
+    plan: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
+    ask: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
+    auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+    full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+  },
+} as const satisfies Record<
+  ChatLocalRunHarness,
+  Record<DesktopRunnerApprovalMode, ChatLocalRunWebSearch>
+>;
+
+/**
+ * The most an organization lets a local run do without asking. Until an
+ * administrator lowers it every mode is allowed, so a new setting changes
+ * nothing for an organization that never chose one.
+ */
+export const CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS =
+  "full_auto" satisfies ChatLocalRunApprovalCeiling;
+
+/**
+ * Whether `mode` asks at least as much as `ceiling` allows. The modes are
+ * ordered by how much a run does on its own,
+ * `plan < ask < auto < full_auto`, which is the order
+ * `DESKTOP_RUNNER_APPROVAL_MODES` lists them in.
+ */
+export const isApprovalModeWithin = (
+  mode: DesktopRunnerApprovalMode,
+  ceiling: DesktopRunnerApprovalMode,
+): boolean =>
+  DESKTOP_RUNNER_APPROVAL_MODES.indexOf(mode) <=
+  DESKTOP_RUNNER_APPROVAL_MODES.indexOf(ceiling);
+
+/**
+ * The mode a turn runs in under `ceiling`: its own when the ceiling allows
+ * it, otherwise the highest mode the ceiling allows among `offered` (the
+ * modes the computer can run the harness in, when known), and Ask, which
+ * every harness supports, when none is.
+ */
+export const approvalModeWithin = ({
+  mode,
+  ceiling,
+  offered,
+}: {
+  mode: DesktopRunnerApprovalMode;
+  ceiling: DesktopRunnerApprovalMode;
+  offered?: readonly DesktopRunnerApprovalMode[] | undefined;
+}): DesktopRunnerApprovalMode =>
+  isApprovalModeWithin(mode, ceiling)
+    ? mode
+    : (DESKTOP_RUNNER_APPROVAL_MODES.findLast(
+        (candidate) =>
+          isApprovalModeWithin(candidate, ceiling) &&
+          (offered === undefined || offered.includes(candidate)),
+      ) ?? DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE);
 
 export const chatRunTargetSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal(CHAT_RUN_TARGET_KIND.cloud) }),
@@ -67,24 +191,26 @@ export const CHAT_CLOUD_RUN_TARGET = {
 } as const satisfies ChatRunTarget;
 
 /**
- * Why a turn bound for a computer was refused before it started. The send
- * answers with one of these as its error `code`; nothing falls back to cloud.
+ * Why a send bound for a computer was refused before anything of it was
+ * stored. The send answers with one of these as its error `code`; nothing
+ * falls back to cloud. Each depends on the request and the member alone. What
+ * depends on a computer's state (none connected, a harness not ready, a model
+ * it no longer offers) is found once the turn is stored and fails it with a
+ * `local_runner_*` kind (`ai-errors.ts`), which every client reads from the
+ * stored thread.
  */
 export const CHAT_LOCAL_RUN_REFUSAL = {
   /** Running chat turns on a computer is not enabled for this member. */
   unavailable: "local_run_unavailable",
-  /** None of the member's computers has a runner connected. */
-  noComputer: "local_run_no_computer",
-  /** The computer is connected but the harness cannot take a run now. */
-  harnessUnavailable: "local_run_harness_unavailable",
-  /** The harness no longer offers the chosen model. */
-  modelUnavailable: "local_run_model_unavailable",
-  /** The computer cannot run the harness in the chosen approval mode. */
-  approvalsUnavailable: "local_run_approvals_unavailable",
-  /** The turn does not fit what one run may carry. */
-  tooLarge: "local_run_too_large",
+  /** The organization does not let a run go that far without asking. */
+  approvalsAboveLimit: "local_run_approvals_above_limit",
   /** A turn cannot both run in the agent sandbox and on a computer. */
   conflictingRunMode: "local_run_conflicting_run_mode",
+  /**
+   * The folder a member asked to allow is not one their computer lists. Only
+   * the folder approval endpoint answers it.
+   */
+  folderUnavailable: "local_run_folder_unavailable",
 } as const;
 export type ChatLocalRunRefusal =
   (typeof CHAT_LOCAL_RUN_REFUSAL)[keyof typeof CHAT_LOCAL_RUN_REFUSAL];
@@ -94,6 +220,19 @@ export type ChatLocalHarnessReadiness = DesktopRunnerHarnessReport & {
   id: ChatLocalRunHarness;
 };
 
+/**
+ * Whether the member let runs work in a linked folder: `pending` until the
+ * first turn there is allowed, which the composer asks for.
+ */
+export const CHAT_LOCAL_FOLDER_APPROVALS = ["approved", "pending"] as const;
+export type ChatLocalFolderApproval =
+  (typeof CHAT_LOCAL_FOLDER_APPROVALS)[number];
+
+/** A folder linked on one of the member's computers, as it last reported it. */
+export type ChatLocalLinkedFolderReadiness = DesktopRunnerLinkedFolder & {
+  approval: ChatLocalFolderApproval;
+};
+
 /** One of the member's computers that has held a runner socket. */
 export type ChatLocalRunnerReadiness = {
   desktopId: string;
@@ -101,140 +240,140 @@ export type ChatLocalRunnerReadiness = {
   connected: boolean;
   lastSeenAt: string;
   harnesses: ChatLocalHarnessReadiness[];
+  linkedFolders: ChatLocalLinkedFolderReadiness[];
 };
 
 /**
  * What the composer may offer for local runs. `hidden` when the member cannot
  * run chat turns on a computer at all; the composer then shows no option.
+ * `maxApprovals` is the most the organization lets a run do without asking.
  */
 export type ChatLocalRunReadiness =
   | { status: "hidden" }
-  | { status: "enabled"; runners: ChatLocalRunnerReadiness[] };
+  | {
+      status: "enabled";
+      runners: ChatLocalRunnerReadiness[];
+      maxApprovals: ChatLocalRunApprovalCeiling;
+    };
 
 export const CHAT_LOCAL_HARNESS_STATE = DESKTOP_RUNNER_HARNESS_STATE;
 
+// A local run's blocking question, its answers and the rule they are held to
+// live in a leaf module, so a client that only answers a question does not
+// load the runner protocol.
+export {
+  CHAT_LOCAL_RUN_QUESTION_TOOL,
+  chatLocalRunAnswersRefusal,
+  chatLocalRunQuestionReplySchema,
+  chatLocalRunQuestionSchema,
+  chatLocalRunQuestionsSchema,
+} from "./chat-local-run-question";
+export type {
+  ChatLocalRunQuestion,
+  ChatLocalRunQuestionReply,
+} from "./chat-local-run-question";
+
 /**
- * The resume payload that answers a local run's blocking question: the
- * interrupt the question paused the turn with (`metadata.kind: "question"`,
- * its questions in `metadata.questions`) is resumed with `status: "resolved"`
- * and this payload. Answers are keyed by question id and hold option labels
- * or free text; every question asked takes at least one, and a question
- * without free text takes only its option labels. A `cancelled` resume
- * stops the run's turn instead of answering.
+ * The tool call a message the member steered a running local turn with is
+ * persisted as, in that turn's answer where the harness took it: a call the
+ * harness ran, whose input is the member's text and whose result says it was
+ * delivered. The API mints it from its own record of what was sent; a
+ * desktop only reports that the harness took it.
  */
-export const chatLocalRunQuestionReplySchema = v.strictObject({
-  answers: desktopRunnerQuestionAnswersSchema,
+export const CHAT_LOCAL_RUN_STEER_TOOL = "user_message";
+
+export const chatLocalRunSteerInputSchema = v.strictObject({
+  text: v.pipe(v.string(), v.minLength(1)),
 });
-export type ChatLocalRunQuestionReply = v.InferOutput<
-  typeof chatLocalRunQuestionReplySchema
+export type ChatLocalRunSteerInput = v.InferOutput<
+  typeof chatLocalRunSteerInputSchema
+>;
+
+/** The call id of the steer `inputId` delivered; one input, one call. */
+export const chatLocalRunSteerCallId = (inputId: string) => `steer_${inputId}`;
+
+/**
+ * The CUSTOM stream event that tells the chat what became of a message it
+ * steered a running local turn with: `steered` once the harness took it
+ * (the answer holds it from there on), `refused` when it did not. A turn
+ * that ends without either did not take it. A rejoined stream replays these
+ * from the run log, so a reload settles the same way.
+ */
+export const CHAT_LOCAL_RUN_STEER_EVENT = "stella.local-run.steer";
+
+export const CHAT_LOCAL_RUN_STEER_STATUSES = ["steered", "refused"] as const;
+
+export const chatLocalRunSteerEventSchema = v.strictObject({
+  inputId: v.pipe(v.string(), v.uuid()),
+  status: v.picklist(CHAT_LOCAL_RUN_STEER_STATUSES),
+});
+export type ChatLocalRunSteerEvent = v.InferOutput<
+  typeof chatLocalRunSteerEventSchema
+>;
+
+/** What the chat asks to steer a running local turn with. */
+export const chatLocalRunSteerRequestSchema = v.strictObject({
+  /** The queued message's id, so a repeat steers once. */
+  inputId: v.pipe(v.string(), v.uuid()),
+  text: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH),
+  ),
+});
+export type ChatLocalRunSteerRequest = v.InferOutput<
+  typeof chatLocalRunSteerRequestSchema
 >;
 
 /**
- * The tool call a local run's question is persisted as, for every harness:
- * Codex's native item name, which a Claude Code `AskUserQuestion` takes too.
+ * Whether the running turn will be steered: `queued` once the computer was
+ * handed the message (the turn's stream then says whether it took it),
+ * `unavailable` when this turn cannot be steered and the chat sends the
+ * message the usual way.
  */
-export const CHAT_LOCAL_RUN_QUESTION_TOOL = "request_user_input";
+export const CHAT_LOCAL_RUN_STEER_OUTCOMES = ["queued", "unavailable"] as const;
+export type ChatLocalRunSteerOutcome =
+  (typeof CHAT_LOCAL_RUN_STEER_OUTCOMES)[number];
 
 /**
- * One question of a local run's blocking question, as its interrupt carries
- * it (`metadata.questions`). An answer names an option by its `label`, which
- * is the harness's native reply. `multiSelect` lets one answer pick several
- * options; `allowsFreeText` lets it be the member's own words; a `secret`
- * answer is never shown back.
- */
-export const chatLocalRunQuestionSchema = v.object({
-  id: desktopRunnerQuestionIdSchema,
-  header: v.string(),
-  prompt: v.string(),
-  options: v.array(v.object({ label: v.string(), description: v.string() })),
-  allowsFreeText: v.boolean(),
-  multiSelect: v.boolean(),
-  secret: v.boolean(),
-});
-/**
- * The questions one blocking question asks: at least one, each under its own
- * id, and no more than one answer may carry
- * (`DESKTOP_RUNNER_ANSWER_LIMITS`), so every pause can be answered.
- */
-export const chatLocalRunQuestionsSchema = v.pipe(
-  v.array(chatLocalRunQuestionSchema),
-  v.minLength(1),
-  v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestions),
-  v.check(
-    (questions) =>
-      new Set(questions.map(({ id }) => id)).size === questions.length,
-    "Each question has its own id",
-  ),
-  v.check(
-    (questions) =>
-      questions.every(
-        ({ allowsFreeText, options }) => allowsFreeText || options.length > 0,
-      ),
-    "Each question offers an option or free text",
-  ),
-);
-export type ChatLocalRunQuestion = Readonly<
-  Omit<v.InferOutput<typeof chatLocalRunQuestionSchema>, "options">
-> & {
-  readonly options: readonly { label: string; description: string }[];
-};
-
-/**
- * Why `answers` do not answer `questions`, or `null` when they do. Every
- * question takes at least one answer, a single-choice question takes only one,
- * a question without free text takes only its option labels, and only the
- * questions asked are answered. The browser checks it before sending, the API
- * before an answer leaves for the computer, and every harness before replying,
- * so an answer the harness would refuse never leaves its run waiting.
- */
-export const chatLocalRunAnswersRefusal = (
-  questions: readonly ChatLocalRunQuestion[],
-  answers: Readonly<Record<string, readonly string[]>>,
-): string | null => {
-  const asked = new Set(questions.map(({ id }) => id));
-  const unasked = Object.keys(answers).find((id) => !asked.has(id));
-  if (unasked !== undefined) {
-    return `Question ${unasked} was not asked.`;
-  }
-  for (const question of questions) {
-    const given = Object.hasOwn(answers, question.id)
-      ? (answers[question.id] ?? [])
-      : [];
-    if (given.length === 0) {
-      return `Question ${question.id} has no answer.`;
-    }
-    if (!question.multiSelect && given.length > 1) {
-      return `Question ${question.id} takes one answer.`;
-    }
-    const labels = new Set(question.options.map(({ label }) => label));
-    if (!question.allowsFreeText && given.some((a) => !labels.has(a))) {
-      return `Question ${question.id} takes one of its options.`;
-    }
-  }
-  return null;
-};
-
-/**
- * The CUSTOM stream event a turn running on a computer sends when that
- * computer goes away mid-turn and when it is back. The turn stays open while
- * the computer is away and continues once it reconnects, so the chat shows
- * the wait instead of a stalled answer. A rejoined stream replays these
- * events from the run log, so a reload shows the same state.
+ * The CUSTOM stream event a turn running on a computer sends while its run
+ * waits for the computer to pick it up, once it did, and when that computer
+ * goes away mid-turn and is back. The turn stays open while the computer is
+ * away and continues once it reconnects, so the chat shows the wait instead
+ * of a stalled answer; a run no computer picks up in time ends the turn as
+ * `local_runner_not_reached`. A rejoined stream replays these events from the
+ * run log, so a reload shows the same state.
  */
 export const CHAT_LOCAL_RUN_COMPUTER_EVENT = "stella.local-run.computer";
 
+/**
+ * Where a turn on the member's computer stands: `delivering` until the
+ * computer picks the run up (`since` is when the turn was sent), `waiting`
+ * while a computer that took it is away, `connected` otherwise.
+ */
 export const CHAT_LOCAL_RUN_COMPUTER_STATUSES = [
+  "delivering",
   "waiting",
   "connected",
 ] as const;
 export type ChatLocalRunComputerStatus =
   (typeof CHAT_LOCAL_RUN_COMPUTER_STATUSES)[number];
 
-export const chatLocalRunComputerEventSchema = v.strictObject({
-  status: v.picklist(CHAT_LOCAL_RUN_COMPUTER_STATUSES),
-});
+export const chatLocalRunComputerEventSchema = v.variant("status", [
+  v.strictObject({
+    status: v.literal("delivering"),
+    since: apiDateTimeSchema,
+  }),
+  v.strictObject({ status: v.literal("waiting") }),
+  v.strictObject({ status: v.literal("connected") }),
+]);
 export type ChatLocalRunComputerEvent = v.InferOutput<
   typeof chatLocalRunComputerEventSchema
+>;
+/** What the chat shows while a turn waits on the member's computer. */
+export type ChatLocalRunComputerWait = Exclude<
+  ChatLocalRunComputerEvent,
+  { status: "connected" }
 >;
 
 /**

@@ -145,6 +145,7 @@ export type HandlerErrorMissingRequiredField = {
  */
 export type HandlerErrorValidationIssue = {
   path: string;
+  code?: string | undefined;
   message: string;
 };
 
@@ -589,6 +590,14 @@ export class WorkflowIntegrationError extends TaggedError(
 )<{
   message: string;
   cause?: unknown;
+}> {}
+
+/** The documents of one request cannot fit its model, even trimmed. */
+export class DocumentTooLargeError extends TaggedError(
+  "DocumentTooLargeError",
+)<{
+  message: string;
+  budgetBytes: number;
 }> {}
 
 /** Post-generation OOXML structural violations. */

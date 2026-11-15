@@ -15,12 +15,17 @@ pub enum Permission {
   Notifications,
   OpenAtLogin,
   Accessibility,
+  Microphone,
 }
 
 impl Permission {
   /// Display order.
-  pub const ALL: [Self; 3] =
-    [Self::Notifications, Self::OpenAtLogin, Self::Accessibility];
+  pub const ALL: [Self; 4] = [
+    Self::Notifications,
+    Self::OpenAtLogin,
+    Self::Accessibility,
+    Self::Microphone,
+  ];
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -45,13 +50,15 @@ pub enum DesktopSurface {
   DocumentHandoff,
   ClipboardHistory,
   ActivityDetails,
+  Dictation,
 }
 
 impl DesktopSurface {
-  pub const ALL: [Self; 3] = [
+  pub const ALL: [Self; 4] = [
     Self::DocumentHandoff,
     Self::ClipboardHistory,
     Self::ActivityDetails,
+    Self::Dictation,
   ];
 }
 
@@ -64,14 +71,21 @@ pub const fn required_permissions(surface: DesktopSurface) -> &'static [Permissi
     }
     DesktopSurface::ClipboardHistory => &[Permission::OpenAtLogin],
     DesktopSurface::ActivityDetails => &[Permission::Accessibility],
+    // Hearing the speech, then typing it into the app in front.
+    DesktopSurface::Dictation => &[Permission::Microphone, Permission::Accessibility],
   }
 }
 
-fn surface_available(surface: DesktopSurface, gates: &FeatureGates) -> bool {
+/// Whether the account and this build have the surface now. Dictation also
+/// needs a build that carries the speech engine.
+pub fn surface_available(surface: DesktopSurface, gates: &FeatureGates) -> bool {
   match surface {
     DesktopSurface::DocumentHandoff | DesktopSurface::ClipboardHistory => true,
     DesktopSurface::ActivityDetails => {
       gates.is_enabled(DesktopFeature::ActivityTimeline)
+    }
+    DesktopSurface::Dictation => {
+      cfg!(dictation) && gates.is_enabled(DesktopFeature::Dictation)
     }
   }
 }
@@ -109,6 +123,7 @@ pub fn status(app: &AppHandle, permission: Permission) -> PermissionStatus {
     Permission::Notifications => notifications_status(app),
     Permission::OpenAtLogin => open_at_login_status(app),
     Permission::Accessibility => accessibility_status(),
+    Permission::Microphone => microphone_status(),
   }
 }
 
@@ -232,6 +247,46 @@ fn accessibility_status() -> PermissionStatus {
   PermissionStatus::NotApplicable
 }
 
+#[cfg(target_os = "macos")]
+fn microphone_status() -> PermissionStatus {
+  use stella_desktop_macos::MicrophoneAuthorization;
+  match stella_desktop_macos::microphone_authorization() {
+    MicrophoneAuthorization::NotDetermined => PermissionStatus::NotDetermined,
+    MicrophoneAuthorization::Denied => PermissionStatus::Denied,
+    MicrophoneAuthorization::Authorized => PermissionStatus::Granted,
+    MicrophoneAuthorization::Unavailable => PermissionStatus::NotApplicable,
+  }
+}
+
+/// Windows asks desktop apps nothing: the microphone is on unless it was
+/// turned off for this device, for every app, or for desktop apps.
+#[cfg(target_os = "windows")]
+fn microphone_status() -> PermissionStatus {
+  use windows_registry::{CURRENT_USER, Key, LOCAL_MACHINE};
+
+  const CONSENT_STORE: &str = r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone";
+  const NON_PACKAGED: &str = r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\NonPackaged";
+
+  let denied = |root: &Key, path: &str| {
+    root
+      .open(path)
+      .and_then(|key| key.get_string("Value"))
+      .is_ok_and(|value| value == "Deny")
+  };
+  if denied(LOCAL_MACHINE, CONSENT_STORE)
+    || denied(CURRENT_USER, CONSENT_STORE)
+    || denied(CURRENT_USER, NON_PACKAGED)
+  {
+    return PermissionStatus::Denied;
+  }
+  PermissionStatus::Granted
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn microphone_status() -> PermissionStatus {
+  PermissionStatus::NotApplicable
+}
+
 /// The OS settings page for a permission, where the user changes it.
 #[cfg_attr(
   target_os = "macos",
@@ -252,6 +307,10 @@ fn settings_url(app: &AppHandle, permission: Permission) -> Option<String> {
         "x-apple.systempreferences:com.apple.LoginItems-Settings.extension".to_string()
       }
       Permission::Accessibility => ACCESSIBILITY_SETTINGS_URL.to_string(),
+      Permission::Microphone => {
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+          .to_string()
+      }
     })
   }
   #[cfg(target_os = "windows")]
@@ -261,6 +320,7 @@ fn settings_url(app: &AppHandle, permission: Permission) -> Option<String> {
       Permission::Notifications => Some("ms-settings:notifications".to_string()),
       Permission::OpenAtLogin => Some("ms-settings:startupapps".to_string()),
       Permission::Accessibility => None,
+      Permission::Microphone => Some("ms-settings:privacy-microphone".to_string()),
     }
   }
   #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -305,6 +365,14 @@ fn request(app: &AppHandle, permission: Permission) -> Result<(), String> {
       // user turns it on in the pane opened next.
       #[cfg(target_os = "macos")]
       stella_desktop_macos::request_accessibility_permission();
+      open_settings(app, permission)
+    }
+    Permission::Microphone => {
+      #[cfg(target_os = "macos")]
+      if microphone_status() == PermissionStatus::NotDetermined {
+        stella_desktop_macos::request_microphone_permission();
+        return Ok(());
+      }
       open_settings(app, permission)
     }
   }
@@ -375,6 +443,18 @@ mod tests {
       needed_permissions(&gates),
       vec![Permission::Notifications, Permission::OpenAtLogin]
     );
+  }
+
+  #[test]
+  fn dictation_asks_for_the_microphone_and_for_typing_into_other_apps() {
+    assert_eq!(
+      required_permissions(DesktopSurface::Dictation),
+      &[Permission::Microphone, Permission::Accessibility]
+    );
+    assert!(!surface_available(
+      DesktopSurface::Dictation,
+      &FeatureGates::default()
+    ));
   }
 
   #[test]

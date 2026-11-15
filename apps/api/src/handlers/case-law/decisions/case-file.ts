@@ -113,10 +113,9 @@ export const listCaseFileDocuments = async ({
   if (after === false) {
     return false;
   }
-  const familyKey = await docketFamilyKeyToRead({
+  const familyKey = docketFamilyKeyToRead({
     country: decision.country,
     locator,
-    tx,
   });
   const localizedCourts = tx
     .select({ court: publishedCaseLawDecisions.court })

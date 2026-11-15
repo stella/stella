@@ -1,6 +1,6 @@
 {
   "route": "/settings/organization/tools",
-  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1); the sidebar shows each matter's working and waiting chats, read once per page from one bounded list",
+  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1); the sidebar shows each matter's working and waiting chats, read once per page from one bounded list. The SharePoint and OneDrive card reads the organization's opt-in once through the member's connection status, warmed by the loader (answered 404 where the deployment does not offer it).",
   "budget": {
     "depth": 5,
     "requests": [
@@ -16,6 +16,7 @@
       "GET /v1/organization-settings",
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/organization-settings/deployment-features",
+      "GET /v1/sharepoint/connection",
       "GET /v1/signals/count",
       "GET /v1/time-entries/approval-queue",
       "GET /v1/time-timers",
@@ -34,6 +35,7 @@
       "GET /v1/organization-settings": 1,
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/organization-settings/deployment-features": 1,
+      "GET /v1/sharepoint/connection": 1,
       "GET /v1/signals/count": 1,
       "GET /v1/time-entries/approval-queue": 1,
       "GET /v1/time-timers": 1,
@@ -51,6 +53,7 @@
       "GET /v1/organization-settings": 5,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/organization-settings/deployment-features": 5,
+      "GET /v1/sharepoint/connection": 4,
       "GET /v1/signals/count": 5,
       "GET /v1/time-entries/approval-queue": 10,
       "GET /v1/time-timers": 7,
@@ -67,6 +70,7 @@
       "GET /v1/organization-settings": 1024,
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/organization-settings/deployment-features": 1024,
+      "GET /v1/sharepoint/connection": 1024,
       "GET /v1/signals/count": 1024,
       "GET /v1/time-entries/approval-queue": 1024,
       "GET /v1/time-timers": 1024,

@@ -12,6 +12,7 @@ const LOCAL: ChatLocalRunTarget = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 };
 
 const answer = (localRunContext?: unknown) => ({

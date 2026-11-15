@@ -5,6 +5,7 @@ import { envBase } from "@/api/env-base";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  admissionRefusal,
   getCorpusIndexClient,
   isCorpusIndexUnavailable,
 } from "@/api/lib/legal-search/corpus-index-client";
@@ -308,6 +309,31 @@ const stubSlowEngine = () => {
 };
 
 describe("the request's latency budget is not the index's availability", () => {
+  const refusedForDeadline = () =>
+    admissionRefusal(
+      {
+        init: { method: "POST" },
+        path: "/api/v1/legal_corpus_v1_cze/search",
+        signal: undefined,
+        timeoutMs: 50, // timeout under test
+        endsAtRequestDeadline: true,
+      },
+      { type: "refused", reason: "deadline", waitedMs: 0, queued: 3 },
+    );
+
+  test("a read the queue estimates cannot start in time is the budget's expiry", () => {
+    const error = runWithinRequestLatencyBudget(
+      { label: "search_legislation", budgetMs: 50 },
+      refusedForDeadline,
+    );
+
+    expect(error.reach).toBe("budget_expired");
+    expect(isCorpusIndexUnavailable(error)).toBe(false);
+    expect(findRequestBudgetExpiry(error)).toMatchObject({
+      label: "search_legislation",
+    });
+  });
+
   test("a search the budget ends is the budget's expiry, not an outage", async () => {
     stubSlowEngine();
 
