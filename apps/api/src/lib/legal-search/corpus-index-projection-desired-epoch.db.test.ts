@@ -400,14 +400,11 @@ test("a generation whose desired epoch trails the canonical one is current to ev
   ]);
   // The shared rule agrees with the builder: the content the builder derives
   // is what the trailing state holds, at any canonical epoch not behind it.
-  const material = materials.ready.at(0) ?? panic("No ready material");
-  if (material.family !== "case_law") {
-    return panic("A case-law lease read another family");
-  }
-  const derived = deriveCorpusIndexProjectionDescriptor(
-    material.manifest,
-    material.input,
-  );
+  const material = materials.ready.find((ready) => ready.family === "case_law");
+  const derived =
+    material?.family === "case_law"
+      ? deriveCorpusIndexProjectionDescriptor(material.manifest, material.input)
+      : panic("No ready case-law material");
   expect(corpusProjectionDesiredStateHolds(plain, 2n, derived)).toBe(true);
   expect(corpusProjectionDesiredStateHolds(plain, 1n, derived)).toBe(true);
   expect(corpusProjectionDesiredStateHolds(plain, 0n, derived)).toBe(false);
