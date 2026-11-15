@@ -1760,6 +1760,21 @@ mod stand_in {
           }
         }
       }
+      "run.input" => {
+        // A running turn takes every message it is steered with.
+        if held.runs.get(&run_id).is_some_and(|run| !run.finished) {
+          let taken = json!({
+            "type": "run.event",
+            "runId": run_id,
+            "chunk": {
+              "type": "CUSTOM",
+              "name": "stella.run-input",
+              "value": { "inputId": message["inputId"], "status": "accepted" },
+            },
+          });
+          emit(held, &run_id, taken).await;
+        }
+      }
       "run.answer" => {
         // A run that asked a question goes on with the request it answers.
         if held

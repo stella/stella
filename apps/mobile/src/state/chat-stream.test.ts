@@ -25,6 +25,7 @@ import {
   answerEntry,
   applyChatEvent,
   cancelChatTurn,
+  chatRegenerateBody,
   chatSendBody,
   createSseParser,
   EMPTY_ANSWER,
@@ -514,11 +515,90 @@ describe("drawing an answer from its events", () => {
     );
   });
 
+  test("a failure says why by the code its error event carries", () => {
+    const failureAfter = (event: unknown) =>
+      reduce([parseChatEvent(JSON.stringify(event)) ?? []].flat()).failure;
+    expect(
+      failureAfter({
+        type: "RUN_ERROR",
+        message: "None of the member's computers is connected.",
+        code: "ai_local_runner_no_computer",
+      }),
+    ).toBe("local_runner_no_computer");
+    // A code this build does not know, or none, still reads as a failure.
+    expect(
+      failureAfter({ type: "RUN_ERROR", message: "x", code: "ai_newer" }),
+    ).toBe("unknown");
+    expect(failureAfter({ type: "RUN_ERROR", message: "x" })).toBe("unknown");
+    expect(
+      failureAfter({ type: "RUN_FINISHED", outcome: { type: "completed" } }),
+    ).toBeUndefined();
+  });
+
   test("passes over events it does not draw, and data that is not JSON", () => {
     expect(parseChatEvent('{"type":"MESSAGES_SNAPSHOT","messages":[]}')).toBe(
       undefined,
     );
     expect(parseChatEvent("not json")).toBe(undefined);
+  });
+});
+
+describe("answering the latest message again", () => {
+  const PARTS = [{ type: "text", content: "Which leases end this year?" }];
+  const LOCAL = {
+    kind: "local",
+    harness: "codex",
+    model: "gpt-5-codex",
+  } as const;
+
+  test("sends the stored message back as a regeneration, on the thread's computer", () => {
+    const body = chatRegenerateBody({
+      anonymized: false,
+      matterId: undefined,
+      retry: {
+        answerId: ANSWER_ID,
+        messageId: MESSAGE_ID,
+        parts: PARTS,
+        runTarget: LOCAL,
+      },
+      runId: "run-2",
+      threadId: THREAD_ID,
+    });
+    expect(body.forwardedProps).toEqual({
+      threadId: THREAD_ID,
+      runId: "run-2",
+      sendMode: "rawOverride",
+      runTarget: LOCAL,
+      message: { id: MESSAGE_ID, role: "user", parts: PARTS },
+      turnIntent: "regenerate",
+    });
+    // The server refuses an envelope whose copies disagree.
+    expect(body.data).toEqual(body.forwardedProps);
+    expect(body.messages).toEqual([{ id: MESSAGE_ID, role: "user" }]);
+  });
+
+  test("names no target for a thread on stella's own models", () => {
+    expect(
+      chatRegenerateBody({
+        anonymized: true,
+        matterId: "matter-1",
+        retry: {
+          answerId: ANSWER_ID,
+          messageId: MESSAGE_ID,
+          parts: PARTS,
+          runTarget: undefined,
+        },
+        runId: "run-2",
+        threadId: THREAD_ID,
+      }).forwardedProps,
+    ).toEqual({
+      threadId: THREAD_ID,
+      runId: "run-2",
+      workspaceId: "matter-1",
+      sendMode: "anonymized",
+      message: { id: MESSAGE_ID, role: "user", parts: PARTS },
+      turnIntent: "regenerate",
+    });
   });
 });
 

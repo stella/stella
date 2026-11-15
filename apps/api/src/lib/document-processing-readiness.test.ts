@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { isTransientRedisConnectionError } from "@/api/lib/redis-client";
 import {
   installRecordingAnalytics,
@@ -10,10 +12,11 @@ import type {
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
-process.env["GOTENBERG_USERNAME"] ??= "test";
-process.env["GOTENBERG_PASSWORD"] ??= "test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3002");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "test");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "test");
 
 let readinessSend = async (
   _command: string,
