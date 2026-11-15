@@ -23,6 +23,11 @@ import type { getAuth } from "@/api/lib/auth";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  holdQueueOfUnavailableMemberOnTx,
+  readDueQueueHeadOnTx,
+  sweepThreadsWithDueQueueOnTx,
+} from "@/api/lib/chat/chat-queue-system";
+import {
   instrumentSqlTransactionCounts,
   queryCountLogger,
 } from "@/api/lib/db-query-counter";
@@ -239,6 +244,30 @@ export type Transaction = TransactionOf<RootDatabase>;
 export const readOperatorActivitySummary = async (now: number) =>
   await withAggregateTransaction(rootDb, async (tx) =>
     readAuditedActivitySummary(tx, now),
+  );
+
+/**
+ * The chat queue's sender reads across organizations which queues have a
+ * message due and who queued it, before that member is proved again, and
+ * holds a queue whose member can no longer be proved. Ids and owners only;
+ * the send itself runs on the member's own connection.
+ */
+export const readDueChatQueueHead = async (threadId: SafeId<"chatThread">) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await readDueQueueHeadOnTx({ threadId, tx }),
+  );
+export const sweepThreadsWithDueChatQueue = async (limit: number) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await sweepThreadsWithDueQueueOnTx({ limit, tx }),
+  );
+export const holdChatQueueOfUnavailableMember = async (
+  options: Omit<Parameters<typeof holdQueueOfUnavailableMemberOnTx>[0], "tx">,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await holdQueueOfUnavailableMemberOnTx({ ...options, tx }),
   );
 
 /** Organization-bound OAuth operations never expose the owner connection. */

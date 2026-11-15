@@ -230,6 +230,8 @@ const TABLE_CLASSIFICATIONS = {
   chatMessageRevisions: FORMAT_SCOPE_EXCLUSION,
   chatMessageSearchDocuments: FORMAT_SCOPE_EXCLUSION,
   chatMessages: FORMAT_SCOPE_EXCLUSION,
+  chatQueueHolds: FORMAT_SCOPE_EXCLUSION,
+  chatQueuedMessages: FORMAT_SCOPE_EXCLUSION,
   chatRunLogEntries: FORMAT_SCOPE_EXCLUSION,
   chatRunLogs: FORMAT_SCOPE_EXCLUSION,
   chatSecrets: FORMAT_SCOPE_EXCLUSION,

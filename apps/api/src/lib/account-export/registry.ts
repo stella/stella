@@ -108,12 +108,8 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.noUserContent,
   },
-  // A message waiting to be sent; once sent it is a chat message, which the
-  // export carries. Exporting messages still waiting is a follow-up.
-  chat_queued_messages: {
-    type: "exempt",
-    reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
-  },
+  // A message the member wrote and queued: their content before it is sent.
+  chat_queued_messages: { type: "exported" },
   chat_threads: { type: "exported" },
   chat_tool_grants: {
     type: "exempt",

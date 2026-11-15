@@ -857,6 +857,8 @@ export const chatQueuedMessages = p.pgTable(
     request: jsonb("request").notNull(),
     /** Raised by every edit; a send and an edit name the revision they read. */
     revision: p.integer("revision").notNull().default(0),
+    /** When a queue sweep last tried this thread's queue; the next sweep tries the oldest first. */
+    sweptAt: timestamptz("swept_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()

@@ -46,10 +46,6 @@ import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import { planAssistantFinishPersistence } from "@/api/handlers/chat/persist-message";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
-import {
-  releaseChatQueueOnTx,
-  takeQueuedChatMessageOnTx,
-} from "@/api/handlers/chat/queue/chat-queue-gate";
 import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
 import type {
   ChatMessageMetadata,
@@ -66,6 +62,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  releaseChatQueueOnTx,
+  takeQueuedChatMessageOnTx,
+} from "@/api/lib/chat/chat-queue-gate";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
@@ -1252,7 +1252,6 @@ const takeTurnSourceOnTx = async ({
         revision: source.revision,
         threadId,
         tx,
-        whileWaiting: source.whileWaiting,
       });
     default:
       source satisfies never;

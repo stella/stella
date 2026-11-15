@@ -3,7 +3,6 @@ import { Result } from "better-result";
 import { CHAT_QUEUE_HOLD_REASON } from "@stll/api-contract/chat-queue";
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
-import { holdChatQueueOnTx } from "@/api/handlers/chat/queue/chat-queue-gate";
 import { lockOwnQueueThreadOnTx } from "@/api/handlers/chat/queue/chat-queue-store";
 import {
   chatQueueThreadParams,
@@ -11,6 +10,7 @@ import {
 } from "@/api/handlers/chat/queue/shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { holdChatQueueOnTx } from "@/api/lib/chat/chat-queue-gate";
 
 const config = {
   contract: "patch",

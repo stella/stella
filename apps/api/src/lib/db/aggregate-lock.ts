@@ -44,6 +44,7 @@ import {
   caseLawDecisionIdentifiers,
   caseLawReplayBatches,
   caseLawSources,
+  chatThreads,
   contacts,
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
@@ -3182,6 +3183,26 @@ export const lockMatterCreationMembers = async ({
     .orderBy(member.userId)
     .limit(userIds.length)
     .for("update");
+
+/**
+ * Lock the chat thread every write of its turns and its queue serializes on:
+ * acceptance, settlement, a stop and every queue change. False when the
+ * caller cannot see the thread.
+ */
+export const lockChatThreadForTurnOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<boolean> =>
+  (
+    await tx
+      .select({ id: chatThreads.id })
+      .from(chatThreads)
+      .where(eq(chatThreads.id, threadId))
+      .for("update")
+  ).length === 1;
 
 /** Lock the member within the caller's lifecycle or access-hold sequence. */
 export const lockMemberAccessRow = async ({

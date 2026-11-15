@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
-import { releaseChatQueueOnTx } from "@/api/handlers/chat/queue/chat-queue-gate";
 import { lockOwnQueueThreadOnTx } from "@/api/handlers/chat/queue/chat-queue-store";
 import {
   chatQueueThreadParams,
@@ -10,6 +9,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
+import { releaseChatQueueOnTx } from "@/api/lib/chat/chat-queue-gate";
 
 const config = {
   contract: "patch",

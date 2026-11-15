@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
-import { removeQueuedChatMessageOnTx } from "@/api/handlers/chat/queue/chat-queue-gate";
 import { lockOwnQueueThreadOnTx } from "@/api/handlers/chat/queue/chat-queue-store";
 import {
   chatQueuedMessageParams,
@@ -12,6 +11,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
+import { removeQueuedChatMessageOnTx } from "@/api/lib/chat/chat-queue-gate";
 
 const config = {
   contract: "patch",

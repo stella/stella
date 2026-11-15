@@ -6,10 +6,6 @@ import { stopChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { stopLocalChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import {
-  releaseChatQueueOnTx,
-  wasSentOnTx,
-} from "@/api/handlers/chat/queue/chat-queue-gate";
-import {
   lockOwnQueueThreadOnTx,
   moveQueuedChatMessageOnTx,
 } from "@/api/handlers/chat/queue/chat-queue-store";
@@ -22,10 +18,11 @@ import {
 import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
 import {
-  ringChatQueue,
-  ringChatQueueToReplace,
-} from "@/api/lib/chat/chat-queue-doorbell";
+  releaseChatQueueOnTx,
+  wasSentOnTx,
+} from "@/api/lib/chat/chat-queue-gate";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 
 const config = {
@@ -40,11 +37,15 @@ const config = {
   params: chatQueuedMessageParams,
 } satisfies HandlerConfig;
 
-/** What sending a queued message now does to the thread's turn. */
+/**
+ * What sending a queued message now does to the thread's turn: none to end,
+ * or one stopped. A turn waiting on the member ends in the same transaction;
+ * a running one ends once its run stops (`executionId` when this process
+ * may tell it directly). Either way the turn's end rings the queue and this
+ * message is first, so a lost ring leaves it for the sweep.
+ */
 type SendNowPlan =
-  | { type: "next" }
-  | { type: "stop"; executionId: string | null }
-  | { type: "replace" };
+  { type: "next" } | { type: "stop"; executionId: string | null };
 
 const sendQueuedChatMessageNow = createSafeRootHandler(
   config,
@@ -96,7 +97,7 @@ const sendQueuedChatMessageNow = createSafeRootHandler(
             await releaseChatQueueOnTx({ threadId, tx });
             const active = (
               await tx
-                .select({ id: chatTurns.id, status: chatTurns.status })
+                .select({ id: chatTurns.id })
                 .from(chatTurns)
                 .where(
                   and(
@@ -106,31 +107,22 @@ const sendQueuedChatMessageNow = createSafeRootHandler(
                 )
                 .limit(1)
             ).at(0);
-            const plan: SendNowPlan = await (async () => {
-              switch (active?.status) {
-                case undefined:
-                  return { type: "next" };
-                case "awaiting-user":
-                  return { type: "replace" };
-                case "running": {
-                  // Stop sends the next message: the turn's end rings the
-                  // queue, and this message is first.
-                  const stop = await stopChatTurnOnTx({
-                    pings,
-                    threadId,
-                    tx,
-                    turnId: active.id,
-                  });
-                  return {
-                    type: "stop",
-                    executionId:
-                      stop.type === "requested" ? stop.executionId : null,
-                  };
-                }
-                default:
-                  return panic("Unhandled active turn status");
-              }
-            })();
+            if (active === undefined) {
+              return { type: "planned", plan: { type: "next" } } as const;
+            }
+            // Ending a turn that waits on the member is the replacement Send
+            // now asks for; it is stored here, so a lost ring or a sender
+            // that died still finds this message due.
+            const stop = await stopChatTurnOnTx({
+              pings,
+              threadId,
+              tx,
+              turnId: active.id,
+            });
+            const plan: SendNowPlan = {
+              type: "stop",
+              executionId: stop.type === "requested" ? stop.executionId : null,
+            };
             return { type: "planned", plan } as const;
           }),
       ),
@@ -152,9 +144,6 @@ const sendQueuedChatMessageNow = createSafeRootHandler(
     switch (plan.type) {
       case "next":
         ringChatQueue(threadId);
-        break;
-      case "replace":
-        ringChatQueueToReplace(threadId);
         break;
       case "stop":
         if (plan.executionId !== null) {

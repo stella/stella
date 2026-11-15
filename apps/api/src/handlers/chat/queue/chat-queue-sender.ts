@@ -6,10 +6,17 @@ import {
   createChatQueueDrainer,
 } from "@/api/handlers/chat/queue/chat-queue-drain";
 import sendMessage from "@/api/handlers/chat/send-message";
-import { captureError, detached } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
 import { answerChatQueueDoorbell } from "@/api/lib/chat/chat-queue-doorbell";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+/** A sweep for due queues failed; the next one, `CHAT_QUEUE_SWEEP_INTERVAL_MS` later, tries again. */
+const queueSweepFailed = failureSink({
+  event: "chat.queue.sweep_failed",
+  expected: [],
+});
 
 /**
  * Send queued chat messages from this API task: every ring of the doorbell
@@ -30,11 +37,8 @@ export const startChatQueueSender = (): (() => void) => {
       }),
     signal: stopping.signal,
   });
-  const stopAnswering = answerChatQueueDoorbell((threadId, whileWaiting) => {
-    detached(
-      async () => await drainer.drain(threadId, whileWaiting),
-      "chat-queue.ring",
-    );
+  const stopAnswering = answerChatQueueDoorbell((threadId) => {
+    detached(async () => await drainer.drain(threadId), "chat-queue.ring");
   });
   let sweeping = false;
   const timer = setInterval(() => {
@@ -46,10 +50,10 @@ export const startChatQueueSender = (): (() => void) => {
       const swept = await Result.tryPromise(async () => await drainer.sweep());
       sweeping = false;
       if (Result.isError(swept)) {
-        captureError(
-          swept.error,
-          handlerErrorContext("chat.queue.sweep", { feature: "chat.queue" }),
-        );
+        observeFailure(swept.error, {
+          sink: queueSweepFailed,
+          ctx: { feature: "chat.queue" },
+        });
       }
     }, "chat-queue.sweep");
   }, CHAT_QUEUE_SWEEP_INTERVAL_MS);

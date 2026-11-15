@@ -117,7 +117,7 @@ const CHAT_PATH_BUDGETS = {
   },
   /** The turn's settlement after its last append: the assistant message,
    *  the turn row, the closed log. */
-  settleTurn: { measured: { statements: 10 } },
+  settleTurn: { measured: { statements: 11 } },
   /** The rejoin probe of a running turn. */
   rejoinProbe: { measured: { bytes: 117, statements: 2 } },
   /** Joining a running turn from its start, up to its current tail. */

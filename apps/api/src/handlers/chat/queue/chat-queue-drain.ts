@@ -9,35 +9,42 @@ import {
 import { CHAT_RUN_TARGET_KIND } from "@stll/api-contract/chat-run-target";
 import { mapWithConcurrency } from "@stll/concurrency";
 
+import {
+  holdChatQueueOfUnavailableMember,
+  readDueChatQueueHead,
+  sweepThreadsWithDueChatQueue,
+} from "@/api/db/root";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
-import { lockChatThreadForTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import type {
   LocalRunRoute,
   LocalRunTarget,
 } from "@/api/handlers/chat/local-run-route";
-import {
-  holdChatQueueOnTx,
-  readChatQueueGateOnTx,
-} from "@/api/handlers/chat/queue/chat-queue-gate";
 import { parseQueuedChatSend } from "@/api/handlers/chat/queue/chat-queue-store";
 import type sendMessage from "@/api/handlers/chat/send-message";
 import { createResponseSet } from "@/api/http/context";
 import { status, unwrapStatus } from "@/api/http/status";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  holdQueueOfUnavailableMember,
-  listThreadsWithDueQueue,
-  readDueQueueHead,
-} from "@/api/lib/chat/chat-queue-system";
+  type ChatQueueHoldWrite,
+  holdDueChatQueueOnTx,
+  readChatQueueGateOnTx,
+} from "@/api/lib/chat/chat-queue-gate";
 import { resolveQueuedTurnMember } from "@/api/lib/chat/queued-turn-member";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 /** Threads one sweep visits; a larger backlog continues on the next sweep. */
 const SWEEP_BATCH_SIZE = 25;
 const SWEEP_CONCURRENCY = 2;
 /** How often every API task looks for a queue whose ring was lost. */
 export const CHAT_QUEUE_SWEEP_INTERVAL_MS = 15_000;
+
+/** A step of sending a queued message failed; the sweep tries it again. */
+const queuedSendFailed = failureSink({
+  event: "chat.queue.send_failed",
+  expected: [],
+});
 
 /** Statuses after which the queue simply tries again later. */
 const TRANSIENT_SEND_STATUSES: ReadonlySet<number> = new Set([429, 503]);
@@ -107,13 +114,11 @@ export const queueDispositionOfRefusal = (
 const sendNextQueuedChatMessage = async ({
   dependencies,
   threadId,
-  whileWaiting,
 }: {
   dependencies: ChatQueueDrainDependencies;
   threadId: SafeId<"chatThread">;
-  whileWaiting: "queue" | "replace";
 }): Promise<ChatQueueSendOutcome> => {
-  const due = await readDueQueueHead({ threadId, whileWaiting });
+  const due = await readDueChatQueueHead(threadId);
   if (due === null) {
     return { type: "not-due" };
   }
@@ -121,26 +126,25 @@ const sendNextQueuedChatMessage = async ({
     organizationId: due.organizationId,
     userId: due.userId,
     threadId,
-    queuedMessageId: due.queuedMessageId,
+    queuedMessageId: due.id,
     signal: dependencies.signal,
   });
   if (Result.isError(member)) {
-    captureError(
-      member.error,
-      handlerErrorContext("chat.queue.member", {
-        feature: "chat.queue",
-        threadId,
-      }),
-    );
+    observeFailure(member.error, {
+      sink: queuedSendFailed,
+      ctx: { feature: "chat.queue", step: "member", threadId },
+    });
     return { type: "retry-later" };
   }
-  if (member.value.type === "unavailable") {
-    await holdQueueOfUnavailableMember({
+  const holdUnavailable = async (): Promise<ChatQueueSendOutcome> => {
+    await holdChatQueueOfUnavailableMember({
+      head: { id: due.id, revision: due.revision },
       threadId,
-      queuedMessageId: due.queuedMessageId,
-      refusalCode: CHAT_QUEUE_SEND_REFUSAL.memberUnavailable,
     });
     return { type: "held", reason: CHAT_QUEUE_HOLD_REASON.sendRefused };
+  };
+  if (member.value.type === "unavailable") {
+    return await holdUnavailable();
   }
   const { caller, request } = member.value;
   // The member's own connection reads the head: a thread no longer theirs,
@@ -149,50 +153,50 @@ const sendNextQueuedChatMessage = async ({
     if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
       return { type: "thread-unavailable" } as const;
     }
-    return await readChatQueueGateOnTx({ threadId, tx, whileWaiting });
+    return await readChatQueueGateOnTx({ threadId, tx });
   });
   if (gate.isErr()) {
-    captureError(
-      gate.error,
-      handlerErrorContext("chat.queue.gate", {
-        feature: "chat.queue",
-        threadId,
-      }),
-    );
+    observeFailure(gate.error, {
+      sink: queuedSendFailed,
+      ctx: { feature: "chat.queue", step: "gate", threadId },
+    });
     return { type: "retry-later" };
   }
   if (gate.value.type === "thread-unavailable") {
     // The member can no longer see the thread (a matter they lost): hold
     // it rather than proving them again on every sweep.
-    await holdQueueOfUnavailableMember({
-      threadId,
-      queuedMessageId: due.queuedMessageId,
-      refusalCode: CHAT_QUEUE_SEND_REFUSAL.memberUnavailable,
-    });
-    return { type: "held", reason: CHAT_QUEUE_HOLD_REASON.sendRefused };
+    return await holdUnavailable();
   }
   if (gate.value.type !== "due") {
     return { type: "not-due" };
   }
   const { head } = gate.value;
   const send = parseQueuedChatSend(head.request);
+  // Every refusal below was met outside the thread lock: it holds the queue
+  // only while this message is still the due head, so a pause, an edit or a
+  // turn since then stands.
   const hold = async (
-    write: Parameters<typeof holdChatQueueOnTx>[0]["hold"],
+    write: ChatQueueHoldWrite,
   ): Promise<ChatQueueSendOutcome> => {
-    const held = await caller.safeDb(async (tx) => {
-      await holdChatQueueOnTx({ hold: write, threadId, tx });
-    });
-    if (held.isErr()) {
-      captureError(
-        held.error,
-        handlerErrorContext("chat.queue.hold", {
-          feature: "chat.queue",
+    const held = await caller.safeDb(
+      async (tx) =>
+        await holdDueChatQueueOnTx({
+          head: { id: head.id, revision: head.revision },
+          hold: write,
           threadId,
+          tx,
         }),
-      );
+    );
+    if (held.isErr()) {
+      observeFailure(held.error, {
+        sink: queuedSendFailed,
+        ctx: { feature: "chat.queue", step: "hold", threadId },
+      });
       return { type: "retry-later" };
     }
-    return { type: "held", reason: write.reason };
+    return held.value === "held"
+      ? { type: "held", reason: write.reason }
+      : { type: "not-due" };
   };
 
   const { runTarget } = send;
@@ -253,7 +257,6 @@ const sendNextQueuedChatMessage = async ({
       startedFromQueue: {
         queuedMessageId: head.id,
         revision: head.revision,
-        whileWaiting,
       },
     },
   } satisfies SendContext;
@@ -294,38 +297,27 @@ export const createChatQueueDrainer = (
   dependencies: ChatQueueDrainDependencies,
 ) => {
   const draining = new Set<SafeId<"chatThread">>();
-  const drain = async (
-    threadId: SafeId<"chatThread">,
-    whileWaiting: "queue" | "replace" = "queue",
-  ): Promise<void> => {
+  const drain = async (threadId: SafeId<"chatThread">): Promise<void> => {
     if (draining.has(threadId)) {
       return;
     }
     draining.add(threadId);
     const sent = await Result.tryPromise(
-      async () =>
-        await sendNextQueuedChatMessage({
-          dependencies,
-          threadId,
-          whileWaiting,
-        }),
+      async () => await sendNextQueuedChatMessage({ dependencies, threadId }),
     );
     draining.delete(threadId);
     if (Result.isError(sent)) {
-      captureError(
-        sent.error,
-        handlerErrorContext("chat.queue.drain", {
-          feature: "chat.queue",
-          threadId,
-        }),
-      );
+      observeFailure(sent.error, {
+        sink: queuedSendFailed,
+        ctx: { feature: "chat.queue", step: "drain", threadId },
+      });
     }
   };
   const sweep = async (): Promise<void> => {
     if (dependencies.signal.aborted) {
       return;
     }
-    const threads = await listThreadsWithDueQueue(SWEEP_BATCH_SIZE);
+    const threads = await sweepThreadsWithDueChatQueue(SWEEP_BATCH_SIZE);
     await mapWithConcurrency({
       items: threads,
       limit: SWEEP_CONCURRENCY,

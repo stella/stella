@@ -303,7 +303,6 @@ const startServer = async (): Promise<void> => {
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
       closeBackgroundWorkers: async () => {
-        stopChatQueueSender();
         await stopFeatureAccessGrantsRefresh?.();
         await backgroundWorkers.close();
       },
@@ -318,6 +317,7 @@ const startServer = async (): Promise<void> => {
         });
       },
       relinquishChatTurnRuns,
+      stopChatQueueSender,
       stopHttp: async () => {
         // Runner sockets are asked to reconnect elsewhere before the
         // listener stops waiting on open connections.

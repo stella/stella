@@ -25,7 +25,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   contract: "replace",
-  precondition: { type: "revision", fields: ["expectedRevision"] },
+  precondition: { type: "revision", fields: ["revision"] },
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
@@ -35,7 +35,7 @@ const config = {
     "once it was sent. The message keeps its place in the queue.",
   params: chatQueuedMessageParams,
   body: v.object({
-    expectedRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    revision: v.pipe(v.number(), v.integer(), v.minValue(0)),
     send: queuedChatSendSchema,
   }),
 } satisfies HandlerConfig;
@@ -43,7 +43,7 @@ const config = {
 const replaceQueuedChatMessage = createSafeRootHandler(
   config,
   async function* ({
-    body: { expectedRevision, send },
+    body: { revision, send },
     params: { messageId, threadId },
     recordAuditEvent,
     safeDb,
@@ -74,7 +74,7 @@ const replaceQueuedChatMessage = createSafeRootHandler(
           return undefined;
         }
         const replaced = await replaceQueuedChatMessageOnTx({
-          expectedRevision,
+          expectedRevision: revision,
           id: messageId,
           send,
           threadId,

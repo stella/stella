@@ -1,9 +1,6 @@
 import type { SafeId } from "@/api/lib/branded-types";
 
-type ChatQueueDoorbellAnswer = (
-  threadId: SafeId<"chatThread">,
-  whileWaiting: "queue" | "replace",
-) => void;
+type ChatQueueDoorbellAnswer = (threadId: SafeId<"chatThread">) => void;
 
 let answer: ChatQueueDoorbellAnswer | null = null;
 
@@ -16,18 +13,7 @@ let answer: ChatQueueDoorbellAnswer | null = null;
  * costs one indexed read.
  */
 export const ringChatQueue = (threadId: SafeId<"chatThread">): void => {
-  answer?.(threadId, "queue");
-};
-
-/**
- * The member asked to send their first queued message now, replacing a turn
- * that waits on them (Send now). Lost like any ring, the message stays first
- * and goes once that turn ends.
- */
-export const ringChatQueueToReplace = (
-  threadId: SafeId<"chatThread">,
-): void => {
-  answer?.(threadId, "replace");
+  answer?.(threadId);
 };
 
 /** Drain rung threads with `drain`; the server calls this once at boot. */

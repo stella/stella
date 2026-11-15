@@ -108,7 +108,7 @@ export const resolveQueuedTurnMember = async ({
       authorization: { ...authorization, role: authorization.role },
     };
     const request = new Request(
-      new URL(`/chat/threads/${threadId}/queue/send`, env.BETTER_AUTH_URL),
+      new URL(`/chat/threads/${threadId}/queue/send`, env.BETTER_AUTH_URL).href,
       { method: "POST", signal },
     );
     const built = await resolveValidateAuth({

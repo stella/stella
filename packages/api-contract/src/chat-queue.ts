@@ -12,6 +12,17 @@ export const CHAT_QUEUE_LIMIT = 20;
  * Why a thread's queue waits although its turn has ended. Each is shown with
  * the queue; the member resumes it, or sends a message, which releases it.
  */
+export const CHAT_QUEUE_HOLD_REASONS = [
+  "turn-failed",
+  "turn-interrupted",
+  "member",
+  "send-refused",
+  "usage-limit",
+  "computer-away",
+] as const;
+
+export type ChatQueueHoldReason = (typeof CHAT_QUEUE_HOLD_REASONS)[number];
+
 export const CHAT_QUEUE_HOLD_REASON = {
   /** The turn before failed; what it was asked may need to change first. */
   turnFailed: "turn-failed",
@@ -25,12 +36,7 @@ export const CHAT_QUEUE_HOLD_REASON = {
   usageLimit: "usage-limit",
   /** The first message runs on a computer of the member that is not connected. */
   computerAway: "computer-away",
-} as const;
-
-export type ChatQueueHoldReason =
-  (typeof CHAT_QUEUE_HOLD_REASON)[keyof typeof CHAT_QUEUE_HOLD_REASON];
-
-export const CHAT_QUEUE_HOLD_REASONS = Object.values(CHAT_QUEUE_HOLD_REASON);
+} as const satisfies Record<string, ChatQueueHoldReason>;
 
 /** Error codes the queue's routes answer with. */
 export const CHAT_QUEUE_ERROR_CODE = {

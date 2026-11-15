@@ -12,6 +12,10 @@ import {
 } from "drizzle-orm";
 
 import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+import {
+  CHAT_QUEUE_HOLD_REASON,
+  type ChatQueueHoldReason,
+} from "@stll/api-contract/chat-queue";
 
 import { CHAT_TURNS_ORG_RUN_ID_UIDX } from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
@@ -41,7 +45,6 @@ import type {
 } from "@/api/handlers/chat/chat-turn-state";
 import { isChatHistorySnapshotCurrentOnTx } from "@/api/handlers/chat/history-window";
 import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
-import { holdChatQueueAfterTurnOnTx } from "@/api/handlers/chat/queue/chat-queue-gate";
 import type {
   ChatMessageRole,
   ChatTurnOutcome,
@@ -52,11 +55,13 @@ import type {
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { holdChatQueueOnTx } from "@/api/lib/chat/chat-queue-gate";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { closeChatRunLogOnTx } from "@/api/lib/chat/run-log";
 import { CHAT_TURN_TIMING_ACTIVE_STATUSES } from "@/api/lib/chat/turn-status";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
+import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -171,7 +176,6 @@ export type ChatTurnSource =
       type: "queue";
       queuedMessageId: SafeId<"chatMessage">;
       revision: number;
-      whileWaiting: "queue" | "replace";
     };
 
 export type ChatTurnAcceptance = {
@@ -292,20 +296,63 @@ export const createChatTurnAcceptance = ({
   workspaceId,
 });
 
-/** Lock the thread every write of its turns and its queue serializes on. */
-export const lockChatThreadForTurnOnTx = async ({
+/**
+ * What a turn's end does to its thread's queue, by how it ended. Total over
+ * the outcome union, so a new outcome does not compile until it is decided.
+ * `wait`: the turn still owns the thread (it waits on the member), nothing
+ * may start. `drain`: the next queued message may go. A hold keeps the queue
+ * until the member resumes it or sends a message.
+ */
+export const CHAT_QUEUE_AFTER_TURN = {
+  "awaiting-user": { type: "wait" },
+  completed: { type: "drain" },
+  // A budget pause ends the turn; the queued message is the member's next
+  // word and starts the next turn, as a typed one would.
+  paused: { type: "drain" },
+  // Stop sends the next message, as it did before the queue was stored.
+  cancelled: { type: "drain" },
+  failed: { type: "hold", reason: CHAT_QUEUE_HOLD_REASON.turnFailed },
+  interrupted: { type: "hold", reason: CHAT_QUEUE_HOLD_REASON.turnInterrupted },
+} as const satisfies Record<
+  ChatTurnOutcome["type"],
+  | { type: "wait" | "drain" }
+  | {
+      type: "hold";
+      reason: Extract<ChatQueueHoldReason, "turn-failed" | "turn-interrupted">;
+    }
+>;
+
+/**
+ * Apply `CHAT_QUEUE_AFTER_TURN` for a turn that settled in this transaction.
+ * Draining needs nothing here: the settlement's ping rings the queue.
+ */
+export const holdChatQueueAfterTurnOnTx = async ({
+  outcome,
   threadId,
+  turnId,
   tx,
 }: {
+  outcome: ChatTurnOutcome["type"];
   threadId: SafeId<"chatThread">;
+  turnId: SafeId<"chatTurn">;
   tx: Transaction;
-}): Promise<boolean> => {
-  const locked = await tx
-    .select({ id: chatThreads.id })
-    .from(chatThreads)
-    .where(eq(chatThreads.id, threadId))
-    .for("update");
-  return locked.length === 1;
+}): Promise<void> => {
+  const after = CHAT_QUEUE_AFTER_TURN[outcome];
+  switch (after.type) {
+    case "wait":
+    case "drain":
+      return;
+    case "hold":
+      await holdChatQueueOnTx({
+        hold: { reason: after.reason, turnId },
+        threadId,
+        tx,
+      });
+      return;
+    default:
+      after satisfies never;
+      panic("Unhandled queue disposition");
+  }
 };
 
 /**

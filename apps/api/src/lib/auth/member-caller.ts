@@ -47,7 +47,6 @@ export type MemberCaller = Readonly<OrgSettingsForAuth> & {
     readonly startedFromQueue?: {
       readonly queuedMessageId: SafeId<"chatMessage">;
       readonly revision: number;
-      readonly whileWaiting: "queue" | "replace";
     };
   };
   readonly featureAccessSnapshot?: FeatureAccessSnapshot;

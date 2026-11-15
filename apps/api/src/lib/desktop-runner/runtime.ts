@@ -2,12 +2,12 @@ import { chatBackgroundTasksChangedRealtimeEvent } from "@stll/api-contract";
 
 import { rootDb } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
-import { releaseComputerAwayHoldsOnTx } from "@/api/handlers/chat/queue/chat-queue-gate";
 import type { HttpServer } from "@/api/http/context";
 import { detached } from "@/api/lib/analytics/capture";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { desktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
+import { releaseComputerAwayHoldsOnTx } from "@/api/lib/chat/chat-queue-gate";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   createDesktopRunnerControl,

@@ -14,41 +14,17 @@ import {
   chatThreads,
   chatTurns,
 } from "@/api/db/schema";
-import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
+import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
+import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
 
 /**
  * When a thread's queue may send, and the writes that keep it consistent
  * with the thread's turns: holds, and taking the next message for a turn.
- * Turn persistence calls these under the thread lock, so this module reads
- * no message content.
+ * Every write here runs under the thread lock, so this module reads no
+ * message content and decides nothing about a turn.
  */
-
-/**
- * What a turn's end does to its thread's queue, by how it ended. Total over
- * the outcome union, so a new outcome does not compile until it is decided.
- * `wait`: the turn still owns the thread (it waits on the member), nothing
- * may start. `drain`: the next queued message may go. A hold keeps the queue
- * until the member resumes it or sends a message.
- */
-export const CHAT_QUEUE_AFTER_TURN = {
-  "awaiting-user": { type: "wait" },
-  completed: { type: "drain" },
-  // A budget pause ends the turn; the queued message is the member's next
-  // word and starts the next turn, as a typed one would.
-  paused: { type: "drain" },
-  // Stop sends the next message, as it did before the queue was stored.
-  cancelled: { type: "drain" },
-  failed: { type: "hold", reason: CHAT_QUEUE_HOLD_REASON.turnFailed },
-  interrupted: { type: "hold", reason: CHAT_QUEUE_HOLD_REASON.turnInterrupted },
-} as const satisfies Record<
-  ChatTurnOutcome["type"],
-  | { type: "wait" | "drain" }
-  | {
-      type: "hold";
-      reason: Extract<ChatQueueHoldReason, "turn-failed" | "turn-interrupted">;
-    }
->;
 
 /** Whether `id` was sent: it is a stored message of the thread. */
 export const wasSentOnTx = async ({
@@ -97,14 +73,18 @@ const closePositionGapOnTx = async ({
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<void> => {
+  const shift = replayWrite(chatQueuedMessages, {
+    position: sql`${chatQueuedMessages.position} - 1`,
+  });
   // audit: skip — renumbering the remaining queue after an audited removal
   await tx
     .update(chatQueuedMessages)
-    .set({ position: sql`${chatQueuedMessages.position} - 1` })
+    .set(shift.set)
     .where(
       and(
         eq(chatQueuedMessages.threadId, threadId),
         gt(chatQueuedMessages.position, position),
+        shift.setWhere,
       ),
     );
 };
@@ -150,7 +130,7 @@ export const removeQueuedChatMessageOnTx = async ({
   return { type: "removed", request: removed.request };
 };
 
-type ChatQueueHoldWrite =
+export type ChatQueueHoldWrite =
   | { reason: "member" | "usage-limit" | "computer-away" }
   | { reason: "turn-failed" | "turn-interrupted"; turnId: SafeId<"chatTurn"> }
   | {
@@ -161,7 +141,8 @@ type ChatQueueHoldWrite =
 
 /**
  * Hold the thread's queue, only while it has queued messages. A hold already
- * there is replaced: the newest reason is the one the member acts on.
+ * there stands until it is released: a member's pause is never replaced by
+ * a reason the server finds later, and any hold keeps the queue alike.
  */
 export const holdChatQueueOnTx = async ({
   hold,
@@ -212,12 +193,7 @@ export const holdChatQueueOnTx = async ({
       AND EXISTS (
         SELECT 1 FROM ${chatQueuedMessages} q WHERE q.thread_id = ${threadId}
       )
-    ON CONFLICT (thread_id) DO UPDATE SET
-      reason = excluded.reason,
-      turn_id = excluded.turn_id,
-      queued_message_id = excluded.queued_message_id,
-      refusal_code = excluded.refusal_code,
-      created_at = now()
+    ON CONFLICT (thread_id) DO NOTHING
   `);
 };
 
@@ -231,39 +207,6 @@ export const releaseChatQueueOnTx = async ({
 }): Promise<void> => {
   // audit: skip — releasing a hold changes no stored content; the send or resume that released it is the record
   await tx.delete(chatQueueHolds).where(eq(chatQueueHolds.threadId, threadId));
-};
-
-/**
- * Apply `CHAT_QUEUE_AFTER_TURN` for a turn that settled in this transaction.
- * Draining needs nothing here: the settlement's ping rings the queue.
- */
-export const holdChatQueueAfterTurnOnTx = async ({
-  outcome,
-  threadId,
-  turnId,
-  tx,
-}: {
-  outcome: ChatTurnOutcome["type"];
-  threadId: SafeId<"chatThread">;
-  turnId: SafeId<"chatTurn">;
-  tx: Transaction;
-}): Promise<void> => {
-  const after = CHAT_QUEUE_AFTER_TURN[outcome];
-  switch (after.type) {
-    case "wait":
-    case "drain":
-      return;
-    case "hold":
-      await holdChatQueueOnTx({
-        hold: { reason: after.reason, turnId },
-        threadId,
-        tx,
-      });
-      return;
-    default:
-      after satisfies never;
-      panic("Unhandled queue disposition");
-  }
 };
 
 /** The next queued message, as stored. */
@@ -284,20 +227,16 @@ export type ChatQueueGate =
 /**
  * The one gate of the queue: a queued message goes only when the thread has
  * no hold and no active turn. A turn waiting on the member is active, so no
- * wait of any kind lets the queue go. `whileWaiting: "replace"` is the
- * member's explicit replacement of a waiting turn (Send now on an item): it
- * admits a turn waiting on the member, never one that runs or was just
- * accepted. The caller holds the thread lock and has ended a running turn
- * whose lease lapsed (`canAcceptChatTurnOnTx`).
+ * wait of any kind lets the queue go; Send now ends such a turn first. The
+ * caller holds the thread lock and has ended a running turn whose lease
+ * lapsed (`canAcceptChatTurnOnTx`).
  */
 export const readChatQueueGateOnTx = async ({
   threadId,
   tx,
-  whileWaiting,
 }: {
   threadId: SafeId<"chatThread">;
   tx: Transaction;
-  whileWaiting: "queue" | "replace";
 }): Promise<ChatQueueGate> => {
   const head = (
     await tx
@@ -324,17 +263,13 @@ export const readChatQueueGateOnTx = async ({
   if (hold !== undefined) {
     return { type: "held", reason: hold.reason };
   }
-  const blocking =
-    whileWaiting === "replace"
-      ? (["accepted", "running"] as const)
-      : (["accepted", "running", "awaiting-user"] as const);
   const active = await tx
     .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(
       and(
         eq(chatTurns.threadId, threadId),
-        inArray(chatTurns.status, blocking),
+        inArray(chatTurns.status, ACTIVE_CHAT_TURN_STATUSES),
       ),
     )
     .limit(1);
@@ -351,6 +286,56 @@ export const readChatQueueGateOnTx = async ({
   };
 };
 
+/** The queued message the sender read, by id and revision. */
+export type DueQueuedChatMessage = {
+  id: SafeId<"chatMessage">;
+  revision: number;
+};
+
+/** Whether `id` at `revision` is still the due head of an open gate. */
+const isDueHeadOnTx = async ({
+  id,
+  revision,
+  threadId,
+  tx,
+}: DueQueuedChatMessage & {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<boolean> => {
+  const gate = await readChatQueueGateOnTx({ threadId, tx });
+  return (
+    gate.type === "due" &&
+    gate.head.id === id &&
+    gate.head.revision === revision
+  );
+};
+
+/**
+ * Hold the queue for a refusal the sender met outside the thread lock, only
+ * while the message it tried is still the due head: a pause, an edit, a
+ * removal or a turn since then is newer than the refusal and stands.
+ */
+export const holdDueChatQueueOnTx = async ({
+  head,
+  hold,
+  threadId,
+  tx,
+}: {
+  head: DueQueuedChatMessage;
+  hold: ChatQueueHoldWrite;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<"held" | "not-due"> => {
+  if (
+    !(await lockChatThreadForTurnOnTx({ threadId, tx })) ||
+    !(await isDueHeadOnTx({ ...head, threadId, tx }))
+  ) {
+    return "not-due";
+  }
+  await holdChatQueueOnTx({ hold, threadId, tx });
+  return "held";
+};
+
 /**
  * Take the queued message `id` at `revision` for the turn being accepted in
  * this transaction: it must be the due head of an open gate. Deleting it here,
@@ -364,20 +349,13 @@ export const takeQueuedChatMessageOnTx = async ({
   revision,
   threadId,
   tx,
-  whileWaiting,
 }: {
   id: SafeId<"chatMessage">;
   revision: number;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
-  whileWaiting: "queue" | "replace";
 }): Promise<"taken" | "not-due"> => {
-  const gate = await readChatQueueGateOnTx({ threadId, tx, whileWaiting });
-  if (
-    gate.type !== "due" ||
-    gate.head.id !== id ||
-    gate.head.revision !== revision
-  ) {
+  if (!(await isDueHeadOnTx({ id, revision, threadId, tx }))) {
     return "not-due";
   }
   const removed = await removeQueuedChatMessageOnTx({ id, threadId, tx });

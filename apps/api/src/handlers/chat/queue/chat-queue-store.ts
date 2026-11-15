@@ -22,9 +22,10 @@ import {
   type QueuedChatSend,
   queuedChatSendSchema,
 } from "@/api/handlers/chat/chat-schema";
-import { lockChatThreadForTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
-import { wasSentOnTx } from "@/api/handlers/chat/queue/chat-queue-gate";
 import type { SafeId } from "@/api/lib/branded-types";
+import { wasSentOnTx } from "@/api/lib/chat/chat-queue-gate";
+import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
+import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { isRecord } from "@/api/lib/type-guards";
 import { isUserFileUrl } from "@/api/lib/user-files/types";
@@ -72,6 +73,10 @@ const textOfPart = (part: unknown): string | null =>
     ? part["content"]
     : null;
 
+/** The text the member wrote in a queued message, part by part. */
+export const queuedChatSendTexts = (send: QueuedChatSend): string[] =>
+  send.message.parts.map(textOfPart).filter((piece) => piece !== null);
+
 const itemOfRow = (row: {
   id: SafeId<"chatMessage">;
   position: number;
@@ -80,11 +85,7 @@ const itemOfRow = (row: {
   createdAt: Date;
 }): ChatQueueItem => {
   const send = parseQueuedChatSend(row.request);
-  const text = send.message.parts
-    .map(textOfPart)
-    .filter((piece) => piece !== null)
-    .join("\n")
-    .trim();
+  const text = queuedChatSendTexts(send).join("\n").trim();
   return {
     id: row.id,
     position: row.position,
@@ -95,6 +96,15 @@ const itemOfRow = (row: {
     createdAt: row.createdAt,
   };
 };
+
+/**
+ * Every queued message of a thread. Enqueue admits at most
+ * `CHAT_QUEUE_LIMIT` under the thread lock, so more is a defect, not a page.
+ */
+const wholeQueue = <TRow>(read: BoundedReadResult<TRow>): TRow[] =>
+  read.type === "complete"
+    ? read.rows
+    : panic("A chat thread holds more queued messages than its limit");
 
 const QUEUE_ROW_COLUMNS = {
   id: chatQueuedMessages.id,
@@ -112,12 +122,16 @@ export const readChatQueueOnTx = async ({
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<{ items: ChatQueueItem[]; hold: ChatQueueHold | null }> => {
-  const rows = await tx
-    .select(QUEUE_ROW_COLUMNS)
-    .from(chatQueuedMessages)
-    .where(eq(chatQueuedMessages.threadId, threadId))
-    .orderBy(asc(chatQueuedMessages.position))
-    .limit(CHAT_QUEUE_LIMIT);
+  const rows = wholeQueue(
+    await readBounded(
+      tx
+        .select(QUEUE_ROW_COLUMNS)
+        .from(chatQueuedMessages)
+        .where(eq(chatQueuedMessages.threadId, threadId))
+        .orderBy(asc(chatQueuedMessages.position)),
+      CHAT_QUEUE_LIMIT,
+    ),
+  );
   const hold = (
     await tx
       .select({
@@ -297,13 +311,15 @@ export const moveQueuedChatMessageOnTx = async ({
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<"moved" | "not-found"> => {
-  const order = (
-    await tx
-      .select({ id: chatQueuedMessages.id })
-      .from(chatQueuedMessages)
-      .where(eq(chatQueuedMessages.threadId, threadId))
-      .orderBy(asc(chatQueuedMessages.position))
-      .limit(CHAT_QUEUE_LIMIT)
+  const order = wholeQueue(
+    await readBounded(
+      tx
+        .select({ id: chatQueuedMessages.id })
+        .from(chatQueuedMessages)
+        .where(eq(chatQueuedMessages.threadId, threadId))
+        .orderBy(asc(chatQueuedMessages.position)),
+      CHAT_QUEUE_LIMIT,
+    ),
   ).map((row) => row.id);
   if (
     !order.includes(id) ||

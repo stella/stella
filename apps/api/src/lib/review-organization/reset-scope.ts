@@ -120,6 +120,8 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "case_law_research_columns",
   "chat_run_log_entries",
   "chat_run_logs",
+  "chat_queue_holds",
+  "chat_queued_messages",
   "chat_secrets",
   "chat_threads",
   "chat_browser_site_grants",

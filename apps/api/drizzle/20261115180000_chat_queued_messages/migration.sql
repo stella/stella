@@ -13,6 +13,7 @@ CREATE TABLE "chat_queued_messages" (
   "position" integer NOT NULL,
   "request" jsonb NOT NULL,
   "revision" integer DEFAULT 0 NOT NULL,
+  "swept_at" timestamp with time zone,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
   CONSTRAINT "chat_queued_messages_position_check" CHECK ("chat_queued_messages"."position" >= 1),

@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, countDistinct, eq, inArray, sql } from "drizzle-orm";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -22,11 +22,8 @@ import type { QueuedChatSend } from "@/api/handlers/chat/chat-schema";
 import {
   CHAT_QUEUE_AFTER_TURN,
   holdChatQueueAfterTurnOnTx,
-  holdChatQueueOnTx,
-  releaseChatQueueOnTx,
-  removeQueuedChatMessageOnTx,
-  takeQueuedChatMessageOnTx,
-} from "@/api/handlers/chat/queue/chat-queue-gate";
+  stopChatTurnOnTx,
+} from "@/api/handlers/chat/chat-turn-persistence";
 import {
   enqueueChatMessageOnTx,
   lockOwnQueueThreadOnTx,
@@ -37,6 +34,15 @@ import {
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  holdChatQueueOnTx,
+  holdDueChatQueueOnTx,
+  releaseChatQueueOnTx,
+  removeQueuedChatMessageOnTx,
+  takeQueuedChatMessageOnTx,
+} from "@/api/lib/chat/chat-queue-gate";
+import { sweepThreadsWithDueQueueOnTx } from "@/api/lib/chat/chat-queue-system";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -44,6 +50,8 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { chatQueueReadScalingScenario } from "@/api/tests/read-scaling/chat-queue";
+import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 
 const clock = createTestClock();
 const databaseUrl = process.env["DATABASE_URL"];
@@ -106,7 +114,7 @@ type Operation =
   | { type: "wait" }
   | { type: "answer" }
   | { type: "end"; outcome: TerminalOutcome }
-  | { type: "take"; whileWaiting: "queue" | "replace"; stale: boolean };
+  | { type: "take"; stale: boolean };
 
 const operation: fc.Arbitrary<Operation> = fc.oneof(
   fc.record({ type: fc.constant("enqueue"), text: fc.string() }),
@@ -138,11 +146,7 @@ const operation: fc.Arbitrary<Operation> = fc.oneof(
       "interrupted",
     ),
   }),
-  fc.record({
-    type: fc.constant("take"),
-    whileWaiting: fc.constantFrom<"queue" | "replace">("queue", "replace"),
-    stale: fc.boolean(),
-  }),
+  fc.record({ type: fc.constant("take"), stale: fc.boolean() }),
 );
 
 const suite = (
@@ -221,7 +225,7 @@ const suite = (
     });
   };
 
-  /** End the thread's active turn (if any) and accept a new one for `messageId`. */
+  /** Accept a new turn for `messageId`; the caller made sure none is active. */
   const acceptTurnOnTx = async ({
     messageId,
     owner,
@@ -234,23 +238,6 @@ const suite = (
     tx: Transaction;
   }) => {
     await insertMessage({ id: messageId, owner, role: "user", threadId, tx });
-    // A replacement supersedes the waiting turn, as acceptance does.
-    await tx
-      .update(chatTurns)
-      .set({
-        assistantMessageId: null,
-        cancellationReason: "superseded",
-        interactionToolCallId: null,
-        interactionType: null,
-        settledAt: sql`now()`,
-        status: "cancelled",
-      })
-      .where(
-        and(
-          eq(chatTurns.threadId, threadId),
-          eq(chatTurns.status, "awaiting-user"),
-        ),
-      );
     await tx.insert(chatTurns).values({
       id: createSafeId<"chatTurn">(),
       leaseExpiresAt: sql`now() + interval '1 minute'`,
@@ -393,13 +380,11 @@ const suite = (
     owner,
     revision,
     threadId,
-    whileWaiting,
   }: {
     id: SafeId<"chatMessage">;
     owner: Owner;
     revision: number;
     threadId: SafeId<"chatThread">;
-    whileWaiting: "queue" | "replace";
   }) =>
     await withLock(threadId, owner, async (tx) => {
       const taken = await takeQueuedChatMessageOnTx({
@@ -407,7 +392,6 @@ const suite = (
         revision,
         threadId,
         tx,
-        whileWaiting,
       });
       if (taken === "taken") {
         await acceptTurnOnTx({ messageId: id, owner, threadId, tx });
@@ -415,11 +399,7 @@ const suite = (
       return taken;
     });
 
-  const gateOpen = (model: Model, whileWaiting: "queue" | "replace") =>
-    !model.held &&
-    (whileWaiting === "replace"
-      ? model.turn !== "accepted" && model.turn !== "running"
-      : !ACTIVE.has(model.turn));
+  const gateOpen = (model: Model) => !model.held && !ACTIVE.has(model.turn);
 
   const assertMatchesModel = async (
     threadId: SafeId<"chatThread">,
@@ -675,23 +655,11 @@ const suite = (
         const revision = op.stale ? head.revision + 1 : head.revision;
         // Two senders race for the same head; acceptance takes it once.
         const outcomes = await Promise.all([
-          takeAndAccept({
-            id: head.id,
-            owner,
-            revision,
-            threadId,
-            whileWaiting: op.whileWaiting,
-          }),
-          takeAndAccept({
-            id: head.id,
-            owner,
-            revision,
-            threadId,
-            whileWaiting: op.whileWaiting,
-          }),
+          takeAndAccept({ id: head.id, owner, revision, threadId }),
+          takeAndAccept({ id: head.id, owner, revision, threadId }),
         ]);
         const taken = outcomes.filter((outcome) => outcome === "taken").length;
-        if (op.stale || !gateOpen(model, op.whileWaiting)) {
+        if (op.stale || !gateOpen(model)) {
           expect(taken).toBe(0);
           return;
         }
@@ -749,7 +717,7 @@ const suite = (
       );
     }, 180_000);
 
-    test("a waiting turn of any kind keeps a plain send from the queue", async () => {
+    test("a waiting turn keeps the queue until Send now ends it", async () => {
       const owner = await seedOwner();
       const threadId = await seedThread(owner);
       const id = createSafeId<"chatMessage">();
@@ -768,26 +736,152 @@ const suite = (
         });
       });
       await setTurnStatus({ owner, status: "running", threadId });
-      await setTurnStatus({ owner, status: "awaiting-user", threadId });
-      expect(
-        await takeAndAccept({
+      const turnId = await setTurnStatus({
+        owner,
+        status: "awaiting-user",
+        threadId,
+      });
+      expect(await takeAndAccept({ id, owner, revision: 0, threadId })).toBe(
+        "not-due",
+      );
+      // Send now ends the wait in its own transaction, so the message is due
+      // to whichever sender comes next, ring or sweep.
+      await withChatRunPings(
+        async (pings) =>
+          await withLock(threadId, owner, async (tx) => {
+            await stopChatTurnOnTx({ pings, threadId, tx, turnId });
+          }),
+      );
+      expect(await takeAndAccept({ id, owner, revision: 0, threadId })).toBe(
+        "taken",
+      );
+    });
+
+    test("a refusal the sender met outside the lock holds only a head still due", async () => {
+      const owner = await seedOwner();
+      const threadId = await seedThread(owner);
+      const id = createSafeId<"chatMessage">();
+      await withLock(threadId, owner, async (tx) => {
+        await enqueueChatMessageOnTx({
           id,
-          owner,
-          revision: 0,
+          send: sendOf(id, "next"),
           threadId,
-          whileWaiting: "queue",
-        }),
-      ).toBe("not-due");
-      // Only the member's explicit replacement ends the wait.
-      expect(
-        await takeAndAccept({
+          tx,
+        });
+      });
+      const holdAway = async (revision: number) =>
+        await database.transaction(
+          async (tx) =>
+            await holdDueChatQueueOnTx({
+              head: { id, revision },
+              hold: { reason: "computer-away" },
+              threadId,
+              tx,
+            }),
+        );
+      const holdReason = async () =>
+        (
+          await database
+            .select({ reason: chatQueueHolds.reason })
+            .from(chatQueueHolds)
+            .where(eq(chatQueueHolds.threadId, threadId))
+        ).at(0)?.reason;
+      // The member paused after the sender read the head: the pause stands.
+      await withLock(threadId, owner, async (tx) => {
+        await holdChatQueueOnTx({ hold: { reason: "member" }, threadId, tx });
+      });
+      expect(await holdAway(0)).toBe("not-due");
+      expect(await holdReason()).toBe("member");
+      // The member edited it since: the refusal was about an older body.
+      await withLock(threadId, owner, async (tx) => {
+        await releaseChatQueueOnTx({ threadId, tx });
+        await replaceQueuedChatMessageOnTx({
+          expectedRevision: 0,
           id,
-          owner,
-          revision: 0,
+          send: sendOf(id, "edited"),
           threadId,
-          whileWaiting: "replace",
-        }),
-      ).toBe("taken");
+          tx,
+        });
+      });
+      expect(await holdAway(0)).toBe("not-due");
+      expect(await holdReason()).toBeUndefined();
+      expect(await holdAway(1)).toBe("held");
+      expect(await holdReason()).toBe("computer-away");
+    });
+
+    test("reading a chat's queue costs the same however many chats have messages waiting", async () => {
+      const owner = await seedOwner();
+      const queueIn = async (threadId: SafeId<"chatThread">) => {
+        const id = createSafeId<"chatMessage">();
+        await withLock(threadId, owner, async (tx) => {
+          await enqueueChatMessageOnTx({
+            id,
+            send: sendOf(id, "waiting"),
+            threadId,
+            tx,
+          });
+        });
+      };
+      const measureAt = async (others: number) => {
+        const threadId = await seedThread(owner);
+        await queueIn(threadId);
+        for (let index = 0; index < others; index += 1) {
+          // db-await-in-loop: seeds the member's other chats with a waiting message before the measured read.
+          await queueIn(await seedThread(owner));
+        }
+        return await chatQueueReadScalingScenario.measure({
+          database,
+          organizationId: owner.organizationId,
+          threadId,
+          userId: owner.userId,
+        });
+      };
+      const at10 = await measureAt(10);
+      const at200 = await measureAt(200);
+      console.info(
+        "handler-scaling",
+        JSON.stringify({ name: "chat queue read", at10, at200 }),
+      );
+      expect(at10.statements).toBeGreaterThan(0);
+      expect(readScalingViolations({ small: at10, large: at200 })).toEqual([]);
+    });
+
+    test("a bounded sweep reaches every due queue in turn", async () => {
+      const owner = await seedOwner();
+      const threads = [await seedThread(owner), await seedThread(owner)];
+      for (const threadId of threads) {
+        const id = createSafeId<"chatMessage">();
+        // db-await-in-loop: two fixture threads
+        await withLock(threadId, owner, async (tx) => {
+          await enqueueChatMessageOnTx({
+            id,
+            send: sendOf(id, "next"),
+            threadId,
+            tx,
+          });
+        });
+      }
+      const sweepOne = async () =>
+        (
+          await database.transaction(
+            async (tx) => await sweepThreadsWithDueQueueOnTx({ limit: 1, tx }),
+          )
+        ).filter((threadId) => threads.includes(threadId));
+      // Other queues may share the database: within as many sweeps as there
+      // are queues, both of this test's threads come up, neither twice.
+      const [{ queues } = { queues: 0 }] = await database
+        .select({ queues: countDistinct(chatQueuedMessages.threadId) })
+        .from(chatQueuedMessages);
+      const seen: SafeId<"chatThread">[] = [];
+      for (let sweep = 0; sweep < queues && seen.length < 2; sweep += 1) {
+        // db-await-in-loop: each sweep orders the next one
+        const [picked] = await sweepOne();
+        if (picked !== undefined) {
+          expect(seen).not.toContain(picked);
+          seen.push(picked);
+        }
+      }
+      expect(new Set(seen)).toEqual(new Set(threads));
     });
   });
 };
