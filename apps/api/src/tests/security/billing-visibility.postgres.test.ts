@@ -36,6 +36,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import { moneyPaths } from "@/api/lib/billing/money-response";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { cents } from "@/api/lib/money";
 import {
   authorizedMemberRole,
@@ -245,14 +246,20 @@ const seedFixture = async (db: GatedTestDb, fixture: Fixture) => {
     currency: "USD",
     totalAmount: RATE,
   });
-  await db.insert(contacts).values({
-    id: contactId,
+  // The owner reaches contacts only inside one organization's scope.
+  await withOwnerOrganizationScope(
+    db,
     organizationId,
-    type: "person",
-    displayName: "Rate contact",
-    defaultHourlyRate: RATE,
-    currency: "USD",
-  });
+    async (tx) =>
+      await tx.insert(contacts).values({
+        id: contactId,
+        organizationId,
+        type: "person",
+        displayName: "Rate contact",
+        defaultHourlyRate: RATE,
+        currency: "USD",
+      }),
+  );
 };
 
 type ActorContextOptions = { db: GatedTestDb; fixture: Fixture; actor: Actor };
