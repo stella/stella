@@ -296,6 +296,8 @@
     "scripts/typecheck-baseline.ts",
     "scripts/typecheck-cache.test.ts",
     "scripts/typecheck-coverage.ts",
+    "scripts/typecheck-profile.test.ts",
+    "scripts/typecheck-profile.ts",
     "scripts/unsignalled-skip.test.ts",
     "scripts/validate-main-heavy-sha.test.ts",
     "scripts/verify-step.test.sh",

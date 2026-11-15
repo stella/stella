@@ -2441,16 +2441,36 @@ jobs:
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Typecheck-cost baseline guard
+        id: typecheck-cost
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           STELLA_VERIFY: check
+          # Temporary diagnostic capture; remove after attribution.
+          TYPECHECK_COST_PROFILE_DIR: ${{ runner.temp }}/typecheck-cost-profile
         # The --self-test run first proves the parser and comparison logic,
         # so a broken guard cannot pass silently.
         run: |
           bun scripts/typecheck-baseline.ts --self-test
-          bun test scripts/typecheck-baseline.test.ts scripts/pre-push-policy.test.ts
+          bun test scripts/typecheck-baseline.test.ts scripts/typecheck-profile.test.ts scripts/pre-push-policy.test.ts
           bun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"
+
+      - name: Summarize API typecheck CPU hotspots
+        if: ${{ !cancelled() && steps.typecheck-cost.outcome == 'failure' }}
+        env:
+          TYPECHECK_COST_PROFILE_DIR: ${{ runner.temp }}/typecheck-cost-profile
+        run: bun scripts/typecheck-profile.ts "$TYPECHECK_COST_PROFILE_DIR/api-file-times.tsv"
+
+      - name: Upload API typecheck diagnostics
+        if: ${{ !cancelled() && (steps.typecheck-cost.outcome == 'success' || steps.typecheck-cost.outcome == 'failure') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: api-typecheck-profile
+          path: |
+            ${{ runner.temp }}/typecheck-cost-profile/
+            ${{ runner.temp }}/typecheck-base.json
+          retention-days: 7
+          if-no-files-found: warn
 
       - *merge_group_cancel
 
