@@ -1167,16 +1167,16 @@ export const createChatRuntime = ({
     return !isStoppedTurn();
   };
 
-  const withBody = async (
+  const withBody = async <T>(
     options: ChatSendMessageOptions | undefined,
-    action: () => Promise<void>,
+    action: () => Promise<T>,
   ) => {
     if (options?.body !== undefined) {
       client.updateOptions({ forwardedProps: options.body });
     }
 
     try {
-      await action();
+      return await action();
     } finally {
       if (options?.body !== undefined) {
         client.updateOptions({ forwardedProps: {} });
@@ -1464,11 +1464,11 @@ export const createChatRuntime = ({
   const answerToolApproval = async (
     response: { approved: boolean; id: string },
     options: ChatSendMessageOptions | undefined,
-  ) => {
+  ): Promise<Result<void, ChatRequestError>> => {
     if (!(await awaitRequestEnd())) {
-      return;
+      return Result.ok();
     }
-    await withBody(options, async () => {
+    return await withBody(options, async () => {
       const interrupt = client
         .getInterrupts()
         .find(
@@ -1484,7 +1484,7 @@ export const createChatRuntime = ({
         await resolveNativeInterrupt(() => {
           interrupt.resolveInterrupt({ approved: response.approved });
         });
-        return;
+        return Result.ok();
       }
 
       if (
@@ -1506,10 +1506,12 @@ export const createChatRuntime = ({
           ),
         );
         if (!pending) {
-          throw new ChatRequestError({
-            kind: "preparation_failed",
-            message: "The local-run approval is no longer pending",
-          });
+          return Result.err(
+            new ChatRequestError({
+              kind: "preparation_failed",
+              message: "The local-run approval is no longer pending",
+            }),
+          );
         }
         // Unsafe resume submits the protocol reply but does not apply the
         // SDK's bound-approval message transition. Keep the posted call and
@@ -1538,18 +1540,21 @@ export const createChatRuntime = ({
           },
         ]);
         if (!sent) {
-          throw new ChatRequestError({
-            kind: "preparation_failed",
-            message: "The local-run approval response was not sent",
-          });
+          return Result.err(
+            new ChatRequestError({
+              kind: "preparation_failed",
+              message: "The local-run approval response was not sent",
+            }),
+          );
         }
-        return;
+        return Result.ok();
       }
 
       // Transitional reload path for turns persisted before native AG-UI
       // interrupt descriptors were available. New live turns always resolve
       // through the bound interrupt above.
       await client.addLegacyToolApprovalResponse(response);
+      return Result.ok();
     });
   };
 
@@ -1653,9 +1658,10 @@ export const createChatRuntime = ({
         await pending;
         return;
       }
-      const answer = Result.tryPromise(
-        async () => await answerToolApproval(response, options),
-      );
+      const answer = Result.tryPromise({
+        try: async () => await answerToolApproval(response, options),
+        catch: toError,
+      }).then((outcome) => outcome.andThen((result) => result));
       approvalAnswers.set(
         response.id,
         answer.then(() => undefined),
@@ -1666,7 +1672,7 @@ export const createChatRuntime = ({
         // The failed continuation is the turn's error, shown like any other.
         // Its card stays answered; the thread reloads from the server, and
         // the next message settles the turn.
-        captureRuntimeError(outcome.error.cause);
+        captureRuntimeError(outcome.error);
       }
     },
     answerLocalRunQuestion,

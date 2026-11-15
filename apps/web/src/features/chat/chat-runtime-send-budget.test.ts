@@ -388,6 +388,26 @@ const clientToolAnswer =
     },
   ];
 
+const localApproval = (runId: string): ServerEvent[] =>
+  approvalAnswer(runId).map((event) =>
+    event["type"] === "RUN_FINISHED"
+      ? {
+          ...event,
+          outcome: {
+            type: "interrupt",
+            interrupts: [
+              {
+                id: `approval_${APPROVAL_CALL_ID}`,
+                toolCallId: APPROVAL_CALL_ID,
+                reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval,
+                metadata: { kind: "approval", input: APPROVAL_INPUT },
+              },
+            ],
+          },
+        }
+      : event,
+  );
+
 const ASK_CALL_ID = "call-ask";
 const ASK_INPUT = {
   questions: [{ question: "Which side?", reason: "It decides the draft." }],
@@ -547,25 +567,6 @@ describe("every kind of send carries only the message it posts", () => {
 
   test("approving or denying an unbound local-run command", async () => {
     for (const approved of [true, false]) {
-      const localApproval = (runId: string): ServerEvent[] =>
-        approvalAnswer(runId).map((event) =>
-          event.type === "RUN_FINISHED"
-            ? {
-                ...event,
-                outcome: {
-                  type: "interrupt",
-                  interrupts: [
-                    {
-                      id: `approval_${APPROVAL_CALL_ID}`,
-                      toolCallId: APPROVAL_CALL_ID,
-                      reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval,
-                      metadata: { kind: "approval", input: APPROVAL_INPUT },
-                    },
-                  ],
-                },
-              }
-            : event,
-        );
       const page = openScriptedPage([localApproval, textAnswer]);
       await askQuestion(page.runtime);
       await page.runtime.resolveToolApproval({
@@ -609,6 +610,54 @@ describe("every kind of send carries only the message it posts", () => {
       expect(page.runtime.getSnapshot().error).toBeUndefined();
       resetChatRequestStateForTests();
     }
+  });
+
+  test("a missing local approval fails closed and permits a corrected retry", async () => {
+    const page = openScriptedPage([localApproval, textAnswer]);
+    await askQuestion(page.runtime);
+    const pendingMessages = page.runtime.getSnapshot().messages;
+    page.runtime.setMessages(
+      pendingMessages.map((message) => ({
+        ...message,
+        parts: message.parts.filter(
+          (part) => part.type !== "tool-call" || part.id !== APPROVAL_CALL_ID,
+        ),
+      })),
+    );
+    const response = { approved: true, id: `approval_${APPROVAL_CALL_ID}` };
+    await page.runtime.resolveToolApproval(response);
+    expect(page.posted).toHaveLength(1);
+    expect(page.runtime.getSnapshot().error?.message).toBe(
+      "The local-run approval is no longer pending",
+    );
+    expect(page.errors).toHaveLength(1);
+
+    page.runtime.showStoredMessages(pendingMessages);
+    await page.runtime.resolveToolApproval(response);
+    expect(page.posted).toHaveLength(2);
+    expect(correlationOf(page.posted.at(1)?.body ?? {}).matches).toBe(true);
+    expect(page.runtime.getSnapshot().error).toBeUndefined();
+    page.runtime.leave();
+  });
+
+  test("a rejected local approval continuation remains a visible failure", async () => {
+    const page = openScriptedPage([
+      localApproval,
+      () => [{ type: "RUN_ERROR", message: "Continuation rejected" }],
+    ]);
+    await askQuestion(page.runtime);
+    await page.runtime.resolveToolApproval({
+      approved: false,
+      id: `approval_${APPROVAL_CALL_ID}`,
+    });
+    expect(page.posted).toHaveLength(2);
+    expect(page.runtime.getSnapshot().error?.message).toBe(
+      "The local-run approval response was not sent",
+    );
+    expect(page.errors.map(({ message }) => message)).toContain(
+      "The local-run approval response was not sent",
+    );
+    page.runtime.leave();
   });
 
   test("answering an ask-user card", async () => {
