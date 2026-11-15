@@ -179,14 +179,12 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     /** The harness session a later run on this desktop may resume. */
     harnessSessionId: p.varchar("harness_session_id", { length: 256 }),
     /**
-     * The run's output key, encrypted for its organization: random per run,
-     * sent to the computer in `run.start`, and what every grant to read the
-     * run's step outputs there is signed with. Absent only for a run
-     * assigned before runs kept one: it gets no grant, and its `run.start`
-     * is cancelled rather than sent again.
+     * No longer written or read: the output key a run once got for reading
+     * its step outputs on the computer, encrypted for its organization.
+     * Dropped in a later release, once no running API task selects it.
      */
     outputKeyEncrypted: bytea("output_key_encrypted"),
-    /** The IV of `output_key_encrypted`; set with it. */
+    /** The IV of `output_key_encrypted`; no longer written or read. */
     outputKeyIv: bytea("output_key_iv"),
     /**
      * When `run.start` was first written to one of the computer's sockets;

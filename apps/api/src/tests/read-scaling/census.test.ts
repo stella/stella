@@ -21,7 +21,6 @@ import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
 import { chatLimitReminderScalingScenario } from "./chat-limit-reminder";
 import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunStepContentScalingScenario } from "./chat-local-run-step-content";
-import { chatLocalRunStepOutputGrantScalingScenario } from "./chat-local-run-step-output-grant";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
 import { chatPinnedThreadsScalingScenario } from "./chat-threads";
@@ -106,7 +105,6 @@ const measuredApiScenarios = [
   chatLocalRunnersScalingScenario,
   chatLocalFilesUndoScalingScenario,
   chatBackgroundTasksScalingScenario,
-  chatLocalRunStepOutputGrantScalingScenario,
   chatLocalRunStepContentScalingScenario,
   chatActiveRunsScalingScenario,
   chatPinnedThreadsScalingScenario,

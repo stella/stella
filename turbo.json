@@ -1956,7 +1956,6 @@
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-request.fixture.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-runner.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/chat-local-run-step-content.fixtures.json",
-        "$TURBO_ROOT$/packages/api-contract/src/chat-local-run-step-output.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-edit-file-types.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-registry.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts"
