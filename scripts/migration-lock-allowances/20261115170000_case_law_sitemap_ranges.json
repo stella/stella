@@ -1,0 +1,4 @@
+{
+  "add-column": "Four nullable range bound columns without defaults on case_law_sitemap_shards, a derived listing of a few thousand rows; catalog-only under the 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The range bound check is added NOT VALID, so it scans no row; the online phase validates it. Catalog work is bounded by the 1s lock_timeout and 5s statement_timeout."
+}

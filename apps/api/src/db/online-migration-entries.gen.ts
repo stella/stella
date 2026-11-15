@@ -4,6 +4,7 @@ export { default as constraints_billing_activity_hour_cap_constraints } from "./
 export { default as constraints_billing_drafts_constraints } from "./online-migration-entries/constraints-billing-drafts-constraints";
 export { default as constraints_case_law_identifier_retry_constraints } from "./online-migration-entries/constraints-case-law-identifier-retry-constraints";
 export { default as constraints_case_law_parsed_source_constraint } from "./online-migration-entries/constraints-case-law-parsed-source-constraint";
+export { default as constraints_case_law_sitemap_range_bounds } from "./online-migration-entries/constraints-case-law-sitemap-range-bounds";
 export { default as constraints_chat_content_v3_constraints } from "./online-migration-entries/constraints-chat-content-v3-constraints";
 export { default as constraints_client_invoice_constraints } from "./online-migration-entries/constraints-client-invoice-constraints";
 export { default as constraints_contact_vat_id_constraints } from "./online-migration-entries/constraints-contact-vat-id-constraints";
@@ -152,6 +153,7 @@ export { default as repairs_case_law_identifier_retry_constraint_validation } fr
 export { default as repairs_case_law_parsed_source_validation } from "./online-migration-entries/repairs-case-law-parsed-source-validation";
 export { default as repairs_case_law_population_repair } from "./online-migration-entries/repairs-case-law-population-repair";
 export { default as repairs_case_law_sitemap_packing_enrollment } from "./online-migration-entries/repairs-case-law-sitemap-packing-enrollment";
+export { default as repairs_case_law_sitemap_range_enrollment } from "./online-migration-entries/repairs-case-law-sitemap-range-enrollment";
 export { default as repairs_case_law_source_config_object_repair } from "./online-migration-entries/repairs-case-law-source-config-object-repair";
 export { default as repairs_chat_content_v3_repair } from "./online-migration-entries/repairs-chat-content-v3-repair";
 export { default as repairs_chat_run_text_boundaries } from "./online-migration-entries/repairs-chat-run-text-boundaries";

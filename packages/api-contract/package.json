@@ -22,6 +22,7 @@
     "./search-history-identity": "./src/search-history-identity.ts",
     "./search-history-title": "./src/search-history-title.ts",
     "./public-crawl-rules": "./src/public-crawl-rules.ts",
+    "./public-sitemap-budget": "./src/public-sitemap-budget.ts",
     "./provider-setup": "./src/provider-setup.ts",
     "./organization-create": "./src/organization-create.ts",
     "./organization-ai-availability": "./src/organization-ai-availability.ts",

@@ -37,6 +37,7 @@ import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { DAY_IN_MS } from "@stll/time";
 
 import type { env } from "@/api/env";
+import { SITEMAP_RANGE_ROWS_CEILING } from "@/api/lib/case-law/sitemap-shard-budget";
 import {
   API_RATE_LIMITS,
   MCP_RATE_LIMITS,
@@ -746,10 +747,12 @@ export const LIMITS = {
   caseLawLanguageAlternatesPerGroupMax: 30,
   /** Max URL entries in one sitemap file by protocol. */
   caseLawSitemapUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
-  /** URL ceiling; XML serialization separately enforces the byte ceiling. */
-  caseLawSitemapShardUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
-  /** Hreflang groups reserve room for their language alternates. */
-  caseLawSitemapMultilingualShardUrlLimit: 5000,
+  /**
+   * URLs one case-law sitemap file lists at most: the decisions one read may
+   * serve (`case-law/sitemap-shard-budget.ts`), far below the protocol's
+   * ceiling. XML serialization separately enforces the byte ceiling.
+   */
+  caseLawSitemapShardUrlLimit: SITEMAP_RANGE_ROWS_CEILING,
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawSourceFacetCountCap: 1000,

@@ -483,14 +483,19 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tsv: "required",
     searchable_text: "required",
   },
-  // The shards the public sitemap index lists. The count is how the refresh
-  // splits a month, not what the index states.
+  // The shards the public sitemap index lists. A file's read looks up its
+  // range and refuses one whose count outgrew what a read may serve.
   case_law_sitemap_shards: {
     country: "required",
     year: "required",
     month: "required",
     bucket: "required",
     last_modified_at: "required",
+    total: "required",
+    range_start_date: "required",
+    range_start_id: "required",
+    range_end_date: "required",
+    range_end_id: "required",
   },
   case_law_source_arrivals: {
     source_id: "required",
