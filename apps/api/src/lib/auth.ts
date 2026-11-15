@@ -3569,7 +3569,7 @@ export const realtimeAuthorizers = {
  * it (no explicit eviction needed) and never leaks across requests, so a
  * revoked session is still re-checked in full on the very next request.
  *
- * `resolveValidateAuth`'s return type is intentionally left for TypeScript
+ * `memberCallerFromIdentity`'s return type is intentionally left for TypeScript
  * to infer (no hand-written `ValidateAuthValue`/`ValidateAuthResolution`
  * annotation). `scopedDb`/`safeDb` come from the membership-scoped database
  * factories, which are generic over the concrete transaction type; annotating
@@ -3924,36 +3924,26 @@ const resolveAccessTokenIdentity = async ({
   };
 };
 
-const resolveValidateAuth = async ({
-  getSession,
-  request,
-  route,
-  server,
+type MemberCallerFromIdentityOptions = {
+  identity: ResolvedIdentity;
+  initialWorkspaceId: SafeId<"workspace"> | null;
+  request: Request;
+  server: ResolveValidateAuthOptions["server"];
+};
+
+/**
+ * The member context handlers read, from an identity a credential proved:
+ * the professional-use gate, the role, feature access, organization
+ * settings, the member's own scoped connections, matter access and the audit
+ * recorder. Every way a member is proved builds it here, so none of them can
+ * hand a handler a context the others would not.
+ */
+export const memberCallerFromIdentity = async ({
+  identity,
   initialWorkspaceId,
-  responseHeaders,
-}: ResolveValidateAuthOptions) => {
-  // Told apart by shape, never by fallback: a request carrying a JWT bearer
-  // is judged on that token alone, so a rejected token cannot fall through to
-  // a browser session that happens to ride along.
-  const accessToken = readAccessTokenBearer(request.headers);
-  const resolved =
-    accessToken === undefined
-      ? await resolveSessionIdentity({
-          getSession,
-          request,
-          initialWorkspaceId,
-          responseHeaders,
-        })
-      : await resolveAccessTokenIdentity({
-          token: accessToken,
-          request,
-          route,
-          initialWorkspaceId,
-          responseHeaders,
-        });
-  if (!resolved.ok) {
-    return resolved;
-  }
+  request,
+  server,
+}: MemberCallerFromIdentityOptions) => {
   const {
     authorization,
     email,
@@ -3963,7 +3953,7 @@ const resolveValidateAuth = async ({
     stream,
     grantedScopes,
     userId,
-  } = resolved.identity;
+  } = identity;
   // A signed-in account uses the product only once it has accepted the
   // professional-use statement, whether it signed in here or in the browser
   // that granted an app its token. An account created where it was not
@@ -4130,6 +4120,44 @@ const resolveValidateAuth = async ({
       }),
   };
   return { ok: true as const, value: caller };
+};
+
+const resolveValidateAuth = async ({
+  getSession,
+  request,
+  route,
+  server,
+  initialWorkspaceId,
+  responseHeaders,
+}: ResolveValidateAuthOptions) => {
+  // Told apart by shape, never by fallback: a request carrying a JWT bearer
+  // is judged on that token alone, so a rejected token cannot fall through to
+  // a browser session that happens to ride along.
+  const accessToken = readAccessTokenBearer(request.headers);
+  const resolved =
+    accessToken === undefined
+      ? await resolveSessionIdentity({
+          getSession,
+          request,
+          initialWorkspaceId,
+          responseHeaders,
+        })
+      : await resolveAccessTokenIdentity({
+          token: accessToken,
+          request,
+          route,
+          initialWorkspaceId,
+          responseHeaders,
+        });
+  if (!resolved.ok) {
+    return resolved;
+  }
+  return await memberCallerFromIdentity({
+    identity: resolved.identity,
+    initialWorkspaceId,
+    request,
+    server,
+  });
 };
 
 /** The member a browser session proved for this request. */

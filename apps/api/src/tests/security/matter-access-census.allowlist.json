@@ -47,14 +47,14 @@
       "getSessionAndMemberAuthorization.memberAuthorizationResult.authorization#rootDb": 1,
       "isActiveOrganizationMember.authorization#rootDb": 1,
       "issueDesktopAccountGrant.db#rootDb": 1,
+      "memberCallerFromIdentity.getActiveWorkspaceIds": 2,
+      "memberCallerFromIdentity.getActiveWorkspaceIds.activeWorkspaceIds": 1,
+      "memberCallerFromIdentity.getWorkspaceAccess#rootDb": 1,
+      "memberCallerFromIdentity.orgSettings#rootDb": 1,
       "readAccountProfessionalUse#rootDb": 1,
       "realtimeAuthorizers.user#rootDb": 1,
       "realtimeAuthorizers.workspace#rootDb": 1,
-      "resolveCredentialMemberAuthorization#rootDb": 1,
-      "resolveValidateAuth.getActiveWorkspaceIds": 2,
-      "resolveValidateAuth.getActiveWorkspaceIds.activeWorkspaceIds": 1,
-      "resolveValidateAuth.getWorkspaceAccess#rootDb": 1,
-      "resolveValidateAuth.orgSettings#rootDb": 1
+      "resolveCredentialMemberAuthorization#rootDb": 1
     }
   },
   "apps/api/src/lib/db/member-access-hold.ts::names-matter-role-rule": {
