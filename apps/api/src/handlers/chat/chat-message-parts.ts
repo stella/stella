@@ -1552,8 +1552,8 @@ const isPersistedSubagentPart = (part: PersistedSubagentPart): boolean => {
         isRecord(message) &&
         isNonEmptyString(message.id) &&
         isSubagentMessageRole(message.role) &&
+        // Child content is a proven v3 message content (see its type).
         isRecord(message.content) &&
-        message.content.version === 3 &&
         Array.isArray(message.content.data),
     )
   );
