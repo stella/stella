@@ -274,6 +274,10 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // The page script runs serialised inside a web page and may reference
+  // nothing outside itself, so it cannot import better-result; its catches
+  // turn a DOM parse that throws into a fallback value.
+  "packages/browser-page/src/page-script.ts",
   // Adapter definitions return typed stored-read failures; the existing replay
   // callback protocol consumes those failures through Promise rejection.
   "apps/api/src/lib/legal-search/stored-raw-reparse-boundary.ts",
@@ -555,7 +559,7 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   },
   {
     reason:
-      "Shared page code of the browser hosts: the page script is serialised into the page and may reference nothing outside itself, so it cannot import better-result; it moved here from the extension library unchanged. Enrol the package's other modules with that library.",
+      "Shared page code of the browser hosts, moved here from the extension library unchanged. Enrol it with that library; the page script itself is a boundary module.",
     unit: "packages/browser-page/src",
   },
   { reason: "unreviewed", unit: "apps/landing/src" },

@@ -1,5 +1,0 @@
-{
-  "metric": "try-catch-outside-boundary",
-  "delta": 2,
-  "reason": "The page script moved from the extension library, whose unit is exempt, into the shared browser-page package unchanged. It is serialised into the page and may reference nothing outside itself, so it cannot import better-result; its two catches turn a CSS parse and a fragment decode that throw into a fallback value."
-}
