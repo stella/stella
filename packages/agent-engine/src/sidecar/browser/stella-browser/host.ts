@@ -4,6 +4,7 @@ import { appendFileSync } from "node:fs";
 import {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_ERROR_CODE,
+  BROWSER_CONTROL_LIMITS,
   type BrowserControlCommand,
   type BrowserControlResult,
   PRODUCTION_STELLA_ORIGINS,
@@ -115,13 +116,14 @@ export type StellaBrowserHostOptions = {
 type Running = {
   instance: BrowserInstance;
   targets: Targets;
-  profileDir: string;
+  /** The account the browser's profile is: never used for another. */
+  memberKey: string;
   /** Isolated worlds by document, shared by every chat's reads. */
   worlds: Map<string, number>;
 };
 
 export type StellaBrowserHost = BrowserHost & {
-  /** Closes the browser; the holder is exiting. */
+  /** Closes the browser, one starting too, and starts none again: the holder is exiting. */
   stop: () => Promise<void>;
 };
 
@@ -130,6 +132,15 @@ const noTab = (): BrowserControlResult =>
     BROWSER_CONTROL_ERROR_CODE.noControlledTab,
     "No tab is open for this chat in the stella browser. Open a page first.",
   );
+
+const cancelled = (): BrowserControlResult =>
+  browserControlError(
+    BROWSER_CONTROL_ERROR_CODE.cancelled,
+    "The browser step was stopped before it ran.",
+  );
+
+const STOPPED =
+  "The stella browser is closing with stella's agent on this computer.";
 
 /** What a read in the chat's active tab works with; null when the chat has none. */
 const readingIn = (
@@ -157,19 +168,34 @@ type Step = {
   policy: OriginPolicy;
 };
 
-/** Opens `requested` in the chat's tab, or in a new window of the chat's. */
+/**
+ * Opens `requested` in the chat's tab, or in a new window of the chat's.
+ * A chat keeps at most the contract's number of tabs: one more is refused
+ * before the browser makes a window.
+ */
 const openIn = async (
   current: Running,
   { controllerId, policy, signal }: Step,
   { newTab, requested }: { newTab: boolean; requested: URL },
 ): Promise<BrowserControlResult> => {
   if (newTab || current.targets.activeTab(controllerId) === null) {
+    if (
+      current.targets.chatTabs(controllerId).length >=
+      BROWSER_CONTROL_LIMITS.tabs
+    ) {
+      return browserControlError(
+        BROWSER_CONTROL_ERROR_CODE.tabLimitReached,
+        `Chat already has ${String(BROWSER_CONTROL_LIMITS.tabs)} tabs open, the most it may keep. Open the page in the current tab without newTab.`,
+      );
+    }
     const opened = await current.targets.openTab(controllerId, signal);
     if (Result.isError(opened)) {
-      return browserControlError(
-        BROWSER_CONTROL_ERROR_CODE.navigationFailed,
-        "The stella browser could not open a window for this page.",
-      );
+      return opened.error.type === "aborted"
+        ? cancelled()
+        : browserControlError(
+            BROWSER_CONTROL_ERROR_CODE.navigationFailed,
+            "The stella browser could not open a window for this page.",
+          );
     }
   }
   const reading = readingIn(current, controllerId, signal, policy);
@@ -208,103 +234,144 @@ const methodRecorder = (methodLog: string | null) => {
   };
 };
 
-/** Runs each chat's commands one at a time, each stoppable by the chat's cancel. */
-const chatQueues = () => {
+/**
+ * Runs each chat's commands one at a time, in order, whatever the one
+ * before did. A chat's cancel stops its command running and every one
+ * still queued behind it.
+ */
+export const chatQueues = () => {
   const queues = new Map<string, Promise<unknown>>();
-  const inFlight = new Map<string, AbortController>();
+  const stops = new Map<string, Set<AbortController>>();
   return {
     run: async <T>(
       controllerId: string,
       signal: AbortSignal,
       work: (signal: AbortSignal) => Promise<T>,
     ): Promise<T> => {
+      const stop = new AbortController();
+      const chat = stops.get(controllerId) ?? new Set<AbortController>();
+      chat.add(stop);
+      stops.set(controllerId, chat);
       const previous = queues.get(controllerId) ?? Promise.resolve();
-      const turn = previous.then(async () => {
-        const stop = new AbortController();
-        inFlight.set(controllerId, stop);
-        const result = await work(AbortSignal.any([signal, stop.signal]));
-        if (inFlight.get(controllerId) === stop) {
-          inFlight.delete(controllerId);
-        }
-        return result;
-      });
+      const turn = Promise.allSettled([previous]).then(
+        async () => await work(AbortSignal.any([signal, stop.signal])),
+      );
       queues.set(controllerId, turn);
-      const result = await turn;
-      if (queues.get(controllerId) === turn) {
-        queues.delete(controllerId);
-      }
-      return result;
+      return await turn.finally(() => {
+        chat.delete(stop);
+        if (chat.size === 0 && stops.get(controllerId) === chat) {
+          stops.delete(controllerId);
+        }
+        if (queues.get(controllerId) === turn) {
+          queues.delete(controllerId);
+        }
+      });
     },
     cancel: (controllerId: string) => {
-      inFlight.get(controllerId)?.abort();
+      for (const stop of stops.get(controllerId) ?? []) {
+        stop.abort();
+      }
     },
   };
 };
 
-export const createStellaBrowserHost = ({
-  accountOrigin,
-  environment,
-  home,
-  log,
-  platform,
-  processes = realBrowserProcesses,
-  profileRoot,
-  testHooks,
-}: StellaBrowserHostOptions): StellaBrowserHost => {
+/**
+ * Read through a call: TypeScript keeps a checked `signal.aborted` narrowed
+ * across awaits, but a stop can land during any of them.
+ */
+const isStopped = (signal: AbortSignal): boolean => signal.aborted;
+
+/** Starts the account's browser on its profile; why not, as the tools report it. */
+const startFor = async (
+  {
+    environment,
+    home,
+    log,
+    platform,
+    processes = realBrowserProcesses,
+    profileRoot,
+    testHooks,
+  }: StellaBrowserHostOptions,
+  memberKey: string,
+  recordMethod: (method: CdpMethod) => void,
+): Promise<BrowserInstance | BrowserControlResult> => {
+  const browser =
+    testHooks?.executable ??
+    findInstalledBrowser({ fs: realBrowserFileSystem, home, platform })
+      ?.executable;
+  if (browser === undefined) {
+    return disconnected(
+      "Neither Google Chrome nor Microsoft Edge is installed on this computer, so the stella browser cannot start.",
+    );
+  }
+  const profile = prepareProfile(profileRoot, memberKey);
+  if (Result.isError(profile)) {
+    return disconnected(profile.error.message);
+  }
+  const started = await startBrowserInstance({
+    environment: browserEnvironment(environment),
+    errorLog: testHooks?.browserLog ?? null,
+    executable: browser,
+    onMethod: recordMethod,
+    processes,
+    profile: profile.value,
+    testArgs: testHooks?.args ?? [],
+  });
+  if (Result.isError(started)) {
+    log(`the stella browser did not start: ${started.error.type}`);
+    return disconnected(START_FAILURES[started.error.type]);
+  }
+  return started.value;
+};
+
+export const createStellaBrowserHost = (
+  options: StellaBrowserHostOptions,
+): StellaBrowserHost => {
+  const { accountOrigin, log, testHooks } = options;
   const detached = createDetached((_error, task) => {
     log(`stella browser background work failed: ${task}`);
   });
   let running: Running | null = null;
-  let starting: Promise<Running | BrowserControlResult> | null = null;
+  let starting: {
+    memberKey: string;
+    started: Promise<Running | BrowserControlResult>;
+  } | null = null;
+  let stopped = false;
   const queues = chatQueues();
+  /** How often each chat was released: a command from before a release leaves nothing open. */
+  const releases = new Map<string, number>();
   const recordMethod = methodRecorder(testHooks?.methodLog ?? null);
 
+  const closeRunning = async () => {
+    const current = running;
+    running = null;
+    await current?.instance.close();
+  };
+
   const launch = async (
-    apiOrigin: string,
+    memberKey: string,
   ): Promise<Running | BrowserControlResult> => {
-    const browser =
-      testHooks?.executable ??
-      findInstalledBrowser({ fs: realBrowserFileSystem, home, platform })
-        ?.executable;
-    if (browser === undefined) {
-      return disconnected(
-        "Neither Google Chrome nor Microsoft Edge is installed on this computer, so the stella browser cannot start.",
-      );
+    const started = await startFor(options, memberKey, recordMethod);
+    if ("status" in started) {
+      return started;
     }
-    const profile = prepareProfile(profileRoot, memberKeyOf(apiOrigin));
-    if (Result.isError(profile)) {
-      return disconnected(profile.error.message);
-    }
-    if (running !== null && running.profileDir !== profile.value.profileDir) {
-      // Another account's browser: it closes before this one starts.
-      await running.instance.close();
-      running = null;
-    }
-    const started = await startBrowserInstance({
-      environment: browserEnvironment(environment),
-      executable: browser,
-      onMethod: recordMethod,
-      processes,
-      profile: profile.value,
-      testArgs: testHooks?.args ?? [],
-      errorLog: testHooks?.browserLog ?? null,
-    });
-    if (Result.isError(started)) {
-      log(`the stella browser did not start: ${started.error.type}`);
-      return disconnected(START_FAILURES[started.error.type]);
+    // The holder began to stop while the browser started: it closes again.
+    if (stopped) {
+      await started.close();
+      return disconnected(STOPPED);
     }
     log(
-      `the stella browser started: ${started.value.product} (pid ${String(started.value.pid)})`,
+      `the stella browser started: ${started.product} (pid ${String(started.pid)})`,
     );
     const next: Running = {
-      instance: started.value,
-      profileDir: profile.value.profileDir,
-      targets: createTargets(started.value.client),
+      instance: started,
+      memberKey,
+      targets: createTargets(started.client, detached),
       worlds: new Map(),
     };
     running = next;
     detached(
-      started.value.gone.then((end) => {
+      started.gone.then((end) => {
         log(`the stella browser closed: ${end.type}`);
         if (running === next) {
           running = null;
@@ -316,22 +383,87 @@ export const createStellaBrowserHost = ({
     return next;
   };
 
-  /** The running browser, started for this account when none runs. */
+  /**
+   * The account's running browser, started when none runs. A browser of
+   * another account (the desktop signed in as someone else) is never used:
+   * it closes, with its tabs, before this account's starts.
+   */
   const ensureRunning = async (
     apiOrigin: string,
   ): Promise<Running | BrowserControlResult> => {
-    if (running !== null && !running.instance.isGone()) {
+    const memberKey = memberKeyOf(apiOrigin);
+    if (starting !== null && starting.memberKey !== memberKey) {
+      await starting.started;
+    }
+    if (stopped) {
+      return disconnected(STOPPED);
+    }
+    if (starting !== null) {
+      return await starting.started;
+    }
+    if (running?.memberKey === memberKey && !running.instance.isGone()) {
       return running;
     }
-    starting ??= launch(apiOrigin).finally(() => {
-      starting = null;
-    });
-    return await starting;
+    await closeRunning();
+    const launching = {
+      memberKey,
+      started: launch(memberKey).finally(() => {
+        if (starting === launching) {
+          starting = null;
+        }
+      }),
+    };
+    starting = launching;
+    return await launching.started;
+  };
+
+  /** Closes the browser once no chat has a tab in it. */
+  const closeIfIdle = async (current: Running) => {
+    if (!current.targets.holdsTabs() && running === current) {
+      await closeRunning();
+    }
+  };
+
+  const open = async (
+    step: Step,
+    apiOrigin: string,
+    command: Extract<BrowserControlCommand, { action: "open" }>,
+    releasedBefore: number,
+  ): Promise<BrowserControlResult> => {
+    const requested = step.policy.parseControllableUrl(command.url);
+    if (requested === null) {
+      return browserControlError(
+        BROWSER_CONTROL_ERROR_CODE.navigationFailed,
+        "Only public HTTPS pages without embedded credentials can be opened; stella itself and intranet, loopback and private addresses are refused.",
+      );
+    }
+    // Stopped, or released, while it waited in the chat's queue.
+    if (isStopped(step.signal)) {
+      return cancelled();
+    }
+    const current = await ensureRunning(apiOrigin);
+    if ("status" in current) {
+      return current;
+    }
+    const result = isStopped(step.signal)
+      ? cancelled()
+      : await openIn(current, step, {
+          newTab: command.newTab === true,
+          requested,
+        });
+    // The chat was released while this open waited or ran: what it opened
+    // goes with the chat.
+    if ((releases.get(step.controllerId) ?? 0) !== releasedBefore) {
+      await current.targets.releaseChat(step.controllerId);
+      await closeIfIdle(current);
+    }
+    return result;
   };
 
   const run = async (
     { command, controllerId }: BrowserHostRequest,
     signal: AbortSignal,
+    releasedBefore: number,
   ): Promise<BrowserControlResult> => {
     const apiOrigin = accountOrigin();
     if (apiOrigin === null) {
@@ -343,25 +475,15 @@ export const createStellaBrowserHost = ({
       signal,
     };
     switch (command.action) {
-      case BROWSER_CONTROL_ACTION.open: {
-        const requested = step.policy.parseControllableUrl(command.url);
-        if (requested === null) {
-          return browserControlError(
-            BROWSER_CONTROL_ERROR_CODE.navigationFailed,
-            "Only public HTTPS pages without embedded credentials can be opened; stella itself and intranet, loopback and private addresses are refused.",
-          );
-        }
-        const current = await ensureRunning(apiOrigin);
-        return "status" in current
-          ? current
-          : await openIn(current, step, {
-              newTab: command.newTab === true,
-              requested,
-            });
-      }
+      case BROWSER_CONTROL_ACTION.open:
+        return await open(step, apiOrigin, command, releasedBefore);
       case BROWSER_CONTROL_ACTION.snapshot:
       case BROWSER_CONTROL_ACTION.find:
-        return await readIn(running, step, command);
+        return await readIn(
+          running?.memberKey === memberKeyOf(apiOrigin) ? running : null,
+          step,
+          command,
+        );
       case BROWSER_CONTROL_ACTION.click:
       case BROWSER_CONTROL_ACTION.fill:
       case BROWSER_CONTROL_ACTION.pressKey:
@@ -378,41 +500,44 @@ export const createStellaBrowserHost = ({
     }
   };
 
-  const close = async () => {
-    const current = running;
-    running = null;
-    await current?.instance.close();
-  };
-
   return {
     acts: false,
-    request: async (request, signal) =>
-      localBrowserResult(
+    request: async (request, signal) => {
+      const releasedBefore = releases.get(request.controllerId) ?? 0;
+      return localBrowserResult(
         await queues.run(
           request.controllerId,
           signal,
-          async (stoppable) => await run(request, stoppable),
+          async (stoppable) => await run(request, stoppable, releasedBefore),
         ),
-      ),
+      );
+    },
     cancel: ({ controllerId }) => {
       queues.cancel(controllerId);
     },
     releaseChat: (controllerId) => {
+      releases.set(controllerId, (releases.get(controllerId) ?? 0) + 1);
+      // Its queued and running commands stop; an open among them closes
+      // what it made (see `open`).
+      queues.cancel(controllerId);
       const current = running;
       if (current === null) {
         return;
       }
       detached(
-        current.targets.releaseChat(controllerId).then(async (none) => {
+        current.targets.releaseChat(controllerId).then(async () => {
           // No chat has a tab left: the browser closes until the next open.
-          if (none && running === current) {
-            await close();
-          }
+          await closeIfIdle(current);
           return undefined;
         }),
         "stella-browser.release-chat",
       );
     },
-    stop: close,
+    stop: async () => {
+      stopped = true;
+      // A browser still starting closes as soon as it has (see `launch`).
+      await starting?.started;
+      await closeRunning();
+    },
   };
 };

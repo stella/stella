@@ -21,9 +21,20 @@ const WITH_BROWSER = [
 const WITHOUT_BROWSER =
   "BROWSER: This run has no browser tools: stella cannot reach the member's Chrome from it, so never say you opened a page in their browser. If the member asks you to open or operate a website in their browser, tell them, in their language, that this run cannot, and use your other web tools for public pages if they help.";
 
+/**
+ * Where the stella browser may serve the run: what is different there, so
+ * every sentence above holds for the browser the chat's pages are in.
+ */
+const READ_ONLY_HOST =
+  "When the member's Chrome cannot be reached, the pages open in the stella browser instead, which only reads so far: there, search by opening the site's search results address, follow a link by opening its href, and expect no downloads; click, type, press_key, select, go_back and switch_tab answer not_available_on_this_browser.";
+
 /** The run's instructions with what is true of its browser after them. */
 export const withLocalBrowserInstructions = (
   instructions: string,
-  hasBrowser: boolean,
-): string =>
-  `${instructions}\n\n${hasBrowser ? WITH_BROWSER : WITHOUT_BROWSER}`;
+  browser: { hasBrowser: boolean; readOnlyHost: boolean },
+): string => {
+  if (!browser.hasBrowser) {
+    return `${instructions}\n\n${WITHOUT_BROWSER}`;
+  }
+  return `${instructions}\n\n${WITH_BROWSER}${browser.readOnlyHost ? ` ${READ_ONLY_HOST}` : ""}`;
+};

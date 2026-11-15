@@ -82,8 +82,11 @@ export const createHostRouter = ({
   const router: BrowserHost & {
     /** Whether a chat's page-changing steps can run where its pages are. */
     actsFor: (controllerId: string) => boolean;
+    /** Whether a browser that only reads may serve a chat. */
+    readOnlyHost: boolean;
   } = {
     acts: true,
+    readOnlyHost: stellaBrowser !== null && !stellaBrowser.acts,
     actsFor: (controllerId) =>
       (chats.get(controllerId) ?? choose())?.acts ?? true,
     request: async (request, signal) => {

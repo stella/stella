@@ -252,11 +252,34 @@ const TOOL_DEFINITIONS = {
   { description: string; inputSchema: object }
 >;
 
-export const localBrowserToolList = () =>
-  CHAT_LOCAL_RUN_BROWSER_ACTIONS.map((name) => ({
-    name,
-    ...TOOL_DEFINITIONS[name],
-  }));
+/** What holds for downloads in a browser that only reads. */
+const READ_ONLY_DOWNLOADS =
+  "When the chat's pages are in the stella browser, which only reads so far, nothing is downloaded.";
+
+/**
+ * `tools/list` as the agent sees it. Where the stella browser may serve
+ * the run (`readOnlyHost`), each description that promises downloads says
+ * that browser saves none.
+ */
+export const localBrowserToolList = ({
+  readOnlyHost,
+}: {
+  readOnlyHost: boolean;
+}) =>
+  CHAT_LOCAL_RUN_BROWSER_ACTIONS.map((name) => {
+    const { description, inputSchema } = TOOL_DEFINITIONS[name];
+    return {
+      name,
+      description:
+        readOnlyHost && description.includes(DOWNLOADS_NOTE)
+          ? description.replace(
+              DOWNLOADS_NOTE,
+              () => `${DOWNLOADS_NOTE} ${READ_ONLY_DOWNLOADS}`,
+            )
+          : description,
+      inputSchema,
+    };
+  });
 
 /** An MCP `tools/call` result. */
 type LocalBrowserToolResult = {

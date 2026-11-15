@@ -3,6 +3,8 @@ import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { sidecarDefines } from "./sidecar-defines";
+
 /**
  * Compiles the harness sidecar into the desktop bundle's external binary,
  * named as Tauri's `bundle.externalBin` expects: `<name>-<target triple>`,
@@ -82,11 +84,7 @@ const compile = async (triple: CompiledTriple, version: string) => {
     entrypoints: [ENTRYPOINT],
     minify: true,
     sourcemap: "none",
-    define: {
-      "process.env.STELLA_SIDECAR_VERSION": JSON.stringify(version),
-      // Release builds have no stella browser test hooks (`src/sidecar/env.ts`).
-      "process.env.STELLA_BROWSER_TEST_HOOKS": JSON.stringify("0"),
-    },
+    define: sidecarDefines(version),
     compile: {
       target: BUN_TARGETS[triple],
       outfile: file,

@@ -141,6 +141,18 @@ describe("the browser's launch", () => {
     const linked = path.join(root, "linked");
     symlinkSync(elsewhere, linked);
     expect(Result.isError(prepareProfile(linked, "key"))).toBe(true);
+
+    // A folder that cannot even be looked at is refused, not thrown.
+    const locked = path.join(root, "locked");
+    mkdirSync(locked, { mode: 0o700 });
+    chmodSync(locked, 0o000);
+    try {
+      expect(
+        Result.isError(prepareProfile(path.join(locked, "browser"), "key")),
+      ).toBe(true);
+    } finally {
+      chmodSync(locked, 0o700);
+    }
   });
 
   test("hands the browser fds 3 and 4, and no process started later inherits the holder's ends", async () => {

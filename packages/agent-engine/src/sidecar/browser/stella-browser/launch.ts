@@ -35,28 +35,34 @@ const INSTANCE_FILE = "instance.json";
 const PROFILE_FOLDER = "profile";
 
 /** Whether a folder is the user's alone: not a symlink, mode 0700 or less. */
-const isPrivate = (dir: string) => {
-  const stat = lstatSync(dir, { throwIfNoEntry: false });
-  // The low six mode bits are the group's and others' permissions.
-  return (
-    stat !== undefined &&
-    stat.isDirectory() &&
-    !stat.isSymbolicLink() &&
-    stat.uid === process.getuid?.() &&
-    stat.mode % 0o100 === 0
-  );
-};
+const NOT_PRIVATE =
+  "The stella browser's profile folder is not private to this user.";
 
-/** Creates a folder 0700 if it is missing; refuses one that is not private. */
-const privateFolder = (dir: string): boolean => {
+/**
+ * Creates a folder 0700 when it is missing, then holds it to being the
+ * user's alone: a directory, not a symlink, owned by this user, with no
+ * permission for the group or others. A folder that cannot be read for
+ * that (no access, an I/O error) is refused like one that fails it.
+ */
+const privateFolder = (dir: string): Result<void, { message: string }> => {
+  // Already there is fine; the check below decides.
   const made = Result.try(() => mkdirSync(dir, { mode: 0o700 }));
-  if (
-    Result.isError(made) &&
-    lstatSync(dir, { throwIfNoEntry: false }) === undefined
-  ) {
-    return false;
+  const stat = Result.try(() => lstatSync(dir, { throwIfNoEntry: false }));
+  if (Result.isError(stat) || stat.value === undefined) {
+    return Result.err({
+      message: Result.isError(made)
+        ? "The stella browser's profile folder could not be created."
+        : NOT_PRIVATE,
+    });
   }
-  return isPrivate(dir);
+  const { value } = stat;
+  // The low six mode bits are the group's and others' permissions.
+  return value.isDirectory() &&
+    !value.isSymbolicLink() &&
+    value.uid === process.getuid?.() &&
+    value.mode % 0o100 === 0
+    ? Result.ok(undefined)
+    : Result.err({ message: NOT_PRIVATE });
 };
 
 /**
@@ -70,11 +76,9 @@ export const prepareProfile = (
   const memberDir = path.join(root, memberKey);
   const profileDir = path.join(memberDir, PROFILE_FOLDER);
   for (const dir of [root, memberDir, profileDir]) {
-    if (!privateFolder(dir)) {
-      return Result.err({
-        message:
-          "The stella browser's profile folder is not private to this user.",
-      });
+    const checked = privateFolder(dir);
+    if (Result.isError(checked)) {
+      return checked;
     }
   }
   return Result.ok({

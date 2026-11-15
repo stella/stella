@@ -242,8 +242,20 @@ const runInFrame = async (
   return UNREACHABLE;
 };
 
-/** What every read-only page operation carries. */
-const readOperationBase = () => ({
+/**
+ * The only origin a read may return, and what it answers otherwise: an
+ * `open` reads only the origin it was asked for, wherever the page moved
+ * meanwhile.
+ */
+type RequiredOrigin = { origin: string; refusal: BrowserControlResult };
+
+/**
+ * What every read-only page operation carries. With a required origin each
+ * frame refuses before reading anything when the tab's top document has
+ * another.
+ */
+const readOperationBase = (required?: RequiredOrigin) => ({
+  ...(required === undefined ? {} : { expectedTopOrigin: required.origin }),
   identityProviderHosts: IDENTITY_PROVIDER_HOSTS,
   limits: BROWSER_CONTROL_LIMITS,
   metadataType: BROWSER_CONTROL_TARGET_METADATA,
@@ -287,7 +299,10 @@ const frameOutcome = <T extends { origin: string; url: string }>(
 };
 
 /** A read that could not start, or a frame that refused it. */
-const readRefusal = (outcome: PageReadFailure): BrowserControlResult => {
+const readRefusal = (
+  outcome: PageReadFailure,
+  required?: RequiredOrigin,
+): BrowserControlResult => {
   switch (outcome.type) {
     case "invalid-cursor":
       return browserControlError(
@@ -311,7 +326,7 @@ const readRefusal = (outcome: PageReadFailure): BrowserControlResult => {
             STALE_CURSOR_MESSAGE,
           );
         case "top-origin":
-          return unsupportedPage();
+          return required?.refusal ?? unsupportedPage();
         default:
           outcome.reason satisfies never;
           return panic("Unhandled page refusal");
@@ -331,7 +346,11 @@ const readRefusal = (outcome: PageReadFailure): BrowserControlResult => {
 const topDocumentRefusal = (
   policy: OriginPolicy,
   top: { origin: string; url: string },
+  required?: RequiredOrigin,
 ): BrowserControlResult | null => {
+  if (required !== undefined && top.origin !== required.origin) {
+    return required.refusal;
+  }
   if (isIdentityProviderUrl(top.url)) {
     return needsMember();
   }
@@ -461,6 +480,7 @@ const inReaderFrame = async (
 export const readSnapshot = async (
   context: ReadContext,
   cursor: string | undefined,
+  required?: RequiredOrigin,
 ): Promise<BrowserControlResult> => {
   const preflight = await readPreflight(context);
   if ("status" in preflight) {
@@ -475,7 +495,7 @@ export const readSnapshot = async (
         context.policy,
         frame,
         await inReaderFrame(context, located, frame, {
-          ...readOperationBase(),
+          ...readOperationBase(required),
           facts: request.facts,
           idPrefix: request.idPrefix,
           kind: "snapshot",
@@ -488,10 +508,10 @@ export const readSnapshot = async (
       ),
   });
   if (outcome.type !== "window") {
-    return readRefusal(outcome);
+    return readRefusal(outcome, required);
   }
   const { window } = outcome;
-  const refusal = topDocumentRefusal(context.policy, window.top);
+  const refusal = topDocumentRefusal(context.policy, window.top, required);
   if (refusal !== null) {
     return refusal;
   }
@@ -688,11 +708,18 @@ export const openPage = async (
   if (landedUrl !== null && isIdentityProviderUrl(landedUrl.href)) {
     return needsMember();
   }
-  if (landedUrl === null || landedUrl.origin !== requested.origin) {
-    return browserControlError(
+  const redirected = (to: string) =>
+    browserControlError(
       BROWSER_CONTROL_ERROR_CODE.redirected,
-      `The page redirected away from ${requested.origin} to ${landedUrl?.origin ?? "an unsupported address"} and was not read. Use snapshot to read it after approval.`,
+      `The page redirected away from ${requested.origin} to ${to} and was not read. Use snapshot to read it after approval.`,
     );
+  if (landedUrl === null || landedUrl.origin !== requested.origin) {
+    return redirected(landedUrl?.origin ?? "an unsupported address");
   }
-  return await readSnapshot(context, undefined);
+  // The page may still move to another origin before it is read: every
+  // frame refuses then, and so does the document that was read.
+  return await readSnapshot(context, undefined, {
+    origin: requested.origin,
+    refusal: redirected("another address"),
+  });
 };

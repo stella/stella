@@ -52,6 +52,10 @@ export const isPublicHostname = (rawHostname: string): boolean => {
   return !isIpv4Literal || !isPrivateIpv4(octets);
 };
 
+/** A hostname without the DNS root's trailing dot, lower case. */
+const withoutRootDot = (hostname: string): string =>
+  hostname.toLowerCase().replace(/\.$/u, "");
+
 /** What a host counts as stella: its pages stay out of reach of every command. */
 type StellaOrigins = {
   /** Hosts of every stella origin, trusted by this build or not. */
@@ -68,10 +72,15 @@ export const createOriginPolicy = ({
   hostnames,
   originFromUrl,
 }: StellaOrigins) => {
+  const stellaHosts: ReadonlySet<string> = new Set(
+    hostnames.map(withoutRootDot),
+  );
   /**
    * Parses a URL the controlled tab may open or act on: HTTPS, no embedded
    * credentials, a public host, and never stella itself, whose signed-in
-   * session must stay out of reach of page-driven actions.
+   * session must stay out of reach of page-driven actions. A name with the
+   * DNS root's trailing dot is the same host, so stella is recognised
+   * either way.
    */
   const parseControllableUrl = (rawUrl: string): URL | null => {
     const url = URL.parse(rawUrl);
@@ -79,10 +88,13 @@ export const createOriginPolicy = ({
       url?.protocol !== "https:" ||
       url.username !== "" ||
       url.password !== "" ||
-      !isPublicHostname(url.hostname) ||
-      hostnames.includes(url.hostname) ||
-      originFromUrl(url.href) !== null
+      !isPublicHostname(url.hostname)
     ) {
+      return null;
+    }
+    const named = new URL(url.href);
+    named.hostname = withoutRootDot(url.hostname);
+    if (stellaHosts.has(named.hostname) || originFromUrl(named.href) !== null) {
       return null;
     }
     return url;

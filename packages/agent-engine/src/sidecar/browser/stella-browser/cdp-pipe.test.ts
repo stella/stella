@@ -37,6 +37,15 @@ describe("the debugging pipe's framing", () => {
     }
   });
 
+  test("keeps its own copy of a partial message when the caller reuses the Buffer", () => {
+    const { messages, read } = reader();
+    const chunk = Buffer.from('{"id":1');
+    expect(read(chunk)).toBe(true);
+    chunk[chunk.length - 1] = "2".codePointAt(0) ?? 0;
+    expect(read(Buffer.from("}\0"))).toBe(true);
+    expect(messages).toEqual(['{"id":1}']);
+  });
+
   test("splits several messages in one read and keeps the rest for the next", () => {
     const { messages, read } = reader();
     expect(read(bytes('{"id":1}\0{"id":2}\0{"id"'))).toBe(true);

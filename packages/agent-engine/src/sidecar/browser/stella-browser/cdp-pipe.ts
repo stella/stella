@@ -75,8 +75,9 @@ export const createCdpFrameReader = ({
         return false;
       }
       if (rest.length > 0) {
-        // A copy: the caller may reuse the chunk's memory.
-        pending.push(rest.slice());
+        // A copy, also of a Buffer, whose slice shares memory: the caller
+        // may reuse the chunk.
+        pending.push(new Uint8Array(rest));
         pendingBytes += rest.length;
       }
       return true;

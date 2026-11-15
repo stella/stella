@@ -23,6 +23,28 @@ describe("createOriginPolicy", () => {
     ).toBe("docs.example-stella.com");
   });
 
+  test("knows stella's hosts with the DNS root's trailing dot, or in capitals, too", () => {
+    for (const rawUrl of [
+      "https://app.example-stella.com./chat",
+      "https://APP.Example-Stella.com/chat",
+      "https://api.example-stella.com./v1",
+      "https://API.example-stella.com:443/v1",
+    ]) {
+      expect(policy.parseControllableUrl(rawUrl)).toBeNull();
+    }
+    const dotted = createOriginPolicy({
+      hostnames: ["app.example-stella.com."],
+      originFromUrl: () => null,
+    });
+    expect(
+      dotted.parseControllableUrl("https://app.example-stella.com/"),
+    ).toBeNull();
+    expect(
+      policy.parseControllableUrl("https://research.example.com./doc")
+        ?.hostname,
+    ).toBe("research.example.com.");
+  });
+
   test("refuses what is not a public HTTPS address", () => {
     for (const rawUrl of [
       "http://research.example.com/",

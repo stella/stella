@@ -123,21 +123,9 @@ export const startBrowserInstance = async ({
     onMethod === undefined ? {} : { onSend: onMethod },
   );
   inbox.receive = client.receive;
-  let gone = false;
-  const ended = Promise.race([pipe.ended, exited]).then((end) => {
-    gone = true;
-    pipe.close();
-    client.disconnect();
-    // A pipe that ended or overflowed leaves a browser that cannot be
-    // driven: it is ended rather than left running.
-    if (child.exitCode === null && child.signalCode === null) {
-      processes.signal(pid, "SIGTERM");
-    }
-    rmSync(profile.instanceFile, { force: true });
-    return end;
-  });
-  const kill = async () => {
-    if (await exitedWithin(exited, CLOSE_WAIT_MS)) {
+  /** Ends the process: SIGTERM, then SIGKILL, each given time to take. */
+  const terminate = async () => {
+    if (await exitedWithin(exited, 0)) {
       return;
     }
     processes.signal(pid, "SIGTERM");
@@ -147,6 +135,18 @@ export const startBrowserInstance = async ({
     processes.signal(pid, "SIGKILL");
     await exited;
   };
+  let gone = false;
+  // However it ends, the instance is gone only once its process is: a pipe
+  // that ended or overflowed leaves a browser that cannot be driven, so it
+  // is ended rather than left running.
+  const ended = Promise.race([pipe.ended, exited]).then(async (end) => {
+    gone = true;
+    pipe.close();
+    client.disconnect();
+    await terminate();
+    rmSync(profile.instanceFile, { force: true });
+    return end;
+  });
   const close = async () => {
     if (!gone) {
       const asked = await client.send(
@@ -154,12 +154,13 @@ export const startBrowserInstance = async ({
         {},
         { timeoutMs: CLOSE_WAIT_MS },
       );
-      // A browser that did not take the request is ended at once.
-      if (Result.isError(asked)) {
-        processes.signal(pid, "SIGTERM");
+      // A browser that took the request closes by itself; one that did not
+      // is ended when the pipe closes below.
+      if (Result.isOk(asked)) {
+        await exitedWithin(exited, CLOSE_WAIT_MS);
       }
     }
-    await kill();
+    pipe.close();
     await ended;
   };
   const version = await client.send(

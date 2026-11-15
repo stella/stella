@@ -50,7 +50,18 @@ export const frameNumberOf = (tab: OwnedTab, frameId: string): number => {
   return assigned;
 };
 
-export const createTargets = (client: CdpClient) => {
+/** Frames in other processes attach as they appear, flattened onto one pipe. */
+const AUTO_ATTACH = {
+  autoAttach: true,
+  flatten: true,
+  waitForDebuggerOnStart: false,
+} as const;
+
+export const createTargets = (
+  client: CdpClient,
+  /** Runs work nobody waits for, reporting a rejection. */
+  background: (work: Promise<unknown>, task: `${string}.${string}`) => void,
+) => {
   const chats = new Map<string, ChatTabs>();
   const byTarget = new Map<string, OwnedTab>();
   /** Every session a chat's tab holds, its frames' too. */
@@ -98,7 +109,10 @@ export const createTargets = (client: CdpClient) => {
       tab.url = targetInfo.url;
     }
   });
-  // A window a chat's page opens is the chat's: closed with its tabs.
+  // A window a chat's page opens is the chat's: closed with its tabs. One
+  // a page opens without an opener (`noopener`) carries no opener id, so it
+  // is no chat's, like a tab the member opens: never listed or read, and
+  // left open (a known limit until tab ownership follows the opening frame).
   client.on("Target.targetCreated", ({ targetInfo }) => {
     const opener =
       targetInfo.openerId === undefined
@@ -108,7 +122,8 @@ export const createTargets = (client: CdpClient) => {
       chatOf(opener.controllerId).popups.add(targetInfo.targetId);
     }
   });
-  // A frame in another process attaches on its parent's session.
+  // A frame in another process attaches on its parent's session, and the
+  // frames inside it attach on its own once it auto-attaches as well.
   client.on("Target.attachedToTarget", ({ sessionId, targetInfo }, parent) => {
     const tab = parent === null ? undefined : bySession.get(parent);
     if (tab === undefined || targetInfo.type !== "iframe") {
@@ -116,6 +131,13 @@ export const createTargets = (client: CdpClient) => {
     }
     tab.frameSessions.set(targetInfo.targetId, sessionId);
     bySession.set(sessionId, tab);
+    background(
+      client
+        .send("Target.setAutoAttach", AUTO_ATTACH, { sessionId })
+        // A frame that went before it could attach has nothing nested left.
+        .then((attached) => Result.isOk(attached)),
+      "stella-browser.frame-auto-attach",
+    );
   });
   client.on("Target.detachedFromTarget", ({ sessionId }) => {
     const tab = bySession.get(sessionId);
@@ -141,21 +163,27 @@ export const createTargets = (client: CdpClient) => {
   /**
    * A new window for the chat, blank, in the background, with its frames
    * in other processes attached as they appear; why not, when the browser
-   * would not make one.
+   * would not make one. The window is waited for even when `signal` aborts
+   * meanwhile, since the browser makes it once asked: a stopped or released
+   * open closes the window it made instead of leaving it behind.
    */
   const openTab = async (
     controllerId: string,
     signal: AbortSignal,
   ): Promise<Result<OwnedTab, CdpFailure>> => {
-    const created = await client.send(
-      "Target.createTarget",
-      { background: true, newWindow: true, url: "about:blank" },
-      { signal },
-    );
+    const created = await client.send("Target.createTarget", {
+      background: true,
+      newWindow: true,
+      url: "about:blank",
+    });
     if (Result.isError(created)) {
       return created;
     }
     const { targetId } = created.value;
+    if (signal.aborted) {
+      await closeTarget(targetId);
+      return Result.err({ type: "aborted" });
+    }
     const attached = await client.send(
       "Target.attachToTarget",
       { flatten: true, targetId },
@@ -182,11 +210,10 @@ export const createTargets = (client: CdpClient) => {
     const sessionId = tab.sessionId;
     const enabled = await client.send("Page.enable", {}, { sessionId, signal });
     const framesAttach = Result.isOk(enabled)
-      ? await client.send(
-          "Target.setAutoAttach",
-          { autoAttach: true, flatten: true, waitForDebuggerOnStart: false },
-          { sessionId, signal },
-        )
+      ? await client.send("Target.setAutoAttach", AUTO_ATTACH, {
+          sessionId,
+          signal,
+        })
       : enabled;
     if (Result.isError(framesAttach)) {
       await closeTarget(targetId);

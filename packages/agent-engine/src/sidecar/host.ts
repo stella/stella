@@ -1306,10 +1306,10 @@ export class SidecarHost {
       toolPath: message.toolPath,
       model: message.model,
       reasoningEffort: message.reasoningEffort,
-      instructions: withLocalBrowserInstructions(
-        message.instructions,
-        browser !== null,
-      ),
+      instructions: withLocalBrowserInstructions(message.instructions, {
+        hasBrowser: browser !== null,
+        readOnlyHost: this.options.browser?.readOnlyHost === true,
+      }),
       policy: message.policy,
       mcp: binding.value,
       browser,

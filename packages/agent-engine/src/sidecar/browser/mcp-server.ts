@@ -111,6 +111,8 @@ const serve = (run: BrowserMcpRun): Serving => ({
 export type LocalBrowserMcp = {
   /** `http://127.0.0.1:<port>`, for logs and tests. */
   readonly origin: string;
+  /** Whether the stella browser, which only reads, may serve a run. */
+  readonly readOnlyHost: boolean;
   /** The binding a run's harness configuration receives. */
   register: (run: BrowserMcpRun) => StellaSandboxMcpBinding;
   /**
@@ -355,6 +357,19 @@ const createDownloadInbox = (
   };
 };
 
+/** The inbox the extension's downloads arrive in; none without the extension. */
+const downloadInboxFor = (
+  source: LocalBrowserMcpOptions["downloads"],
+  runOf: (threadId: string) => BrowserMcpRun | null,
+) => {
+  if (source === null) {
+    return null;
+  }
+  const inbox = createDownloadInbox(runOf, source.home);
+  source.onDownload(inbox.arrive);
+  return inbox;
+};
+
 /** A chat's page state, kept while any run of the chat is held. */
 const sessionFor = (
   sessions: Map<string, LocalBrowserSession>,
@@ -392,13 +407,7 @@ export const startLocalBrowserMcp = ({
 }: LocalBrowserMcpOptions): LocalBrowserMcp => {
   const endpoints = createEndpoints(browser.releaseChat);
   const sessions = new Map<string, LocalBrowserSession>();
-  const downloads =
-    downloadSource === null
-      ? null
-      : createDownloadInbox(endpoints.runOf, downloadSource.home);
-  if (downloadSource !== null && downloads !== null) {
-    downloadSource.onDownload(downloads.arrive);
-  }
+  const downloads = downloadInboxFor(downloadSource, endpoints.runOf);
   const listener = { host: "" };
 
   const answer = async (
@@ -440,7 +449,7 @@ export const startLocalBrowserMcp = ({
       case "ping":
         return rpcResult(id, {});
       case "tools/list":
-        return rpcResult(id, { tools: localBrowserToolList() });
+        return rpcResult(id, { tools: localBrowserToolList(browser) });
       case "tools/call": {
         const params = v.safeParse(toolCallParamsSchema, message.params);
         if (
@@ -567,6 +576,7 @@ export const startLocalBrowserMcp = ({
 
   return {
     origin,
+    readOnlyHost: browser.readOnlyHost,
     register: (run) => {
       const secret = Buffer.from(
         crypto.getRandomValues(new Uint8Array(SECRET_BYTES)),

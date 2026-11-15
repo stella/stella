@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import {
   chmodSync,
@@ -14,6 +15,7 @@ import * as v from "valibot";
 
 import {
   BROWSER_CONTROL_ERROR_CODE,
+  BROWSER_CONTROL_LIMITS,
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import { pageScript } from "@stll/browser-page/page-script";
@@ -22,6 +24,7 @@ import { waitFor } from "@stll/test-kit";
 import { readLocalBrowserResult } from "../local-result";
 import { CDP_METHOD_ALLOWLIST } from "./cdp-client";
 import {
+  chatQueues,
   createStellaBrowserHost,
   NOT_AVAILABLE_ON_STELLA_BROWSER,
 } from "./host";
@@ -53,7 +56,18 @@ afterEach(async () => {
 const receivedSchema = v.object({
   method: v.string(),
   params: v.optional(v.record(v.string(), v.unknown())),
+  sessionId: v.optional(v.string()),
 });
+
+const alive = (pid: number) =>
+  Result.isOk(Result.try(() => process.kill(pid, 0)));
+
+/** The pid each start of the browser logged. */
+const startedPids = (lines: readonly string[]) =>
+  lines.flatMap((line) => {
+    const pid = /\(pid (\d+)\)$/u.exec(line)?.[1];
+    return pid === undefined ? [] : [Number(pid)];
+  });
 
 const start = () => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-browser-host-"));
@@ -67,8 +81,9 @@ const start = () => {
   );
   chmodSync(executable, 0o755);
   const lines: string[] = [];
+  const account = { origin: "https://api.example-stella.com" };
   const host = createStellaBrowserHost({
-    accountOrigin: () => "https://api.example-stella.com",
+    accountOrigin: () => account.origin,
     environment: { PATH: process.env["PATH"] },
     home: null,
     log: (line) => {
@@ -79,18 +94,21 @@ const start = () => {
     testHooks: { args: [], browserLog: null, executable, methodLog: null },
   });
   cleanups.push(host.stop);
-  /** Every message the stand-in browsers received, in order. */
-  const received = () => {
+  /** Every message the stand-in browsers received, by account profile. */
+  const receivedBy = () => {
     const profiles = path.join(root, "browser-profiles");
-    const member = existsSync(profiles) ? readdirSync(profiles) : [];
-    const log = path.join(profiles, member[0] ?? "", "profile", "fake-cdp.log");
-    return existsSync(log)
-      ? readFileSync(log, "utf-8")
-          .split("\n")
-          .filter((line) => line !== "")
-          .map((line) => v.parse(receivedSchema, JSON.parse(line)))
-      : [];
+    return (existsSync(profiles) ? readdirSync(profiles) : []).map((member) => {
+      const log = path.join(profiles, member, "profile", "fake-cdp.log");
+      return existsSync(log)
+        ? readFileSync(log, "utf-8")
+            .split("\n")
+            .filter((line) => line !== "")
+            .map((line) => v.parse(receivedSchema, JSON.parse(line)))
+        : [];
+    });
   };
+  /** Every message the stand-in browsers received, in order per profile. */
+  const received = () => receivedBy().flat();
   const send = async (
     command: BrowserControlCommand,
     controllerId = "chat-1",
@@ -107,7 +125,8 @@ const start = () => {
         new AbortController().signal,
       ),
     );
-  return { host, lines, received, send };
+  const methods = () => received().map(({ method }) => method);
+  return { account, host, lines, methods, received, receivedBy, send };
 };
 
 const OPEN = {
@@ -228,5 +247,166 @@ describe("the stella browser host", () => {
     expect(await send(OPEN, "chat-3")).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.needsMember,
     });
+  });
+
+  test("never uses one account's browser for another: it closes and the other's starts", async () => {
+    const { account, receivedBy, send } = start();
+    expect(await send(OPEN)).toMatchObject({ status: "error" });
+    account.origin = "https://api.other-stella.com";
+    expect(await send(OPEN, "chat-2")).toMatchObject({ status: "error" });
+    const [first, second] = receivedBy();
+    expect(receivedBy()).toHaveLength(2);
+    for (const profile of [first ?? [], second ?? []]) {
+      expect(profile.map(({ method }) => method)).toContain(
+        "Browser.getVersion",
+      );
+    }
+    // One of the two profiles' browsers was closed for the other.
+    expect(
+      [first ?? [], second ?? []].filter((profile) =>
+        profile.some(({ method }) => method === "Browser.close"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("reads an opened page only on the origin it was opened on, wherever it moved meanwhile", async () => {
+    const { received, send } = start();
+    expect(
+      await send({
+        action: "open",
+        url: "https://research.example.com/moves-away",
+      }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.redirected });
+    // Every read of the page named the origin it must still be on.
+    const reads = received().filter(
+      ({ method, params }) =>
+        method === "Runtime.callFunctionOn" &&
+        JSON.stringify(params).includes('"purpose":"read"'),
+    );
+    expect(reads.length).toBeGreaterThan(0);
+    for (const { params } of reads) {
+      expect(JSON.stringify(params)).toContain(
+        '"expectedTopOrigin":"https://research.example.com"',
+      );
+    }
+  });
+
+  test("lets frames inside a frame in another process attach too", async () => {
+    const { received, send } = start();
+    await send({ action: "open", url: "https://research.example.com/framed" });
+    await waitFor(
+      () =>
+        received().some(
+          ({ method, sessionId }) =>
+            method === "Target.setAutoAttach" && sessionId === "FRAME-SESSION",
+        )
+          ? true
+          : undefined,
+      { description: "the frame's own auto-attach", timeoutMs: 10_000 },
+    );
+  });
+
+  test("keeps a chat to the tab limit, refused before a window is made", async () => {
+    const { methods, send } = start();
+    for (let opened = 0; opened < BROWSER_CONTROL_LIMITS.tabs; opened += 1) {
+      await send({ ...OPEN, newTab: true });
+    }
+    expect(await send({ ...OPEN, newTab: true })).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.tabLimitReached,
+    });
+    expect(
+      methods().filter((method) => method === "Target.createTarget"),
+    ).toHaveLength(BROWSER_CONTROL_LIMITS.tabs);
+  });
+
+  test("a chat released while its open waits for the browser leaves no window, and the idle browser closes", async () => {
+    const { host, lines, methods, send } = start();
+    const opening = send(OPEN);
+    host.releaseChat("chat-1");
+    expect(await opening).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.cancelled,
+    });
+    const created = methods().filter(
+      (method) => method === "Target.createTarget",
+    ).length;
+    expect(
+      methods().filter((method) => method === "Target.closeTarget").length,
+    ).toBe(created);
+    await waitFor(
+      () =>
+        lines.every((line) => !line.startsWith("the stella browser started")) ||
+        lines.some((line) => line.startsWith("the stella browser closed"))
+          ? true
+          : undefined,
+      { description: "no browser left running", timeoutMs: 10_000 },
+    );
+  });
+
+  test("stopping while the browser starts closes it, and starts none again", async () => {
+    const { host, methods, send } = start();
+    const opening = send(OPEN);
+    // The browser has been asked for its version: it is starting.
+    await waitFor(
+      () => (methods().includes("Browser.getVersion") ? true : undefined),
+      { description: "the browser to start", timeoutMs: 10_000 },
+    );
+    await host.stop();
+    expect(await opening).toMatchObject({ status: "error" });
+    expect(await send(OPEN)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.disconnected,
+    });
+    expect(
+      methods().filter((method) => method === "Browser.getVersion"),
+    ).toHaveLength(1);
+    expect(methods()).toContain("Browser.close");
+  });
+
+  test("a browser whose pipe ends but that ignores SIGTERM is killed", async () => {
+    const { lines, send } = start();
+    expect(
+      await send({ action: "open", url: "https://research.example.com/hang" }),
+    ).toMatchObject({ status: "error" });
+    const [pid] = startedPids(lines);
+    expect(pid).toBeDefined();
+    await waitFor(() => (pid !== undefined && !alive(pid) ? true : undefined), {
+      description: "the hung browser to be killed",
+      timeoutMs: 15_000,
+    });
+  });
+});
+
+describe("a chat's command queue", () => {
+  test("runs the next command after one that failed, and a cancel stops the queued ones too", async () => {
+    const queues = chatQueues();
+    const signal = new AbortController().signal;
+    const failing = queues.run("chat-1", signal, async () => {
+      await Promise.resolve();
+      throw new TypeError("the command failed");
+    });
+    const held = Promise.withResolvers<null>();
+    const running = queues.run("chat-1", signal, async (stop) => {
+      await held.promise;
+      return stop.aborted;
+    });
+    const queued = queues.run(
+      "chat-1",
+      signal,
+      async (stop) => await Promise.resolve(stop.aborted),
+    );
+    queues.cancel("chat-1");
+    held.resolve(null);
+    expect(
+      Result.isError(await Result.tryPromise(async () => await failing)),
+    ).toBe(true);
+    expect(await running).toBe(true);
+    expect(await queued).toBe(true);
+    // A later command of the chat starts fresh.
+    expect(
+      await queues.run(
+        "chat-1",
+        signal,
+        async (stop) => await Promise.resolve(stop.aborted),
+      ),
+    ).toBe(false);
   });
 });

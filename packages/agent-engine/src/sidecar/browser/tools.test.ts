@@ -192,9 +192,26 @@ const parsed = (result: { content: { text: string }[] }): unknown =>
 
 describe("the local browser tools", () => {
   test("list exactly the actions chat knows", () => {
-    expect(localBrowserToolList().map(({ name }) => name)).toEqual([
-      ...CHAT_LOCAL_RUN_BROWSER_ACTIONS,
-    ]);
+    expect(
+      localBrowserToolList({ readOnlyHost: false }).map(({ name }) => name),
+    ).toEqual([...CHAT_LOCAL_RUN_BROWSER_ACTIONS]);
+  });
+
+  test("where a browser that only reads may serve the run, no description promises it downloads", () => {
+    const plain = localBrowserToolList({ readOnlyHost: false });
+    const readOnly = localBrowserToolList({ readOnlyHost: true });
+    for (const [index, tool] of readOnly.entries()) {
+      const before = plain[index]?.description ?? "";
+      expect(tool.description.includes("nothing is downloaded")).toBe(
+        before.includes("A PDF the page downloads is saved"),
+      );
+      expect(plain[index]?.description).not.toContain("nothing is downloaded");
+    }
+    expect(
+      readOnly.filter(({ description }) =>
+        description.includes("nothing is downloaded"),
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   test("in a browser that only reads, steps that change a page are refused before anyone is asked", async () => {
