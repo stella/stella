@@ -3608,7 +3608,7 @@ describe("validateMessage", () => {
       "rejected input spaced unlike its JSON",
       "search-documents",
       '{ "query": 123 }',
-      {},
+      { input: { query: 123 } },
     ],
     [
       "a tool the run does not register",
@@ -3672,8 +3672,19 @@ describe("validateMessage", () => {
         role: "assistant",
         parts,
       });
+      const content = chatMessageContentFromMessage(message);
+      if (sentArguments === '{ "query": 123 }') {
+        // The parsed view must not erase the provider's noncanonical bytes.
+        expect(content.data[0]).toMatchObject({
+          input: {
+            status: "parsed",
+            value: { query: 123 },
+            rawArguments: sentArguments,
+          },
+        });
+      }
       const reloadedCall: unknown = chatMessageFromPersisted({
-        content: chatMessageContentFromMessage(message),
+        content,
         id: message.id,
         role: message.role,
       }).parts[0];
