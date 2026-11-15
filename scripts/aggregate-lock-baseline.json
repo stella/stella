@@ -2963,13 +2963,6 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
-    "fingerprint": "524756483fd16f916e2be80430faa9d5515c2731481c0887c7fe6521fb7ae04e",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
-    "holder": "stella_ingestion"
-  },
-  {
-    "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "641404ede5117abf453883a4e5be08a6bb7652c2107fc6471880fb899a072466",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
