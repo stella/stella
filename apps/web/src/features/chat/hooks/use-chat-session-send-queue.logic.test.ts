@@ -265,6 +265,7 @@ describe("reduceSendQueue", () => {
     const result = reduceSendQueue(state, {
       type: "conversation-switched",
       conversationId: "conversation-2",
+      isGenerating: false,
     });
 
     expect(result.state).toEqual({
@@ -278,6 +279,25 @@ describe("reduceSendQueue", () => {
       wasGenerating: false,
     });
     expect(result.dispatchedEntry).toBeNull();
+  });
+
+  test("a conversation opened mid-turn queues a send and drains it at the turn's end", () => {
+    const switched = reduceSendQueue(
+      createInitialSendQueueState(CONVERSATION_ID),
+      {
+        type: "conversation-switched",
+        conversationId: "conversation-2",
+        isGenerating: true,
+      },
+    ).state;
+    expect(canSendWithoutQueueing(switched)).toBe(false);
+
+    const queued = reduceSendQueue(switched, {
+      type: "message-enqueued",
+      entry: makeEntry("a"),
+    }).state;
+    const { dispatchedEntry } = applyRenderTick(queued, false, "ready");
+    expect(dispatchedEntry?.id).toBe("a");
   });
 
   test("two generation-finished events in a row dispatch only once", () => {
