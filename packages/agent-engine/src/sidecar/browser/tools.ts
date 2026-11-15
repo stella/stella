@@ -831,6 +831,12 @@ type LocalBrowserCallContext = {
   downloads: (shownAddress: string | null) => Promise<TakenDownloads>;
   /** Aborts when the agent's call ends. */
   signal: AbortSignal;
+  /**
+   * How often the chat's pages moved to another browser (`host-router.ts`);
+   * absent where they never move. What the chat saw in one browser (its
+   * pages, their trails, its tabs) holds nothing in another.
+   */
+  browserMoves?: () => number;
 };
 
 /**
@@ -1063,6 +1069,7 @@ export const createLocalBrowserSession = () => {
         acts,
         approvals,
         approve,
+        browserMoves = () => 0,
         downloads,
         send,
         signal,
@@ -1088,12 +1095,19 @@ export const createLocalBrowserSession = () => {
           return declinedResult();
         }
       }
+      const movesBefore = browserMoves();
       // The tabs the chat knew before this step: any other is one it opened.
-      const knownTabs = seen === null ? null : new Set(seen.tabs.keys());
+      const knewTabs = seen === null ? null : new Set(seen.tabs.keys());
       // The one place page content is read: to answer the agent here.
       const result = readLocalBrowserResult(
         await send(step, seen?.observedTab ?? null),
       );
+      // The step moved the chat to another browser: its record starts over.
+      const moved = browserMoves() !== movesBefore;
+      if (moved) {
+        seen = null;
+      }
+      const knownTabs = moved ? null : knewTabs;
       ticket?.finish(result.status === "success" ? "completed" : "failed");
       const wentBack = step.action === BROWSER_CONTROL_ACTION.goBack;
       if (

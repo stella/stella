@@ -1,4 +1,6 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
+
+import { BROWSER_CONTROL_LIMITS } from "@stll/api-contract/browser-control";
 
 import type { CdpClient, CdpFailure } from "./cdp-client";
 
@@ -57,6 +59,27 @@ const AUTO_ATTACH = {
   waitForDebuggerOnStart: false,
 } as const;
 
+/**
+ * Whether a failed close leaves nothing open: the browser says it has no
+ * such window, or the browser is gone. Without an answer it can read, the
+ * holder cannot tell.
+ */
+const closeLeftNothing = (failure: CdpFailure): boolean => {
+  switch (failure.type) {
+    case "protocol":
+    case "disconnected":
+      return true;
+    case "timeout":
+    case "invalid":
+    case "aborted":
+    case "refused":
+      return false;
+    default:
+      failure satisfies never;
+      return panic("Unhandled protocol failure");
+  }
+};
+
 export const createTargets = (
   client: CdpClient,
   /** Runs work nobody waits for, reporting a rejection. */
@@ -66,6 +89,12 @@ export const createTargets = (
   const byTarget = new Map<string, OwnedTab>();
   /** Every session a chat's tab holds, its frames' too. */
   const bySession = new Map<string, OwnedTab>();
+  /**
+   * Windows asked to close that the browser neither closed nor said were
+   * gone (no answer in time, or one the holder could not read): asked
+   * again on the next release.
+   */
+  const unclosed = new Set<string>();
   let nextTabId = 1;
 
   const chatOf = (controllerId: string): ChatTabs => {
@@ -79,6 +108,7 @@ export const createTargets = (
   };
 
   const forget = (targetId: string) => {
+    unclosed.delete(targetId);
     const tab = byTarget.get(targetId);
     for (const chat of chats.values()) {
       chat.popups.delete(targetId);
@@ -97,6 +127,23 @@ export const createTargets = (
     }
   };
 
+  /**
+   * Asks the browser to close a window. A window it closes is forgotten
+   * when it reports it destroyed; one it says it does not have, or a
+   * browser that is gone, leaves nothing to close; any other failure leaves
+   * the window possibly open, and it is asked again on the next release.
+   */
+  const closeTarget = async (targetId: string) => {
+    const closed = await client.send("Target.closeTarget", { targetId });
+    if (Result.isOk(closed)) {
+      unclosed.delete(targetId);
+    } else if (closeLeftNothing(closed.error)) {
+      forget(targetId);
+    } else {
+      unclosed.add(targetId);
+    }
+  };
+
   client.on("Target.targetDestroyed", ({ targetId }) => {
     forget(targetId);
   });
@@ -109,7 +156,8 @@ export const createTargets = (
       tab.url = targetInfo.url;
     }
   });
-  // A window a chat's page opens is the chat's: closed with its tabs. One
+  // A window a chat's page opens is the chat's: closed with its tabs, and
+  // counted with them, so one past the chat's tab limit closes at once. One
   // a page opens without an opener (`noopener`) carries no opener id, so it
   // is no chat's, like a tab the member opens: never listed or read, and
   // left open (a known limit until tab ownership follows the opening frame).
@@ -118,9 +166,18 @@ export const createTargets = (
       targetInfo.openerId === undefined
         ? undefined
         : byTarget.get(targetInfo.openerId);
-    if (opener !== undefined) {
-      chatOf(opener.controllerId).popups.add(targetInfo.targetId);
+    if (opener === undefined) {
+      return;
     }
+    const chat = chatOf(opener.controllerId);
+    if (chat.tabs.length + chat.popups.size >= BROWSER_CONTROL_LIMITS.tabs) {
+      background(
+        closeTarget(targetInfo.targetId).then(() => true),
+        "stella-browser.close-window-over-limit",
+      );
+      return;
+    }
+    chat.popups.add(targetInfo.targetId);
   });
   // A frame in another process attaches on its parent's session, and the
   // frames inside it attach on its own once it auto-attaches as well.
@@ -151,14 +208,6 @@ export const createTargets = (
       }
     }
   });
-
-  const closeTarget = async (targetId: string) => {
-    const closed = await client.send("Target.closeTarget", { targetId });
-    if (Result.isError(closed)) {
-      // Gone already, or the browser is: nothing is left to close.
-      forget(targetId);
-    }
-  };
 
   /**
    * A new window for the chat, blank, in the background, with its frames
@@ -245,17 +294,25 @@ export const createTargets = (
     /** The chat's tabs, the active one first, then the others newest first. */
     chatTabs: (controllerId: string): OwnedTab[] =>
       (chats.get(controllerId)?.tabs ?? []).toReversed(),
-    /** Closes every tab and window of the chat; true when no chat has any left. */
+    /** The chat's tabs and the windows its pages opened, which its tab limit counts. */
+    windowCount: (controllerId: string): number => {
+      const chat = chats.get(controllerId);
+      return chat === undefined ? 0 : chat.tabs.length + chat.popups.size;
+    },
+    /**
+     * Closes every tab and window of the chat, and asks again for those an
+     * earlier close left uncertain; true when no chat has a tab left.
+     */
     releaseChat: async (controllerId: string): Promise<boolean> => {
       const chat = chats.get(controllerId);
       chats.delete(controllerId);
-      if (chat !== undefined) {
-        for (const targetId of [
-          ...chat.tabs.map((tab) => tab.targetId),
-          ...chat.popups,
-        ]) {
-          await closeTarget(targetId);
-        }
+      const leftOpen = [...unclosed];
+      for (const targetId of [
+        ...(chat?.tabs.map((tab) => tab.targetId) ?? []),
+        ...(chat?.popups ?? []),
+        ...leftOpen,
+      ]) {
+        await closeTarget(targetId);
       }
       return [...chats.values()].every(({ tabs }) => tabs.length === 0);
     },

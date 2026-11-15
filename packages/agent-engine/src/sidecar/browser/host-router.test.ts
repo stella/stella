@@ -6,15 +6,21 @@ import {
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
-import type { BrowserHost } from "./browser-host";
+import type { BrowserHost, BrowserHostRequest } from "./browser-host";
 import { createHostRouter } from "./host-router";
 import { localBrowserResult, readLocalBrowserResult } from "./local-result";
 
-/** A host that answers every command with its own name, and records what it got. */
+/**
+ * A host that answers every command with its own name, as a page waiting
+ * for the member's sign-in (or as a failure once `failing`), and records
+ * what it got.
+ */
 const fakeHost = (name: string, acts: boolean) => {
   const requests: string[] = [];
+  const observed: (number | null)[] = [];
   const released: string[] = [];
   const cancelled: string[] = [];
+  const state = { failing: false };
   const host: BrowserHost = {
     acts,
     cancel: ({ controllerId }) => {
@@ -23,11 +29,14 @@ const fakeHost = (name: string, acts: boolean) => {
     releaseChat: (controllerId) => {
       released.push(controllerId);
     },
-    request: async ({ command, controllerId }) => {
+    request: async ({ command, controllerId, observedTab }) => {
       requests.push(`${controllerId}:${command.action}`);
+      observed.push(observedTab?.tabId ?? null);
       return await Promise.resolve(
         localBrowserResult({
-          code: BROWSER_CONTROL_ERROR_CODE.executionFailed,
+          code: state.failing
+            ? BROWSER_CONTROL_ERROR_CODE.navigationFailed
+            : BROWSER_CONTROL_ERROR_CODE.needsMember,
           message: name,
           protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
           status: "error",
@@ -35,7 +44,7 @@ const fakeHost = (name: string, acts: boolean) => {
       );
     },
   };
-  return { cancelled, host, released, requests };
+  return { cancelled, host, observed, released, requests, state };
 };
 
 const OPEN = { action: "open", url: "https://research.example.com/" } as const;
@@ -45,6 +54,7 @@ const routed = async (
   router: ReturnType<typeof createHostRouter>,
   command: BrowserControlCommand,
   controllerId = "chat-1",
+  observedTab: BrowserHostRequest["observedTab"] = null,
 ) => {
   const result = readLocalBrowserResult(
     await router.request(
@@ -52,7 +62,7 @@ const routed = async (
         accountOrigin: "https://api.example-stella.com",
         command,
         controllerId,
-        observedTab: null,
+        observedTab,
         toolCallId: "call",
         turnId: "run",
       },
@@ -139,6 +149,37 @@ describe("which browser a chat's commands go to", () => {
     expect(stellaBrowser.released).toEqual(["chat-1"]);
     expect(router.actsFor("chat-1")).toBe(true);
     expect(chrome.requests).toEqual(["chat-1:open"]);
+  });
+
+  test("a chat moves only once its open succeeded in the other browser, which never sees the first one's tab", async () => {
+    const { chrome, router, state, stellaBrowser } = setup({
+      extension: false,
+      stella: true,
+    });
+    expect(await routed(router, OPEN)).toBe("stella-browser");
+    expect(router.browserMoves("chat-1")).toBe(1);
+    state.ready = true;
+    // The open fails in the member's Chrome: the chat stays where its tab is.
+    chrome.state.failing = true;
+    const watched = { revision: "r1", tabId: 3 };
+    expect(await routed(router, OPEN, "chat-1", watched)).toBe("member-chrome");
+    expect(chrome.observed).toEqual([null]);
+    expect(chrome.released).toEqual(["chat-1"]);
+    expect(stellaBrowser.released).toEqual([]);
+    expect(router.browserMoves("chat-1")).toBe(1);
+    expect(await routed(router, SNAPSHOT, "chat-1", watched)).toBe(
+      "stella-browser",
+    );
+    // It opens there: the chat moves, and its record starts over.
+    chrome.state.failing = false;
+    expect(await routed(router, OPEN, "chat-1", watched)).toBe("member-chrome");
+    expect(chrome.observed).toEqual([null, null]);
+    expect(stellaBrowser.released).toEqual(["chat-1"]);
+    expect(router.browserMoves("chat-1")).toBe(2);
+    expect(await routed(router, SNAPSHOT, "chat-1", watched)).toBe(
+      "member-chrome",
+    );
+    expect(chrome.observed).toEqual([null, null, 3]);
   });
 
   test("a stop and a chat's end reach every browser", () => {

@@ -6,7 +6,11 @@ import {
 
 import { type BrowserBridge, browserBridgeError } from "./bridge";
 import type { BrowserHost, BrowserHostRequest } from "./browser-host";
-import { localBrowserResult } from "./local-result";
+import {
+  type LocalBrowserResult,
+  localBrowserResult,
+  readLocalBrowserResult,
+} from "./local-result";
 
 /**
  * Which browser a chat's commands go to: the one owner of that choice,
@@ -47,6 +51,19 @@ type HostRouterOptions = {
   stellaBrowser: BrowserHost | null;
 };
 
+/**
+ * Whether an open left the chat a page in that browser: read, or waiting
+ * there for the member to sign in.
+ */
+const openedIn = (result: LocalBrowserResult): boolean => {
+  const read = readLocalBrowserResult(result);
+  return (
+    read.status === "success" ||
+    (read.status === "error" &&
+      read.code === BROWSER_CONTROL_ERROR_CODE.needsMember)
+  );
+};
+
 const NO_BROWSER =
   "stella cannot reach a browser on this computer. Ask the member to open Chrome with the stella extension and choose Use with stella desktop, then try again.";
 
@@ -54,8 +71,10 @@ export const createHostRouter = ({
   extension,
   stellaBrowser,
 }: HostRouterOptions) => {
-  /** The host each chat's last `open` went to. */
+  /** The host each chat's pages are in: where its last opened page opened. */
   const chats = new Map<string, BrowserHost>();
+  /** How often each chat's pages moved from one browser to the other. */
+  const moves = new Map<string, number>();
 
   /** Where a chat opens a page now. */
   const choose = (): BrowserHost | null => {
@@ -82,6 +101,8 @@ export const createHostRouter = ({
   const router: BrowserHost & {
     /** Whether a chat's page-changing steps can run where its pages are. */
     actsFor: (controllerId: string) => boolean;
+    /** How often the chat's pages moved to another browser. */
+    browserMoves: (controllerId: string) => number;
     /** Whether a browser that only reads may serve a chat. */
     readOnlyHost: boolean;
   } = {
@@ -99,16 +120,36 @@ export const createHostRouter = ({
           ),
         );
       }
-      if (request.command.action === BROWSER_CONTROL_ACTION.open) {
-        // A chat that moves to another browser leaves its tabs in the first.
-        const previous = chats.get(request.controllerId);
-        if (previous !== undefined && previous !== host) {
-          previous.releaseChat(request.controllerId);
-        }
-        chats.set(request.controllerId, host);
+      const previous = chats.get(request.controllerId);
+      if (
+        request.command.action !== BROWSER_CONTROL_ACTION.open ||
+        previous === host
+      ) {
+        return await host.request(request, signal);
       }
-      return await host.request(request, signal);
+      // An open in another browser: the tab the chat watched is the first
+      // browser's, and the chat moves only once the page opened there.
+      const result = await host.request(
+        { ...request, observedTab: null },
+        signal,
+      );
+      if (!openedIn(result)) {
+        // Whatever the failed open made there goes with the chat's idle time.
+        if (previous !== undefined) {
+          host.releaseChat(request.controllerId);
+        }
+        return result;
+      }
+      // The chat leaves its tabs in the first browser.
+      previous?.releaseChat(request.controllerId);
+      chats.set(request.controllerId, host);
+      moves.set(
+        request.controllerId,
+        (moves.get(request.controllerId) ?? 0) + 1,
+      );
+      return result;
     },
+    browserMoves: (controllerId) => moves.get(controllerId) ?? 0,
     cancel: (run) => {
       for (const host of hosts()) {
         host.cancel(run);

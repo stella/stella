@@ -317,6 +317,12 @@ const NOTHING_DOWNLOADED: TakenDownloads = {
   shownSaving: false,
 };
 
+/** What the chat's tools need to know of the browser its pages are in. */
+const chatBrowser = (browser: HostRouter, threadId: string) => ({
+  acts: browser.actsFor(threadId),
+  browserMoves: () => browser.browserMoves(threadId),
+});
+
 /** A chat's page state, kept while any run of the chat is held. */
 const sessionFor = (
   sessions: Map<string, LocalBrowserSession>,
@@ -416,7 +422,7 @@ export const startLocalBrowserMcp = ({
           { id, requestSignal, serving },
           async (signal) =>
             await sessionFor(sessions, held.threadId).call(name, input, {
-              acts: browser.actsFor(held.threadId),
+              ...chatBrowser(browser, held.threadId),
               approvals: held.approvals,
               approve: held.approve,
               downloads: async (shownAddress) =>

@@ -223,8 +223,7 @@ const openIn = async (
 ): Promise<BrowserControlResult> => {
   if (newTab || current.targets.activeTab(controllerId) === null) {
     if (
-      current.targets.chatTabs(controllerId).length >=
-      BROWSER_CONTROL_LIMITS.tabs
+      current.targets.windowCount(controllerId) >= BROWSER_CONTROL_LIMITS.tabs
     ) {
       return browserControlError(
         BROWSER_CONTROL_ERROR_CODE.tabLimitReached,
@@ -499,28 +498,33 @@ export const createStellaBrowserHost = (
   /**
    * The account's running browser, started when none runs. A browser of
    * another account is never used: it closes, with its tabs, before this
-   * account's starts.
+   * account's starts. Closing the old browser and starting the new one is
+   * one operation, reserved before its first wait: every caller meanwhile
+   * joins it, or waits for it to end when it is another account's.
    */
   const ensureRunning = async (
     apiOrigin: string,
   ): Promise<Running | BrowserControlResult> => {
     const memberKey = memberKeyOf(apiOrigin);
-    if (starting !== null && starting.memberKey !== memberKey) {
-      await starting.started;
+    const pending = starting;
+    if (pending !== null) {
+      const joined = await pending.started;
+      return pending.memberKey === memberKey
+        ? joined
+        : await ensureRunning(apiOrigin);
     }
     if (stopped) {
       return disconnected(STOPPED);
     }
-    if (starting !== null) {
-      return await starting.started;
-    }
     if (running?.memberKey === memberKey && !running.instance.isGone()) {
       return running;
     }
-    await closeRunning();
     const launching = {
       memberKey,
-      started: launch(memberKey).finally(() => {
+      started: (async () => {
+        await closeRunning();
+        return await launch(memberKey);
+      })().finally(() => {
         if (starting === launching) {
           starting = null;
         }

@@ -10,7 +10,9 @@ import { appendFileSync, createReadStream, createWriteStream } from "node:fs";
  * browser does; one containing `hang` ends its pipe while it keeps running
  * and ignores SIGTERM; one containing `unreachable` fails to load; one
  * containing `slow` loads after a second; one containing `framed-private`
- * holds a frame from a private address; `Browser.close` makes it exit.
+ * holds a frame from a private address; one containing `popup` opens a
+ * window of its own; a window on one containing `sticky` answers its close
+ * with what the holder cannot read; `Browser.close` makes it exit.
  */
 
 const PROFILE_FLAG = "--user-data-dir=";
@@ -26,6 +28,7 @@ const send = (message: object) => {
 };
 
 let targets = 0;
+let popups = 0;
 /** Set once it hangs: it no longer ends with its pipe either. */
 const state = { hanging: false };
 const sessions = new Map<string, string>();
@@ -80,7 +83,7 @@ const answer = (
   method: string,
   params: Record<string, unknown>,
   sessionId: string | undefined,
-): object | "exit" | "hang" => {
+): object | "exit" | "hang" | "unreadable" => {
   switch (method) {
     case "Browser.getVersion":
       return { product: "Chrome/150.0.0.0", protocolVersion: "1.3" };
@@ -90,6 +93,14 @@ const answer = (
       targets += 1;
       return { targetId: `T${String(targets)}` };
     }
+    // A window showing a `sticky` page gives an answer the holder cannot
+    // read, so it cannot tell whether the window closed.
+    case "Target.closeTarget":
+      return (addresses.get(`S${String(params["targetId"])}`) ?? "").includes(
+        "sticky",
+      )
+        ? "unreadable"
+        : {};
     case "Target.attachToTarget": {
       const sessionIdOf = `S${String(params["targetId"])}`;
       sessions.set(sessionIdOf, String(params["targetId"]));
@@ -126,6 +137,21 @@ const answer = (
         });
       }
       const frameId = sessions.get(sessionId ?? "") ?? "";
+      // A page that opens a window of its own, as `window.open` does.
+      if (String(params["url"]).includes("popup")) {
+        popups += 1;
+        send({
+          method: "Target.targetCreated",
+          params: {
+            targetInfo: {
+              openerId: frameId,
+              targetId: `POPUP-${String(popups)}`,
+              type: "page",
+              url: "https://research.example.com/opened",
+            },
+          },
+        });
+      }
       if (String(params["url"]).includes("unreachable")) {
         return { errorText: "net::ERR_NAME_NOT_RESOLVED", frameId };
       }
@@ -222,6 +248,14 @@ input.on("data", (chunk: Buffer | string) => {
     }
     if (result === "hang") {
       return;
+    }
+    if (result === "unreadable") {
+      send({
+        id,
+        result: "closing",
+        ...(typeof sessionId === "string" ? { sessionId } : {}),
+      });
+      continue;
     }
     send({
       id,

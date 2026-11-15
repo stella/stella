@@ -1055,6 +1055,30 @@ describe("keys, options, history and tabs", () => {
     expect(browser.sent).toHaveLength(3);
   });
 
+  test("an open that moved the chat to another browser starts its record over: no page of the first is earlier there", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([pageAt("r-1", DECISION_URL), page("r-2")]);
+    const moves = { count: 0 };
+    const context = { ...browser.context, browserMoves: () => moves.count };
+    await session.call("open", { url: DECISION_URL }, context);
+    // The second open lands in the other browser, in a tab with the same id.
+    const send = context.send;
+    const moved = {
+      ...context,
+      send: async (...args: Parameters<typeof send>) => {
+        moves.count += 1;
+        return await send(...args);
+      },
+    };
+    await session.call("open", { url: SEARCH_URL }, moved);
+    const back = await session.call("go_back", {}, context);
+    expect(parsed(back)).toMatchObject({ refused: "no_earlier_page" });
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "open",
+      "open",
+    ]);
+  });
+
   test("go_back with no earlier page read in the tab is refused without navigating", async () => {
     const session = createLocalBrowserSession();
     const browser = recorder([page("r-1")]);

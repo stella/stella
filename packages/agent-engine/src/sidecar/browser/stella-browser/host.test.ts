@@ -450,6 +450,88 @@ describe("the stella browser host", () => {
     });
   });
 
+  test("two chats' first opens at once start one browser, which both use", async () => {
+    const { lines, methods, send } = start({ slowStart: true });
+    const opened = await Promise.all([
+      send(OPEN, "chat-1"),
+      send(OPEN, "chat-2"),
+    ]);
+    for (const result of opened) {
+      expect(result).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+      });
+    }
+    expect(
+      methods().filter((method) => method === "Browser.getVersion"),
+    ).toHaveLength(1);
+    expect(startedPids(lines)).toHaveLength(1);
+    expect(
+      methods().filter((method) => method === "Target.createTarget"),
+    ).toHaveLength(2);
+  });
+
+  test("a window a chat's page opens past the chat's tab limit closes at once, and counts toward it", async () => {
+    const { received, send } = start();
+    for (let opened = 2; opened < BROWSER_CONTROL_LIMITS.tabs; opened += 1) {
+      await send({ ...OPEN, newTab: true });
+    }
+    // One more tab, whose page opens a window: the chat's last allowed.
+    await send({
+      action: "open",
+      newTab: true,
+      url: "https://research.example.com/popup",
+    });
+    const closes = () =>
+      received().flatMap(({ method, params }) =>
+        method === "Target.closeTarget" ? [params?.["targetId"]] : [],
+      );
+    expect(closes()).toEqual([]);
+    // Its page opens another: one past the limit.
+    await send({
+      action: "open",
+      url: "https://research.example.com/popup-again",
+    });
+    await waitFor(() => (closes().length > 0 ? true : undefined), {
+      description: "the window past the limit to close",
+      timeoutMs: 10_000,
+    });
+    expect(closes()).toEqual(["POPUP-2"]);
+    // The window the chat keeps counts: no new tab is made.
+    expect(await send({ ...OPEN, newTab: true })).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.tabLimitReached,
+    });
+  });
+
+  test("a window whose close the browser leaves uncertain is closed again on the next release", async () => {
+    const { host, received, send } = start({ chatIdleMs: 0 });
+    await send(
+      { action: "open", url: "https://research.example.com/sticky" },
+      "chat-1",
+    );
+    // Another chat keeps the browser open.
+    await send(OPEN, "chat-2");
+    const closesOf = (targetId: string) =>
+      received().filter(
+        ({ method, params }) =>
+          method === "Target.closeTarget" && params?.["targetId"] === targetId,
+      ).length;
+    host.releaseChat("chat-1");
+    await waitFor(() => (closesOf("T1") === 1 ? true : undefined), {
+      description: "chat 1's window to be closed",
+      timeoutMs: 10_000,
+    });
+    await send(OPEN, "chat-3");
+    host.releaseChat("chat-3");
+    await waitFor(() => (closesOf("T3") === 1 ? true : undefined), {
+      description: "chat 3's window to be closed",
+      timeoutMs: 10_000,
+    });
+    await waitFor(() => (closesOf("T1") === 2 ? true : undefined), {
+      description: "chat 1's window to be closed again",
+      timeoutMs: 10_000,
+    });
+  });
+
   test("stopping while the browser starts closes it, and starts none again", async () => {
     const { host, methods, send } = start({ slowStart: true });
     const opening = send(OPEN);
