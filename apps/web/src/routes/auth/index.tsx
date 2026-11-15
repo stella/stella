@@ -4,6 +4,7 @@ import { createFileRoute, redirect, useLocation } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { SignInPanel } from "@/components/auth/sign-in-panel";
+import { SIGN_IN_ENTRY_METHOD } from "@/components/auth/sign-in-panel.logic";
 import {
   getOauthHashFragment,
   getSignedOauthQuery,
@@ -26,6 +27,8 @@ const DevQuickStartButton = import.meta.env.DEV
 
 const searchSchema = routeSearchSchema({
   redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
+  // A link can open the page on the password form (`?method=password`).
+  method: v.optional(v.literal(SIGN_IN_ENTRY_METHOD.password)),
 });
 
 export const Route = createFileRoute("/auth/")({
@@ -75,6 +78,7 @@ function LoginOrSignup() {
   const defaultRedirectTo = Route.useSearch({
     select: (s) => s.redirectTo ?? "/",
   });
+  const entryMethod = Route.useSearch({ select: (s) => s.method });
   const location = useLocation({
     select: ({ hash, searchStr }) => ({ hash, searchStr }),
   });
@@ -82,7 +86,7 @@ function LoginOrSignup() {
 
   return (
     <div className="flex w-full max-w-md flex-col gap-4">
-      <SignInPanel redirectTo={redirectTo} />
+      <SignInPanel entryMethod={entryMethod} redirectTo={redirectTo} />
       {DevQuickStartButton === null ? null : (
         <React.Suspense fallback={null}>
           <DevQuickStartButton redirectTo={redirectTo} />

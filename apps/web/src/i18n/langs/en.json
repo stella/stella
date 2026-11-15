@@ -159,6 +159,7 @@
     "handoffAccount": "Continue as <account>{email}</account> in <organization>{organizationName}</organization>?",
     "handoffTitle": "Continue to stella",
     "headline": "Clarity for every case.",
+    "invalidEmailOrPassword": "Incorrect email or password.",
     "invitation": {
       "declined": "Invitation declined",
       "declinedDescription": "You have declined this invitation. You can safely close this page.",
@@ -207,6 +208,7 @@
       "useBackupCode": "Use a backup code instead"
     },
     "useDifferentEmail": "Use a different email",
+    "useEmailCode": "Use an email code instead",
     "usePassword": "Use a password instead",
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>"
   },

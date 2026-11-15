@@ -10,6 +10,9 @@ export const AUTH_SOCIAL_PROVIDER_IDS = [
 ] as const;
 export type AuthSocialProviderId = (typeof AUTH_SOCIAL_PROVIDER_IDS)[number];
 export const AUTH_ACCESS_RESET_ERROR_CODE = "confirm_access_reset";
+/** No sign-in code is sent: the account named signs in with a password. */
+export const AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE =
+  "sign_in_code_unavailable";
 
 export const ORGANIZATION_ROLE_NAMES = [
   "owner",
