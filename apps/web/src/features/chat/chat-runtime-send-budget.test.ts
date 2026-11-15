@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { CHAT_LOCAL_RUN_INTERRUPT_REASONS } from "@stll/api-contract/chat-local-run-tool";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
@@ -257,9 +258,8 @@ const correlationOf = (body: JsonObject) => {
       body["threadId"] === forwarded["threadId"] &&
       body["runId"] === forwarded["runId"] &&
       body["parentRunId"] === forwarded["parentRunId"] &&
-      JSON.stringify(body["resume"]) === JSON.stringify(forwarded["resume"]) &&
-      (body["data"] === undefined ||
-        JSON.stringify(body["data"]) === JSON.stringify(forwarded)) &&
+      Bun.deepEquals(body["resume"], forwarded["resume"]) &&
+      (body["data"] === undefined || Bun.deepEquals(body["data"], forwarded)) &&
       anchors.some(
         (anchor) =>
           anchor["id"] === message["id"] && anchor["role"] === message["role"],
@@ -541,6 +541,72 @@ describe("every kind of send carries only the message it posts", () => {
           },
         ],
       });
+      resetChatRequestStateForTests();
+    }
+  });
+
+  test("approving or denying an unbound local-run command", async () => {
+    for (const approved of [true, false]) {
+      const localApproval = (runId: string): ServerEvent[] =>
+        approvalAnswer(runId).map((event) =>
+          event.type === "RUN_FINISHED"
+            ? {
+                ...event,
+                outcome: {
+                  type: "interrupt",
+                  interrupts: [
+                    {
+                      id: `approval_${APPROVAL_CALL_ID}`,
+                      toolCallId: APPROVAL_CALL_ID,
+                      reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval,
+                      metadata: { kind: "approval", input: APPROVAL_INPUT },
+                    },
+                  ],
+                },
+              }
+            : event,
+        );
+      const page = openScriptedPage([localApproval, textAnswer]);
+      await askQuestion(page.runtime);
+      await page.runtime.resolveToolApproval({
+        approved,
+        id: `approval_${APPROVAL_CALL_ID}`,
+      });
+      expectEachSendPosts(page, [
+        `user ${QUESTION_ID}`,
+        `assistant ${ASSISTANT_ID}`,
+      ]);
+      expect(
+        objectAt(page.posted.at(1)?.body ?? {}, "forwardedProps"),
+      ).toMatchObject({
+        parentRunId: page.posted.at(0)?.body["runId"],
+        resume: [
+          {
+            interruptId: `approval_${APPROVAL_CALL_ID}`,
+            payload: { approved },
+            status: "resolved",
+          },
+        ],
+      });
+      const postedMessage = objectAt(
+        objectAt(page.posted.at(1)?.body ?? {}, "forwardedProps"),
+        "message",
+      );
+      expect(postedMessage["parts"]).toContainEqual(
+        expect.objectContaining({
+          type: "tool-call",
+          id: APPROVAL_CALL_ID,
+          name: "save_playbook",
+          input: APPROVAL_INPUT,
+          state: "approval-responded",
+          approval: {
+            id: `approval_${APPROVAL_CALL_ID}`,
+            needsApproval: true,
+            approved,
+          },
+        }),
+      );
+      expect(page.runtime.getSnapshot().error).toBeUndefined();
       resetChatRequestStateForTests();
     }
   });

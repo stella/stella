@@ -25,6 +25,7 @@ import {
   type LocalRunQuestionPause,
   localRunQuestionPauseOf,
 } from "@stll/api-contract/chat-local-run-question";
+import { CHAT_LOCAL_RUN_INTERRUPT_REASONS } from "@stll/api-contract/chat-local-run-tool";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   chatLocalRunComputerEventSchema,
@@ -813,9 +814,6 @@ export const createChatRuntime = ({
         upstreamConnection.joinRun(runId, signal),
       ),
     connect: (messages, data, abortSignal, runContext) => {
-      if (runContext === undefined) {
-        return panic("TanStack connection omitted the AG-UI run context");
-      }
       if (!messages.every(isChatUiMessage)) {
         return panic("Stella chat connection received model messages");
       }
@@ -1475,9 +1473,8 @@ export const createChatRuntime = ({
         .getInterrupts()
         .find(
           (candidate) =>
-            candidate.kind === "generic" &&
-            (candidate.interruptId === response.id ||
-              candidate.id === response.id),
+            candidate.interruptId === response.id ||
+            candidate.id === response.id,
         );
       if (interrupt?.kind === "generic") {
         // Stella's server tool catalog is dynamic, so the browser has no
@@ -1487,6 +1484,65 @@ export const createChatRuntime = ({
         await resolveNativeInterrupt(() => {
           interrupt.resolveInterrupt({ approved: response.approved });
         });
+        return;
+      }
+
+      if (
+        interrupt?.kind === "unbound" &&
+        interrupt.reason === CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval
+      ) {
+        // Desktop harness approvals carry the local-run protocol, not a
+        // TanStack tool binding. Resume the exact server-owned interrupt,
+        // just as for a local-run question; never use legacy tool approval.
+        const messages = client.getMessages();
+        const pending = messages.some((message) =>
+          message.parts.some(
+            (part) =>
+              part.type === "tool-call" &&
+              part.state === "approval-requested" &&
+              "approval" in part &&
+              part.approval.id === interrupt.interruptId &&
+              part.approval.approved === undefined,
+          ),
+        );
+        if (!pending) {
+          throw new ChatRequestError({
+            kind: "preparation_failed",
+            message: "The local-run approval is no longer pending",
+          });
+        }
+        // Unsafe resume submits the protocol reply but does not apply the
+        // SDK's bound-approval message transition. Keep the posted call and
+        // its native resolution consistent for the server's validation.
+        client.setMessagesManually(
+          messages.map((message) => ({
+            ...message,
+            parts: message.parts.map((part) =>
+              part.type === "tool-call" &&
+              "approval" in part &&
+              part.approval.id === interrupt.interruptId
+                ? {
+                    ...part,
+                    approval: { ...part.approval, approved: response.approved },
+                    state: "approval-responded" as const,
+                  }
+                : part,
+            ),
+          })),
+        );
+        const sent = await client.resumeInterruptsUnsafe([
+          {
+            interruptId: interrupt.interruptId,
+            status: "resolved",
+            payload: { approved: response.approved },
+          },
+        ]);
+        if (!sent) {
+          throw new ChatRequestError({
+            kind: "preparation_failed",
+            message: "The local-run approval response was not sent",
+          });
+        }
         return;
       }
 
