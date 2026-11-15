@@ -10,8 +10,9 @@ import {
 
 /** The revision an exemption pins its called workflow to. */
 const pinnedRevision = (key: keyof typeof WORKFLOW_PRIVILEGE_ALLOWLIST) => {
-  const exemption: { calls?: string } = WORKFLOW_PRIVILEGE_ALLOWLIST[key];
-  const revision = exemption.calls?.split("@").at(1);
+  const exemption = WORKFLOW_PRIVILEGE_ALLOWLIST[key];
+  const calls = "calls" in exemption ? exemption.calls : undefined;
+  const revision = calls?.split("@").at(1);
   if (revision === undefined) {
     throw new Error(`${key} pins no called workflow`);
   }
