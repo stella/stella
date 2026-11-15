@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
+  CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
   corpusIndexCommitTimeoutSecs,
   corpusProjectionAppendIngestBudgetMs,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -23,8 +24,10 @@ import {
   corpusProjectionOfflineBlockFits,
   corpusProjectionOfflineBlockJoins,
   type CorpusProjectionOfflineBuildPolicy,
+  corpusProjectionOfflineIndexingWindowMs,
   corpusProjectionOfflineLeaseCanStart,
   corpusProjectionOfflineNextShardClass,
+  corpusProjectionOfflineReserveToStartMs,
   corpusProjectionOfflineShardClass,
   corpusProjectionOfflineShardIsClosed,
   corpusProjectionOfflineShardName,
@@ -35,11 +38,15 @@ import { openCorpusProjectionShardStaging } from "@/api/lib/legal-search/corpus-
 import {
   CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
   CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS,
+  CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS,
   corpusProjectionOfflineIndexerEndedAt,
   corpusProjectionOfflineIndexerKillDeadline,
   corpusProjectionOfflineRequestLeaseFloor,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
-import { CORPUS_PROJECTION_LEASE_MAX_MS } from "@/api/lib/legal-search/corpus-index-projection-store";
+import {
+  CORPUS_PROJECTION_LEASE_MAX_MS,
+  CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
+} from "@/api/lib/legal-search/corpus-index-projection-store";
 
 const MANIFESTS: CorpusIndexManifest[] = Object.values(CORPUS_INDEX_MANIFESTS);
 
@@ -68,12 +75,25 @@ const maxFillWindowMs = (
   CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS -
   closeAllowanceMs;
 
+/** The slowest rate that still indexes the largest revision in the window. */
+const minIngestBytesPerSecond = (manifest: CorpusIndexManifest) =>
+  Math.max(
+    1_000_000,
+    Math.ceil(
+      (CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES * 1000) /
+        corpusProjectionOfflineIndexingWindowMs(manifest),
+    ),
+  );
+
 /** A valid policy for one registered manifest, every bound exercised. */
 const manifestAndPolicy = fc
   .record({
     manifest: fc.constantFrom(...MANIFESTS),
-    ingestBytesPerSecond: fc.integer({ min: 1_000_000, max: 1_000_000_000 }),
-    maxShardBytes: fc.integer({ min: 1024 ** 2, max: 4 * 1024 ** 3 }),
+    rateFraction: fc.double({ min: 0, max: 1, noNaN: true }),
+    maxShardBytes: fc.integer({
+      min: CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+      max: 4 * 1024 ** 3,
+    }),
     maxShardRevisions: fc.integer({
       min: 1,
       max: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
@@ -82,13 +102,17 @@ const manifestAndPolicy = fc
     fillFraction: fc.double({ min: 0, max: 1, noNaN: true }),
     proofAllowanceMs: fc.integer({ min: 0, max: 30 * 60_000 }),
   })
-  .map(({ manifest, fillFraction, ...rest }) => {
+  .map(({ manifest, fillFraction, rateFraction, ...rest }) => {
     const fillMax = maxFillWindowMs(manifest, rest.closeAllowanceMs);
+    const rateMin = minIngestBytesPerSecond(manifest);
     return {
       manifest,
       policy: {
         ...BASE_POLICY,
         ...rest,
+        ingestBytesPerSecond: Math.floor(
+          rateMin + rateFraction * (1_000_000_000 - rateMin),
+        ),
         fillWindowMs: Math.floor(10_000 + fillFraction * (fillMax - 10_000)),
       } satisfies CorpusProjectionOfflineBuildPolicy,
     };
@@ -216,16 +240,11 @@ describe("offline build plan", () => {
               CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
           );
 
-          // Indexing a full shard at the measured rate fits half the kill
-          // budget and one commit window, and the shard fits half the heap.
+          // Indexing a full shard at the measured rate fits the indexing
+          // window, and the shard fits half the heap.
           const indexingMs =
             (plan.shardByteCap * 1000) / policy.ingestBytesPerSecond;
-          expect(indexingMs).toBeLessThanOrEqual(
-            corpusProjectionAppendIngestBudgetMs(manifest) / 2,
-          );
-          expect(indexingMs).toBeLessThanOrEqual(
-            corpusIndexCommitTimeoutSecs(manifest) * 1000,
-          );
+          expect(indexingMs).toBeLessThanOrEqual(plan.indexingWindowMs);
           expect(plan.shardByteCap).toBeLessThanOrEqual(policy.maxShardBytes);
           expect(plan.shardByteCap).toBeLessThanOrEqual(
             manifest.engine.indexConfig.indexing_settings.resources.heap_size /
@@ -263,16 +282,13 @@ describe("offline build plan", () => {
             revisions += 1;
             bytes += size;
           }
-          // A shard takes at least one block, never more than its class or
-          // the run's shard size, and only a lone block may exceed the byte
-          // cap.
+          // A shard takes at least one block, never more than its class, the
+          // run's shard size or the byte cap.
           expect(revisions).toBeGreaterThanOrEqual(1);
           expect(revisions).toBeLessThanOrEqual(
             Math.min(limit, plan.shardRevisionCap),
           );
-          if (revisions > 1) {
-            expect(bytes).toBeLessThanOrEqual(plan.shardByteCap);
-          }
+          expect(bytes).toBeLessThanOrEqual(plan.shardByteCap);
         },
       ),
     );
@@ -367,6 +383,132 @@ describe("offline build plan", () => {
         },
       ),
     );
+  });
+
+  /**
+   * The run's time, from the store's constants: from reserving to the first
+   * start a shard has at most the longest lease less the kill budget and the
+   * record margin; after the first start, the start window for the later
+   * start transactions, then the indexing window, and as much again for the
+   * file, the spawn, the merges at exit and the publish, all inside the kill
+   * budget a REST ingest of the generation gets.
+   */
+  test("offline-build.request-sizing", () => {
+    for (const manifest of MANIFESTS) {
+      const killBudgetMs = corpusProjectionAppendIngestBudgetMs(manifest);
+      const indexingWindowMs =
+        corpusProjectionOfflineIndexingWindowMs(manifest);
+      expect(
+        CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS + 2 * indexingWindowMs,
+      ).toBeLessThanOrEqual(killBudgetMs);
+      expect(indexingWindowMs).toBeLessThanOrEqual(
+        corpusIndexCommitTimeoutSecs(manifest) * 1000,
+      );
+      expect(corpusProjectionOfflineReserveToStartMs(manifest)).toBe(
+        CORPUS_PROJECTION_LEASE_MAX_MS -
+          killBudgetMs -
+          CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS,
+      );
+    }
+    // The figures the module comment quotes, for a 600 s commit window.
+    const v10 = CORPUS_INDEX_MANIFESTS.case_law_v10;
+    expect(corpusIndexCommitTimeoutSecs(v10)).toBe(600);
+    expect(corpusProjectionAppendIngestBudgetMs(v10)).toBe(660_000);
+    expect(corpusProjectionOfflineReserveToStartMs(v10)).toBe(180_000);
+    expect(corpusProjectionOfflineIndexingWindowMs(v10)).toBe(300_000);
+
+    assertProperty(
+      "offline-build.request-sizing",
+      fc.property(
+        manifestAndPolicy,
+        fc.array(
+          fc.integer({
+            min: 1,
+            max: CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+          }),
+          { minLength: 1, maxLength: 300 },
+        ),
+        ({ manifest, policy }, blockSizes) => {
+          const plan = planCorpusProjectionOfflineBuild(manifest, policy);
+          expect(plan.shardByteCap).toBeGreaterThanOrEqual(
+            CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+          );
+          expect(plan.reserveToFirstStartMs).toBeLessThanOrEqual(
+            corpusProjectionOfflineReserveToStartMs(manifest),
+          );
+          expect(plan.startTransactionsPerShard).toBe(
+            Math.ceil(
+              plan.shardRevisionCap / CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
+            ),
+          );
+          expect(plan.startTransactionsPerShard).toBeLessThanOrEqual(
+            CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS /
+              CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
+          );
+          // Pack every block in order, a new shard whenever the next does not
+          // fit: an oversized request is split, every block lands in exactly
+          // one shard, and every shard indexes inside its window.
+          const shards: number[][] = [[]];
+          for (const size of blockSizes) {
+            const current = shards.at(-1) ?? [];
+            const fill = {
+              revisions: current.length,
+              bytes: current.reduce((sum, bytes) => sum + bytes, 0),
+              limit: plan.shardRevisionCap,
+              earliestLeaseExpiresAtMs: null,
+            };
+            if (corpusProjectionOfflineBlockFits(plan, fill, size)) {
+              current.push(size);
+            } else {
+              expect(current.length).toBeGreaterThan(0);
+              shards.push([size]);
+            }
+          }
+          expect(shards.flat()).toEqual(blockSizes);
+          for (const shard of shards) {
+            const bytes = shard.reduce((sum, size) => sum + size, 0);
+            expect(shard.length).toBeLessThanOrEqual(plan.shardRevisionCap);
+            expect(bytes).toBeLessThanOrEqual(plan.shardByteCap);
+            expect(
+              (bytes * 1000) / policy.ingestBytesPerSecond,
+            ).toBeLessThanOrEqual(plan.indexingWindowMs);
+          }
+        },
+      ),
+    );
+  });
+
+  test("a request that cannot index inside its window is refused, never sent", () => {
+    const v2 = CORPUS_INDEX_MANIFESTS.legislation_v2;
+    // A 60 s commit window leaves 30 s of indexing: too little for the
+    // largest revision at 4 MB/s.
+    expect(corpusProjectionOfflineIndexingWindowMs(v2)).toBe(30_000);
+    expect(() =>
+      planCorpusProjectionOfflineBuild(v2, {
+        ...BASE_POLICY,
+        ingestBytesPerSecond: 4_000_000,
+      }),
+    ).toThrow("cannot index the largest revision");
+    expect(() =>
+      planCorpusProjectionOfflineBuild(v2, {
+        ...BASE_POLICY,
+        maxShardBytes: CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES - 1,
+      }),
+    ).toThrow("shard byte limit must be an integer");
+    // A block over the cap is refused, not shipped alone past the window.
+    const plan = planCorpusProjectionOfflineBuild(v2, BASE_POLICY);
+    expect(() =>
+      corpusProjectionOfflineBlockFits(
+        plan,
+        {
+          revisions: 0,
+          bytes: 0,
+          limit: plan.shardRevisionCap,
+          earliestLeaseExpiresAtMs: null,
+        },
+        plan.shardByteCap + 1,
+      ),
+    ).toThrow("exceeds the shard byte cap");
   });
 
   test("a policy outside its bounds is refused", () => {

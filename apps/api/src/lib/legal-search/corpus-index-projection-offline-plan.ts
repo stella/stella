@@ -3,16 +3,19 @@ import { panic } from "better-result";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
+  CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
   corpusIndexCommitTimeoutSecs,
   corpusProjectionAppendIngestBudgetMs,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
   CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS,
+  CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   CORPUS_PROJECTION_LEASE_MAX_MS,
   CORPUS_PROJECTION_LEASE_MIN_MS,
+  CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 
 /**
@@ -23,28 +26,37 @@ import {
  * properties over every registered manifest cover what a run will do.
  *
  * How the kill budget relates to shard size. An offline run is killed at its
- * start plus the generation's ingest budget (its commit window plus the
- * upload allowance), the same budget an ingest request gets, so the lease a
- * start requires covers it. Inside that budget the run must spawn, index the
- * file, merge at exit and publish. A shard is therefore sized so indexing it
- * at the measured rate takes at most half the budget, leaving the other half
- * for the time between the start and the spawn, the merges at exit and the
- * upload; and at most one commit window, so a run commits once and no
- * revision straddles a commit boundary; and at most half the indexing heap,
- * so memory does not force an early commit either. A revision larger than
- * the shard cap travels alone.
+ * request's first start plus the generation's ingest budget (its commit window
+ * plus the upload allowance), the same budget an ingest request gets, so the
+ * lease a start requires covers it. That budget is spent in this order:
  *
- * How the lease relates to the start. A shard file is one offline request,
- * started in transactions of at most one append's rows, all within the start
- * window of its first start, and every revision's lease must reach the
- * request's kill deadline plus the record margin, both counted from that
- * first start (`corpusProjectionOfflineRequestLeaseFloor`). So the first start
- * must come no later than the earliest lease's expiry less the kill budget
- * and the record margin; the fill window is what the lease leaves before
- * that, less the close allowance. With a 600 s commit window the kill budget
- * is 660 s, so a 900 s lease leaves 180 s between reserving and the first
- * start. A build slower than that closes its shard early, with fewer
- * revisions; a lease is never started short.
+ * 1. the request's later start transactions, at most
+ *    `CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS` (a request of at most
+ *    `CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS` revisions takes at most
+ *    sixteen transactions of `CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE` rows);
+ * 2. indexing the file, at most `corpusProjectionOfflineIndexingWindowMs`:
+ *    half of what the start window leaves, and never more than one commit
+ *    window, so a run commits once and no revision straddles a commit;
+ * 3. the other half: writing the file, the spawn, the merges at exit and the
+ *    publish.
+ *
+ * A shard's bytes are therefore capped at what the measured rate indexes in
+ * the indexing window, and at half the indexing heap so memory does not force
+ * an early commit either. The cap must hold the largest revision the builder
+ * emits (`CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES`), or the plan is
+ * refused: every request, a lone revision included, fits its window.
+ *
+ * How the lease relates to the start. Every revision's lease must reach the
+ * request's kill deadline plus the record margin, both counted from the first
+ * start (`corpusProjectionOfflineRequestLeaseFloor`). So the first start must
+ * come no later than the earliest lease's expiry less the kill budget and the
+ * record margin: from reserving to the first start a shard has at most
+ * `corpusProjectionOfflineReserveToStartMs`, the longest lease less both. The
+ * fill window is that less the close allowance. With a 600 s commit window the
+ * kill budget is 660 s, so a 900 s lease leaves 180 s between reserving and
+ * the first start, and indexing gets 300 s. A build slower than that closes
+ * its shard early, with fewer revisions; a lease is never started short, and
+ * a start transaction past the start window starts nothing.
  */
 
 /** A conservative indexing rate: half the per-core rate measured offline. */
@@ -59,7 +71,8 @@ export const CORPUS_PROJECTION_OFFLINE_DEFAULT_MAX_SHARD_REVISIONS =
 
 const MIN_INGEST_BYTES_PER_SECOND = 1_000_000;
 const MAX_INGEST_BYTES_PER_SECOND = 1_000_000_000;
-const MIN_SHARD_BYTES = 1024 ** 2;
+/** A shard must hold the largest revision the builder emits. */
+const MIN_SHARD_BYTES = CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES;
 const MAX_SHARD_BYTES = 4 * 1024 ** 3;
 const MAX_SHARD_REVISIONS = CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS;
 const MIN_FILL_WINDOW_MS = 10_000;
@@ -111,6 +124,16 @@ export type CorpusProjectionOfflinePlan = {
   leaseMs: number;
   /** A shard closes once its earliest lease has this little left. */
   closeMarginMs: number;
+  /**
+   * The longest a shard may take from its first reservation to its first
+   * start: the fill window plus the close allowance, never more than
+   * `corpusProjectionOfflineReserveToStartMs`.
+   */
+  reserveToFirstStartMs: number;
+  /** Start transactions a full shard takes, all inside the start window. */
+  startTransactionsPerShard: number;
+  /** How long a full shard may take to index at the measured rate. */
+  indexingWindowMs: number;
   shardByteCap: number;
   shardRevisionCap: number;
   /** A run reserves nothing once its deadline is this close. */
@@ -138,23 +161,63 @@ const indexingHeapBytes = (manifest: CorpusIndexManifest): number =>
   manifest.engine.indexConfig.indexing_settings.resources.heap_size;
 
 /**
+ * How long an offline run of `manifest` may spend indexing its file: of the
+ * kill budget, what the start window leaves, halved so the file write, the
+ * spawn, the merges at exit and the publish get the other half; and at most
+ * one commit window. 300 s for a 600 s commit window, 30 s for a 60 s one.
+ */
+export const corpusProjectionOfflineIndexingWindowMs = (
+  manifest: CorpusIndexManifest,
+): number => {
+  const afterStartsMs =
+    corpusProjectionAppendIngestBudgetMs(manifest) -
+    CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS;
+  return afterStartsMs > 0
+    ? Math.min(
+        Math.floor(afterStartsMs / 2),
+        corpusIndexCommitTimeoutSecs(manifest) * 1000,
+      )
+    : panic("The generation's kill budget leaves no time after the starts");
+};
+
+/**
+ * The longest a shard of `manifest` may take from reserving to its request's
+ * first start: every lease must still reach the kill deadline plus the record
+ * margin from then (`corpusProjectionOfflineRequestLeaseFloor`), and no lease
+ * is longer than `CORPUS_PROJECTION_LEASE_MAX_MS`. 180 s for a 600 s commit
+ * window.
+ */
+export const corpusProjectionOfflineReserveToStartMs = (
+  manifest: CorpusIndexManifest,
+): number =>
+  CORPUS_PROJECTION_LEASE_MAX_MS -
+  corpusProjectionAppendIngestBudgetMs(manifest) -
+  CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS;
+
+/**
  * Bytes one shard may hold for `manifest`: indexing it at the measured rate
- * fits in half the kill budget and in one commit window, and it fits in half
- * the indexing heap.
+ * fits the indexing window, and it fits in half the indexing heap. Refused
+ * when that cannot hold the largest revision, which would then be killed
+ * before it is indexed however often it is retried.
  */
 const corpusProjectionOfflineShardByteCap = (
   manifest: CorpusIndexManifest,
   { ingestBytesPerSecond, maxShardBytes }: CorpusProjectionOfflineBuildPolicy,
 ): number => {
-  const indexingWindowMs = Math.min(
-    corpusProjectionAppendIngestBudgetMs(manifest) / 2,
-    corpusIndexCommitTimeoutSecs(manifest) * 1000,
-  );
-  return Math.min(
+  const cap = Math.min(
     maxShardBytes,
     Math.floor(indexingHeapBytes(manifest) / 2),
-    Math.floor((ingestBytesPerSecond * indexingWindowMs) / 1000),
+    Math.floor(
+      (ingestBytesPerSecond *
+        corpusProjectionOfflineIndexingWindowMs(manifest)) /
+        1000,
+    ),
   );
+  return cap >= CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES
+    ? cap
+    : panic(
+        "Offline projection build ingest rate cannot index the largest revision inside the generation's indexing window",
+      );
 };
 
 export const planCorpusProjectionOfflineBuild = (
@@ -190,7 +253,8 @@ export const planCorpusProjectionOfflineBuild = (
     "close allowance",
   );
   const closeMarginMs = startMarginMs + closeAllowanceMs;
-  const maxFillWindowMs = CORPUS_PROJECTION_LEASE_MAX_MS - closeMarginMs;
+  const maxFillWindowMs =
+    corpusProjectionOfflineReserveToStartMs(manifest) - closeAllowanceMs;
   if (maxFillWindowMs < MIN_FILL_WINDOW_MS) {
     return panic(
       "The generation's kill budget leaves no fill window inside the longest projection lease",
@@ -224,6 +288,11 @@ export const planCorpusProjectionOfflineBuild = (
     startMarginMs,
     leaseMs,
     closeMarginMs,
+    reserveToFirstStartMs: fillWindowMs + closeAllowanceMs,
+    startTransactionsPerShard: Math.ceil(
+      shardRevisionCap / CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
+    ),
+    indexingWindowMs: corpusProjectionOfflineIndexingWindowMs(manifest),
     shardByteCap: corpusProjectionOfflineShardByteCap(manifest, policy),
     shardRevisionCap,
     // The last shard may fill for its whole window, close, run to its kill,
@@ -254,8 +323,7 @@ type ShardFill = {
 /**
  * Whether a shard takes no more revisions: it is at a cap, or its earliest
  * lease is so close to its start margin that only the starts and the file
- * write still fit. An empty shard is never closed: one revision larger than
- * the byte cap travels alone.
+ * write still fit. An empty shard is never closed.
  */
 export const corpusProjectionOfflineShardIsClosed = (
   plan: CorpusProjectionOfflinePlan,
@@ -268,14 +336,27 @@ export const corpusProjectionOfflineShardIsClosed = (
     (fill.earliestLeaseExpiresAtMs !== null &&
       fill.earliestLeaseExpiresAtMs - nowMs <= plan.closeMarginMs));
 
-/** Whether one more block of `blockBytes` still fits a shard. */
+/**
+ * Whether one more block of `blockBytes` still fits a shard. Every block the
+ * builder emits fits an empty shard, since the plan's byte cap holds the
+ * largest revision; one that does not is refused, never sent alone past the
+ * indexing window.
+ */
 export const corpusProjectionOfflineBlockFits = (
   plan: CorpusProjectionOfflinePlan,
   fill: ShardFill,
   blockBytes: number,
-): boolean =>
-  fill.revisions < Math.min(fill.limit, plan.shardRevisionCap) &&
-  (fill.revisions === 0 || fill.bytes + blockBytes <= plan.shardByteCap);
+): boolean => {
+  if (blockBytes > plan.shardByteCap) {
+    return panic(
+      `An offline projection block of ${blockBytes} bytes exceeds the shard byte cap`,
+    );
+  }
+  return (
+    fill.revisions < Math.min(fill.limit, plan.shardRevisionCap) &&
+    fill.bytes + blockBytes <= plan.shardByteCap
+  );
+};
 
 /**
  * Whether a built block joins a shard: it is of the shard's class (its

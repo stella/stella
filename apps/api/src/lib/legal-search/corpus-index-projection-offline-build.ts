@@ -19,10 +19,7 @@ import {
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { recoverExpiredCorpusProjectionIntentsTx } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
-import {
-  CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
-  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-} from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { CORPUS_PROJECTION_DELETE_MAX_REVISIONS } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { readReservedCorpusProjectionMaterialsTx } from "@/api/lib/legal-search/corpus-index-projection-materials";
 import {
   corpusProjectionOfflineBlockJoins,
@@ -64,6 +61,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-revision-block";
 import {
   CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
+  CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
   type CorpusProjectionIntentLease,
   type CorpusProjectionOfflineRequest,
   type CorpusProjectionOfflineStart,
@@ -844,7 +842,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
         return entries;
       }
       const limit = Math.min(
-        CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+        CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
         shardClass - entries.length,
       );
       // db-await-in-loop: a page walk: one reservation page of up to an append's revisions per pass
@@ -1019,7 +1017,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     let windowClosed = false;
     for (const chunk of chunkItems(
       startable,
-      CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+      CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
     )) {
       if (windowClosed) {
         handBack.push(...chunk);
@@ -1167,7 +1165,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       ).getTime() + CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS;
     for (const chunk of chunkItems(
       [...entries],
-      CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+      CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
     )) {
       const testNow = await this.#testNow();
       const recorded = await this.#admit(
