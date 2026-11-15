@@ -100,10 +100,10 @@ const serve = (
 ): Served => {
   const requests: string[] = [];
   const server = Bun.serve({
-    fetch: (request) => {
+    fetch: async (request) => {
       const { pathname } = new URL(request.url);
       requests.push(pathname);
-      return answer(pathname);
+      return await answer(pathname);
     },
     hostname: "127.0.0.1",
     port: 0,
