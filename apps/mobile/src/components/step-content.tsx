@@ -75,7 +75,7 @@ export const StepContentView = ({
     }
     return next;
   };
-  const [load, setLoad] = useState(() => read(STEP_CONTENT_UNREAD));
+  const [load, setLoad] = useState(async () => await read(STEP_CONTENT_UNREAD));
   const [reading, startReading] = useTransition();
 
   return (
