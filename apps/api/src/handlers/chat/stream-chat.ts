@@ -33,6 +33,7 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
@@ -222,7 +223,6 @@ import {
   chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
 import {
-  type ChatContextNotice,
   createContextNoticeStamp,
   SESSION_NOT_RESUMED_NOTICE,
 } from "@/api/lib/chat/context-notice";
