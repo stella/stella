@@ -912,9 +912,9 @@ export const caseLawDecisions = p.pgTable(
     indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
     /**
-     * Monotonic fence captured by final-generation projection intents. Any
-     * desired-state transaction increments it before changing the projection,
-     * so a worker leased against an older value cannot publish stale content.
+     * Monotonic order of the decision's projection desired-state changes. No
+     * generation's desired epoch exceeds it; leases are fenced by their own
+     * generation's desired state. Bookkeeping: writing it keeps `updated_at`.
      */
     projectionEpoch: p
       .bigint("projection_epoch", { mode: "bigint" })

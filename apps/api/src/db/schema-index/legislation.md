@@ -60,7 +60,7 @@ legislation_documents.content_hash                    varchar          null     
 legislation_documents.indexed_hash                    varchar          null              legislation.ts:296  The case-law twins' legislation counterparts; see that table.
 legislation_documents.indexed_generation              varchar          null              legislation.ts:297
 legislation_documents.indexed_at                      timestamptz      null              legislation.ts:298
-legislation_documents.projection_epoch                bigint           default,not null  legislation.ts:300  Monotonic fence advanced by each desired-state transaction.
+legislation_documents.projection_epoch                bigint           default,not null  legislation.ts:300  Monotonic order of the document's projection desired-state changes.
 legislation_documents.payload_revision                bigint           default,not null  legislation.ts:309  Advanced by the database whenever the payload or the version identity changes (migration `20260926150000_legislation_payload_revision`); a write that supplies…
 legislation_documents.change_summary                  jsonb            null              legislation.ts:320  What this consolidation changed against the eligible one before it, and the payload revisions of both it was computed from; null until computed.
 legislation_documents.created_at                      timestamptz      default,not null  legislation.ts:321
