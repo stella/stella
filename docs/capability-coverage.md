@@ -840,7 +840,7 @@ mechanics, and similar), not gaps in coverage.
 | public_indexing | 11 |
 | realtime_stream | 10 |
 | search_ui | 21 |
-| session_token_exchange | 20 |
+| session_token_exchange | 21 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 24 |
 | url_preview | 2 |
