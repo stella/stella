@@ -14,6 +14,7 @@
 
 use crate::logging::best_effort;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -350,39 +351,61 @@ struct CardScan {
   failure: Option<&'static str>,
 }
 
-/// The open dialog's last card scan: set when it opens, replaced by a
-/// rescan, read by the store's refresh and by the signature, and cleared
-/// when the flow ends. `None` while no signing flow runs.
-static CARD_SCAN: std::sync::Mutex<Option<CardScan>> = std::sync::Mutex::new(None);
+/// The open dialog's last card scan, with the flow that took it: set when
+/// the dialog opens, replaced by a rescan, read by the store's refresh and by
+/// the signature, and cleared when the flow ends. `None` while no signing
+/// flow runs.
+static CARD_SCAN: std::sync::Mutex<Option<FlowCardScan>> = std::sync::Mutex::new(None);
+/// Numbers the signing flows, so a scan or a cleanup that outlives its flow
+/// cannot touch the next flow's scan.
+static NEXT_CARD_SCAN_FLOW: AtomicU64 = AtomicU64::new(0);
 
-fn current_card_scan() -> CardScan {
-  CARD_SCAN
-    .lock()
-    .unwrap_or_else(|e| e.into_inner())
-    .clone()
-    .unwrap_or_default()
+#[derive(Clone, Debug)]
+struct FlowCardScan {
+  flow: u64,
+  cards: CardScan,
 }
 
-/// Replace the open dialog's scan; a scan that outlived its flow is dropped.
-fn remember_card_scan(cards: CardScan) {
-  if let Some(current) = CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
-    *current = cards;
+fn current_card_scan() -> CardScan {
+  let scan = CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner()).clone();
+  scan.map(|scan| scan.cards).unwrap_or_default()
+}
+
+/// The flow whose dialog holds the card scan, if a flow runs.
+fn card_scan_flow() -> Option<u64> {
+  let scan = CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner());
+  scan.as_ref().map(|scan| scan.flow)
+}
+
+/// Replace `flow`'s scan. A scan that outlived its flow is dropped, even when
+/// another flow has started since.
+fn remember_card_scan(flow: u64, cards: CardScan) {
+  let mut scan = CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner());
+  if let Some(current) = scan.as_mut().filter(|current| current.flow == flow) {
+    current.cards = cards;
   }
 }
 
 /// Holds the flow's card scan, and clears it however the flow ends.
-struct CardScanGuard;
+struct CardScanGuard {
+  flow: u64,
+}
 
 impl CardScanGuard {
   fn start(cards: CardScan) -> Self {
-    *CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner()) = Some(cards);
-    Self
+    let flow = NEXT_CARD_SCAN_FLOW.fetch_add(1, Ordering::Relaxed);
+    *CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner()) =
+      Some(FlowCardScan { flow, cards });
+    Self { flow }
   }
 }
 
 impl Drop for CardScanGuard {
   fn drop(&mut self) {
-    *CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    let mut scan = CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner());
+    if scan.as_ref().is_some_and(|scan| scan.flow == self.flow) {
+      *scan = None;
+    }
   }
 }
 
@@ -442,8 +465,13 @@ pub async fn dialog_listing() -> DialogListing {
 
 /// The picker after the dialog's Rescan button scanned the cards again.
 pub async fn rescan_dialog_listing() -> DialogListing {
+  // The scan belongs to the flow that asked for it; it is dropped if that
+  // flow ends while the helper runs.
+  let flow = card_scan_flow();
   let (listing, cards) = rescanned_listing(&InstalledSources).await;
-  remember_card_scan(cards);
+  if let Some(flow) = flow {
+    remember_card_scan(flow, cards);
+  }
   DialogListing::of(&listing)
 }
 
@@ -1675,6 +1703,33 @@ fn percent_encode(value: &str) -> String {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn a_card_scan_that_outlives_its_flow_leaves_the_next_flow_alone() {
+    let scan = |failure| CardScan {
+      failure: Some(failure),
+      ..CardScan::default()
+    };
+    let first = CardScanGuard::start(scan("first"));
+    let first_flow = card_scan_flow().expect("the first flow holds the scan");
+    drop(first);
+    let second = CardScanGuard::start(scan("second"));
+
+    // The first flow's rescan finishes after the second flow opened.
+    remember_card_scan(first_flow, scan("stale"));
+    assert_eq!(current_card_scan().failure, Some("second"));
+
+    // The second flow's own rescan still lands.
+    let second_flow = card_scan_flow().expect("the second flow holds the scan");
+    remember_card_scan(second_flow, scan("rescanned"));
+    assert_eq!(current_card_scan().failure, Some("rescanned"));
+
+    // A guard of an ended flow cannot clear the running one.
+    drop(CardScanGuard { flow: first_flow });
+    assert_eq!(current_card_scan().failure, Some("rescanned"));
+    drop(second);
+    assert_eq!(card_scan_flow(), None);
+  }
 
   #[test]
   fn percent_encoding_spells_every_other_byte_as_uppercase_hex() {
