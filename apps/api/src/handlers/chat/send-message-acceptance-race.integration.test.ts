@@ -9,7 +9,10 @@ import {
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
-import { persistAcceptedMessageWithClaim } from "@/api/handlers/chat/chat-message-persistence";
+import {
+  CHAT_MEMBER_MESSAGE_PLACEMENT,
+  persistAcceptedMessageWithClaim,
+} from "@/api/handlers/chat/chat-message-persistence";
 import { createChatTurnAcceptance } from "@/api/handlers/chat/chat-turn-persistence";
 import { resolveTruncationTarget } from "@/api/handlers/chat/history-window";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -279,6 +282,7 @@ describe("a regeneration of the latest user turn", () => {
         messageId: regenerated,
         type: "update",
       },
+      placement: CHAT_MEMBER_MESSAGE_PLACEMENT.rewrite,
       plannedOnHistory: target.value.snapshot,
       recordAuditEvent: async () => await Promise.resolve(),
       safeDb,
