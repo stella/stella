@@ -1072,12 +1072,10 @@ const composerSendState = ({
   turnAwaitsMember: boolean;
   steering: ChatTurnSteering;
 }): ChatThreadSendState => {
-  if (isGenerating) {
-    return { type: "working", steering };
+  if (turnAwaitsMember) {
+    return { type: "waiting_on_member", steering };
   }
-  return turnAwaitsMember
-    ? { type: "waiting_on_member", steering }
-    : { type: "idle" };
+  return isGenerating ? { type: "working", steering } : { type: "idle" };
 };
 
 const ChatThreadScrollSurface = ({ children }: { children: ReactNode }) => (
