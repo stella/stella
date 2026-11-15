@@ -24,8 +24,9 @@ use stella_desktop_pkcs11::drivers::{
 };
 use stella_desktop_pkcs11::macho::ModuleCheck;
 use stella_desktop_pkcs11::protocol::{
-  MAX_RESPONSE_BYTES, ModuleOutcome, Pin, PinEntry, PinRetries, ReaderCard, ReaderScan,
-  Request, Response, SignRequest, TokenListing, decode_response, encode_request,
+  MAX_RESPONSE_BYTES, ModuleListing, ModuleOutcome, Pin, PinEntry, PinRetries,
+  ReaderCard, ReaderScan, Request, Response, SignRequest, TokenListing,
+  decode_response, encode_request,
 };
 use stella_desktop_signing_core::{
   SigningErrorCode, SigningIdentity, issuer_chain, signing_identity,
@@ -146,7 +147,7 @@ pub async fn scan(
       ModuleOrigin::Chosen => None,
     })
     .collect();
-  let (loadable, mut notices) = sort_installed(installed);
+  let (loadable, notices) = sort_installed(installed);
   if loadable.is_empty() && helper_path().is_none() {
     return Ok(TokenScan {
       identities: Vec::new(),
@@ -175,8 +176,29 @@ pub async fn scan(
       });
     }
   };
+  Ok(listed_scan(
+    modules,
+    readers,
+    &installed_drivers,
+    notices,
+    now,
+  ))
+}
+
+/// What the helper listed, as the dialog offers it. Modules that could not
+/// be used are logged; when every module asked was unusable, the cards could
+/// not be read, which the dialog reports rather than showing no card.
+fn listed_scan(
+  modules: Vec<ModuleListing>,
+  readers: ReaderScan,
+  installed_drivers: &[&str],
+  mut notices: Vec<DriverNotice>,
+  now: i64,
+) -> TokenScan {
   let mut identities = Vec::new();
   let mut read_slots: Vec<String> = Vec::new();
+  let mut unusable: Vec<String> = Vec::new();
+  let asked = modules.len();
   for listing in modules {
     match listing.outcome {
       ModuleOutcome::Loaded { tokens } => {
@@ -189,22 +211,29 @@ pub async fn scan(
       }
       ModuleOutcome::Unusable { detail } => {
         tracing::warn!(module = %listing.module.display(), %detail, "PKCS #11 module could not be used");
+        unusable.push(format!("{}: {detail}", listing.module.display()));
       }
     }
   }
   match readers {
     ReaderScan::Read { cards } => {
-      notices.extend(missing_drivers(&cards, &read_slots, &installed_drivers));
+      notices.extend(missing_drivers(&cards, &read_slots, installed_drivers));
     }
     ReaderScan::Unavailable { detail } => {
       tracing::info!(%detail, "smart card readers could not be read");
     }
   }
-  Ok(TokenScan {
+  let failure = (asked > 0 && unusable.len() == asked).then(|| {
+    HelperFailure::Failed(format!(
+      "no PKCS #11 module could be used: {}",
+      unusable.join("; ")
+    ))
+  });
+  TokenScan {
     identities,
     notices,
-    failure: None,
-  })
+    failure,
+  }
 }
 
 /// A notice for each card in a reader that no module read certificates
@@ -582,6 +611,58 @@ mod tests {
       reader: reader.to_string(),
       atr_hex: atr_hex.to_string(),
     }
+  }
+
+  #[test]
+  fn a_listing_where_every_module_was_unusable_is_a_failure() {
+    let unusable = |path: &str| ModuleListing {
+      module: PathBuf::from(path),
+      outcome: ModuleOutcome::Unusable {
+        detail: "C_Initialize failed".to_string(),
+      },
+    };
+    let readers = || ReaderScan::Read { cards: Vec::new() };
+
+    let none_usable = listed_scan(
+      vec![unusable("/a.dylib"), unusable("/b.dylib")],
+      readers(),
+      &[],
+      Vec::new(),
+      NOW,
+    );
+    assert!(matches!(
+      none_usable.failure,
+      Some(HelperFailure::Failed(detail)) if detail.contains("/a.dylib") && detail.contains("/b.dylib")
+    ));
+
+    // One module that works keeps its certificates and no failure.
+    let one_usable = listed_scan(
+      vec![
+        unusable("/a.dylib"),
+        ModuleListing {
+          module: PathBuf::from("/m.dylib"),
+          outcome: ModuleOutcome::Loaded {
+            tokens: vec![token(vec![certificate(
+              SIGNING,
+              CertificateKey::BehindLogin,
+            )])],
+          },
+        },
+      ],
+      readers(),
+      &[],
+      Vec::new(),
+      NOW,
+    );
+    assert!(one_usable.failure.is_none());
+    assert_eq!(one_usable.identities.len(), 1);
+
+    // Asking no module is not a failure: the readers were still read.
+    assert!(
+      listed_scan(Vec::new(), readers(), &[], Vec::new(), NOW)
+        .failure
+        .is_none()
+    );
   }
 
   #[test]
