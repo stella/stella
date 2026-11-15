@@ -212,30 +212,41 @@ export const lockActiveWorkspaceForBufferIntent = async (
   }
 };
 
-/** Reserve exact-key recovery ownership before a non-upload writer calls PUT. */
-export const reserveObjectCleanupIntents = async ({
-  chatThreadId,
-  objectKey,
-  organizationId,
-  safeDb,
-  workspaceAvailability = OBJECT_INTENT_WORKSPACE_AVAILABILITY.ACTIVE,
-  workspaceIds,
-}: {
+type ObjectCleanupIntentScope = {
   chatThreadId?: SafeId<"chatThread">;
-  objectKey: string;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   workspaceAvailability?: ObjectIntentWorkspaceAvailability;
   workspaceIds: SafeId<"workspace">[];
-}): Promise<Result<SafeId<"pendingUpload">[], SafeDbError>> => {
+};
+
+/**
+ * Reserve exact-key recovery ownership for every object a non-upload writer
+ * is about to PUT, in one transaction: one organization lock, one workspace
+ * check and one insert however many objects there are. Answers each key's
+ * intent ids.
+ */
+export const reserveObjectCleanupIntentsForKeys = async ({
+  chatThreadId,
+  objectKeys,
+  organizationId,
+  safeDb,
+  workspaceAvailability = OBJECT_INTENT_WORKSPACE_AVAILABILITY.ACTIVE,
+  workspaceIds,
+}: ObjectCleanupIntentScope & {
+  objectKeys: readonly [string, ...string[]];
+}): Promise<
+  Result<ReadonlyMap<string, SafeId<"pendingUpload">[]>, SafeDbError>
+> => {
   const uniqueWorkspaceIds = [...new Set(workspaceIds)].toSorted();
-  const intents =
-    uniqueWorkspaceIds.length === 0
-      ? [{ id: createSafeId<"pendingUpload">(), ownerWorkspaceId: null }]
-      : uniqueWorkspaceIds.map((candidate) => ({
-          id: createSafeId<"pendingUpload">(),
-          ownerWorkspaceId: candidate,
-        }));
+  const owners = uniqueWorkspaceIds.length === 0 ? [null] : uniqueWorkspaceIds;
+  const intents = [...new Set(objectKeys)].flatMap((objectKey) =>
+    owners.map((ownerWorkspaceId) => ({
+      id: createSafeId<"pendingUpload">(),
+      objectKey,
+      ownerWorkspaceId,
+    })),
+  );
   const result = await safeDb(async (tx) => {
     await lockOrganizationObjectIntentsForWriter(tx, organizationId);
 
@@ -267,7 +278,7 @@ export const reserveObjectCleanupIntents = async ({
     }
     // audit: skip; crash-recovery ownership for the later audited mutation.
     await tx.insert(bufferObjectCleanupIntents).values(
-      intents.map(({ id, ownerWorkspaceId }) => ({
+      intents.map(({ id, objectKey, ownerWorkspaceId }) => ({
         chatThreadId: chatThreadId ?? null,
         id,
         nextAttemptAt: new Date(
@@ -281,9 +292,38 @@ export const reserveObjectCleanupIntents = async ({
       })),
     );
   });
+  if (Result.isError(result)) {
+    return Result.err(result.error);
+  }
+  const byKey = new Map<string, SafeId<"pendingUpload">[]>();
+  for (const { id, objectKey } of intents) {
+    const ids = byKey.get(objectKey);
+    if (ids === undefined) {
+      byKey.set(objectKey, [id]);
+    } else {
+      ids.push(id);
+    }
+  }
+  return Result.ok(byKey);
+};
+
+/** Reserve exact-key recovery ownership before a non-upload writer calls PUT. */
+export const reserveObjectCleanupIntents = async ({
+  objectKey,
+  ...scope
+}: ObjectCleanupIntentScope & {
+  objectKey: string;
+}): Promise<Result<SafeId<"pendingUpload">[], SafeDbError>> => {
+  const result = await reserveObjectCleanupIntentsForKeys({
+    ...scope,
+    objectKeys: [objectKey],
+  });
   return Result.isError(result)
     ? Result.err(result.error)
-    : Result.ok(intents.map(({ id }) => id));
+    : Result.ok(
+        result.value.get(objectKey) ??
+          panic("Object intents were reserved for another key"),
+      );
 };
 
 export const reserveObjectCleanupIntent = async ({

@@ -20,7 +20,7 @@ import {
   createChatAttachmentPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
-import { toSafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
@@ -88,9 +88,16 @@ const fileUsageDb = {
   transaction: async <T>(callback: (tx: Transaction) => Promise<T>) =>
     await callback(createFileDeletionTx()),
 };
+/** Reserves every object of an upload under `intentIds`, as one call. */
+const reservingAs =
+  (intentIds: SafeId<"pendingUpload">[]) =>
+  async ({ objectKeys }: { objectKeys: readonly string[] }) =>
+    await Promise.resolve(
+      Result.ok(new Map(objectKeys.map((key) => [key, intentIds]))),
+    );
 const uploadDependencies = {
   organizationFileUsageDb: fileUsageDb,
-  reserveChatObjectCleanupIntent: async () => Result.ok([]),
+  reserveChatObjectCleanupIntents: reservingAs([]),
 };
 
 describe("chat attachment hydration", () => {
@@ -455,8 +462,7 @@ describe("chat attachment hydration", () => {
     const result = await uploadUserFile({
       dependencies: {
         ...uploadDependencies,
-        reserveChatObjectCleanupIntent: async () =>
-          Result.ok([cleanupIntentId]),
+        reserveChatObjectCleanupIntents: reservingAs([cleanupIntentId]),
         settleObjectCleanupIntentsAfterWriter: settleIntents,
       },
       file: {
@@ -499,14 +505,23 @@ describe("chat attachment hydration", () => {
     const thumbnailCleanupIntentId = toSafeId<"pendingUpload">(
       "11111111-1111-4111-8111-111111111115",
     );
-    let reservationCount = 0;
-    const reserveChatObjectCleanupIntent = mock(async () => {
-      reservationCount += 1;
-      if (reservationCount === 1) {
-        return Result.ok([sourceCleanupIntentId]);
-      }
-      return Result.ok([thumbnailCleanupIntentId]);
-    });
+    const reserveChatObjectCleanupIntents = mock(
+      async ({ objectKeys }: { objectKeys: readonly string[] }) =>
+        await Promise.resolve(
+          Result.ok(
+            new Map(
+              objectKeys.map((key, index) => [
+                key,
+                [
+                  index === 0
+                    ? sourceCleanupIntentId
+                    : thumbnailCleanupIntentId,
+                ],
+              ]),
+            ),
+          ),
+        ),
+    );
     const settleIntents = mock(async () => Result.ok(undefined));
     let putCount = 0;
     const putS3ObjectWithSignal = mock(async () => {
@@ -551,7 +566,7 @@ describe("chat attachment hydration", () => {
             webp: new Uint8Array([1]),
           }),
         putS3ObjectWithSignal,
-        reserveChatObjectCleanupIntent,
+        reserveChatObjectCleanupIntents,
         settleObjectCleanupIntentsAfterWriter: settleIntents,
       },
       file: {
@@ -568,6 +583,11 @@ describe("chat attachment hydration", () => {
     });
 
     expect(Result.isError(result)).toBe(true);
+    // The image and its thumbnail are reserved in one call.
+    expect(reserveChatObjectCleanupIntents).toHaveBeenCalledTimes(1);
+    expect(
+      reserveChatObjectCleanupIntents.mock.calls.at(0)?.[0].objectKeys,
+    ).toHaveLength(2);
     expect(putS3ObjectWithSignal).toHaveBeenCalledTimes(2);
     expect(settleIntents).toHaveBeenCalledWith({
       intentIds: [thumbnailCleanupIntentId],

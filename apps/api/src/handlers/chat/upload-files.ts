@@ -6,6 +6,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   CHAT_INPUT_REFUSAL_CODE,
+  CHAT_THREAD_NOT_FOUND_ERROR_CODE,
 } from "@stll/api-contract";
 import {
   isChatFileMimeType,
@@ -45,7 +46,7 @@ import {
   BUFFER_INTENT_WRITE_TIMEOUT_MS,
   lockObjectCleanupIntentsForWriter,
   OBJECT_INTENT_WORKSPACE_AVAILABILITY,
-  reserveObjectCleanupIntents,
+  reserveObjectCleanupIntentsForKeys,
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
@@ -595,19 +596,26 @@ export const hydrateFilePart = async ({
     return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
   });
 
-type ReserveChatObjectCleanupIntent = (options: {
-  objectKey: string;
+/**
+ * Reserves cleanup intents for every object of one chat file (the file and
+ * its thumbnail) at once, so one upload reserves in one transaction.
+ */
+type ReserveChatObjectCleanupIntents = (options: {
+  objectKeys: readonly [string, ...string[]];
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
 }) => Promise<
-  Result<SafeId<"pendingUpload">[], SafeDbError | HandlerError<400>>
+  Result<
+    ReadonlyMap<string, SafeId<"pendingUpload">[]>,
+    SafeDbError | HandlerError<400>
+  >
 >;
 
 export type UploadUserFileDependencies = {
   generateImageThumbnail?: typeof generateImageThumbnail;
   organizationFileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
   putS3ObjectWithSignal?: typeof putS3ObjectWithSignal;
-  reserveChatObjectCleanupIntent?: ReserveChatObjectCleanupIntent;
+  reserveChatObjectCleanupIntents?: ReserveChatObjectCleanupIntents;
   settleObjectCleanupIntentsAfterWriter?: typeof settleObjectCleanupIntentsAfterWriter;
 };
 
@@ -626,10 +634,10 @@ export const chatObjectCleanupWorkspaceIds = ({
     ),
   ].toSorted();
 
-const reserveChatObjectCleanupIntent: ReserveChatObjectCleanupIntent = async (
+const reserveChatObjectCleanupIntents: ReserveChatObjectCleanupIntents = async (
   options,
 ) => {
-  const { objectKey, safeDb, threadId } = options;
+  const { objectKeys, safeDb, threadId } = options;
   const threadScopeResult = await safeDb(
     async (tx) =>
       await tx
@@ -650,6 +658,7 @@ const reserveChatObjectCleanupIntent: ReserveChatObjectCleanupIntent = async (
     return Result.err(
       new HandlerError({
         status: 400,
+        code: CHAT_THREAD_NOT_FOUND_ERROR_CODE,
         message: "Chat thread no longer exists",
       }),
     );
@@ -657,13 +666,51 @@ const reserveChatObjectCleanupIntent: ReserveChatObjectCleanupIntent = async (
   const cleanupWorkspaceIds = chatObjectCleanupWorkspaceIds(
     threadScopeResult.value,
   );
-  return await reserveObjectCleanupIntents({
+  return await reserveObjectCleanupIntentsForKeys({
     chatThreadId: threadId,
-    objectKey,
+    objectKeys,
     organizationId: threadScopeResult.value.organizationId,
     safeDb,
     workspaceAvailability: OBJECT_INTENT_WORKSPACE_AVAILABILITY.NOT_DELETING,
     workspaceIds: cleanupWorkspaceIds,
+  });
+};
+
+type ReserveUploadCleanupIntentsOptions = {
+  reserve: ReserveChatObjectCleanupIntents;
+  safeDb: SafeDb;
+  sourceKey: string;
+  /** `null` for a file stored without a thumbnail. */
+  thumbnailKey: string | null;
+  threadId: SafeId<"chatThread">;
+};
+
+/**
+ * One upload's cleanup intents, the file's and its thumbnail's, reserved
+ * together: a thumbnail is never written without recovery ownership, and
+ * one upload reserves once.
+ */
+const reserveUploadCleanupIntents = async ({
+  reserve,
+  safeDb,
+  sourceKey,
+  thumbnailKey,
+  threadId,
+}: ReserveUploadCleanupIntentsOptions) => {
+  const reserved = await reserve({
+    objectKeys: thumbnailKey === null ? [sourceKey] : [sourceKey, thumbnailKey],
+    safeDb,
+    threadId,
+  });
+  if (Result.isError(reserved)) {
+    return Result.err(reserved.error);
+  }
+  const idsOf = (objectKey: string) =>
+    reserved.value.get(objectKey) ??
+    panic("An upload's object was not reserved");
+  return Result.ok({
+    source: idsOf(sourceKey),
+    thumbnail: thumbnailKey === null ? [] : idsOf(thumbnailKey),
   });
 };
 
@@ -746,9 +793,9 @@ export const uploadUserFile = async ({
   workspaceId,
 }: UploadUserFileInput) =>
   await Result.gen(async function* () {
-    const reserveCleanupIntent =
-      dependencies?.reserveChatObjectCleanupIntent ??
-      reserveChatObjectCleanupIntent;
+    const reserveCleanupIntents =
+      dependencies?.reserveChatObjectCleanupIntents ??
+      reserveChatObjectCleanupIntents;
     const settleCleanupIntents =
       dependencies?.settleObjectCleanupIntentsAfterWriter ??
       settleObjectCleanupIntentsAfterWriter;
@@ -881,42 +928,22 @@ export const uploadUserFile = async ({
       }
     }
 
-    const cleanupIntentIds: SafeId<"pendingUpload">[] = [];
-    const cleanupIntent = await reserveCleanupIntent({
-      objectKey: s3Key,
+    const reserved = await reserveUploadCleanupIntents({
+      reserve: reserveCleanupIntents,
       safeDb,
+      sourceKey: s3Key,
+      thumbnailKey: preparedThumbnail?.key ?? null,
       threadId,
     });
-    if (Result.isError(cleanupIntent)) {
-      return Result.err(cleanupIntent.error);
+    if (Result.isError(reserved)) {
+      return Result.err(reserved.error);
     }
-    const sourceCleanupIntentIds = cleanupIntent.value;
-    cleanupIntentIds.push(...sourceCleanupIntentIds);
-
-    let thumbnailCleanupIntentIds: SafeId<"pendingUpload">[] = [];
-    if (preparedThumbnail !== null) {
-      const thumbnailCleanupIntent = await reserveCleanupIntent({
-        objectKey: preparedThumbnail.key,
-        safeDb,
-        threadId,
-      });
-      if (Result.isError(thumbnailCleanupIntent)) {
-        captureError(
-          thumbnailCleanupIntent.error,
-          handlerErrorContext(
-            "chat.uploadUserFile.thumbnailCleanupIntent_error",
-            {
-              stage: "chat-thumbnail-cleanup-reserve",
-              userFileId: id,
-            },
-          ),
-        );
-        preparedThumbnail = null;
-      } else {
-        thumbnailCleanupIntentIds = thumbnailCleanupIntent.value;
-        cleanupIntentIds.push(...thumbnailCleanupIntent.value);
-      }
-    }
+    const sourceCleanupIntentIds = reserved.value.source;
+    let thumbnailCleanupIntentIds = reserved.value.thumbnail;
+    const cleanupIntentIds = [
+      ...sourceCleanupIntentIds,
+      ...thumbnailCleanupIntentIds,
+    ];
 
     let thumbnailFileId: string | null = null;
     let placeholder: string | null = null;
