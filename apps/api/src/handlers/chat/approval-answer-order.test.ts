@@ -139,7 +139,7 @@ const runRequest = async ({
         index: prompts.length - 1,
         model,
         runId: runId ?? "run-1",
-        threadId: threadId ?? "thread-1",
+        threadId,
       });
     },
     structuredOutput: () => panic("No structured output in this test"),
@@ -386,7 +386,7 @@ const runAndStore = async ({
         index: prompts.length - 1,
         model,
         runId: runId ?? "run-1",
-        threadId: threadId ?? "thread-1",
+        threadId,
       });
     },
     structuredOutput: () => panic("No structured output in this test"),
@@ -563,9 +563,6 @@ describe("persisted approvals from before native interrupt descriptors", () => {
         initialMessages: [user("legacy-user", "Delete the draft"), pending],
         connection: {
           async *connect(messages, _data, _signal, run) {
-            if (run === undefined) {
-              panic("A continuation needs a run context");
-            }
             expect(run.resume).toBeUndefined();
             const history = messages.map(
               (message) =>
@@ -621,8 +618,7 @@ describe("persisted approvals from before native interrupt descriptors", () => {
           initialMessages: [user("legacy-user", "Delete the draft"), settled],
           connection: {
             async *connect() {
-              panic("Reloading a completed turn must not send");
-              yield* [];
+              yield panic("Reloading a completed turn must not send");
             },
           },
         });
