@@ -2010,7 +2010,7 @@ describe("offline delivery guards", () => {
         name: name ?? panic("A migration check has no name"),
         check: check ?? panic("A migration check has no clause"),
       }));
-      expect(clauses.map(({ name }) => name).toSorted()).toEqual(names);
+      expect(clauses.map(({ name }) => name).toSorted()).toEqual([...names]);
       const definitions = async (tx: TestTransaction) =>
         new Map(
           (
