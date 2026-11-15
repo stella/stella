@@ -219,13 +219,33 @@
       },
       "patternInPath": "{pattern} ({path})",
       "commandExited": "{command} (išėjimo kodas {code})",
-      "opensOnComputer": "Atidarykite kompiuteryje, kuriame tai buvo vykdoma",
+      "browserClick": "Spustelėti „{target}“ puslapyje {url}",
+      "browserPressKey": "Paspausti klavišą {key} elemente „{target}“ puslapyje {url}",
+      "browserSelect": "Pasirinkti „{option}“ elemente „{target}“ puslapyje {url}",
+      "browserType": "Įvesti tekstą į „{target}“ puslapyje {url}",
       "status": {
         "needs_approval": "Laukiama patvirtinimo",
         "running": "Vykdoma",
         "failed": "Nepavyko",
         "interrupted": "Sustabdyta"
-      }
+      },
+      "output": {
+        "command": "Išvestis",
+        "diff": "Failų pakeitimai",
+        "conversation": "Subagento pokalbis",
+        "conversationPrompt": "Užduotis",
+        "conversationReport": "Ataskaita",
+        "cut": "Rodomi pirmieji {kept} iš {total}",
+        "empty": "Išvesties nėra",
+        "arriving": "Vis dar gaunama iš kompiuterio, kuriame buvo vykdomas šis žingsnis",
+        "notCopied": "Į šį pokalbį dar nenukopijuota",
+        "notStored": "Iš šio žingsnio nieko neišsaugota",
+        "runBudgetReached": "Neišsaugota: šis vykdymas jau išsaugojo tiek, kiek leidžiama vienam vykdymui",
+        "imageTooLargeToStore": "Šio paveikslėlio dydis – {total}. Didesni nei {kept} paveikslėliai nesaugomi, todėl jo parodyti negalima.",
+        "loadFailed": "Nepavyko įkelti.",
+        "showMore": "Rodyti daugiau"
+      },
+      "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}",
@@ -234,7 +254,8 @@
       "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}"
     },
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių} many {# žingsnių}}",
-    "reasoning": "Mąstymas"
+    "reasoning": "Mąstymas",
+    "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį."
   },
   "tasks": {
     "emptyTitle": "Atvirų užduočių nėra",
@@ -263,7 +284,8 @@
       "tomorrow": "Rytoj",
       "week": "Šią savaitę",
       "later": "Vėliau",
-      "none": "Be termino"
+      "none": "Be termino",
+      "closed": "Atliktos arba atšauktos"
     },
     "markDone": "Pažymėti kaip atliktą",
     "reopen": "Atidaryti iš naujo",
@@ -277,7 +299,43 @@
     "doneAssigning": "Atlikta",
     "someone": "Kažkas",
     "membersFailed": "Nepavyko įkelti bylos narių.",
-    "assignFailed": "Užduoties priskirti nepavyko. Bandykite dar kartą."
+    "assignFailed": "Užduoties priskirti nepavyko. Bandykite dar kartą.",
+    "statusTitle": "Būsena",
+    "priorityTitle": "Prioritetas",
+    "priority": {
+      "none": "Nėra",
+      "urgent": "Skubu",
+      "high": "Aukštas",
+      "medium": "Vidutinis",
+      "low": "Žemas"
+    },
+    "subtasks": "Použduočiai",
+    "linked": "Susieti elementai",
+    "delete": "Ištrinti užduotį",
+    "deleteTitle": "Ištrinti užduotį?",
+    "deleteMessage": "Ar tikrai norite ištrinti „{name}“? Šio veiksmo negalima atšaukti.",
+    "cancel": "Atšaukti",
+    "saveFailed": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
+    "readOnly": "Ši užduotis gauta iš prijungto kalendoriaus, todėl čia jos keisti negalima.",
+    "untitled": "Užduotis be pavadinimo",
+    "loadOneFailed": "Šios užduoties įkelti nepavyko.",
+    "filter": "Filtras",
+    "whoseTitle": "Priskirta",
+    "whose": {
+      "mine": "Man",
+      "everyone": "Bet kam",
+      "unassigned": "Niekam"
+    },
+    "showTitle": "Rodyti",
+    "show": {
+      "open": "Atviros",
+      "overdue": "Pradelstos",
+      "all": "Visos, ir atliktos"
+    },
+    "emptyFilteredTitle": "Užduočių nėra",
+    "emptyFilteredDescription": "Šį filtrą atitinkančios užduotys bus rodomos čia.",
+    "loadMore": "Įkelti daugiau",
+    "loadMoreFailed": "Daugiau užduočių įkelti nepavyko."
   },
   "matters": {
     "emptyTitle": "Bylų dar nėra",

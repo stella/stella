@@ -292,7 +292,7 @@ export const gradePropertyConstraint = (
 };
 
 // ── Tier-match (LLM) grading ──────────────────────────
-export const TIER_MATCH_SYSTEM_PROMPT =
+const TIER_MATCH_SYSTEM_PROMPT =
   "You grade whether a value extracted from a contract meets a tiered drafting " +
   "standard authored by a lawyer for one issue. You are given: numbered " +
   "acceptable rules the value must satisfy, the ideal (preferred) language, " +
@@ -607,7 +607,7 @@ export const tierMatchBatchSchema = v.strictObject({
   ),
 });
 
-export type TierMatchItem = {
+type TierMatchItem = {
   /** The caller's handle for the position; verdicts come back keyed by it. */
   key: string;
   askValue: string;
@@ -908,7 +908,7 @@ const tierMatchRecords = ({
 // per-entity fan-out here: a large playbook (many positions per document) must
 // not burst an unbounded number of external calls at once and trip provider
 // rate limits or timeouts.
-export const POSITION_MATCH_CONCURRENCY = 4;
+const POSITION_MATCH_CONCURRENCY = 4;
 
 /**
  * Grade a batch of verdict properties for one entity version. Deterministic

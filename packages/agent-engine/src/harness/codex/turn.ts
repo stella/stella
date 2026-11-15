@@ -569,6 +569,13 @@ export class CodexTurnSession {
         }
         return;
       }
+      case "model/rerouted": {
+        const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
+        if (parsed !== null && parsed.turnId === this.turnId) {
+          this.emit({ type: "model.rerouted", model: parsed.toModel });
+        }
+        return;
+      }
       case "turn/plan/updated": {
         const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
         if (parsed !== null && parsed.turnId === this.turnId) {

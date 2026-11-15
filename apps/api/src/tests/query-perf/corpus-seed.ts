@@ -12,6 +12,7 @@ import {
   caseLawDecisions,
   caseLawProvisionExtractionScopes,
   caseLawSitemapChanges,
+  caseLawSources,
   corpusIndexGenerations,
 } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
@@ -737,9 +738,31 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
         `01990000-00a2-7000-8000-${(work * LEGISLATION_VERSIONS_PER_WORK).toString(16).padStart(12, "0")}`,
       ),
     );
+    const quoteSourceId = toSafeId<"caseLawSource">(
+      "01990000-00a3-7000-8000-000000000001",
+    );
+    const quoteDecisionId = toSafeId<"caseLawDecision">(
+      "01990000-00a4-7000-8000-000000000001",
+    );
+    await database.insert(caseLawSources).values({
+      id: quoteSourceId,
+      name: "Quote budget fixture",
+      adapterKey: QUOTE_FIXTURE_ADAPTER_KEY,
+      enabled: false,
+    });
+    await database.insert(caseLawDecisions).values({
+      id: quoteDecisionId,
+      sourceId: quoteSourceId,
+      country: "CZE",
+      court: "Nejvyšší soud",
+      language: "cs",
+      caseNumber: "1 Test 1/2026",
+      fulltext: "Stored decision text.",
+    });
     return {
       candidateIds,
       completionSourceId: COMPLETION_SOURCE_ID,
+      quoteDecisionId,
       replaySourceId: REPLAY_SOURCE_ID,
     };
   });
@@ -756,6 +779,9 @@ type SeedSitemapReadBudgetOptions = {
 
 /** The sitemap fixture's source; any registered adapter serves, its rows are synthetic. */
 const SITEMAP_FIXTURE_ADAPTER_KEY = ADAPTER_KEYS.CZ_REGIONAL;
+
+/** The quote fixture's source; no other fixture uses this adapter. */
+const QUOTE_FIXTURE_ADAPTER_KEY = ADAPTER_KEYS.UK_FCL;
 
 /** One available dirty month beside a growing backlog held by another run. */
 export const seedSitemapReadBudget = async ({

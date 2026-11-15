@@ -186,7 +186,7 @@ export const CodexItemSchema = v.variant("type", [
         kind: v.object({ type: v.picklist(["add", "delete", "update"]) }),
         /**
          * The file's text for an add or a delete, a unified diff for an
-         * update. It stays on the computer (`HarnessStepOutput`).
+         * update. It is the step's content (`HarnessStepOutput`).
          */
         diff: v.nullish(v.string()),
       }),
@@ -356,6 +356,12 @@ export const CODEX_NOTIFICATIONS = {
       /** The model's context window; absent or null when Codex knows none. */
       modelContextWindow: v.nullish(v.number()),
     }),
+  }),
+  /** The provider moved the turn to another model; the turn names it. */
+  "model/rerouted": v.object({
+    threadId: v.string(),
+    turnId: v.string(),
+    toModel: v.string(),
   }),
   /** The harness's working plan changed; only step titles are shown. */
   "turn/plan/updated": v.object({

@@ -219,13 +219,33 @@
       },
       "patternInPath": "{pattern} em {path}",
       "commandExited": "{command} (código de saída {code})",
-      "opensOnComputer": "Abra no computador que executou",
+      "browserClick": "Clicar em “{target}” em {url}",
+      "browserPressKey": "Pressionar a tecla {key} em “{target}” em {url}",
+      "browserSelect": "Selecionar “{option}” em “{target}” em {url}",
+      "browserType": "Inserir texto em “{target}” em {url}",
       "status": {
         "needs_approval": "Aguardando aprovação",
         "running": "Em andamento",
         "failed": "Falhou",
         "interrupted": "Interrompido"
-      }
+      },
+      "output": {
+        "command": "Saída",
+        "diff": "Alterações nos arquivos",
+        "conversation": "Conversa do subagente",
+        "conversationPrompt": "Tarefa",
+        "conversationReport": "Relatório",
+        "cut": "Mostrando os primeiros {kept} de {total}",
+        "empty": "Sem saída",
+        "arriving": "Ainda chegando do computador que executou esta etapa",
+        "notCopied": "Ainda não copiado para este chat",
+        "notStored": "Nada desta etapa foi guardado",
+        "runBudgetReached": "Não guardado: esta execução já tinha guardado o máximo permitido para uma execução",
+        "imageTooLargeToStore": "Esta imagem tem {total}. Imagens com mais de {kept} não são guardadas, por isso ela não pode ser exibida.",
+        "loadFailed": "Não foi possível carregar.",
+        "showMore": "Mostrar mais"
+      },
+      "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas} many {# fontes consultadas}}",
@@ -234,7 +254,8 @@
       "analyses": "{count, plural, one {# análise} other {# análises} many {# análises}}"
     },
     "stepCount": "{count, plural, one {# etapa} other {# etapas} many {# etapas}}",
-    "reasoning": "Raciocínio"
+    "reasoning": "Raciocínio",
+    "historyTrimmed": "Não foi possível resumir as mensagens anteriores, então esta resposta considera apenas a parte mais recente da conversa."
   },
   "tasks": {
     "emptyTitle": "Nenhuma tarefa em aberto",
@@ -263,7 +284,8 @@
       "tomorrow": "Amanhã",
       "week": "Esta semana",
       "later": "Mais tarde",
-      "none": "Sem prazo"
+      "none": "Sem prazo",
+      "closed": "Concluídas ou canceladas"
     },
     "markDone": "Marcar como concluída",
     "reopen": "Reabrir",
@@ -277,7 +299,43 @@
     "doneAssigning": "Concluído",
     "someone": "Alguém",
     "membersFailed": "Não foi possível carregar os membros do caso.",
-    "assignFailed": "Não foi possível atribuir a tarefa. Tente novamente."
+    "assignFailed": "Não foi possível atribuir a tarefa. Tente novamente.",
+    "statusTitle": "Status",
+    "priorityTitle": "Prioridade",
+    "priority": {
+      "none": "Nenhuma",
+      "urgent": "Urgente",
+      "high": "Alta",
+      "medium": "Média",
+      "low": "Baixa"
+    },
+    "subtasks": "Subtarefas",
+    "linked": "Itens vinculados",
+    "delete": "Excluir tarefa",
+    "deleteTitle": "Excluir a tarefa?",
+    "deleteMessage": "Tem certeza de que deseja excluir “{name}”? Esta ação não pode ser desfeita.",
+    "cancel": "Cancelar",
+    "saveFailed": "Não foi possível salvar a alteração. Tente novamente.",
+    "readOnly": "Esta tarefa vem de um calendário conectado e não pode ser alterada aqui.",
+    "untitled": "Tarefa sem título",
+    "loadOneFailed": "Não foi possível carregar esta tarefa.",
+    "filter": "Filtrar",
+    "whoseTitle": "Atribuídas a",
+    "whose": {
+      "mine": "Mim",
+      "everyone": "Qualquer pessoa",
+      "unassigned": "Ninguém"
+    },
+    "showTitle": "Mostrar",
+    "show": {
+      "open": "Abertas",
+      "overdue": "Atrasadas",
+      "all": "Todas, inclusive concluídas"
+    },
+    "emptyFilteredTitle": "Nenhuma tarefa",
+    "emptyFilteredDescription": "As tarefas que corresponderem a este filtro aparecerão aqui.",
+    "loadMore": "Carregar mais",
+    "loadMoreFailed": "Não foi possível carregar mais tarefas."
   },
   "matters": {
     "emptyTitle": "Ainda não há casos",

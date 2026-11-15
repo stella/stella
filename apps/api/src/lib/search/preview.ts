@@ -639,7 +639,10 @@ const readCaseLawDecisionPreview = async (
 ): Promise<SearchPreview | null> => {
   const rows = await scopedDb(
     async (tx) =>
-      await tx.execute(buildCaseLawDecisionPreviewQuery(input.resultId)),
+      await tx.execute(
+        buildCaseLawDecisionPreviewQuery(input.resultId),
+        "objects",
+      ),
   );
   const row = rows.at(0);
   const title = nullableText(row?.["title"]);
@@ -677,7 +680,10 @@ export const readSearchPreview = async (
   if (input.type === "chat") {
     const rows = await scopedDb(
       async (tx) =>
-        await tx.execute<SearchPreviewChatRow>(buildSearchPreviewQuery(input)),
+        await tx.execute<SearchPreviewChatRow>(
+          buildSearchPreviewQuery(input),
+          "objects",
+        ),
     );
     const row = rows.at(0);
     if (!row) {
@@ -799,7 +805,7 @@ export const readSearchPreview = async (
   }
 
   const rows = await scopedDb(
-    async (tx) => await tx.execute(buildSearchPreviewQuery(input)),
+    async (tx) => await tx.execute(buildSearchPreviewQuery(input), "objects"),
   );
   const preview = rows.at(0)?.["preview"];
   if (!isSearchPreviewRow(preview)) {

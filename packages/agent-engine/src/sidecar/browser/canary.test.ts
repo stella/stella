@@ -408,8 +408,9 @@ describe.each(
       "open",
     ]);
     const calls = toolCalls(chunks);
-    // The member was asked exactly about the steps the mode holds back,
-    // with the step's kind and never the page's content.
+    // The member was asked exactly about the steps the mode holds back:
+    // the step's kind and what it acts on (the element's role and name and
+    // the page's address), never the page's text.
     expect(
       desktop.messages.filter(
         (message) => message.type === "run.approval_request",
@@ -419,10 +420,17 @@ describe.each(
       calls
         .filter(({ id }) => id.startsWith(APPROVAL_STEP_PREFIX))
         .map(({ input, name }) => ({ input, name })),
-    ).toEqual(
+    ).toMatchObject(
       ASKED[approvals].map((action) => ({
         name: "local_browser",
-        input: { action },
+        input: {
+          action,
+          asked: {
+            name: expect.any(String),
+            role: expect.any(String),
+            url: expect.stringContaining(library.origin),
+          },
+        },
       })),
     );
     expect(

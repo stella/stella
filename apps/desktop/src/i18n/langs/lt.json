@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Praneša, kai dokumentas paruoštas arba sinchronizavimui reikia dėmesio.",
     "permissionAccessibility": "Pritaikymas neįgaliesiems",
     "permissionAccessibilityDescription": "Leidžia veiklos laiko juostai įrašyti langų pavadinimus.",
+    "permissionMicrophone": "Mikrofonas",
+    "permissionMicrophoneDescription": "Leidžia diktavimui jus girdėti, kol laikote jo spartųjį klavišą.",
     "permissionAllowed": "Leidžiama",
     "permissionAllow": "Leisti",
     "permissionOpenSettings": "Atidaryti nustatymus",
@@ -294,6 +296,7 @@
     "errorReadHistory": "Nepavyko įkelti iškarpinės istorijos.",
     "errorUpdateHistory": "Nepavyko atnaujinti iškarpinės istorijos.",
     "formattedText": "Formatuotas tekstas",
+    "dictation": "Padiktuotas tekstas",
     "image": "Paveikslėlis",
     "imageCleanupPending": "Kai kurių ištrintų vaizdo duomenų pašalinti nepavyko. Valymas bus automatiškai pakartotas.",
     "imageDimensions": "{width} × {height} px",
@@ -582,9 +585,32 @@
   "dictation": {
     "title": "Diktavimas",
     "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma. Įjungus DI taisymą, perrašytas tekstas (ne garsas) per stella siunčiamas jūsų organizacijos DI teikėjui, kad būtų ištaisytos klaidos ir formatavimas; stella jo nesaugo.",
+    "descriptionCloud": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras programoje, kurią naudojate. Kalbą paverčia tekstu stella AI, o stella jos nesaugo.",
     "cleanup": {
       "title": "Taisyti su DI",
-      "description": "Kalba ir toliau paverčiama tekstu šiame kompiuteryje, o garsas niekada jo nepalieka. Įjungus taisymą, gautas tekstas per stella siunčiamas jūsų organizacijos DI teikėjui, kuris ištaiso atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“. stella jo nesaugo."
+      "description": "Kalba ir toliau paverčiama tekstu šiame kompiuteryje, o garsas niekada jo nepalieka. Įjungus taisymą, gautas tekstas per stella siunčiamas jūsų organizacijos DI teikėjui, kuris ištaiso atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“. stella jo nesaugo. Taisymui taip pat perduodama, į kokios rūšies programą diktuojate, pavyzdžiui, el. paštą ar pokalbių programą, kad tekstas jai tiktų.",
+      "descriptionCloud": "Įjungus taisymą, stella AI taip pat ištaiso gauto teksto atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“. Taisymui taip pat perduodama, į kokios rūšies programą diktuojate, pavyzdžiui, el. paštą ar pokalbių programą, kad tekstas jai tiktų."
+    },
+    "context": {
+      "windowTitle": {
+        "title": "Bendrinti lango pavadinimą su DI taisymu",
+        "description": "Taisymui perduodamas ir lango, į kurį diktuojate, pavadinimas, kad būtų galima atskirti, pavyzdžiui, sutartį nuo vidinio pranešimo. Langų pavadinimuose gali būti klientų vardų ar bylų pavadinimų. Pavadinimas per stella siunčiamas jūsų organizacijos DI teikėjui, o stella jo nesaugo."
+      },
+      "textBeforeCursor": {
+        "title": "Bendrinti tekstą prieš žymeklį su DI taisymu",
+        "description": "Taisymui perduodama ir iki {limit, number} simbolių prieš žymeklį, kad padiktuotas tekstas tęstų rašomą tekstą. Taip dalis dokumento, kuriame esate, per stella siunčiama jūsų organizacijos DI teikėjui, o stella jos nesaugo."
+      }
+    },
+    "keptInHistory": "Kiekvienas diktavimas taip pat išsaugomas šio kompiuterio iškarpinės istorijoje.",
+    "destination": {
+      "title": "Paversti naudojant",
+      "local": "Šį kompiuterį",
+      "cloud": "stella AI",
+      "cloudDescription": "Garsas palieka šį kompiuterį: jis siunčiamas į stella, o per stella DI teikėją – pasirinkto modelio teikėjui, kad būtų paverstas tekstu. stella jo nesaugo.",
+      "unavailableRegion": "stella AI jūsų organizacijos regione dar nesiūlo kalbos pavertimo tekstu.",
+      "unavailableProvider": "Jūsų organizacijos DI paslaugų teikėjas nesiūlo kalbos pavertimo tekstu.",
+      "unavailable": "Pavertimas naudojant stella AI šiuo metu nepasiekiamas.",
+      "model": "Pavertimo modelis"
     },
     "language": {
       "title": "Diktavimo kalba",
@@ -606,8 +632,10 @@
       "transcription": "Perrašyti nepavyko. Bandykite dar kartą.",
       "focusChanged": "Perjungėte į kitą programą, kol tekstas dar nebuvo paruoštas, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
       "focusUnconfirmed": "stella negalėjo patvirtinti, kuri programa yra aktyvi, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
-      "shortcutHeld": "Atleiskite sparčiųjų klavišų mygtukus, kad būtų galima įvesti tekstą. Nieko nebuvo įvesta; bandykite dar kartą."
-    }
+      "shortcutHeld": "Atleiskite sparčiųjų klavišų mygtukus, kad būtų galima įvesti tekstą. Nieko nebuvo įvesta; bandykite dar kartą.",
+      "cloudTranscription": "stella AI nepavyko paversti šio diktavimo tekstu, o kalbos modelio šiame kompiuteryje nėra. Bandykite dar kartą arba ties „Paversti naudojant“ pasirinkite „Šį kompiuterį“ ir atsisiųskite modelį."
+    },
+    "failureKeptInHistory": "Tekstas yra iškarpinės istorijoje."
   },
   "shortcut": {
     "title": "Iškarpinės spartusis klavišas",
@@ -724,6 +752,18 @@
     "introduceActivityTitle": "Nauja: veiklos laiko juosta",
     "introduceActivityBody": "Veikla dabar pasiekiama jūsų paskyroje. Niekas neįrašoma, kol jos nepaleisite veiklos lange.",
     "openActivity": "Atidaryti veiklą",
+    "dictationModel": "Kalbos modelis ({size} MB) atsisiunčiamas vieną kartą ir veikia šiame kompiuteryje.",
+    "dictationTurnOn": "Įjungti ir atsisiųsti",
+    "dictationDownloadContinues": "Galite tęsti. Atsisiuntimas vyks fone.",
+    "dictationReady": "Diktavimas įjungtas ir paruoštas.",
+    "dictationTryLabel": "Diktuokite čia",
+    "dictationTryPlaceholder": "Spustelėkite čia, laikykite {shortcut} ir pasakykite sakinį.",
+    "dictationListening": "Klausausi…",
+    "dictationTranscribing": "Užrašau, ką pasakėte…",
+    "dictationMicrophone": "Taip stella jus girdi, kol laikote spartųjį klavišą.",
+    "dictationAccessibility": "Taip stella įrašo, ką pasakėte, į programą, kurią naudojate.",
+    "dictationFailed": "stella desktop nepavyko įjungti diktavimo. Bandykite dar kartą.",
+    "introduceDictationTitle": "Nauja: diktavimas",
     "guideWaiting": "Įjunkite stella desktop sąraše aukščiau, kad leistumėte pritaikymą neįgaliesiems.",
     "guideAllowed": "stella desktop leidžiama",
     "never": {

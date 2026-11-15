@@ -434,6 +434,119 @@ export const censusCorpusProjectionRevisions = async ({
   });
 };
 
+/** Not exported, so only the census below can construct presence evidence. */
+const PRESENCE_PROOF_CONSTRUCTION: unique symbol = Symbol(
+  "corpus projection presence proof",
+);
+
+/**
+ * Opaque evidence that an exact census of one index found, for one revision,
+ * exactly the documents its append wrote. Applied state is written only
+ * against it, so an acceptance, a timeout, or an absent, partial or excess
+ * count cannot reach it. The fields are private, so a structural copy is not
+ * evidence either.
+ */
+export class CorpusProjectionPresenceProof {
+  readonly #indexId: string;
+  readonly #revision: ProjectionRevision;
+  readonly #documentCount: number;
+
+  /** Callable only in this module: the presence census constructs it. */
+  constructor(
+    construction: typeof PRESENCE_PROOF_CONSTRUCTION,
+    indexId: string,
+    { revision, documentCount }: CorpusProjectionRevisionPresence,
+  ) {
+    if (construction !== PRESENCE_PROOF_CONSTRUCTION) {
+      panic("Corpus projection presence proof has a foreign constructor");
+    }
+    this.#indexId = indexId;
+    this.#revision = revision;
+    this.#documentCount = documentCount;
+  }
+
+  get indexId() {
+    return this.#indexId;
+  }
+
+  get revision() {
+    return this.#revision;
+  }
+
+  get documentCount() {
+    return this.#documentCount;
+  }
+}
+
+type ProveCorpusProjectionRevisionsOptions = {
+  client: Pick<CorpusIndexClient, "aggregate">;
+  indexId: string;
+  /** Each revision with the document count its append wrote. */
+  expected: readonly CorpusProjectionRevisionPresence[];
+};
+
+/** A revision the census did not find exactly as its append wrote it. */
+type CorpusProjectionUnprovenRevision = {
+  revision: ProjectionRevision;
+  expectedDocumentCount: number;
+  /** Zero when the census found none. */
+  observedDocumentCount: number;
+};
+
+export type CorpusProjectionPresenceCensus = {
+  proofs: CorpusProjectionPresenceProof[];
+  unproven: CorpusProjectionUnprovenRevision[];
+};
+
+/**
+ * Census a bounded revision set once, exactly. A revision that counts exactly
+ * the documents its append wrote gets presence evidence; every other one is
+ * reported with what the census found, absent, partial or in excess.
+ */
+export const proveCorpusProjectionRevisionsPresent = async ({
+  client,
+  indexId,
+  expected,
+}: ProveCorpusProjectionRevisionsOptions): Promise<
+  Result<CorpusProjectionPresenceCensus, CorpusIndexError>
+> => {
+  const census = await censusCorpusProjectionRevisions({
+    client,
+    indexId,
+    revisions: expected.map(({ revision }) => revision),
+  });
+  if (census.isErr()) {
+    return Result.err(census.error);
+  }
+  const counts = new Map(
+    census.value.present.map(({ revision, documentCount }) => [
+      revision,
+      documentCount,
+    ]),
+  );
+  const proofs: CorpusProjectionPresenceProof[] = [];
+  const unproven: CorpusProjectionUnprovenRevision[] = [];
+  for (const presence of expected) {
+    const observedDocumentCount = counts.get(presence.revision) ?? 0;
+    if (observedDocumentCount === presence.documentCount) {
+      proofs.push(
+        new CorpusProjectionPresenceProof(
+          PRESENCE_PROOF_CONSTRUCTION,
+          indexId,
+          presence,
+        ),
+      );
+    } else {
+      unproven.push({
+        revision: presence.revision,
+        expectedDocumentCount: presence.documentCount,
+        observedDocumentCount,
+      });
+    }
+  }
+  return Result.ok({ proofs, unproven });
+};
+
 export const deleteCorpusProjectionRevisions = async ({
   client,
   indexId,
@@ -469,24 +582,17 @@ export const countCorpusProjectionRevisions = async ({
   return searched.map(({ numHits }) => numHits);
 };
 
-export const corpusIndexUnknownAppendBarrierAt = (
-  appendStartedAt: Date,
-  manifest: CorpusIndexManifest,
-): Date => {
-  if (!Number.isFinite(appendStartedAt.getTime())) {
-    return panic("Corpus projection append barrier contract is invalid");
-  }
-  return new Date(
-    appendStartedAt.getTime() +
-      corpusIndexUnknownAppendBarrierDelayMs(manifest),
-  );
-};
-
-const corpusIndexUnknownAppendBarrierDelayMs = (
+/**
+ * Whole-request budget of one projection append into `manifest`'s indexes:
+ * the ingest waits for the generation's commit window. An append may start
+ * only while its lease covers this budget, and an append whose outcome is
+ * unknown may still be inside it, so the start margin and the unknown
+ * barrier both read it here.
+ */
+export const corpusProjectionAppendIngestBudgetMs = (
   manifest: CorpusIndexManifest,
 ): number =>
-  corpusIndexCommittedIngestTimeoutMs(corpusIndexCommitTimeoutSecs(manifest)) +
-  corpusIndexAppendPublishDelayMs(manifest);
+  corpusIndexCommittedIngestTimeoutMs(corpusIndexCommitTimeoutSecs(manifest));
 
 /** The commit window a generation's indexes were created with. */
 export const corpusIndexCommitTimeoutSecs = (

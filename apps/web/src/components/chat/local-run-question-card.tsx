@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -9,6 +9,7 @@ import {
   EMPTY_LOCAL_RUN_QUESTION_DRAFT,
   localRunAnswerOf,
   localRunAnswersOf,
+  localRunOptionLayout,
   type LocalRunQuestionDraft,
   type LocalRunQuestionPause,
   toggleLocalRunOption,
@@ -68,6 +69,7 @@ export const LocalRunQuestionCard = ({
     {},
   );
   const [sent, setSent] = useState<Sent>(null);
+  const cardId = useId();
   const { questions } = pause;
   const canSubmit =
     sent === null && canSubmitLocalRunAnswers(questions, drafts);
@@ -158,15 +160,9 @@ export const LocalRunQuestionCard = ({
         <div>
           <div className="border-border/50 border-t px-3 py-3">
             <Steps lang={formattingLocale} markerStyle={markerStyle}>
-              {questions.map((question) => {
+              {questions.map((question, questionIndex) => {
                 const draft = draftOf(question);
                 const ownWords = answersInOwnWords(question, draft);
-                const pickedDescriptions = question.options
-                  .filter(
-                    ({ label, description }) =>
-                      description !== "" && draft.picked.includes(label),
-                  )
-                  .map(({ label, description }) => ({ label, description }));
                 return (
                   <Step key={question.id}>
                     <div className="space-y-1.5">
@@ -198,30 +194,56 @@ export const LocalRunQuestionCard = ({
                       ) : (
                         <>
                           {!ownWords && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {question.options.map((option) => {
+                            <div
+                              className={cn(
+                                "flex gap-1.5",
+                                localRunOptionLayout(question) === "list"
+                                  ? "flex-col items-start"
+                                  : "flex-wrap",
+                              )}
+                            >
+                              {question.options.map((option, optionIndex) => {
                                 const isPicked = draft.picked.includes(
                                   option.label,
                                 );
+                                const descriptionId = `${cardId}-${questionIndex}-${optionIndex}`;
                                 return (
-                                  <Button
-                                    aria-pressed={isPicked}
+                                  <div
+                                    className="space-y-0.5"
                                     key={option.label}
-                                    onClick={() =>
-                                      updateDraft(question, (current) =>
-                                        toggleLocalRunOption(
-                                          question,
-                                          current,
-                                          option.label,
-                                        ),
-                                      )
-                                    }
-                                    selected={isPicked}
-                                    size="xs"
-                                    variant="outline"
                                   >
-                                    <bdi>{option.label}</bdi>
-                                  </Button>
+                                    <Button
+                                      aria-describedby={
+                                        option.description === ""
+                                          ? undefined
+                                          : descriptionId
+                                      }
+                                      aria-pressed={isPicked}
+                                      onClick={() =>
+                                        updateDraft(question, (current) =>
+                                          toggleLocalRunOption(
+                                            question,
+                                            current,
+                                            option.label,
+                                          ),
+                                        )
+                                      }
+                                      selected={isPicked}
+                                      size="xs"
+                                      variant="outline"
+                                    >
+                                      <bdi>{option.label}</bdi>
+                                    </Button>
+                                    {option.description !== "" && (
+                                      <p
+                                        className="text-muted-foreground text-xs"
+                                        dir="auto"
+                                        id={descriptionId}
+                                      >
+                                        {option.description}
+                                      </p>
+                                    )}
+                                  </div>
                                 );
                               })}
                               {question.allowsFreeText && (
@@ -241,17 +263,6 @@ export const LocalRunQuestionCard = ({
                               )}
                             </div>
                           )}
-                          {!ownWords &&
-                            pickedDescriptions.map(({ label, description }) => (
-                              <p
-                                className="text-muted-foreground text-xs"
-                                dir="auto"
-                                key={label}
-                              >
-                                {description}
-                              </p>
-                            ))}
-
                           {ownWords && (
                             <div className="flex gap-1.5">
                               {question.secret ? (

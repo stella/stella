@@ -151,6 +151,7 @@ describe("which routes an API access token opens", () => {
       ["PUT", "/v1/workspaces"],
       ["PUT", "/v1/tasks/:workspaceId"],
       ["PATCH", "/v1/tasks/:workspaceId"],
+      ["DELETE", "/v1/tasks/:workspaceId/:taskId"],
     ] as const) {
       expect(
         admitApiAccessTokenRoute({ method, route, scopes: readOnly }),
@@ -163,6 +164,23 @@ describe("which routes an API access token opens", () => {
         }),
       ).toEqual({ admitted: true });
     }
+  });
+
+  test("a task is deleted at the tasks consent, never through the entity delete that reaches documents", () => {
+    expect(
+      admitApiAccessTokenRoute({
+        method: "DELETE",
+        route: "/v1/tasks/:workspaceId/:taskId",
+        scopes: ["stella:documents_write"],
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    expect(
+      admitApiAccessTokenRoute({
+        method: "DELETE",
+        route: "/v1/entities/:workspaceId",
+        scopes: ["stella:matters_write", "stella:documents_write"],
+      }),
+    ).toEqual({ admitted: false, reason: "route" });
   });
 
   test("the mobile app asks for every scope a listed route requires", () => {
@@ -404,6 +422,7 @@ describe("which routes an API access token opens", () => {
       "PATCH /v1/chat/threads/:threadId/pin-state",
       "GET /v1/chat/threads/:threadId/messages",
       "GET /v1/chat/threads/:threadId/messages/older",
+      "GET /v1/chat/threads/:threadId/local-run-steps/:callId/content",
       "POST /v1/chat",
       "GET /v1/chat/threads/:threadId/turns/:turnId/resume",
       "GET /v1/chat/threads/:threadId/turns/:turnId/join",
@@ -412,6 +431,41 @@ describe("which routes an API access token opens", () => {
       "GET /v1/chat/runs/active",
       "POST /v1/chat/tool-grants",
     ]);
+  });
+
+  test("a coding agent's step content and the image it viewed open at the chat scope only", () => {
+    for (const route of [
+      "/v1/chat/threads/:threadId/local-run-steps/:callId/content",
+      "/v1/user-files/:fileId/content",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "GET",
+          route,
+          scopes: MOBILE_SCOPES,
+        }),
+      ).toEqual({ admitted: true });
+      expect(
+        admitApiAccessTokenRoute({
+          method: "GET",
+          route,
+          scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+    }
+    // A chat file's preview and thumbnail stay with signed-in browsers.
+    for (const route of [
+      "/v1/user-files/:fileId/visual",
+      "/v1/user-files/:fileId/thumbnail",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "GET",
+          route,
+          scopes: MOBILE_SCOPES,
+        }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
   });
 
   test("a standing approval given in a conversation is stored at the chat scope", () => {

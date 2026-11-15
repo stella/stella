@@ -1,25 +1,18 @@
 {
   "entries": [
     {
-      "id": "apps/api/src/handlers/case-law/decisions/court-vocabulary-plan.postgres.test.ts::published court walks (postgres) > vocabulary and browse seek published index ranges at both corpus sizes",
+      "id": "apps/api/src/tests/query-perf/scheduled-run.postgres.test.ts::scheduled export measurement (postgres) > export measurement executes auto / transitions once without replaying writes",
       "owner": "stella",
-      "reason": "The unchanged plan test passed in run 40647999241 and reported one heap fetch in run 40652291069. VACUUM visibility-map state depends on concurrent transaction snapshots; the exact-zero assertion needs an isolated visibility fixture.",
-      "created": "2026-10-28",
-      "expires": "2026-11-04"
+      "reason": "Failed on two pull requests that change no export code (runs 43587536394, 43591313231) while merge groups on the same main pass: the queued-export key reads go from 19 and 13 pages at 6,000 rows to 320 each at 12,000, so the doubling budget fails (455 vs 1065, at most 564). The plan depends on planner state; the read needs a plan that stays bounded.",
+      "created": "2026-11-14",
+      "expires": "2026-11-28"
     },
     {
-      "id": "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.test.ts::the tip > a lap lists closed days only, from where the walk stopped to today",
+      "id": "apps/api/src/tests/query-perf/scheduled-run.postgres.test.ts::scheduled export measurement (postgres) > export measurement executes force_generic_plan / transitions once without replaying writes",
       "owner": "stella",
-      "reason": "The adapter captures the UTC date before fetching; the assertion recomputes it after fetching, so a UTC date change during the request changes the expected end date.",
-      "created": "2026-10-27",
-      "expires": "2026-11-10"
-    },
-    {
-      "id": "apps/api/src/handlers/time-entries/suggestions/suggestions.integration.test.ts::time entry suggestions integration > an accepted suggestion's tail past midnight covers the next day's first minutes",
-      "owner": "stella",
-      "reason": "The midnight-tail case reads shared current-day fixture activity, so unrelated chat rows change its expected engagement minutes. Keep reporting failures while the fixture date is isolated.",
-      "created": "2026-10-28",
-      "expires": "2026-11-04"
+      "reason": "The same doubling-budget failure as the quarantined auto / transitions case (455 vs 1065 pages, at most 564) on a pull request that changes no export code (job 132566648596), while main passes. The queued-export key read needs a plan that stays bounded under a generic plan too.",
+      "created": "2026-11-14",
+      "expires": "2026-11-28"
     },
     {
       "id": "apps/web/src/routes/law/-law-home/law-recent.dom.test.tsx::a delayed second-client import cannot restore history cleared by the first client",
@@ -29,11 +22,11 @@
       "expires": "2026-11-24"
     },
     {
-      "id": "apps/web/src/routes/law/-law-home/law-recent.dom.test.tsx::remove can be retried after a failed server write without losing local history",
+      "id": "packages/scripts/src/decision-reader-boundary.test.ts::source imports never reference any removed reader module",
       "owner": "stella",
-      "reason": "Times out at the 5 s fast-suite limit under parallel load on main as well as on branches (local runs at load ~20: 5.3 s and 7.8 s on main); the full server-history mount with a dynamic import needs a lighter fixture.",
-      "created": "2026-11-10",
-      "expires": "2026-11-24"
+      "reason": "The test globs every source file and then reads each one; in a turbo run at concurrency 2 the @stll/mcp-apps test regenerates packages/mcp-apps/src/generated/bundles.ts in between, so the read can find the file gone (ENOENT in run job 132545465662). The scan needs to skip files that vanish after the glob or read a stable file list.",
+      "created": "2026-11-14",
+      "expires": "2026-11-28"
     }
   ]
 }

@@ -76,12 +76,6 @@ import {
   hasUnnotedFolderRestore,
   markFolderRestoreNotesTold,
 } from "@/api/lib/desktop-runner/folder-restores";
-import {
-  mintRunOutputKey,
-  type SealedRunOutputKey,
-  sealRunOutputKey,
-  storedRunOutputKey,
-} from "@/api/lib/desktop-runner/output-keys";
 import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
 import {
   DESKTOP_RUNNER_LEASED_RUN_STATES,
@@ -91,6 +85,10 @@ import {
   type DesktopRunnerLostReason,
   type DesktopRunnerRunState,
 } from "@/api/lib/desktop-runner/states";
+import {
+  announcedAwaitedSteps,
+  recordAwaitedSteps,
+} from "@/api/lib/desktop-runner/step-contents";
 import {
   brandPersistedChatThreadId,
   brandPersistedWorkspaceId,
@@ -1213,6 +1211,20 @@ export const persistRunMessage = async (
         requestId: requestIdOf(message),
         message,
       });
+      // A run's word on which steps it still has to send is recorded with
+      // the event that carries it: both are stored, or neither is and the
+      // computer sends the event again.
+      const awaited =
+        message.type === DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent
+          ? announcedAwaitedSteps(message.chunk)
+          : null;
+      if (awaited !== null) {
+        await recordAwaitedSteps(tx, {
+          owner: binding,
+          runId: message.runId,
+          stepKeys: awaited,
+        });
+      }
       return { type: "persisted", seq: message.seq };
     }
     const run = await readBoundRun(tx, binding, message.runId);
@@ -1496,8 +1508,6 @@ export type PendingCommand = {
   readonly kind: DesktopRunnerCommandKind;
   readonly payload: unknown;
   readonly workspaceIds: readonly SafeId<"workspace">[];
-  /** The run's output key, which a `run.start` carries; never logged. */
-  readonly sealedOutputKey: SealedRunOutputKey | null;
 };
 
 type PendingCommandsOptions = SessionOptions & {
@@ -1532,8 +1542,6 @@ export const readPendingCommands = async (
       kind: desktopRunnerCommands.kind,
       payload: desktopRunnerCommands.payload,
       workspaceIds: runs.workspaceIds,
-      outputKeyEncrypted: runs.outputKeyEncrypted,
-      outputKeyIv: runs.outputKeyIv,
     })
     .from(desktopRunnerCommands)
     .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
@@ -1561,13 +1569,10 @@ export const readPendingCommands = async (
   }
   return {
     type: "current",
-    commands: rows.map(
-      ({ outputKeyEncrypted, outputKeyIv, workspaceIds, ...row }) => ({
-        ...row,
-        workspaceIds: workspaceIds.map(brandPersistedWorkspaceId),
-        sealedOutputKey: storedRunOutputKey(outputKeyEncrypted, outputKeyIv),
-      }),
-    ),
+    commands: rows.map(({ workspaceIds, ...row }) => ({
+      ...row,
+      workspaceIds: workspaceIds.map(brandPersistedWorkspaceId),
+    })),
   };
 };
 
@@ -1849,18 +1854,13 @@ export type InsertedRun =
  * Bind a new run to a connected runner and queue its `run.start`, both or
  * neither. The runner must report the harness ready at the requested version
  * with the requested model and approval mode. The caller mints the run id, so nothing here
- * answers for a run id another tenant holds. The run gets its own output key
- * (`output-keys.ts`), stored encrypted for its organization.
+ * answers for a run id another tenant holds.
  */
 export const insertAssignedRun = async (
   db: DesktopRunnerDb,
   options: InsertRunOptions,
-): Promise<InsertedRun> => {
-  const sealedOutputKey = await sealRunOutputKey(
-    options.owner.organizationId,
-    mintRunOutputKey(),
-  );
-  return await withAggregateTransaction(db, async (tx) => {
+): Promise<InsertedRun> =>
+  await withAggregateTransaction(db, async (tx) => {
     const { owner, runId, desktopId, harness, harnessVersion, now } = options;
     // Serialized with the account's restore requests and settlements, so a
     // restore is either pending here (refused below) or settled and noted.
@@ -1957,8 +1957,6 @@ export const insertAssignedRun = async (
       chatTurnId: options.chat?.turnId ?? null,
       state: "assigned",
       leaseExpiresAt: leaseUntil(now, options.leaseMs),
-      outputKeyEncrypted: sealedOutputKey.ciphertext,
-      outputKeyIv: sealedOutputKey.iv,
       createdAt: now,
       updatedAt: now,
     });
@@ -1980,7 +1978,6 @@ export const insertAssignedRun = async (
       holder: { sessionId: target.sessionId, instanceId: target.instanceId },
     };
   });
-};
 
 type InsertCommandOptions = {
   owner: RunOwner;
@@ -2181,41 +2178,6 @@ export const readRun = async (
       )
       .limit(1)
   ).at(0) ?? null;
-
-/**
- * The stored output key of one run of `owner`: `null` when it has no run by
- * that id, a `null` key when the run keeps none. Read apart from `readRun`,
- * so no view of a run carries it.
- */
-export const readRunOutputKey = async (
-  db: Pick<DesktopRunnerDb, "select">,
-  { owner, runId }: ReadRunOptions,
-): Promise<{ readonly sealedOutputKey: SealedRunOutputKey | null } | null> => {
-  const row = (
-    await db
-      .select({
-        outputKeyEncrypted: runs.outputKeyEncrypted,
-        outputKeyIv: runs.outputKeyIv,
-      })
-      .from(runs)
-      .where(
-        and(
-          eq(runs.runId, runId),
-          eq(runs.userId, owner.userId),
-          eq(runs.organizationId, owner.organizationId),
-        ),
-      )
-      .limit(1)
-  ).at(0);
-  return row === undefined
-    ? null
-    : {
-        sealedOutputKey: storedRunOutputKey(
-          row.outputKeyEncrypted,
-          row.outputKeyIv,
-        ),
-      };
-};
 
 /**
  * The chat thread of the owner's run that is still going; `null` for a run of

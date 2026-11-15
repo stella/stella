@@ -219,13 +219,33 @@
       },
       "patternInPath": "{pattern} ({path})",
       "commandExited": "{command} (izejas kods {code})",
-      "opensOnComputer": "Atveriet datorā, kurā tas tika izpildīts",
+      "browserClick": "Noklikšķināt uz „{target}” lapā {url}",
+      "browserPressKey": "Nospiest taustiņu {key} elementā „{target}” lapā {url}",
+      "browserSelect": "Atlasīt „{option}” elementā „{target}” lapā {url}",
+      "browserType": "Ievadīt tekstu elementā „{target}” lapā {url}",
       "status": {
         "needs_approval": "Gaida apstiprinājumu",
         "running": "Izpildē",
         "failed": "Neizdevās",
         "interrupted": "Apturēts"
-      }
+      },
+      "output": {
+        "command": "Izvade",
+        "diff": "Failu izmaiņas",
+        "conversation": "Apakšaģenta saruna",
+        "conversationPrompt": "Uzdevums",
+        "conversationReport": "Ziņojums",
+        "cut": "Rāda pirmos {kept} no {total}",
+        "empty": "Nav izvades",
+        "arriving": "Joprojām tiek saņemts no datora, kurā šis solis tika izpildīts",
+        "notCopied": "Vēl nav nokopēts uz šo tērzēšanu",
+        "notStored": "No šī soļa nekas netika saglabāts",
+        "runBudgetReached": "Nav saglabāts: šī izpilde jau bija saglabājusi tik daudz, cik drīkst viena izpilde",
+        "imageTooLargeToStore": "Šī attēla izmērs ir {total}. Attēli, kas lielāki par {kept}, netiek saglabāti, tāpēc to nevar parādīt.",
+        "loadFailed": "Neizdevās ielādēt.",
+        "showMore": "Rādīt vairāk"
+      },
+      "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, zero {# pārbaudītu avotu} one {# pārbaudīts avots} other {# pārbaudīti avoti}}",
@@ -234,7 +254,8 @@
       "analyses": "{count, plural, zero {# analīžu} one {# analīze} other {# analīzes}}"
     },
     "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
-    "reasoning": "Argumentācija"
+    "reasoning": "Argumentācija",
+    "historyTrimmed": "Agrākās ziņas neizdevās apkopot, tāpēc šajā atbildē ņemta vērā tikai jaunākā sarunas daļa."
   },
   "tasks": {
     "emptyTitle": "Nav atvērtu uzdevumu",
@@ -263,7 +284,8 @@
       "tomorrow": "Rīt",
       "week": "Šonedēļ",
       "later": "Vēlāk",
-      "none": "Bez termiņa"
+      "none": "Bez termiņa",
+      "closed": "Paveikti vai atcelti"
     },
     "markDone": "Atzīmēt kā izpildītu",
     "reopen": "Atvērt atkārtoti",
@@ -277,7 +299,43 @@
     "doneAssigning": "Gatavs",
     "someone": "Kāds",
     "membersFailed": "Neizdevās ielādēt lietas dalībniekus.",
-    "assignFailed": "Uzdevumu neizdevās piešķirt. Mēģiniet vēlreiz."
+    "assignFailed": "Uzdevumu neizdevās piešķirt. Mēģiniet vēlreiz.",
+    "statusTitle": "Statuss",
+    "priorityTitle": "Prioritāte",
+    "priority": {
+      "none": "Nav",
+      "urgent": "Steidzama",
+      "high": "Augsta",
+      "medium": "Vidēja",
+      "low": "Zema"
+    },
+    "subtasks": "Apakšuzdevumi",
+    "linked": "Saistītie vienumi",
+    "delete": "Dzēst uzdevumu",
+    "deleteTitle": "Vai dzēst uzdevumu?",
+    "deleteMessage": "Vai tiešām vēlaties dzēst “{name}”? Šo darbību nevar atsaukt.",
+    "cancel": "Atcelt",
+    "saveFailed": "Izmaiņas neizdevās saglabāt. Mēģiniet vēlreiz.",
+    "readOnly": "Šis uzdevums ir no pievienota kalendāra, un to šeit nevar mainīt.",
+    "untitled": "Uzdevums bez nosaukuma",
+    "loadOneFailed": "Šo uzdevumu neizdevās ielādēt.",
+    "filter": "Filtrs",
+    "whoseTitle": "Piešķirts",
+    "whose": {
+      "mine": "Man",
+      "everyone": "Jebkuram",
+      "unassigned": "Nevienam"
+    },
+    "showTitle": "Rādīt",
+    "show": {
+      "open": "Atvērtos",
+      "overdue": "Nokavētos",
+      "all": "Visus, arī paveiktos"
+    },
+    "emptyFilteredTitle": "Nav uzdevumu",
+    "emptyFilteredDescription": "Šim filtram atbilstošie uzdevumi tiks parādīti šeit.",
+    "loadMore": "Ielādēt vairāk",
+    "loadMoreFailed": "Vairāk uzdevumu neizdevās ielādēt."
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",

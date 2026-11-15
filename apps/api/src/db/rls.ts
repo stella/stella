@@ -1872,6 +1872,28 @@ export const chatSecretPolicies = () => [
   }),
 ];
 
+const chatLocalRunStepContentOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_local_run_step_contents'::regclass)`;
+
+// What a local run's steps produced is thread content: a member reads a step
+// only with its thread, under the thread's own scope. Nothing but the
+// gateway's owner connection writes it, settled against the run that sends
+// it, so the application role gets no write policy.
+export const chatLocalRunStepContentPolicies = () => [
+  p.pgPolicy("chat_local_run_step_contents_owner_access", {
+    for: "all",
+    to: "public",
+    using: chatLocalRunStepContentOwnerCheck,
+    withCheck: chatLocalRunStepContentOwnerCheck,
+  }),
+  p.pgPolicy("chat_local_run_step_content_select", {
+    for: "select",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(
+      sql`chat_local_run_step_contents.thread_id`,
+    ),
+  }),
+];
+
 export const chatThreadSearchDocumentPolicies = () => [
   p.pgPolicy("chat_thread_search_document_select", {
     for: "select",

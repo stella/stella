@@ -2,11 +2,13 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
   CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   chatLocalRunParentCallId,
   isChatLocalRunToolName,
 } from "@stll/api-contract/chat-local-run-tool";
+import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 
 import { SignedOutError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
@@ -21,6 +23,7 @@ import type { ApiError } from "@/state/api-request";
 import { answerBlocks, messageText } from "@/state/chat-answer";
 import { attachmentParts } from "@/state/chat-attachments";
 import type { ReadyFile } from "@/state/chat-attachments";
+import { contextNoticeIn } from "@/state/chat-messages";
 import type { ChatEntry } from "@/state/chat-messages";
 import type { LocalRunTarget } from "@/state/chat-pending-input";
 
@@ -79,18 +82,30 @@ export const createSseParser = () => {
 /**
  * The AG-UI events an answer is drawn from. Everything else the run sends
  * (snapshots, custom progress) passes as `ignored`, so an event this build
- * has never seen does not end the stream.
+ * has never seen does not end the stream. The answer's text and reasoning
+ * events carry its context notice in their `metadata`, as the server stamps
+ * it on the first of them after the notice changes.
  */
 const chatEventSchema = v.union([
   v.object({
     type: v.literal("TEXT_MESSAGE_START"),
     messageId: v.string(),
+    metadata: v.optional(v.unknown()),
   }),
-  v.object({ type: v.literal("TEXT_MESSAGE_CONTENT"), delta: v.string() }),
+  v.object({
+    type: v.literal("TEXT_MESSAGE_CONTENT"),
+    delta: v.string(),
+    metadata: v.optional(v.unknown()),
+  }),
+  v.object({
+    type: v.literal("TEXT_MESSAGE_END"),
+    metadata: v.optional(v.unknown()),
+  }),
   v.object({ type: v.literal("REASONING_MESSAGE_START") }),
   v.object({
     type: v.literal("REASONING_MESSAGE_CONTENT"),
     delta: v.string(),
+    metadata: v.optional(v.unknown()),
   }),
   v.object({
     type: v.literal("TOOL_CALL_START"),
@@ -183,17 +198,32 @@ const subagentLinkOf = (
     : { metadata: { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: parent } };
 };
 
-/** An answer as it arrives: its parts in order, and where it stands. */
+/**
+ * An answer as it arrives: its parts in order, where it stands, and what its
+ * context left out.
+ */
 export type StreamedAnswer = {
   readonly messageId: string | undefined;
   readonly parts: readonly StreamedPart[];
   readonly status: AnswerStatus;
+  readonly contextNotice: ChatContextNotice | null;
 };
 
 export const EMPTY_ANSWER: StreamedAnswer = {
   messageId: undefined,
   parts: [],
   status: "streaming",
+  contextNotice: null,
+};
+
+/** The answer's notice as an event's metadata changes it, or as it was. */
+const noticeAfter = (
+  answer: StreamedAnswer,
+  metadata: unknown,
+): ChatContextNotice | null => {
+  // `null` is a change too: it withdraws the notice.
+  const stated = contextNoticeIn(metadata);
+  return stated === undefined ? answer.contextNotice : stated;
 };
 
 /**
@@ -239,12 +269,20 @@ export const applyChatEvent = (
         ...answer,
         messageId: answer.messageId ?? event.messageId,
         parts: [...answer.parts, { type: "text", content: "" }],
+        contextNotice: noticeAfter(answer, event.metadata),
       };
     }
     case "TEXT_MESSAGE_CONTENT": {
       return {
         ...answer,
         parts: appendDelta(answer.parts, "text", event.delta),
+        contextNotice: noticeAfter(answer, event.metadata),
+      };
+    }
+    case "TEXT_MESSAGE_END": {
+      return {
+        ...answer,
+        contextNotice: noticeAfter(answer, event.metadata),
       };
     }
     case "REASONING_MESSAGE_START": {
@@ -257,6 +295,7 @@ export const applyChatEvent = (
       return {
         ...answer,
         parts: appendDelta(answer.parts, "thinking", event.delta),
+        contextNotice: noticeAfter(answer, event.metadata),
       };
     }
     case "TOOL_CALL_START": {
@@ -377,6 +416,7 @@ export const answerEntry = (
   files: [],
   // The stored answer names its drafts once the thread is read again.
   drafts: [],
+  contextNotice: answer.contextNotice,
 });
 
 /**
@@ -566,6 +606,11 @@ export const streamConnectTimeout = (bodyLength: number): number =>
  * Opens one SSE request and hands each answer event to `onEvent` as it
  * arrives. The turn id the server names in its response reaches `onTurn`
  * before any event. Aborting `signal` ends the read without an error.
+ *
+ * Only the wait for the response has a deadline. The stream is bounded by its
+ * liveness, never by how long it has run: the server writes a keep-alive
+ * frame whenever a turn has nothing to say, so one that stays silent past
+ * `SSE_SILENCE_BOUND_MS` has lost its connection and breaks, to be rejoined.
  */
 const readChatStream = async ({
   body,
@@ -629,18 +674,37 @@ const readChatStream = async ({
           signal: controller.signal,
         });
         clearTimeout(connectTimer);
-        if (!response.ok || response.body === null) {
-          return response.status;
-        }
+        // A refusal names the turn too once the server has stored the
+        // message, so the thread, not the draft, holds what was sent.
         const turnId = response.headers.get(CHAT_TURN_ID_HEADER);
         if (turnId !== null) {
           onTurn?.(turnId);
+        }
+        if (!response.ok || response.body === null) {
+          return response.status;
         }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         const parse = createSseParser();
         for (;;) {
-          const chunk = await reader.read();
+          let silenceTimer: ReturnType<typeof setTimeout> | undefined;
+          const silent = new Promise<never>((_resolve, reject) => {
+            silenceTimer = setTimeout(() => {
+              reject(
+                new ApiRequestError({
+                  message: `The stream from ${url} went silent`,
+                }),
+              );
+              // Releases the connection; a read the platform does not end on
+              // abort has already lost the race above.
+              abort();
+            }, SSE_SILENCE_BOUND_MS);
+          });
+          const chunk = await Promise.race([reader.read(), silent]).finally(
+            () => {
+              clearTimeout(silenceTimer);
+            },
+          );
           if (chunk.done) {
             break;
           }
@@ -657,7 +721,12 @@ const readChatStream = async ({
         return response.status;
       },
       catch: (cause) =>
-        new ApiRequestError({ message: `The stream from ${url} broke`, cause }),
+        cause instanceof ApiRequestError
+          ? cause
+          : new ApiRequestError({
+              message: `The stream from ${url} broke`,
+              cause,
+            }),
     });
     clearTimeout(connectTimer);
     signal.removeEventListener("abort", abort);

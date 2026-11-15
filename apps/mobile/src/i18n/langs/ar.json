@@ -219,13 +219,33 @@
       },
       "patternInPath": "{pattern} في {path}",
       "commandExited": "{command} (رمز الخروج {code})",
-      "opensOnComputer": "افتحه على الحاسوب الذي نفّذه",
+      "browserClick": "النقر على «{target}» في {url}",
+      "browserPressKey": "الضغط على المفتاح {key} في «{target}» في {url}",
+      "browserSelect": "تحديد «{option}» في «{target}» في {url}",
+      "browserType": "إدخال نص في «{target}» في {url}",
       "status": {
         "needs_approval": "في انتظار الموافقة",
         "running": "قيد التنفيذ",
         "failed": "فشل",
         "interrupted": "متوقف"
-      }
+      },
+      "output": {
+        "command": "المخرجات",
+        "diff": "تغييرات الملفات",
+        "conversation": "محادثة الوكيل الفرعي",
+        "conversationPrompt": "المهمة",
+        "conversationReport": "التقرير",
+        "cut": "يُعرض أول {kept} من {total}",
+        "empty": "لا توجد مخرجات",
+        "arriving": "لا يزال يصل من الحاسوب الذي نفّذ هذه الخطوة",
+        "notCopied": "لم يُنسخ إلى هذه الدردشة بعد",
+        "notStored": "لم يُحفظ شيء من هذه الخطوة",
+        "runBudgetReached": "لم يُحفظ: كان هذا التشغيل قد حفظ بالفعل أقصى ما يُسمح به لتشغيل واحد",
+        "imageTooLargeToStore": "حجم هذه الصورة {total}. لا تُحفظ الصور التي تتجاوز {kept}، لذا لا يمكن عرضها.",
+        "loadFailed": "تعذّر التحميل.",
+        "showMore": "عرض المزيد"
+      },
+      "sessionNotResumed": "تعذّر على وكيل البرمجة على حاسوبك استئناف العمل من حيث توقف، لذا تابع اعتمادًا على رسائل هذه الدردشة."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, zero {# مصادر تمت مراجعتها} one {مصدر واحد تمت مراجعته} two {مصدران تمت مراجعتهما} few {# مصادر تمت مراجعتها} many {# مصدرًا تمت مراجعته} other {# مصدر تمت مراجعته}}",
@@ -234,7 +254,8 @@
       "analyses": "{count, plural, zero {# تحليلات} one {تحليل واحد} two {تحليلان} few {# تحليلات} many {# تحليلًا} other {# تحليل}}"
     },
     "stepCount": "{count, plural, zero {# خطوة} one {# خطوة} two {# خطوتان} few {# خطوات} many {# خطوة} other {# خطوة}}",
-    "reasoning": "استدلال"
+    "reasoning": "استدلال",
+    "historyTrimmed": "تعذّر تلخيص الرسائل السابقة، لذا تراعي هذه الإجابة الجزء الأحدث من المحادثة فقط."
   },
   "tasks": {
     "emptyTitle": "لا توجد مهام مفتوحة",
@@ -263,7 +284,8 @@
       "tomorrow": "غدًا",
       "week": "هذا الأسبوع",
       "later": "لاحقًا",
-      "none": "بلا تاريخ استحقاق"
+      "none": "بلا تاريخ استحقاق",
+      "closed": "منجزة أو ملغاة"
     },
     "markDone": "وضع علامة كمنجزة",
     "reopen": "إعادة الفتح",
@@ -277,7 +299,43 @@
     "doneAssigning": "تم",
     "someone": "شخص ما",
     "membersFailed": "تعذّر تحميل أعضاء القضية.",
-    "assignFailed": "تعذّر إسناد المهمة. حاول مرة أخرى."
+    "assignFailed": "تعذّر إسناد المهمة. حاول مرة أخرى.",
+    "statusTitle": "الحالة",
+    "priorityTitle": "الأولوية",
+    "priority": {
+      "none": "لا شيء",
+      "urgent": "عاجلة",
+      "high": "عالية",
+      "medium": "متوسطة",
+      "low": "منخفضة"
+    },
+    "subtasks": "المهام الفرعية",
+    "linked": "العناصر المرتبطة",
+    "delete": "حذف المهمة",
+    "deleteTitle": "حذف المهمة؟",
+    "deleteMessage": "هل أنت متأكد من رغبتك في حذف «{name}»؟ لا يمكن التراجع عن هذا الإجراء.",
+    "cancel": "إلغاء",
+    "saveFailed": "تعذّر حفظ التغيير. حاول مرة أخرى.",
+    "readOnly": "هذه المهمة واردة من تقويم متصل ولا يمكن تغييرها هنا.",
+    "untitled": "مهمة بلا عنوان",
+    "loadOneFailed": "تعذّر تحميل هذه المهمة.",
+    "filter": "تصفية",
+    "whoseTitle": "مُسندة إلى",
+    "whose": {
+      "mine": "أنا",
+      "everyone": "أي شخص",
+      "unassigned": "لا أحد"
+    },
+    "showTitle": "عرض",
+    "show": {
+      "open": "المفتوحة",
+      "overdue": "المتأخرة",
+      "all": "الكل، بما فيها المنجزة"
+    },
+    "emptyFilteredTitle": "لا توجد مهام",
+    "emptyFilteredDescription": "ستظهر هنا المهام المطابقة لهذه التصفية.",
+    "loadMore": "تحميل المزيد",
+    "loadMoreFailed": "تعذّر تحميل المزيد من المهام."
   },
   "matters": {
     "emptyTitle": "لا توجد ملفات قانونية بعد",

@@ -17,9 +17,11 @@ import {
   corpusIndexProjectionAppendIsUnblocked,
   corpusIndexProjectionErasureIsPending,
   corpusIndexProjectionIntentIsOutstanding,
+  corpusIndexProjectionIsAbsent,
   corpusIndexProjectionIsBlocked,
   corpusIndexProjectionNeedsWork,
   corpusIndexProjectionProducesAppend,
+  corpusIndexProjectionRevisionDeleteIsUnproven,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 
 import {
@@ -181,6 +183,25 @@ export const corpusIndexProjectionIntents = p.pgTable(
       .index("corpus_index_projection_intents_settled_census_idx")
       .on(t.family, t.generation, t.indexId, t.id)
       .where(sql`${t.status} = 'settled'`),
+    // The prover's claim: committed revisions of one index whose stored
+    // barrier has passed, oldest barrier first.
+    p
+      .index("corpus_index_projection_intents_proof_idx")
+      .on(t.family, t.generation, t.indexId, t.appendPublishBarrierAt)
+      .where(sql`${t.status} = 'append_committed'`),
+    // Revisions whose delete may have been issued and is not proven, oldest
+    // claim first: the at-risk side of the unserved gauge, joined to the
+    // states that still name them. Few rows at a time, however long the
+    // revision history grows.
+    p
+      .index("corpus_index_projection_intents_delete_unproven_idx")
+      .on(
+        t.family,
+        t.generation,
+        sql`coalesce(${t.cleanupStartedAt}, ${t.updatedAt})`,
+        t.id,
+      )
+      .where(corpusIndexProjectionRevisionDeleteIsUnproven(t)),
     p.check(
       "corpus_index_projection_intents_family_values",
       sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
@@ -239,6 +260,9 @@ export const corpusIndexProjectionIntents = p.pgTable(
       "corpus_projection_intents_append_request_count_positive",
       sql`${t.appendRequestRevisionCount} IS NULL OR ${t.appendRequestRevisionCount} > 0`,
     ),
+    // An `append_committed` revision either holds its lease and no barrier,
+    // inside a writer that applies it in the same transaction, or is
+    // lease-free with the barrier its recorded acceptance stored.
     p.check(
       "corpus_index_projection_intents_status_shape",
       sql`CASE ${t.status}
@@ -265,11 +289,10 @@ export const corpusIndexProjectionIntents = p.pgTable(
           AND ${t.settledAt} IS NULL
           AND ${t.cancelledAt} IS NULL
         WHEN 'append_committed' THEN
-          ${t.leaseToken} IS NOT NULL
+          (${t.leaseToken} IS NULL) = (${t.appendPublishBarrierAt} IS NOT NULL)
           AND ${t.appendStartedAt} IS NOT NULL
           AND ${t.appendCommittedAt} IS NOT NULL
           AND ${t.appliedAt} IS NULL
-          AND ${t.appendPublishBarrierAt} IS NULL
           AND ${t.cleanupNotBefore} IS NULL
           AND ${t.cleanupStartedAt} IS NULL
           AND ${t.deleteOpstamp} IS NULL
@@ -280,7 +303,6 @@ export const corpusIndexProjectionIntents = p.pgTable(
           AND ${t.appendStartedAt} IS NOT NULL
           AND ${t.appendCommittedAt} IS NOT NULL
           AND ${t.appliedAt} IS NOT NULL
-          AND ${t.appendPublishBarrierAt} IS NULL
           AND ${t.cleanupNotBefore} IS NULL
           AND ${t.cleanupStartedAt} IS NULL
           AND ${t.deleteOpstamp} IS NULL
@@ -416,7 +438,11 @@ export const corpusIndexProjectionStates = p.pgTable(
       .text("desired_action", { enum: CORPUS_INDEX_DESIRED_ACTIONS })
       .notNull(),
     desiredEpoch: p.bigint("desired_epoch", { mode: "bigint" }).notNull(),
-    /** When the current desired projection state was established. */
+    /**
+     * When the current desired projection state was established; once the
+     * named copy trails it by two changes with other content, when that
+     * happened (`corpusIndexProjectionNamedCopyTrailsTwoChanges`).
+     */
     desiredAt: timestamptz("desired_at").defaultNow(),
     desiredFingerprint: p.varchar("desired_fingerprint", { length: 64 }),
     desiredIndexId: p.varchar("desired_index_id", { length: 64 }),
@@ -554,6 +580,13 @@ export const corpusIndexProjectionStates = p.pgTable(
       .index("corpus_index_projection_states_erase_pending_idx")
       .on(t.family, t.generation, t.updatedAt, t.entityId)
       .where(corpusIndexProjectionErasureIsPending(t)),
+    // Entities that should be served and are not, because their named
+    // revision's delete settled or an erasure applied before an upsert came
+    // back. The state row alone answers it, so the gauge reads the index.
+    p
+      .index("corpus_index_projection_states_absent_idx")
+      .on(t.family, t.generation, t.entityId)
+      .where(corpusIndexProjectionIsAbsent(t)),
     p
       .index("corpus_index_projection_states_blocked_idx")
       .on(t.family, t.generation, t.entityId)

@@ -23,7 +23,11 @@ import {
 } from "@stll/api-contract/browser-control";
 import { waitFor } from "@stll/test-kit";
 
-import { type BrowserBridge, startBrowserBridge } from "./bridge";
+import {
+  type BrowserBridge,
+  type BrowserBridgeDownload,
+  startBrowserBridge,
+} from "./bridge";
 import { readLocalBrowserResult } from "./local-result";
 import {
   encodeNativeMessage,
@@ -116,7 +120,7 @@ const startChrome = (
     input.end();
     await exited;
   });
-  return { exited, input, received };
+  return { exited, input, received, toHost };
 };
 
 const extension = (request: Record<string, unknown>) => {
@@ -177,6 +181,36 @@ describe("the browser bridge and its native host", () => {
       source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
       turnId: "run-1",
     });
+  });
+
+  test("hand a download the extension reports unasked to the listener", async () => {
+    const { bridge } = await startBridge();
+    const reports: BrowserBridgeDownload[] = [];
+    bridge.onDownload((report) => {
+      reports.push(report);
+    });
+    const chrome = startChrome(bridge, { answer: extension });
+    await ready(bridge);
+    const download = {
+      outcome: "stopped",
+      reason: "not-pdf",
+      sourceUrl: "https://fixture-library.test/setup",
+      suggestedName: "setup.dmg",
+    } as const;
+
+    chrome.toHost({
+      controllerId: "thread-1",
+      download,
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "download",
+    });
+
+    expect(
+      await waitFor(() => reports.at(0), {
+        description: "the download report",
+      }),
+    ).toEqual({ controllerId: "thread-1", download });
   });
 
   test("answer disconnected while no extension is connected", async () => {

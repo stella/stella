@@ -1523,7 +1523,7 @@ const cloudChatChunks = async () => {
       // them; the answer follows the last step's results.
       const step = FAKE_STELLA_STEPS.at(iteration);
       iteration += 1;
-      const ids = { runId: runId ?? "run-1", threadId: threadId ?? "t-1" };
+      const ids = { runId: runId ?? "run-1", threadId };
       yield { type: EventType.RUN_STARTED, ...ids, model, timestamp };
       if (step !== undefined) {
         for (const call of step) {
@@ -1532,7 +1532,6 @@ const cloudChatChunks = async () => {
             type: EventType.TOOL_CALL_START,
             toolCallId: call.id,
             toolCallName: call.tool,
-            toolName: call.tool,
             model,
             timestamp,
           };
@@ -1547,7 +1546,6 @@ const cloudChatChunks = async () => {
             type: EventType.TOOL_CALL_END,
             toolCallId: call.id,
             toolCallName: call.tool,
-            toolName: call.tool,
             input: call.arguments,
             model,
             timestamp,
@@ -1623,7 +1621,52 @@ describe("Codex items as chat parts", () => {
     expect(
       cloudParts.filter(({ type }) => type === "tool-result"),
     ).toHaveLength(FAKE_STELLA_CALLS.length);
-    expect(local).toEqual(cloud);
+    // v1 chat() owns a message per model iteration and stamps its source;
+    // the native harness reports one continuous turn with model-only stamps.
+    // Verify that bookkeeping separately before comparing every ordered part.
+    expect(local.map(({ role }) => role)).toEqual(["assistant"]);
+    expect(cloud.map(({ role }) => role)).toEqual(
+      [...FAKE_STELLA_STEPS, null].map(() => "assistant"),
+    );
+    const comparableParts = (
+      messages: ReturnType<typeof storedMessages>,
+      engine: "cloud" | "local",
+    ) =>
+      messages.flatMap(({ parts }) =>
+        parts.map((part) => {
+          if (part.type === "tool-call") {
+            expect(part.metadata).toEqual({
+              tanstack: {
+                model: "gpt-test",
+                ...(engine === "cloud"
+                  ? {
+                      source: {
+                        api: "text",
+                        model: "gpt-test",
+                        provider: "scripted",
+                      },
+                    }
+                  : {}),
+              },
+            });
+            const { metadata: _metadata, ...content } = part;
+            return content;
+          }
+          if (part.type === "tool-result") {
+            expect(part.metadata).toEqual(
+              engine === "local"
+                ? { tanstack: { model: "gpt-test" } }
+                : undefined,
+            );
+            const { metadata: _metadata, ...content } = part;
+            return content;
+          }
+          return part;
+        }),
+      );
+    expect(comparableParts(local, "local")).toEqual(
+      comparableParts(cloud, "cloud"),
+    );
   });
 
   test("the answer's markdown reaches the stored text unchanged", async () => {

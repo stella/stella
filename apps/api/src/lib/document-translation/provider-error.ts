@@ -46,6 +46,12 @@ export const documentTranslationProviderErrorCode = (
     case "local_runner_relinked":
     case "local_runner_restoring":
     case "local_runner_folder_unavailable":
+    case "local_runner_no_computer":
+    case "local_runner_harness_unavailable":
+    case "local_runner_model_unavailable":
+    case "local_runner_reasoning_effort_unavailable":
+    case "local_runner_approvals_unavailable":
+    case "local_runner_folder_not_approved":
     case "unknown":
       return "translation_failed";
     default: {

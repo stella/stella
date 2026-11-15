@@ -332,7 +332,10 @@ if (!databaseUrl || !enabled) {
           transaction: scopedDb,
           execute: async <TRow extends Record<string, unknown>>(
             query: SQLWrapper | string,
-          ) => await scopedDb(async (tx) => await tx.execute<TRow>(query)),
+          ) =>
+            await scopedDb(
+              async (tx) => await tx.execute<TRow>(query, "objects"),
+            ),
         };
         return await run({
           scopedDb,

@@ -178,6 +178,9 @@ export const CreateDocumentDraftInspectorEditor = ({
     <div className="h-full min-h-0 overflow-auto">
       <DocxEditor
         ref={attachEditor}
+        accessibleName={t("chat.createDocument.previewName", {
+          name: payload.name,
+        })}
         autoOpenReviewSidebar={false}
         className="folio-docx-preview folio-peek h-full"
         document={

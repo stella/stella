@@ -219,13 +219,33 @@
       },
       "patternInPath": "{pattern} w {path}",
       "commandExited": "{command} (kod wyjścia {code})",
-      "opensOnComputer": "Otwórz na komputerze, na którym to uruchomiono",
+      "browserClick": "Kliknij „{target}” na stronie {url}",
+      "browserPressKey": "Naciśnij klawisz {key} w „{target}” na stronie {url}",
+      "browserSelect": "Wybierz „{option}” w „{target}” na stronie {url}",
+      "browserType": "Wprowadź tekst w „{target}” na stronie {url}",
       "status": {
         "needs_approval": "Oczekiwanie na zatwierdzenie",
         "running": "W toku",
         "failed": "Niepowodzenie",
         "interrupted": "Zatrzymano"
-      }
+      },
+      "output": {
+        "command": "Wynik",
+        "diff": "Zmiany w plikach",
+        "conversation": "Rozmowa subagenta",
+        "conversationPrompt": "Zadanie",
+        "conversationReport": "Raport",
+        "cut": "Wyświetlono pierwsze {kept} z {total}",
+        "empty": "Brak wyniku",
+        "arriving": "Wciąż napływa z komputera, na którym uruchomiono ten krok",
+        "notCopied": "Jeszcze nie skopiowano do tego czatu",
+        "notStored": "Z tego kroku nic nie zostało zapisane",
+        "runBudgetReached": "Nie zapisano: to uruchomienie zapisało już tyle, ile może zapisać jedno uruchomienie",
+        "imageTooLargeToStore": "Ten obraz ma {total}. Obrazy większe niż {kept} nie są zapisywane, dlatego nie można go wyświetlić.",
+        "loadFailed": "Nie udało się wczytać.",
+        "showMore": "Pokaż więcej"
+      },
+      "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}",
@@ -234,7 +254,8 @@
       "analyses": "{count, plural, one {# analiza} few {# analizy} many {# analiz} other {# analizy}}"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroku}}",
-    "reasoning": "Rozumowanie"
+    "reasoning": "Rozumowanie",
+    "historyTrimmed": "Nie udało się podsumować wcześniejszych wiadomości, dlatego ta odpowiedź uwzględnia tylko najnowszą część rozmowy."
   },
   "tasks": {
     "emptyTitle": "Brak otwartych zadań",
@@ -263,7 +284,8 @@
       "tomorrow": "Jutro",
       "week": "W tym tygodniu",
       "later": "Później",
-      "none": "Bez terminu"
+      "none": "Bez terminu",
+      "closed": "Wykonane lub anulowane"
     },
     "markDone": "Oznacz jako wykonane",
     "reopen": "Otwórz ponownie",
@@ -277,7 +299,43 @@
     "doneAssigning": "Gotowe",
     "someone": "Ktoś",
     "membersFailed": "Nie udało się wczytać członków sprawy.",
-    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie."
+    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie.",
+    "statusTitle": "Status",
+    "priorityTitle": "Priorytet",
+    "priority": {
+      "none": "Brak",
+      "urgent": "Pilny",
+      "high": "Wysoki",
+      "medium": "Średni",
+      "low": "Niski"
+    },
+    "subtasks": "Podzadania",
+    "linked": "Powiązane elementy",
+    "delete": "Usuń zadanie",
+    "deleteTitle": "Usunąć zadanie?",
+    "deleteMessage": "Czy na pewno chcesz usunąć „{name}”? Tej operacji nie można cofnąć.",
+    "cancel": "Anuluj",
+    "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "readOnly": "To zadanie pochodzi z połączonego kalendarza i nie można go tu zmienić.",
+    "untitled": "Zadanie bez tytułu",
+    "loadOneFailed": "Nie udało się wczytać tego zadania.",
+    "filter": "Filtr",
+    "whoseTitle": "Przypisane do",
+    "whose": {
+      "mine": "Mnie",
+      "everyone": "Kogokolwiek",
+      "unassigned": "Nikogo"
+    },
+    "showTitle": "Pokaż",
+    "show": {
+      "open": "Otwarte",
+      "overdue": "Zaległe",
+      "all": "Wszystkie, także wykonane"
+    },
+    "emptyFilteredTitle": "Brak zadań",
+    "emptyFilteredDescription": "Zadania pasujące do tego filtra pojawią się tutaj.",
+    "loadMore": "Wczytaj więcej",
+    "loadMoreFailed": "Nie udało się wczytać kolejnych zadań."
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",

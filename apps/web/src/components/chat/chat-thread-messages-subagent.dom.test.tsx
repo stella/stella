@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { LocalRunStepOutputView } from "@stll/api-contract/chat-local-run-step-content-view";
 import fixtures from "@stll/api-contract/chat-local-run-steps.fixtures";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
@@ -12,10 +13,7 @@ import type {
   ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
-import type {
-  LocalRunStepImageView,
-  LocalRunStepOutputView,
-} from "@/features/chat/local-run-step-output.logic";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 
@@ -25,8 +23,10 @@ globalThis.fetch = Object.assign(
   { preconnect: originalFetch.preconnect },
 );
 
-const { act, cleanup, fireEvent, render, within } =
+const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
+// Load the real lazy renderer before assertions use its parsed Markdown.
+await import("@/components/ai-elements/message-response");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
@@ -45,6 +45,7 @@ const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
 const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
+const { getUserFileContentUrl } = await import("@/lib/user-files");
 const { isCanonicalChatUIMessage } =
   await import("@/components/chat/chat-ui-tools");
 
@@ -153,6 +154,9 @@ const connectorCall = step({
 
 const removal = { command: "rm draft.md" };
 
+/** The thread the turn is in: a step's content is read by it. */
+const THREAD_ID = "thread-fixture";
+
 const turnTree = (
   queryClient: InstanceType<typeof QueryClient>,
   parts: readonly object[],
@@ -182,6 +186,10 @@ const turnTree = (
                         <a {...props}>{children}</a>
                       ),
                     }}
+                    threadRef={{
+                      scope: "global",
+                      threadId: toChatThreadId(THREAD_ID),
+                    }}
                   />
                 </ChatEditorProvider>
               </ChatApprovalContext>
@@ -208,26 +216,29 @@ const MEMBER = {
 const keptKey = (callId: string) => ({
   activeOrganizationId: MEMBER.activeOrganizationId,
   userId: MEMBER.id,
+  threadId: THREAD_ID,
   callId,
 });
 
+const NOT_STORED: LocalRunStepOutputView = {
+  status: "answered",
+  content: { state: "not_stored" },
+};
+
 type RenderOptions = {
   /**
-   * What the computer answers for the subagent's conversation, as a read of
-   * it left the cache; nothing kept unless a test says otherwise. A read
-   * the desktop answered holds, so no test reaches for the computer.
+   * What stella answers for the subagent's conversation, as a read of it
+   * left the cache; nothing stored unless a test says otherwise. A settled
+   * read holds, so no test reaches for the API.
    */
   conversation?: LocalRunStepOutputView;
-  /** What the computer answers for the viewed image. */
-  image?: LocalRunStepImageView;
+  /** What stella answers for the viewed image. */
+  image?: LocalRunStepOutputView;
 };
 
 const renderTurn = (
   parts: readonly object[],
-  {
-    conversation = { status: "not-kept" },
-    image: viewed = { status: "not-kept" },
-  }: RenderOptions = {},
+  { conversation = NOT_STORED, image: viewed = NOT_STORED }: RenderOptions = {},
 ) => {
   const queryClient = new QueryClient();
   queryClient.setQueryData(
@@ -235,7 +246,7 @@ const renderTurn = (
     conversation,
   );
   queryClient.setQueryData(
-    chatKeys.localRunStepImage(keptKey("run_call-image")),
+    chatKeys.localRunStepOutput(keptKey("run_call-image")),
     viewed,
   );
   // A connected server's tool decorates its row from the connector list.
@@ -397,49 +408,68 @@ const conversationOf = (...entries: (readonly [string, string])[]) => {
     .join("");
   const bytes = new TextEncoder().encode(text).length;
   return {
-    status: "shown",
+    status: "text",
+    kind: "conversation",
     text,
-    keptBytes: bytes,
+    readBytes: bytes,
+    storedBytes: bytes,
     totalBytes: bytes,
   } as const;
 };
 
-test("opening a finished subagent shows what it was told, wrote and reported, read from the computer", async () => {
+test("opening a finished subagent shows what it was told, wrote and reported, as stella stored it", async () => {
   const { view, queryClient } = renderTurn([subagent(done), read], {
     conversation: conversationOf(
       ["prompt", "List every clause on arrears."],
       // Kept ahead of what it wrote, shown after it.
       ["report", "Clause 4 caps arrears."],
-      ["message", "<b>Reading</b> the lease."],
+      [
+        "message",
+        "**Reading** the lease.\n\n![chart](https://tracker.example/pixel.png)\n\n<script>window.stolen = 1</script>",
+      ],
     ),
   });
   await view.findByText("Check the lease");
   const inGroup = within(groupOf(view.container));
-  // Folded, the group has read nothing from the computer.
+  // Folded, the group has read nothing.
   expect(inGroup.queryByText("List every clause on arrears.")).toBeNull();
   await act(async () => {
     fireEvent.click(inGroup.getByRole("button", { expanded: false }));
   });
-  const conversation = within(
-    inGroup.getByRole("region", {
-      name: messages.chat.toolCall.localOutput.conversation,
-    }),
-  );
-  expect(
-    conversation.getAllByRole("listitem").map((item) => item.textContent),
-  ).toEqual([
+  const region = inGroup.getByRole("region", {
+    name: messages.chat.toolCall.localOutput.conversation,
+  });
+  // Formatted as the answer is: the emphasis is drawn, not its markers.
+  const emphasis = await waitFor(() => {
+    const strong = region.querySelector('[data-streamdown="strong"]');
+    if (strong === null) {
+      throw new Error("The conversation is not formatted yet");
+    }
+    return strong;
+  });
+  expect(emphasis.textContent).toBe("Reading");
+  // The entries themselves, not the lists a formatted entry may hold.
+  const [prompt, message, report] = [
+    ...(region.querySelector("ol")?.children ?? []),
+  ].map((item) => item.textContent);
+  expect(prompt).toBe(
     `${messages.chat.toolCall.localOutput.conversationPrompt}List every clause on arrears.`,
-    // A model wrote it: shown as the text it is, never as markup.
-    "<b>Reading</b> the lease.",
+  );
+  expect(message).toContain("Reading the lease.");
+  expect(message).not.toContain("**");
+  expect(report).toBe(
     `${messages.chat.toolCall.localOutput.conversationReport}Clause 4 caps arrears.`,
-  ]);
-  expect(groupOf(view.container).querySelector("b")).toBeNull();
+  );
+  // A model wrote it: opening it requests nothing it names and runs nothing.
+  expect(region.querySelector("img")).toBeNull();
+  expect(region.querySelector("script")).toBeNull();
+  expect(message).toContain("chart");
   // The steps it took still show beside its conversation.
   expect(inGroup.getByText("drafts/lease.md")).toBeDefined();
   queryClient.clear();
 });
 
-test("a subagent with nothing kept on this computer says so, and one that took no steps still opens", async () => {
+test("a subagent with nothing stored says so, and one that took no steps still opens", async () => {
   const { view, queryClient } = renderTurn([subagent(done)]);
   await view.findByText("Check the lease");
   const inGroup = within(groupOf(view.container));
@@ -447,7 +477,7 @@ test("a subagent with nothing kept on this computer says so, and one that took n
     fireEvent.click(inGroup.getByRole("button", { expanded: false }));
   });
   expect(
-    inGroup.getByText(messages.chat.toolCall.localOutput.notKept),
+    inGroup.getByText(messages.chat.toolCall.localOutput.notStored),
   ).toBeDefined();
   queryClient.clear();
 });
@@ -462,7 +492,7 @@ test("a subagent still at work has no conversation to open yet", async () => {
   queryClient.clear();
 });
 
-const PNG_SRC = "data:image/png;base64,iVBORw0KGgo=";
+const IMAGE_URL = "stella://file::file-page-1";
 
 const openImageRow = async (view: ReturnType<typeof render>) => {
   const row =
@@ -473,30 +503,99 @@ const openImageRow = async (view: ReturnType<typeof render>) => {
   });
 };
 
-test("opening an image step shows the image read from the computer, named by its file", async () => {
+test("opening an image step shows the image stella stored, named by its file", async () => {
   const { view, queryClient } = renderTurn([image], {
-    image: { status: "shown", type: "image/png", src: PNG_SRC },
+    image: {
+      status: "answered",
+      content: {
+        state: "stored",
+        kind: "image",
+        totalBytes: 8,
+        file: {
+          url: IMAGE_URL,
+          filename: "page-1.png",
+          mimeType: "image/png",
+        },
+      },
+    },
   });
   await view.findByText("scans/page-1.png");
   expect(view.queryByRole("img", { name: "scans/page-1.png" })).toBeNull();
   await openImageRow(view);
   expect(
     view.getByRole("img", { name: "scans/page-1.png" }).getAttribute("src"),
-  ).toBe(PNG_SRC);
+  ).toBe(getUserFileContentUrl(IMAGE_URL));
   queryClient.clear();
 });
 
-test("an image the computer does not keep says why instead of showing one", async () => {
+test("an image too large to store says why instead of showing one", async () => {
   const { view, queryClient } = renderTurn([image], {
-    image: { status: "too-large", totalBytes: 3 * 1024 * 1024 },
+    image: {
+      status: "answered",
+      content: {
+        state: "too_large",
+        kind: "image",
+        totalBytes: 12 * 1024 * 1024,
+      },
+    },
   });
   await view.findByText("scans/page-1.png");
   await openImageRow(view);
   expect(view.queryByRole("img", { name: "scans/page-1.png" })).toBeNull();
-  // Both sizes are named: the image's, and the most the computer keeps.
+  // Both sizes are named: the image's, and the most a step stores.
   expect(
-    view.getByText(/^This image is \S+ MB\. Images over \S+ MB are not kept/u),
+    view.getByText(
+      /^This image is \S+ MB\. Images over \S+ MB are not stored/u,
+    ),
   ).toBeDefined();
+  queryClient.clear();
+});
+
+/**
+ * A step that may still change is read again as its row opens: the API
+ * answers `content` for it until the test ends.
+ */
+const answeringStep = (content: object) => {
+  const previous = globalThis.fetch;
+  globalThis.fetch = Object.assign(
+    async () => await Promise.resolve(Response.json(content)),
+    { preconnect: originalFetch.preconnect },
+  );
+  return () => {
+    globalThis.fetch = previous;
+  };
+};
+
+test("a step still arriving says so and can be read again", async () => {
+  const content = { state: "arriving" } as const;
+  const restore = answeringStep(content);
+  const { view, queryClient } = renderTurn([image], {
+    image: { status: "answered", content },
+  });
+  await view.findByText("scans/page-1.png");
+  await openImageRow(view);
+  expect(
+    await view.findByText(messages.chat.toolCall.localOutput.arriving),
+  ).toBeDefined();
+  restore();
+  expect(
+    view.getByRole("button", { name: messages.common.tryAgain }),
+  ).toBeDefined();
+  queryClient.clear();
+});
+
+test("a step a fork has yet to copy says so", async () => {
+  const content = { state: "not_copied" } as const;
+  const restore = answeringStep(content);
+  const { view, queryClient } = renderTurn([image], {
+    image: { status: "answered", content },
+  });
+  await view.findByText("scans/page-1.png");
+  await openImageRow(view);
+  expect(
+    await view.findByText(messages.chat.toolCall.localOutput.notCopied),
+  ).toBeDefined();
+  restore();
   queryClient.clear();
 });
 

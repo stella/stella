@@ -110,8 +110,8 @@ type LocalRunSubagentGroupProps = {
   rows: readonly ReactNode[];
   /**
    * The subagent's own conversation (what it was told, wrote and reported),
-   * read from the computer that ran it once the group is open; `null` while
-   * the subagent works. With no rows either, there is nothing to open.
+   * read from stella once the group is open; `null` while the subagent
+   * works. With no rows either, there is nothing to open.
    */
   conversation: ReactNode;
 };
@@ -120,7 +120,7 @@ type LocalRunSubagentGroupProps = {
  * A subagent a coding agent started on the member's computer: its short
  * description, how many steps it took and its one status, with its own
  * conversation and the steps it took inside. What it was told, wrote and
- * reported stays on that computer: opening the group reads it from there.
+ * reported is stored with the conversation: opening the group reads it.
  */
 export const LocalRunSubagentGroup = ({
   conversation,
@@ -205,7 +205,7 @@ export const LocalRunSubagentGroup = ({
           </CollapsibleTrigger>
           <CollapsiblePanel>
             <div className="border-border/50 flex flex-col gap-1 border-t px-2.5 py-1.5">
-              {/* Read from the computer only once the member opens it. */}
+              {/* Read from stella only once the member opens it. */}
               {isOpen && conversation}
               {rows}
             </div>

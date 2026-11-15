@@ -185,7 +185,7 @@ describe("screenshot regeneration trust boundary", () => {
       ],
       [
         "Push regenerated baselines",
-        "stella/.github/.github/actions/signed-commit@fc5f380b18234429cb60682ccfe1537561311e61",
+        "stella/.github/.github/actions/signed-commit@2ba6dc5822df5213c500aa6edb7b6c4bdec56804",
       ],
     ]);
     for (const step of publish) {

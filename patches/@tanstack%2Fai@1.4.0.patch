@@ -1,0 +1,229 @@
+Approval interrupts update the actual tool owner without rebuilding unrelated messages.
+Canonical TOOL_CALL_END input updates completed calls without resetting their state.
+Snapshot sibling results do not enrich terminal calls with absent output.
+Sequential calls wait behind the first pending approval; plain client requests proceed.
+RUN_ERROR raw evidence retains HTTP status and AWS exception identity.
+Reasoning provenance survives UI/model conversions and AG-UI snapshots.
+TOOL_CALL_START flushes before waiting for further provider output.
+Durable delivery respects consumer demand until cancellation detaches its producer.
+Empty event metadata preserves the current assistant object without a spurious emit.
+Remove each hunk when upstream preserves the same behavior.
+
+diff --git a/dist/esm/activities/chat/messages.js b/dist/esm/activities/chat/messages.js
+--- a/dist/esm/activities/chat/messages.js
++++ b/dist/esm/activities/chat/messages.js
+@@ -162,6 +162,7 @@
+ 			if (content || signature !== void 0) pendingThinking.push({
+ 				content: typeof content === "string" ? content : "",
+ 				...signature !== void 0 ? { signature } : {},
++				...msg.metadata?.tanstack?.reasoningProvenance !== void 0 && { provenance: msg.metadata.tanstack.reasoningProvenance },
+ 				...redactedFrom(msg)
+ 			});
+ 			continue;
+@@ -599,6 +600,7 @@
+ 				pendingThinking.push({
+ 					content: part.content,
+ 					...part.signature && { signature: part.signature },
++					...part.provenance !== void 0 && { provenance: part.provenance },
+ 					...part.redacted && { redacted: true }
+ 				});
+ 				current.order.push({ type: "thinking" });
+@@ -676,6 +678,7 @@
+ 		type: "thinking",
+ 		content: thinking.content,
+ 		...thinking.signature && { signature: thinking.signature },
++		...thinking.provenance !== void 0 && { provenance: thinking.provenance },
+ 		...thinking.redacted && { redacted: true }
+ 	};
+ }
+@@ -851,6 +854,7 @@
+ 					type: "thinking",
+ 					content,
+ 					...signature !== void 0 ? { signature } : {},
++					...message.metadata?.tanstack?.reasoningProvenance !== void 0 && { provenance: message.metadata.tanstack.reasoningProvenance },
+ 					...redactedFrom(message)
+ 				}] : []
+ 			});
+diff --git a/dist/esm/activities/chat/stream/message-updaters.js b/dist/esm/activities/chat/stream/message-updaters.js
+--- a/dist/esm/activities/chat/stream/message-updaters.js
++++ b/dist/esm/activities/chat/stream/message-updaters.js
+@@ -108,8 +108,9 @@
+ function updateToolCallApproval(messages, messageId, toolCallId, approvalId) {
+ 	return messages.map((msg) => {
+ 		if (msg.id !== messageId) return msg;
+-		const parts = [...msg.parts];
+-		const toolCallPart = parts.find((p) => p.type === "tool-call" && p.id === toolCallId);
++		const toolCallPart = msg.parts.find((p) => p.type === "tool-call" && p.id === toolCallId);
++		if (!toolCallPart) return msg;
++		const parts = [...msg.parts];
+ 		if (toolCallPart) {
+ 			const index = parts.indexOf(toolCallPart);
+ 			parts[index] = {
+diff --git a/dist/esm/activities/chat/stream/processor.js b/dist/esm/activities/chat/stream/processor.js
+--- a/dist/esm/activities/chat/stream/processor.js
++++ b/dist/esm/activities/chat/stream/processor.js
+@@ -793,6 +793,7 @@
+ 			...incomingRecord,
+ 			tanstack: Object.fromEntries(Object.entries(incomingTanstack).filter(([key]) => key !== "content" && key !== "args"))
+ 		} : incomingRecord;
++		if (Object.entries(toMerge).every(([key, value]) => key === "tanstack" && value !== null && typeof value === "object" && Object.keys(value).length === 0)) return;
+ 		const metadata = mergeMetadata(message.metadata, toMerge);
+ 		const createdAt = coerceCreatedAt(tanstackMetadata(incomingRecord)?.createdAt);
+ 		const createdAtValid = createdAt !== void 0;
+@@ -1324,7 +1325,7 @@
+ 					...prev.approval !== void 0 ? { approval: prev.approval } : {},
+ 					...prev.metadata !== void 0 ? { metadata: prev.metadata } : {}
+ 				};
+-				if (result && next.output === void 0) {
++				if (result && next.output === void 0 && next.state !== "complete" && next.state !== "error") {
+ 					let output;
+ 					if (Array.isArray(result.content)) output = result.content;
+ 					else try {
+@@ -1515,10 +1516,25 @@
+ 		const msgState = this.getMessageState(messageId);
+ 		if (!msgState) return;
+ 		const existingToolCall = msgState.toolCalls.get(chunk.toolCallId);
+-		if (existingToolCall && existingToolCall.state !== "input-complete") {
+-			existingToolCall.arguments = finishToolCallArguments(existingToolCall.arguments, chunk).args;
+-			const index = msgState.toolCallOrder.indexOf(chunk.toolCallId);
+-			this.completeToolCall(messageId, index, existingToolCall);
++		if (existingToolCall) {
++			const final = finishToolCallArguments(existingToolCall.arguments, chunk);
++			existingToolCall.arguments = final.args;
++			const wasComplete = existingToolCall.state === "input-complete";
++			if (!wasComplete) {
++				const index = msgState.toolCallOrder.indexOf(chunk.toolCallId);
++				this.completeToolCall(messageId, index, existingToolCall);
++			} else {
++				existingToolCall.parsedArguments = final.input;
++				const currentPart = this.messages.find((m) => m.id === messageId)?.parts.find((p) => p.type === "tool-call" && p.id === existingToolCall.id);
++				this.messages = updateToolCallPart(this.messages, messageId, {
++					id: existingToolCall.id,
++					name: existingToolCall.name,
++					arguments: final.args,
++					state: currentPart?.state ?? "input-complete",
++					input: final.input,
++					...existingToolCall.metadata !== void 0 && { metadata: existingToolCall.metadata }
++				});
++			}
+ 		}
+ 	}
+ 	/**
+@@ -1653,7 +1669,7 @@
+ 					});
+ 					continue;
+ 				}
+-				const resolvedMessageId = this.getActiveAssistantMessageId() ?? this.toolCallToMessage.get(toolCallId) ?? this.messages.find((m) => m.role === "assistant" && m.parts.some((p) => p.type === "tool-call" && p.id === toolCallId))?.id;
++				const resolvedMessageId = this.messages.find((m) => m.role === "assistant" && m.parts.some((p) => p.type === "tool-call" && p.id === toolCallId))?.id;
+ 				if (resolvedMessageId) {
+ 					this.messages = updateToolCallApproval(this.messages, resolvedMessageId, toolCallId, interrupt.id);
+ 					this.emitMessagesChange();
+diff --git a/dist/esm/activities/chat/tools/tool-calls.js b/dist/esm/activities/chat/tools/tool-calls.js
+--- a/dist/esm/activities/chat/tools/tool-calls.js
++++ b/dist/esm/activities/chat/tools/tool-calls.js
+@@ -584,11 +584,12 @@
+ 			});
+ 			continue;
+ 		}
+-		if (hasPendingApprovals) {
++		if (hasPendingApprovals && (!runsInOrder || needsApproval.length > 0)) {
+ 			const resolution = approvalResolution(approvals, toolCall.id);
+ 			const isPendingApproval = tool.needsApproval && resolution === void 0;
+ 			const isClientRequest = !tool.execute && (!tool.needsApproval || resolution !== void 0 && isApproved(resolution));
+-			if (!isPendingApproval && !isClientRequest) {
++			const isNoApprovalCall = !tool.needsApproval && !runsInOrder;
++			if (!isPendingApproval && !isClientRequest && !isNoApprovalCall) {
+ 				held.push(toolCall);
+ 				continue;
+ 			}
+diff --git a/dist/esm/activities/error-payload.js b/dist/esm/activities/error-payload.js
+--- a/dist/esm/activities/error-payload.js
++++ b/dist/esm/activities/error-payload.js
+@@ -98,12 +98,52 @@
+ *   const rawEvent = toRunErrorRawEvent(error)
+ *   yield { type: EventType.RUN_ERROR, ..., ...(rawEvent !== undefined && { rawEvent }) }
+ */
++function httpStatusOf(e) {
++	return typeof e.status === "number" && Number.isInteger(e.status) && e.status >= 100 && e.status <= 599 ? e.status : void 0;
++}
++/**
++* The response's HTTP status travels with the body it came with: an SDK keeps
++* it on the exception, not in the body, and a symbolic `code` in the body
++* (`rate_limit_exceeded`, `model_not_found`) otherwise leaves the event with
++* no status at all. `code` precedence (#985) is untouched.
++*/
++function withHttpStatus(body, e) {
++	const status = httpStatusOf(e);
++	if (status === void 0 || typeof body !== "object" || Array.isArray(body) || "status" in body) return body;
++	return {
++		...body,
++		status
++	};
++}
++/**
++* An AWS SDK service exception carries no body; its identity is its name, its
++* fault side and the response status.
++*/
++function awsExceptionEvidence(e) {
++	if (e.$fault !== "client" && e.$fault !== "server" || typeof e.name !== "string") return void 0;
++	const status = e.$metadata?.httpStatusCode;
++	return {
++		name: e.name,
++		$fault: e.$fault,
++		...typeof status === "number" && { $metadata: { httpStatusCode: status } },
++		...typeof e.message === "string" && { message: e.message }
++	};
++}
++/**
++* A response whose body is not a JSON object (plain text, HTML, empty) still
++* left its HTTP status on the exception.
++*/
++function statusEvidence(e) {
++	const status = httpStatusOf(e);
++	return status === void 0 ? void 0 : { status };
++}
+ function toRunErrorRawEvent(error) {
+ 	if (!error || typeof error !== "object") return void 0;
+ 	const e = error;
+-	if (e.rawEvent !== void 0 && e.rawEvent !== null) return e.rawEvent;
+-	if (e.error !== void 0 && e.error !== null && typeof e.error === "object") return e.error;
+-	if (e.metadata !== void 0 && e.metadata !== null) return e.metadata;
++	if (e.rawEvent !== void 0 && e.rawEvent !== null) return withHttpStatus(e.rawEvent, e);
++	if (e.error !== void 0 && e.error !== null && typeof e.error === "object") return withHttpStatus(e.error, e);
++	if (e.metadata !== void 0 && e.metadata !== null) return withHttpStatus(e.metadata, e);
++	return awsExceptionEvidence(e) ?? statusEvidence(e);
+ }
+ /** Read one response header from the `headers` that an SDK error carries. */
+ function responseHeader(error, name) {
+diff --git a/dist/esm/stream-to-response.js b/dist/esm/stream-to-response.js
+--- a/dist/esm/stream-to-response.js
++++ b/dist/esm/stream-to-response.js
+@@ -152,7 +152,7 @@
+ 				let iteratorDone = false;
+ 				try {
+ 					while (!isAborted(cancellation.signal)) {
+-						while (!detachOnCancel && !cancelled && !isAborted(cancellation.signal) && (controller.desiredSize ?? 0) <= 0) await new Promise((resolve) => {
++						while (!cancelled && !isAborted(cancellation.signal) && (controller.desiredSize ?? 0) <= 0) await new Promise((resolve) => {
+ 							resumePump = resolve;
+ 						});
+ 						if (isAborted(cancellation.signal)) break;
+@@ -387,7 +387,7 @@
+ * that same batch.
+ */
+ function isDurabilityFlushBoundary(chunk) {
+-	return chunk.type === "RUN_STARTED" || chunk.type === "RUN_FINISHED" || chunk.type === "RUN_ERROR" || chunk.type === "TOOL_CALL_END" || chunk.type === "CUSTOM" && !isDurabilityBatchedCustom(chunk);
++	return chunk.type === "RUN_STARTED" || chunk.type === "RUN_FINISHED" || chunk.type === "RUN_ERROR" || chunk.type === "TOOL_CALL_START" || chunk.type === "TOOL_CALL_END" || chunk.type === "CUSTOM" && !isDurabilityBatchedCustom(chunk);
+ }
+ /**
+ * Name of the synthetic `CUSTOM` chunk a fresh durable producer appends to its
+diff --git a/dist/esm/utilities/ag-ui-wire.js b/dist/esm/utilities/ag-ui-wire.js
+--- a/dist/esm/utilities/ag-ui-wire.js
++++ b/dist/esm/utilities/ag-ui-wire.js
+@@ -166,6 +166,7 @@
+ 					content: part.content
+ 				};
+ 				if (part.signature) reasoning.encryptedValue = part.signature;
++				if (part.provenance !== void 0) reasoning.metadata = { tanstack: { reasoningProvenance: part.provenance } };
+ 				wire.push(reasoning);
+ 			}
+ 			const text = collectText(segment.parts);
