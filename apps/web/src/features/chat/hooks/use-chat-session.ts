@@ -148,7 +148,7 @@ import {
   sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
 import {
-  resendLatestChatMessage,
+  settleRouteHandoff,
   showStoredChatThread,
 } from "@/features/chat/chat-runtime-registry";
 import {
@@ -912,6 +912,28 @@ export const useChatSession = ({
     [draftManager, threadRef],
   );
 
+  // A new chat's first message was sent before the page existed (the landing
+  // page, `/new`, Ask AI); this page takes it from the runtime. Refused before
+  // the server stored it, it goes back into this chat's composer, like any
+  // send the server refused.
+  useExternalSyncEffect(() => {
+    const handoff = chat.takeRouteHandoff();
+    if (handoff === null) {
+      return;
+    }
+    detached(
+      (async () => {
+        const settled = await settleRouteHandoff(chat, handoff);
+        if (settled.type === "sent") {
+          return;
+        }
+        notifyUserError(settled.error, t("chat.sendError"));
+        restoreIntoComposer(handoff.message);
+      })(),
+      "use-chat-session.settle-route-handoff",
+    );
+  }, [chat, restoreIntoComposer, t]);
+
   /**
    * Queue `message` at the end of the chat's queue, as it would be sent now
    * (its mode and document preferences snapshotted). `kept` when the server
@@ -1399,8 +1421,7 @@ export const useChatSession = ({
         return;
       }
 
-      await resendLatestChatMessage(
-        chat,
+      await chat.reload(
         sendMode === undefined ? undefined : { body: { sendMode } },
       );
     },

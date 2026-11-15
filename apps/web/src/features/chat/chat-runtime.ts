@@ -147,6 +147,13 @@ export type ChatSendMessageOptions = {
   /** Where the message was sent from; a send without it is not timed. */
   timingSurface?: ChatTimingSurface | undefined;
 };
+/** A new chat's first message, sent before the page moved to the chat. */
+export type ChatRouteHandoff = {
+  /** Whether the server took the message's turn, once it answered. */
+  accepted: Promise<ChatSendAcceptance>;
+  message: ChatRouteHandoffMessage;
+};
+
 export type ChatRouteHandoffStart = {
   messageId: SafeId<"chatMessage">;
   status: "started";
@@ -275,12 +282,6 @@ export type ChatRuntime = ChatActivitySession & {
   /** Answer the latest message again: a regeneration, which the server
    *  takes only for a message it stores. */
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
-  /**
-   * Send the page's latest message again as the new message it still is,
-   * for a send the server refused before it stored anything. The registry
-   * decides between this and `reload` (`resendLatestChatMessage`).
-   */
-  sendLatestMessageAgain: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
   /** Show the thread as the server stores it, after a request the server did
    *  not accept: its messages replace the page's, and the request's error
@@ -291,6 +292,12 @@ export type ChatRuntime = ChatActivitySession & {
     message: ChatRouteHandoffMessage,
     options?: ChatSendMessageOptions,
   ) => Promise<ChatRouteHandoffStart>;
+  /**
+   * The route handoff this runtime started that no page has taken yet, once:
+   * the page the member lands on takes it, to hand the message back to its
+   * composer if the server refuses it.
+   */
+  takeRouteHandoff: () => ChatRouteHandoff | null;
   /** The user's Stop: the server ends the turn as stopped. */
   stop: () => void;
   /** The page leaves the thread: it closes its own request and asks the
@@ -327,7 +334,7 @@ export const sendThreadChatMessage = async (
  * accepted the turn (whose answer then streams on), or the request failed
  * before it did, with the failure it reported.
  */
-type ChatSendAcceptance =
+export type ChatSendAcceptance =
   { status: "accepted" } | { status: "failed"; error: Error };
 
 type ChatThreadSendUntilAccepted = (
@@ -599,6 +606,8 @@ export const createChatRuntime = ({
    *  a new one, before its request is posted. */
   let requestAnswered = Promise.withResolvers<undefined>();
   requestAnswered.resolve(undefined);
+  /** The route handoff no page has taken yet (`takeRouteHandoff`). */
+  let routeHandoff: ChatRouteHandoff | null = null;
   /** Counts the page's loadings, so a steer stays with the one it was asked
    *  in. */
   let loadingGeneration = 0;
@@ -1477,18 +1486,33 @@ export const createChatRuntime = ({
     }
   };
 
-  const sendThreadMessageUntilAccepted: ChatThreadSendUntilAccepted = async (
-    message,
-    options,
-  ) => {
+  /**
+   * Listen for whether the server takes the turn of the next send the page
+   * posts; call before starting it. The answer comes as soon as the server
+   * answered; a send that ends before its request was answered (it never
+   * started, or failed while it was prepared) answers from how its
+   * `delivery` ended.
+   */
+  const listenForSendAcceptance = () => {
     const acceptance = Promise.withResolvers<ChatSendAcceptance>();
     awaitedSendAcceptance = acceptance;
     const errorBeforeSend = snapshot.error;
-    // A send that ends before its request was answered (it never started, or
-    // failed while it was prepared) answers from how it ended.
+    return async (delivery: Promise<void>): Promise<ChatSendAcceptance> =>
+      await settleSendAcceptance({ acceptance, delivery, errorBeforeSend });
+  };
+
+  const settleSendAcceptance = async ({
+    acceptance,
+    delivery,
+    errorBeforeSend,
+  }: {
+    acceptance: PromiseWithResolvers<ChatSendAcceptance>;
+    delivery: Promise<void>;
+    errorBeforeSend: Error | undefined;
+  }): Promise<ChatSendAcceptance> => {
     const delivered = Result.tryPromise({
       try: async () => {
-        await sendThreadMessage(message, options);
+        await delivery;
       },
       catch: toError,
     }).then((outcome): ChatSendAcceptance => {
@@ -1510,6 +1534,14 @@ export const createChatRuntime = ({
       await delivered;
     }
     return answer;
+  };
+
+  const sendThreadMessageUntilAccepted: ChatThreadSendUntilAccepted = async (
+    message,
+    options,
+  ) => {
+    const answer = listenForSendAcceptance();
+    return await answer(sendThreadMessage(message, options));
   };
 
   const showStoredMessages = (messages: PersistedChatMessage[]): void => {
@@ -1832,8 +1864,8 @@ export const createChatRuntime = ({
     }
   };
 
-  /** Start a turn on the page's latest user message again. The body says
-   *  what the request is: a regeneration, or the message sent anew. */
+  /** Start a turn on the page's latest user message again, as the body
+   *  says. */
   const postLatestMessageAgain = async (
     options: ChatSendMessageOptions,
   ): Promise<void> => {
@@ -1947,13 +1979,12 @@ export const createChatRuntime = ({
         },
       });
     },
-    sendLatestMessageAgain: async (options) => {
-      await postLatestMessageAgain({ body: { ...options?.body } });
-    },
     setMessages: showMessages,
     showStoredMessages,
     startRouteHandoffMessage: async (message, options) => {
+      const answer = listenForSendAcceptance();
       const started = startClientSend(message, options);
+      const accepted = answer(started.stream);
       if (started.status === "not_started") {
         const outcome = await Result.tryPromise({
           try: async () => await started.stream,
@@ -1970,7 +2001,13 @@ export const createChatRuntime = ({
         started.stream.catch(captureRuntimeError),
         "chat-queries.stream",
       );
+      routeHandoff = { accepted, message };
       return started;
+    },
+    takeRouteHandoff: () => {
+      const taken = routeHandoff;
+      routeHandoff = null;
+      return taken;
     },
     stop: () => {
       // Stopping the request does not stop the extension: a browser command
