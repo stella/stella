@@ -342,7 +342,6 @@ class ChunkMapper {
         type: EventType.TOOL_CALL_START,
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
-        toolName: toolCall.name,
         // The subagent step that made the call, beside it: the API keeps
         // the link under that step's chat call id.
         ...(toolCall.parentCallId === undefined
@@ -364,7 +363,6 @@ class ChunkMapper {
         type: EventType.TOOL_CALL_END,
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
-        toolName: toolCall.name,
         input,
       },
     );
