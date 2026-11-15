@@ -135,6 +135,8 @@ export const TAGGED_FAILURE_REASON = {
   CorpusGenerationUndeclaredError: "tagged_failure",
   CorpusGenerationUsageError: "tagged_failure",
   CorpusIndexError: "tagged_failure",
+  CorpusIndexFlipPairRefusedError: "tagged_failure",
+  CorpusIndexFlipParityReadError: "tagged_failure",
   CorpusIndexGroupContractMismatchError: "tagged_failure",
   CorpusIndexGroupNotReadyError: "tagged_failure",
   CorpusIndexGroupWithdrawalRefusedError: "tagged_failure",
