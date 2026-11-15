@@ -1900,10 +1900,9 @@ const commitExpiredOfflineAppendsTx = async (
     options: {
       to: "append_committed",
       from: ["append_started"],
-      guard: and(
-        eq(corpusIndexProjectionIntents.appendDelivery, "offline_indexer"),
-        isNotNull(corpusIndexProjectionIntents.expectedDocumentCount),
-        sql`EXISTS (
+      guard: sql`${corpusIndexProjectionIntents.appendDelivery} = 'offline_indexer'
+        AND ${corpusIndexProjectionIntents.expectedDocumentCount} IS NOT NULL
+        AND EXISTS (
           SELECT 1
           FROM ${corpusIndexProjectionStates} state
           WHERE state.family = ${corpusIndexProjectionIntents.family}
@@ -1914,7 +1913,6 @@ const commitExpiredOfflineAppendsTx = async (
             AND state.desired_fingerprint = ${corpusIndexProjectionIntents.fingerprint}
             AND state.desired_index_id = ${corpusIndexProjectionIntents.indexId}
         )`,
-      ),
       set: {
         leaseToken: null,
         leaseExpiresAt: null,
