@@ -306,6 +306,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth invokes these hooks and consumes rejected APIError values.
   // Better Auth organization hooks reject invalid slug operations through APIError.
   "apps/api/src/lib/auth/organization-slug-hooks.ts",
+  "apps/api/src/lib/auth/organization-logo-hooks.ts",
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
   "apps/api/src/lib/auth/request-budget-hooks.ts",
