@@ -601,33 +601,11 @@ export class DocumentTooLargeError extends TaggedError(
   budgetBytes: number;
 }> {}
 
-/** Post-generation OOXML structural violations. */
-export class OoxmlValidationError extends TaggedError("OoxmlValidationError")<{
-  message: string;
-  violations: {
-    rule: string;
-    message: string;
-    element?: string;
-  }[];
-}> {}
-
 /** Optimistic-lock failure inside a transaction. */
 export class ConcurrentModificationError extends TaggedError(
   "ConcurrentModificationError",
 )<{
   message: string;
-}> {}
-
-/** DOCX template block-directive structural errors. */
-export class TemplateDirectiveError extends TaggedError(
-  "TemplateDirectiveError",
-)<{
-  message: string;
-  errors: {
-    message: string;
-    paragraphIndex: number;
-    directive: string;
-  }[];
 }> {}
 
 type AdapterFetchErrorOptions = {

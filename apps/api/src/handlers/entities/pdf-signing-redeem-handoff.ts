@@ -116,5 +116,3 @@ export const createRedeemPdfSigningHandoffEndpoint = (
       });
     },
   );
-
-export default createRedeemPdfSigningHandoffEndpoint();
