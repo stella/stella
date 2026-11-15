@@ -791,6 +791,9 @@ export const useChatSession = ({
   const sendQueueRef = useRef<SendQueueState>(
     createInitialSendQueueState(conversationId),
   );
+  /** Whether a turn of this page runs, as the queue last synced it; a
+   *  conversation switch starts from it rather than from no turn. */
+  const queueTurnRunningRef = useRef(false);
   const [queuedMessages, setQueuedMessages] = useState<
     readonly QueuedChatEntry[]
   >([]);
@@ -994,7 +997,11 @@ export const useChatSession = ({
       options?: ChatSendMessageOptions,
     ) => {
       if (sendQueueRef.current.conversationId !== conversationId) {
-        applySendQueueEvent({ type: "conversation-switched", conversationId });
+        applySendQueueEvent({
+          type: "conversation-switched",
+          conversationId,
+          isGenerating: queueTurnRunningRef.current,
+        });
       }
 
       const requestOptions = withRequestSnapshots(options);
@@ -1017,7 +1024,7 @@ export const useChatSession = ({
           break;
         default:
           intent satisfies never;
-          return panic(`Unhandled send intent: ${String(intent)}`);
+          panic(`Unhandled send intent: ${String(intent)}`);
       }
       if (!canSendWithoutQueueing(sendQueueRef.current)) {
         enqueueMessage(message, requestOptions);
@@ -1931,6 +1938,7 @@ export const useChatSession = ({
       messages,
     }).length > 0;
   useExternalSyncEffect(() => {
+    queueTurnRunningRef.current = queueTurnRunning;
     applySendQueueEvent({
       type: "generation-status-synced",
       isGenerating: queueTurnRunning,
@@ -1984,7 +1992,11 @@ export const useChatSession = ({
 
   useExternalSyncEffect(() => {
     steerOnResumeRef.current = null;
-    applySendQueueEvent({ type: "conversation-switched", conversationId });
+    applySendQueueEvent({
+      type: "conversation-switched",
+      conversationId,
+      isGenerating: queueTurnRunningRef.current,
+    });
   }, [applySendQueueEvent, conversationId]);
 
   // Drain the queue one message per turn. When the response

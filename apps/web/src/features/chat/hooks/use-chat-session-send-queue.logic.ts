@@ -276,7 +276,13 @@ export type SendQueueEvent =
       /** The latest turn waits on the member: an approval or a question. */
       awaitingMember: boolean;
     }
-  | { type: "conversation-switched"; conversationId: string }
+  | {
+      type: "conversation-switched";
+      conversationId: string;
+      /** A turn of the conversation switched to already runs: a page that
+       *  opens mid-turn, as a new chat's page does with its first turn. */
+      isGenerating: boolean;
+    }
   | { type: "message-edit-opened"; sessionId: string }
   | { type: "message-edit-closed"; sessionId: string }
   | { type: "message-edit-accepted"; sessionId: string }
@@ -458,7 +464,11 @@ export const reduceSendQueue = (
 
     case "conversation-switched": {
       return {
-        state: createInitialSendQueueState(event.conversationId),
+        state: {
+          ...createInitialSendQueueState(event.conversationId),
+          isGenerating: event.isGenerating,
+          wasGenerating: event.isGenerating,
+        },
         dispatchedEntry: null,
       };
     }
