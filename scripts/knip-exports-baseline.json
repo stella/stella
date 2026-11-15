@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 98,
+    "count": 94,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 1,
@@ -19,7 +19,6 @@
       "apps/api/src/lib/auth/feature-access/view-eligibility.ts": 1,
       "apps/api/src/lib/buffer-intent-reconciliation.ts": 5,
       "apps/api/src/lib/chat/thread-compaction.ts": 1,
-      "apps/api/src/lib/document-translation/run-queue.ts": 1,
       "apps/api/src/lib/entities/query-entities.ts": 3,
       "apps/api/src/lib/errors/tagged-errors.ts": 3,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
@@ -33,8 +32,6 @@
       "apps/api/src/lib/s3.ts": 1,
       "apps/api/src/lib/safe-id-boundaries.ts": 2,
       "apps/api/src/lib/scheduler/tasks/list-verification-run-reconcile.ts": 1,
-      "apps/api/src/lib/tanstack-ai-generate.ts": 1,
-      "apps/api/src/lib/template-binding/binding-sources.ts": 1,
       "apps/api/src/lib/usage/organization-access.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 1,
       "apps/api/src/mcp/billing-tools.ts": 1,
@@ -42,8 +39,7 @@
       "apps/api/src/mcp/context.ts": 1,
       "apps/api/src/mcp/file-comparison-picker-tool.ts": 1,
       "apps/api/src/mcp/matter-tools.ts": 1,
-      "apps/api/src/mcp/tool-types.ts": 7,
-      "apps/api/src/tests/helpers/provider-wire-contract.ts": 1
+      "apps/api/src/mcp/tool-types.ts": 7
     }
   },
   "apps/desktop": {
@@ -64,17 +60,6 @@
     "count": 1,
     "files": {
       "packages/agent-engine/src/harness/skill-folders.ts": 1
-    }
-  },
-  "packages/business-registries": {
-    "count": 22,
-    "files": {
-      "packages/business-registries/src/ares/parse.ts": 1,
-      "packages/business-registries/src/ares/types.ts": 7,
-      "packages/business-registries/src/companies-house/types.ts": 1,
-      "packages/business-registries/src/denue/types.ts": 1,
-      "packages/business-registries/src/krs/types.ts": 3,
-      "packages/business-registries/src/orsr/types.ts": 9
     }
   }
 }
