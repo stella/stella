@@ -9,9 +9,8 @@ import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
 import { memberHasPermissions } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
-import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
+import { rootKeys } from "@/lib/auth-query-options";
 import { STALE_TIME } from "@/lib/consts";
-import { organizationOptions } from "@/lib/organization/queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
@@ -77,26 +76,28 @@ export const roleOptions = resourceQueryOptions(
 );
 
 /** The additional membership grant is read only when role grants do not decide the operation. */
-export const activeMemberOptions = queryOptions({
-  queryKey: ["active-organization-member"],
-  retry: BOOT_QUERY_RETRY,
-  queryFn: async ({ client }) => {
-    const session = await ensureRouteQueryData(client, sessionOptions);
-    const organizationId = session?.session.activeOrganizationId;
-    if (!session || !organizationId) {
-      return null;
-    }
-    const organization = await ensureRouteQueryData(
-      client,
-      organizationOptions(organizationId),
-    );
-    return (
-      organization.members.find(({ userId }) => userId === session.user.id) ??
-      null
-    );
+export const activeMemberOptions = resourceQueryOptions(
+  queryOptions({
+    queryKey: ["active-organization-member"],
+    retry: BOOT_QUERY_RETRY,
+    queryFn: async () => {
+      const [{ authClient }, { toAuthClientError }] = await Promise.all([
+        import("@/lib/auth-client"),
+        import("@/lib/errors/auth"),
+      ]);
+      const result = await authClient.organization.getActiveMember();
+      if (result.error) {
+        throw toAuthClientError(result.error);
+      }
+      return result.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  }),
+  {
+    resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
+    scope: { type: "organization" },
   },
-  staleTime: STALE_TIME.FIVE.MINUTES,
-});
+);
 
 type EnsureMemberPermissionOptions = {
   queryClient: QueryClient;
@@ -114,9 +115,6 @@ export const ensureMemberPermission = async ({
     return false;
   }
   const member = await ensureRouteQueryData(queryClient, activeMemberOptions);
-  if (!member) {
-    return false;
-  }
   return memberHasPermissions({
     role: member.role,
     billingAccess: member.billingAccess,

@@ -138,7 +138,7 @@ export const organizationSettingsRoute = mount(
     }),
     routes(
       {
-        "/members/:memberId/billing-access": { PUT: updateMemberBillingAccess },
+        "/members/:memberId/billing": { PUT: updateMemberBillingAccess },
       },
       {
         middleware: [

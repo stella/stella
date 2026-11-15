@@ -70,7 +70,21 @@ const mount = (role: "owner" | "member" = "owner") => {
   });
   clients.push(client);
   client.setQueryData(roleOptions.queryKey, role);
-  client.setQueryData(activeMemberOptions.queryKey, null);
+  // The member holds no additional billing grant: their role decides.
+  client.setQueryData(activeMemberOptions.queryKey, {
+    id: "member-1",
+    organizationId: "organization-1",
+    role,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    userId: "user-1",
+    user: {
+      id: "user-1",
+      email: "member@example.test",
+      name: "Member",
+      image: undefined,
+    },
+    billingAccess: false,
+  });
   client.setQueryData(entitySummariesOptions(WORKSPACE_ID).queryKey, [
     { id: "work-item-1", name: "Work item" },
   ]);

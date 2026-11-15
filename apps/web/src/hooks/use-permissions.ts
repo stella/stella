@@ -35,7 +35,13 @@ export const usePermissions = (permissions: PermissionInput): boolean => {
       permissions,
     });
   const memberView = queryView(
-    useQuery({ ...activeMemberOptions, enabled: needsMemberGrant }),
+    useQuery({
+      ...resourceQueryOptions(activeMemberOptions, {
+        resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
+        scope: { type: "organization" },
+      }),
+      enabled: needsMemberGrant,
+    }),
   );
   useQueryViewError(memberView, "usePermissions:member-query");
 
