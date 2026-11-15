@@ -205,17 +205,14 @@ const transactionRunner =
     const { crash } = model;
     const dies = crash.type === "transaction" && crash.index === index;
     crashIf(model, dies && crash.phase === "before", `transaction ${index}`);
-    if (model.inStartAdmission) {
-      const start = model.startTransactions;
+    const start = model.inStartAdmission ? model.startTransactions : null;
+    if (start !== null) {
       model.startTransactions += 1;
       crashIf(
         model,
         model.dieBeforeStartTransaction === start,
         `before start transaction ${start}`,
       );
-      if (model.holdStartTransaction?.index === start) {
-        model.offsetMs += model.holdStartTransaction.ms;
-      }
     }
     const value = await db.transaction(async (tx) => {
       if (model.repeatableRead) {
@@ -225,6 +222,11 @@ const transactionRunner =
       crashIf(model, dies, `commit of transaction ${index}`);
       return result;
     });
+    // The next start transaction is held back: its statement instant, read
+    // before it opens, falls that much later.
+    if (start !== null && model.holdStartTransaction?.index === start + 1) {
+      model.offsetMs += model.holdStartTransaction.ms;
+    }
     if (model.switchToSingleAfterReserve) {
       const reserved = await entityIn(model, "reserved");
       if (reserved !== undefined) {
