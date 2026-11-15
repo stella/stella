@@ -1,3 +1,4 @@
+// parser-output-unchanged: the sitemap read budget bounds public sitemap files and their read deadline; no parser reads it.
 import {
   SITEMAP_FILE_FETCH_TIMEOUT_MS,
   SITEMAP_FILE_SERVE_TARGET_MS,
