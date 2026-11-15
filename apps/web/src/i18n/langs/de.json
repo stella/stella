@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Optionen zur Überarbeitung",
     "editWithAI": "Mit KI bearbeiten",
     "keyRequired": {
+      "accountFeaturesUnavailable": "KI-Funktionen sind für dieses Konto nicht verfügbar.",
       "accountRestricted": "Die Einstellungen des KI-Anbieters sind für dieses Konto nicht verfügbar.",
       "configUnreadable": "Die Konfiguration des KI-Anbieters kann nicht gelesen werden. Bitten Sie eine Organisationsadministration, ihn erneut zu verbinden.",
       "cta": "KI-Einstellungen öffnen",
@@ -159,6 +160,7 @@
     "handoffAccount": "Als <account>{email}</account> in <organization>{organizationName}</organization> fortfahren?",
     "handoffTitle": "Weiter zu stella",
     "headline": "Klarheit für jeden Fall.",
+    "invalidEmailOrPassword": "E-Mail oder Passwort ist falsch.",
     "invitation": {
       "declined": "Einladung abgelehnt",
       "declinedDescription": "Sie haben diese Einladung abgelehnt. Sie können diese Seite schließen.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Stattdessen Wiederherstellungscode verwenden"
     },
     "useDifferentEmail": "Andere E-Mail verwenden",
+    "useEmailCode": "Stattdessen mit E-Mail-Code anmelden",
     "usePassword": "Stattdessen mit Passwort anmelden",
     "weSentCodeTo": "Wir haben einen Code an <email>{emailAddress}</email> gesendet"
   },
@@ -2200,6 +2203,15 @@
     "sourcePlaceholder": "Chat über {title}",
     "sourcePlaceholderAction": "Chat über",
     "sources": "Quellen:",
+    "steerRefused": {
+      "cannotSteer": "Dieser Agent nimmt während der Arbeit keine Nachrichten an.",
+      "noRun": "Der Agent läuft gerade nicht auf Ihrem Computer.",
+      "notPlain": "Während der Agent arbeitet, können Sie ihm nur eine Textnachricht ohne Dateien senden, die nicht im anonymisierten Modus gesendet wird.",
+      "notTaken": "Der Agent konnte Ihre Nachricht gerade nicht annehmen.",
+      "runFull": "Der Agent nimmt gerade keine weiteren Nachrichten an.",
+      "title": "Ihre Nachricht wartet, bis der Agent fertig ist",
+      "turnNotRunning": "Der Agent arbeitet gerade nicht."
+    },
     "stopFailed": "Die Antwort konnte nicht gestoppt werden. Versuchen Sie es erneut.",
     "stopResponse": "Stoppen",
     "stopped": "Gestoppt",

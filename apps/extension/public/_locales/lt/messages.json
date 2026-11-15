@@ -68,6 +68,9 @@
   "connectStella": {
     "message": "Prijungti „stella“"
   },
+  "openStella": {
+    "message": "Atverti „stella“"
+  },
   "adoptTab": {
     "message": "Naudoti šį skirtuką su „stella“"
   },

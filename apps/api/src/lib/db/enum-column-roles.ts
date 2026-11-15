@@ -165,6 +165,10 @@ export const ENUM_COLUMN_ROLES = {
     outcome: ATTRIBUTE,
     source: ATTRIBUTE,
   },
+  // Why a queue waits; any reason may replace another.
+  chat_queue_holds: {
+    reason: ATTRIBUTE,
+  },
   chat_secrets: {
     decision: ATTRIBUTE,
   },

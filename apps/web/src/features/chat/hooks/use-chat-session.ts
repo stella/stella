@@ -150,6 +150,8 @@ import type { PlaybookPaneMode } from "@/features/chat/hooks/use-chat-session-pl
 import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/use-chat-session-reader-annotation-write.logic";
 import {
   canSendWithoutQueueing,
+  CHAT_STEER_REFUSAL_MESSAGES,
+  type ChatSteerRefusal,
   createInitialSendQueueState,
   describeQueuedMessage,
   type QueuedChatEntry,
@@ -860,12 +862,24 @@ export const useChatSession = ({
     [applySendQueueEvent, sendChatMessage],
   );
 
+  // A steer that left the message queued says why; the queue shows it.
+  const notifySteerRefused = useCallback(
+    (reason: ChatSteerRefusal) => {
+      stellaToast.add({
+        title: t("chat.steerRefused.title"),
+        description: t(CHAT_STEER_REFUSAL_MESSAGES[reason]),
+        type: "info",
+      });
+    },
+    [t],
+  );
+
   // Hand a queued message to the running turn; it moves to the front of the
   // queue. During a turn on the member's computer the turn is handed the
   // message and goes on with it. One that cannot take it is stopped after
   // "Send now", and the queue drain sends the message once the stop
   // settles; after a plain send's steer the turn runs on and the message
-  // waits for its end. A turn that ends before it says leaves the message
+  // waits for its end, with a notice. A turn that ends before it says leaves the message
   // first in the queue, sent next. Until the steer settles nothing queued is
   // sent, so a message the turn took is never sent again. With the queue
   // held after a failed turn it is sent at once, like a manual send.
@@ -891,12 +905,15 @@ export const useChatSession = ({
             inputId: id,
             text: route.text,
           });
-          const next = steerFallback(outcome, origin);
+          const next = steerFallback(outcome.type, origin);
           const dispatched = applySendQueueEvent({
             type: "steer-settled",
             id,
             next,
           });
+          if (outcome.type === "refused" && next === "keep") {
+            notifySteerRefused(outcome.reason);
+          }
           if (dispatched) {
             await dispatchQueuedMessage(dispatched).catch(
               ignoreQueuedDispatchError,
@@ -909,9 +926,11 @@ export const useChatSession = ({
         return;
       }
       if (sendQueueRef.current.isGenerating) {
-        if (origin === "send_now") {
-          stop();
+        if (origin === "steer") {
+          notifySteerRefused("message_not_plain");
+          return;
         }
+        stop();
         return;
       }
       const dispatched = applySendQueueEvent({
@@ -924,7 +943,13 @@ export const useChatSession = ({
         );
       }
     },
-    [applySendQueueEvent, chat, dispatchQueuedMessage, stop],
+    [
+      applySendQueueEvent,
+      chat,
+      dispatchQueuedMessage,
+      notifySteerRefused,
+      stop,
+    ],
   );
 
   // "Send now" on a queued message: now, even if the running turn has to
@@ -951,14 +976,17 @@ export const useChatSession = ({
       const entry = sendQueueRef.current.queue.find(
         (queued) => queued.id === id,
       );
+      if (entry === undefined) {
+        return;
+      }
+      if (steerableText(entry) === null) {
+        notifySteerRefused("message_not_plain");
+        return;
+      }
       const approvalIds = openHarnessApprovalRequestIds(
         projectCanonicalChatUIMessages(chat.getSnapshot().messages),
       );
-      if (
-        entry === undefined ||
-        steerableText(entry) === null ||
-        approvalIds.length === 0
-      ) {
+      if (approvalIds.length === 0) {
         return;
       }
       applySendQueueEvent({ type: "queued-message-promoted", id });
@@ -970,7 +998,7 @@ export const useChatSession = ({
         );
       }
     },
-    [applySendQueueEvent, chat, resolveToolApproval],
+    [applySendQueueEvent, chat, notifySteerRefused, resolveToolApproval],
   );
 
   /** What the thread is doing now, as the send routing reads it. */

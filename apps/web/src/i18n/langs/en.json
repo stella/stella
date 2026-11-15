@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Rewrite options",
     "editWithAI": "Edit with AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "AI features are not available for this account.",
       "accountRestricted": "AI provider settings are unavailable for this account.",
       "configUnreadable": "The AI provider configuration cannot be read. Ask an organization admin to reconnect it.",
       "cta": "Open AI settings",
@@ -159,6 +160,7 @@
     "handoffAccount": "Continue as <account>{email}</account> in <organization>{organizationName}</organization>?",
     "handoffTitle": "Continue to stella",
     "headline": "Clarity for every case.",
+    "invalidEmailOrPassword": "Incorrect email or password.",
     "invitation": {
       "declined": "Invitation declined",
       "declinedDescription": "You have declined this invitation. You can safely close this page.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Use a backup code instead"
     },
     "useDifferentEmail": "Use a different email",
+    "useEmailCode": "Use an email code instead",
     "usePassword": "Use a password instead",
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>"
   },
@@ -2200,6 +2203,15 @@
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",
     "sources": "Sources:",
+    "steerRefused": {
+      "cannotSteer": "This agent cannot take messages while it works.",
+      "noRun": "The agent is not running on your computer right now.",
+      "notPlain": "Only a text message without files, not sent anonymized, can go to the agent while it works.",
+      "notTaken": "The agent could not take your message just now.",
+      "runFull": "The agent cannot take more messages right now.",
+      "title": "Your message is queued until the agent finishes",
+      "turnNotRunning": "The agent is not working right now."
+    },
     "stopFailed": "Couldn't stop the answer. Try again.",
     "stopResponse": "Stop",
     "stopped": "Stopped",

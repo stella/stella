@@ -173,6 +173,7 @@ const deleteThread = createSafeRootHandler(
             if (result.length > 0) {
               pings.changed({
                 organizationId: thread.organizationId,
+                threadId: params.threadId,
                 userId: user.id,
               });
               await recordAuditEvent(tx, {

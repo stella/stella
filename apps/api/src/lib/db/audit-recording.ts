@@ -56,7 +56,8 @@ export type AuditExecutionContext = {
     | {
         type: "user_dispatch";
         userId: SafeId<"user">;
-        source: "chat" | "action" | "api";
+        /** `chat_queue`: the server sent a message the user queued, as the user. */
+        source: "chat" | "chat_queue" | "action" | "api";
         sourceId?: string;
       }
     | {
