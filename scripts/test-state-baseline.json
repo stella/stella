@@ -584,16 +584,6 @@
     "owner": "case-law",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/components/chat/ask-user-card.test.tsx": {
-    "count": 3,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/src/components/chat/chat-answer-footer.dom.test.tsx": {
-    "count": 3,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/web/src/components/chat/chat-mock-model-badge.test.tsx": {
     "count": 1,
     "owner": "ai",
@@ -619,24 +609,9 @@
     "owner": "ai",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/components/chat/composer-query-consumption.dom.test.tsx": {
-    "count": 3,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/src/components/chat/legal-citation-link.dom.test.tsx": {
-    "count": 3,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/web/src/components/chat/tool-approval-card.test.ts": {
     "count": 1,
     "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/src/components/references/reference-chip.test.tsx": {
-    "count": 3,
-    "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
   "apps/web/src/lib/deterministic-date.test.ts": {
