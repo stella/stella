@@ -42,9 +42,13 @@ use super::state::{Backoff, RunnerState};
 use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
   ActiveRun, CloseCode, DESKTOP_ID_HEADER, DesktopMessage, HELLO_TIMEOUT,
-  HarnessReport, HarnessStatus, Hello, MAX_FRAME_BYTES, PATH, PING_INTERVAL,
-  POLICY_VIOLATION_CODE, PROTOCOL, RunRef, RunRejected, ServerMessage, Welcome,
+  HarnessReport, HarnessStatus, Hello, LinkedFolderReport, LinkedFoldersStatus,
+  MAX_FRAME_BYTES, PATH, PING_INTERVAL, POLICY_VIOLATION_CODE, PROTOCOL, RunRef,
+  RunRejected, ServerMessage, Welcome,
 };
+
+/// How long a connection waits for the first probes before its hello.
+const FIRST_REPORTS_WAIT: Duration = Duration::from_secs(20);
 
 /// `hello` lists at most this many runs; the contract refuses more.
 const MAX_ACTIVE_RUNS: usize = 64;
@@ -177,6 +181,9 @@ pub(crate) struct Runner {
   report_changes: Option<watch::Receiver<u64>>,
   /// The reports the API last received, in `hello` or `harness.status`.
   sent_reports: Vec<HarnessReport>,
+  /// The linked folders the API last received, in `hello` or
+  /// `linked_folders.status`.
+  sent_linked_folders: Vec<LinkedFolderReport>,
 }
 
 impl Runner {
@@ -191,6 +198,7 @@ impl Runner {
     Self {
       report_changes,
       sent_reports: Vec::new(),
+      sent_linked_folders: Vec::new(),
       config: parts.config,
       auth: parts.auth,
       journals: parts.journals,
@@ -341,17 +349,40 @@ impl Runner {
     self.journal.replace(namespace.to_owned(), journal);
   }
 
-  async fn connect_once(&mut self) -> Ended {
+  /// The account to connect as, with its journal open and the host told
+  /// which API it serves.
+  async fn authorized(&mut self) -> Result<Authorized, Ended> {
     let authorized = match self.auth.authorize().await {
       Ok(Some(authorized)) => authorized,
-      Ok(None) => return Ended::SignedOut,
+      Ok(None) => return Err(Ended::SignedOut),
       Err(_unavailable) => {
         tracing::warn!("desktop runner account unavailable");
-        return Ended::Failed;
+        return Err(Ended::Failed);
       }
     };
     self.ensure_journal(&authorized.namespace).await;
     self.host.connecting(&authorized.api_base_url);
+    Ok(authorized)
+  }
+
+  async fn connect_once(&mut self) -> Ended {
+    let mut authorized = match self.authorized().await {
+      Ok(authorized) => authorized,
+      Err(ended) => return ended,
+    };
+    if !self.reports.settled() {
+      // The probes need the host `connecting` started, but the account's
+      // lease is not held while they run: every other account request
+      // would wait on it. The connection authorizes again afterwards.
+      drop(authorized);
+      if !self.wait_for_first_reports().await {
+        return Ended::Stopped;
+      }
+      authorized = match self.authorized().await {
+        Ok(authorized) => authorized,
+        Err(ended) => return ended,
+      };
+    }
     self.reattach();
     let (request, secure) = match upgrade_request(&authorized, self.config.desktop_id) {
       Ok(request) => request,
@@ -407,6 +438,7 @@ impl Runner {
     }
     let hello = self.hello();
     self.sent_reports.clone_from(&hello.harnesses);
+    self.sent_linked_folders.clone_from(&hello.linked_folders);
     let hello = DesktopMessage::Hello(hello);
     if send(&mut socket, &hello).await.is_err() {
       return Ended::Failed;
@@ -423,6 +455,35 @@ impl Runner {
     self.backoff.reset();
     self.publish(RunnerState::Connected);
     self.serve(&mut socket, notices).await
+  }
+
+  /// Wait, up to `FIRST_REPORTS_WAIT`, until every installed harness has
+  /// been probed, so the hello says what each can do. Runs the API sent
+  /// while the computer was away then start on a known report instead of
+  /// being refused as not installed.
+  /// Resolves `false` when the runner is told to stop meanwhile: a slow
+  /// probe never holds up turning local agents off or on again.
+  async fn wait_for_first_reports(&mut self) -> bool {
+    let Some(mut changes) = self.reports.changes() else {
+      return true;
+    };
+    let reports = &self.reports;
+    let settled = async {
+      while !reports.settled() {
+        if changes.changed().await.is_err() {
+          return;
+        }
+      }
+    };
+    tokio::select! {
+      waited = tokio::time::timeout(FIRST_REPORTS_WAIT, settled) => {
+        if waited.is_err() {
+          tracing::info!("desktop runner connects before every harness was probed");
+        }
+        true
+      }
+      () = Self::next_stop(&mut self.stop) => false,
+    }
   }
 
   fn hello(&self) -> Hello {
@@ -449,6 +510,7 @@ impl Runner {
       sidecar_version: self.host.sidecar_version(),
       harnesses: self.reports.reports(),
       active_runs,
+      linked_folders: self.reports.linked_folders(),
     }
   }
 
@@ -471,7 +533,8 @@ impl Runner {
     }
   }
 
-  /// Send each harness report that changed since the API last received it.
+  /// Send each harness report that changed since the API last received it,
+  /// and the linked folders when they changed.
   async fn send_changed_reports(&mut self, socket: &mut Socket) -> Result<(), ()> {
     let reports = self.reports.reports();
     for report in &reports {
@@ -483,6 +546,14 @@ impl Runner {
       }
     }
     self.sent_reports = reports;
+    let folders = self.reports.linked_folders();
+    if folders != self.sent_linked_folders {
+      let status = DesktopMessage::LinkedFoldersStatus(LinkedFoldersStatus {
+        folders: folders.clone(),
+      });
+      send(socket, &status).await?;
+      self.sent_linked_folders = folders;
+    }
     Ok(())
   }
 
@@ -614,6 +685,11 @@ impl Runner {
       }
     }
     for message in resend {
+      send(socket, &message).await?;
+    }
+    // The API forgot every background count at `hello`; the live ones
+    // count again.
+    for message in self.journal.background_reports() {
       send(socket, &message).await?;
     }
     Ok(())

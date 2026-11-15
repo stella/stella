@@ -1,4 +1,6 @@
+import { panic } from "better-result";
 import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
+import fc from "fast-check";
 import {
   mkdirSync,
   mkdtempSync,
@@ -8,12 +10,17 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ts from "typescript6";
+
+import { compareCodeUnit } from "@stll/collation";
+import { assertProperty } from "@stll/property-testing";
 
 import { formattedLikeRepository } from "./generated-artifacts";
 import {
   breakingApiChanges,
   checkPackageApi,
   generateApiReport,
+  printCanonicalDeclaration,
 } from "./package-api-report";
 
 // timeout: each case type-checks fixture packages and their published
@@ -661,3 +668,181 @@ test.each([
     ).toContain(expected);
   },
 );
+
+/**
+ * A type expression whose unions and type literals list their members in two
+ * orders.
+ */
+type DrawnType =
+  | { type: "leaf"; text: string }
+  | { type: "wrap"; wrap: (inner: string) => string; inner: DrawnType }
+  | { type: "union"; drawn: DrawnType[]; shuffled: DrawnType[] }
+  | { type: "object"; drawn: DrawnProperty[]; shuffled: DrawnProperty[] };
+type DrawnProperty = { name: string; value: DrawnType };
+type MemberOrder = "drawn" | "shuffled";
+
+const LEAF_TYPES = ['"x"', '"y"', "1", "2", "null", "undefined", "string"];
+const WRAPPERS = [
+  (inner: string) => `(${inner})[]`,
+  (inner: string) => `{ k: ${inner} }`,
+  (inner: string) => `((value: ${inner}) => void)`,
+  (inner: string) => `Promise<${inner}>`,
+  (inner: string) => `readonly [${inner}, 1]`,
+];
+
+const PROPERTY_NAMES = ["a", "b", '"c-d"', "readonly e", "f?"];
+
+const permutations = <T>(drawn: T[]) =>
+  fc
+    .shuffledSubarray(drawn, {
+      minLength: drawn.length,
+      maxLength: drawn.length,
+    })
+    .map((shuffled) => ({ drawn, shuffled }));
+
+const { drawnType } = fc.letrec<{ drawnType: DrawnType }>((tie) => ({
+  drawnType: fc.oneof(
+    { depthSize: "small", withCrossShrink: true },
+    fc
+      .constantFrom(...LEAF_TYPES)
+      .map((text): DrawnType => ({ type: "leaf", text })),
+    fc
+      .tuple(fc.constantFrom(...WRAPPERS), tie("drawnType"))
+      .map(([wrap, inner]): DrawnType => ({ type: "wrap", wrap, inner })),
+    fc
+      .array(tie("drawnType"), { minLength: 2, maxLength: 4 })
+      .chain(permutations)
+      .map((orders): DrawnType => ({ type: "union", ...orders })),
+    fc
+      .uniqueArray(
+        fc.record({
+          name: fc.constantFrom(...PROPERTY_NAMES),
+          value: tie("drawnType"),
+        }),
+        { minLength: 2, maxLength: 4, selector: ({ name }) => name },
+      )
+      .chain(permutations)
+      .map((orders): DrawnType => ({ type: "object", ...orders })),
+  ),
+}));
+
+const renderType = (drawn: DrawnType, order: MemberOrder): string => {
+  switch (drawn.type) {
+    case "leaf":
+      return drawn.text;
+    case "wrap":
+      return drawn.wrap(renderType(drawn.inner, order));
+    case "union":
+      return drawn[order]
+        .map((member) => `(${renderType(member, order)})`)
+        .join(" | ");
+    case "object":
+      // The call signature and method overloads keep their place among the
+      // properties around them.
+      return `{ (call: 1): void; ${drawn[order]
+        .map(({ name, value }) => `${name}: ${renderType(value, order)};`)
+        .join(" m(): 1; ")} m(): 2; }`;
+    default:
+      drawn satisfies never;
+      return panic("Unsupported drawn type");
+  }
+};
+
+const declarationText = (drawn: DrawnType, order: MemberOrder): string =>
+  `export declare const value: ${renderType(drawn, order)};\nexport type Alias = { field?: ${renderType(drawn, order)} };\n`;
+
+// Names, keywords and literals, in sorted order: what a printed declaration
+// says, whatever its layout, parentheses and member order.
+const declarationTokens = (text: string): string[] => {
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true);
+  scanner.setText(text);
+  const tokens: string[] = [];
+  for (
+    let kind = scanner.scan();
+    kind !== ts.SyntaxKind.EndOfFileToken;
+    kind = scanner.scan()
+  ) {
+    if (
+      kind === ts.SyntaxKind.Identifier ||
+      kind === ts.SyntaxKind.StringLiteral ||
+      kind === ts.SyntaxKind.NumericLiteral ||
+      (kind >= ts.SyntaxKind.FirstKeyword && kind <= ts.SyntaxKind.LastKeyword)
+    ) {
+      tokens.push(scanner.getTokenText());
+    }
+  }
+  return tokens.toSorted(compareCodeUnit);
+};
+
+test("a printed declaration does not depend on the order of any union's members or any type literal's properties", () => {
+  assertProperty(
+    "package-api-report: union member and property order never reach a printed declaration",
+    fc.property(drawnType, (drawn) => {
+      const drawnText = declarationText(drawn, "drawn");
+      const printed = printCanonicalDeclaration("api.d.ts", drawnText);
+      expect(
+        printCanonicalDeclaration(
+          "api.d.ts",
+          declarationText(drawn, "shuffled"),
+        ),
+      ).toBe(printed);
+      // A fixed point, and nothing the declaration says is lost or added.
+      expect(printCanonicalDeclaration("api.d.ts", printed)).toBe(printed);
+      expect(declarationTokens(printed)).toEqual(declarationTokens(drawnText));
+    }),
+    { numRuns: 200 },
+  );
+});
+
+// Literals the checker meets first get the lower type ids that TypeScript
+// orders inferred unions and expanded mapped types by. The report checks and
+// emits modules in path order, so `a-warm.ts` is met before `unions.ts`.
+const WARM_LITERALS = ['"p"', '"q"', '"r"', "1", "2"];
+const INFERRED_UNIONS = [
+  'export const pick = (n: number) => (n === 0 ? "p" : n === 1 ? "q" : n === 2 ? "r" : n === 3 ? 1 : 2);',
+  'export const box = (n: number) => ({ value: n === 0 ? "r" : n === 1 ? "p" : undefined });',
+  'export const pair = (n: number) => [n === 0 ? "q" : "p", n === 1 ? 2 : 1] as const;',
+  "const keyed = <K extends string>(keys: readonly K[]) => ({}) as { [P in K]: P };",
+  'export const expanded = keyed(["r", "q", "p"]);',
+].join("\n");
+
+const inferredUnionsReport = (warmOrder: readonly string[]): string => {
+  const root = mkdtempSync(path.join(tmpdir(), "package-api-order-"));
+  roots.push(root);
+  mkdirSync(path.join(root, "src"));
+  writeFileSync(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "@stll/fixture",
+      exports: { "./a-warm": "./src/a-warm.ts", "./unions": "./src/unions.ts" },
+    }),
+  );
+  writeFileSync(path.join(root, "src/unions.ts"), `${INFERRED_UNIONS}\n`);
+  writeFileSync(
+    path.join(root, "src/a-warm.ts"),
+    `export const warm = [${warmOrder.join(", ")}] as const;\n`,
+  );
+  return (
+    generateApiReport(root).declarations["./src/unions.d.ts"] ??
+    panic("The report has no ./src/unions.d.ts entry")
+  );
+};
+
+// timeout: each run type-checks two fixture programs; five runs take
+// 10 to 25 seconds on a loaded CI runner.
+test("one module's types never reorder another module's inferred unions or expanded properties", () => {
+  const reference = inferredUnionsReport(WARM_LITERALS);
+  assertProperty(
+    "package-api-report: another module's type creation order never reorders a report entry",
+    fc.property(
+      fc.shuffledSubarray(WARM_LITERALS, {
+        minLength: WARM_LITERALS.length,
+        maxLength: WARM_LITERALS.length,
+      }),
+      (warmOrder) => {
+        expect(inferredUnionsReport(warmOrder)).toBe(reference);
+      },
+    ),
+    { numRuns: 5 },
+  );
+}, 90_000);

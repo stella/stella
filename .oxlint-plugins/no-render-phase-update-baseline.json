@@ -1,7 +1,6 @@
 {
   "apps/desktop/src/clipboard/ClipboardApp.tsx": 2,
   "apps/mobile/src/components/case-law-list.tsx": 1,
-  "apps/mobile/src/components/chats-list.tsx": 1,
   "apps/mobile/src/components/header-search.tsx": 1,
   "apps/web/src/components/ai-suggestions/host.tsx": 1,
   "apps/web/src/components/chat/ask-user-card.tsx": 2,

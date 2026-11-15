@@ -11,10 +11,6 @@
  *     relevance: base64("<score>:relevance:<decisionId>")
  *     newest:    the date order's cursor (`decision-date-order.ts`), scoped to
  *                `newest`
- *
- * REMOVAL CONDITION: drop the one-segment legacy read once no replica issuing
- * `<sortKey>:<decisionId>` can still be serving. That form predates sorting
- * entirely, so `relevance` is what its page was ordered by, soundly.
  */
 
 import { panic } from "better-result";
@@ -68,19 +64,11 @@ const decodeRelevanceCursor = (cursor: string): DecisionSearchCursor | null => {
   if (id === undefined || !isUuid(id)) {
     return null;
   }
-  switch (segments.length) {
-    // legacy: `<sortKey>:<decisionId>`.
-    case 1:
-      return { sort: RELEVANCE, sortKey: decoded.score, id };
-    case 2:
-      return segments.at(0) === RELEVANCE
-        ? { sort: RELEVANCE, sortKey: decoded.score, id }
-        : null;
-    // A decision id carrying a colon is not a cursor this service issued: the
-    // grammar spends every segment it defines.
-    default:
-      return null;
-  }
+  // The grammar spends both segments it defines: a payload naming no order, or
+  // a decision id carrying a colon, is not a cursor this service issued.
+  return segments.length === 2 && segments.at(0) === RELEVANCE
+    ? { sort: RELEVANCE, sortKey: decoded.score, id }
+    : null;
 };
 
 /** The position a cursor names in `sort`, or null for one `sort` did not issue. */

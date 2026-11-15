@@ -3,6 +3,7 @@ import {
   ReviewAuthorAvatar,
   UNKNOWN_AUTHOR_LABEL,
 } from "@stll/ui/review-author-avatar";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { getDisplayName } from "@/lib/get-display-name";
@@ -62,28 +63,23 @@ export const UserIdentity = ({
         />
       )}
       <Component className="min-w-0 flex-1">
-        <BidiText
-          as={element}
+        <TruncatedText
           className={cn(
-            "truncate text-sm font-medium",
-            element === "span" && "block",
+            "text-sm font-medium",
             deleted && "text-muted-foreground",
             nameClassName,
           )}
+          render={<BidiText as={element} />}
         >
           {displayName}
-        </BidiText>
+        </TruncatedText>
         {secondaryText ? (
-          <BidiText
-            as={element}
-            className={cn(
-              "text-muted-foreground truncate text-xs",
-              element === "span" && "block",
-              secondaryClassName,
-            )}
+          <TruncatedText
+            className={cn("text-muted-foreground text-xs", secondaryClassName)}
+            render={<BidiText as={element} />}
           >
             {secondaryText}
-          </BidiText>
+          </TruncatedText>
         ) : null}
       </Component>
     </Component>

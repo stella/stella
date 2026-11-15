@@ -120,7 +120,9 @@ const OrganizationInstructionsEditor = ({
             role="group"
             aria-labelledby={headingId}
             aria-describedby={descriptionId}
-            className="min-h-40 rounded-md border"
+            // The editor loads lazily into this box and fills it, so its
+            // arrival never changes the card's height.
+            className="flex min-h-40 flex-col rounded-md border"
           >
             <MarkdownHybridEditor
               key={editorRevision}
@@ -130,7 +132,6 @@ const OrganizationInstructionsEditor = ({
               onMarkdownChange={setDraft}
               changeEmission="immediate"
               readOnly={!canEdit || mutation.isPending}
-              className="min-h-40"
             />
           </div>
           <p className="text-muted-foreground text-end text-xs tabular-nums">

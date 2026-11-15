@@ -71,6 +71,10 @@ const EXPECTED_SITES: Record<string, string> = {
     "encryption",
   "src/handlers/files/update-document-properties.ts:createEntityVersionFromBuffer:0":
     "serverBuiltFileEncryption()",
+  "src/handlers/sharepoint/import-file.ts:createEntityFromBuffer:0":
+    "encryption",
+  "src/handlers/sharepoint/import-file.ts:createEntityVersionFromBuffer:0":
+    "encryption",
   "src/handlers/lists/sample-case/create.ts:createDocument:0":
     "serverBuiltFileEncryption()",
   "src/handlers/reports/report-export-queue.ts:createEntityFromBuffer:0":

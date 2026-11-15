@@ -16,10 +16,8 @@ import {
   LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
-import {
-  extractFacts,
-  parseOccurredOn,
-} from "@/api/lib/lists/generation/fact-extract";
+import { parsePartialDate } from "@/api/lib/lists/fact-details";
+import { extractFacts } from "@/api/lib/lists/generation/fact-extract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
@@ -281,26 +279,26 @@ describe("extractFacts", () => {
   });
 });
 
-describe("parseOccurredOn", () => {
+describe("parsePartialDate", () => {
   test("keeps the precision the document stated", () => {
-    expect(parseOccurredOn("2021-07-19")).toEqual({
+    expect(parsePartialDate("2021-07-19")).toEqual({
       date: "2021-07-19",
       precision: "day",
     });
-    expect(parseOccurredOn("2021-07")).toEqual({
+    expect(parsePartialDate("2021-07")).toEqual({
       date: "2021-07-01",
       precision: "month",
     });
-    expect(parseOccurredOn("2021")).toEqual({
+    expect(parsePartialDate("2021")).toEqual({
       date: "2021-01-01",
       precision: "year",
     });
   });
 
   test("drops a date that is not a calendar date or not a date at all", () => {
-    expect(parseOccurredOn("2021-02-30")).toBeNull();
-    expect(parseOccurredOn("2021-13")).toBeNull();
-    expect(parseOccurredOn("spring 2021")).toBeNull();
-    expect(parseOccurredOn(null)).toBeNull();
+    expect(parsePartialDate("2021-02-30")).toBeNull();
+    expect(parsePartialDate("2021-13")).toBeNull();
+    expect(parsePartialDate("spring 2021")).toBeNull();
+    expect(parsePartialDate(null)).toBeNull();
   });
 });

@@ -22,6 +22,7 @@ import {
   BILLING_STATUS,
   billingDraftUserSettings,
   chatBrowserSiteGrants,
+  chatLimitReminders,
   chatToolGrants,
   contacts,
   correspondence,
@@ -42,6 +43,7 @@ import {
   outboundActions,
   pdfSigningSessions,
   requestIdempotencyReceipts,
+  searchHistoryCountryClears,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
@@ -1521,7 +1523,10 @@ type ClearMemberScopedDataOptions = Pick<
 
 /**
  * The member's desktop runners, on the owner connection the runner tables
- * admit; their runs, queued commands, events and folder restores cascade, and an open runner
+ * admit. Runners go first, as a session claim locks a runner before its
+ * runs, so the two never wait on each other; their runs cascade, and the
+ * runs are then deleted by name too, since each keeps its output key.
+ * Queued commands, events and folder restores cascade, and an open runner
  * socket closes on its next heartbeat.
  */
 const clearMemberDesktopRunners = async ({
@@ -1537,6 +1542,14 @@ const clearMemberDesktopRunners = async ({
       and(
         eq(desktopRunners.organizationId, organizationId),
         eq(desktopRunners.userId, userId),
+      ),
+    );
+  await tx
+    .delete(desktopRunnerRuns)
+    .where(
+      and(
+        eq(desktopRunnerRuns.organizationId, organizationId),
+        eq(desktopRunnerRuns.userId, userId),
       ),
     );
   await recordAuditEvent(tx, {
@@ -1638,22 +1651,19 @@ const clearMemberConnectorAuthorization = async ({
         eq(outboundActions.status, "pending"),
       ),
     );
-  await tx
-    .delete(chatToolGrants)
-    .where(
-      and(
-        eq(chatToolGrants.organizationId, organizationId),
-        eq(chatToolGrants.userId, userId),
-      ),
-    );
-  await tx
-    .delete(chatBrowserSiteGrants)
-    .where(
-      and(
-        eq(chatBrowserSiteGrants.organizationId, organizationId),
-        eq(chatBrowserSiteGrants.userId, userId),
-      ),
-    );
+  // The member's own chat settings: tool grants, limit reminders and browser
+  // site approvals.
+  for (const table of [
+    chatToolGrants,
+    chatLimitReminders,
+    chatBrowserSiteGrants,
+  ] as const) {
+    await tx
+      .delete(table)
+      .where(
+        and(eq(table.organizationId, organizationId), eq(table.userId, userId)),
+      );
+  }
   await tx
     .delete(mcpOAuthState)
     .where(
@@ -1895,6 +1905,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [desktopRunnerRuns.userId, "cleared"],
   [desktopRunnerFolderRestores.userId, "cleared"],
   [searchHistoryEntries.userId, "cleared"],
+  [searchHistoryCountryClears.userId, "cleared"],
   [searchHistoryOwners.userId, "cleared"],
   [searchHistoryTombstones.userId, "cleared"],
   [workspaceMembers.userId, "cleared"],
@@ -1914,6 +1925,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [sharepointConnections.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
   [chatToolGrants.userId, "cleared"],
+  [chatLimitReminders.userId, "cleared"],
   [chatBrowserSiteGrants.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],

@@ -8,9 +8,14 @@ import {
 } from "@tanstack/ai";
 import { panic } from "better-result";
 
-import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import {
+  type AgentHarness,
+  harnessSessionIdEvent,
+} from "@stll/api-contract/agent-harness";
+import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   chatLocalRunApprovalReason,
 } from "@stll/api-contract/chat-local-run-tool";
 import {
@@ -20,6 +25,10 @@ import {
   type ChatLocalRunContext,
   type ChatLocalRunLimit,
 } from "@stll/api-contract/chat-run-target";
+import {
+  DESKTOP_RUNNER_INPUT_EVENT,
+  type DesktopRunnerInputEvent,
+} from "@stll/api-contract/desktop-runner";
 
 import {
   approvalMessage,
@@ -28,6 +37,7 @@ import {
   type HarnessFailure,
   type HarnessQuestionRequest,
   type HarnessToolCall,
+  type HarnessToolResult,
   type HarnessUsage,
 } from "./events";
 import { shownToolInput, shownToolResult } from "./tool-parts";
@@ -69,10 +79,15 @@ export type HarnessChunkContext = {
 const FAILURE_CODE = {
   auth_required: "harness.auth_required",
   usage_limit: "harness.usage_limit",
+  // The provider's own transient outage, not the harness's: the chat's code
+  // for it, so the member reads "try again in a moment".
+  model_at_capacity: AI_FAILURE_CODES.provider_unavailable,
   provider_error: "harness.provider_error",
   harness_exited: "harness.exited",
   protocol_violation: "harness.protocol_violation",
   sandbox_unavailable: "harness.sandbox_unavailable",
+  retry_stalled: "harness.retry_stalled",
+  tools_unavailable: "harness.tools_unavailable",
 } as const satisfies Record<HarnessFailure["type"], string>;
 
 const toTokenUsage = (usage: HarnessUsage): TokenUsage => {
@@ -108,6 +123,13 @@ const TOOL_RESULT_FIELDS = {
   },
 } as const satisfies Record<ToolResultStatus, object>;
 
+/**
+ * A cancelled call's result content, whatever the harness sent with it: a
+ * call the turn cut off never ran to its end, so its card reads as stopped,
+ * never as failed.
+ */
+const INTERRUPTED_RESULT_CONTENT = JSON.stringify({ status: "interrupted" });
+
 type TextState = { text: string; emitted: number; ended: boolean };
 
 class ChunkMapper {
@@ -122,9 +144,12 @@ class ChunkMapper {
   private readonly texts = new Map<string, TextState>();
 
   private readonly context: HarnessChunkContext;
+  /** The model the turn runs on: the one asked for until a reroute. */
+  private model: string;
 
   constructor(context: HarnessChunkContext) {
     this.context = context;
+    this.model = context.model;
   }
 
   map(event: HarnessEvent): AdapterYieldChunk[] {
@@ -155,7 +180,7 @@ class ChunkMapper {
         this.push(
           {
             type: EventType.CUSTOM,
-            name: `${this.context.harness}.session-id`,
+            name: harnessSessionIdEvent(this.context.harness),
             value: { sessionId: event.sessionId },
           },
           {
@@ -190,10 +215,26 @@ class ChunkMapper {
       case "question.requested":
         this.question(event.request);
         return;
+      case "model.rerouted":
+        this.model = event.model;
+        return;
       case "interaction.resolved":
       case "retrying":
         // The harness continues on its own; its next output opens a new
         // segment. A transient retry leaves nothing to persist.
+        return;
+      case "input.settled":
+        // Where the turn took (or refused) a steering message. It names the
+        // input only: the API holds the text it sent.
+        this.ensureSegment();
+        this.push({
+          type: EventType.CUSTOM,
+          name: DESKTOP_RUNNER_INPUT_EVENT,
+          value: {
+            inputId: event.inputId,
+            status: event.status,
+          } satisfies DesktopRunnerInputEvent,
+        });
         return;
       case "turn.completed": {
         // How full the context is, for the chat's meter.
@@ -234,12 +275,15 @@ class ChunkMapper {
     }
   }
 
-  /** Stamp the model and time every chunk carries, as the cloud engine does. */
+  /**
+   * Stamp the model and time every chunk carries, as the cloud engine does:
+   * the model that ran, which a reroute changes.
+   */
   private push(...chunks: AdapterYieldChunk[]) {
     for (const chunk of chunks) {
       this.out.push({
         ...chunk,
-        model: this.context.model,
+        model: this.model,
         timestamp: this.context.now(),
       });
     }
@@ -281,7 +325,7 @@ class ChunkMapper {
       type: EventType.RUN_FINISHED,
       runId: this.segmentRunId(),
       threadId: this.context.threadId,
-      model: this.context.model,
+      model: this.model,
       timestamp: this.context.now(),
       ...fields,
     };
@@ -293,7 +337,7 @@ class ChunkMapper {
       type: EventType.RUN_ERROR,
       runId: this.segmentRunId(),
       threadId: this.context.threadId,
-      model: this.context.model,
+      model: this.model,
       timestamp: this.context.now(),
       message: failure.message,
       code,
@@ -324,7 +368,16 @@ class ChunkMapper {
         type: EventType.TOOL_CALL_START,
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
-        toolName: toolCall.name,
+        // The subagent step that made the call, beside it: the API keeps
+        // the link under that step's chat call id.
+        ...(toolCall.parentCallId === undefined
+          ? {}
+          : {
+              metadata: {
+                [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]:
+                  toolCall.parentCallId,
+              },
+            }),
       },
       {
         type: EventType.TOOL_CALL_ARGS,
@@ -336,7 +389,6 @@ class ChunkMapper {
         type: EventType.TOOL_CALL_END,
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
-        toolName: toolCall.name,
         input,
       },
     );
@@ -363,7 +415,7 @@ class ChunkMapper {
 
   private completeToolCall(
     toolCall: HarnessToolCall,
-    result: { content: string; status: "succeeded" | "failed" },
+    result: HarnessToolResult,
   ) {
     if (this.opened.has(toolCall.id) && !this.unresolved.has(toolCall.id)) {
       // One result per call: a repeat would persist a second result part.
@@ -373,12 +425,14 @@ class ChunkMapper {
     this.openToolCall(toolCall);
     this.resolveToolCall(
       toolCall.id,
-      shownToolResult(
-        toolCall,
-        result.content,
-        result.status === "failed",
-        this.context.workspaceDir,
-      ),
+      result.status === "cancelled"
+        ? INTERRUPTED_RESULT_CONTENT
+        : shownToolResult(
+            toolCall,
+            result.content,
+            result.status === "failed",
+            this.context.workspaceDir,
+          ),
       result.status,
     );
   }
@@ -503,11 +557,7 @@ class ChunkMapper {
     }
     // Pair every open tool call before the run ends, as the cloud engine does.
     for (const toolCallId of [...this.unresolved]) {
-      this.resolveToolCall(
-        toolCallId,
-        JSON.stringify({ status: "interrupted" }),
-        "cancelled",
-      );
+      this.resolveToolCall(toolCallId, INTERRUPTED_RESULT_CONTENT, "cancelled");
     }
     this.closeSegment(chunk);
     this.terminated = true;

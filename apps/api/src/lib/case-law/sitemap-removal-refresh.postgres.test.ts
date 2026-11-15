@@ -152,8 +152,20 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
     ]);
     const refreshDb =
       asTestRaw<Parameters<typeof refreshCaseLawSitemapShards>[0]>(db);
-    await refreshCaseLawSitemapShards(refreshDb);
-    await refreshCaseLawSitemapShards(refreshDb);
+    // Broad invalidations expand into monthly work across scheduler runs.
+    // Start with one work unit so setup also exercises its continuation.
+    expect(
+      (await refreshCaseLawSitemapShards(refreshDb, { runBudgetMs: 0 })).type,
+    ).toBe("pending");
+    for (let run = 0; run < 100; run += 1) {
+      // db-await-in-loop: continue scheduler runs until their durable work is drained.
+      if ((await refreshCaseLawSitemapShards(refreshDb)).type === "refreshed") {
+        break;
+      }
+      if (run === 99) {
+        panic("The sitemap fixture refresh never finished");
+      }
+    }
     const remainingChanges = await db
       .select()
       .from(caseLawSitemapChanges)
@@ -196,11 +208,13 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
         .where(eq(caseLawSitemapShards.country, country))
         .orderBy(caseLawSitemapShards.month),
     ).toEqual([{ month: "01" }, { month: "02" }]);
-    // Only January is dirty. Removal retires February too, so its rebuilding
-    // depends on the generation trigger's whole-country invalidation.
+    // Only January is dirty: an earlier updated_at can lower its last
+    // modification, so it is logged for a recount rather than folded.
+    // Removal retires February too, so its rebuilding depends on the
+    // generation trigger's whole-country invalidation.
     await db
       .update(caseLawDecisions)
-      .set({ updatedAt: new Date("2024-04-01T00:00:00Z") })
+      .set({ updatedAt: new Date("2024-02-15T00:00:00Z") })
       .where(eq(caseLawDecisions.id, decisionId));
     const counted = Promise.withResolvers<undefined>();
     const release = Promise.withResolvers<undefined>();

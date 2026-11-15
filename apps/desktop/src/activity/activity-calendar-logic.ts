@@ -855,6 +855,11 @@ const hasOwnTitle = (segment: MatchedSegment) =>
 
 /** The Titles tab: every title across the suggestion's apps, and each app's
  * time without one, so the tab accounts for all of the suggestion's time. */
+/** Whether any of a suggestion's time recorded a window title of its own;
+ * untitled time alone is not a title. */
+export const hasWindowTitles = (suggestion: ActivitySuggestion) =>
+  titleRows(suggestion).some(({ type }) => type === "named");
+
 export const titleRows = (suggestion: ActivitySuggestion): EvidenceRow[] => {
   const named = suggestion.evidence.flatMap(({ identifier, details }) =>
     details.map(({ title, durationMs, matter }): EvidenceRow => ({

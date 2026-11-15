@@ -10,7 +10,9 @@ import {
 } from "bun:test";
 
 import {
+  chatBackgroundTasksChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
   newNotificationRealtimeEvent,
   type OrganizationRealtimeEvent,
@@ -129,7 +131,12 @@ const FANOUT_CASES: { [C in RealtimeChannel]: readonly ChannelEvent[C][] } = {
     },
   ],
   organization: [resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY)],
-  user: [newNotificationRealtimeEvent(), chatRunsChangedRealtimeEvent()],
+  user: [
+    newNotificationRealtimeEvent(),
+    chatBackgroundTasksChangedRealtimeEvent(),
+    chatRunsChangedRealtimeEvent(),
+    chatThreadsChangedRealtimeEvent(),
+  ],
   session: [
     {
       type: REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED,

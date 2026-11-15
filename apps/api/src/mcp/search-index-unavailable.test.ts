@@ -721,6 +721,7 @@ describe("public corpus statement budgets", () => {
             status: "available",
             readBlocks: async () => [],
             readTextPieces: async () => [],
+            resolveHeldAnchors: async () => new Map(),
           }),
         },
       },

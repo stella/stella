@@ -202,7 +202,7 @@ const choose = async (input: HTMLInputElement, search: string) => {
     });
   });
   await testing.waitFor(() =>
-    expect(testing.screen.getAllByRole("option")).toHaveLength(1),
+    expect(testing.screen.getAllByRole("option").length).toBe(1),
   );
   await testing.act(async () => {
     testing.fireEvent.keyDown(input, { key: "ArrowDown" });

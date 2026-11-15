@@ -54,6 +54,7 @@ const stepNamed = (name: string, candidate = source) => {
 };
 
 const PROOF_STEPS = [
+  "Configure flaky-test quarantine",
   "Run staging web smoke",
   "Run staging response policy checks",
   "Run staging API chat smoke",
@@ -418,5 +419,113 @@ test("proof tooling failures remain distinct before waiver evaluation", () => {
     expect(result).toStartWith("error|Staging proof tooling failure:");
     expect(result).not.toContain("rerun");
     expect(result).not.toContain("waived:");
+  }
+});
+
+test("quarantine tooling survives a deployed checkout without the action", () => {
+  const root = mkdtempSync(
+    path.resolve(import.meta.dir, "../.quarantine-tooling-test-"),
+  );
+  try {
+    const workspace = path.join(root, "workspace");
+    const runnerTemp = path.join(root, "runner-temp");
+    mkdirSync(runnerTemp, { recursive: true });
+    const checkout = stepNamed("Checkout quarantine tooling");
+    if (!isRecord(checkout["with"])) {
+      throw new TypeError("Quarantine checkout inputs are required");
+    }
+    expect(checkout["uses"]).toBe(
+      stepNamed("Checkout deployed source")["uses"],
+    );
+    expect(checkout["with"]).toMatchObject({
+      ref: `\${{ github.workflow_sha }}`,
+      "persist-credentials": false,
+      path: ".quarantine-tooling",
+    });
+    for (const relativeFile of text(checkout["with"], "sparse-checkout")
+      .trim()
+      .split(/\s+/u)) {
+      copySparseCheckoutFile({
+        fixtureRoot: workspace,
+        checkoutPath: ".quarantine-tooling",
+        relativeFile,
+      });
+    }
+    const environment = {
+      PATH: process.env["PATH"] ?? "",
+      GITHUB_WORKSPACE: workspace,
+      RUNNER_TEMP: runnerTemp,
+      GITHUB_ENV: path.join(root, "github-env"),
+    };
+    const preserve = stepNamed(
+      "Preserve quarantine tooling across source checkouts",
+    );
+    const restore = stepNamed(
+      "Restore quarantine tooling after source checkout",
+    );
+    for (const step of [
+      checkout,
+      preserve,
+      restore,
+      stepNamed("Configure flaky-test quarantine"),
+    ]) {
+      expect(step["env"]).toBeUndefined();
+    }
+    const steps = promotionSteps();
+    const target = steps.findIndex(
+      (step) => step["name"] === "Checkout deployed source",
+    );
+    expect(
+      steps.indexOf(
+        steps.find((step) => step["name"] === "Checkout quarantine tooling") ??
+          {},
+      ),
+    ).toBeLessThan(target);
+    expect(
+      Bun.spawnSync(["bash", "-c", text(preserve, "run")], {
+        cwd: workspace,
+        env: environment,
+      }).exitCode,
+    ).toBe(0);
+    rmSync(workspace, { recursive: true, force: true });
+    mkdirSync(workspace);
+    expect(
+      existsSync(
+        path.join(
+          workspace,
+          ".github/actions/flaky-test-quarantine/action.yml",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      Bun.spawnSync(["bash", "-c", text(restore, "run")], {
+        cwd: workspace,
+        env: environment,
+      }).exitCode,
+    ).toBe(0);
+    const tooling = path.join(workspace, ".quarantine-tooling");
+    for (const entry of ["main.mjs", "post.mjs"]) {
+      expect(
+        assertPreservedImports(
+          path.join(tooling, ".github/actions/flaky-test-quarantine", entry),
+        ),
+      ).toBeGreaterThan(1);
+    }
+    const configured = Bun.spawnSync(
+      [
+        process.execPath,
+        path.join(tooling, ".github/actions/flaky-test-quarantine/main.mjs"),
+      ],
+      { cwd: workspace, env: environment },
+    );
+    expect(configured.exitCode, configured.stderr.toString()).toBe(0);
+    expect(readFileSync(environment.GITHUB_ENV, "utf-8")).toContain(
+      `--preload=${tooling}/scripts/flaky-test-quarantine-preload.ts`,
+    );
+    expect(stepNamed("Configure flaky-test quarantine")["with"]).toEqual({
+      token: `\${{ github.token }}`,
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

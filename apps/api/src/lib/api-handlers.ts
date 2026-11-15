@@ -63,6 +63,7 @@ import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import { requestAbortRefusal } from "@/api/lib/errors/request-abort";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -158,6 +159,8 @@ import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
+import { legalHoldViewerFromContext } from "@/api/lib/workspaces/legal-holds/projection";
+import { legalHoldRefusalForViewer } from "@/api/lib/workspaces/legal-holds/refusal";
 import { recordWriteContract } from "@/api/lib/write-contract/write-contract";
 import type { WriteContract } from "@/api/lib/write-contract/write-contract";
 // Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
@@ -305,6 +308,9 @@ type McpCapabilityReason =
  * - `human_confirmation`: the user's own confirmation of an action an agent
  *   prepared (for example sending an email they reviewed); an agent must never
  *   be able to confirm for them.
+ * - `organization_export`: starting or downloading a whole-organization data
+ *   export; a person performs it in the app, never an agent, because it hands
+ *   over the firm's privileged material in one action.
  * - `native_device`: a native app registering the device it runs on (push
  *   alert delivery). Only the signed-in app holds the device token; an agent
  *   that could register one could route a person's alerts elsewhere.
@@ -337,6 +343,7 @@ type McpInternalReason =
   | "compound_consent"
   | "human_confirmation"
   | "native_device"
+  | "organization_export"
   | "agent_autonomy_ceiling";
 
 /**
@@ -421,10 +428,9 @@ export type UsageMeteringConfig = {
  * (`v.pipe(v.string(), v.description("..."))`), which the same exporter carries
  * into the catalog's `inputSchema`.
  *
- * Optional only until the remaining gaps are closed. Every capability without
- * one is listed by id in `apps/api/capability-description-ledger.json`; a new
- * capability may not join that list, and authoring prose means deleting its
- * line in the same change (see apps/api/scripts/capability-description-guard.ts).
+ * Optional in the type, required by
+ * apps/api/scripts/capability-description-guard.ts, which fails a capability
+ * without one.
  */
 type CapabilityDescription = {
   description?: string;
@@ -1070,6 +1076,7 @@ const runSafeHandlerInDeliveryScope = async <
     const error = result.error;
 
     const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
@@ -1085,7 +1092,15 @@ const runSafeHandlerInDeliveryScope = async <
         telemetry: safeErrorTelemetryDisposition(statusCode, handlerError.code),
       });
 
-      return toErrorStatus(statusCode, safeErrorBody(handlerError));
+      return toErrorStatus(
+        statusCode,
+        safeErrorBody(
+          legalHoldRefusalForViewer(
+            handlerError,
+            legalHoldViewerFromContext(ctx),
+          ),
+        ),
+      );
     }
 
     if (DatabaseError.is(error)) {
@@ -1142,6 +1157,7 @@ const runSafeHandlerInDeliveryScope = async <
     // BYOK key for) gets reported to the user as "Internal
     // server error" with no actionable detail.
     const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
@@ -1156,7 +1172,15 @@ const runSafeHandlerInDeliveryScope = async <
           handlerError.code,
         ),
       });
-      return toErrorStatus(handlerError.status, safeErrorBody(handlerError));
+      return toErrorStatus(
+        handlerError.status,
+        safeErrorBody(
+          legalHoldRefusalForViewer(
+            handlerError,
+            legalHoldViewerFromContext(ctx),
+          ),
+        ),
+      );
     }
 
     logAndCaptureSafeError({

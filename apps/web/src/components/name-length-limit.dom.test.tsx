@@ -110,7 +110,7 @@ test("saving a view template shows the server's length verdict under the name", 
   // Editing the name clears the stale verdict.
   fireEvent.change(input, { target: { value: "Shorter" } });
   await waitFor(() => {
-    expect(screen.queryByText(TOO_LONG_MESSAGE)).toBeNull();
+    expect(screen.queryByText(TOO_LONG_MESSAGE) === null).toBe(true);
   });
 });
 

@@ -15,6 +15,7 @@ export const DESIGN_SYSTEM_CONSUMER_FILES = [
   ...PRODUCT_FRONTEND_FILES,
   "apps/desktop/src/**/*.{ts,tsx}",
   "apps/landing/src/**/*.{ts,tsx}",
+  "apps/outlook/src/**/*.{ts,tsx}",
   "apps/playground/src/**/*.{ts,tsx}",
   "packages/chat/src/**/*.{ts,tsx}",
   "packages/decision-reader/src/**/*.{ts,tsx}",

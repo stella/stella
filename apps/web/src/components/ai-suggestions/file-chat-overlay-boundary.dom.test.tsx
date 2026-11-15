@@ -208,7 +208,7 @@ test("a dismissed overlay failure leaves the reader working without the overlay"
       view.getByRole("button", { name: messages.common.dismiss }),
     );
 
-    await waitFor(() => expect(view.queryByRole("alert")).toBe(null));
+    await waitFor(() => expect(view.queryByRole("alert") === null).toBe(true));
     expect(view.getByTestId("reader")).toBeDefined();
     expect(overlayRenders).toBe(rendersBeforeDismiss);
   } finally {

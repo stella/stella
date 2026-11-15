@@ -20,6 +20,7 @@ import {
   DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS,
   DESKTOP_RUNNER_LIMITS,
+  DESKTOP_RUNNER_LINKED_FOLDER_STATES,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   type DESKTOP_RUNNER_MESSAGE_ROLES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
@@ -27,6 +28,7 @@ import {
   DESKTOP_RUNNER_POLICY_REASONS,
   DESKTOP_RUNNER_POLICY_VIOLATION_CODE,
   DESKTOP_RUNNER_PROTOCOL,
+  DESKTOP_RUNNER_REASONING_EFFORTS,
   DESKTOP_RUNNER_REJECT_REASONS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
   DESKTOP_RUNNER_SERVER_MESSAGE,
@@ -40,6 +42,7 @@ import {
   desktopRunnerHarnessReportSchema,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
+  knownReasoningEfforts,
   parseDesktopRunnerFrame,
 } from "./desktop-runner";
 import fixtures from "./desktop-runner.fixtures.json";
@@ -134,10 +137,12 @@ describe("desktop runner fixtures", () => {
       networkPolicies: [...DESKTOP_RUNNER_NETWORK_POLICIES],
       fsPolicies: [...DESKTOP_RUNNER_FS_POLICIES],
       approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
+      reasoningEfforts: [...DESKTOP_RUNNER_REASONING_EFFORTS],
       desktopMessageTypes: Object.values(DESKTOP_RUNNER_DESKTOP_MESSAGE),
       serverMessageTypes: Object.values(DESKTOP_RUNNER_SERVER_MESSAGE),
       answerLimits: DESKTOP_RUNNER_ANSWER_LIMITS,
       folderRestoreOutcomes: [...DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES],
+      linkedFolderStates: [...DESKTOP_RUNNER_LINKED_FOLDER_STATES],
     });
   });
 
@@ -220,12 +225,36 @@ describe("desktop runner fixtures", () => {
         folderRestoreOutcomes: desktop.flatMap((message) =>
           message.type === "folder.restored" ? [message.outcome] : [],
         ),
+        linkedFolderStates: [
+          ...desktop.flatMap((message) =>
+            message.type === "hello"
+              ? message.linkedFolders.map(({ state }) => state)
+              : [],
+          ),
+          ...desktop.flatMap((message) =>
+            message.type === "linked_folders.status"
+              ? message.folders.map(({ state }) => state)
+              : [],
+          ),
+        ],
         networkPolicies: starts.map(({ policy }) => policy.network),
         fsPolicies: starts.map(({ policy }) => policy.fs),
         approvalModes: [
           ...starts.map(({ policy }) => policy.approvals),
           ...reports.flatMap((report) =>
             report.state === "ready" ? report.approvalModes : [],
+          ),
+        ],
+        reasoningEfforts: [
+          ...starts.flatMap(({ reasoningEffort }) =>
+            reasoningEffort === null ? [] : [reasoningEffort],
+          ),
+          ...reports.flatMap((report) =>
+            report.state === "ready"
+              ? report.models.flatMap(
+                  ({ reasoningEfforts }) => reasoningEfforts,
+                )
+              : [],
           ),
         ],
       }),
@@ -243,6 +272,28 @@ describe("desktop runner fixtures", () => {
     const parsed = v.safeParse(desktopRunnerHarnessReportSchema, report);
     expect(parsed.success).toBe(true);
     expect(parsed.output).toMatchObject({ approvalModes: ["ask"] });
+  });
+
+  test("a model reported before reasoning efforts offers none", () => {
+    const parsed = v.safeParse(desktopRunnerHarnessReportSchema, {
+      state: "ready",
+      id: "codex",
+      version: "0.48.0",
+      capabilities: ["approvals"],
+      models: [{ id: "model-large", label: "Large model" }],
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.output).toMatchObject({
+      models: [{ id: "model-large", reasoningEfforts: [] }],
+    });
+  });
+
+  test("a harness's efforts keep the ones the contract carries, once each, weakest first", () => {
+    expect(knownReasoningEfforts(["high", "turbo", "low", "high"])).toEqual([
+      "low",
+      "high",
+    ]);
+    expect(knownReasoningEfforts([])).toEqual([]);
   });
 
   test("an attached file's path stays in its own folder", () => {

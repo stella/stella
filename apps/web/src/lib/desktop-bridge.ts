@@ -1,9 +1,15 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
+import {
+  desktopAccountConnectUrl,
+  parseDesktopLinkStatus,
+  signedDesktopLinkStatus,
+} from "@stll/api-contract/desktop-account-link";
+import { readDesktopLinkProtocol } from "@stll/api-contract/desktop-registry";
 import type {
   DesktopAccountIdentity,
+  DesktopLinkFailure,
   LinkAccountRequest,
   LinkedAccountSnapshot,
 } from "@stll/api-contract/desktop-rpc";
@@ -115,7 +121,8 @@ export const parseDesktopAccountChallenge = (hash: string) => {
   const protocol = params.get("protocol");
   if (
     [...params].length !== 5 ||
-    protocol !== String(DESKTOP_ACCOUNT_POLICY.linkProtocol) ||
+    !protocol ||
+    readDesktopLinkProtocol(protocol) === null ||
     !correlationId ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
       correlationId,
@@ -251,26 +258,12 @@ export const desktopBridgeProofHeaders = async ({
 const isBridgeResponse = (value: unknown): value is BridgeResponse =>
   typeof value === "object" && value !== null;
 
-const parseDesktopConnectionStatus = (value: unknown) => {
-  if (typeof value !== "object" || value === null || !("status" in value)) {
-    return null;
-  }
-  switch (value.status) {
-    case "pending":
-    case "connected":
-    case "failed":
-      return value.status;
-    default:
-      return null;
-  }
-};
-
 const DESKTOP_BRIDGE_RESPONSE_MAX_SKEW_SECONDS = 30;
 
 /** The challenge fields a bridge status must be signed for. */
 type DesktopConnectionChallenge = Pick<
   DesktopAccountChallenge,
-  "correlationId" | "verifierHash" | "deviceJkt" | "portSecret"
+  "correlationId" | "verifierHash" | "deviceJkt" | "portSecret" | "protocol"
 >;
 
 type VerifyDesktopConnectionOptions = {
@@ -282,15 +275,22 @@ type VerifyDesktopConnectionOptions = {
 /**
  * Accepts a status only when the app signed it with this challenge's port
  * secret over `correlationId\nverifierHash\ndeviceJkt\nstatus\ntimestamp`
- * within the skew window: a status signed for any other challenge fails.
+ * within the skew window: a status signed for any other challenge fails, and
+ * so does a failure whose reason the app did not sign.
  */
 export const verifyDesktopConnectionStatus = async ({
   payload,
-  challenge: { correlationId, verifierHash, deviceJkt, portSecret },
+  challenge: { correlationId, verifierHash, deviceJkt, portSecret, protocol },
   nowSeconds,
 }: VerifyDesktopConnectionOptions) => {
-  const status = parseDesktopConnectionStatus(payload);
+  // The challenge names the protocol of the app that opened it.
+  const linkProtocol = readDesktopLinkProtocol(protocol);
+  const status =
+    linkProtocol === null
+      ? null
+      : parseDesktopLinkStatus(payload, linkProtocol);
   if (
+    linkProtocol === null ||
     status === null ||
     typeof payload !== "object" ||
     payload === null ||
@@ -328,7 +328,7 @@ export const verifyDesktopConnectionStatus = async ({
     key,
     signature,
     new TextEncoder().encode(
-      `${correlationId}\n${verifierHash}\n${deviceJkt}\n${status}\n${payload.timestamp}`,
+      `${correlationId}\n${verifierHash}\n${deviceJkt}\n${signedDesktopLinkStatus(status, linkProtocol)}\n${payload.timestamp}`,
     ),
   );
   return valid ? status : null;
@@ -535,8 +535,36 @@ export const resolveDesktopAccountLink = ({
 const provesLocalDesktopChallenge = async (
   challenge: DesktopConnectionChallenge,
 ) => {
-  const status = await readDesktopConnection({ challenge });
-  return status.isOk() && status.value === "pending";
+  const connection = await readDesktopConnection({ challenge });
+  return connection.isOk() && connection.value.status === "pending";
+};
+
+/**
+ * What a link the app ended reports: a refusal the page names with its own
+ * next step, the update it needs, or, for a failure the app did not classify,
+ * an error.
+ */
+const failedDesktopLinkOutcome = (
+  reason: DesktopLinkFailure,
+): Result<DesktopLinkOutcome, DesktopBridgeUnavailableError> => {
+  switch (reason) {
+    case "account_conflict":
+    case "switch_declined":
+    case "declined":
+      return Result.ok({
+        status: "refused",
+        reason,
+      } as const satisfies DesktopLinkOutcome);
+    case "update_required":
+      return Result.ok({
+        status: "update-required",
+      } as const satisfies DesktopLinkOutcome);
+    case "unavailable":
+      return Result.err(new DesktopBridgeUnavailableError());
+    default:
+      reason satisfies never;
+      return panic("Unknown desktop link failure");
+  }
 };
 
 type LinkDesktopAccountOptions = Pick<LinkAccountRequest, "apiBaseUrl"> & {
@@ -576,11 +604,13 @@ export const linkDesktopAccount = async ({
     accountAttempt = null;
   }
   if (!challengeLive) {
-    const params = new URLSearchParams({
-      apiBaseUrl,
-      webOrigin: window.location.origin,
-    });
-    window.location.href = `stella://account/connect?${params.toString()}`;
+    openDesktopUrl(
+      desktopAccountConnectUrl({
+        apiBaseUrl,
+        webOrigin: window.location.origin,
+        intent: "connect",
+      }),
+    );
     return Result.ok({
       status: "started",
     } as const satisfies DesktopLinkOutcome);
@@ -621,14 +651,19 @@ export const linkDesktopAccount = async ({
         const connection = await readDesktopConnection({ challenge });
         if (connection.isOk()) {
           const status = connection.value;
-          switch (status) {
+          switch (status.status) {
             case "connected":
               return {
                 status: "connected",
                 email: matched.value,
               } as const satisfies DesktopLinkOutcome;
-            case "failed":
-              throw new DesktopBridgeUnavailableError();
+            case "failed": {
+              const failed = failedDesktopLinkOutcome(status.reason);
+              if (failed.isErr()) {
+                throw failed.error;
+              }
+              return failed.value;
+            }
             case "pending":
               break;
             default:
@@ -648,6 +683,25 @@ export const linkDesktopAccount = async ({
     },
     catch: (cause) => cause,
   });
+};
+
+type OpenDesktopAccountSwitchOptions = Pick<LinkAccountRequest, "apiBaseUrl">;
+
+/**
+ * Asks the app on this computer to replace its account with the one signed in
+ * here. The app decides: it asks the member to confirm in its own window and
+ * opens a fresh approval page, so this page alone never switches it.
+ */
+export const openDesktopAccountSwitch = ({
+  apiBaseUrl,
+}: OpenDesktopAccountSwitchOptions) => {
+  openDesktopUrl(
+    desktopAccountConnectUrl({
+      apiBaseUrl,
+      webOrigin: window.location.origin,
+      intent: "switch",
+    }),
+  );
 };
 
 export const openFileInDesktop = async (input: OpenFileInDesktopInput) => {

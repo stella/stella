@@ -857,8 +857,18 @@ struct Installed {
   executable: PathBuf,
 }
 
+/// Sets the state, telling subscribers only when it changed. Every lease
+/// writes the settled state, and a subscriber that reads something on a
+/// change (a status read, a readiness probe) may take a lease itself: an
+/// unconditional notification would loop through it without end.
 fn replace_state(slot: &Slot, state: HarnessInstallState) {
-  slot.state.send_modify(|current| *current = state);
+  slot.state.send_if_modified(|current| {
+    if *current == state {
+      return false;
+    }
+    *current = state;
+    true
+  });
 }
 
 /// The active release, rolling the pointer back to the previous release when
@@ -1695,6 +1705,26 @@ pub(crate) mod tests {
       let lease = installation.acquire(ManagedHarness::Codex).unwrap();
       assert_eq!(lease.config_env(), ("CODEX_HOME", home.as_path()));
       assert_eq!(private_dir_mode(&home), Some(0o700));
+    });
+  }
+
+  #[test]
+  fn a_lease_of_the_settled_release_tells_no_subscriber() {
+    run(|| async {
+      let bytes = codex_archive("1.0.0");
+      let fixture = serve(vec![("/v1.tar.gz", Serve::Bytes(bytes.clone()))]).await;
+      let dir = TempDir::new();
+      let installation =
+        open(&dir, release("1.0.0", fixture.url("/v1.tar.gz"), &bytes));
+      assert_eq!(install(&installation).await, ready("1.0.0"));
+      let mut changes = installation.subscribe(ManagedHarness::Codex);
+      changes.borrow_and_update();
+
+      for _ in 0..3 {
+        drop(installation.acquire(ManagedHarness::Codex).unwrap());
+      }
+      assert!(!changes.has_changed().unwrap());
+      assert_eq!(*changes.borrow(), ready("1.0.0"));
     });
   }
 

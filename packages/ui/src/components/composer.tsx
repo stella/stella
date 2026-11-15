@@ -4,7 +4,10 @@ import type { ReactNode } from "react";
 
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
-import { COMPOSER_PICKER_TRIGGER_CLASS } from "./composer-tokens";
+import {
+  COMPOSER_PICKER_TRIGGER_CLASS,
+  COMPOSER_PLACEHOLDER_CLASS,
+} from "./composer-tokens";
 import {
   Menu,
   MenuPopup,
@@ -12,6 +15,7 @@ import {
   MenuRadioItem,
   MenuTrigger,
 } from "./menu";
+import { TruncatedText } from "./truncated-text";
 
 export {
   COMPOSER_CONTROL_BUTTON_SIZE,
@@ -29,6 +33,35 @@ export {
   COMPOSER_SEND_BUTTON_CLASS,
   COMPOSER_PICKER_TRIGGER_CLASS,
 } from "./composer-tokens";
+
+/** Where the placeholder sits over the editor, in each stature. */
+const COMPOSER_PLACEHOLDER_POSITION_CLASS = {
+  compact: "start-0 end-0 top-1/2 -translate-y-1/2",
+  large: "start-3 end-3 top-2",
+} as const;
+
+/**
+ * The placeholder painted over an empty editor, cut to one line. It takes no
+ * pointer and is hidden from assistive tech, so it shows no hint.
+ */
+export const ComposerPlaceholder = ({
+  children,
+  stature,
+}: {
+  children: ReactNode;
+  stature: keyof typeof COMPOSER_PLACEHOLDER_POSITION_CLASS;
+}) => (
+  <TruncatedText
+    aria-hidden="true"
+    className={cn(
+      COMPOSER_PLACEHOLDER_CLASS,
+      COMPOSER_PLACEHOLDER_POSITION_CLASS[stature],
+    )}
+    hint={false}
+  >
+    {children}
+  </TruncatedText>
+);
 
 type ComposerStatusRowProps = {
   /** Left cluster: matter picker, web-search / anonymize toggles, ... */
@@ -129,7 +162,7 @@ export const ComposerPicker = <Value extends string>({
         <span className="flex size-3 shrink-0 items-center justify-center [&>svg]:size-3">
           {icon}
         </span>
-        <span className="truncate">{current?.label ?? value}</span>
+        <TruncatedText hint={false}>{current?.label ?? value}</TruncatedText>
         <ChevronDownIcon
           aria-hidden="true"
           className="size-3 shrink-0 opacity-70"

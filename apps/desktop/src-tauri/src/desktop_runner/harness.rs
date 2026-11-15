@@ -10,8 +10,8 @@ use tokio::sync::watch;
 use super::journal::{Recorded, SharedJournal};
 use crate::runner_protocol::{
   ApprovalKind, DesktopMessage, FolderRestore, FolderRestoreOutcome, FolderRestored,
-  Harness, HarnessReport, JsonObject, MissingHarness, RejectReason, RunAnswer,
-  RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  Harness, HarnessReport, JsonObject, LinkedFolderReport, MissingHarness, RejectReason,
+  RunAnswer, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
 };
 
 /// A run command the host could not take (its harness holder is busy or
@@ -104,6 +104,16 @@ pub(crate) trait HarnessReports: Send + Sync + 'static {
   /// changed ones as `harness.status`. `None` when reports never change.
   fn changes(&self) -> Option<watch::Receiver<u64>> {
     None
+  }
+  /// The folders linked on this computer as last looked at; the runner sends
+  /// them in `hello` and, once they change, as `linked_folders.status`.
+  fn linked_folders(&self) -> Vec<LinkedFolderReport> {
+    Vec::new()
+  }
+  /// Every installed harness has been probed, so the reports say what it
+  /// can do rather than that it is being checked.
+  fn settled(&self) -> bool {
+    true
   }
 }
 

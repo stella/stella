@@ -1,3 +1,5 @@
+import { TruncatedText } from "@stll/ui/truncated-text";
+
 import { PreviewSurface } from "./PreviewSurface";
 
 // Mocks the company-registry lookup: a search field, a registry switcher, and a
@@ -17,12 +19,12 @@ export const RegistryLookupPreview = () => (
           }}
         >
           <SearchGlyph />
-          <span
-            className="truncate text-[0.65rem] font-medium"
+          <TruncatedText
+            className="text-[0.65rem] font-medium"
             style={{ color: "var(--foreground)" }}
           >
             Example Holding s.r.o.
-          </span>
+          </TruncatedText>
           <span
             className="inline-block"
             style={{
@@ -87,12 +89,13 @@ export const RegistryLookupPreview = () => (
               >
                 {field.label}
               </dt>
-              <dd
-                className="truncate text-[0.62rem]"
+              <TruncatedText
+                className="text-[0.62rem]"
+                render={<dd />}
                 style={{ color: "var(--foreground)" }}
               >
                 {field.value}
-              </dd>
+              </TruncatedText>
             </div>
           ))}
         </dl>
@@ -109,12 +112,12 @@ export const RegistryLookupPreview = () => (
         >
           Pull into matter
         </span>
-        <span
-          className="truncate text-[0.55rem]"
+        <TruncatedText
+          className="text-[0.55rem]"
           style={{ color: "var(--muted-foreground)" }}
         >
           Official record · ARES, Czech Republic
-        </span>
+        </TruncatedText>
       </footer>
     </div>
   </PreviewSurface>

@@ -10,10 +10,11 @@ import { Button } from "@stll/ui/button";
 import { MegaphoneIcon, RefreshCcwIcon } from "@stll/ui/icons";
 import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { FEEDBACK_CHANNELS } from "@/components/feedback-dialog.logic";
 import {
   isNetworkError,
@@ -415,11 +416,14 @@ const UnexpectedRouteError = ({
             <span className="text-muted-foreground text-xs">
               {t("routeError.reference")}
             </span>
-            <bdi className="text-foreground truncate font-mono text-sm">
+            <TruncatedText
+              className="text-foreground font-mono text-sm"
+              render={<bdi />}
+            >
               {visibleErrorReference}
-            </bdi>
+            </TruncatedText>
           </div>
-          <CopyActionButton
+          <CopyControl
             disabled={errorReference === null}
             iconClassName="size-4"
             iconOnly

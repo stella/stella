@@ -119,6 +119,7 @@
     "Marketing content check": [
       "@stll/landing",
       "@stll/cli",
+      "@stll/docx-utils",
       "apps/landing/**",
       "packages/cli/**",
       "apps/api/src/handlers/chat/send-message.ts",
@@ -454,7 +455,10 @@
       ".github/workflows/journey-canary.yml",
       ".github/workflows/case-law-search-probe.yml",
       ".github/workflows/scheduled-run-alerts.yml",
-      ".github/workflows/publish-npm.yml"
+      ".github/workflows/publish-npm.yml",
+      "packages/db-load-gate/src/default-busy-windows.json",
+      "apps/api/src/lib/case-law/coverage-freshness.ts",
+      "apps/api/src/lib/case-law/coverage-refresh-interval.ts"
     ],
     "Test release policy scripts": [
       "scripts/**",
@@ -668,7 +672,8 @@
       ".changeset/**",
       ".github/workflows/**",
       "scripts/**",
-      "@stll/sha256"
+      "@stll/sha256",
+      "apps/web/e2e/marketing/captures.ts"
     ],
     "Test CLI contract changeset guard": [".changeset/**", "scripts/**"],
     "Test package scaffolder": ["scripts/**"],
@@ -771,6 +776,14 @@
     ],
     "Test write contract inventories": ["**"],
     "Office fixture metadata": ["**"],
+    "Tailwind sources cover class-shipping dependencies": [
+      "apps/**/*.css",
+      "apps/*/package.json",
+      "packages/*/package.json",
+      "bun.lock",
+      "scripts/check-tailwind-sources.ts",
+      "scripts/check-tailwind-sources.test.ts"
+    ],
     "Bridge-version guard": [
       "apps/desktop/src-tauri/src/**",
       "apps/desktop/src/shared/rpc.ts",

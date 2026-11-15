@@ -2,13 +2,10 @@ import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
 import { classifyFailure, readFailureBrand } from "@stll/errors";
 
-import {
-  supersededBrowserParts,
-  type SupersededBrowserResult,
-} from "@/api/handlers/chat/browser-snapshot-history";
 import {
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
@@ -17,6 +14,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
+import { supersededToolResultParts } from "@/api/handlers/chat/tool-result-retention";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { estimateTextTokens } from "@/api/lib/ai-generation/token-estimate";
@@ -41,7 +39,6 @@ import {
   truncateForCompaction,
 } from "@/api/lib/chat/compaction-tokens";
 import { HISTORY_TRIMMED_NOTICE } from "@/api/lib/chat/context-notice";
-import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import { createSkillSummaryProjection } from "@/api/lib/chat/skill-summary-projection";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -107,7 +104,7 @@ export const shouldCompactChatMessages = (
   messages: readonly ChatMessage[],
   triggerTokens: number = DEFAULT_TRIGGER_TOKENS,
 ): boolean =>
-  estimateMessagesTokens(messages, supersededBrowserParts(messages)) >
+  estimateMessagesTokens(messages, supersededToolResultParts(messages)) >
   triggerTokens;
 
 type ChatThreadNeedsCompactionOptions = {
@@ -213,8 +210,8 @@ export const computeThreadContextUsage = ({
 
   let conversationTokens = conversationContextTokens;
   let attachmentTokens = 0;
-  // Estimated as the model receives it: superseded page snapshots shrink.
-  const superseded = supersededBrowserParts(messages);
+  // Estimated as the model receives it: superseded tool results shrink.
+  const superseded = supersededToolResultParts(messages);
   for (const message of messages) {
     const messageAttachmentTokens =
       countAttachmentParts(message) * FILE_PART_ESTIMATED_TOKENS;
@@ -255,9 +252,9 @@ export const planChatCompaction = ({
   triggerTokens = DEFAULT_TRIGGER_TOKENS,
 }: PlanChatCompactionOptions): ChatCompactionPlan => {
   const providerVisibleMessages = getProviderVisibleMessages(messages);
-  // Token counts use the model's view (superseded page snapshots shrink);
+  // Token counts use the model's view (superseded tool results shrink);
   // the plan itself keeps the stored messages.
-  const superseded = supersededBrowserParts(providerVisibleMessages);
+  const superseded = supersededToolResultParts(providerVisibleMessages);
   const totalTokens = estimateMessagesTokens(
     providerVisibleMessages,
     superseded,
@@ -948,8 +945,7 @@ export const isModelCompactionSummaryMessage = (
 ): boolean =>
   message.metadata?.[MODEL_COMPACTION_SUMMARY_METADATA_KEY] === true;
 
-const NO_SUPERSEDED_PARTS: ReadonlyMap<ChatPart, SupersededBrowserResult> =
-  new Map();
+const NO_SUPERSEDED_PARTS: ReadonlyMap<ChatPart, ChatPart> = new Map();
 
 const estimateMessagesTokens = (
   messages: readonly ChatMessage[],
@@ -972,11 +968,7 @@ const estimateMessageTokens = (
   let total = MESSAGE_OVERHEAD_TOKENS;
 
   for (const part of visibleParts) {
-    const stub = superseded.get(part);
-    total +=
-      stub === undefined
-        ? estimatePartTokens(part)
-        : estimateTextTokens(safeStringify({ ...part, output: stub }));
+    total += estimatePartTokens(superseded.get(part) ?? part);
   }
 
   return total;

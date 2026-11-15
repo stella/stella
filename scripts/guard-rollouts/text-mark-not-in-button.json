@@ -1,0 +1,19 @@
+{
+  "id": "text-mark-not-in-button",
+  "rules": ["text-mark-not-in-button/text-mark-not-in-button"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-19T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "text-mark-not-in-button/text-mark-not-in-button",
+    "apps",
+    "packages"
+  ]
+}

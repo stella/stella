@@ -1,3 +1,4 @@
+// parser-output-unchanged: the bench recital also runs back to an opening-formula paragraph, the role the Czech readers now give the formula; a reader that does not emit that role reads its recitals as before.
 // parser-output-unchanged: [cz-regional] only adds the bench-recital rule, which only the Supreme and Constitutional Court readers call.
 // parser-output-unchanged: [cz-uohs] only adds the bench-recital rule, which only the Supreme and Constitutional Court readers call.
 // parser-output-unchanged: [cz-nss] only adds the bench-recital rule, which only the Supreme and Constitutional Court readers call.
@@ -37,7 +38,8 @@ const compactUpper = (text: string): string =>
 /**
  * The lines a Czech decision opens with beside its title: the state and the
  * formula the court decides under. They are the court's words, not its
- * title, so none of them is a `decision-title`. Spacing is not significant
+ * title, so none of them is a `decision-title`; every Czech reader gives
+ * them the `opening-formula` role. Spacing is not significant
  * (`J M É N E M   R E P U B L I K Y`).
  */
 const OPENING_FORMULAE: ReadonlySet<string> = new Set([
@@ -374,6 +376,7 @@ export const czechBenchRecitalStart = (
       : (head.type === "heading" && head.role === "decision-title") ||
         (head.type === "paragraph" &&
           (head.role === "case-number" ||
+            head.role === "opening-formula" ||
             head.role === "intro" ||
             head.role === "apparatus"));
   const recital = blocks.slice(start, end);

@@ -56,6 +56,8 @@
     "appearance.calendar",
     "auth.continueWithEmail",
     "avt.claimTypes.opinion.label",
+    "avt.mode.review",
+    "avt.review.status.reviewed",
     "avt.verification.documentView.original",
     "billing.codes.activity",
     "billing.codes.codeLabelField",
@@ -166,6 +168,7 @@
     "knowledge.playbooks.review.fixAccepted",
     "knowledge.playbooks.review.playbookLabel",
     "knowledge.playbooks.review.reject",
+    "knowledge.playbooks.review.run",
     "knowledge.playbooks.versions.restoredToast",
     "knowledge.playbooks.versions.versionHistory",
     "knowledge.sections.skills.title",
@@ -262,6 +265,7 @@
     "workspaces.overview.activity.actorActions.cancelled",
     "workspaces.overview.activity.actorActions.created",
     "workspaces.overview.activity.actorActions.deleted",
+    "workspaces.overview.activity.actorActions.reviewed",
     "workspaces.overview.activity.actorActions.updated",
     "workspaces.overview.activity.fields.name",
     "workspaces.overview.activity.fields.property",
@@ -318,6 +322,9 @@
     ],
     "auth.emailPlaceholder": [
       "ar"
+    ],
+    "avt.mode.graph": [
+      "de"
     ],
     "avt.verification.documentView.original": [
       "de",
@@ -379,6 +386,12 @@
     "chat.pastedText.fromPromptFallback": [
       "de"
     ],
+    "chat.runOn.cloud": [
+      "cs",
+      "de",
+      "fr",
+      "sk"
+    ],
     "chat.suggestionSeverity.style": [
       "fr"
     ],
@@ -427,6 +440,9 @@
     ],
     "common.filter": [
       "et"
+    ],
+    "common.folder": [
+      "pl"
     ],
     "common.formula": [
       "lv"
@@ -764,9 +780,6 @@
     "search.kinds.contact": [
       "fr"
     ],
-    "search.kinds.folder": [
-      "pl"
-    ],
     "search.kinds.link": [
       "de",
       "et",
@@ -1088,34 +1101,6 @@
     "lawHome.tryIdentifier",
     "legalReader.annotations.sharedBadge",
     "navigation.myTodos",
-    "organization.aiConfig.apiKeyUpdatePlaceholder",
-    "organization.aiConfig.baseUrl",
-    "organization.aiConfig.chooseModelsSubtitle",
-    "organization.aiConfig.chooseModelsTitle",
-    "organization.aiConfig.customModelBadge",
-    "organization.aiConfig.customModelDescription",
-    "organization.aiConfig.customModelHint",
-    "organization.aiConfig.defaultModel",
-    "organization.aiConfig.defaultModelOption",
-    "organization.aiConfig.deploymentNamePlaceholder",
-    "organization.aiConfig.editProviders",
-    "organization.aiConfig.endpoint",
-    "organization.aiConfig.endpointDescription",
-    "organization.aiConfig.overrideRoles",
-    "organization.aiConfig.overrideRolesDescription",
-    "organization.aiConfig.prices.azureManaged",
-    "organization.aiConfig.prices.empty",
-    "organization.aiConfig.prices.emptyHint",
-    "organization.aiConfig.prices.inMtok",
-    "organization.aiConfig.prices.model",
-    "organization.aiConfig.prices.outMtok",
-    "organization.aiConfig.prices.perCall",
-    "organization.aiConfig.prices.selectedHeading",
-    "organization.aiConfig.prices.source",
-    "organization.aiConfig.prices.title",
-    "organization.aiConfig.prices.typicalCallHint",
-    "organization.aiConfig.selectAtLeastOneRole",
-    "organization.aiConfig.selectedProvider",
     "organization.matterNumber.description",
     "organization.matterNumber.patternInvalidTokens",
     "organization.matterNumber.patternMustContainSeq",

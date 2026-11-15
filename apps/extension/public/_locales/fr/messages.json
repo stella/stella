@@ -85,5 +85,17 @@
   },
   "connectStellaInstead": {
     "message": "Connecter stella ici à la place"
+  },
+  "allowDesktop": {
+    "message": "Utiliser avec stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop connecté"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop n’est pas lancé"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Mettez à jour stella desktop et cette extension"
   }
 }

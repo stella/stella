@@ -47,6 +47,7 @@ const SEARCH_TEST_RESOURCES = {
 } as const;
 
 const {
+  caseLawSectionInfiniteOptions,
   hasSearchQueryOrSelectiveFilter,
   recentFilePreviewFieldOptions,
   resolveRecentFilePreviewFieldId,
@@ -130,6 +131,57 @@ describe("search query enablement", () => {
 
     expect(organizationB.queryKey).not.toEqual(ownerA.queryKey);
     expect(userB.queryKey).not.toEqual(ownerA.queryKey);
+  });
+});
+
+describe("the case-law section query", () => {
+  const params = {
+    enabled: true,
+    organizationId: "org_1",
+    userId: "user_1",
+    query: "  odpovědnost za škodu ",
+    limit: 10,
+  };
+
+  test("keys on the owner and the normalized query, not the matter filters", () => {
+    const section = caseLawSectionInfiniteOptions(params);
+    const spaced = caseLawSectionInfiniteOptions({
+      ...params,
+      query: "odpovědnost za škodu",
+    });
+
+    expect(section.queryKey).toEqual(spaced.queryKey);
+    expect(section.queryKey).not.toEqual(
+      searchInfiniteOptions({
+        ...emptySearch(),
+        enabled: true,
+        workspaceIds: [],
+        query: params.query,
+        types: ["case-law"],
+        limit: 10,
+      }).queryKey,
+    );
+  });
+
+  test("isolates cached results by organization and user", () => {
+    const ownerA = caseLawSectionInfiniteOptions(params);
+    const organizationB = caseLawSectionInfiniteOptions({
+      ...params,
+      organizationId: "org_2",
+    });
+    const userB = caseLawSectionInfiniteOptions({
+      ...params,
+      userId: "user_2",
+    });
+
+    expect(organizationB.queryKey).not.toEqual(ownerA.queryKey);
+    expect(userB.queryKey).not.toEqual(ownerA.queryKey);
+  });
+
+  test("uses the caller-owned gate", () => {
+    expect(
+      caseLawSectionInfiniteOptions({ ...params, enabled: false }).enabled,
+    ).toBeFalse();
   });
 });
 

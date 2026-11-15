@@ -3,6 +3,7 @@ import { TaggedError } from "better-result";
 
 import type { TranslationKey } from "@/i18n/types";
 import { APIError } from "@/lib/errors/api";
+import { AUTH_CLIENT_ERROR_TAG } from "@/lib/errors/api-tag";
 import {
   STATUS_ERROR_KEYS,
   STATUS_TO_KEY,
@@ -104,7 +105,7 @@ const AUTH_ERROR_KEYS = {
 
 type AuthErrorCode = keyof typeof AUTH_ERROR_KEYS;
 
-export class AuthClientError extends TaggedError("AuthClientError")<{
+export class AuthClientError extends TaggedError(AUTH_CLIENT_ERROR_TAG)<{
   code?: AuthErrorCode | undefined;
   message: string;
   status: number;

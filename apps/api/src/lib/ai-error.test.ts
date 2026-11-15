@@ -147,6 +147,16 @@ describe("classifyAIError", () => {
     }
   });
 
+  test("names a local turn's model at capacity as the provider's outage", () => {
+    // The run error the computer reports once its retries are spent.
+    const runError = {
+      code: AI_FAILURE_CODES.provider_unavailable,
+      message: "Selected model is at capacity. Please try a different model.",
+    };
+    expect(classifyAIError(runError)).toBe("provider_unavailable");
+    expect(isAnticipatedAIFailure(runError, "provider_unavailable")).toBe(true);
+  });
+
   test("maps chat loop stops to a stable stream error kind", () => {
     const error = new ChatLoopDetectedError({
       message:

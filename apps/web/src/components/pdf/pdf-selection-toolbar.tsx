@@ -11,6 +11,7 @@ import { Button } from "@stll/ui/button";
 import { AddCommentIcon } from "@stll/ui/icons";
 
 import { composerText } from "@/components/chat-editor-source";
+import { useSelectionCopyControl } from "@/components/copy-control";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { FILE_CHAT_DRAFT_DELIVERY } from "@/components/inspector/inspector-store-types";
 import type { FileChatHandoff } from "@/components/inspector/inspector-store-types";
@@ -28,7 +29,6 @@ import { SelectionToolbar } from "@/components/selection-toolbar";
 import {
   SelectionAIActions,
   SelectionCopyMenu,
-  useSelectionCopy,
 } from "@/components/selection-toolbar-actions";
 import {
   MarkColorSwatches,
@@ -117,7 +117,7 @@ export const PdfSelectionToolbar = ({
   const [copyOpen, setCopyOpen] = useState(false);
   const [style, setStyle] = useState<ReaderAnnotationStyle>("highlight");
   // The bar copies the words selected in the PDF while it is showing.
-  const selectionCopy = useSelectionCopy({
+  const selectionCopy = useSelectionCopyControl({
     ownsSelection: (selection, root) =>
       barRef.current !== null &&
       root.contains(selection.anchorNode) &&

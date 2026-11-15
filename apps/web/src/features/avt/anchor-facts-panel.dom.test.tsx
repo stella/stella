@@ -50,6 +50,7 @@ const fact = {
   customFields: [],
   firstSource: null,
   factDetails: null,
+  sourceTier: "unsourced",
 } as const satisfies ListItem;
 const clients: InstanceType<typeof QueryClient>[] = [];
 const spies: { mockRestore: () => void }[] = [];
@@ -78,6 +79,7 @@ type MountFactOptions = {
   name?: string;
   statement?: string;
   factDetails?: ListItem["factDetails"];
+  sourceTier?: ListItem["sourceTier"];
   role?: "owner" | "intern";
 };
 
@@ -85,6 +87,7 @@ const mountFact = ({
   name = fact.name,
   statement = name,
   factDetails = null,
+  sourceTier = fact.sourceTier,
   role = "owner",
 }: MountFactOptions = {}) => {
   const client = new QueryClient({
@@ -102,7 +105,11 @@ const mountFact = ({
   }).queryKey;
   client.setQueryData(itemsKey, {
     pages: [
-      { items: [{ ...fact, name, factDetails }], nextCursor: null, limit: 100 },
+      {
+        items: [{ ...fact, name, factDetails, sourceTier }],
+        nextCursor: null,
+        limit: 100,
+      },
     ],
     pageParams: [null],
   });
@@ -130,6 +137,12 @@ const mountFact = ({
             occurredOn: null,
             occurredOnPrecision: null,
           });
+        }
+        if (
+          request.method === "GET" &&
+          pathname === `/v1/lists/${workspaceId}/${listId}/generations`
+        ) {
+          return Response.json({ items: [], nextCursor: null, limit: 20 });
         }
         if (
           request.method === "GET" &&
@@ -179,7 +192,9 @@ const factAction = async (name: string) => {
 
 const mountUndescribedFact = async () => {
   const requests = mountFact();
-  expect(screen.getByText(messages.avt.anchorFacts.inScoring)).toBeTruthy();
+  expect(
+    screen.getAllByText(messages.avt.anchorFacts.inScoring),
+  ).not.toHaveLength(0);
   const hold = await factAction(messages.avt.anchorFacts.holdOutOfScoring);
   expect(hold.getAttribute("aria-disabled")).not.toBe("true");
   expect(
@@ -290,7 +305,7 @@ for (const scenario of [
       messages.avt.anchorFacts.inScoring,
       messages.avt.anchorFacts.heldForReview,
     ]) {
-      expect(screen.queryByText(label) !== null).toBe(
+      expect(screen.queryAllByText(label).length > 0).toBe(
         label === scenario.status,
       );
     }
@@ -300,13 +315,9 @@ for (const scenario of [
     });
     expect(hold.getAttribute("aria-disabled")).toBe("true");
     expect(note.getAttribute("aria-disabled")).toBe("true");
-    expect(
-      screen
-        .getByRole("combobox", {
-          name: messages.avt.anchorFacts.interpretiveConfidence,
-        })
-        .hasAttribute("disabled"),
-    ).toBe(true);
+    for (const level of screen.getAllByRole("menuitemradio")) {
+      expect(level.getAttribute("aria-disabled")).toBe("true");
+    }
     expect(screen.getByText(scenario.reason)).toBeTruthy();
     fireEvent.click(hold);
     fireEvent.click(note);
@@ -323,21 +334,12 @@ test("Not stated clears an existing confidence while preserving scoring", async 
   const requests = mountFact({
     factDetails: { ...describedFact, scoring: "included" },
   });
-  await act(async () => {
-    fireEvent.mouseDown(
-      screen.getByRole("combobox", {
-        name: messages.avt.anchorFacts.interpretiveConfidence,
-      }),
-      { button: 0 },
-    );
-  });
-  const notStated = await screen.findByRole("option", {
+  await factAction(messages.avt.anchorFacts.holdOutOfScoring);
+  const notStated = screen.getByRole("menuitemradio", {
     name: messages.common.notStated,
   });
   await act(async () => {
-    fireEvent.pointerDown(notStated, { button: 0, pointerType: "mouse" });
-    fireEvent.pointerUp(notStated, { button: 0, pointerType: "mouse" });
-    fireEvent.click(notStated, { button: 0, detail: 1 });
+    fireEvent.click(notStated);
   });
   await waitFor(() => {
     expect(requests).toEqual([
@@ -377,20 +379,19 @@ test("an imported fact reads as reference, statement and one meta line", () => {
   expect(screen.queryByText(/9 Mar 2021 \(/u)).toBeNull();
 });
 
-test("a held fact shows its status and is included in one click", async () => {
+test("a held fact shows its status and is included from its actions", async () => {
   const requests = mountFact({
     factDetails: { ...describedFact, scoring: "held" },
   });
   expect(
     screen.getAllByText(messages.avt.anchorFacts.heldForReview),
   ).not.toHaveLength(0);
-  expect(screen.queryByText(messages.avt.anchorFacts.inScoring)).toBeNull();
+  expect(
+    screen.queryAllByText(messages.avt.anchorFacts.inScoring),
+  ).toHaveLength(0);
+  const include = await factAction(messages.avt.anchorFacts.includeInScoring);
   await act(async () => {
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: messages.avt.anchorFacts.includeInScoring,
-      }),
-    );
+    fireEvent.click(include);
   });
   await waitFor(() => {
     expect(requests).toEqual([
@@ -411,3 +412,24 @@ test("a held fact shows its status and is included in one click", async () => {
     ]);
   });
 });
+
+const TIER_CASES = [
+  { sourceTier: "document", label: null },
+  { sourceTier: "testimony", label: messages.avt.factTier.testimony.label },
+  { sourceTier: "unsourced", label: messages.avt.factTier.unsourced.label },
+] as const satisfies readonly {
+  sourceTier: NonNullable<ListItem["sourceTier"]>;
+  label: string | null;
+}[];
+
+test.each(TIER_CASES)(
+  "a $sourceTier fact names its footing only when no document records it",
+  ({ sourceTier, label }) => {
+    mountFact({ sourceTier });
+    for (const { label: other } of TIER_CASES) {
+      if (other !== null) {
+        expect(screen.queryByText(other) !== null).toBe(other === label);
+      }
+    }
+  },
+);

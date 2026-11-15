@@ -18,8 +18,9 @@
  */
 
 import { toMarkdownBytes } from "@firecrawl/anydoc";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import {
   EMAIL_MIME_TYPES,
@@ -55,6 +56,7 @@ import {
   formatWorkerErrorLine,
   getWorkerErrorClass,
 } from "@/api/lib/search/extraction-worker-error";
+import { writeWorkerStdout } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
   DOCM_MIME_TYPE,
@@ -372,16 +374,25 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   return buffer;
 };
 
+/** The caller's character budget (argv[3]); the shared one when absent. */
+const readMaxCharsArgument = (value: string | undefined): number => {
+  if (value === undefined) {
+    return LIMITS.extractedContentMaxChars;
+  }
+  const parsed = parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(0);
+  if (parsed < 1) {
+    return panic("Extraction worker character budget is invalid");
+  }
+  return parsed;
+};
+
 // ── Main ──────────────────────────────────────────────────
 
 try {
   const mimeType = process.argv[2] ?? "";
+  const maxChars = readMaxCharsArgument(process.argv[3]);
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
-  const result = await extract(
-    fileBytes,
-    mimeType,
-    LIMITS.extractedContentMaxChars,
-  );
+  const result = await extract(fileBytes, mimeType, maxChars);
   if (result.isErr()) {
     const errorClass = getWorkerErrorClass(result.error);
     const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
@@ -391,7 +402,7 @@ try {
     process.exit(1);
   }
   if (result.value) {
-    process.stdout.write(result.value);
+    await writeWorkerStdout(result.value);
   }
   process.exit(0);
 } catch (error) {

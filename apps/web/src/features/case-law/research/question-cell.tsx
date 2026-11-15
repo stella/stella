@@ -20,6 +20,7 @@ import {
   PreviewCardPopup,
   PreviewCardTrigger,
 } from "@stll/ui/preview-card";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { FieldValue } from "@stll/workspace-ui/field-value";
 
 import { AiCell } from "@/components/workspaces/ai-cell";
@@ -92,9 +93,9 @@ export const QuestionCell = ({
         break;
       case "not_stated":
         value = (
-          <span className="text-muted-foreground line-clamp-2 text-xs">
+          <TruncatedText className="text-muted-foreground text-xs" lines={2}>
             {t("caseLaw.research.answers.notStated")}
-          </span>
+          </TruncatedText>
         );
         break;
       case "not_allowed":

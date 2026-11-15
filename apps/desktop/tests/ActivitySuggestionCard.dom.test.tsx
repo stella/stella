@@ -85,6 +85,7 @@ const SelectedRangeCard = ({
       structure={null}
       suggestion={suggestion}
       timeLabel=""
+      titlesNotice={null}
       times={{
         date: DATE,
         onRangeChange: setRange,
@@ -215,6 +216,7 @@ describe("the stella AI consent on a card", () => {
           onRestoreTemplate={noop}
           onUndo={noop}
           sourceAppVisuals={[]}
+          titlesNotice={null}
           structure={null}
           suggestion={manualSuggestion({
             drafted: [],

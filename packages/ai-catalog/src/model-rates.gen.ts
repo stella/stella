@@ -12,6 +12,20 @@
 import type { ModelRate } from "./model-rate";
 
 export const MODEL_RATES = {
+  // models.dev: google:gemini-4-hydrogen
+  "gemini-4-hydrogen": {
+    kind: "flat",
+    inputPerMTok: 150_000,
+    outputPerMTok: 750_000,
+    cachedInputPerMTok: 7500,
+  },
+  // models.dev: google:gemini-4-carbon
+  "gemini-4-carbon": {
+    kind: "flat",
+    inputPerMTok: 200_000,
+    outputPerMTok: 1_000_000,
+    cachedInputPerMTok: 10_000,
+  },
   // models.dev: google:gemini-4-argon
   "gemini-4-argon": {
     kind: "flat",
@@ -456,9 +470,9 @@ export const MODEL_RATES = {
   // models.dev: mistral:mistral-large-latest
   "mistral-large-latest": {
     kind: "flat",
-    inputPerMTok: 50_000,
-    outputPerMTok: 150_000,
-    cachedInputPerMTok: 5000,
+    inputPerMTok: 70_000,
+    outputPerMTok: 210_000,
+    cachedInputPerMTok: 7000,
   },
   // models.dev: mistral:mistral-medium-latest
   "mistral-medium-latest": {

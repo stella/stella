@@ -23,7 +23,7 @@ import {
   renderDiagram,
 } from "@/components/ai-elements/mermaid-diagram";
 import type { DiagramRender } from "@/components/ai-elements/mermaid-diagram";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { detached } from "@/lib/detached";
 
 /**
@@ -105,7 +105,7 @@ export const DiagramBlockView = ({
         >
           <PlusIcon className="size-3" />
         </Button>
-        <CopyActionButton
+        <CopyControl
           iconClassName="size-3"
           iconOnly
           size="icon-xs"

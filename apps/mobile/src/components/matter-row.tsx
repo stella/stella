@@ -102,7 +102,7 @@ export const MatterRow = ({
         });
 
   return (
-    <SwipeRow action={swipe}>
+    <SwipeRow actions={{ leading: swipe, trailing: null }}>
       {(accessibility) => (
         <Link
           asChild

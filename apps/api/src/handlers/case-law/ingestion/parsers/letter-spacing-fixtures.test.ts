@@ -103,7 +103,11 @@ describe("Slovak Constitutional Court: IV. ÚS 135/2025", () => {
 
   test("NÁLEZ is the decision's title", async () => {
     expect((await blocks()).slice(0, 2)).toEqual([
-      { type: "paragraph", role: "intro", text: "SLOVENSKÁ REPUBLIKA" },
+      {
+        type: "paragraph",
+        role: "opening-formula",
+        text: "SLOVENSKÁ REPUBLIKA",
+      },
       { type: "heading", role: "decision-title", text: "NÁLEZ" },
     ]);
   });

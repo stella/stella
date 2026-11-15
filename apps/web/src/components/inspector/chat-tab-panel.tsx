@@ -23,11 +23,11 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -61,13 +61,14 @@ import {
 } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
 import {
   DockedComposer,
   PromptBarPending,
   PromptBarPlaceholderContent,
 } from "@/components/chat/docked-composer";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
-import { useEffectiveRunTarget } from "@/components/chat/use-effective-run-target";
+import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import {
   boundLegalDocumentLabel,
@@ -109,6 +110,10 @@ import {
   settleQueuedChatSend,
   subscribeQueuedChatSend,
 } from "@/features/chat/queued-chat-sends";
+import {
+  useMakeSkillFromChat,
+  useSaveDraftedSkill,
+} from "@/features/chat/use-make-skill-from-chat";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -252,18 +257,23 @@ export const ChatTabPanel = ({
     getContextMatterIds,
     getSendMode,
   };
-  const { data } = useSuspenseQuery(
-    chatThreadOptions({
-      activeOrganizationId,
-      key: threadRef,
-      context: chatThreadContext,
-    }),
-  );
-  // Read at send time, so a follow-up carries the thread's stored target as
-  // the chat page sends it. The cache key never depends on it, so the
-  // runtime addresses the entry read above.
-  const runTarget = useEffectiveRunTarget(activeOrganizationId, data.runTarget);
-  const getRunTarget = useLatestCallback((): ChatRunTarget => runTarget);
+  const threadQueryOptions = chatThreadOptions({
+    activeOrganizationId,
+    key: threadRef,
+    context: chatThreadContext,
+  });
+  const { data } = useSuspenseQuery(threadQueryOptions);
+  // The same model menu and Run on choice the chat page offers. The target
+  // is read at send time; the cache key never depends on it, so the runtime
+  // addresses the entry read above.
+  const composerModels = useChatComposerModels({
+    activeOrganizationId,
+    threadRef,
+    stored: data,
+    queryKey: threadQueryOptions.queryKey,
+    startsOnLastChoice: true,
+  });
+  const { getRunTarget } = composerModels;
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: { ...chatThreadContext, getRunTarget },
@@ -280,16 +290,20 @@ export const ChatTabPanel = ({
     olderCursor,
     isLoadingOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     turnAbandoned,
-    waitingForComputer,
+    computerWait,
+    turnSentAt,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -347,6 +361,11 @@ export const ChatTabPanel = ({
         if (!(await ensureAIAvailable())) {
           return CHAT_SEND_KEPT;
         }
+        // A model or Run on choice may still be landing; the send waits so
+        // it never runs on the previous one. A failure was already toasted.
+        if (Result.isError(await composerModels.awaitPendingSelection())) {
+          return CHAT_SEND_KEPT;
+        }
 
         // PromptBar emits the raw editor HTML; the backend parses
         // `<entity-mention>` tags out of TanStack text content.
@@ -391,6 +410,13 @@ export const ChatTabPanel = ({
   });
   const hasSuggestedFollowups = suggestedPrompts.length > 0;
   const focusComposer = editorController.focus;
+  const handleContinuePausedTurn = useLatestCallback(async () => {
+    await continuePausedTurnWhenReady({
+      ensureAIAvailable,
+      awaitPendingSelection: composerModels.awaitPendingSelection,
+      continueTurn: continuePausedTurn,
+    });
+  });
   const sendWithoutAnonymization = useLatestCallback(async () => {
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
@@ -426,6 +452,8 @@ export const ChatTabPanel = ({
   // label while the real conversation title stayed stale on every other
   // surface. Pre-first-message renames stay label-only, as before.
   const renameThread = useRenameChatThread(threadRef);
+  const saveDraftedSkill = useSaveDraftedSkill();
+  const makeSkillFromChat = useMakeSkillFromChat(saveDraftedSkill);
   const hasThreadMessages = messages.length > 0;
   // The tab store keeps a document's chat across reloads only once its
   // conversation exists on the server.
@@ -600,8 +628,23 @@ export const ChatTabPanel = ({
           }
           startLabelEditingWithSuggestion();
         },
+        "make-skill": (args) => {
+          editorController.setContent(composerText(""));
+          if (!hasThreadMessages) {
+            stellaToast.add({
+              title: t("chat.makeSkill.emptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          makeSkillFromChat({ intent: args, threadRef });
+        },
       });
+      // Inside the member's send gesture, before any await: a turn for
+      // their computer opens stella desktop when none is connected. A queued
+      // question sent on mount is no gesture, so it never opens it.
       if (!handledReserved) {
+        composerModels.openDesktopForSend();
         return await handlePromptSubmit({ prompt, files });
       }
 
@@ -609,7 +652,11 @@ export const ChatTabPanel = ({
       if (newThreadMessage === undefined) {
         return CHAT_SEND_SENT;
       }
+      composerModels.openDesktopForSend();
       if (!(await ensureAIAvailable())) {
+        return CHAT_SEND_KEPT;
+      }
+      if (Result.isError(await composerModels.awaitPendingSelection())) {
         return CHAT_SEND_KEPT;
       }
       const newThreadId = createChatThreadId();
@@ -625,6 +672,9 @@ export const ChatTabPanel = ({
         activeOrganizationId,
         context: {
           ...chatThreadContext,
+          // The new thread starts where this chat's turns run, as the chat
+          // page's `/new` does.
+          getRunTarget: composerModels.getRunTarget,
           getSendMode: () => getChatSendMode(newThreadRef),
         },
         files,
@@ -648,6 +698,7 @@ export const ChatTabPanel = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,
@@ -741,6 +792,7 @@ export const ChatTabPanel = ({
                   onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
                   onOpenPlaybook={handleOpenPlaybook}
+                  onContinuePausedTurn={handleContinuePausedTurn}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
                   queuedMessageActions={{
@@ -750,7 +802,8 @@ export const ChatTabPanel = ({
                   queuedMessages={queuedMessages}
                   streamdownComponents={streamdownComponents}
                   userMessageEdit={userMessageEdit}
-                  waitingForComputer={waitingForComputer}
+                  computerWait={computerWait}
+                  turnSentAt={turnSentAt}
                   workspaceId={tabWorkspaceId}
                 />
               )}
@@ -788,6 +841,7 @@ export const ChatTabPanel = ({
                   editorController.setContent(composerStoredMarkdown(prompt));
                   detached(
                     editorController.submit(async (draft) => {
+                      composerModels.openDesktopForSend();
                       if (!(await ensureAIAvailable())) {
                         return CHAT_SEND_KEPT;
                       }
@@ -815,15 +869,17 @@ export const ChatTabPanel = ({
             onStop={() => {
               stop();
             }}
+            stopping={stopPending}
             onNewThread={messages.length > 0 ? startNewThread : null}
             onSubmit={handleComposerSubmit}
             pendingCount={0}
             queueWhileGenerating
             reservedCommands={{ hasPersistedThread: hasThreadMessages }}
+            models={composerModels.models}
             skillChat={{
               contextMatterIds: tab.contextMatterIds,
               document: null,
-              runTarget,
+              runTarget: composerModels.runTarget,
               threadRef,
               webSearch: {
                 available: data.webSearchAvailable,
@@ -835,6 +891,7 @@ export const ChatTabPanel = ({
             dock={
               <ChatComposerDock
                 data={data}
+                models={composerModels.models}
                 leadingContext={
                   <ChatMatterPicker
                     matterIds={tab.contextMatterIds}
@@ -1083,6 +1140,8 @@ export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
         dock={
           <ChatComposerDock
             leadingContext={<ChatMatterPickerPending />}
+            // The live panel's menu replaces this once the thread is read.
+            models={null}
             status="pending"
             threadRef={threadRef}
           />

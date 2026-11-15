@@ -5,20 +5,29 @@ import {
   CHAT_LOCAL_FILES_UNDO_SETTLED_STATES,
   CHAT_LOCAL_FILES_UNDO_STATES,
 } from "@stll/api-contract/chat-local-files-undo";
+import {
+  CHAT_LOCAL_RUN_STEP_CONTENT_KINDS,
+  CHAT_LOCAL_RUN_STEP_CONTENT_ROW_OUTCOMES,
+} from "@stll/api-contract/chat-local-run-step-content";
 
-import { denyStellaAccessPolicies } from "@/api/db/rls";
+import {
+  chatLocalRunStepContentPolicies,
+  denyStellaAccessPolicies,
+} from "@/api/db/rls";
 import {
   DESKTOP_RUNNER_COMMAND_KINDS,
   DESKTOP_RUNNER_CONNECTIONS,
   DESKTOP_RUNNER_EVENT_TYPES,
   DESKTOP_RUNNER_LEASED_RUN_STATES,
+  DESKTOP_RUNNER_LOST_REASONS,
   DESKTOP_RUNNER_RUN_STATES,
   DESKTOP_RUNNER_STORED_OUTCOMES,
   DESKTOP_RUNNER_STORED_REJECT_REASONS,
 } from "@/api/lib/desktop-runner/states";
 
-import { chatThreads, chatTurns } from "./chat";
+import { chatMessages, chatThreads, chatTurns } from "./chat";
 import {
+  bytea,
   jsonb,
   organization,
   p,
@@ -27,6 +36,7 @@ import {
   timestamptz,
   user,
 } from "./common";
+import { userFiles } from "./files-views";
 
 // The gateway serves sockets and sweeps leases across every organization, so
 // these tables are reached only through the table owner; tenant roles see none.
@@ -85,6 +95,28 @@ export const desktopRunners = p.pgTable.withRLS(
     sidecarVersion: p.varchar("sidecar_version", { length: 64 }).notNull(),
     /** Each harness's latest report, as the protocol defines it. */
     harnesses: jsonb("harnesses").notNull(),
+    /**
+     * The folders the member linked on the computer, by id, name and state as
+     * it last reported them; their paths never leave the computer.
+     */
+    linkedFolders: jsonb("linked_folders").notNull().default([]),
+    /**
+     * Linked folders the member let runs work in. A run in a folder not
+     * listed here is refused, so the first run in a newly linked folder asks.
+     */
+    approvedFolderIds: p
+      .uuid("approved_folder_ids")
+      .array()
+      .notNull()
+      .default([]),
+    /**
+     * How many tasks the harness process each run left behind keeps running
+     * in the background, by run id, as the computer reported them over its
+     * current socket (`run.background`), while the run's chat waits for its
+     * next turn. A run with none has no entry; a socket's claim starts from
+     * none, and the computer reports the live ones again after `welcome`.
+     */
+    backgroundTasks: jsonb("background_tasks").notNull().default({}),
     connectedAt: timestamptz("connected_at").notNull(),
     /** Renewed by the socket's heartbeat; routing ignores a stale runner. */
     lastSeenAt: timestamptz("last_seen_at").notNull(),
@@ -130,6 +162,11 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     harnessVersion: p.varchar("harness_version", { length: 64 }).notNull(),
     /** Workspaces the run's MCP token may reach, authorized when assigned. */
     workspaceIds: p.text("workspace_ids").array().notNull(),
+    /**
+     * The folder linked on the computer the run works in; null for the
+     * chat's own. An undo of the run's files restores that folder.
+     */
+    linkedFolderId: p.uuid("linked_folder_id"),
     state: p.text({ enum: DESKTOP_RUNNER_RUN_STATES }).notNull(),
     /** Set with `finished`: how the run ended, as the desktop reported. */
     outcome: p.text({ enum: DESKTOP_RUNNER_STORED_OUTCOMES }),
@@ -137,8 +174,25 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     rejectReason: p.text("reject_reason", {
       enum: DESKTOP_RUNNER_STORED_REJECT_REASONS,
     }),
+    /** Set with `lost` where the API knows why (`DESKTOP_RUNNER_LOST_REASONS`). */
+    lostReason: p.text("lost_reason", { enum: DESKTOP_RUNNER_LOST_REASONS }),
     /** The harness session a later run on this desktop may resume. */
     harnessSessionId: p.varchar("harness_session_id", { length: 256 }),
+    /**
+     * No longer written or read: the output key a run once got for reading
+     * its step outputs on the computer, encrypted for its organization.
+     * Dropped in a later release, once no running API task selects it.
+     */
+    outputKeyEncrypted: bytea("output_key_encrypted"),
+    /** The IV of `output_key_encrypted`; no longer written or read. */
+    outputKeyIv: bytea("output_key_iv"),
+    /**
+     * When `run.start` was first written to one of the computer's sockets;
+     * absent while it never was. A run never written ends after the short
+     * unaccepted window, one that was keeps the recovery window, since its
+     * computer may be running it.
+     */
+    deliveredAt: timestamptz("delivered_at"),
     /** When the desktop accepted `run.start`; absent while it never has. */
     acceptedAt: timestamptz("accepted_at"),
     /** Highest position of the run's desktop messages persisted without a gap. */
@@ -149,6 +203,13 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
       .notNull()
       .default(0),
     leaseExpiresAt: timestamptz("lease_expires_at").notNull(),
+    /** UTF-8 bytes of step text the run has stored, bounded per run. */
+    stepContentTextBytes: p
+      .bigint("step_content_text_bytes", { mode: "number" })
+      .notNull()
+      .default(0),
+    /** Images the run's steps have stored, bounded per run. */
+    stepContentImages: p.integer("step_content_images").notNull().default(0),
     /**
      * The chat thread whose turn started the run; null for runs started
      * outside chat. The run and its messages go with the thread.
@@ -237,6 +298,10 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     p.check(
       "desktop_runner_runs_reject_reason_check",
       sql`(${table.state} = 'rejected') = (${table.rejectReason} IS NOT NULL) AND (${table.rejectReason} IS NULL OR ${table.rejectReason} IN (${sqlValues(DESKTOP_RUNNER_STORED_REJECT_REASONS)}))`,
+    ),
+    p.check(
+      "desktop_runner_runs_lost_reason_check",
+      sql`(${table.lostReason} IS NULL OR ${table.state} = 'lost') AND (${table.lostReason} IS NULL OR ${table.lostReason} IN (${sqlValues(DESKTOP_RUNNER_LOST_REASONS)}))`,
     ),
     p.check(
       "desktop_runner_runs_ack_seq_check",
@@ -396,6 +461,131 @@ export const desktopRunnerAppCalls = p.pgTable.withRLS(
       sql`jsonb_typeof(${table.result}) = 'object'`,
     ),
     ...ownerOnlyPolicies("desktop_runner_app_calls"),
+  ],
+);
+
+/**
+ * What the steps of a chat's local runs produced (a command's output, a
+ * change's diff, a subagent's conversation, an image a step viewed), one row
+ * per step of a thread, stored beside the step's call and never in it. Text
+ * is held encrypted for the thread's organization; an image is a chat file
+ * the row names.
+ *
+ * A row lives as long as the answer that shows its step: it goes with the
+ * turn that produced it, and so with that turn's messages, or, in a forked
+ * thread, with the message it was copied for; and always with its thread. It
+ * is keyed by thread, since a forked thread keeps its source's call ids, and
+ * names its run without depending on it, since an ended run is pruned long
+ * before its conversation.
+ *
+ * A member reads a step only with its thread, under the thread's own scope.
+ * Only the gateway's owner connection writes one, in the transaction that
+ * settles it against the run sending it.
+ */
+export const chatLocalRunStepContents = p.pgTable.withRLS(
+  "chat_local_run_step_contents",
+  {
+    threadId: p.uuid("thread_id").notNull(),
+    /** SHA-256 hex of the step's chat call id, which names its run. */
+    stepKey: p.varchar("step_key", { length: 64 }).notNull(),
+    /** The run whose step this is; its row may be gone. */
+    runId: p.uuid("run_id").notNull(),
+    /** The turn that produced the step; null for a row a fork copied. */
+    turnId: p.uuid("turn_id"),
+    /** The message a fork copied the step for; null for a run's own row. */
+    messageId: p.uuid("message_id"),
+    /** What the step produced; null while the step is awaited. */
+    kind: p.text(),
+    /**
+     * How the step's content settled (stored, or why it was not), or
+     * `awaited` while its run, now over, has still to send it.
+     */
+    outcome: p.text().notNull(),
+    /** How many bytes the step produced, stored or not. */
+    totalBytes: p.bigint("total_bytes", { mode: "number" }).notNull(),
+    /** How many bytes are stored: a text's kept start, or the whole image. */
+    storedBytes: p.integer("stored_bytes").notNull(),
+    /** The stored text, encrypted for the thread's organization. */
+    textEncrypted: bytea("text_encrypted"),
+    /** The IV of `text_encrypted`; set with it. */
+    textIv: bytea("text_iv"),
+    /** The chat file a stored image is. */
+    userFileId: p.uuid("user_file_id"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "chat_local_run_step_contents_pkey",
+      columns: [table.threadId, table.stepKey],
+    }),
+    p
+      .foreignKey({
+        name: "chat_local_run_step_contents_thread_fk",
+        columns: [table.threadId],
+        foreignColumns: [chatThreads.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "chat_local_run_step_contents_turn_fk",
+        columns: [table.turnId],
+        foreignColumns: [chatTurns.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "chat_local_run_step_contents_message_fk",
+        columns: [table.messageId, table.threadId],
+        foreignColumns: [chatMessages.id, chatMessages.threadId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "chat_local_run_step_contents_user_file_fk",
+        columns: [table.userFileId],
+        foreignColumns: [userFiles.id],
+      })
+      .onDelete("cascade"),
+    // Each serves its reference's cascade, so deleting a turn or a file
+    // never reads the whole table. A message's cascade names the thread too
+    // and reads that thread's rows through the primary key.
+    p.index("chat_local_run_step_contents_turn_idx").on(table.turnId),
+    p
+      .index("chat_local_run_step_contents_user_file_idx")
+      .on(table.userFileId)
+      .where(sql`${table.userFileId} IS NOT NULL`),
+    p.check(
+      "chat_local_run_step_contents_step_key_check",
+      sql`${table.stepKey} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "chat_local_run_step_contents_kind_check",
+      sql`${table.kind} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_KINDS)})`,
+    ),
+    p.check(
+      "chat_local_run_step_contents_outcome_check",
+      sql`${table.outcome} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_ROW_OUTCOMES)})`,
+    ),
+    p.check(
+      "chat_local_run_step_contents_owner_check",
+      sql`num_nonnulls(${table.turnId}, ${table.messageId}) = 1`,
+    ),
+    // An awaited step is known by its key alone; a settled one has a kind.
+    p.check(
+      "chat_local_run_step_contents_awaited_check",
+      sql`(${table.kind} IS NULL) = (${table.outcome} = 'awaited')`,
+    ),
+    p.check(
+      "chat_local_run_step_contents_bytes_check",
+      sql`${table.totalBytes} >= 0 AND ${table.storedBytes} >= 0 AND ${table.storedBytes} <= ${table.totalBytes}`,
+    ),
+    // A stored text holds its ciphertext and IV, a stored image its file,
+    // and a step that stored nothing holds neither.
+    p.check(
+      "chat_local_run_step_contents_content_check",
+      sql`(${table.textEncrypted} IS NULL) = (${table.textIv} IS NULL) AND (${table.textEncrypted} IS NOT NULL) = (${table.outcome} = 'stored' AND ${table.kind} <> 'image') AND (${table.userFileId} IS NOT NULL) = (${table.outcome} = 'stored' AND ${table.kind} = 'image') AND (${table.outcome} = 'stored' OR ${table.storedBytes} = 0)`,
+    ),
+    ...chatLocalRunStepContentPolicies(),
   ],
 );
 

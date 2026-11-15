@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -14,6 +14,12 @@ import nodePath from "node:path";
 
 import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
 import { parseChangesetEntry } from "./changeset-entry";
+import {
+  DESKTOP_SUPPORT_FLOOR_PATH,
+  desktopBuildsFromTags,
+  type DesktopSupportFloorMove,
+  moveDesktopSupportFloor,
+} from "./check-desktop-support-floor";
 import { computeProvenanceVerdicts } from "./check-marketing-recordings";
 import { releaseQueueHistoryWarning } from "./check-release-queue-history";
 import {
@@ -1292,12 +1298,55 @@ const resolveHeadSha = (rootDir: string): string => {
   return sha;
 };
 
+/** Whether a merge-group receipt stands in for main/heavy and main/pr-depth. */
+export type ReceiptCoverage = "covered" | "not_covered";
+
+/** Answers receipt coverage for a commit; a throw counts as not covered. */
+export type ReceiptCoverageReader = (sha: string) => Promise<ReceiptCoverage>;
+
+const RELEASE_REPOSITORY = "stella/stella";
+
+const RECEIPT_COVERAGE_COMMAND = [
+  "bash",
+  "scripts/check-release-receipt-coverage.sh",
+] as const;
+
+/**
+ * The proof the release health check (check-release-main-health.sh) accepts
+ * for a main commit that carries no release-candidate tag, asked of the
+ * script that owns it with the repository and commit appended to `command`.
+ * Only its exit 0 is coverage: no receipt, uncovered history, any other exit
+ * and a command that cannot start all keep both statuses required.
+ */
+export const receiptCoverageReader =
+  (
+    command: readonly string[] = RECEIPT_COVERAGE_COMMAND,
+  ): ReceiptCoverageReader =>
+  async (sha) => {
+    const spawned = Result.try(() =>
+      Bun.spawn([...command, RELEASE_REPOSITORY, sha], {
+        cwd: ROOT_DIR,
+        stderr: "inherit",
+        stdin: "ignore",
+        stdout: "ignore",
+      }),
+    );
+    if (Result.isError(spawned)) {
+      return "not_covered";
+    }
+    return (await spawned.value.exited) === 0 ? "covered" : "not_covered";
+  };
+
 export type ReleaseCutReaders = {
   json?: GitHubJsonReader;
+  coverage?: ReceiptCoverageReader;
 };
 
 /**
- * Refuses the cut unless main/heavy and main/pr-depth are green on it. With
+ * Refuses the cut unless main/heavy and main/pr-depth are green on it, or,
+ * when neither has failed, a merge-group receipt on it covers them: the same
+ * proof the release health check accepts for a main commit that carries no
+ * release-candidate tag. A failed gate is never covered. With
  * --allow-unproven-main the same verdict is printed and the cut goes on.
  */
 export const assertReleaseCutReady = async (
@@ -1313,6 +1362,23 @@ export const assertReleaseCutReady = async (
   if (refusal === null) {
     write(
       `maintenance-release: main/heavy and main/pr-depth are green on ${sha}\n`,
+    );
+    return;
+  }
+  // A receipt stands in only for evidence that is absent or not yet in; a
+  // gate that ran and failed refuses whatever the receipt says.
+  const failed = gates.some(({ state }) => state === "failure");
+  const readCoverage = readers.coverage ?? receiptCoverageReader();
+  const coverage = failed
+    ? null
+    : await Result.tryPromise(async () => readCoverage(sha));
+  if (
+    coverage !== null &&
+    Result.isOk(coverage) &&
+    coverage.value === "covered"
+  ) {
+    write(
+      `maintenance-release: a merge-group receipt and validated queue history stand in for main/heavy and main/pr-depth on ${sha}\n`,
     );
     return;
   }
@@ -1517,19 +1583,68 @@ export const assertPreCutGates = async ({
   );
 };
 
+export class IncompleteReleaseListingError extends TaggedError(
+  "IncompleteReleaseListingError",
+)<{ message: string }> {}
+
+const OPEN_RELEASE_LIST_LIMIT = 500;
+
+export const assertNoOpenReleasePullRequests = (listing: unknown): void => {
+  if (!Array.isArray(listing) || listing.length >= OPEN_RELEASE_LIST_LIMIT) {
+    throw new IncompleteReleaseListingError({
+      message:
+        "Open release pull request listing is incomplete; cannot cut a release",
+    });
+  }
+  const blockers: string[] = [];
+  for (const pull of listing) {
+    if (
+      !isRecord(pull) ||
+      typeof pull["title"] !== "string" ||
+      typeof pull["number"] !== "number" ||
+      !Number.isSafeInteger(pull["number"]) ||
+      pull["number"] <= 0 ||
+      typeof pull["headRefOid"] !== "string" ||
+      !/^[0-9a-f]{40}$/u.test(pull["headRefOid"])
+    ) {
+      throw new IncompleteReleaseListingError({
+        message:
+          "Open release pull request listing is incomplete or invalid; cannot cut a release",
+      });
+    }
+    if (pull["title"].startsWith("chore: release v")) {
+      blockers.push(
+        `#${pull["number"]} ${pull["title"]} (head ${pull["headRefOid"].slice(0, 7)}); land it first (merge-bar ${pull["number"]})`,
+      );
+    }
+  }
+  if (blockers.length > 0) {
+    throw new MaintenanceReleaseError(
+      `Earlier release pull requests are still open: ${blockers.join("; ")}`,
+    );
+  }
+};
+
 /** Everything the cut does besides its own release file writes. */
 export type MaintenanceCutEffects = {
   readonly rootDir: string;
   readonly assertCleanWorktree: () => void;
   readonly resolveHeadSha: () => string;
   readonly latestFinalVersion: () => string;
-  readonly assertNoOpenRelease: () => void;
+  readonly listOpenPullRequests: () => unknown;
   readonly openReleasePullRequest: (version: string) => void;
   readonly runGate: CutGateRunner;
   readonly queueHistoryWarning: (baseSha: string) => string | null;
   readonly readPreviousRelease: (tag: string) => Promise<PreviousRelease>;
   readonly ensureFreshRecordings: (reviewReason: string) => void;
   readonly versionPackages: (rootDir: string) => void;
+  /**
+   * Writes the desktop support floor that this cut's clock and the release
+   * dates give (docs/releases.md, "Desktop Support").
+   */
+  readonly moveDesktopSupportFloor: (
+    releaseDates: ReleaseDates,
+  ) => DesktopSupportFloorMove;
   /** Checks the written release: its changelog and marketing provenance. */
   readonly checkPreparedRelease: (version: string) => void;
   readonly write: (text: string) => void;
@@ -1546,7 +1661,7 @@ export const cutMaintenanceRelease = async (
   const { rootDir } = effects;
   const options = parseMaintenanceReleaseOptions(args);
   effects.assertCleanWorktree();
-  effects.assertNoOpenRelease();
+  assertNoOpenReleasePullRequests(effects.listOpenPullRequests());
   const latestFinal = parseStableVersion(effects.latestFinalVersion());
   const previousFinalTag = `v${latestFinal.value}`;
   const versionOnMain = parseStableVersion(
@@ -1571,17 +1686,18 @@ export const cutMaintenanceRelease = async (
       `${previousTag} gained a final tag after this cut fetched tags; run the cut again`,
     );
   }
-  const recordedDates = readReleaseManifest(rootDir).releases;
+  // The publication manifest as the preparation below writes it.
+  const releaseDates = projectReleaseDates({
+    dates: readReleaseManifest(rootDir).releases,
+    previousRelease,
+    previousTag,
+  });
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
     context: {
       baseSha,
       previousFinalTag,
-      releaseDates: projectReleaseDates({
-        dates: recordedDates,
-        previousRelease,
-        previousTag,
-      }),
+      releaseDates,
       rootDir,
       write: effects.write,
     },
@@ -1605,13 +1721,17 @@ export const cutMaintenanceRelease = async (
         rootDir,
         versionPackages: effects.versionPackages,
       });
+      // The floor rides in the release change, so the API this release builds
+      // refuses exactly the builds its own dates end support for.
+      const desktopSupportFloor = effects.moveDesktopSupportFloor(releaseDates);
       effects.checkPreparedRelease(release.version);
-      return release;
+      return { ...release, desktopSupportFloor };
     },
     paths: [
       nodePath.join(rootDir, RECORDINGS_MANIFEST_PATH),
       nodePath.join(rootDir, "VERSION"),
       nodePath.join(rootDir, RELEASE_DATES_PATH),
+      nodePath.join(rootDir, DESKTOP_SUPPORT_FLOOR_PATH),
       nodePath.join(rootDir, `docs/changelog/v${next.value}.md`),
       nodePath.join(rootDir, `docs/changelog/v${current.value}.md`),
       nodePath.join(rootDir, CHANGESET_DIRECTORY, `release-v${next.value}.md`),
@@ -1630,6 +1750,9 @@ export const cutMaintenanceRelease = async (
             `  ${prepared.foldedChangelogPath} (removed: never tagged, notes folded into ${prepared.changelogPath})`,
           ]),
       `  ${RELEASE_DATES_PATH} (${prepared.previousTag}${PREVIOUS_RELEASE_NOTE[previousRelease.kind]})`,
+      prepared.desktopSupportFloor.from === prepared.desktopSupportFloor.to
+        ? `  ${DESKTOP_SUPPORT_FLOOR_PATH} (desktop support floor stays ${prepared.desktopSupportFloor.to})`
+        : `  ${DESKTOP_SUPPORT_FLOOR_PATH} (desktop support floor ${prepared.desktopSupportFloor.from} to ${prepared.desktopSupportFloor.to})`,
       ...(prepared.changesets.length === 0
         ? []
         : [
@@ -1684,7 +1807,7 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
   assertCleanWorktree: () => {
     assertCleanWorktree(rootDir);
   },
-  assertNoOpenRelease: () => {
+  listOpenPullRequests: () => {
     const listing = spawnOutput([
       "gh",
       "pr",
@@ -1696,30 +1819,16 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
       "--base",
       "main",
       "--limit",
-      "500",
+      String(OPEN_RELEASE_LIST_LIMIT),
       "--json",
-      "title",
+      "number,title,headRefOid",
     ]);
     if (listing === null) {
       throw new MaintenanceReleaseError(
         "Could not read open release pull requests",
       );
     }
-    const pulls: unknown = JSON.parse(listing);
-    if (
-      !Array.isArray(pulls) ||
-      pulls.length >= 500 ||
-      pulls.some(
-        (pull: unknown) =>
-          isRecord(pull) &&
-          typeof pull["title"] === "string" &&
-          pull["title"].startsWith("chore: release v"),
-      )
-    ) {
-      throw new MaintenanceReleaseError(
-        "An earlier release pull request is still open, or the listing is incomplete",
-      );
-    }
+    return JSON.parse(listing);
   },
   openReleasePullRequest: (version) => {
     const branch = `release/v${version}`;
@@ -1748,6 +1857,15 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
   readPreviousRelease,
   ensureFreshRecordings,
   versionPackages: runChangesetVersion,
+  moveDesktopSupportFloor: (releases) =>
+    moveDesktopSupportFloor({
+      rootDir,
+      releases,
+      isDesktopBuild: desktopBuildsFromTags(rootDir),
+      // The cut's own clock: support ends as of the release being cut.
+      now: new Date(),
+      writeFile: atomicWriteFile,
+    }),
   checkPreparedRelease: (version) => {
     run(["bash", "scripts/check-release-changelog.sh", "--version", version]);
     run(["bun", "run", "marketing:provenance", "--strict"]);

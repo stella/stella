@@ -9,7 +9,7 @@ export type DecisionParagraphRange = {
   readonly to: number;
 };
 
-const MAX_DECISION_PARAGRAPH_RANGE_SPAN = 500;
+export const MAX_DECISION_PARAGRAPH_RANGE_SPAN = 500;
 const MAX_DECISION_PARAGRAPH_RANGE_INPUT_CHARS = 33;
 // Group-free so the published JSON Schema pattern is portable across validators.
 const PARAGRAPH_RANGE_PATTERN = /^\d+(?:[-–]\d+)?$/u;

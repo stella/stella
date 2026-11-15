@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
@@ -16,27 +16,45 @@ import {
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
+import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
+import { chatLimitReminderScalingScenario } from "./chat-limit-reminder";
 import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
+import { chatLocalRunStepContentScalingScenario } from "./chat-local-run-step-content";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
+import { chatPinnedThreadsScalingScenario } from "./chat-threads";
 import { claimCommentScalingScenarios } from "./claim-comments";
+import { reviewHistoryScalingScenarios } from "./claim-review-history";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import {
+  conflictCheckListScalingScenario,
+  conflictCheckReadScalingScenario,
+} from "./conflict-checks";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
+import { dataExportReadScalingScenarios } from "./data-exports";
+import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
-import { dictationScalingScenario } from "./dictation";
+import {
+  desktopDictationModelsScalingScenario,
+  dictationScalingScenario,
+} from "./dictation";
 import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
+import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
+import { legalHoldScalingScenarios } from "./legal-holds";
 import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { memberCandidatesScalingScenario } from "./member-candidates";
+import { memberRoleScalingScenario } from "./member-role";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
@@ -50,6 +68,7 @@ import {
   scenarioMembershipViolations,
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
+import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
@@ -63,43 +82,66 @@ import {
 } from "./surface";
 import { timeEntryReportScalingScenario } from "./time-entry-report";
 import { suggestionRangeScalingScenario } from "./time-suggestion-range";
+import {
+  verificationChronologyScalingScenarios,
+  verificationGraphScalingScenarios,
+} from "./verification-graph";
+import { verifyQuoteApiScalingScenario } from "./verify-quote";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  ...dataExportReadScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
+  verifyQuoteApiScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  decisionAnchorRedirectsScalingScenario,
   decisionFilterValidationScalingScenario,
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
   chatLocalFilesUndoScalingScenario,
+  chatBackgroundTasksScalingScenario,
+  chatLocalRunStepContentScalingScenario,
   chatActiveRunsScalingScenario,
+  chatPinnedThreadsScalingScenario,
+  chatLimitReminderScalingScenario,
   browserSiteGrantsScalingScenario,
+  conflictCheckListScalingScenario,
+  conflictCheckReadScalingScenario,
   chatMcpAppBundleScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
+  ...reviewHistoryScalingScenarios,
+  ...verificationGraphScalingScenarios,
+  ...verificationChronologyScalingScenarios,
+  ...graphToolsScalingScenarios,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
   mobileClientMetadataScalingScenario,
+  memberRoleScalingScenario,
   outlookClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
+  memberCandidatesScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
   ...outboundActionScalingScenarios,
+  ...legalHoldScalingScenarios,
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
+  desktopDictationModelsScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
+  ...sharepointBrowseScalingScenarios,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>
@@ -168,6 +210,7 @@ test("previously measured scenarios retain their handler or tool identity", asyn
       scenarioMembershipViolations({
         base: readScenarioRegistry({ ...registry, readSource: readBaseSource }),
         current,
+        handlerExists: (file) => existsSync(path.join(repoRoot, file)),
       }),
     ).toEqual([]);
   }

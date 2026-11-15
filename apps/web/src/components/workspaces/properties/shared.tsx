@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { SquareMinusIcon } from "@stll/ui/icons";
 import { PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -61,9 +62,9 @@ export const PropertyPopoverTrigger = ({
         className={cn(isValid ? "" : "text-warning")}
         type={property.content.type}
       />
-      <span className="w-0 flex-1 truncate">
+      <TruncatedText className="w-0 flex-1">
         <HighlightedText text={name} />
-      </span>
+      </TruncatedText>
     </Tooltip>
   );
 };

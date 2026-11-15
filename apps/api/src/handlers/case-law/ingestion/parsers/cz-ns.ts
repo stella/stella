@@ -1146,7 +1146,7 @@ const classifyBlocks = (
         id,
         anchorId,
         type: "paragraph",
-        role: "intro",
+        role: "opening-formula",
         inlines,
         plainText,
       });

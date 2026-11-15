@@ -134,16 +134,18 @@ const buildOrgAIConfig = (selection: ModelSelection): OrgAIConfig => {
 // boundary and turned into the documented "error" score for every task and
 // repeat of that model.
 export type ModelTarget =
-  | { type: "resolved"; id: string; orgAIConfig: OrgAIConfig }
+  | { type: "resolved"; id: string; modelId: string; orgAIConfig: OrgAIConfig }
   | { type: "resolution-error"; id: string; message: string };
 
 export const resolveModelTargets = (specs: readonly string[]): ModelTarget[] =>
   specs.map((spec) => {
     try {
+      const selection = resolveModelSelection(spec);
       return {
         type: "resolved",
         id: spec,
-        orgAIConfig: buildOrgAIConfig(resolveModelSelection(spec)),
+        modelId: selection.modelId,
+        orgAIConfig: buildOrgAIConfig(selection),
       };
     } catch (error) {
       if (!Panic.is(error)) {

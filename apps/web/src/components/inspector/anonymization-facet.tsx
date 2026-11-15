@@ -41,6 +41,7 @@ import { Input } from "@stll/ui/input";
 import { MenuItem, MenuPopup } from "@stll/ui/menu";
 import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { matchesComboboxItem } from "@/components/combobox-filter.logic";
@@ -910,9 +911,9 @@ export const AnonymizationFacet = ({
                 onClick={() => selectFromSidebar(entry.canonical, entry.label)}
                 variant="plain"
               >
-                <span className="truncate text-sm font-medium">
+                <TruncatedText className="text-sm font-medium">
                   {entry.canonical}
-                </span>
+                </TruncatedText>
                 <span className="text-muted-foreground text-xs">
                   {formatLabel(entry.label)}
                 </span>
@@ -988,9 +989,9 @@ export const AnonymizationFacet = ({
                       ) : (
                         <ChevronRight className="text-muted-foreground size-4 shrink-0" />
                       )}
-                      <span className="truncate text-sm font-medium">
+                      <TruncatedText className="text-sm font-medium">
                         {formatLabel(label)}
-                      </span>
+                      </TruncatedText>
                     </span>
                     <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums">
                       {format.number(activeCount)}
@@ -1016,9 +1017,9 @@ export const AnonymizationFacet = ({
                           }
                           variant="plain"
                         >
-                          <span className="block truncate text-xs">
+                          <TruncatedText className="text-xs">
                             {row.canonical}
-                          </span>
+                          </TruncatedText>
                         </Button>
                         <div className="flex items-center gap-1">
                           {!row.isExcluded && row.count > 0 && (

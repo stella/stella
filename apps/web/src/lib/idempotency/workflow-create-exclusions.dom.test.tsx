@@ -92,7 +92,7 @@ const serveRequests = (respond: (request: Request) => Response) => {
   return requests;
 };
 
-test("calendar creates a task then its custom date field without a replay header", async () => {
+test("calendar keys its task create for replay and writes the custom date field without a key", async () => {
   const requests = serveRequests(() => Response.json({ entityId }));
   const client = createClient();
   const { result } = renderHook(
@@ -113,7 +113,10 @@ test("calendar creates a task then its custom date field without a replay header
     ["PUT", `/v1/tasks/${workspaceId}`],
     ["POST", `/v1/fields/${workspaceId}`],
   ]);
-  expect(requests.at(0)?.headers.get("Idempotency-Key")).toBeNull();
+  expect(requests.at(0)?.headers.get("Idempotency-Key")).toEqual(
+    expect.any(String),
+  );
+  expect(requests.at(1)?.headers.get("Idempotency-Key")).toBeNull();
   expect(await requests.at(1)?.json()).toMatchObject({
     entityId,
     propertyId,
@@ -121,7 +124,7 @@ test("calendar creates a task then its custom date field without a replay header
   });
 });
 
-test("kanban creates a task then its subgroup field without a replay header", async () => {
+test("kanban keys its task create for replay and writes the subgroup field without a key", async () => {
   const property = {
     id: toSafeId<"property">(propertyId),
     workspaceId: toSafeId<"workspace">(workspaceId),
@@ -182,10 +185,11 @@ test("kanban creates a task then its subgroup field without a replay header", as
     ).toBe(true),
   );
   const created = requests.find((request) => request.method === "PUT");
-  expect(created?.headers.get("Idempotency-Key")).toBeNull();
+  expect(created?.headers.get("Idempotency-Key")).toEqual(expect.any(String));
   const field = requests.find(
     (request) => new URL(request.url).pathname === `/v1/fields/${workspaceId}`,
   );
+  expect(field?.headers.get("Idempotency-Key")).toBeNull();
   expect(await field?.json()).toMatchObject({
     entityId,
     propertyId,

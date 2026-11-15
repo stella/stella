@@ -2018,11 +2018,6 @@
       ],
       "pl-kis-listing-17-opw.json:0": [
         {
-          "rule": "sentence-cut",
-          "anchorId": "p-3",
-          "excerpt": "akres wniosku o opinię w sprawie opodatkowania wyrównawczego ⏎ 1 stycznia 2026 r. wpłynął wniosek z 1 stycznia 2026 r. o"
-        },
-        {
           "rule": "stray-leading-number",
           "anchorId": "p-4",
           "excerpt": "1 stycznia 2026 r. wpłynął wniosek z 1 stycznia 2026 r. o opinię w sprawie opodatkowania wyrównawczego. Przedmiotowy wni"

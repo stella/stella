@@ -126,10 +126,9 @@ test("two decisions from one court render each case number once as the accessibl
   );
   await waitFor(() =>
     expect(
-      screen.container.querySelectorAll(
-        '[data-citation-presentation="inline"]',
-      ),
-    ).toHaveLength(2),
+      screen.container.querySelectorAll('[data-citation-presentation="inline"]')
+        .length,
+    ).toBe(2),
   );
   const rendered = screen.container.querySelector("p")?.textContent ?? "";
   expect(rendered.split(first.caseNumber)).toHaveLength(2);
@@ -222,8 +221,8 @@ test("a real slug cache read contributes its resolved canonical decision to answ
   );
   await waitFor(() =>
     expect(
-      screen.container.querySelectorAll("[data-decision-citation]"),
-    ).toHaveLength(2),
+      screen.container.querySelectorAll("[data-decision-citation]").length,
+    ).toBe(2),
   );
   expect(
     screen.container.querySelector(`[data-decision-citation="${second.id}"]`),

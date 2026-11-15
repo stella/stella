@@ -116,8 +116,8 @@ export const useCalendarCreateTask = ({
         ...(dueDate && { dueDate }),
         ...(startAt && { allDay: true, startAt }),
       },
-      send: async (creationPayload) =>
-        api.tasks({ workspaceId }).put(creationPayload),
+      send: async (creationPayload, request) =>
+        api.tasks({ workspaceId }).put(creationPayload, request),
     });
 
     const entityId = taskData?.entityId;

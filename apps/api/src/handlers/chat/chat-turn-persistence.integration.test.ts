@@ -7,12 +7,12 @@ import {
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  getAwaitingUserInteractions,
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -1638,7 +1638,7 @@ describe("durable chat turn persistence", () => {
       reason: "superseded",
       type: "cancelled",
     });
-    expect(getAwaitingUserInteractions(reloadedAssistant)).toEqual([]);
+    expect(memberWaitsOf(reloadedAssistant)).toEqual([]);
     expect(
       reloadedAssistant.parts.flatMap((part) =>
         part.type === "tool-call"

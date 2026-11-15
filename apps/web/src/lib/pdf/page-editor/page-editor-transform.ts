@@ -222,13 +222,21 @@ const copyOutputPages = async ({
   }
 };
 
-const saveOutputs = async (
-  outputPageIds: readonly (readonly string[])[],
-  pageById: ReadonlyMap<string, PagePlanEntry>,
-  loaded: ReadonlyMap<string, PDF>,
-  result: Uint8Array[],
+type SaveOutputsOptions = {
+  outputPageIds: readonly (readonly string[])[];
+  pageById: ReadonlyMap<string, PagePlanEntry>;
+  loaded: ReadonlyMap<string, PDF>;
+  result: Uint8Array[];
+  index?: number | undefined;
+};
+
+const saveOutputs = async ({
+  outputPageIds,
+  pageById,
+  loaded,
+  result,
   index = 0,
-): Promise<void> => {
+}: SaveOutputsOptions): Promise<void> => {
   const pageIds = outputPageIds.at(index);
   if (!pageIds) {
     return;
@@ -242,7 +250,13 @@ const saveOutputs = async (
     pageById,
   });
   result.push(await output.save({ compressStreams: true }));
-  await saveOutputs(outputPageIds, pageById, loaded, result, index + 1);
+  await saveOutputs({
+    outputPageIds,
+    pageById,
+    loaded,
+    result,
+    index: index + 1,
+  });
 };
 
 export const transformPagePlan = async ({
@@ -267,6 +281,11 @@ export const transformPagePlan = async ({
   }
 
   const result: Uint8Array[] = [];
-  await saveOutputs(outputs, pageById, loaded, result);
+  await saveOutputs({
+    outputPageIds: outputs,
+    pageById,
+    loaded,
+    result,
+  });
   return result;
 };

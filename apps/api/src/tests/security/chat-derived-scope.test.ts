@@ -27,6 +27,10 @@ const POINTER_ONLY_TABLES: ReadonlyMap<string, string> = new Map([
     "names the conversation a tool approval applies in; holds a tool name, never thread content",
   ],
   [
+    "chat_limit_reminders",
+    "names the conversation a usage-limit reminder is for; holds a turn id and a time, never thread content",
+  ],
+  [
     "desktop_runner_runs",
     "names the thread whose turn started a run on the member's computer; owner-only RLS denies every application role, and only the thread's own member reads the run back, by account and organization",
   ],

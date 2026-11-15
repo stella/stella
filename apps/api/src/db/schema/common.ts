@@ -35,6 +35,7 @@ import {
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
   chatBrowserSiteGrantPolicies,
+  chatLimitReminderPolicies,
   chatMessagePolicies,
   chatMessageRevisionPolicies,
   chatMessageSearchDocumentPolicies,
@@ -353,6 +354,13 @@ export const DESTRUCTIVE_EFFECT_CHUNK_STATUSES = [
 export type DestructiveEffectChunkStatus =
   (typeof DESTRUCTIVE_EFFECT_CHUNK_STATUSES)[number];
 
+export type AccountErasureReport = {
+  retainedMatterContent: {
+    workspaceId: SafeId<"workspace">;
+    reason: "establishment_or_defence_of_legal_claims";
+  }[];
+};
+
 export type AccountDeletionStorageCleanup = {
   s3Keys: string[];
   notBefore?: string;
@@ -576,6 +584,7 @@ export {
   orgReadOnlyPolicies,
   savedSearchPolicies,
   outboundActionPolicies,
+  chatLimitReminderPolicies,
   chatBrowserSiteGrantPolicies,
   chatToolGrantPolicies,
   sharepointConnectionPolicies,

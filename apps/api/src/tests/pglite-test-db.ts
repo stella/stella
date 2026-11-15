@@ -17,7 +17,6 @@ import {
   CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatement,
   CENSUS_COLUMN_GRANTS_BY_RELATION,
-  DOCTRINE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -42,8 +41,10 @@ import {
   installPgliteChatRunLogRls,
   installPgliteChatSecretRls,
   installPgliteChatStoredContentEgress,
+  installPgliteChatTurnOrdinal,
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
+  installPgliteConflictCheckRoutines,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteCorrespondenceSources,
   installPgliteDecisionAliases,
@@ -51,11 +52,13 @@ import {
   installPgliteDecisionDocketFilingYear,
   installPgliteDesktopPresenceRls,
   installPgliteEntityFeatureGateMaintenance,
+  installPgliteFindingDecisionHistory,
   installPgliteFlowTransitions,
   installPgliteInvoiceObjects,
+  installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
-  installPgliteListVerificationBudgets,
+  installPgliteModelRunBudgets,
   installPgliteOrganizationDeleteOwnerGuard,
   installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
@@ -66,6 +69,7 @@ import {
   installPgliteSanctionsMonitoringTriggers,
   installPgliteSchedulerJobPauseLog,
   installPgliteSchemaPrerequisites,
+  installPgliteSearchHistoryClearFence,
   installPgliteServiceClientCredentialCascade,
   installPgliteStatuteCitationCounts,
   installPgliteSyntheticMembershipTrigger,
@@ -87,7 +91,7 @@ import {
 // costs a ~2.2 GB peak (drizzle-kit's push diffing plus PGlite WASM churn);
 // loading a snapshot skips drizzle-kit entirely and keeps the process near
 // PGlite's runtime floor.
-export const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
+const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
 
 const allSchema = {
   ...schema,
@@ -343,9 +347,9 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set(
-    [DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
-      .flatMap(publicLawColumnPairs)
-      .map(({ relation, column }) => `${relation}.${column}`),
+    publicLawColumnPairs(CENSUS_COLUMN_GRANTS_BY_RELATION).map(
+      ({ relation, column }) => `${relation}.${column}`,
+    ),
   );
 
 const decisionColumnNames = new Set(
@@ -500,7 +504,8 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_raw_sweeps",
       "case_law_citation_authority_sweep",
       "case_law_decision_citation_stats",
-      "case_law_decision_citation_stats_state"
+      "case_law_decision_citation_stats_state",
+      "case_law_decision_anchor_redirects"
     TO stella_ingestion
   `,
   `
@@ -873,6 +878,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteSyntheticMembershipTrigger(db);
   await installPgliteUserFileOrganizationKeyGuard(db);
+  await installPgliteConflictCheckRoutines(db);
   await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
@@ -894,7 +900,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
   await installPgliteWorkspaceContactCapacity(db);
-  await installPgliteListVerificationBudgets(db);
+  await installPgliteModelRunBudgets(db);
   await installPgliteChatRunLogRls(db);
   await installPgliteAccountAuditRls(db);
   await installPgliteChatMessageRevisionsRls(db);
@@ -913,10 +919,14 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteTimeEntryTimerSignals(db);
   await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
+  await installPgliteSearchHistoryClearFence(db);
+  await installPgliteChatTurnOrdinal(db);
   await installPglitePlaybookDocumentTypeKey(db);
+  await installPgliteFindingDecisionHistory(db);
   await db.transaction(async (tx) => {
     await installPgliteCorrespondenceSources(tx);
   });
+  await installPgliteLegalHoldDeleteBackstop(db);
 
   return client;
 };

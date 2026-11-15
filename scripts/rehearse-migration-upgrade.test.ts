@@ -157,7 +157,7 @@ if (args.includes("assert-empty") && process.env.REHEARSAL_TEST_FAILURE === "non
 `;
 
 const fakeTimeout = `#!${process.execPath}
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 const args = process.argv.slice(2);
 appendFileSync(path.join(process.env.REHEARSAL_TEST_STATE, "events"), "timeout " + args.slice(0,3).join(" ") + "\\n");
@@ -167,12 +167,24 @@ if (args[index].startsWith("--kill-after=")) index++;
 const seconds = args[index++];
 const child = Bun.spawn(args.slice(index), {stdin:"inherit", stdout:"inherit", stderr:"inherit"});
 // Shorten only the boot bound in this fake; the production script owns 120s.
+// A deadline case expires once readiness has probed at least once, however
+// slow the runner, so the probe it asserts is never raced by the timer.
 let expired = false;
-const timer = seconds === "120" && ["deadline", "scheduler"].includes(process.env.REHEARSAL_TEST_FAILURE)
-  ? setTimeout(() => { expired = true; child.kill("SIGTERM"); }, 250)
-  : undefined;
+const failure = process.env.REHEARSAL_TEST_FAILURE;
+const events = path.join(process.env.REHEARSAL_TEST_STATE, "events");
+const started = Date.now();
+const expire = () => { expired = true; child.kill("SIGTERM"); };
+const timer = seconds !== "120" || !["deadline", "scheduler"].includes(failure)
+  ? undefined
+  : failure === "scheduler"
+    ? setTimeout(expire, 250)
+    : setInterval(() => {
+        const probed = readFileSync(events, "utf8").includes("curl\\n");
+        if (probed || Date.now() - started > 10_000) expire();
+      }, 50);
 const status = await child.exited;
 clearTimeout(timer);
+clearInterval(timer);
 process.exit(expired ? 124 : status);
 `;
 

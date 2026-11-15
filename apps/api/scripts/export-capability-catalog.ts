@@ -169,6 +169,13 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // Organization-wide address-book mutations cross matter boundaries, so
   // they require their own consent instead of borrowing a workspace write.
   contacts: "stella:contacts_write",
+  // A conflict check reads across every matter of the firm and records the
+  // result, so it takes the address-book consent rather than a matter write.
+  "conflict-checks": "stella:contacts_write",
+  // A full copy of the organization's data, held by owners and admins only:
+  // starting one and minting its download links are administrative actions,
+  // so they take the admin consent rather than a matter write.
+  "data-exports": "stella:admin_write",
   "document-types": "stella:matters_write",
   // Redline suggestions queued on a document: deciding or reopening one is a
   // document review act, so it takes the document write consent.
@@ -228,6 +235,10 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // dedicated read-only scope would understate what it does.
   reports: "stella:matters_write",
   "seller-profiles": "stella:billing_write",
+  // Browse a connected SharePoint or OneDrive account and copy files into a
+  // matter as documents: the copy writes document content, so it takes the
+  // document write consent; the browse reads downgrade to the read scope.
+  sharepoint: "stella:documents_write",
   skills: "stella:skills",
   "style-sets": "stella:templates",
   tasks: "stella:matters_write",
@@ -475,6 +486,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   rates: "FEATURE_TIME_BILLING",
   "saved-time-narratives": "FEATURE_TIME_BILLING",
   "seller-profiles": "FEATURE_TIME_BILLING",
+  sharepoint: "FEATURE_SHAREPOINT",
   "template-packs": "FEATURE_TEMPLATE_PACKS",
   "time-entries": "FEATURE_TIME_BILLING",
   "time-timers": "FEATURE_TIME_BILLING",
@@ -493,10 +505,9 @@ type CapabilityEntry = {
    * Prose from the handler config's `description`, written for the agent
    * deciding whether to call this capability. Carried verbatim into the
    * committed catalog; the CLI renders it as the generated command's
-   * `--help` brief and MCP renders it in list/describe. Absent only for a
-   * capability that has not been given one yet; each of those is listed by id
-   * in apps/api/capability-description-ledger.json and guarded by
-   * apps/api/scripts/capability-description-guard.ts.
+   * `--help` brief and MCP renders it in list/describe.
+   * apps/api/scripts/capability-description-guard.ts fails a capability
+   * without one.
    */
   description?: string;
   handlerKind: HandlerKind;

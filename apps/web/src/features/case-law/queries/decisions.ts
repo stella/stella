@@ -295,7 +295,7 @@ export const caseLawCoverageOptions = () =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-export type DecisionsPageOptionsInput = {
+type DecisionsPageOptionsInput = {
   filters: DecisionListFilters;
   /** One-based; at most `caseLawDeepestPage(pageSize)`. */
   page: number;

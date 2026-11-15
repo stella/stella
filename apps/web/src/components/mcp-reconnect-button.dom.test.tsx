@@ -232,7 +232,7 @@ test("approval waiting copy has no reconnect action", () => {
   assignUserStorage("user-1");
   render(noticeTree({ ...brokenConnection, status: "needs_approval" }));
   expect(
-    screen.queryByRole("button", { name: messages.knowledge.mcp.reconnect }),
+    screen.queryByRole("button", { name: messages.common.reconnect }),
   ).toBeNull();
   expect(
     screen.getByRole("button", { name: messages.chat.mcpReconnect.dismiss }),
@@ -250,12 +250,12 @@ test("a recovered connection can show a new break even without an expiry", async
     );
   });
   expect(
-    screen.queryByRole("button", { name: messages.knowledge.mcp.reconnect }),
+    screen.queryByRole("button", { name: messages.common.reconnect }),
   ).toBeNull();
   view.rerender(noticeTree({ ...candidate, status: "connected" }));
   view.rerender(noticeTree(candidate));
   expect(
-    screen.getByRole("button", { name: messages.knowledge.mcp.reconnect }),
+    screen.getByRole("button", { name: messages.common.reconnect }),
   ).toBeDefined();
 });
 
@@ -268,7 +268,7 @@ test("typing the same mention again preserves the announcement node", () => {
     announcement,
   );
   expect(
-    screen.queryByRole("button", { name: messages.knowledge.mcp.reconnect }),
+    screen.queryByRole("button", { name: messages.common.reconnect }),
   ).toBeNull();
   view.rerender(noticeTree(brokenConnection));
   expect(view.container.querySelector('[aria-live="polite"] p')).toBe(
@@ -291,7 +291,7 @@ for (const { removal } of [
       await act(async () => {
         fireEvent.click(
           screen.getByRole("button", {
-            name: messages.knowledge.mcp.reconnect,
+            name: messages.common.reconnect,
           }),
         );
       });
@@ -309,7 +309,7 @@ for (const { removal } of [
       }
       expect(
         screen.queryByRole("button", {
-          name: messages.knowledge.mcp.reconnect,
+          name: messages.common.reconnect,
         }),
       ).toBeNull();
       expect(client?.getQueryState(key)?.isInvalidated).toBe(false);
@@ -365,7 +365,7 @@ test("multiple matches share one notice, show two names and isolate names in Ara
   ).toHaveLength(1);
   expect(
     screen.getAllByRole("button", {
-      name: arabicMessages.knowledge.mcp.reconnect,
+      name: arabicMessages.common.reconnect,
     }),
   ).toHaveLength(2);
   const visible = view.container.querySelector(".bg-muted\\/40");
@@ -380,7 +380,7 @@ test("dismissal hides only the same connection break", async () => {
   assignUserStorage("user-1");
   const view = render(noticeTree(brokenConnection));
   expect(
-    screen.getByRole("button", { name: messages.knowledge.mcp.reconnect }),
+    screen.getByRole("button", { name: messages.common.reconnect }),
   ).toBeDefined();
   await act(async () => {
     fireEvent.click(
@@ -388,21 +388,21 @@ test("dismissal hides only the same connection break", async () => {
     );
   });
   expect(
-    screen.queryByRole("button", { name: messages.knowledge.mcp.reconnect }),
+    screen.queryByRole("button", { name: messages.common.reconnect }),
   ).toBeNull();
   view.rerender(noticeTree(brokenConnection));
   expect(
-    screen.queryByRole("button", { name: messages.knowledge.mcp.reconnect }),
+    screen.queryByRole("button", { name: messages.common.reconnect }),
   ).toBeNull();
   view.rerender(
     noticeTree({ ...brokenConnection, expiresAt: "2026-10-13T00:00:00Z" }),
   );
   expect(
-    screen.getByRole("button", { name: messages.knowledge.mcp.reconnect }),
+    screen.getByRole("button", { name: messages.common.reconnect }),
   ).toBeDefined();
   view.rerender(noticeTree({ ...brokenConnection, status: "revoked" }));
   expect(
-    screen.getByRole("button", { name: messages.knowledge.mcp.reconnect }),
+    screen.getByRole("button", { name: messages.common.reconnect }),
   ).toBeDefined();
   view.rerender(
     noticeTree({
@@ -411,7 +411,7 @@ test("dismissal hides only the same connection break", async () => {
     }),
   );
   expect(
-    screen.getByRole("button", { name: messages.knowledge.mcp.reconnect }),
+    screen.getByRole("button", { name: messages.common.reconnect }),
   ).toBeDefined();
 });
 afterAll(async () => {
@@ -481,7 +481,7 @@ test("OAuth reconnect opens the authorization window and refreshes connections o
   try {
     await act(async () => {
       fireEvent.click(
-        screen.getByRole("button", { name: messages.knowledge.mcp.reconnect }),
+        screen.getByRole("button", { name: messages.common.reconnect }),
       );
     });
     await waitFor(() =>
@@ -509,7 +509,7 @@ test("OAuth reconnect opens the authorization window and refreshes connections o
 test("bearer reconnect opens its tools entry without starting OAuth", async () => {
   const { appRouter } = await mount("bearer");
   const link = screen.getByRole("link", {
-    name: messages.knowledge.mcp.reconnect,
+    name: messages.common.reconnect,
   });
   expect(link.getAttribute("href")).toBe(
     "/knowledge/tools?slug=example-server",
@@ -532,7 +532,7 @@ test("two concurrent reconnects handle their own completion independently", asyn
   try {
     await mount("oauth2", ["example-server", "second-server"]);
     const buttons = screen.getAllByRole("button", {
-      name: messages.knowledge.mcp.reconnect,
+      name: messages.common.reconnect,
     });
     const first = buttons.at(0);
     const second = buttons.at(1);

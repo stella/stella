@@ -60,10 +60,10 @@ const search = async (
 
   // All four queries are independent; run in parallel.
   const [hitsResult, countResult, kindResult, wsResult] = await Promise.all([
-    database.execute(hitsQuery),
-    database.execute(countQuery),
-    database.execute(kindFacetQuery),
-    database.execute(workspaceFacetQuery),
+    database.execute(hitsQuery, "objects"),
+    database.execute(countQuery, "objects"),
+    database.execute(kindFacetQuery, "objects"),
+    database.execute(workspaceFacetQuery, "objects"),
   ]);
 
   const hasMore = hitsResult.length > limit;
@@ -107,8 +107,8 @@ const searchContent = async (
 ): Promise<ContentSearchResult> => {
   const { hitsQuery, countQuery } = buildContentSearchQueries(query);
   const [hitsResult, countResult] = await Promise.all([
-    database.execute(hitsQuery),
-    database.execute(countQuery),
+    database.execute(hitsQuery, "objects"),
+    database.execute(countQuery, "objects"),
   ]);
 
   const hits: ContentSearchHit[] = hitsResult.map((row: RawRow) => ({

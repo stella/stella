@@ -16,8 +16,8 @@ import { CLI_IDENTITY_SCOPES } from "./auth/constants.js";
 import { parseScopesFlag } from "./auth/scopes.js";
 import type { Context } from "./context.js";
 import {
-  VERIFICATION_RUN_CAP_CODES,
-  type VerificationRunCapCode,
+  MODEL_RUN_CAP_CODES,
+  type ModelRunCapCode,
 } from "./generated/mcp-contract.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
@@ -1207,14 +1207,56 @@ describe("toolErrorLines", () => {
       "hint: Fix the fields",
     ]);
   });
+
+  test("an issue code renders beside its reason, so each legal hold names its scope", () => {
+    const envelope = errorEnvelope({
+      error: {
+        code: "legal_hold_active",
+        message: "Deletion is blocked by an active legal hold",
+        hint: "Release the hold first",
+        issues: [
+          {
+            path: "hold-1",
+            code: "matter",
+            message: "2026-10-01T00:00:00.000Z",
+          },
+          {
+            path: "hold-2",
+            code: "entity",
+            message: "2026-10-02T00:00:00.000Z",
+          },
+          { path: "hold-3", code: 7, message: "2026-10-03T00:00:00.000Z" },
+        ],
+      },
+    });
+    expect(envelope?.issues).toEqual([
+      { path: "hold-1", code: "matter", message: "2026-10-01T00:00:00.000Z" },
+      { path: "hold-2", code: "entity", message: "2026-10-02T00:00:00.000Z" },
+      { path: "hold-3", message: "2026-10-03T00:00:00.000Z" },
+    ]);
+    expect(
+      envelope === null
+        ? []
+        : toolErrorLines(envelope, {
+            command: "matter delete",
+            flagPaths: FLAGS,
+          }),
+    ).toEqual([
+      "error: Deletion is blocked by an active legal hold",
+      "  hold-1: 2026-10-01T00:00:00.000Z [matter]",
+      "  hold-2: 2026-10-02T00:00:00.000Z [entity]",
+      "  hold-3: 2026-10-03T00:00:00.000Z",
+      "hint: Release the hold first",
+    ]);
+  });
 });
 
 test("verification limit envelopes retain recovery metadata and select their exit class", () => {
   const expectedExits = {
-    [VERIFICATION_RUN_CAP_CODES.active]: EXIT_CODES.server,
-    [VERIFICATION_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
-  } as const satisfies Record<VerificationRunCapCode, number>;
-  for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
+    [MODEL_RUN_CAP_CODES.active]: EXIT_CODES.server,
+    [MODEL_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
+  } as const satisfies Record<ModelRunCapCode, number>;
+  for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
     for (const retryable of [true, false]) {
       const error = {
         code,

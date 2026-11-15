@@ -3,34 +3,17 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { addedEntries, parseReasonedLedger } from "./ledger-membership";
-import {
-  migrationLedger,
-  parseOwnerLedger,
-  sha256MigrationFiles,
-} from "./sha256-migration-ledger";
+import { addedEntries } from "./ledger-membership";
+import { parseOwnerLedger, rawSha256Files } from "./sha256-migration-ledger";
 
-// The same membership guard binds the real owner map and generated file ledger.
-test("owner and migration membership admits removals and rejects additions or swaps", () => {
-  for (const base of [
-    ["owner-a", "owner-b"],
-    ["file-a", "file-b"],
-  ]) {
-    const first = base.at(0);
-    expect(first).toBeDefined();
-    if (first === undefined) {
-      return;
-    }
-    expect(addedEntries([first], base)).toEqual([]);
-    expect(addedEntries([first, "new-entry"], base)).toEqual(["new-entry"]);
-  }
+// The membership guard binds the real owner map.
+test("owner membership admits removals and rejects additions or swaps", () => {
+  const base = ["owner-a", "owner-b"];
+  expect(addedEntries(["owner-a"], base)).toEqual([]);
+  expect(addedEntries(["owner-a", "new-entry"], base)).toEqual(["new-entry"]);
 });
 
-test("migration reasons and owner paths are derived from their source declarations", () => {
-  const files = ["apps/api/src/a.ts", "apps/web/src/b.ts"];
-  expect(
-    parseReasonedLedger(JSON.stringify(migrationLedger(files)), "fixture"),
-  ).toEqual(files);
+test("owner paths are derived from their source declaration", () => {
   expect(
     parseOwnerLedger(
       'export const SHA256_OWNERS = { "packages/a/src/hash.ts": "runtime owner" } as const;',
@@ -90,7 +73,7 @@ test("real census enumerates raw hashing while admitting exact registered owners
     ]) {
       expect(Bun.spawnSync(command, { cwd: root }).exitCode).toBe(0);
     }
-    expect(sha256MigrationFiles(root)).toEqual([
+    expect(rawSha256Files(root)).toEqual([
       "apps/example/packages/sha256/src/node.ts",
       "scripts/example.ts",
     ]);

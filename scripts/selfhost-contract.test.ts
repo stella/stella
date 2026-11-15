@@ -118,8 +118,7 @@ describe("self-host production environment", () => {
     expect(example).not.toMatch(/^SMTP_HOST=/mu);
 
     for (const entry of ENV_CATALOG.filter(
-      ({ documented, owner }) =>
-        documented && owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
+      ({ owner }) => owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
     )) {
       expect(
         example.match(new RegExp(`^#? ?${entry.name}=`, "gmu")),

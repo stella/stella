@@ -13,7 +13,10 @@ import type {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
+  DesktopRunnerInputEvent,
 } from "@stll/api-contract/desktop-runner";
+
+import type { HarnessStepOutput } from "./step-output";
 
 type DesktopRunnerApprovalDecision =
   (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
@@ -66,11 +69,24 @@ export type HarnessToolCall = {
    * reads it, and it is not part of what a turn reports.
    */
   localInput?: unknown;
+  /**
+   * The harness's id of the subagent step that made the call; absent on the
+   * main thread. Reported beside the call, never inside its input.
+   */
+  parentCallId?: string;
 };
 
 export type HarnessToolResult = {
   content: string;
-  status: "succeeded" | "failed";
+  /** `cancelled`: the harness never ran the call to its end because the
+   *  turn was stopped or a new message cut it off; not a failure. */
+  status: "succeeded" | "failed" | "cancelled";
+  /**
+   * What a native step produced (a command's output, a change's diff). It
+   * is the step's content: the sidecar keeps it and sends it to stella beside
+   * the turn's events, and it is not part of what a turn reports.
+   */
+  localOutput?: HarnessStepOutput;
 };
 
 /**
@@ -96,7 +112,7 @@ export type HarnessApprovalRequest = {
  * What an approval asks the user to allow, from what chat keeps of the call
  * (`chatLocalRunApprovalMessage`): a command's shown command line, else the
  * harness's shown reason, or the tool's name. Never more of a step than its
- * call shows, so a heredoc's text stays here.
+ * call shows, so a heredoc's text is never in it.
  */
 export const approvalMessage = (request: HarnessApprovalRequest): string =>
   chatLocalRunApprovalMessage({
@@ -163,6 +179,11 @@ export type HarnessUsage = {
 export type HarnessFailure =
   | { type: "auth_required"; message: string }
   | { type: "usage_limit"; message: string; resetsAt: string | null }
+  /**
+   * The model stayed at capacity through every retry: a transient state of
+   * the provider, unlike a usage limit, which is the member's own allowance.
+   */
+  | { type: "model_at_capacity"; message: string }
   | { type: "provider_error"; message: string; code: string }
   | {
       type: "harness_exited";
@@ -175,7 +196,15 @@ export type HarnessFailure =
    * The run's approval mode needs the harness's OS sandbox and the sandbox
    * could not start; the run never runs without it.
    */
-  | { type: "sandbox_unavailable"; message: string };
+  | { type: "sandbox_unavailable"; message: string }
+  /**
+   * The harness kept retrying the provider with nothing else happening for
+   * longer than a turn may wait; the turn ends instead of waiting on.
+   */
+  | { type: "retry_stalled"; message: string }
+  /** The harness could not reach stella's MCP server, so it has none of
+   *  stella's tools; the turn does not run without them. */
+  | { type: "tools_unavailable"; message: string };
 
 export type HarnessEvent =
   | {
@@ -198,6 +227,21 @@ export type HarnessEvent =
   | { type: "interaction.resolved"; requestId: string }
   /** A transient provider error the harness is retrying on its own. */
   | { type: "retrying"; message: string }
+  /**
+   * What became of a message the turn was steered with (`HarnessTurn.steer`),
+   * at the point where the harness took it or refused it.
+   */
+  | {
+      type: "input.settled";
+      inputId: string;
+      status: DesktopRunnerInputEvent["status"];
+    }
+  /**
+   * The provider runs the turn on another model than the one asked for:
+   * Codex rerouted it, or Claude Code retried it on its fallback model after
+   * a refusal. What the turn reports from here on names this model.
+   */
+  | { type: "model.rerouted"; model: string }
   | { type: "turn.completed"; usage: HarnessUsage | null }
   | { type: "turn.interrupted" }
   | { type: "turn.failed"; failure: HarnessFailure };
@@ -209,8 +253,11 @@ export type HarnessEvent =
 export const HARNESS_FAILURE_OUTCOME = {
   auth_required: "needs_login",
   usage_limit: "limit_reached",
+  model_at_capacity: "failed",
   provider_error: "failed",
   harness_exited: "failed",
   protocol_violation: "failed",
   sandbox_unavailable: "failed",
+  retry_stalled: "failed",
+  tools_unavailable: "failed",
 } as const satisfies Record<HarnessFailure["type"], DesktopRunnerRunOutcome>;

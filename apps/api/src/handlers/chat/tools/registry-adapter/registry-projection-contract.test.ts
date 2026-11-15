@@ -298,6 +298,7 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
               await Promise.resolve(
                 ANNOTATION_BLOCKS.flatMap(readerAnchorPiecesOf),
               ),
+            resolveHeldAnchors: async () => await Promise.resolve(new Map()),
           }),
         searchConsolidatedLegislation: searchConsolidatedLegislationMock,
         getLawTextBlock: getLawTextBlockMock,

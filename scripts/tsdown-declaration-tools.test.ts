@@ -11,7 +11,7 @@ const trackedTsdownConfigs = () => {
 test("every declaration tool is resolved from and declared by its workspace", async () => {
   for (const configPath of trackedTsdownConfigs()) {
     const source = await Bun.file(configPath).text();
-    if (!source.includes("tsgo:")) {
+    if (!/generator:\s*["'](?:tsgo|tsrs)["']/u.test(source)) {
       continue;
     }
 
@@ -22,26 +22,22 @@ test("every declaration tool is resolved from and declared by its workspace", as
 
     const toolPackages = [
       ...source.matchAll(
-        /resolvePackageBinary\(import\.meta\.url,\s*["']([^"']+)["']\)/gu,
+        /moduleUrl:\s*import\.meta\.resolve\(["']([^"']+)["']\)/gu,
       ),
     ].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
     expect(
       toolPackages,
-      `${configPath}: name each tsgo.path package with resolvePackageBinary`,
+      `${configPath}: resolve the declaration API from this workspace`,
     ).not.toHaveLength(0);
 
     const packageJsonPath = path.join(path.dirname(configPath), "package.json");
-    const manifest = await Bun.file(packageJsonPath).json();
-    const declaredPackages = {
-      ...manifest.dependencies,
-      ...manifest.devDependencies,
-    };
+    const manifest: unknown = await Bun.file(packageJsonPath).json();
 
     for (const toolPackage of toolPackages) {
       expect(
-        declaredPackages,
-        `${configPath}: ${toolPackage} must be a dependency or devDependency of this workspace`,
-      ).toHaveProperty(toolPackage);
+        manifest,
+        `${configPath}: ${toolPackage} must be declared by this workspace`,
+      ).toMatchObject({ devDependencies: { [toolPackage]: "catalog:" } });
     }
   }
 });

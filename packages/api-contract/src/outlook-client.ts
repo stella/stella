@@ -24,11 +24,13 @@ export const OUTLOOK_CLIENT_NAME = "stella for Outlook" as const;
 export const OUTLOOK_IDENTITY_SCOPES = ["openid", "offline_access"] as const;
 
 /**
- * Only what the add-in does: list matters, file a message into one, and the
- * AI summary and reply draft. It never writes matters or billing.
+ * Only what the add-in does: list matters, file a message into one (the
+ * upload routes are `stella:matters_write`), and the AI summary, reply draft
+ * and questions about the email. It never writes billing.
  */
 export const OUTLOOK_RESOURCE_SCOPES = [
   "stella:read",
+  "stella:matters_write",
   "stella:documents_write",
   "stella:chat",
 ] as const satisfies readonly ApiOAuthResourceScope[];

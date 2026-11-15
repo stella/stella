@@ -64,8 +64,16 @@ describe("Table", () => {
 
     expect(markup).toMatch(/<tr class="[^"]*text-muted-foreground/u);
     expect(markup).toContain("tabular-nums");
-    expect(markup).toMatch(
-      /<td class="[^"]*text-muted-foreground[^"]*truncate/u,
+    const cell = /<td class="(?<classes>[^"]*)"[^>]*>A long narrative/u.exec(
+      markup,
+    )?.groups?.["classes"];
+    expect(cell?.split(" ")).toEqual(
+      expect.arrayContaining([
+        "table-cell",
+        "text-muted-foreground",
+        "truncate",
+        "max-w-full",
+      ]),
     );
   });
 
