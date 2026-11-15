@@ -1583,12 +1583,15 @@ mod stand_in {
     }
   }
 
+  /// A run's end; a completed one names where its turn ended, as a holder's
+  /// does.
   fn finished(run_id: &str, outcome: &str, session: Option<&str>) -> Value {
     json!({
       "type": "run.finished",
       "runId": run_id,
       "outcome": outcome,
       "harnessSessionId": session,
+      "harnessBoundary": (outcome == "completed").then_some("turn-1"),
     })
   }
 

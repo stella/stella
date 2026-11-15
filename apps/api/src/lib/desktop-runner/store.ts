@@ -2559,18 +2559,13 @@ export const readChatRunSession = async (
       .orderBy(desc(runs.createdAt), desc(runs.runId))
       .limit(1)
   ).at(0);
-  if (
-    forked === undefined ||
-    forked.sessionId === null ||
-    forked.boundary === null
-  ) {
+  if (forked === undefined) {
     return { type: "fresh" };
   }
-  return {
-    type: "fork",
-    sessionId: forked.sessionId,
-    boundary: forked.boundary,
-  };
+  const { sessionId, boundary } = forked;
+  return sessionId === null || boundary === null
+    ? { type: "fresh" }
+    : { type: "fork", sessionId, boundary };
 };
 
 type ChatRunForRequestOptions = {
