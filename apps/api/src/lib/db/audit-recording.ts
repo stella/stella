@@ -1,7 +1,5 @@
 import { panic } from "better-result";
-import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import type {
   AUDIT_ACTIVITY_CATEGORIES,
   SearchHistoryKind,
@@ -99,11 +97,19 @@ type AuditEventFields = {
 };
 
 // Requiring rollback keeps a database handle from standing in for a transaction.
-type AuditTransaction = Pick<
-  PgAsyncDatabase<PgQueryResultHKT>,
-  "insert" | "select"
-> &
-  Pick<Transaction, "rollback">;
+type AuditTransaction = {
+  insert: {
+    (table: typeof auditLogs): {
+      values: (rows: (typeof auditLogs.$inferInsert)[]) => Promise<unknown>;
+    };
+    (table: typeof accountAuditLogs): {
+      values: (
+        rows: (typeof accountAuditLogs.$inferInsert)[],
+      ) => Promise<unknown>;
+    };
+  };
+  rollback: () => never;
+};
 
 /** Chat entries carry only the change fields their resource type lists. */
 type ChatAuditEvent = {
@@ -405,7 +411,10 @@ const insertAuditRows = async (
   tx: AuditTransaction,
   rows: readonly (typeof auditLogs.$inferInsert)[],
 ): Promise<void> => {
-  await insertInChunks(rows, (batch) => tx.insert(auditLogs).values(batch));
+  await insertInChunks(
+    rows,
+    async (batch) => await tx.insert(auditLogs).values(batch),
+  );
   if (
     rows.some(
       ({ action }) =>
@@ -527,17 +536,19 @@ export const createAccountRecorder =
   async (tx, event) => {
     const events = Array.isArray(event) ? event : [event];
     const groupId = Bun.randomUUIDv7();
-    await insertInChunks(events, (batch) =>
-      tx.insert(accountAuditLogs).values(
-        batch.map(({ type, resourceId }) => ({
-          id: Bun.randomUUIDv7(),
-          userId,
-          eventType: type,
-          resourceId,
-          requestMetadata,
-          groupId,
-        })),
-      ),
+    await insertInChunks(
+      events,
+      async (batch) =>
+        await tx.insert(accountAuditLogs).values(
+          batch.map(({ type, resourceId }) => ({
+            id: Bun.randomUUIDv7(),
+            userId,
+            eventType: type,
+            resourceId,
+            requestMetadata,
+            groupId,
+          })),
+        ),
     );
     if (
       events.some(({ type }) => type === ACCOUNT_EXPORT_DOWNLOADED_EVENT_TYPE)
