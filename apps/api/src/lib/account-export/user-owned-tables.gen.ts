@@ -25,6 +25,8 @@ export const USER_OWNED_TABLE_NAMES = [
   "chat_limit_reminders",
   "chat_message_revisions",
   "chat_messages",
+  "chat_queue_holds",
+  "chat_queued_messages",
   "chat_secrets",
   "chat_threads",
   "chat_tool_grants",
