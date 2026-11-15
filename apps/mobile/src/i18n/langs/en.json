@@ -290,7 +290,7 @@
     "steerPrompt": "Send to the agent while it works",
     "steerRefused": {
       "turnNotRunning": "The agent is not working right now.",
-      "noRun": "The agent has not started yet.",
+      "noRun": "The agent is not running on your computer right now.",
       "cannotSteer": "This agent cannot take messages while it works.",
       "runFull": "The agent cannot take more messages right now.",
       "notTaken": "The agent could not take your message just now."

@@ -290,7 +290,7 @@
     "steerPrompt": "Saada agendile töö ajal",
     "steerRefused": {
       "turnNotRunning": "Agent praegu ei tööta.",
-      "noRun": "Agent pole veel alustanud.",
+      "noRun": "Agent ei tööta praegu sinu arvutis.",
       "cannotSteer": "See agent ei võta töö ajal sõnumeid vastu.",
       "runFull": "Agent ei saa praegu rohkem sõnumeid vastu võtta.",
       "notTaken": "Agent ei saanud sinu sõnumit praegu vastu võtta."

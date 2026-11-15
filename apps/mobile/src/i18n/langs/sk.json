@@ -290,7 +290,7 @@
     "steerPrompt": "Poslať agentovi počas práce",
     "steerRefused": {
       "turnNotRunning": "Agent práve nepracuje.",
-      "noRun": "Agent ešte nezačal.",
+      "noRun": "Agent teraz na vašom počítači nebeží.",
       "cannotSteer": "Tento agent počas práce neprijíma správy.",
       "runFull": "Agent teraz ďalšie správy neprijme.",
       "notTaken": "Agent teraz vašu správu nemohol prijať."

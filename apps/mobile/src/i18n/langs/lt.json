@@ -290,7 +290,7 @@
     "steerPrompt": "Siųsti agentui jam dirbant",
     "steerRefused": {
       "turnNotRunning": "Agentas šiuo metu nedirba.",
-      "noRun": "Agentas dar nepradėjo.",
+      "noRun": "Agentas dabar neveikia jūsų kompiuteryje.",
       "cannotSteer": "Šis agentas darbo metu nepriima žinučių.",
       "runFull": "Agentas šiuo metu negali priimti daugiau žinučių.",
       "notTaken": "Agentas šiuo metu negalėjo priimti jūsų žinutės."

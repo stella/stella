@@ -290,7 +290,7 @@
     "steerPrompt": "Sūtīt aģentam tā darba laikā",
     "steerRefused": {
       "turnNotRunning": "Aģents pašlaik nestrādā.",
-      "noRun": "Aģents vēl nav sācis.",
+      "noRun": "Aģents pašlaik jūsu datorā nedarbojas.",
       "cannotSteer": "Šis aģents darba laikā nepieņem ziņas.",
       "runFull": "Aģents pašlaik nevar pieņemt vairāk ziņu.",
       "notTaken": "Aģents pašlaik nevarēja pieņemt jūsu ziņu."
