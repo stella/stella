@@ -29,13 +29,15 @@ const isSocialLinkHintRequest = (requestUrl: URL | string): boolean =>
   new URL(requestUrl).pathname === `/api/auth${SOCIAL_LINK_HINT_PATH}`;
 
 const PASSWORD_SIGN_IN_PATH = "/api/auth/sign-in/email";
+/** Better Auth's code for a password sign-in it turned down. */
+export const INVALID_SIGN_IN_CODE = "INVALID_EMAIL_OR_PASSWORD";
 
 // The password sign-in form shows its own message for refused credentials.
 const isPasswordSignInRefusal = (
   error: AuthErrorValue,
   requestUrl: URL | string,
 ): boolean =>
-  error.code === "INVALID_EMAIL_OR_PASSWORD" &&
+  error.code === INVALID_SIGN_IN_CODE &&
   new URL(requestUrl).pathname === PASSWORD_SIGN_IN_PATH;
 
 // The sign-in page answers this code by opening its password form.

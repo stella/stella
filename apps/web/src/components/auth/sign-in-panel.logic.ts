@@ -59,20 +59,24 @@ export type SignInEntryMethod =
   (typeof SIGN_IN_ENTRY_METHOD)[keyof typeof SIGN_IN_ENTRY_METHOD];
 
 /**
- * Where the quiet password form stands: behind its link, open beside the
- * other methods, or open in place of the email-code form because the server
- * answered that the address typed there signs in with a password.
+ * Whether the password form for the one password account stands in for the
+ * email step. The page shows one or the other, never both: two forms that
+ * each ask for an address read as one broken form.
  */
 export type PasswordEntry =
-  | { type: "closed" }
-  | { type: "offered" }
-  | { type: "required"; email: string };
+  { type: "closed" } | { type: "open"; email: string };
 
-export const initialPasswordEntry = (
-  entryMethod: SignInEntryMethod | undefined,
-): PasswordEntry =>
-  entryMethod === SIGN_IN_ENTRY_METHOD.password
-    ? { type: "offered" }
+export const initialPasswordEntry = ({
+  entryMethod,
+  options,
+}: {
+  entryMethod: SignInEntryMethod | undefined;
+  options: Pick<SignInOptions, "showEmailOtp" | "showReviewPasswordSignIn">;
+}): PasswordEntry =>
+  options.showReviewPasswordSignIn &&
+  // Asked for by link, or the only way to type an address on this page.
+  (entryMethod === SIGN_IN_ENTRY_METHOD.password || !options.showEmailOtp)
+    ? { type: "open", email: "" }
     : { type: "closed" };
 
 /**

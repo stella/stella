@@ -1,65 +1,45 @@
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
 import { PasswordSignInForm } from "./password-sign-in-form";
-import type { PasswordEntry } from "./sign-in-panel.logic";
 
 /**
- * Password sign-in kept out of the way: a quiet link that opens the form.
- * Offered when the deployment allows one configured account to use a
- * password rather than as a sign-in method for everyone.
+ * Password sign-in for the one account a deployment lets use a password,
+ * standing in for the email step, with the way back to it.
  */
 export const PasswordSignInOption = ({
-  entry,
-  onOpen,
+  email,
+  onUseEmailCode,
   redirectTo,
 }: {
-  entry: PasswordEntry;
-  onOpen: () => void;
+  /** The address already typed in the email step. */
+  email: string;
+  /** Absent when the page has no email step to return to. */
+  onUseEmailCode: (() => void) | undefined;
   redirectTo: string;
 }) => {
   const t = useTranslations();
 
-  switch (entry.type) {
-    case "closed":
-      return (
+  return (
+    <>
+      <PasswordSignInForm
+        autoFocus
+        defaultEmail={email}
+        lastUsed={null}
+        redirectTo={redirectTo}
+      />
+      {onUseEmailCode && (
         <Button
-          aria-expanded={false}
           className="self-center"
-          onClick={onOpen}
+          onClick={onUseEmailCode}
           size="sm"
           type="button"
           variant="link"
         >
-          {t("auth.usePassword")}
+          {t("auth.useEmailCode")}
         </Button>
-      );
-    case "offered":
-      return (
-        <PasswordSignInForm
-          key="offered"
-          autoFocus
-          defaultEmail=""
-          lastUsed={null}
-          redirectTo={redirectTo}
-        />
-      );
-    case "required":
-      return (
-        // Keyed apart from the offered form: an address the server named
-        // must replace whatever that form already held.
-        <PasswordSignInForm
-          key="required"
-          autoFocus
-          defaultEmail={entry.email}
-          lastUsed={null}
-          redirectTo={redirectTo}
-        />
-      );
-    default:
-      entry satisfies never;
-      return panic("Unknown password entry state");
-  }
+      )}
+    </>
+  );
 };

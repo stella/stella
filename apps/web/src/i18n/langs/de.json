@@ -159,6 +159,7 @@
     "handoffAccount": "Als <account>{email}</account> in <organization>{organizationName}</organization> fortfahren?",
     "handoffTitle": "Weiter zu stella",
     "headline": "Klarheit für jeden Fall.",
+    "invalidEmailOrPassword": "E-Mail oder Passwort ist falsch.",
     "invitation": {
       "declined": "Einladung abgelehnt",
       "declinedDescription": "Sie haben diese Einladung abgelehnt. Sie können diese Seite schließen.",
@@ -207,6 +208,7 @@
       "useBackupCode": "Stattdessen Wiederherstellungscode verwenden"
     },
     "useDifferentEmail": "Andere E-Mail verwenden",
+    "useEmailCode": "Stattdessen mit E-Mail-Code anmelden",
     "usePassword": "Stattdessen mit Passwort anmelden",
     "weSentCodeTo": "Wir haben einen Code an <email>{emailAddress}</email> gesendet"
   },

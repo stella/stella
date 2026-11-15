@@ -159,6 +159,7 @@
     "handoffAccount": "Folytatja <account>{email}</account> fiókkal a(z) <organization>{organizationName}</organization> szervezetben?",
     "handoffTitle": "Tovább a Stellába",
     "headline": "Tisztán látás minden ügyben.",
+    "invalidEmailOrPassword": "Hibás e-mail-cím vagy jelszó.",
     "invitation": {
       "declined": "Meghívó elutasítva",
       "declinedDescription": "Elutasította ezt a meghívót. Biztonságosan bezárhatja ezt az oldalt.",
@@ -207,6 +208,7 @@
       "useBackupCode": "Inkább biztonsági kód használata"
     },
     "useDifferentEmail": "Másik e-mail-cím használata",
+    "useEmailCode": "Bejelentkezés e-mailben kapott kóddal",
     "usePassword": "Bejelentkezés jelszóval",
     "weSentCodeTo": "Kódot küldtünk a következő címre: <email>{emailAddress}</email>"
   },

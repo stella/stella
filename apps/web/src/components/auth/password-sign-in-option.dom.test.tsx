@@ -112,9 +112,8 @@ const mount = async (
       </IntlProvider>
     </QueryClientProvider>,
   );
-  await waitFor(() =>
-    ui.getByRole("button", { name: messages.auth.continueWithEmail }),
-  );
+  // The panel renders once the capabilities have loaded.
+  await ui.findByRole("heading", { name: messages.auth.signIn });
   return { client, ui, appRouter };
 };
 
@@ -127,22 +126,41 @@ test("offers no password sign-in without the capability", async () => {
   expect(ui.queryByPlaceholderText(messages.auth.password)).toBeNull();
 });
 
-test("keeps the password form behind a quiet option with the capability", async () => {
+test("swaps the email step for the password form, carrying the typed address", async () => {
   const { ui } = await mount({ ...emailOnly, reviewPasswordSignIn: true });
 
   const option = ui.getByRole("button", { name: messages.auth.usePassword });
-  expect(option.getAttribute("aria-expanded")).toBe("false");
   expect(ui.queryByPlaceholderText(messages.auth.password)).toBeNull();
+  fireEvent.change(ui.getByPlaceholderText(messages.auth.emailPlaceholder), {
+    target: { value: "review@example.test" },
+  });
 
   fireEvent.click(option);
 
-  await waitFor(() => ui.getByPlaceholderText(messages.auth.password));
+  const passwordField = await ui.findByPlaceholderText(messages.auth.password);
   expect(
     ui.getByRole("button", { name: messages.auth.signInWithPassword }),
   ).toBeDefined();
-  expect(
-    ui.queryByRole("button", { name: messages.auth.usePassword }),
-  ).toBeNull();
+  // One form on the page: the email step and its link are gone.
+  for (const name of [
+    messages.auth.usePassword,
+    messages.auth.continueWithEmail,
+  ]) {
+    expect(ui.queryByRole("button", { name })).toBeNull();
+  }
+  const emailFields = ui.getAllByPlaceholderText(
+    messages.auth.emailPlaceholder,
+  );
+  expect(emailFields).toHaveLength(1);
+  expect(emailFields.at(0)?.getAttribute("value")).toBe("review@example.test");
+  expect(document.activeElement).toBe(passwordField);
+
+  fireEvent.click(ui.getByRole("button", { name: messages.auth.useEmailCode }));
+
+  await waitFor(() =>
+    ui.getByRole("button", { name: messages.auth.continueWithEmail }),
+  );
+  expect(ui.queryByPlaceholderText(messages.auth.password)).toBeNull();
 });
 
 test("opens on the password form when a link asks for it", async () => {
@@ -153,11 +171,10 @@ test("opens on the password form when a link asks for it", async () => {
 
   expect(ui.getByPlaceholderText(messages.auth.password)).toBeDefined();
   expect(
-    ui.queryByRole("button", { name: messages.auth.usePassword }),
+    ui.queryByRole("button", { name: messages.auth.continueWithEmail }),
   ).toBeNull();
-  // The other methods stay on the page.
   expect(
-    ui.getByRole("button", { name: messages.auth.continueWithEmail }),
+    ui.getByRole("button", { name: messages.auth.useEmailCode }),
   ).toBeDefined();
 });
 
@@ -167,6 +184,22 @@ test("ignores a link asking for the password form without the capability", async
   });
 
   expect(ui.queryByPlaceholderText(messages.auth.password)).toBeNull();
+  expect(
+    ui.getByRole("button", { name: messages.auth.continueWithEmail }),
+  ).toBeDefined();
+});
+
+test("shows the password form alone when the page has no email step", async () => {
+  const { ui } = await mount({
+    ...emailOnly,
+    emailOtp: false,
+    reviewPasswordSignIn: true,
+  });
+
+  expect(ui.getByPlaceholderText(messages.auth.password)).toBeDefined();
+  expect(
+    ui.queryByRole("button", { name: messages.auth.useEmailCode }),
+  ).toBeNull();
 });
 
 test("swaps the email-code form for the password form when the server names a password account", async () => {

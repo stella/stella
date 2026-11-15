@@ -10,6 +10,7 @@ import { Input } from "@stll/ui/input";
 
 import { SecretInput } from "@/components/secret-input";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
+import { INVALID_SIGN_IN_CODE } from "@/lib/account/auth-code-report";
 import { useAnalytics } from "@/lib/analytics/provider";
 import {
   authClient,
@@ -138,7 +139,12 @@ export const PasswordSignInForm = ({
             },
           });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-            notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
+            notifyUserError(
+              toAuthClientError(error),
+              error.code === INVALID_SIGN_IN_CODE
+                ? t("auth.invalidEmailOrPassword")
+                : t("errors.actionFailed"),
+            );
           }
           return;
         }

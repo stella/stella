@@ -126,9 +126,6 @@ const SignInOptionsPanel = ({
   const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(
     null,
   );
-  const [passwordEntry, setPasswordEntry] = useState(() =>
-    initialPasswordEntry(entryMethod),
-  );
   const signInOptions = resolveSignInOptions({
     authCapabilities,
     socialProviderFlags: {
@@ -153,6 +150,11 @@ const SignInOptionsPanel = ({
     stored: readLastUsedLoginMethod(),
     options: signInOptions,
   });
+  const [passwordEntry, setPasswordEntry] = useState(() =>
+    initialPasswordEntry({ entryMethod, options: signInOptions }),
+  );
+  const openPasswordEntry = (email: string) =>
+    setPasswordEntry({ type: "open", email });
 
   const handleOtpSent = async (email: string) => {
     if (onOtpSent) {
@@ -318,20 +320,25 @@ const SignInOptionsPanel = ({
         <TextSeparator>{t("auth.orSignInWithEmail")}</TextSeparator>
       )}
 
-      {showEmailOtp && passwordEntry.type !== "required" && (
+      {showEmailOtp && passwordEntry.type === "closed" && (
         <EmailCodeSignInForm
           autoFocus={!showSocialProviders && !showLocalPassword}
           lastUsed={lastUsed}
           onCodeSent={handleOtpSent}
-          onPasswordRequired={(email) =>
-            setPasswordEntry({ type: "required", email })
+          onPasswordRequired={openPasswordEntry}
+          onUsePassword={
+            showReviewPasswordSignIn ? openPasswordEntry : undefined
           }
         />
       )}
-      {(showReviewPasswordSignIn || passwordEntry.type === "required") && (
+      {passwordEntry.type === "open" && (
         <PasswordSignInOption
-          entry={passwordEntry}
-          onOpen={() => setPasswordEntry({ type: "offered" })}
+          email={passwordEntry.email}
+          onUseEmailCode={
+            showEmailOtp
+              ? () => setPasswordEntry({ type: "closed" })
+              : undefined
+          }
           redirectTo={redirectTo}
         />
       )}
@@ -355,12 +362,15 @@ const EmailCodeSignInForm = ({
   lastUsed,
   onCodeSent,
   onPasswordRequired,
+  onUsePassword,
 }: {
   autoFocus: boolean;
   lastUsed: SignInMethod | null;
   onCodeSent: (email: string) => Promise<void>;
   /** The server sends this address no code: it signs in with a password. */
   onPasswordRequired: (email: string) => void;
+  /** Opens the password form with the address typed so far, where offered. */
+  onUsePassword: ((email: string) => void) | undefined;
 }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -404,56 +414,69 @@ const EmailCodeSignInForm = ({
   }));
 
   return (
-    <Form
-      dirty={dirty}
-      onDiscard={() => form.reset()}
-      errors={formErrors}
-      onSubmit={(e) => {
-        e.preventDefault();
-        detached(form.handleSubmit(), "sign-in-panel.submit");
-      }}
-    >
-      <form.Field name="email">
-        {(field) => (
-          <Field className="relative" name={field.name}>
-            <Input
-              autoFocus={autoFocus}
-              onBlur={field.handleBlur}
-              onChange={(e) => field.handleChange(e.target.value)}
-              placeholder={t("auth.emailPlaceholder")}
-              size="lg"
-              type="email"
-              value={field.state.value}
-            />
-            {lastUsed === SIGN_IN_METHOD.emailOtp && <LastUsedFieldBadge />}
-            <FieldError />
-          </Field>
-        )}
-      </form.Field>
-      <form.Subscribe
-        selector={(s) => ({
-          isSubmitting: s.isSubmitting,
-          canSubmit: s.canSubmit,
-          email: s.values.email,
-        })}
+    <>
+      <Form
+        dirty={dirty}
+        onDiscard={() => form.reset()}
+        errors={formErrors}
+        onSubmit={(e) => {
+          e.preventDefault();
+          detached(form.handleSubmit(), "sign-in-panel.submit");
+        }}
       >
-        {({ isSubmitting, canSubmit, email }) => (
-          <Button
-            className="w-full"
-            disabled={!canSubmit || email.trim().length === 0}
-            loading={isSubmitting}
-            type="submit"
-            variant={signInMethodVariant({
-              method: SIGN_IN_METHOD.emailOtp,
-              lastUsed,
-              fallback: "default",
-            })}
-          >
-            {t("auth.continueWithEmail")}
-          </Button>
-        )}
-      </form.Subscribe>
-    </Form>
+        <form.Field name="email">
+          {(field) => (
+            <Field className="relative" name={field.name}>
+              <Input
+                autoFocus={autoFocus}
+                onBlur={field.handleBlur}
+                onChange={(e) => field.handleChange(e.target.value)}
+                placeholder={t("auth.emailPlaceholder")}
+                size="lg"
+                type="email"
+                value={field.state.value}
+              />
+              {lastUsed === SIGN_IN_METHOD.emailOtp && <LastUsedFieldBadge />}
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
+        <form.Subscribe
+          selector={(s) => ({
+            isSubmitting: s.isSubmitting,
+            canSubmit: s.canSubmit,
+            email: s.values.email,
+          })}
+        >
+          {({ isSubmitting, canSubmit, email }) => (
+            <Button
+              className="w-full"
+              disabled={!canSubmit || email.trim().length === 0}
+              loading={isSubmitting}
+              type="submit"
+              variant={signInMethodVariant({
+                method: SIGN_IN_METHOD.emailOtp,
+                lastUsed,
+                fallback: "default",
+              })}
+            >
+              {t("auth.continueWithEmail")}
+            </Button>
+          )}
+        </form.Subscribe>
+      </Form>
+      {onUsePassword && (
+        <Button
+          className="self-center"
+          onClick={() => onUsePassword(form.state.values.email)}
+          size="sm"
+          type="button"
+          variant="link"
+        >
+          {t("auth.usePassword")}
+        </Button>
+      )}
+    </>
   );
 };
 

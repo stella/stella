@@ -21,7 +21,7 @@ function AuthLayout() {
   const t = useTranslations();
 
   return (
-    <div className="auth-gradient flex min-h-dvh flex-col">
+    <div className="auth-gradient flex min-h-dvh shrink-0 flex-col">
       <style>{`
         .auth-gradient {
           background: linear-gradient(
