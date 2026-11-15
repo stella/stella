@@ -42,3 +42,13 @@
     transform: translateX(0);
   }
 }
+
+/* Reduced motion swaps steps without movement. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(.onboarding-step-forward),
+  ::view-transition-new(.onboarding-step-backward),
+  ::view-transition-old(.onboarding-step-forward),
+  ::view-transition-old(.onboarding-step-backward) {
+    animation: none;
+  }
+}
