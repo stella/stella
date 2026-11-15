@@ -84,6 +84,29 @@ describe("opening stella from the popup", () => {
     expect(calls).toEqual(["activate 5", "focus window 3"]);
   });
 
+  test("judges a navigating tab by where it is going", async () => {
+    const { browser, calls } = fakeBrowser([
+      // Leaving stella for another site.
+      tab(6, `${START_ORIGIN}/chat`, {
+        lastAccessed: 300,
+        pendingUrl: "https://example.com/",
+      }),
+      // Coming to stella from another site.
+      tab(7, "https://example.com/", {
+        lastAccessed: 100,
+        pendingUrl: `${START_ORIGIN}/`,
+        windowId: 4,
+      }),
+    ]);
+    expect(
+      await openOrFocusStella(browser, {
+        originFromUrl,
+        startOrigin: START_ORIGIN,
+      }),
+    ).toEqual({ status: "focused", tabId: 7 });
+    expect(calls).toEqual(["activate 7", "focus window 4"]);
+  });
+
   test("opens the start origin when no stella tab is open", async () => {
     const { browser, calls } = fakeBrowser([
       ...untrustedTabs,

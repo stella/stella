@@ -24,9 +24,9 @@ export type OpenStellaResult =
   | { status: "opened"; url: string }
   | { status: "no-origin" };
 
-/** A tab still loading has its address only as the pending one. */
+/** Where a tab is going: its pending address while a navigation is under way. */
 const tabAddress = ({ pendingUrl, url }: OpenStellaTab): string =>
-  url !== undefined && url !== "" ? url : (pendingUrl ?? "");
+  pendingUrl !== undefined && pendingUrl !== "" ? pendingUrl : (url ?? "");
 
 /**
  * Brings the member to stella: the most recently used tab on a trusted
