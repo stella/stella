@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
@@ -19,6 +19,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
@@ -66,7 +67,7 @@ export const seedMemberBillingScaling = async (
     actorUserId,
     targetMemberId,
     cleanup: async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(inArray(user.id, users));
     },
   };

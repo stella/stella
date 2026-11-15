@@ -59,6 +59,7 @@ import {
   createTestHandlerContext,
   NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { writeScalingViolations } from "@/api/tests/read-scaling/measurement";
 import {
@@ -626,9 +627,7 @@ const cleanUpFixture = async (db: GatedTestDb, fixture: Fixture) => {
   await db
     .delete(workspaces)
     .where(inArray(workspaces.id, [workspaceId, otherWorkspaceId]));
-  await db
-    .delete(organization)
-    .where(inArray(organization.id, [organizationId, otherOrganizationId]));
+  await deleteOrganizationsForTest(db, [organizationId, otherOrganizationId]);
   await db.delete(user).where(
     inArray(
       user.id,
