@@ -349,16 +349,6 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/flows/review-gate-task-state.postgres.test.ts": {
-    "count": 4,
-    "owner": "database",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
-  "apps/api/src/lib/flows/start-flow-run.admission.test.ts": {
-    "count": 2,
-    "owner": "guards",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/folio-collab-rooms.test.ts": {
     "count": 2,
     "owner": "guards",
@@ -431,11 +421,6 @@
   },
   "apps/api/src/lib/redis-outage.test.ts": {
     "count": 1,
-    "owner": "guards",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/api/src/lib/runtime-worker-path.test.ts": {
-    "count": 8,
     "owner": "guards",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
