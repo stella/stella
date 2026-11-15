@@ -533,10 +533,12 @@ export const createChatRuntime = ({
   let desktopHold: AbortController | null = null;
   const isStoppedTurn = (): boolean =>
     stoppedTurnId !== null && stoppedTurnId === turnId;
-  /** Settles once the page's latest request has its answer's headers: the
-   *  server holds the turn by then, as one that runs again after a
-   *  resumed wait. */
-  let requestAnswered: Promise<unknown> = Promise.resolve();
+  /** Settles once the request of the page's current loading has its
+   *  answer's headers, or the loading ends: the server holds the turn by
+   *  then, as one that runs again after a resumed wait. A new loading opens
+   *  a new one, before its request is posted. */
+  let requestAnswered = Promise.withResolvers<undefined>();
+  requestAnswered.resolve(undefined);
   /** Steers waiting to hear from the running turn, by input id. */
   const pendingSteers = new Map<string, (outcome: ChatSteerOutcome) => void>();
   const settleSteer = (inputId: string, outcome: ChatSteerOutcome) => {
@@ -707,13 +709,11 @@ export const createChatRuntime = ({
       if (acceptance !== undefined) {
         awaitedSendAcceptance = undefined;
       }
-      const answered = Promise.withResolvers<undefined>();
-      requestAnswered = answered.promise;
       const received = await Result.tryPromise({
         try: async () => await chatFetchClient(input, init),
         catch: toError,
       });
-      answered.resolve(undefined);
+      requestAnswered.resolve(undefined);
       if (Result.isError(received)) {
         acceptance?.resolve({ status: "failed", error: received.error });
         return readQueryResult(received);
@@ -1145,7 +1145,10 @@ export const createChatRuntime = ({
       });
     },
     onLoadingChange: (isLoading) => {
-      if (!isLoading) {
+      if (isLoading) {
+        requestAnswered = Promise.withResolvers<undefined>();
+      } else {
+        requestAnswered.resolve(undefined);
         settleOpenSteers();
       }
       setSnapshot({
@@ -1545,7 +1548,7 @@ export const createChatRuntime = ({
     const send = async () => {
       // A request still on its way has no turn the server runs yet: a turn
       // resumed after its wait still reads as waiting until then.
-      await requestAnswered;
+      await requestAnswered.promise;
       if (!running()) {
         settleSteer(inputId, "unsettled");
         return;
