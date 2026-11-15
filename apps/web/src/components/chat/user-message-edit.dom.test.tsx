@@ -12,6 +12,7 @@ import {
 import { CHAT_MESSAGE_EDIT_ERROR_CODE } from "@stll/api-contract";
 import { createChatPastedTextPart } from "@stll/api-contract/chat";
 import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { PASTED_TEXT_CHIP_MAX_LINES } from "@/components/chat-pasted-text";
 import type {
@@ -19,7 +20,6 @@ import type {
   UserMessageEditOutcome,
 } from "@/components/chat/user-message-edit.logic";
 import { createUuid } from "@/lib/uuid";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 

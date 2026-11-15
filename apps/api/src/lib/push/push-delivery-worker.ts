@@ -16,6 +16,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   createApnsClient,
   createHttp2ApnsTransport,
+  isRetryableOutcome,
 } from "@/api/lib/push/apns-client";
 import type {
   ApnsAlert,
@@ -188,7 +189,7 @@ export const deliverPushNotification = async (
         .map(({ device }) => pushTokenHash(device.token)),
     ],
     removed,
-    retryable: outcomes.filter(({ outcome }) => outcome.type === "retry")
+    retryable: outcomes.filter(({ outcome }) => isRetryableOutcome(outcome))
       .length,
     rejected: outcomes.flatMap(({ outcome }) =>
       outcome.type === "rejected"

@@ -1,8 +1,6 @@
-import JSZip from "jszip";
-
 import { isReviewFlag } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { JustificationContent } from "@/api/db/schema";
 import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
@@ -186,13 +184,21 @@ const buildTextExportCell = (
   return cell;
 };
 
-const buildNumberExportCell = (
-  value: number,
-  displayValue: string,
-  currency: string | null,
-  style: ExportCellStyle = "default",
-  comment?: string,
-): ExportNumberCell => {
+type BuildNumberExportCellOptions = {
+  value: number;
+  displayValue: string;
+  currency: string | null;
+  style?: ExportCellStyle | undefined;
+  comment?: string | undefined;
+};
+
+const buildNumberExportCell = ({
+  value,
+  displayValue,
+  currency,
+  style = "default",
+  comment,
+}: BuildNumberExportCellOptions): ExportNumberCell => {
   const cell: ExportNumberCell = {
     type: "number",
     value,
@@ -325,13 +331,13 @@ const buildPropertyCell = ({
   }
 
   if (content?.type === "int") {
-    return buildNumberExportCell(
-      content.value,
-      formatFieldContent(content, locale),
-      content.currency,
+    return buildNumberExportCell({
+      value: content.value,
+      displayValue: formatFieldContent(content, locale),
+      currency: content.currency,
       style,
-      commentOption,
-    );
+      comment: commentOption,
+    });
   }
 
   return buildTextExportCell(formatFieldContent(content, locale), style, {
@@ -345,7 +351,11 @@ const buildMetadataExportCell = (
   locale: string,
 ): ExportCell => {
   if (column.id === "_version") {
-    return buildNumberExportCell(entity.version, String(entity.version), null);
+    return buildNumberExportCell({
+      value: entity.version,
+      displayValue: String(entity.version),
+      currency: null,
+    });
   }
 
   return buildTextExportCell(formatMetadataColumn(column, entity, locale));
@@ -446,15 +456,12 @@ export const buildDocxExport = async ({
   columns,
   rows,
 }: ExportTableInput): Promise<ArrayBuffer> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "[Content_Types].xml", docxContentTypesXml);
-  writeZipEntry(zip, "_rels/.rels", docxRootRelationshipsXml);
-  writeZipEntry(zip, "word/document.xml", buildDocxDocumentXml(columns, rows));
+  const zip = new ZipArchive();
+  zip.set("[Content_Types].xml", docxContentTypesXml);
+  zip.set("_rels/.rels", docxRootRelationshipsXml);
+  zip.set("word/document.xml", buildDocxDocumentXml(columns, rows));
 
-  return await zip.generateAsync({
-    type: "arraybuffer",
-    compression: "DEFLATE",
-  });
+  return (await zip.generate()).buffer;
 };
 
 type CellHyperlink = { ref: string; url: string; relId: string };
@@ -505,24 +512,19 @@ export const buildXlsxExport = async ({
   rows,
   worksheetName,
 }: ExportTableInput & { worksheetName?: string }): Promise<ArrayBuffer> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   const styleRegistry = buildStyleRegistry(rows);
   const { hyperlinks, comments } = collectCellAnnotations(columns, rows);
   const hasComments = comments.length > 0;
   const commentsRelId = `rId${hyperlinks.length + 1}`;
   const vmlRelId = `rId${hyperlinks.length + 2}`;
 
-  writeZipEntry(zip, "[Content_Types].xml", buildContentTypesXml(hasComments));
-  writeZipEntry(zip, "_rels/.rels", rootRelsXml);
-  writeZipEntry(
-    zip,
-    "xl/workbook.xml",
-    buildWorkbookXml(worksheetName ?? "Table"),
-  );
-  writeZipEntry(zip, "xl/_rels/workbook.xml.rels", workbookRelsXml);
-  writeZipEntry(zip, "xl/styles.xml", buildStylesXml(styleRegistry));
-  writeZipEntry(
-    zip,
+  zip.set("[Content_Types].xml", buildContentTypesXml(hasComments));
+  zip.set("_rels/.rels", rootRelsXml);
+  zip.set("xl/workbook.xml", buildWorkbookXml(worksheetName ?? "Table"));
+  zip.set("xl/_rels/workbook.xml.rels", workbookRelsXml);
+  zip.set("xl/styles.xml", buildStylesXml(styleRegistry));
+  zip.set(
     "xl/worksheets/sheet1.xml",
     buildSheetXml({
       columns,
@@ -534,8 +536,7 @@ export const buildXlsxExport = async ({
   );
 
   if (hyperlinks.length > 0 || hasComments) {
-    writeZipEntry(
-      zip,
+    zip.set(
       "xl/worksheets/_rels/sheet1.xml.rels",
       buildWorksheetRelsXml({
         hyperlinks,
@@ -546,18 +547,11 @@ export const buildXlsxExport = async ({
     );
   }
   if (hasComments) {
-    writeZipEntry(zip, "xl/comments1.xml", buildCommentsXml(comments));
-    writeZipEntry(
-      zip,
-      "xl/drawings/vmlDrawing1.vml",
-      buildVmlDrawingXml(comments),
-    );
+    zip.set("xl/comments1.xml", buildCommentsXml(comments));
+    zip.set("xl/drawings/vmlDrawing1.vml", buildVmlDrawingXml(comments));
   }
 
-  return await zip.generateAsync({
-    type: "arraybuffer",
-    compression: "DEFLATE",
-  });
+  return (await zip.generate()).buffer;
 };
 
 const escapeXml = (value: string): string =>

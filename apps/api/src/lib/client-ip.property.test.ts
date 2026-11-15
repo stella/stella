@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
 
@@ -31,12 +31,13 @@ describe("client IP normalization", () => {
   });
 
   test("normalizes equivalent address spellings to one key", () => {
-    fc.assert(
+    assertProperty(
+      "normalizes equivalent address spellings to one key",
       fc.property(fc.oneof(fc.ipV4(), fc.ipV6(), fc.string()), (address) => {
         const normalized = normalizeRateLimitClientAddress(address);
         expect(normalizeRateLimitClientAddress(normalized)).toBe(normalized);
       }),
-      propertyConfig({ numRuns: 600 }),
+      { numRuns: 600 },
     );
   });
 });

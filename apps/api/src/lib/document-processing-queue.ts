@@ -19,6 +19,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { mapWithConcurrency } from "@stll/concurrency";
 import {
   sanitizeErrorAttributesForOutput,
@@ -419,25 +420,22 @@ export const createDocumentProcessingLeaseRenewal = ({
       }
     };
     detached(
-      renewal.then(releaseRenewal, releaseRenewal),
+      async () => renewal.then(releaseRenewal, releaseRenewal),
       "document-processing.lease-heartbeat-release",
     );
-    detached(
-      (async () => {
-        const result = await Result.tryPromise({
-          try: async () =>
-            await withTimeout(async () => await renewal, {
-              label: "document processing lease heartbeat",
-              timeoutMs,
-            }),
-          catch: (cause) => cause,
-        });
-        if (Result.isError(result)) {
-          onError(result.error);
-        }
-      })(),
-      "document-processing.lease-heartbeat-renew",
-    );
+    detached(async () => {
+      const result = await Result.tryPromise({
+        try: async () =>
+          await withTimeout(async () => await renewal, {
+            label: "document processing lease heartbeat",
+            timeoutMs,
+          }),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(result)) {
+        onError(result.error);
+      }
+    }, "document-processing.lease-heartbeat-renew");
   };
 };
 
@@ -513,7 +511,7 @@ const readCurrentDocumentSource = async ({
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, organizationId),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
       ),
     )
     .innerJoin(
@@ -2136,7 +2134,7 @@ const recoverMissingNativeExtractionRuns = async (
       and(
         cursor === null ? undefined : gt(fields.id, cursor),
         lt(entityVersions.createdAt, settledBefore),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         sql`${fields.content}->>'type' = 'file'
           AND ${fields.content}->>'encrypted' = 'false'`,
         notExists(
@@ -2741,7 +2739,7 @@ const recoverFailedOcrSearchIndexes = async (
       and(
         eq(workspaces.id, documentProcessingRuns.workspaceId),
         eq(workspaces.organizationId, documentProcessingRuns.organizationId),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
       ),
     )
     .where(
@@ -3311,17 +3309,18 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
     null;
   let closing = false;
   detached(
-    worker.waitUntilReady().then(() => {
-      if (closing) {
+    async () =>
+      worker.waitUntilReady().then(() => {
+        if (closing) {
+          return undefined;
+        }
+        if (ocrConfigured) {
+          readiness = startDocumentOcrWorkerReadiness(
+            envDocumentProcessingWorker.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES,
+          );
+        }
         return undefined;
-      }
-      if (ocrConfigured) {
-        readiness = startDocumentOcrWorkerReadiness(
-          envDocumentProcessingWorker.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES,
-        );
-      }
-      return undefined;
-    }),
+      }),
     "document-processing.publish-readiness",
   );
 
@@ -3337,18 +3336,19 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
     }
     reconciling = true;
     detached(
-      reconcileDocumentProcessing({
-        onComplete: () => {
-          reconciling = false;
-          if (!closing) {
-            detached(
-              scheduleReconciliation(),
-              "document-processing.schedule-reconciliation",
-            );
-          }
-        },
-        phases: reconciliationPhases,
-      }),
+      async () =>
+        reconcileDocumentProcessing({
+          onComplete: () => {
+            reconciling = false;
+            if (!closing) {
+              detached(
+                async () => scheduleReconciliation(),
+                "document-processing.schedule-reconciliation",
+              );
+            }
+          },
+          phases: reconciliationPhases,
+        }),
       "document-processing.reconcile",
     );
   };

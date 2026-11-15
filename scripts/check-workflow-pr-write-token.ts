@@ -73,21 +73,6 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
     requires: CI_PLAN_TRUSTED,
     privileges: ACTIONS_WRITE,
   },
-  ".github/workflows/ci.yml:ci-browser": {
-    reason: CI_PLAN_REASON,
-    covers: PULL_REQUEST_DEPENDABOT,
-    requires: {
-      unconditional:
-        "the job only reads the results the admitted browser jobs uploaded",
-    },
-    privileges: ACTIONS_WRITE,
-  },
-  ".github/workflows/ci.yml:ci-checks-generated": {
-    reason: CI_PLAN_REASON,
-    covers: PULL_REQUEST_DEPENDABOT,
-    requires: CI_PLAN_TRUSTED,
-    privileges: ACTIONS_WRITE,
-  },
   ".github/workflows/ci.yml:ci-checks-policy": {
     reason: CI_PLAN_REASON,
     covers: PULL_REQUEST_DEPENDABOT,
@@ -129,18 +114,6 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
     },
   },
   ".github/workflows/ci.yml:ci-tests": {
-    reason: CI_PLAN_REASON,
-    covers: PULL_REQUEST_DEPENDABOT,
-    requires: CI_PLAN_TRUSTED,
-    privileges: ACTIONS_WRITE,
-  },
-  ".github/workflows/ci.yml:code-quality-api": {
-    reason: CI_PLAN_REASON,
-    covers: PULL_REQUEST_DEPENDABOT,
-    requires: CI_PLAN_TRUSTED,
-    privileges: ACTIONS_WRITE,
-  },
-  ".github/workflows/ci.yml:code-quality-web-rest": {
     reason: CI_PLAN_REASON,
     covers: PULL_REQUEST_DEPENDABOT,
     requires: CI_PLAN_TRUSTED,
@@ -290,7 +263,7 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
         "the approval rests on the pinned called workflow, not on the job condition",
     },
     calls:
-      "stella/.github/.github/workflows/pr-lint.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+      "stella/.github/.github/workflows/pr-lint.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804",
     privileges: { write: ["pull-requests"], secrets: [] },
   },
   ".github/workflows/publish-npm.yml:release-*": {
@@ -306,7 +279,7 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
       ],
     },
     calls:
-      "stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d",
+      "stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804",
     privileges: {
       write: ["contents", "id-token"],
       secrets: ["STELLA_RELEASE_APP_ID", "STELLA_RELEASE_APP_PRIVATE_KEY"],

@@ -3,7 +3,8 @@ import { afterAll, describe, expect, test } from "bun:test";
 import http from "node:http";
 import https from "node:https";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { takeRefusedRequests } from "@/testing/dom-network-guard";
 
 // Read before any DOM exists: these are the functions the guard must hand

@@ -54,7 +54,7 @@ export type AccountStore = {
  * letters and digits stay, anything else becomes `_` and its code point in
  * six hex digits, so two different parts never meet in one key.
  */
-const keyPart = (part: string): string =>
+export const keyPart = (part: string): string =>
   part.replaceAll(
     /[^A-Za-z0-9]/gu,
     (character) =>

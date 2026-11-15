@@ -14,17 +14,22 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
   lockCaseLawProjectionRepairIdentifiers,
   lockCaseLawProjectionRepairRows,
   lockCaseLawProjectionRepairStates,
+  lockCorpusProjectionRevisionsAfterStates,
 } from "@/api/lib/db/aggregate-lock";
+import { transitionBatch } from "@/api/lib/db/transitions";
+import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   CORPUS_INDEX_MANIFESTS,
   type CorpusIndexManifest,
   corpusIndexManifestCoversJurisdiction,
+  requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   type CaseLawProjectionInput,
@@ -33,8 +38,15 @@ import {
   deriveCorpusIndexProjectionDescriptor,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE } from "@/api/lib/legal-search/corpus-index-projection-intent-transition-spec";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
+import {
+  corpusProjectionAcceptedAppendCleanupFence,
+  corpusProjectionRetiredRevisionRunnableAt,
+} from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import { corpusIndexProjectionNamedCopyTrailsTwoChanges } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
@@ -116,6 +128,7 @@ export type CaseLawProjectionCanonicalInput = {
   ecli: string | null;
   metadata: Record<string, unknown> | null;
   provisionKeys: readonly string[];
+  rankingSignals: CaseLawRankingSignals;
   vacatedFrom: string | null;
   sourceDescriptor: Parameters<typeof isRedistributable>[0];
 };
@@ -136,6 +149,7 @@ export const caseLawProjectionInputFromCanonical = ({
   ecli,
   metadata,
   provisionKeys,
+  rankingSignals,
   vacatedFrom,
   sourceDescriptor,
 }: CaseLawProjectionCanonicalInput): CaseLawProjectionInput => ({
@@ -159,6 +173,7 @@ export const caseLawProjectionInputFromCanonical = ({
   ecli,
   metadata,
   provisionKeys,
+  rankingSignals,
   vacatedFrom,
 });
 
@@ -453,6 +468,9 @@ const lockCaseLawProjectionInput = async (
     (await readCaseLawJurisdictionVacatedTx(tx, [row.jurisdiction])).get(
       row.jurisdiction,
     ) ?? null;
+  const rankingSignals = (
+    await readCaseLawRankingSignals(tx, [row.documentId])
+  ).get(String(row.documentId));
   return {
     epoch: row.projectionEpoch,
     input: caseLawProjectionInputFromCanonical({
@@ -461,6 +479,10 @@ const lockCaseLawProjectionInput = async (
       provisionKeys:
         provisionKeys ??
         panic(`Provision keys were not loaded for ${row.documentId}`),
+      // The row is locked, so it cannot have disappeared since.
+      rankingSignals:
+        rankingSignals ??
+        panic(`Ranking signals were not loaded for ${row.documentId}`),
       vacatedFrom,
       sourceDescriptor: source.sourceDescriptor,
     }),
@@ -543,39 +565,63 @@ const projectionEpochUpdate = (
   }
 };
 
+/**
+ * The projection epoch is search-projection bookkeeping: no reader of the
+ * decision or document sees it. Every write of it keeps `updated_at`, the
+ * public freshness that sitemaps, change cursors and compare-and-set tokens
+ * read, as the other bookkeeping writers of these rows do.
+ */
+export const CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS = {
+  case_law: sql<Date>`${caseLawDecisions.updatedAt}`,
+  legislation: sql<Date>`${legislationDocuments.updatedAt}`,
+} as const satisfies Record<CorpusIndexProjectionSubject["family"], unknown>;
+
 const setCanonicalProjectionEpoch = async (
   tx: Transaction,
   update: CanonicalProjectionEpochUpdate,
 ): Promise<void> => {
   switch (update.family) {
-    case "case_law":
+    case "case_law": {
       if (update.epochs.length === 0) {
         return;
       }
+      const write = replayWrite(caseLawDecisions, {
+        projectionEpoch: sqlCaseFragment({
+          branches: update.epochs.map(
+            ({ id, epoch }) =>
+              sql`WHEN ${caseLawDecisions.id} = ${id} THEN ${epoch.toString()}::bigint`,
+          ),
+          fallback: sql`${caseLawDecisions.projectionEpoch}`,
+        }),
+        updatedAt: CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS.case_law,
+      });
       await tx
         .update(caseLawDecisions)
-        .set({
-          projectionEpoch: sqlCaseFragment({
-            branches: update.epochs.map(
-              ({ id, epoch }) =>
-                sql`WHEN ${caseLawDecisions.id} = ${id} THEN ${epoch.toString()}::bigint`,
-            ),
-            fallback: sql`${caseLawDecisions.projectionEpoch}`,
-          }),
-        })
+        .set(write.set)
         .where(
-          inArray(
-            caseLawDecisions.id,
-            update.epochs.map(({ id }) => id),
+          and(
+            write.setWhere,
+            inArray(
+              caseLawDecisions.id,
+              update.epochs.map(({ id }) => id),
+            ),
           ),
         );
       return;
-    case "legislation":
+    }
+    case "legislation": {
+      const write = replayWrite(legislationDocuments, {
+        projectionEpoch: update.epoch,
+        updatedAt: CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS.legislation,
+      });
       await tx
         .update(legislationDocuments)
-        .set({ projectionEpoch: update.epoch })
-        .where(eq(legislationDocuments.id, update.entityId));
+        .set(write.set)
+        .where(
+          and(write.setWhere, eq(legislationDocuments.id, update.entityId)),
+        );
       return;
+    }
     default:
       update satisfies never;
       return panic(`Unhandled projection epoch update: ${String(update)}`);
@@ -838,13 +884,194 @@ export const buildCorpusIndexProjectionDesiredStateValues = ({
   desiredIndexId: descriptor.action === "upsert" ? descriptor.indexId : null,
 });
 
-const writeDesiredStates = async (
+export type DesiredStateKey = Pick<
+  typeof corpusIndexProjectionStates.$inferSelect,
+  "family" | "generation" | "entityId"
+>;
+
+const desiredStateKeys = (keys: readonly DesiredStateKey[]) =>
+  or(
+    ...keys.map(({ family, generation, entityId }) =>
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.entityId, entityId),
+      ),
+    ),
+  );
+
+/**
+ * States this write takes from a desired erasure back to an upsert while they
+ * still name a copy. Read before the write, since the write replaces the
+ * erasure it is undoing; every desired writer holds the canonical row first,
+ * so no other desired write can move these states in between.
+ */
+const readUndoneErasuresTx = async (
+  tx: Transaction,
+  values: readonly (typeof corpusIndexProjectionStates.$inferInsert)[],
+): Promise<DesiredStateKey[]> => {
+  const keys = desiredStateKeys(
+    values.filter(({ desiredAction }) => desiredAction === "upsert"),
+  );
+  if (keys === undefined) {
+    return [];
+  }
+  return await tx
+    .select({
+      family: corpusIndexProjectionStates.family,
+      generation: corpusIndexProjectionStates.generation,
+      entityId: corpusIndexProjectionStates.entityId,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        keys,
+        eq(corpusIndexProjectionStates.desiredAction, "erase"),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+      ),
+    );
+};
+
+export const SERVED_COPY_RETIREMENT_REASONS = {
+  undoneErasure: "projection revision retired by an undone erasure",
+  legacyUnproven: "projection revision retired as not provably current",
+} as const;
+
+/**
+ * Retire the copy these states name and stop naming it, so the entity is
+ * appended anew and never served the retired copy again. The copy is queued
+ * for cleanup if it is still `applied`. The caller holds these state rows;
+ * the revisions are locked after them, in the projection lock order. Each
+ * state is then queued for the append walk at the instant its retired copy
+ * can have settled.
+ */
+export const retireServedCopiesTx = async (
+  tx: Transaction,
+  retired: readonly DesiredStateKey[],
+  reason: (typeof SERVED_COPY_RETIREMENT_REASONS)[keyof typeof SERVED_COPY_RETIREMENT_REASONS],
+): Promise<void> => {
+  const keys = desiredStateKeys(retired);
+  if (keys === undefined) {
+    return;
+  }
+  const named = await tx
+    .select({
+      family: corpusIndexProjectionStates.family,
+      generation: corpusIndexProjectionStates.generation,
+      entityId: corpusIndexProjectionStates.entityId,
+      revision: corpusIndexProjectionStates.appliedRevision,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        keys,
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+      ),
+    );
+  const revisions = named.flatMap(({ revision, ...key }) =>
+    revision === null ? [] : [{ ...key, revision }],
+  );
+  if (revisions.length === 0) {
+    return;
+  }
+  await lockCorpusProjectionRevisionsAfterStates(
+    tx,
+    revisions.map(({ revision }) => revision),
+  );
+  const transitionAt = sql<Date>`clock_timestamp()`;
+  const generations = Map.groupBy(
+    revisions,
+    ({ family, generation }) => `${family}/${generation}`,
+  );
+  for (const group of generations.values()) {
+    const first = group.at(0) ?? panic("Empty retired copy group");
+    const manifest = requireCorpusIndexManifest(first.family, first.generation);
+    // db-await-in-loop: one statement per generation, each with that generation's publish fence
+    await transitionBatch({
+      tx,
+      spec: CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE,
+      ids: group.map(({ revision }) => revision),
+      options: {
+        to: "cleanup_pending",
+        from: ["applied"],
+        set: {
+          leaseToken: null,
+          leaseExpiresAt: null,
+          ...corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt),
+          lastError: reason,
+          updatedAt: transitionAt,
+        },
+      },
+      // Bookkeeping on the derived public corpus projection: no tenant data
+      // and no actor; the canonical write that changed the desired state is
+      // audited.
+      recordTransitionAuditEvent: () => undefined,
+    });
+    const unname = replayWrite(
+      corpusIndexProjectionStates,
+      {
+        appliedAction: null,
+        appliedEpoch: null,
+        appliedRevision: null,
+        appliedFingerprint: null,
+        appliedIndexId: null,
+        appliedAt: null,
+      },
+      {
+        modifiedAt: {
+          column: corpusIndexProjectionStates.updatedAt,
+          value: corpusProjectionRetiredRevisionRunnableAt(
+            manifest,
+            corpusIndexProjectionStates.appliedRevision,
+          ),
+        },
+      },
+    );
+    // audit: skip - applied-state bookkeeping on the derived public corpus projection
+    // db-await-in-loop: one statement per generation, each with that generation's settlement bound
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set(unname.set)
+      .where(
+        and(
+          desiredStateKeys(group),
+          eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+          eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+          unname.setWhere,
+        ),
+      );
+  }
+};
+
+export const writeDesiredStates = async (
   tx: Transaction,
   values: (typeof corpusIndexProjectionStates.$inferInsert)[],
 ): Promise<void> => {
   if (values.length === 0) {
     return;
   }
+  const undone = await readUndoneErasuresTx(tx, values);
+  const states = corpusIndexProjectionStates;
+  // Judged on the row before this write: once its named copy trails by two
+  // changes with other content, an upsert write keeps `desired_at` at the
+  // instant that happened, so the legacy pass can tell a copy that fell that
+  // far behind before its cutover from one that fell behind after it (see the
+  // predicate). A write that turns the state into an erasure stamps its own
+  // instant, so the erasure's pending time is its own; the undo that follows
+  // it retires the copy here (`readUndoneErasuresTx`).
+  const namedCopyTrailsTwoChanges =
+    corpusIndexProjectionNamedCopyTrailsTwoChanges({
+      desiredAction: states.desiredAction,
+      appliedAction: states.appliedAction,
+      appliedRevision: states.appliedRevision,
+      appliedEpoch: states.appliedEpoch,
+      desiredEpoch: states.desiredEpoch,
+      appliedFingerprint: states.appliedFingerprint,
+      desiredFingerprint: states.desiredFingerprint,
+      appliedIndexId: states.appliedIndexId,
+      desiredIndexId: states.desiredIndexId,
+    });
   const desiredStateUnchanged = sql`(
     ${corpusIndexProjectionStates.desiredAction},
     ${corpusIndexProjectionStates.desiredEpoch},
@@ -865,23 +1092,36 @@ const writeDesiredStates = async (
         corpusIndexProjectionStates.generation,
         corpusIndexProjectionStates.entityId,
       ],
-      set: {
-        desiredAction: sql`excluded.desired_action`,
-        desiredEpoch: sql`excluded.desired_epoch`,
-        desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE clock_timestamp() END`,
-        desiredFingerprint: sql`excluded.desired_fingerprint`,
-        desiredIndexId: sql`excluded.desired_index_id`,
-        workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
-        retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
-        failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
-        appendMode: sql<
-          "batchable" | "single"
-        >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
-        lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
-        lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
-        updatedAt: sql<Date>`clock_timestamp()`,
-      },
+      ...replayWrite(
+        corpusIndexProjectionStates,
+        {
+          desiredAction: sql`excluded.desired_action`,
+          desiredEpoch: sql`excluded.desired_epoch`,
+          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} OR (excluded.desired_action = 'upsert' AND ${namedCopyTrailsTwoChanges}) THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
+          desiredFingerprint: sql`excluded.desired_fingerprint`,
+          desiredIndexId: sql`excluded.desired_index_id`,
+          workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
+          retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
+          failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
+          appendMode: sql<
+            "batchable" | "single"
+          >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
+          lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
+          lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
+        },
+        {
+          modifiedAt: {
+            column: corpusIndexProjectionStates.updatedAt,
+            value: sql`statement_timestamp()`,
+          },
+        },
+      ),
     });
+  await retireServedCopiesTx(
+    tx,
+    undone,
+    SERVED_COPY_RETIREMENT_REASONS.undoneErasure,
+  );
 };
 
 type DesiredStateSnapshot = {
@@ -892,12 +1132,26 @@ type DesiredStateSnapshot = {
   desiredIndexId: string | null;
 };
 
-const desiredStateMatches = (
-  state: DesiredStateSnapshot,
-  epoch: bigint,
+/**
+ * Whether a generation's desired state already holds what the canonical row
+ * derives for it. One rule for every reader that asks: reconciliation, the
+ * seeding of one generation, and any sweep comparing desired state with the
+ * canonical rows (import this; never restate it).
+ *
+ * Content decides: the action, and for an upsert the fingerprint and index.
+ * The desired epoch orders one generation's revisions of the entity; the
+ * canonical row's epoch is never behind any of them, and a generation whose
+ * content did not change is not drifted for trailing it.
+ */
+export const corpusProjectionDesiredStateHolds = (
+  state: Pick<
+    DesiredStateSnapshot,
+    "desiredAction" | "desiredEpoch" | "desiredFingerprint" | "desiredIndexId"
+  >,
+  canonicalEpoch: bigint,
   descriptor: CorpusIndexProjectionDescriptor,
 ): boolean =>
-  state.desiredEpoch === epoch &&
+  state.desiredEpoch <= canonicalEpoch &&
   state.desiredAction === descriptor.action &&
   state.desiredFingerprint ===
     (descriptor.action === "upsert" ? descriptor.fingerprint : null) &&
@@ -960,7 +1214,7 @@ const reconcileProjectionPlan = ({
     const state = byGeneration.get(generation);
     return (
       state !== undefined &&
-      !desiredStateMatches(state, currentEpoch, descriptor)
+      !corpusProjectionDesiredStateHolds(state, currentEpoch, descriptor)
     );
   });
 
@@ -969,13 +1223,16 @@ const reconcileProjectionPlan = ({
     epoch += 1n;
   }
 
+  // A drift still moves every generation to the new epoch together, so a
+  // state that owes work always desires the canonical epoch: a builder of an
+  // earlier release fences its leases by that equality.
   const values = projections
     .filter(({ generation, descriptor }) => {
       const state = byGeneration.get(generation);
       return (
         existingDrifted ||
         state === undefined ||
-        !desiredStateMatches(state, epoch, descriptor)
+        !corpusProjectionDesiredStateHolds(state, epoch, descriptor)
       );
     })
     .map(({ generation, descriptor }) =>
@@ -1160,15 +1417,12 @@ export const ensureCorpusProjectionDesiredStateTx = async (
     .for("update");
   const existingState = existing.at(0);
   if (existingState !== undefined) {
-    const expectedFingerprint =
-      descriptor.action === "upsert" ? descriptor.fingerprint : null;
-    const expectedIndexId =
-      descriptor.action === "upsert" ? descriptor.indexId : null;
     if (
-      existingState.desiredEpoch !== locked.epoch ||
-      existingState.desiredAction !== descriptor.action ||
-      existingState.desiredFingerprint !== expectedFingerprint ||
-      existingState.desiredIndexId !== expectedIndexId
+      !corpusProjectionDesiredStateHolds(
+        existingState,
+        locked.epoch,
+        descriptor,
+      )
     ) {
       return panic(
         `Existing corpus desired state does not match canonical input: ${subject.family}/${generation}/${subject.entityId}`,
@@ -1319,6 +1573,7 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
     tx,
     rows.map(({ jurisdiction }) => jurisdiction),
   );
+  const rankingSignals = await readCaseLawRankingSignals(tx, ids);
   const manifests = await projectionManifests(tx, "case_law");
   const states = await lockCaseLawProjectionRepairStates(tx, {
     decisionIds: ids,
@@ -1338,6 +1593,9 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
       provisionKeys:
         provisionKeys.get(row.documentId) ??
         panic("Projection repair provision keys missing"),
+      rankingSignals:
+        rankingSignals.get(row.documentId) ??
+        panic("Projection repair ranking signals missing"),
       vacatedFrom: vacated.get(row.jurisdiction) ?? null,
       sourceDescriptor: source.descriptor,
     });

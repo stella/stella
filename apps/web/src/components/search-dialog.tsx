@@ -68,7 +68,10 @@ import {
   type SavedSearchCriteria,
   toSearchFilters,
 } from "@/components/saved-searches.logic";
-import { SearchCaseLawGroup } from "@/components/search-case-law-group";
+import {
+  SearchCaseLawGroup,
+  SearchCaseLawResults,
+} from "@/components/search-case-law-group";
 import {
   citationCommandHits,
   citationCommandRoute,
@@ -100,7 +103,6 @@ import {
 } from "@/components/search-dialog-results";
 import {
   canUseAskAIShortcut,
-  caseLawFacetCountMessage,
   createDialogCloseActionQueue,
   getCaseLawHitRoute,
   getChatHitRoute,
@@ -169,6 +171,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
@@ -379,19 +382,23 @@ const getSearchScopeVisibility = ({
   const registryVisible = scope === "registries" && open && mode === "browse";
   // Recents and actions belong to matters; external scopes skip them.
   const matterScope = scope === "all" || scope === "matters";
+  // External scopes are answered by their own searches, not the matter list.
+  const externalScope = scope === "registries" || scope === "case-law";
+  const caseLawScope = scope === "case-law" && open && mode === "browse";
+  const hasTypedQuery = query.trim().length > 0;
   return {
     activeSearch:
       hasSearchCriteria &&
       !hasUnavailableSelectedType &&
       activeTypeCount > 0 &&
-      scope !== "registries",
-    visibleSearch:
-      hasVisibleSearch && activeTypeCount > 0 && scope !== "registries",
+      !externalScope,
+    visibleSearch: hasVisibleSearch && activeTypeCount > 0 && !externalScope,
     companyQuery: registryVisible || registryGroupActive ? companyQuery : null,
     registryVisible,
     companySearchVisible: registryVisible || registryGroupActive,
     recents: !hasVisibleSearch && matterScope,
-    caseLawPrompt: !hasVisibleSearch && scope === "case-law",
+    caseLawPrompt: caseLawScope && !hasTypedQuery,
+    caseLawResults: caseLawScope && hasTypedQuery,
     showPrompt: query.length === 0 && mode === "browse",
     placeholder: mode === "pick" ? undefined : "",
     // Actions belong to the blank screen and never sit above results.
@@ -415,8 +422,38 @@ type SupplementalPreview =
 const registryExpansionPreview = (expanded: boolean): SupplementalPreview =>
   expanded ? { type: "registry" } : { type: "internal" };
 
-const responsiveFacetVisibility = (showPreview: boolean) =>
-  showPreview ? "xl:block" : "sm:block";
+/** Matter filters do not apply to the Case law scope's corpus search. */
+const responsiveFacetVisibility = (
+  showPreview: boolean,
+  scope: SearchScope,
+) => {
+  if (scope === "case-law") {
+    return undefined;
+  }
+  return showPreview ? "xl:block" : "sm:block";
+};
+
+/** The Case law scope: a prompt until a query is typed, then its section. */
+const SearchCaseLawScope = ({
+  prompt,
+  results,
+  ...props
+}: ComponentProps<typeof SearchCaseLawResults> & {
+  prompt: boolean;
+  results: boolean;
+}) => {
+  const t = useTranslations();
+  if (prompt) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-4 py-8">
+        <p className="text-muted-foreground text-sm">
+          {t("search.caseLawEmptyState")}
+        </p>
+      </div>
+    );
+  }
+  return results ? <SearchCaseLawResults {...props} /> : null;
+};
 
 const resolveSupplementalPreview = ({
   searchScope,
@@ -443,8 +480,7 @@ const resolveSupplementalPreview = ({
       ? companyHit
       : null,
   displayedHit:
-    showLazySearchGroups &&
-    caseLawExpanded &&
+    (searchScope === "case-law" || (showLazySearchGroups && caseLawExpanded)) &&
     supplementalPreview.type === "case-law" &&
     supplementalPreview.query === query
       ? supplementalPreview.hit
@@ -1203,19 +1239,24 @@ export const SearchDialog = ({
         scope: "global",
         threadId: createChatThreadId(),
       };
-      await startNewThreadCommandHandoff({
-        activeOrganizationId: searchRecentsScope.organizationId,
-        context: {
-          allowMissingThread: true,
-          getUserContext,
-          getContextMatterIds: () => [],
-          getSendMode: () => getChatSendMode(threadRef),
-        },
-        files: [],
-        html: toAskAIMessageHtml(queryText),
-        queryClient,
-        threadRef,
-      });
+      readQueryResult(
+        await startNewThreadCommandHandoff({
+          activeOrganizationId: searchRecentsScope.organizationId,
+          context: {
+            allowMissingThread: true,
+            getUserContext,
+            getContextMatterIds: () => [],
+            // No composer here offers a Run on choice; the question runs on
+            // stella.
+            getRunTarget: undefined,
+            getSendMode: () => getChatSendMode(threadRef),
+          },
+          files: [],
+          html: toAskAIMessageHtml(queryText),
+          queryClient,
+          threadRef,
+        }),
+      );
       return threadRef.threadId;
     },
     onError: (error) => {
@@ -1715,6 +1756,15 @@ export const SearchDialog = ({
     !isBlockingSearchError &&
     hasResults;
   const commandHits = [...citationHits, ...(shouldShowResults ? allHits : [])];
+  const caseLawResultsProps = {
+    debouncedQuery,
+    organizationId: searchRecentsScope.organizationId,
+    userId: searchRecentsScope.userId,
+    selectedHitId: supplementalDisplay.caseLawSelectedHitId,
+    onPreview: (hit: GlobalSearchHit) =>
+      setSupplementalPreview({ type: "case-law", query, hit }),
+    onOpen: openSearchResult,
+  };
   const resultsStatus = resolveSearchResultsStatus({
     hasActiveSearch,
     hasQuery,
@@ -2122,11 +2172,11 @@ export const SearchDialog = ({
                 ref={contentAreaRef}
                 style={columnsStyle}
               >
-                {/* Matter filters do not apply to external registry searches. */}
+                {/* Matter filters do not apply to external registry or case-law searches. */}
                 <div
                   className={cn(
                     "hidden min-h-0 w-[var(--search-facets-w,14rem)] shrink-0 border-e group-data-[registry-search=true]/search-content:hidden",
-                    responsiveFacetVisibility(showPreview),
+                    responsiveFacetVisibility(showPreview, searchScope),
                   )}
                 >
                   <ScrollArea axis="vertical">
@@ -2148,7 +2198,7 @@ export const SearchDialog = ({
                 <SearchColumnResizeHandle
                   className={cn(
                     "hidden group-data-[registry-search=true]/search-content:hidden",
-                    responsiveFacetVisibility(showPreview),
+                    responsiveFacetVisibility(showPreview, searchScope),
                   )}
                   label={t("search.resizeFilters")}
                   max={SEARCH_FACETS_MAX_WIDTH}
@@ -2192,13 +2242,12 @@ export const SearchDialog = ({
                           />
                         </ScrollArea>
                       </div>
-                      {scopeVisibility.caseLawPrompt && (
-                        <div className="flex flex-1 items-center justify-center px-4 py-8">
-                          <p className="text-muted-foreground text-sm">
-                            {t("search.caseLawEmptyState")}
-                          </p>
-                        </div>
-                      )}
+                      <SearchCaseLawScope
+                        {...caseLawResultsProps}
+                        prompt={scopeVisibility.caseLawPrompt}
+                        query={query}
+                        results={scopeVisibility.caseLawResults}
+                      />
                       {scopeVisibility.actions &&
                         resolvedActions.length > 0 && (
                           <MenuSection title={t("common.actions")}>
@@ -2298,6 +2347,8 @@ export const SearchDialog = ({
                       }
                       caseLawEnabled={registryResultsPane.caseLawEnabled}
                       caseLawProps={{
+                        ...caseLawResultsProps,
+                        query,
                         expanded: caseLawExpanded,
                         onExpandedChange: (expanded) => {
                           setCaseLawExpansion({
@@ -2305,26 +2356,6 @@ export const SearchDialog = ({
                             expanded,
                           });
                           setSupplementalPreview({ type: "internal" });
-                        },
-                        query,
-                        debouncedQuery,
-                        organizationId: searchRecentsScope.organizationId,
-                        userId: searchRecentsScope.userId,
-                        selectedHitId: supplementalDisplay.caseLawSelectedHitId,
-                        onPreview: (hit) =>
-                          setSupplementalPreview({
-                            type: "case-law",
-                            query,
-                            hit,
-                          }),
-                        onOpen: openSearchResult,
-                        searchFilters: {
-                          workspaceIds: filters.workspaceIds,
-                          kinds: filters.kinds,
-                          editedByUserIds: filters.editedByUserIds,
-                          mimeTypes: filters.mimeTypes,
-                          updatedFrom,
-                          updatedTo,
                         },
                       }}
                     />
@@ -2421,27 +2452,19 @@ const SearchFacetsBody = ({
       if (!isSearchKindOption(bucket.value)) {
         return [];
       }
-      if (!isAvailableSearchKind(bucket.value, publicLawEnabled)) {
+      // Case law has its own section, answered by the corpus search engine;
+      // the matter search never counts it.
+      if (
+        bucket.value === "case-law" ||
+        !isAvailableSearchKind(bucket.value, publicLawEnabled)
+      ) {
         return [];
       }
-      // Case law stays out of the main list until its group opens, so a
-      // bare number beside a few matter rows reads as a miscount.
-      const caseLawCount =
-        bucket.value === "case-law"
-          ? caseLawFacetCountMessage(bucket.count)
-          : null;
       return [
         {
           value: bucket.value,
           count: bucket.count,
           label: t(KIND_TRANSLATION_KEYS[bucket.value]),
-          ...(caseLawCount
-            ? {
-                countLabel: t(caseLawCount.key, {
-                  count: caseLawCount.count,
-                }),
-              }
-            : {}),
         },
       ];
     }),
@@ -2664,7 +2687,7 @@ const SearchDialogFooter = ({
         <SearchFooterHint translationKey="search.hintNavigate" />
         {mode === "pick" ? (
           <span className="hidden items-center gap-1 sm:inline-flex">
-            <kbd className="border-border bg-muted text-3xs rounded border px-1 py-0.5 leading-none">
+            <kbd className="border-border bg-muted text-3xs rounded-sm border px-1 py-0.5 leading-none">
               ↵
             </kbd>
             {PICK_HINT_LABEL}

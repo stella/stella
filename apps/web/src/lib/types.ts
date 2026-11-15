@@ -170,7 +170,8 @@ export type WorkspaceProperty = Omit<
     | {
         version: 1;
         type: "person";
-      };
+      }
+    | Extract<WorkspacePropertyWire["content"], { type: "record" }>;
   tool: ManualInputTool | AIModelTool | PlaybookVerdictTool;
   // Structural role: identifies the document-type classifier by identity
   // rather than by the literal name "Document Type" (mirrors the server
@@ -216,6 +217,16 @@ export type WorkspaceCellMetadata = {
     lockedByName: string | null;
     lockedByImage: string | null;
     reason: "manual-edit" | "explicit";
+  };
+  /** A person's value over the one a run produced; absent once a run settles
+   *  the cell again. */
+  override?: {
+    machine: { content: WorkspaceFieldContent; settledAt: string };
+    editedBy: string;
+    editedByName: string | null;
+    editedByImage: string | null;
+    editedAt: string;
+    reason: string | null;
   };
 };
 

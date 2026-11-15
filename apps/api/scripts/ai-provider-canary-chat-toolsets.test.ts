@@ -187,6 +187,7 @@ const serializeTools = (
   }));
 
 const commonProviderOptions = (model: string, tools: Tool[]) => ({
+  threadId: "provider-toolset-probe",
   logger: resolveDebugOption(false),
   messages: [{ role: "user" as const, content: "Contract probe." }],
   model,

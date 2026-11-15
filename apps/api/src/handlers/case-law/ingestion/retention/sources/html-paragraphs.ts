@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * Every visible run of an HTML document as paragraph input for the oracle.
  *
@@ -15,8 +16,8 @@
  * oracle drops from HTML sources too). A line break joins its neighbours
  * with a space, as the oracle reads it; image alt text is a run of its own.
  */
-import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
+import { load } from "@stll/html";
+import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 
 const HIDDEN_TAGS = new Set([
   "head",
@@ -80,7 +81,7 @@ type Step = { type: "node"; node: AnyNode } | { type: "block-end" };
 
 /** The visible paragraphs of an HTML document or fragment, in order. */
 export const htmlParagraphs = (html: string): string[] => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const paragraphs: string[] = [];
   let current = "";
   const flush = (): void => {

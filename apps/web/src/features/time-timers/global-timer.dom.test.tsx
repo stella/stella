@@ -1,9 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
@@ -32,7 +30,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await act(async () => {
-    await sleep(50);
+    await Promise.resolve();
   });
   await unregisterDomEnvironment();
 });
@@ -99,9 +97,8 @@ test.each([true, false])(
     const paths = serve(timeBilling);
     renderTimer();
     await waitFor(() => expect(paths).toContain("/v1/workspaces/navigation"));
-    await act(async () => {
-      await sleep(20);
-    });
-    expect(paths.includes(TIME_TIMERS_PATH)).toBe(timeBilling);
+    await waitFor(() =>
+      expect(paths.includes(TIME_TIMERS_PATH)).toBe(timeBilling),
+    );
   },
 );

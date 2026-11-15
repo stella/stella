@@ -37,6 +37,7 @@ import {
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { withDeferredCommitEffects } from "@/api/lib/idempotency/commit-effects";
 import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
 import { toJsonValue } from "@/api/lib/json-value";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -308,68 +309,74 @@ export async function runWithRequestReceipt<T>({
       let refusal: { response: unknown } | undefined;
       let receiptState: "pending" | "completed" = "pending";
       try {
+        // Effects the handler owes after commit wait for the receipt's
+        // commit, not the handler savepoint's release.
         const outcome = await Result.tryPromise(
           async () =>
-            await options.scopedDb(async (tx) => {
-              const lock = await withAggregateLock({
-                tx,
-                aggregate: "requestReceipt",
-                id: {
-                  id: claim.id,
-                  organizationId: options.organizationId,
-                  userId: options.userId,
-                },
-                mode: "update",
-                wait: "nowait",
-              });
-              switch (lock.status) {
-                case "missing":
-                case "busy":
-                  return Result.err(
-                    new HandlerError({
-                      status: 409,
-                      code: IDEMPOTENCY_IN_PROGRESS_CODE,
-                      message: "This request is still in progress.",
-                    }),
-                  );
-                case "locked":
-                  break;
-                default:
-                  lock satisfies never;
-                  return panic("Unhandled request receipt lock state");
-              }
-              // Every handler operation is a savepoint of the receipt-owning
-              // transaction. No resource can commit without its replay response.
-              const transactionalDb: ScopedDb = async (fn) =>
-                await withAggregateSavepoint(tx, fn);
-              const result = await run(transactionalDb);
-              let body: unknown = result;
-              let status = responseStatus();
-              while (isHttpStatusResponse(body)) {
-                status = body.code;
-                body = body.response;
-              }
-              if (status < 200 || status >= 300) {
-                refusal = { response: result };
-                return tx.rollback();
-              }
-              if (
-                body instanceof Response ||
-                body instanceof ReadableStream ||
-                body instanceof Blob ||
-                body instanceof ArrayBuffer ||
-                ArrayBuffer.isView(body)
-              ) {
-                panic("Idempotency replay requires a JSON handler");
-              }
-              await completeRequestReceipt({
-                scopedDb: transactionalDb,
-                id: claim.id,
-                status,
-                body,
-              });
-              return Result.ok(result);
-            }),
+            await withDeferredCommitEffects(
+              async () =>
+                await options.scopedDb(async (tx) => {
+                  const lock = await withAggregateLock({
+                    tx,
+                    aggregate: "requestReceipt",
+                    id: {
+                      id: claim.id,
+                      organizationId: options.organizationId,
+                      userId: options.userId,
+                    },
+                    mode: "update",
+                    wait: "nowait",
+                  });
+                  switch (lock.status) {
+                    case "missing":
+                    case "busy":
+                      return Result.err(
+                        new HandlerError({
+                          status: 409,
+                          code: IDEMPOTENCY_IN_PROGRESS_CODE,
+                          message: "This request is still in progress.",
+                        }),
+                      );
+                    case "locked":
+                      break;
+                    default:
+                      lock satisfies never;
+                      return panic("Unhandled request receipt lock state");
+                  }
+                  // Every handler operation is a savepoint of the receipt-owning
+                  // transaction. No resource can commit without its replay response.
+                  const transactionalDb: ScopedDb = async (fn) =>
+                    await withAggregateSavepoint(tx, fn);
+                  const result = await run(transactionalDb);
+                  let body: unknown = result;
+                  let status = responseStatus();
+                  while (isHttpStatusResponse(body)) {
+                    status = body.code;
+                    body = body.response;
+                  }
+                  if (status < 200 || status >= 300) {
+                    refusal = { response: result };
+                    return tx.rollback();
+                  }
+                  if (
+                    body instanceof Response ||
+                    body instanceof ReadableStream ||
+                    body instanceof Blob ||
+                    body instanceof ArrayBuffer ||
+                    ArrayBuffer.isView(body)
+                  ) {
+                    panic("Idempotency replay requires a JSON handler");
+                  }
+                  await completeRequestReceipt({
+                    scopedDb: transactionalDb,
+                    id: claim.id,
+                    status,
+                    body,
+                  });
+                  return Result.ok(result);
+                }),
+              (committed) => committed.isOk(),
+            ),
         );
         if (outcome.isErr()) {
           if (

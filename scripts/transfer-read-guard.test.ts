@@ -224,6 +224,31 @@ test("timeouts and reads in separate functions do not cooccur", () => {
   ).toEqual([]);
 });
 
+test("default parameter functions keep timeout ownership separate from the caller body", () => {
+  for (const parameter of [
+    "deadlineSignal = (durationMs) => AbortSignal.timeout(durationMs)",
+    "{ deadlineSignal = (durationMs) => AbortSignal.timeout(durationMs) }",
+    "[deadlineSignal = (durationMs) => AbortSignal.timeout(durationMs)]",
+    "{ deadlineSignal = function (durationMs) { return AbortSignal.timeout(durationMs); } }",
+  ]) {
+    const source = `const prove = async (${parameter}) => {
+      const response = await fetch(url);
+      return response.json();
+    };`;
+    expect(findTransferReads(file, source)).toEqual([]);
+    const outerRead = findTransferReads(
+      file,
+      source.replace(
+        "fetch(url)",
+        "fetch(url, { signal: AbortSignal.timeout(100) })",
+      ),
+    );
+    expect(
+      outerRead.map(({ kind, function: name }) => ({ kind, name })),
+    ).toEqual([{ kind: "total-timeout-body", name: "module/prove" }]);
+  }
+});
+
 test("nested function identities survive whitespace and source movement", () => {
   const source = `export const exportRows = () => scopedDb(tx => tx.select().limit(LIMITS.exportRowLimit));`;
   const before = findTransferReads(file, source);
@@ -398,6 +423,7 @@ test("sentinel reads pass only with a matching early overflow decision", () => {
   expect(findTransferReads(file, safe)).toEqual([]);
   for (const decision of [
     "if (rows.length > pageSize) console.log('overflow');",
+    "if (rows[length] > pageSize) return { type: 'overflow' };",
     "if (otherRows.length > pageSize) return { type: 'overflow' };",
     "if (rows.length > OTHER_CAP) return { type: 'overflow' };",
     "if (rows.length > pageSize) return makeCsv(rows);",

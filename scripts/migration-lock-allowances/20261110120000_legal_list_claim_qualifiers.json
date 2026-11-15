@@ -1,0 +1,4 @@
+{
+  "add-column": "One constant-default jsonb column on legal_list_claims, a catalog-only change that rewrites no rows, under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The qualifiers check is added NOT VALID, so no rows are scanned under the lock; it only constrains the new column and is validated online after deployment."
+}

@@ -175,12 +175,12 @@ const unchangedReadOutcomeMetadata = (
   if (unreadOutcome !== undefined) {
     return { metadata: recordReadOutcome(unreadOutcome) };
   }
-  if (existing.metadata?.[READ_OUTCOME_METADATA_KEY] === undefined) {
-    return {};
+  if (existing.metadata?.[READ_OUTCOME_METADATA_KEY] !== undefined) {
+    return {
+      metadata: sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`,
+    };
   }
-  return {
-    metadata: sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`,
-  };
+  return {};
 };
 
 /**

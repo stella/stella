@@ -10,6 +10,7 @@ import {
   DatabaseIcon,
   PlugIcon,
 } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { CostBadge, SetupBadge } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
@@ -53,12 +54,13 @@ export const ToolCatalogueCard = ({ entry }: ToolCatalogueCardProps) => {
           />
         </div>
         {description.length > 0 && (
-          <BidiText
-            as="p"
-            className="text-muted-foreground mt-1.5 line-clamp-2 text-xs leading-5"
+          <TruncatedText
+            className="text-muted-foreground mt-1.5 text-xs leading-5"
+            lines={2}
+            render={<BidiText as="p" />}
           >
             {description}
-          </BidiText>
+          </TruncatedText>
         )}
         <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3">
           {isIncluded ? (
@@ -110,11 +112,11 @@ function PublicToolIcon({ entry }: { entry: LoadedCatalogueEntry }) {
     return (
       <div className="bg-muted/45 flex size-10 shrink-0 items-center justify-center rounded-lg">
         <CatalogueEntryIcon
-          className="text-muted-foreground"
           icon={entry.icon}
           iconUrl={entry.iconUrl ?? null}
           size={24}
           slug={entry.slug}
+          tone="muted"
         />
       </div>
     );

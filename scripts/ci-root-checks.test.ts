@@ -188,12 +188,12 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test release image CI gate": [
     "apps/api/scripts/api-test-plan.ts",
-    "apps/api/scripts/test-file-shards.ts",
     "apps/api/scripts/test-timings.ts",
     "packages/property-testing/src/pinned-seeds.ts",
     "packages/scripts/src/generated-file-inventory.ts",
     "packages/scripts/src/generated-input-identity.ts",
     "scripts/api-test-impact.ts",
+    "scripts/check-ci-event-policy.ts",
     "scripts/check-standalone-lockfiles.ts",
     "scripts/check-stll-quarantine-excludes.ts",
     "scripts/ci-affected-selection.ts",
@@ -282,7 +282,6 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test shard partition": [
     "apps/api/scripts/api-test-plan.ts",
-    "apps/api/scripts/test-file-shards.ts",
     "apps/api/scripts/test-timings.ts",
     "scripts/api-test-impact.ts",
     "scripts/ci-affected-selection.ts",
@@ -318,6 +317,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Module ownership invariants": [
     ".oxlint-plugins/__tests__/lint-single-rule.ts",
+    "scripts/generated-artefact-provenance.ts",
     "scripts/generated-artifacts.ts",
     "scripts/ownership-loader.ts",
     "scripts/ownership.test.ts",
@@ -339,6 +339,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/schema-introspection.test.ts",
     "scripts/schema-introspection.ts",
     "scripts/source-globs.ts",
+    "scripts/status-write-shapes.ts",
   ],
   "ci-checks-rest/Design token docs": [
     "scripts/design-tokens-doc.ts",
@@ -388,6 +389,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test maintenance release preparation": [
     "packages/property-testing/src/pinned-seeds.ts",
+    "scripts/check-desktop-support-floor.ts",
     "scripts/check-marketing-recordings.ts",
     "scripts/prepare-maintenance-release.property.test.ts",
     "scripts/prepare-maintenance-release.ts",
@@ -420,7 +422,6 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test changed e2e shard selection": [
     "apps/api/scripts/api-test-plan.ts",
-    "apps/api/scripts/test-file-shards.ts",
     "apps/api/scripts/test-timings.ts",
     "scripts/api-test-impact.ts",
     "scripts/ci-browser-suite-selection.ts",
@@ -516,7 +517,6 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test CI check partition": [
     "apps/api/scripts/api-test-plan.ts",
-    "apps/api/scripts/test-file-shards.ts",
     "apps/api/scripts/test-timings.ts",
     "packages/property-testing/src/pinned-seeds.ts",
     "packages/scripts/src/generated-file-inventory.ts",
@@ -559,7 +559,11 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/changeset-guard.ts",
     "scripts/check-cli-release-coupling.test.ts",
     "scripts/check-cli-release-coupling.ts",
+    "scripts/check-desktop-support-floor.ts",
+    "scripts/check-marketing-recordings.ts",
     "scripts/ci-check-pool-registry.ts",
+    "scripts/prepare-maintenance-release.ts",
+    "scripts/product-media.ts",
   ],
   "ci-checks-rest/Test CLI contract changeset guard": [
     "scripts/changeset-guard.ts",
@@ -591,12 +595,16 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/visual-preview-scope.ts",
   ],
   "ci-checks-rest/Test public document fetch": [
+    "packages/property-testing/src/external-state.ts",
     "scripts/fetch-public-documents.test.ts",
   ],
   "ci-checks-rest/Test migration identity logic": [
     "scripts/check-migration-order.test.ts",
+    "scripts/check-migration-order.ts",
   ],
-  "ci-checks-rest/Check migration identity against the base branch": [],
+  "ci-checks-rest/Check migration identity against the base branch": [
+    "scripts/check-migration-order.ts",
+  ],
   "ci-checks-rest/Test dead-columns reference matching": [
     "scripts/check-dead-columns.ts",
   ],

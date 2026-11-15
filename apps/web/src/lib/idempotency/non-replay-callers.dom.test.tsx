@@ -3,12 +3,13 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { SampleCaseLoad } from "@/features/avt/types";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { AvtWorkspaceView } from "@/lib/workspaces/view-layout";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, fireEvent, render, renderHook, waitFor } =

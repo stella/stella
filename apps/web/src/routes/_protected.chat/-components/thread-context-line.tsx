@@ -2,14 +2,15 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { ChatReference } from "@stll/api-contract/chat-reference-href";
 import { BidiText } from "@stll/ui/bidi-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { InlinePill } from "@/components/inline-pill";
 import {
   ReferenceChip,
   ReferenceIcon,
 } from "@/components/references/reference-chip";
-import type { ChatReference } from "@/components/references/reference.logic";
 import type { ChatHistoryItem } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatListWithMore } from "@/i18n/list-format";
@@ -166,8 +167,6 @@ const ThreadContextEntry = ({
 }) => (
   <li className="flex min-w-0 items-center gap-1.5">
     {icon}
-    <BidiText as="span" className="min-w-0 truncate">
-      {name}
-    </BidiText>
+    <TruncatedText render={<BidiText as="span" />}>{name}</TruncatedText>
   </li>
 );

@@ -74,6 +74,21 @@ describe("Button implicit tooltip", () => {
     ).toBe(false);
   });
 
+  test("a touch button retains its label and native disabled state", () => {
+    for (const name of ACCESSIBLE_NAMES) {
+      const markup = renderToStaticMarkup(
+        <Button {...name} disabled size="touch">
+          Reasoning
+        </Button>,
+      );
+      expect(markup).toContain("Reasoning");
+      expect(markup).toContain("min-h-[44px]");
+      expect(markup).toContain("min-w-[44px]");
+      expect(isNativelyDisabled(markup)).toBe(true);
+      expect(hasTooltip(markup)).toBe(false);
+    }
+  });
+
   test.each(SIZES)("%s: an explicit tooltip renders", (size) => {
     expect(
       hasTooltip(

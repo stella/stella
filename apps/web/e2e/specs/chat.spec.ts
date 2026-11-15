@@ -59,7 +59,9 @@ test("model picker keeps its help and workspace chrome aligned", async ({
   const verticalCenters = await helpTrigger.evaluate((trigger) => {
     const row = trigger.parentElement;
     if (!(row instanceof HTMLElement)) {
-      throw new Error("Reasoning-effort help trigger is missing its model row");
+      throw new TypeError(
+        "Reasoning-effort help trigger is missing its model row",
+      );
     }
 
     const rowRect = row.getBoundingClientRect();
@@ -80,7 +82,7 @@ test("model picker keeps its help and workspace chrome aligned", async ({
   const popoverPaintsAboveMenu = await helpPopup.evaluate((popup) => {
     const menu = document.querySelector('[data-slot="menu-popup"]');
     if (!(menu instanceof HTMLElement)) {
-      throw new Error("Model picker menu popup is missing");
+      throw new TypeError("Model picker menu popup is missing");
     }
 
     const menuRect = menu.getBoundingClientRect();
@@ -281,7 +283,7 @@ test("chat composer sends a message and renders the assistant reply", async ({
     const editor = textbox.closest(".chat-editor");
     const surface = editor?.parentElement?.parentElement;
     if (!(surface instanceof HTMLElement)) {
-      throw new Error("Compact composer is missing its surface");
+      throw new TypeError("Compact composer is missing its surface");
     }
     return surface.getBoundingClientRect().height;
   });
@@ -295,7 +297,7 @@ test("chat composer sends a message and renders the assistant reply", async ({
         '[role="textbox"][contenteditable="true"]',
       );
       if (!(textbox instanceof HTMLElement)) {
-        throw new Error("Chat composer textbox is missing");
+        throw new TypeError("Chat composer textbox is missing");
       }
       return {
         chip: Number.parseFloat(getComputedStyle(chip).fontSize),
@@ -315,7 +317,7 @@ test("chat composer sends a message and renders the assistant reply", async ({
   const availableScroll = await stickyHeader.evaluate((header) => {
     const viewport = header.closest('[data-slot="scroll-area-viewport"]');
     if (!(viewport instanceof HTMLElement)) {
-      throw new Error("Sticky chat header is missing its scroll viewport");
+      throw new TypeError("Sticky chat header is missing its scroll viewport");
     }
     return viewport.scrollHeight - viewport.clientHeight;
   });
@@ -324,7 +326,7 @@ test("chat composer sends a message and renders the assistant reply", async ({
     const viewport = header.closest('[data-slot="scroll-area-viewport"]');
     const turn = header.closest("[data-chat-turn-id]");
     if (!(viewport instanceof HTMLElement) || !(turn instanceof HTMLElement)) {
-      throw new Error("Sticky chat turn is missing its scroll boundary");
+      throw new TypeError("Sticky chat turn is missing its scroll boundary");
     }
     const sentinel = turn.querySelector<HTMLElement>('[aria-hidden="true"]');
     if (!sentinel) {
@@ -346,7 +348,9 @@ test("chat composer sends a message and renders the assistant reply", async ({
     > => {
       const viewport = header.closest('[data-slot="scroll-area-viewport"]');
       if (!(viewport instanceof HTMLElement)) {
-        throw new Error("Sticky chat header is missing its scroll viewport");
+        throw new TypeError(
+          "Sticky chat header is missing its scroll viewport",
+        );
       }
       const samples: {
         headerHeight: number;

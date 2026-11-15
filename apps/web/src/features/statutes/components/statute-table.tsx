@@ -31,6 +31,7 @@ import {
   ShapesIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -77,7 +78,7 @@ import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 import { EM_DASH, formatValidityDate } from "@/lib/statutes/statute-format";
 
 /** The icon each statute column wears in its header menu and the chooser. */
-export const STATUTE_COLUMN_ICONS = {
+const STATUTE_COLUMN_ICONS = {
   act: ScrollTextIcon,
   type: ShapesIcon,
   validity: CircleDotIcon,
@@ -390,17 +391,18 @@ const StatuteActCell = ({ statute }: { statute: StatuteListItem }) => {
         </BidiText>
       )}
       {name !== null && (
-        <BidiText
-          as="span"
+        <TruncatedText
           className={cn(
-            "line-clamp-2 wrap-break-word whitespace-normal",
+            "wrap-break-word whitespace-normal",
             number === null
               ? "text-foreground font-medium group-hover/act:underline"
               : "text-muted-foreground text-xs",
           )}
+          lines={2}
+          render={<BidiText as="span" />}
         >
           <HighlightedText columnId="act" text={name} />
-        </BidiText>
+        </TruncatedText>
       )}
     </Link>
   );
@@ -422,7 +424,7 @@ const StatuteValidityPill = ({
   return (
     <span
       className={cn(
-        "rounded px-1.5 py-0.5 text-xs font-medium",
+        "rounded-sm px-1.5 py-0.5 text-xs font-medium",
         VALIDITY_PILL_CLASS[validity],
       )}
     >

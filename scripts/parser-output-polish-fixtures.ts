@@ -554,6 +554,7 @@ const collectCourts = async ({ adapterDir, json, rowsFor }: FixtureContext) => {
     "pl-courts-detail-303939.json.gz",
     "pl-courts-detail-472699.json.gz",
     "pl-courts-detail-501501.json.gz",
+    "pl-courts-detail-554032.json.gz",
     "pl-courts-detail-628.json.gz",
     "pl-courts-detail-summary-brak.json.gz",
     "pl-courts-detail-summary-nietezowane.json.gz",

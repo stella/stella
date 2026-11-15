@@ -1439,7 +1439,7 @@ const StructureWarnings = ({ errors }: { errors: StructureError[] }) => {
                 key={`${error.paragraphIndex}-${error.directive}-${index}`}
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
+                  <code className="bg-muted rounded-sm px-1 py-0.5 font-mono text-xs">
                     {error.directive}
                   </code>
                   <span className="text-muted-foreground text-xs">

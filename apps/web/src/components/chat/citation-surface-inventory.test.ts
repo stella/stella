@@ -8,7 +8,7 @@ import { createCitationSurfaceInventory } from "@stll/scripts/src/citation-surfa
 const SOURCE_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const CITATION_INVENTORY = createCitationSurfaceInventory(SOURCE_ROOT);
 const SOURCE_TRAY = path.join(SOURCE_ROOT, "features/chat/source-chips.tsx");
-const TRAY_BODY = '<div className="w-full space-y-2">';
+const TRAY_BODY = '<div className="contents" data-chat-answer-citations>';
 
 /** Renders `element` inside the source tray and appends `declarations` to its module. */
 const trayWith = (element: string, declarations: readonly string[]) => {

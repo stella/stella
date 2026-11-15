@@ -20,7 +20,10 @@ describe("resolveChatScope", () => {
     const getWorkspaceAccess = mock(async () => null);
 
     const result = await Result.gen(async function* () {
-      const scope = yield* resolveChatScope({ getWorkspaceAccess });
+      const scope = yield* resolveChatScope({
+        admitted: "active",
+        getWorkspaceAccess,
+      });
       return Result.ok(scope);
     });
 
@@ -36,6 +39,7 @@ describe("resolveChatScope", () => {
 
     const result = await Result.gen(async function* () {
       const scope = yield* resolveChatScope({
+        admitted: "active-or-archived",
         getWorkspaceAccess,
         workspaceId,
       });
@@ -47,9 +51,42 @@ describe("resolveChatScope", () => {
     expect(getWorkspaceAccess).toHaveBeenCalledWith(workspaceId);
   });
 
+  test("an archived matter is read-only: a write scope answers 404", async () => {
+    const result = await Result.gen(async function* () {
+      const scope = yield* resolveChatScope({
+        admitted: "active",
+        getWorkspaceAccess: async () => ({
+          id: workspaceId,
+          status: "archived",
+        }),
+        workspaceId,
+      });
+      return Result.ok(scope);
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ status: 404 });
+    }
+  });
+
+  test("an active matter admits writes", async () => {
+    const result = await Result.gen(async function* () {
+      const scope = yield* resolveChatScope({
+        admitted: "active",
+        getWorkspaceAccess: async () => ({ id: workspaceId, status: "active" }),
+        workspaceId,
+      });
+      return Result.ok(scope);
+    });
+
+    expect(result).toEqual(Result.ok({ scope: "workspace", workspaceId }));
+  });
+
   test("rejects deleting and inaccessible workspaces", async () => {
     const deleting = await Result.gen(async function* () {
       const scope = yield* resolveChatScope({
+        admitted: "active-or-archived",
         getWorkspaceAccess: async () => ({
           id: workspaceId,
           status: "deleting",
@@ -60,6 +97,7 @@ describe("resolveChatScope", () => {
     });
     const inaccessible = await Result.gen(async function* () {
       const scope = yield* resolveChatScope({
+        admitted: "active-or-archived",
         getWorkspaceAccess: async () => null,
         workspaceId,
       });
@@ -125,26 +163,64 @@ describe("persisted chat matter authorization", () => {
   test("global threads bypass matter lookup", async () => {
     const getWorkspaceAccess = mock(async () => null);
     expect(
-      await hasChatWorkspaceAccess({ workspaceId: null, getWorkspaceAccess }),
+      await hasChatWorkspaceAccess({
+        admitted: "active",
+        workspaceId: null,
+        getWorkspaceAccess,
+      }),
     ).toBe(true);
     expect(getWorkspaceAccess).not.toHaveBeenCalled();
   });
 
   test.each([
-    { status: "active" as const, allowed: true },
-    { status: "archived" as const, allowed: true },
-    { status: "deleting" as const, allowed: false },
-  ])("checks persisted matter for $status", async ({ status, allowed }) => {
-    const getWorkspaceAccess = mock(async () => ({ id: workspaceId, status }));
-    expect(
-      await hasChatWorkspaceAccess({ workspaceId, getWorkspaceAccess }),
-    ).toBe(allowed);
-    expect(getWorkspaceAccess).toHaveBeenCalledWith(workspaceId);
-  });
+    { status: "active" as const, admitted: "active" as const, allowed: true },
+    {
+      status: "archived" as const,
+      admitted: "active" as const,
+      allowed: false,
+    },
+    {
+      status: "deleting" as const,
+      admitted: "active" as const,
+      allowed: false,
+    },
+    {
+      status: "active" as const,
+      admitted: "active-or-archived" as const,
+      allowed: true,
+    },
+    {
+      status: "archived" as const,
+      admitted: "active-or-archived" as const,
+      allowed: true,
+    },
+    {
+      status: "deleting" as const,
+      admitted: "active-or-archived" as const,
+      allowed: false,
+    },
+  ])(
+    "checks a $status matter admitting $admitted",
+    async ({ status, admitted, allowed }) => {
+      const getWorkspaceAccess = mock(async () => ({
+        id: workspaceId,
+        status,
+      }));
+      expect(
+        await hasChatWorkspaceAccess({
+          admitted,
+          workspaceId,
+          getWorkspaceAccess,
+        }),
+      ).toBe(allowed);
+      expect(getWorkspaceAccess).toHaveBeenCalledWith(workspaceId);
+    },
+  );
 
   test("refuses inaccessible matters", async () => {
     expect(
       await hasChatWorkspaceAccess({
+        admitted: "active-or-archived",
         workspaceId,
         getWorkspaceAccess: async () => null,
       }),

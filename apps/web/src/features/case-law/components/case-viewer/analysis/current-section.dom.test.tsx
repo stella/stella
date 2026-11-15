@@ -2,8 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
 
 import { READER_BREADCRUMB_CLEARANCE } from "@stll/decision-reader/reader-landing";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { FlatAnalysisHeading } from "./types";
 

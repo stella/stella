@@ -6,7 +6,6 @@ import { hasExcessQueryTokens, MAX_QUERY_TOKENS } from "@stll/sanctions";
 
 import { publicSanctionsResponseSchema } from "@/api/handlers/sanctions/search-response";
 import type { PublicSanctionsScreening } from "@/api/handlers/sanctions/search-response";
-import { status } from "@/api/http/status";
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
@@ -24,13 +23,13 @@ import {
   screenPublicSanctionsSubject,
 } from "@/api/lib/lists/sanctions/public-screening";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
+import { publicScreeningBusyAnswer } from "@/api/lib/lists/sanctions/screening-failure";
 import { SANCTIONS_SUBJECT_ERROR_MESSAGES } from "@/api/lib/lists/sanctions/screening-service";
 import type {
   SanctionsScreening,
   SanctionsScreeningSubject,
   screenSanctionsSubject,
 } from "@/api/lib/lists/sanctions/screening-service";
-import { logger } from "@/api/lib/observability/logger";
 
 const bodySchema = v.strictObject({
   subject: v.union([
@@ -117,15 +116,7 @@ const screeningUnavailable = () =>
     message: "Could not screen the sanctions lists",
   });
 
-/**
- * An expected admission refusal, answered as a response rather than a
- * `HandlerError`: a 5xx error is reported as a fault, and this is capacity.
- */
-const screeningBusy = () =>
-  status(503, {
-    code: "service_unavailable",
-    message: "Sanctions screening is busy; try again shortly",
-  });
+const screeningBusy = publicScreeningBusyAnswer;
 
 type PublicSanctionsSearchResult =
   PublicSanctionsScreening | ReturnType<typeof screeningBusy>;
@@ -175,10 +166,6 @@ export const createPublicSanctionsSearchHandler = ({
         activePublicScreenings >=
         API_RATE_LIMITS.publicSanctionsSearch.maxConcurrent
       ) {
-        // Expected admission refusal: record only the bounded capacity, never identity.
-        logger.warn("sanctions.search.busy", {
-          maxConcurrent: API_RATE_LIMITS.publicSanctionsSearch.maxConcurrent,
-        });
         return Result.ok(screeningBusy());
       }
       activePublicScreenings += 1;

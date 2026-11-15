@@ -11,35 +11,40 @@ import entry9 from "./chatSecret";
 import entry10 from "./chatStoredContent";
 import entry11 from "./chatToolGrants";
 import entry12 from "./contactCapacity";
-import entry13 from "./deadlineAcceptance";
-import entry14 from "./deadlineClaim";
-import entry15 from "./deadlineEmission";
-import entry16 from "./desktopBatch";
-import entry17 from "./desktopRenewal";
-import entry18 from "./documentSource";
-import entry19 from "./existing";
-import entry20 from "./expenseCapacity";
-import entry21 from "./fileComparisonCapacity";
-import entry22 from "./flowEffect";
-import entry23 from "./folioPublication";
-import entry24 from "./legislationAmendments";
-import entry25 from "./mcpOAuthState";
-import entry26 from "./memberPrefix";
-import entry27 from "./memory";
-import entry28 from "./organizationObjectIntentLifecycle";
-import entry29 from "./organizationObjectIntentWriter";
-import entry30 from "./personalCatalog";
-import entry31 from "./professionalUseAcceptance";
-import entry32 from "./rateTableWorkspace";
-import entry33 from "./readerAnnotation";
-import entry34 from "./readerAnswer";
-import entry35 from "./requestReceipt";
-import entry36 from "./sampleCase";
-import entry37 from "./scoutRun";
-import entry38 from "./searchHistory";
-import entry39 from "./searchProjectionRepair";
-import entry40 from "./signal";
-import entry41 from "./signingSession";
+import entry13 from "./corpusProjectionOfflineRequest";
+import entry14 from "./correspondenceSource";
+import entry15 from "./deadlineAcceptance";
+import entry16 from "./deadlineClaim";
+import entry17 from "./deadlineEmission";
+import entry18 from "./desktopBatch";
+import entry19 from "./desktopRenewal";
+import entry20 from "./desktopRunnerCapacity";
+import entry21 from "./documentSource";
+import entry22 from "./existing";
+import entry23 from "./expenseCapacity";
+import entry24 from "./fileComparisonCapacity";
+import entry25 from "./flowEffect";
+import entry26 from "./folioPublication";
+import entry27 from "./legislationAmendments";
+import entry28 from "./mcpOAuthState";
+import entry29 from "./memberPrefix";
+import entry30 from "./memory";
+import entry31 from "./organizationDataBoxes";
+import entry32 from "./organizationObjectIntentLifecycle";
+import entry33 from "./organizationObjectIntentWriter";
+import entry34 from "./organizationSettings";
+import entry35 from "./personalCatalog";
+import entry36 from "./professionalUseAcceptance";
+import entry37 from "./rateTableWorkspace";
+import entry38 from "./readerAnnotation";
+import entry39 from "./readerAnswer";
+import entry40 from "./requestReceipt";
+import entry41 from "./sampleCase";
+import entry42 from "./scoutRun";
+import entry43 from "./searchHistory";
+import entry44 from "./searchProjectionRepair";
+import entry45 from "./signal";
+import entry46 from "./signingSession";
 
 export default {
   "accountDeletionRequest": entry0,
@@ -55,33 +60,38 @@ export default {
   "chatStoredContent": entry10,
   "chatToolGrants": entry11,
   "contactCapacity": entry12,
-  "deadlineAcceptance": entry13,
-  "deadlineClaim": entry14,
-  "deadlineEmission": entry15,
-  "desktopBatch": entry16,
-  "desktopRenewal": entry17,
-  "documentSource": entry18,
-  "existing": entry19,
-  "expenseCapacity": entry20,
-  "fileComparisonCapacity": entry21,
-  "flowEffect": entry22,
-  "folioPublication": entry23,
-  "legislationAmendments": entry24,
-  "mcpOAuthState": entry25,
-  "memberPrefix": entry26,
-  "memory": entry27,
-  "organizationObjectIntentLifecycle": entry28,
-  "organizationObjectIntentWriter": entry29,
-  "personalCatalog": entry30,
-  "professionalUseAcceptance": entry31,
-  "rateTableWorkspace": entry32,
-  "readerAnnotation": entry33,
-  "readerAnswer": entry34,
-  "requestReceipt": entry35,
-  "sampleCase": entry36,
-  "scoutRun": entry37,
-  "searchHistory": entry38,
-  "searchProjectionRepair": entry39,
-  "signal": entry40,
-  "signingSession": entry41,
+  "corpusProjectionOfflineRequest": entry13,
+  "correspondenceSource": entry14,
+  "deadlineAcceptance": entry15,
+  "deadlineClaim": entry16,
+  "deadlineEmission": entry17,
+  "desktopBatch": entry18,
+  "desktopRenewal": entry19,
+  "desktopRunnerCapacity": entry20,
+  "documentSource": entry21,
+  "existing": entry22,
+  "expenseCapacity": entry23,
+  "fileComparisonCapacity": entry24,
+  "flowEffect": entry25,
+  "folioPublication": entry26,
+  "legislationAmendments": entry27,
+  "mcpOAuthState": entry28,
+  "memberPrefix": entry29,
+  "memory": entry30,
+  "organizationDataBoxes": entry31,
+  "organizationObjectIntentLifecycle": entry32,
+  "organizationObjectIntentWriter": entry33,
+  "organizationSettings": entry34,
+  "personalCatalog": entry35,
+  "professionalUseAcceptance": entry36,
+  "rateTableWorkspace": entry37,
+  "readerAnnotation": entry38,
+  "readerAnswer": entry39,
+  "requestReceipt": entry40,
+  "sampleCase": entry41,
+  "scoutRun": entry42,
+  "searchHistory": entry43,
+  "searchProjectionRepair": entry44,
+  "signal": entry45,
+  "signingSession": entry46,
 } as const;

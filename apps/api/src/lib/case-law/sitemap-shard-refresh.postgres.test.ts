@@ -12,22 +12,35 @@
 import { panic } from "better-result";
 import type { SQL as BunSql } from "bun";
 import { describe, expect, test } from "bun:test";
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { waitFor } from "@stll/test-kit";
+
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import {
   caseLawDecisions,
   caseLawSitemapChanges,
   caseLawSitemapShards,
+  caseLawSitemapTouches,
   caseLawSources,
+  databaseBackfillStates,
 } from "@/api/db/schema";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { refreshCaseLawSitemapShards } from "@/api/lib/case-law/sitemap-shard-refresh";
 import { SITEMAP_ALL_BUCKET } from "@/api/lib/case-law/sitemap-shard-sql";
+import {
+  foldCaseLawSitemapTouches,
+  SITEMAP_TOUCH_FOLD_BATCH_LIMIT,
+} from "@/api/lib/case-law/sitemap-touch-fold";
+import { lockCaseLawSitemapSnapshot } from "@/api/lib/db/aggregate-lock";
 import { logger } from "@/api/lib/observability/logger";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { refreshCaseLawSitemapShardsTask } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
+import { createCaseLawSitemapTouchFoldTask } from "@/api/lib/scheduler/tasks/case-law-sitemap-touch-fold";
 import {
   openGatedTestDatabase,
   withGatedTestClients,
@@ -214,6 +227,19 @@ if (!databaseUrl || !runPostgresTests) {
             VALUES (${id}::uuid, ${sourceId}::uuid, ${`sitemap-changes-${id}`}, ${COUNTRY}, 'xx', 'Sitemap change log fixture court', ${id}, '1905-01-15', '{}'::jsonb)`;
         });
         expect(await loggedMonths("1905")).toEqual(["1905/01"]);
+        // A later updated_at alone is queued as a touch through the same
+        // owner-run path, without a log row.
+        await session.begin(async (tx) => {
+          await tx`SET LOCAL ROLE stella_ingestion`;
+          await tx`UPDATE case_law_decisions SET updated_at = updated_at + interval '1 day' WHERE id = ${id}::uuid`;
+        });
+        expect(await loggedMonths("1905")).toEqual(["1905/01"]);
+        expect(
+          await db.$count(
+            caseLawSitemapTouches,
+            eq(caseLawSitemapTouches.decisionId, id),
+          ),
+        ).toBe(1);
 
         const refused = async (
           role: string,
@@ -252,12 +278,31 @@ if (!databaseUrl || !runPostgresTests) {
               async (tx) => await tx`DELETE FROM case_law_sitemap_changes`,
             ),
           ).toMatch(/permission denied/u);
+          // db-await-in-loop: nor read, queue or consume a touch directly
+          for (const statement of [
+            "SELECT count(*) FROM case_law_sitemap_touches",
+            "INSERT INTO case_law_sitemap_touches (decision_id) VALUES (gen_random_uuid())",
+            "DELETE FROM case_law_sitemap_touches",
+          ]) {
+            // db-await-in-loop: each statement is probed in its own transaction
+            expect(
+              await refused(role, async (tx) => await tx.unsafe(statement)),
+            ).toMatch(/permission denied/u);
+          }
         }
         expect(await loggedMonths("1905")).toEqual(["1905/01"]);
       });
       await refreshUntilDone();
       expect(await loggedMonths("1905")).toEqual([]);
       expect(await listedMonths("1905")).toEqual(["1905/01:1", "1905/03:1"]);
+      // The month refresh leaves the touch to the fold job.
+      await foldUntilEmpty();
+      expect(
+        await db.$count(
+          caseLawSitemapTouches,
+          inArray(caseLawSitemapTouches.decisionId, decisionIds),
+        ),
+      ).toBe(0);
     });
 
     test("a language-only update queues the document's sitemap month", async () => {
@@ -380,8 +425,12 @@ if (!databaseUrl || !runPostgresTests) {
                   new Proxy(tx, {
                     get: (target, property, receiver) =>
                       property === "execute"
-                        ? async (query: SQL) => {
+                        ? async (query: SQL | string) => {
                             const result = await target.execute(query);
+                            // The corpus schema lane try is plain text.
+                            if (typeof query === "string") {
+                              return result;
+                            }
                             const rendered = dialect.sqlToQuery(query);
                             if (
                               !state.paused &&
@@ -415,6 +464,240 @@ if (!databaseUrl || !runPostgresTests) {
       await refreshUntilDone();
       expect(await listedMonths("1904")).toEqual(["1904/01:3"]);
       expect(await loggedMonths("1904")).toEqual([]);
+    });
+
+    /** One fold batch in its own transaction on the given handle. */
+    const foldOnce = async (handle: typeof db = db) =>
+      await handle.transaction(
+        async (tx) =>
+          await foldCaseLawSitemapTouches(tx, SITEMAP_TOUCH_FOLD_BATCH_LIMIT),
+      );
+
+    /** Fold until nothing is queued, as consecutive fold runs would. */
+    const foldUntilEmpty = async () => {
+      for (let batch = 0; batch < 100; batch += 1) {
+        // db-await-in-loop: consecutive governed batches, each its own transaction
+        const folded = await foldOnce();
+        if (folded.status === "empty") {
+          return;
+        }
+      }
+      panic("The touch queue never drained");
+    };
+
+    const queuedFor = async (id: SafeId<"caseLawDecision">) =>
+      await db.$count(
+        caseLawSitemapTouches,
+        eq(caseLawSitemapTouches.decisionId, id),
+      );
+
+    /** The fixture month's single listed shard's last modification. */
+    const listedLastModified = async (year: string) => {
+      const rows = await db
+        .select({ lastModifiedAt: caseLawSitemapShards.lastModifiedAt })
+        .from(caseLawSitemapShards)
+        .where(
+          and(
+            eq(caseLawSitemapShards.country, COUNTRY),
+            eq(caseLawSitemapShards.year, year),
+          ),
+        );
+      expect(rows).toHaveLength(1);
+      return rows[0]?.lastModifiedAt.toISOString();
+    };
+
+    /** A listed decision with one committed forward write queued. */
+    const queuedFixture = async (date: string) => {
+      const [id] = await insertDecisions(date, 1);
+      if (id === undefined) {
+        return panic("Expected the touch fixture decision");
+      }
+      await db.execute(
+        sql`UPDATE case_law_decisions SET updated_at = '2020-01-01T00:00:00Z'::timestamptz WHERE id = ${id}::uuid`,
+      );
+      await refreshUntilDone();
+      await foldUntilEmpty();
+      expect(await listedLastModified(date.slice(0, 4))).toBe(
+        "2020-01-01T00:00:00.000Z",
+      );
+      await db.execute(
+        sql`UPDATE case_law_decisions SET updated_at = '2030-01-01T00:00:00Z'::timestamptz WHERE id = ${id}::uuid`,
+      );
+      expect(await queuedFor(id)).toBe(1);
+      return id;
+    };
+
+    /**
+     * A writer in flight when the fold claims its decision: its insert met
+     * the queued touch and queued nothing. The fold must not delete that
+     * touch after reading the decision without the write.
+     */
+    test("a write in flight at a fold's claim keeps its decision queued until it commits", async () => {
+      const id = await queuedFixture("1907-01-15");
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const writer = openClient();
+        const opened = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const writing = writer.db.transaction(async (tx) => {
+          await tx.execute(
+            sql`UPDATE case_law_decisions SET updated_at = '2031-01-01T00:00:00Z'::timestamptz WHERE id = ${id}::uuid`,
+          );
+          opened.resolve(undefined);
+          await release.promise;
+        });
+        await opened.promise;
+        try {
+          const folded = await foldOnce();
+          expect(folded).toMatchObject({ status: "folded" });
+          expect(
+            folded.status === "folded" ? folded.retained : 0,
+          ).toBeGreaterThanOrEqual(1);
+          // Held back, not folded from a read that misses the write.
+          expect(await queuedFor(id)).toBe(1);
+          expect(await listedLastModified("1907")).toBe(
+            "2020-01-01T00:00:00.000Z",
+          );
+        } finally {
+          release.resolve(undefined);
+          await writing;
+        }
+      });
+      await foldUntilEmpty();
+      expect(await queuedFor(id)).toBe(0);
+      expect(await listedLastModified("1907")).toBe("2031-01-01T00:00:00.000Z");
+    });
+
+    /**
+     * A writer arriving while a fold that claimed its decision is still open
+     * waits for that fold, then finds the touch deleted and queues anew.
+     */
+    test("a write arriving during a fold waits for it and queues a new touch", async () => {
+      const id = await queuedFixture("1908-01-15");
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const writer = openClient({ max: 1 });
+        const probe = openClient({ max: 1 });
+        const [backend] = await writer.sql`SELECT pg_backend_pid() AS pid`;
+        const writerPid = Number(backend?.["pid"]);
+        let writing: Promise<unknown> | undefined;
+        await db.transaction(async (tx) => {
+          const folded = await foldCaseLawSitemapTouches(
+            tx,
+            SITEMAP_TOUCH_FOLD_BATCH_LIMIT,
+          );
+          expect(folded).toMatchObject({ status: "folded", retained: 0 });
+          // A Bun SQL query starts when awaited, so start it without blocking.
+          writing = (async () =>
+            await writer.sql`UPDATE case_law_decisions SET updated_at = '2032-01-01T00:00:00Z'::timestamptz WHERE id = ${id}::uuid`)();
+          // The write waits on the fold's claim of its decision.
+          await waitFor(
+            async () => {
+              const [state] =
+                await probe.sql`SELECT wait_event_type FROM pg_stat_activity WHERE pid = ${writerPid}`;
+              return state?.["wait_event_type"] === "Lock" ? true : undefined;
+            },
+            { description: "the writer to wait on the fold's claim" },
+          );
+        });
+        await writing;
+      });
+      expect(await listedLastModified("1908")).toBe("2030-01-01T00:00:00.000Z");
+      expect(await queuedFor(id)).toBe(1);
+      await foldUntilEmpty();
+      expect(await queuedFor(id)).toBe(0);
+      expect(await listedLastModified("1908")).toBe("2032-01-01T00:00:00.000Z");
+    });
+
+    test("a fold leaves the queue alone while a recount or removal holds the shard fence", async () => {
+      const id = await queuedFixture("1909-01-15");
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const holder = openClient({ max: 1 });
+        const held = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const holding = holder.db.transaction(async (tx) => {
+          await lockCaseLawSitemapSnapshot(tx);
+          held.resolve(undefined);
+          await release.promise;
+        });
+        await held.promise;
+        try {
+          expect(await foldOnce()).toEqual({ status: "held" });
+          expect(await queuedFor(id)).toBe(1);
+        } finally {
+          release.resolve(undefined);
+          await holding;
+        }
+      });
+      await foldUntilEmpty();
+      expect(await listedLastModified("1909")).toBe("2030-01-01T00:00:00.000Z");
+    });
+
+    test("the governed fold task drains more than one batch in a run without asking to continue", async () => {
+      await foldUntilEmpty();
+      const ids = await insertDecisions("1910-01-15", 5);
+      await refreshUntilDone();
+      await db.execute(
+        sql`UPDATE case_law_decisions SET updated_at = '2033-01-01T00:00:00Z'::timestamptz WHERE id IN (${sql.join(
+          ids.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})`,
+      );
+      expect(
+        await db.$count(
+          caseLawSitemapTouches,
+          inArray(caseLawSitemapTouches.decisionId, ids),
+        ),
+      ).toBe(5);
+      const resetCheckpoint = async () => {
+        await db
+          .delete(databaseBackfillStates)
+          .where(
+            eq(
+              databaseBackfillStates.name,
+              SCHEDULER_BACKFILL_IDS.sitemapTouches,
+            ),
+          );
+      };
+      await resetCheckpoint();
+      const continuations: Date[] = [];
+      try {
+        const task = createCaseLawSitemapTouchFoldTask({
+          // Batches of at most two: five touches need three of them.
+          createRuntime: (options) =>
+            createScriptBackfillRuntime({
+              ...options,
+              initialSize: 2,
+              config: { ...loadGateHealthConfig(), minSize: 1, maxSize: 2 },
+              readVerdict: async () => ({ kind: "normal", signals: [] }),
+              slot: { tryAcquire: async () => true, release: () => {} },
+            }),
+        });
+        const outcome = await task(
+          asTestRaw({
+            db,
+            dueAt: DueSlot.of({
+              nextRunAt: new Date("2000-01-01"),
+              lockedAt: new Date("2000-01-01"),
+            }),
+            logger,
+            runId: createSafeId<"schedulerJobRun">(),
+            scheduleContinuation: (at: Date) => {
+              continuations.push(at);
+            },
+            signal: new AbortController().signal,
+          }),
+        );
+        expect(outcome === undefined || outcome.isOk()).toBe(true);
+      } finally {
+        await resetCheckpoint();
+      }
+      expect(continuations).toEqual([]);
+      expect(
+        await db.$count(
+          caseLawSitemapTouches,
+          inArray(caseLawSitemapTouches.decisionId, ids),
+        ),
+      ).toBe(0);
+      expect(await listedLastModified("1910")).toBe("2033-01-01T00:00:00.000Z");
     });
   });
 }

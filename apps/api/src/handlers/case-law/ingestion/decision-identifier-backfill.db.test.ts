@@ -238,7 +238,11 @@ test("resumes committed pages and converges to an exact replay-safe projection",
 test("a completion receipt does not hide later projection drift", async () => {
   await db
     .update(caseLawCitations)
-    .set({ normalizedIdentifierValue: "drifted" })
+    .set({
+      normalizedIdentifierValue: "drifted",
+      citedDecisionId: decisionId,
+      resolutionStatus: CITATION_RESOLUTION_STATUS.RESOLVED,
+    })
     .where(eq(caseLawCitations.id, caseNumberCitationId));
 
   const verification = await verifyDecisionIdentifierBackfill(rootDb(), 1);
@@ -254,6 +258,20 @@ test("a completion receipt does not hide later projection drift", async () => {
   expect(await checkpoint()).toMatchObject({
     phase: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE,
     cursorId: null,
+  });
+
+  // Queued for another answer and still linked: a pass reaching many citations
+  // at once must not empty the decisions they point at until the walk returns.
+  const [reopened] = await db
+    .select({
+      citedDecisionId: caseLawCitations.citedDecisionId,
+      resolutionStatus: caseLawCitations.resolutionStatus,
+    })
+    .from(caseLawCitations)
+    .where(eq(caseLawCitations.id, caseNumberCitationId));
+  expect(reopened).toEqual({
+    citedDecisionId: decisionId,
+    resolutionStatus: CITATION_RESOLUTION_STATUS.PENDING,
   });
 });
 

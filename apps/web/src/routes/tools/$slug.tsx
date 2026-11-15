@@ -109,11 +109,12 @@ function PublicToolDetail() {
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6">
         <div className="flex items-start gap-3">
           <CatalogueEntryIcon
-            className="text-muted-foreground mt-0.5 shrink-0"
+            className="mt-0.5 shrink-0"
             icon={entry.icon}
             iconUrl={entry.iconUrl ?? null}
             size={32}
             slug={entry.slug}
+            tone="muted"
           />
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">

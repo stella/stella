@@ -3,10 +3,10 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { TimeEntryReport } from "@stll/api-contract/time-entry-report";
 import { TIME_ENTRY_REPORT_INTERNAL_ROW_ID } from "@stll/api-contract/time-entry-report";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import arabic from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ReportFilter } from "./report-query";
 

@@ -44,6 +44,7 @@ import {
   type TextBox,
 } from "@/api/lib/ocr-local/ppocr-pipeline";
 import { resizeRgbRegion, rgbaToRgb } from "@/api/lib/ocr-local/rgb-image";
+import { writeWorkerStdout } from "@/api/lib/subprocess";
 
 /** Render at 300dpi, capped so an oversized page cannot balloon memory. */
 const RENDER_TARGET_SCALE = 300 / 72;
@@ -307,7 +308,7 @@ try {
   await processPages(0);
   document.close();
 
-  process.stdout.write(JSON.stringify({ pages }));
+  await writeWorkerStdout(JSON.stringify({ pages }));
   process.exit(0);
 } catch (error) {
   // Only the error type reaches stderr: messages could carry recognized

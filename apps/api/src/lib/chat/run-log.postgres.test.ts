@@ -15,6 +15,7 @@ import {
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
   createChatRunLog,
   createChatRunLogReplay,
@@ -24,6 +25,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -133,7 +135,7 @@ if (!databaseUrl || !runPostgresTests) {
       await db
         .delete(chatThreads)
         .where(inArray(chatThreads.id, [threadId, racedThreadId]));
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, userId));
     });
 
@@ -249,14 +251,18 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
       const pending = reader.next();
       expect(
-        await scopedDb(
-          async (tx) =>
-            await settleChatTurnOnTx({
-              assistantMessageId: null,
-              execution,
-              outcome: USER_STOP_OUTCOME,
-              tx,
-            }),
+        await withChatRunPings(
+          async (pings) =>
+            await scopedDb(
+              async (tx) =>
+                await settleChatTurnOnTx({
+                  pings,
+                  assistantMessageId: null,
+                  execution,
+                  outcome: USER_STOP_OUTCOME,
+                  tx,
+                }),
+            ),
         ),
       ).toBe("settled");
       const timing = await readChatTurnTiming({

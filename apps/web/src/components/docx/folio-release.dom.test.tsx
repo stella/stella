@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { DocxComments, DocxEditorRef } from "./app-docx-editor";
 
@@ -73,6 +73,7 @@ test("published editor echoes agent comments and saves applied operations for re
         timeZone="UTC"
       >
         <DocxEditor
+          accessibleName="Test document"
           comments={docxComments}
           document={document}
           onCommentsChange={handleEditorDocxCommentsChange}

@@ -1,33 +1,23 @@
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
 
-import { agentRegistration } from "@/api/db/agent-auth-schema";
-import { rootDb } from "@/api/db/root";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
+import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { McpSession } from "@/api/mcp/auth";
 
 type ResolveAgentAuditExecutionOptions = {
-  credential: McpSession["credential"];
-  organizationId: SafeId<"organization">;
+  credential: AdmittedMcpSession["credential"];
   userId: SafeId<"user">;
-  db?: Pick<typeof rootDb, "select">;
 };
 
 /**
  * Resolve the verified MCP credential into activity provenance. The human
- * remains the accountable owner while the credential is the performer. This
- * owner-level lookup is deliberately isolated here because agent-registration
- * control-plane rows deny access to the scoped application role.
+ * remains the accountable owner while the credential is the performer.
+ * The admission owner has already bound any agent registration to this identity.
  */
-export const resolveAgentAuditExecution = async ({
+export const resolveAgentAuditExecution = ({
   credential,
-  organizationId,
   userId,
-  db = rootDb,
-}: ResolveAgentAuditExecutionOptions): Promise<
-  AuditExecutionContext | undefined
-> => {
+}: ResolveAgentAuditExecutionOptions): AuditExecutionContext | undefined => {
   if (credential === undefined) {
     return undefined;
   }
@@ -69,21 +59,7 @@ export const resolveAgentAuditExecution = async ({
         },
       };
     case "oauth_client": {
-      const registration = await db
-        .select({ id: agentRegistration.id })
-        .from(agentRegistration)
-        .where(
-          and(
-            eq(agentRegistration.clientId, credential.clientId),
-            eq(agentRegistration.boundUserId, userId),
-            eq(agentRegistration.boundOrganizationId, organizationId),
-            eq(agentRegistration.status, "claimed"),
-          ),
-        )
-        .limit(1)
-        .then((rows) => rows.at(0) ?? null);
-
-      if (!registration) {
+      if (!credential.registrationId) {
         return {
           performer: { id: userId, type: "user" },
           trigger: { source: "mcp", type: "direct" },
@@ -93,14 +69,14 @@ export const resolveAgentAuditExecution = async ({
       return {
         performer: {
           type: "agent",
-          id: registration.id,
+          id: credential.registrationId,
           name: null,
         },
         trigger: {
           type: "credential",
           ownerUserId: userId,
           source: "mcp",
-          sourceId: registration.id,
+          sourceId: credential.registrationId,
         },
       };
     }

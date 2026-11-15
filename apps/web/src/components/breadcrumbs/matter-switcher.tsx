@@ -19,6 +19,8 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
+import { cn } from "@stll/ui/utils";
 
 import {
   filterMattersByQuery,
@@ -39,6 +41,8 @@ type MatterSwitcherProps = {
     client: { displayName: string; id: string } | null;
     id: string;
   };
+  /** More crumbs follow, so the caret waits for a hover over its crumb. */
+  revealOnHover?: boolean;
 };
 
 /**
@@ -47,7 +51,10 @@ type MatterSwitcherProps = {
  * checked, so people move between a client's matters without going back to
  * the matter list. The list loads only once the popover opens.
  */
-export const MatterSwitcher = ({ matter }: MatterSwitcherProps) => {
+export const MatterSwitcher = ({
+  matter,
+  revealOnHover = false,
+}: MatterSwitcherProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const { activeOrganizationId } = useAuthenticatedUser();
@@ -117,20 +124,34 @@ export const MatterSwitcher = ({ matter }: MatterSwitcherProps) => {
 
   return (
     <Popover onOpenChange={changeOpen} open={open}>
-      <TooltipRoot>
-        <PopoverTrigger
-          render={
-            <TooltipTrigger
-              render={
-                <Button aria-label={label} size="icon-xs" variant="ghost" />
-              }
-            />
-          }
-        >
-          <ChevronDownIcon />
-        </PopoverTrigger>
-        <TooltipPopup>{label}</TooltipPopup>
-      </TooltipRoot>
+      {/* While more crumbs follow, the caret waits for a hover over its crumb
+          (the `group/crumb` item), so at rest it never sits beside the
+          separator chevron. At rest it also takes no room, item gap
+          included, so the trail holds no blank where it will appear; it stays
+          focusable, and focus, an open popup and touch, which has no hover,
+          show it. */}
+      <span
+        className={cn(
+          "inline-flex",
+          revealOnHover &&
+            "-ms-1.5 w-0 overflow-hidden opacity-0 group-focus-within/crumb:ms-0 group-focus-within/crumb:w-auto group-focus-within/crumb:overflow-visible group-focus-within/crumb:opacity-100 group-hover/crumb:ms-0 group-hover/crumb:w-auto group-hover/crumb:overflow-visible group-hover/crumb:opacity-100 has-data-popup-open:ms-0 has-data-popup-open:w-auto has-data-popup-open:overflow-visible has-data-popup-open:opacity-100 pointer-coarse:ms-0 pointer-coarse:w-auto pointer-coarse:overflow-visible pointer-coarse:opacity-100",
+        )}
+      >
+        <TooltipRoot>
+          <PopoverTrigger
+            render={
+              <TooltipTrigger
+                render={
+                  <Button aria-label={label} size="icon-xs" variant="ghost" />
+                }
+              />
+            }
+          >
+            <ChevronDownIcon />
+          </PopoverTrigger>
+          <TooltipPopup>{label}</TooltipPopup>
+        </TooltipRoot>
+      </span>
       <PopoverPopup align="start" className="w-72" padding="none">
         <Command mode="none" onValueChange={setQuery} value={query}>
           <div className="border-b px-2.5 py-2">
@@ -175,13 +196,13 @@ export const MatterSwitcher = ({ matter }: MatterSwitcherProps) => {
               })}
               <CommandSeparator className="my-1" />
               <CommandItem onClick={openMatterList} value="__all-matters__">
-                <span className="min-w-0 truncate">
+                <TruncatedText>
                   {client === null
                     ? t("workspaces.switcher.viewAll")
                     : t("workspaces.switcher.viewAllForClient", {
                         clientName: client.displayName,
                       })}
-                </span>
+                </TruncatedText>
               </CommandItem>
             </div>
           </CommandList>

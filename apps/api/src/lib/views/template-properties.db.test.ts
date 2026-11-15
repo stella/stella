@@ -11,6 +11,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -53,9 +54,7 @@ afterAll(async () => {
       .where(inArray(properties.workspaceId, seededWorkspaceIds));
   }
   if (seededOrganizationIds.length > 0) {
-    await testDb
-      .delete(organization)
-      .where(inArray(organization.id, seededOrganizationIds));
+    await deleteOrganizationsForTest(testDb, seededOrganizationIds);
   }
   await releaseTestDb();
 });

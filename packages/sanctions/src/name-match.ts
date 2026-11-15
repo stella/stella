@@ -19,6 +19,9 @@ import type { AliasQuality, EntityType, SanctionsEntry } from "./entry";
 import { nameReading, nameReadings, readingKey } from "./normalise";
 import type { NameReading, NameToken } from "./normalise";
 
+/** What the name index reads of a screened record: its names and its kind. */
+export type NamedRecord = Pick<SanctionsEntry, "names" | "entityType">;
+
 export type ScreeningWorkBudget = { remaining: number; exhausted: boolean };
 export const spendScreeningWork = (
   budget: ScreeningWorkBudget,
@@ -352,13 +355,13 @@ function* entityIndexSteps({
   return entities ?? panic("Entity index construction did not return an index");
 }
 
-type IndexedEntries = Iterable<SanctionsEntry> & {
+type IndexedEntries = Iterable<NamedRecord> & {
   readonly length: number;
-  entries: () => Iterable<[number, SanctionsEntry]>;
+  entries: () => Iterable<[number, NamedRecord]>;
 };
 type AliasSource = {
   entryIndex: number;
-  entry: SanctionsEntry;
+  entry: NamedRecord;
   name: string;
   quality: AliasQuality;
   reading: NameReading;
@@ -575,7 +578,7 @@ export const runSteps = <T>(steps: IndexBuildSteps<T>): T => {
     }
   }
 };
-export const buildNameIndex = (entries: readonly SanctionsEntry[]): NameIndex =>
+export const buildNameIndex = (entries: readonly NamedRecord[]): NameIndex =>
   runSteps(nameIndexSteps(entries));
 
 type QueryUnit = {

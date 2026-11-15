@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import type { PgInsertValue } from "drizzle-orm/pg-core";
 
 import type { ReviewDecision } from "@stll/api-contract/review-decision";
+import { REVIEW_STATUS_DECISION } from "@stll/api-contract/review-decision";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -10,8 +11,6 @@ import {
   type LegalListSourceVerificationStatus,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-
-import { LIST_ITEM_SOURCE_REVIEW_DECISION } from "./review-decision-maps";
 
 type DecisionEvent = typeof legalListItemSourceDecisions.$inferInsert;
 type DecisionRow = PgInsertValue<typeof legalListItemSourceDecisions>;
@@ -64,7 +63,7 @@ export const sourceDecisionRows = (
   change: SourceDecisionChange,
 ): DecisionRow[] => {
   const baseline =
-    LIST_ITEM_SOURCE_REVIEW_DECISION[change.previous.verificationStatus];
+    REVIEW_STATUS_DECISION.listItemSource[change.previous.verificationStatus];
   const event: DecisionRow = {
     id: createSafeId<"legalListItemSourceDecision">(),
     workspaceId: change.workspaceId,

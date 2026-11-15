@@ -96,7 +96,7 @@ const recordedCases = async (): Promise<Case[]> => {
 
 const project = async (sourceRaw: string) =>
   plCourtsRetention.type === "checked"
-    ? await plCourtsRetention.project(sourceRaw)
+    ? await plCourtsRetention.project(sourceRaw, { sourceRawObjects: {} })
     : panic("pl-courts is a checked source");
 
 const cases = await recordedCases();

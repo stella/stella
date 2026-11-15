@@ -2,13 +2,8 @@ import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import * as ts from "tsrs/unstable/ast";
-import {
-  type Checker,
-  IndexKind,
-  type Program,
-  type Type,
-} from "tsrs/unstable/async";
+import * as ts from "tsrs/ast";
+import { type Checker, IndexKind, type Program, type Type } from "tsrs/async";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 

@@ -20,6 +20,8 @@ import type {
   RenderTask,
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 
+import { NEUTRAL_COLORS } from "@stll/brand";
+
 import { anchoredScroll, canvasScale, scaledScroll } from "./zoom";
 
 /** The canvas showing between pages and around them, as on the web. */
@@ -330,7 +332,7 @@ const PdfPage = ({
     <canvas
       ref={canvas}
       style={{
-        background: "white",
+        background: NEUTRAL_COLORS.white,
         boxShadow: "0 0 0 1px var(--border)",
         display: "block",
         filter: invert ? DARK_PAGE_FILTER : "none",

@@ -77,6 +77,7 @@ import {
 import type { MountedEditors } from "@/components/mounted-editors.logic";
 import { seedReferenceHints } from "@/components/references/reference-hints";
 import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
+import { chatDraftHasModelContent } from "@/features/chat/lib/chat-message-model-content";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -276,6 +277,7 @@ export type ChatMessageDraftHandoff = {
 };
 
 type ActiveChatEditorHandle = {
+  appendParagraph: (text: string) => void;
   focus: () => void;
   insertMention: (mention: ChatMentionOption) => void;
   insertPastedText: (attrs: PastedTextAttrs) => void;
@@ -349,6 +351,11 @@ type ChatEditorManagerContextValue = {
     threadRef: ChatThreadRef,
     attrs: PastedTextAttrs,
   ) => void;
+  /** `text` after whatever the thread's live composer holds, or at the end
+   *  of its stored draft when none is live. The live composer's latest
+   *  keystrokes reach its stored draft only after a debounce, so appending
+   *  to the stored draft while it is live would lose them. */
+  appendParagraphToThread: (threadRef: ChatThreadRef, text: string) => void;
   registerActiveEditor: (handle: ActiveChatEditorHandle) => () => void;
   /** Put `draft` into the thread's live composer, ahead of whatever the
    *  composer already holds. False when the thread has no live composer. */
@@ -528,6 +535,24 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     [],
   );
 
+  const appendParagraphToThread = useCallback(
+    (threadRef: ChatThreadRef, text: string) => {
+      const threadKey = getChatThreadKey(threadRef);
+      const activeEditor = mountedEditorFor(
+        mountedEditorsRef.current,
+        threadKey,
+      );
+
+      if (activeEditor !== null) {
+        activeEditor.appendParagraph(text);
+        return;
+      }
+
+      useChatDraftStore.getState().appendParagraph(threadKey, text);
+    },
+    [],
+  );
+
   const restoreMessageDraftIntoThread = useCallback(
     (threadRef: ChatThreadRef, draft: ChatMessageDraftHandoff): boolean => {
       const activeEditor = mountedEditorFor(
@@ -561,6 +586,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
 
   const contextValue = useMemo<ChatEditorManagerContextValue>(
     () => ({
+      appendParagraphToThread,
       focusThread,
       getMentionItems,
       hasLiveComposer,
@@ -573,6 +599,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       searchMentionItems,
     }),
     [
+      appendParagraphToThread,
       focusThread,
       getMentionItems,
       getPluginRegistrations,
@@ -1377,9 +1404,34 @@ export const useChatEditor = ({
     [editor, markDraftStarted],
   );
 
+  // As the stored draft does (`appendParagraphToDraftDoc`): its own
+  // paragraph, or the whole content of an empty composer.
+  const appendParagraph = useCallback(
+    (text: string) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+
+      markDraftStarted();
+      const textNode = { type: "text", text };
+      const { doc } = editor.state;
+      // An empty composer is one empty paragraph: write inside it.
+      if (editor.isEmpty && doc.firstChild?.type.name === "paragraph") {
+        editor.commands.insertContentAt(1, textNode);
+        return;
+      }
+      editor.commands.insertContentAt(doc.content.size, {
+        type: "paragraph",
+        content: [textNode],
+      });
+    },
+    [editor, markDraftStarted],
+  );
+
   useExternalSyncEffect(
     () =>
       registerActiveEditor({
+        appendParagraph,
         focus,
         insertMention,
         insertPastedText,
@@ -1387,6 +1439,7 @@ export const useChatEditor = ({
         threadKey,
       }),
     [
+      appendParagraph,
       focus,
       insertMention,
       insertPastedText,
@@ -1601,7 +1654,9 @@ export const useChatEditor = ({
       }
       confirmedCredentialSendRef.current = false;
 
-      if (!html && files.length === 0) {
+      // Nothing a model reads (spaces, a lone line break): the draft stays
+      // in the composer and nothing is sent.
+      if (!chatDraftHasModelContent({ files, html })) {
         return;
       }
 

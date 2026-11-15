@@ -5,6 +5,7 @@ import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/client";
 import { panic, Result } from "better-result";
 import { setTimeout as delay } from "node:timers/promises";
 
+import { resolveEffectiveGrants } from "../src/auth/command-scopes.js";
 import { runBatch } from "../src/batch/runner.js";
 import { resolveBatchCommand } from "../src/commands/batch.js";
 import type { Context } from "../src/context.js";
@@ -178,6 +179,7 @@ const measure = async ({
     configDir: "",
     serverUrl: server.url.origin,
     token,
+    effectiveGrants: resolveEffectiveGrants({ token }),
   };
   const started = performance.now();
   if (concurrency === undefined) {
@@ -204,7 +206,11 @@ const measure = async ({
               tree: generatedRouteMap,
               command,
               call,
-              token,
+              authorization: {
+                token,
+                effectiveGrants: context.effectiveGrants,
+                serverUrl: context.serverUrl,
+              },
               yes: true,
             }),
           now: () => Date.now(),

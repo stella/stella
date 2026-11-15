@@ -1,5 +1,5 @@
-import { load } from "cheerio";
-import { isTag } from "domhandler";
+import { load } from "@stll/html";
+import { isTag } from "@stll/html/nodes";
 
 import type { McpAppDocumentParts } from "../../src/app-document";
 

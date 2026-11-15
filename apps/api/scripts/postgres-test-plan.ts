@@ -13,6 +13,7 @@ import { compareCodeUnit } from "@stll/collation";
  */
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
+    "src/db/contacts-rls-maintenance.postgres.test.ts",
     "src/db/entity-feature-gate-maintenance.postgres.test.ts",
     "src/db/entity-feature-search-budget.postgres.test.ts",
     "src/handlers/case-law/decisions/coverage-counts.postgres.test.ts",
@@ -22,6 +23,8 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/lib/account-export/store.postgres.test.ts",
     "src/lib/business-registries/desktop/proof.postgres.test.ts",
     "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
+    "src/lib/email/correspondence/concurrent-filing.postgres.test.ts",
+    "src/lib/email/correspondence/source-race.postgres.test.ts",
     "src/lib/hosted-usage-provider/replay.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
@@ -168,7 +171,20 @@ const CLUSTER_VISIBILITY_TESTS = new Set([
   "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
 ]);
 
-/** Migration roles and visibility proofs require every other cluster worker to finish. */
+// EXPLAIN (ANALYZE, BUFFERS) charges a relation-cache rebuild to the first
+// statement that touches the relation afterwards (an audit insert pays about
+// 240 pages instead of 12). Other workers' DDL overflows the cluster-wide
+// invalidation queue and resets a measuring backend's caches at arbitrary
+// points, so a suite comparing single-sample block counts across corpus sizes
+// needs a cluster no other worker writes to.
+const CLUSTER_CATALOG_CACHE_TESTS = new Set([
+  "src/tests/query-perf/scheduled-run.postgres.test.ts",
+]);
+
+/**
+ * Migration roles, visibility proofs and single-sample block measurements
+ * require every other cluster worker to finish.
+ */
 export const clusterExclusivePostgresTests = (
   sources: ReadonlyMap<string, string>,
 ): Set<string> => {
@@ -176,6 +192,7 @@ export const clusterExclusivePostgresTests = (
   for (const [testPath, source] of sources) {
     if (
       CLUSTER_VISIBILITY_TESTS.has(testPath) ||
+      CLUSTER_CATALOG_CACHE_TESTS.has(testPath) ||
       runtimeImports
         .scanImports(source)
         .some(({ path: specifier }) =>
@@ -215,4 +232,30 @@ export const classifyPostgresTestIsolation = async (
       .map(({ testPath, tables }) => `  ${testPath}: ${tables.join(", ")}`)
       .join("\n")}\nAdd each path to EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.`,
   );
+};
+
+// Importing one of these boots the shared PGlite test database. Without a
+// snapshot, each boot builds the whole schema in-process (drizzle-kit push and
+// every PGlite install) inside the suite's setup hook.
+const PGLITE_TEST_DATABASE_MODULES = [
+  "tests/pglite-test-db",
+  "tests/security/rls-fixture",
+  "tests/security/test-utils",
+] as const;
+
+/** Whether a test file boots the shared PGlite test database. */
+export const bootsPgliteTestDatabase = (source: string): boolean =>
+  PGLITE_TEST_DATABASE_MODULES.some((module) => source.includes(module));
+
+/** Whether any selected Postgres suite also boots the PGlite test database. */
+export const anyBootsPgliteTestDatabase = async (
+  apiRoot: string,
+  testPaths: readonly string[],
+): Promise<boolean> => {
+  const sources = await Promise.all(
+    testPaths.map(
+      async (testPath) => await Bun.file(path.join(apiRoot, testPath)).text(),
+    ),
+  );
+  return sources.some(bootsPgliteTestDatabase);
 };

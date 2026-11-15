@@ -116,7 +116,7 @@ export const CLI_DEFAULT_SCOPES: readonly string[] = [
 /** Minimum scopes needed for the default CLI login to be useful. */
 export const CLI_REQUIRED_SCOPES = ["openid", "stella:read"] as const;
 
-export const CLIENT_NAME = "stella-cli";
+export const CLIENT_NAME = "stella CLI";
 
 /** `--server` resolution: env var name, checked between the flag and the config file. */
 export const SERVER_URL_ENV_VAR = "STELLA_SERVER_URL";
@@ -129,3 +129,11 @@ export const LOGIN_TIMEOUT_MS: number = 5 * 60 * 1000;
 
 /** Network timeout for every discovery/registration/token request the CLI makes. */
 export const AUTH_FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * How long the browser's redirect stays open while the CLI exchanges the code
+ * and saves the credential. Covers the token request (`AUTH_FETCH_TIMEOUT_MS`)
+ * and local writes with room to spare; past it the browser is told the sign-in
+ * was not confirmed instead of waiting on a CLI that stopped answering.
+ */
+export const SIGN_IN_COMPLETION_TIMEOUT_MS = 60_000;

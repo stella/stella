@@ -46,6 +46,7 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -607,13 +608,13 @@ const TemplateTagsDialogBody = ({
                 <Tooltip
                   content={t("common.remove")}
                   render={
-                    <button
+                    <Button
                       aria-label={t("common.remove")}
-                      className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
                       onClick={() =>
                         setTags((current) => current.filter((x) => x !== tag))
                       }
-                      type="button"
+                      size="inline"
+                      variant="muted"
                     />
                   }
                 >
@@ -640,14 +641,14 @@ const TemplateTagsDialogBody = ({
         {matchingSuggestions.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {matchingSuggestions.map((tag) => (
-              <button
-                className="bg-muted text-muted-foreground hover:text-foreground rounded-full px-2 py-0.5 text-xs font-medium"
+              <Button
                 key={tag}
                 onClick={() => addTag(tag)}
-                type="button"
+                size="chip"
+                variant="secondary"
               >
                 {tag}
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -748,9 +749,7 @@ const TemplateGuidanceDialogBody = ({
       </DialogHeader>
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="template-when-to-use">
-            {t("common.whenToUse")}
-          </label>
+          <Label htmlFor="template-when-to-use">{t("common.whenToUse")}</Label>
           <Textarea
             className="min-h-[60px]"
             id="template-when-to-use"
@@ -761,12 +760,9 @@ const TemplateGuidanceDialogBody = ({
           />
         </div>
         <div className="grid gap-1.5">
-          <label
-            className="text-sm font-medium"
-            htmlFor="template-when-not-to-use"
-          >
+          <Label htmlFor="template-when-not-to-use">
             {t("templates.whenNotToUse")}
-          </label>
+          </Label>
           <Textarea
             className="min-h-[60px]"
             id="template-when-not-to-use"
@@ -844,9 +840,7 @@ const TemplateLanguagesField = ({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-sm font-medium" htmlFor="template-languages">
-        {t("templates.languages")}
-      </label>
+      <Label htmlFor="template-languages">{t("templates.languages")}</Label>
 
       {languages.length > 0 && (
         <div className="flex flex-wrap gap-1">
@@ -860,11 +854,11 @@ const TemplateLanguagesField = ({
               <Tooltip
                 content={t("common.remove")}
                 render={
-                  <button
+                  <Button
                     aria-label={t("common.remove")}
-                    className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
                     onClick={() => onChange(languages.filter((x) => x !== tag))}
-                    type="button"
+                    size="inline"
+                    variant="muted"
                   />
                 }
               >

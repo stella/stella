@@ -15,6 +15,7 @@ import { listenForSessionDocumentRestore } from "@/lib/account/session-document"
 import { listenForSessionChange } from "@/lib/account/session-signal";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import {
+  createRouteCatchHandler,
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
@@ -32,6 +33,7 @@ import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
 import { parseRouteSearch, stringifyRouteSearch } from "@/route-search-params";
 import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 import { routeTree } from "@/routeTree.gen";
+import { getRequestSsrOptions } from "@/security/ssr-options";
 
 enableMapSet();
 
@@ -90,9 +92,9 @@ export function getRouter() {
     parseSearch: parseRouteSearch,
     stringifySearch: stringifyRouteSearch,
     context: { analyticsValue, queryClient, routeErrorLifecycle },
-    defaultOnCatch: () => {
-      routeErrorLifecycle.caught(readCaughtRouteTemplate());
-    },
+    defaultOnCatch: createRouteCatchHandler(routeErrorLifecycle, () =>
+      readCaughtRouteTemplate(),
+    ),
     // Keep browser scroll restoration after hydration, but avoid rendering
     // TanStack's restoration sibling during server streaming for client-only
     // top-level routes.
@@ -107,6 +109,7 @@ export function getRouter() {
     // threshold.
     defaultPendingMs: 500,
     defaultPendingMinMs: 300,
+    ssr: getRequestSsrOptions(),
   });
   getWebHangDetector()?.attach({
     analytics: analyticsValue.analytics,

@@ -6,6 +6,7 @@ import {
   SEARCH_TOTAL_TYPE,
   type SearchTotal,
 } from "@stll/api-contract/search";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
   PUBLIC_LAW_PAGE_REST,
@@ -13,7 +14,6 @@ import {
 } from "@/components/public-law-table/public-law-pagination.logic";
 import czechMessages from "@/i18n/langs/cs.json";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const { useRef, useState } = await import("react");

@@ -18,6 +18,7 @@ import {
   chunkLegislationDocument,
 } from "@/api/lib/corpus-index/chunking";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
+import { CASE_LAW_RANKING_SIGNAL_FIELDS } from "@/api/lib/legal-search/case-law-ranking-signals";
 import {
   type PROJECTION_GENERATION_FIELD,
   PROVISION_KEYS_FIELD,
@@ -33,6 +34,7 @@ import {
   type CorpusIndexManifest,
   type CorpusIndexPublisherFields,
   corpusIndexPublisherFields,
+  corpusIndexRankingSignals,
   corpusIndexStemFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -78,6 +80,15 @@ type CaseLawProjectionDocument = SharedProjectionDocument & {
   keywords?: string;
   text_stem?: string;
   headnote_stem?: string;
+} & RankingSignalFields;
+
+/** What a generation carrying ranking signals writes on every passage. */
+type RankingSignalFields = {
+  [CASE_LAW_RANKING_SIGNAL_FIELDS.citationAuthorityBucket]?: number;
+  [CASE_LAW_RANKING_SIGNAL_FIELDS.courtId]?: string;
+  [CASE_LAW_RANKING_SIGNAL_FIELDS.languageGroupKey]?: string;
+  [CASE_LAW_RANKING_SIGNAL_FIELDS.languageGroupShared]?: boolean;
+  [CASE_LAW_RANKING_SIGNAL_FIELDS.passageCount]?: number;
 };
 
 type LegislationV2ProjectionDocument = SharedProjectionDocument & {
@@ -231,6 +242,39 @@ const groupContractFields = (
   }
 };
 
+/**
+ * The ranking signals every passage of the decision carries, or nothing for a
+ * generation whose mapping has no field for them. On every passage rather than
+ * the opening one, because the scan ranks a decision by whichever passage it
+ * reached first, and that passage is the only one whose fields it reads. An
+ * absent court id or group key writes no field rather than an empty string.
+ */
+const rankingSignalFields = (
+  manifest: Extract<CorpusIndexManifest, { family: "case_law" }>,
+  input: CaseLawProjectionInput,
+  passageCount: number,
+): RankingSignalFields => {
+  if (corpusIndexRankingSignals(manifest) === null) {
+    return {};
+  }
+  const { citationAuthorityBucket, languageGroupKey, languageGroupShared } =
+    input.rankingSignals;
+  return {
+    [CASE_LAW_RANKING_SIGNAL_FIELDS.citationAuthorityBucket]:
+      citationAuthorityBucket,
+    ...(input.courtId === null
+      ? {}
+      : { [CASE_LAW_RANKING_SIGNAL_FIELDS.courtId]: input.courtId }),
+    ...(languageGroupKey === null
+      ? {}
+      : {
+          [CASE_LAW_RANKING_SIGNAL_FIELDS.languageGroupKey]: languageGroupKey,
+        }),
+    [CASE_LAW_RANKING_SIGNAL_FIELDS.languageGroupShared]: languageGroupShared,
+    [CASE_LAW_RANKING_SIGNAL_FIELDS.passageCount]: passageCount,
+  };
+};
+
 export const buildCaseLawProjectionDocuments = ({
   manifest,
   input,
@@ -281,6 +325,7 @@ export const buildCaseLawProjectionDocuments = ({
       ? null
       : stemCorpusText(publisher.summary.value, stemmed.language);
   const chunks = chunkDocument({ ast, fallbackText: payload.text });
+  const signals = rankingSignalFields(manifest, input, chunks.length);
   const passageIdentity =
     manifest.engine.indexConfig.doc_mapping.field_mappings.some(
       ({ name }) => name === "chunk_id",
@@ -293,6 +338,7 @@ export const buildCaseLawProjectionDocuments = ({
       stemmed === null ? null : stemCorpusText(text, stemmed.language);
     documents.push({
       ...shared,
+      ...signals,
       // The manifest owns whether passages can be addressed independently;
       // the revision clause keeps this stable sequence inside its applied copy.
       ...(passageIdentity

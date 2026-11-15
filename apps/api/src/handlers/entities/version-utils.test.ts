@@ -83,6 +83,11 @@ describe("cloneFieldsForRevision", () => {
     const filePropertyId = toSafeId<"property">("prop_file");
     const textPropertyId = toSafeId<"property">("prop_text");
     const nextVersionId = toSafeId<"entityVersion">("version_next");
+    const extracted = {
+      type: "value",
+      runId: "run_extract",
+      settledAt: "2026-11-01T10:00:00.000Z",
+    } as const;
     const replacementFile = fileContentWithMintedObject({
       encryption: serverBuiltFileEncryption(),
       fileName: "agreement.docx",
@@ -112,6 +117,7 @@ describe("cloneFieldsForRevision", () => {
             version: 1,
           },
           propertyId: filePropertyId,
+          aiSettlement: null,
         },
         {
           content: {
@@ -120,6 +126,7 @@ describe("cloneFieldsForRevision", () => {
             version: 1,
           },
           propertyId: textPropertyId,
+          aiSettlement: extracted,
         },
       ],
       entityVersionId: nextVersionId,
@@ -131,6 +138,7 @@ describe("cloneFieldsForRevision", () => {
     expect(cloned).toEqual([
       {
         content: replacementFile,
+        aiSettlement: null,
         entityVersionId: nextVersionId,
         propertyId: filePropertyId,
         workspaceId,
@@ -141,6 +149,8 @@ describe("cloneFieldsForRevision", () => {
           value: "Keep me",
           version: 1,
         },
+        // The run's settlement travels with the value it describes.
+        aiSettlement: extracted,
         entityVersionId: nextVersionId,
         propertyId: textPropertyId,
         workspaceId,
@@ -183,6 +193,7 @@ describe("cloneFieldsForRevision", () => {
             version: 1,
           },
           propertyId: filePropertyId,
+          aiSettlement: null,
         },
         {
           content: {
@@ -191,6 +202,7 @@ describe("cloneFieldsForRevision", () => {
             version: 1,
           },
           propertyId: textPropertyId,
+          aiSettlement: null,
         },
       ],
       entityVersionId: nextVersionId,

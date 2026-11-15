@@ -321,7 +321,7 @@ const directRefusalsClassified = (source: string) =>
   );
 
 test("the pinned provider assigns every direct grant refusal and shared protocol error", async () => {
-  const source = await providerFile("introspect-*.mjs");
+  const source = await providerFile("authorize-*.mjs");
   for (const name of [
     "checkVerificationValue",
     "handleAuthorizationCodeGrant",

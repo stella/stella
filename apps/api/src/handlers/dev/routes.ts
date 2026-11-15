@@ -26,6 +26,7 @@ import {
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
 
 import {
   type FirmKnowledgeJob,
@@ -169,9 +170,9 @@ const startFirmKnowledgeSeed = defineEndpoint.member(
     // A requested organization is used only after the membership lookup
     // proves the caller belongs to it.
     const organizationId =
-      ctx.body?.organizationId === undefined
-        ? session.activeOrganizationId
-        : await resolveMemberDevOrganization(ctx.body.organizationId, userId);
+      ctx.body?.organizationId !== undefined
+        ? await resolveMemberDevOrganization(ctx.body.organizationId, userId)
+        : session.activeOrganizationId;
     if (organizationId === null) {
       return status(403, "Organization membership not found");
     }
@@ -180,9 +181,9 @@ const startFirmKnowledgeSeed = defineEndpoint.member(
       matters: body?.matters ?? FIRM_KNOWLEDGE_MATTERS,
       replaceIncomplete:
         body?.incompleteMatterMode === INCOMPLETE_MATTER_MODE.replace,
-      ...(body?.selectionSeed === undefined
-        ? {}
-        : { selectionSeed: body.selectionSeed }),
+      ...(body?.selectionSeed !== undefined
+        ? { selectionSeed: body.selectionSeed }
+        : {}),
     } satisfies FirmKnowledgeSeedParameters;
 
     if (firmKnowledgeInFlight) {
@@ -263,6 +264,14 @@ const cleanOrganization = defineEndpoint.member(
     const orgId = session.activeOrganizationId;
 
     await scopedDb(async (tx) => {
+      const hold = await requireNoHold({
+        tx,
+        organizationId: orgId,
+        target: { type: "organization" },
+      });
+      if (hold.isErr()) {
+        throw hold.error;
+      }
       // audit: skip — dev-only org-nuke endpoint; not deployed to prod
       // Delete in dependency order.
       // 1. Billing records, which a matter deletion refuses to take (lines

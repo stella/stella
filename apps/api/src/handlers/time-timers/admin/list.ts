@@ -3,6 +3,7 @@ import { and, asc, eq, gt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { timeTimers, workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -136,7 +137,7 @@ const listRunningMemberTimers = createSafeRootHandler(
             and(
               eq(workspaces.id, timeTimers.workspaceId),
               eq(workspaces.organizationId, session.activeOrganizationId),
-              eq(workspaces.status, "active"),
+              eq(workspaces.status, WORKSPACE_STATUS.active),
               sql`CASE WHEN ${workspaces.clientId} IS NOT NULL THEN true
                 ELSE EXISTS (
                   SELECT 1 FROM workspace_members AS workspace_member

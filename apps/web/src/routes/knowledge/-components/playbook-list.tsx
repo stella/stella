@@ -14,7 +14,9 @@ import {
 } from "@stll/ui/dialog";
 import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
+import { useIsMobile } from "@stll/ui/use-mobile";
 
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
   PLAYBOOK_BUILDER_SKILL_NAME,
   setThreadActiveSkill,
@@ -25,6 +27,7 @@ import {
   memberKnowledgeActions,
   memberKnowledgeSource,
 } from "@/features/knowledge/member/member-knowledge";
+import { openPendingPlaybookPane } from "@/features/knowledge/playbook-editor/open-pending-playbook-pane";
 import { PlaybooksPageView } from "@/features/knowledge/views/playbooks/playbooks-page-view";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -88,6 +91,8 @@ export const PlaybookList = ({
     memberKnowledgeActions.usePlaybookActions(organizationId);
   const navigate = useNavigate();
 
+  const isMobile = useIsMobile();
+
   // Nothing is created here: the chat's first save creates the playbook.
   // The chat resolves the skill's title when it renders.
   const buildWithAi = () => {
@@ -96,6 +101,14 @@ export const PlaybookList = ({
       { scope: "global", threadId },
       { skillName: PLAYBOOK_BUILDER_SKILL_NAME },
     );
+    // Below `md` the inspector is a sheet that would cover the chat.
+    if (!isMobile) {
+      openPendingPlaybookPane({
+        inspector: useInspectorTabsStore.getState(),
+        threadId,
+        label: t("knowledge.playbooks.review.playbookLabel"),
+      });
+    }
     detached(
       navigate({ to: "/chat/$threadId", params: { threadId } }),
       "playbook-list.build-with-ai",

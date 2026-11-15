@@ -41,7 +41,9 @@ test("an unproven aside retains its substantive footnote", () => {
   expect(parsed.status).toBe("parsed");
   expect(blockTexts(parsed)).toEqual(["Judgment.", "1. Substantive footnote."]);
   if (parsed.status === "parsed") {
-    expect(parsed.text.validationHtml).toContain("1. Substantive footnote.");
+    expect(parsed.text.validationParagraphs.join("\n")).toContain(
+      "1. Substantive footnote.",
+    );
   }
 });
 
@@ -109,7 +111,9 @@ test("a reviewed publisher signature is removed while ordinary siblings remain",
     "Publisher cookie notice",
   ]);
   if (parsed.status === "parsed") {
-    expect(parsed.text.validationHtml).not.toContain(FOOTER_SIGNATURE);
+    expect(parsed.text.validationParagraphs.join("\n")).not.toContain(
+      FOOTER_SIGNATURE,
+    );
     expect(parsed.text.counts.publisherLinks).toBe(0);
   }
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { expiryInstant } from "./dated-waivers";
@@ -17,11 +17,27 @@ import {
   serializeRegistry,
   splitTestId,
 } from "./flaky-test-quarantine";
+import { QUARANTINE_ACTION, unownedBunTestSteps } from "./flaky-test-workflow";
+import { evaluate } from "./github-expression";
+import { workflowJobSteps } from "./workflow-steps";
 
 const committed = readFileSync(
   path.join(REPOSITORY_ROOT, REGISTRY_FILE),
   "utf-8",
 );
+const actionSource = readFileSync(
+  path.join(
+    REPOSITORY_ROOT,
+    ".github/actions/flaky-test-quarantine/action.yml",
+  ),
+  "utf-8",
+);
+
+test("the shared action authenticates history reads by default", () => {
+  expect(actionSource).toMatch(
+    /inputs:\n {2}token:\n(?: {4}.*\n)*? {4}default: \$\{\{ github\.token \}\}/u,
+  );
+});
 
 const entry = (overrides: Partial<QuarantineEntry> = {}): QuarantineEntry => ({
   id: "apps/web/src/a.test.ts::group > case",
@@ -154,4 +170,188 @@ test("the cache digest changes with the registry", () => {
   expect(quarantineDigest(read(committed))).not.toBe(
     quarantineDigest(read(serializeRegistry({ entries: [entry()] }))),
   );
+});
+
+describe("workflow quarantine ownership", () => {
+  test("every Bun test step is preceded by the shared quarantine action", () => {
+    const workflows = path.join(REPOSITORY_ROOT, ".github/workflows");
+    const violations = readdirSync(workflows)
+      .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
+      .flatMap((file) => {
+        const workflowPath = `.github/workflows/${file}`;
+        const source = readFileSync(
+          path.join(REPOSITORY_ROOT, workflowPath),
+          "utf-8",
+        );
+        return unownedBunTestSteps(Bun.YAML.parse(source), workflowPath);
+      });
+
+    expect(violations).toEqual([]);
+  });
+
+  test("reports a Postgres package test without the shared owner", () => {
+    const fixture = {
+      jobs: {
+        postgres: {
+          steps: [
+            { uses: "actions/checkout@v4" },
+            { run: "bun run test:postgres" },
+          ],
+        },
+      },
+    };
+    expect(unownedBunTestSteps(fixture, "fixture.yml")).toEqual([
+      "fixture.yml: jobs.postgres.steps[1]",
+    ]);
+
+    fixture.jobs.postgres.steps.splice(1, 0, { uses: QUARANTINE_ACTION });
+    expect(unownedBunTestSteps(fixture, "fixture.yml")).toEqual([]);
+  });
+
+  test.each([
+    [undefined, "!cancelled()", false],
+    ["failure()", "failure()", false],
+    ["success()", "always()", false],
+    ["!cancelled()", "always()", false],
+    ["always()", "!cancelled()", true],
+    ["!cancelled()", undefined, true],
+    [undefined, undefined, true],
+    [
+      "!cancelled() && steps.checkout.outcome == 'success'",
+      "!cancelled() && steps.checkout.outcome == 'success'",
+      true,
+    ],
+    ["contains('failure()', 'failure')", "!cancelled()", false],
+    ["!cancelled() && inputs.enabled", "!cancelled()", false],
+  ])(
+    "setup condition %s covers later condition %s: %s",
+    (setup, consumer, covered) => {
+      const fixture = {
+        jobs: {
+          check: {
+            steps: [
+              { id: "checkout", run: "exit 1" },
+              { uses: QUARANTINE_ACTION, if: setup },
+              { run: "bun test", if: consumer },
+            ],
+          },
+        },
+      };
+      expect(unownedBunTestSteps(fixture, "fixture.yml")).toEqual(
+        covered ? [] : ["fixture.yml: jobs.check.steps[2]"],
+      );
+    },
+  );
+
+  test("each repeated setup owns the tests that follow it", () => {
+    const fixture = {
+      jobs: {
+        check: {
+          steps: [
+            { uses: QUARANTINE_ACTION, if: "always()" },
+            { run: "bun test" },
+            { uses: QUARANTINE_ACTION },
+            { run: "bun test", if: "!cancelled()" },
+          ],
+        },
+      },
+    };
+    expect(unownedBunTestSteps(fixture, "fixture.yml")).toEqual([
+      "fixture.yml: jobs.check.steps[3]",
+    ]);
+  });
+
+  test.each([
+    "bun --filter @stll/api test",
+    "bun --filter=@stll/api test:e2e:browser",
+    "bun --cwd apps/api test",
+    "bun --cwd=apps/api test:postgres",
+  ])("recognises a test command after value-taking Bun options: %s", (run) => {
+    const fixture = { jobs: { check: { steps: [{ run }] } } };
+
+    expect(unownedBunTestSteps(fixture, "fixture.yml")).toEqual([
+      "fixture.yml: jobs.check.steps[0]",
+    ]);
+  });
+});
+
+describe("Playwright image quarantine forwarding", () => {
+  test("forwards the preload and mounts reports for the post step", () => {
+    const source = readFileSync(
+      path.join(
+        REPOSITORY_ROOT,
+        ".github/actions/setup-playwright/run-in-image.sh",
+      ),
+      "utf-8",
+    );
+
+    expect(source).toContain(
+      "for key in BUN_OPTIONS FLAKY_TEST_QUARANTINE_REPORT_DIR",
+    );
+    expect(source).toContain(
+      'args+=(--volume "$FLAKY_TEST_QUARANTINE_REPORT_DIR:$FLAKY_TEST_QUARANTINE_REPORT_DIR:rw")',
+    );
+    expect(source).toContain('--volume "$workspace:$workspace"');
+  });
+});
+
+test("independent suites retain quarantine setup after an earlier step fails", () => {
+  const workflow = Bun.YAML.parse(
+    readFileSync(
+      path.join(REPOSITORY_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    ),
+  );
+  const steps = workflowJobSteps(workflow, "service-suites");
+  const index = steps.findIndex(
+    (step) => step["name"] === "Run Valkey-gated API suites",
+  );
+  const setup = steps
+    .slice(0, index)
+    .findLast((step) => step["uses"] === QUARANTINE_ACTION);
+  const suite = steps.at(index);
+  if (setup === undefined || suite === undefined) {
+    throw new TypeError("Suite and preceding quarantine setup are required");
+  }
+  for (const checkout of ["success", "failure", "skipped"]) {
+    for (const failure of [false, true]) {
+      for (const cancelled of [false, true]) {
+        const context = {
+          values: {
+            "steps.checkout.outcome": checkout,
+            "needs.ci-plan.outputs.valkey_suites_required": "true",
+            "github.event_name": "workflow_dispatch",
+            "needs.ci-plan.outputs.suite_depth": "full",
+          },
+          status: {
+            always: true,
+            success: !failure && !cancelled,
+            failure,
+            cancelled,
+          },
+        };
+        const runnable = checkout === "success" && !cancelled;
+        expect(evaluate(String(suite["if"]), context)).toBe(runnable);
+        expect(
+          evaluate(
+            typeof setup["if"] === "string" ? setup["if"] : "success()",
+            context,
+          ),
+        ).toBe(runnable);
+      }
+    }
+  }
+});
+
+test("quoted replay instructions do not run test commands", () => {
+  expect(
+    unownedBunTestSteps(
+      {
+        jobs: {
+          summary: { steps: [{ run: 'echo "bun test"', if: "failure()" }] },
+        },
+      },
+      "fixture.yml",
+    ),
+  ).toEqual([]);
 });

@@ -8,7 +8,6 @@ import {
   gte,
   inArray,
   lte,
-  ne,
   not,
   or,
   sql,
@@ -43,6 +42,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 type SubmissionEntry = typeof timeEntries.$inferSelect & { running: boolean };
 
@@ -144,7 +144,7 @@ const readOwnDrafts = async (
             eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
             and(
               eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-              ne(workspaces.status, "deleting"),
+              visibleWorkspaceSql(),
             ),
           ),
         ),

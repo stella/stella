@@ -2,6 +2,7 @@ import { cents, formatMoneyCents, timeEntryAmount } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
 import { BanknoteIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { formatPreviewDate, formatPreviewHours } from "./format";
 import { PREVIEW_MATTERS } from "./mock-data";
@@ -73,7 +74,7 @@ export const BillingPreview = ({
       <div className="flex h-full min-h-0 flex-col p-3">
         <div className="text-muted-foreground mb-2 flex min-w-0 items-center gap-1.5">
           <MatterIcon className="size-3.5 shrink-0" matter={data.matter} />
-          <span className="truncate">{data.matter.name}</span>
+          <TruncatedText>{data.matter.name}</TruncatedText>
         </div>
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] gap-x-4">
           <div className="text-muted-foreground col-span-full grid grid-cols-subgrid border-b pb-1.5 font-medium">
@@ -95,7 +96,7 @@ export const BillingPreview = ({
                   options: { day: "numeric", month: "short", year: "numeric" },
                 })}
               </span>
-              <span className="truncate">{row.description}</span>
+              <TruncatedText>{row.description}</TruncatedText>
               <span className="text-end tabular-nums">
                 {formatPreviewHours(locale, row.billedMinutes)}
               </span>

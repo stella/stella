@@ -27,6 +27,8 @@ export const SITEMAP_MULTILINGUAL_URL_WEIGHT =
  * A scalar, capped sibling probe keeps the language-group index condition;
  * null group keys match no sibling and therefore remain representatives.
  * Callers pass a published row, so the probe compares published siblings only.
+ * `case_law_decisions_language_group_published_idx` carries everything both
+ * probes read, so a month's probes visit no heap page of an all-visible table.
  */
 export const sitemapDocumentRepresentativeFor = (decision: {
   id: SQLWrapper;
@@ -85,3 +87,13 @@ export const decisionBucketSqlFor = (table: { id: SQLWrapper }) =>
   groupableSql(
     sql<string>`lpad(mod(hashtext(${table.id}::text)::bigint + 2147483648, ${sql.raw(String(SITEMAP_SHARD_BUCKET_COUNT))})::text, ${sql.raw(String(SITEMAP_SHARD_BUCKET_WIDTH))}, '0')`,
   );
+
+/**
+ * A shard's last modification: the newest `updated_at` of the decisions it
+ * lists, at the millisecond precision the shard row and the sitemap carry.
+ * The month recount and the touch fold both write it, so a fold compares and
+ * stores exactly what a recount of the same rows would.
+ */
+export const sitemapLastModifiedSqlFor = (decision: {
+  updatedAt: SQLWrapper;
+}) => sql`date_trunc('milliseconds', max(${decision.updatedAt}))`;

@@ -14,6 +14,9 @@
           "content-type": "application/json"
         },
         "body": {
+          "prompt_cache_options": {
+            "mode": "explicit"
+          },
           "include": [
             "reasoning.encrypted_content"
           ],
@@ -35,6 +38,7 @@
             }
           ],
           "tools": [
+            "show_app",
             "ask-user",
             "request_secret",
             "use_connector_secret",
@@ -106,6 +110,9 @@
           "content-type": "application/json"
         },
         "body": {
+          "prompt_cache_options": {
+            "mode": "explicit"
+          },
           "include": [
             "reasoning.encrypted_content"
           ],
@@ -142,6 +149,7 @@
             }
           ],
           "tools": [
+            "show_app",
             "ask-user",
             "request_secret",
             "use_connector_secret",

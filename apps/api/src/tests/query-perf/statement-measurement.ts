@@ -33,7 +33,13 @@ const PLAN_KEYWORDS: ReadonlySet<string> = new Set([
   "delete",
 ]);
 
-export const capturedStatementQuery = ({ text, params }: Statement) =>
+export const capturedStatementQuery = ({
+  text,
+  params,
+}: {
+  text: string;
+  params: readonly unknown[];
+}) =>
   sql.join(
     text.split(/\$(\d+)/u).map((part, index) => {
       if (index % 2 === 0) {

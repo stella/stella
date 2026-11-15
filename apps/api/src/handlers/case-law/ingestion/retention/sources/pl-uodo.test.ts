@@ -71,6 +71,7 @@ const projectionOf = async (
   }
   return await plUodoRetention.project(
     decision.sourceRaw ?? panic("the decision stored no source raw"),
+    { sourceRawObjects: decision.sourceRawObjects ?? {} },
   );
 };
 
@@ -134,7 +135,9 @@ describe("pl-uodo retention projection", () => {
     if (plUodoRetention.type !== "checked") {
       panic("pl-uodo is declared checked");
     }
-    expect(await plUodoRetention.project("<xPart/>")).toEqual({
+    expect(
+      await plUodoRetention.project("<xPart/>", { sourceRawObjects: {} }),
+    ).toEqual({
       type: "unreadable",
       reason: RETENTION_PROJECTION_FAILURE.UNREADABLE_ENVELOPE,
     });
@@ -150,6 +153,7 @@ describe("pl-uodo retention projection", () => {
           version: 1,
           parts: { listing: "{}", "body-xml": "<html/>" },
         }),
+        { sourceRawObjects: {} },
       ),
     ).toEqual({
       type: "unreadable",

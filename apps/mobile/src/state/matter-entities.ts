@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { documentFormat } from "@stll/api-contract/document-format";
+import type { DocumentFormat } from "@stll/api-contract/document-format";
+
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
@@ -56,52 +59,12 @@ const entityPageSchema = v.object({
 type EntityRow = v.InferOutput<typeof entityRowSchema>;
 
 /**
- * A row as the screen shows it: a document carries its file's format
- * ("PDF", "DOCX"), read from the matter's documents column.
+ * A row as the screen shows it: a document carries its file's format (its
+ * mark, and its tag such as "PDF" or "DOCX"), read from the matter's
+ * documents column.
  */
 export type MatterEntity = Omit<EntityRow, "fields"> & {
-  readonly fileType?: string | undefined;
-};
-
-/** Formats named by their media type; any other is named by its extension. */
-// A Map, so a media type named like an object key ("constructor") finds
-// nothing rather than an inherited property.
-const FILE_TYPE_OF_MIME: ReadonlyMap<string, string> = new Map([
-  ["application/pdf", "PDF"],
-  ["application/msword", "DOC"],
-  [
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "DOCX",
-  ],
-  ["application/vnd.ms-excel", "XLS"],
-  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "XLSX"],
-  ["application/vnd.ms-powerpoint", "PPT"],
-  [
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "PPTX",
-  ],
-  ["application/rtf", "RTF"],
-  ["text/plain", "TXT"],
-  ["text/csv", "CSV"],
-  ["message/rfc822", "EML"],
-  ["application/vnd.ms-outlook", "MSG"],
-]);
-
-/**
- * A file's format as a short tag: the known name of its media type, else
- * its name's extension in capitals, else none. Formats are not translated.
- */
-export const fileTypeOf = (
-  mimeType: string | undefined,
-  fileName: string | undefined,
-): string | undefined => {
-  const media = mimeType?.split(";", 1)[0]?.trim().toLowerCase();
-  const known = media === undefined ? undefined : FILE_TYPE_OF_MIME.get(media);
-  if (known !== undefined) {
-    return known;
-  }
-  const extension = fileName?.match(/\.([a-z0-9]{1,5})$/iu)?.[1];
-  return extension?.toUpperCase();
+  readonly format?: DocumentFormat | undefined;
 };
 
 const toMatterEntity = (
@@ -112,11 +75,9 @@ const toMatterEntity = (
     fileFieldId === null
       ? undefined
       : fields.find((field) => field.propertyId === fileFieldId)?.content;
-  const fileType =
-    file?.type === "file"
-      ? fileTypeOf(file.mimeType, file.fileName)
-      : undefined;
-  return fileType === undefined ? row : { ...row, fileType };
+  return file?.type === "file"
+    ? { ...row, format: documentFormat(file.mimeType, file.fileName) }
+    : row;
 };
 
 export type KnownEntityKind = "folder" | "document" | "task";

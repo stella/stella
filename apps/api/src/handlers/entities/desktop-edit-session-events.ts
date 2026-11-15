@@ -7,7 +7,7 @@ import type {
 } from "@stll/api-contract";
 
 import { status } from "@/api/http/status";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDesktopEditSessionCloseSignal } from "@/api/lib/desktop-edit-session-notifications";
@@ -19,8 +19,13 @@ import {
   readDesktopEditSessionEventState,
   refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
+import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
-import { registerSessionDelivery, sseResponse } from "@/api/lib/sse";
+import {
+  addStreamWithinLimit,
+  registerSessionDelivery,
+  sseResponse,
+} from "@/api/lib/sse";
 
 const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
@@ -213,14 +218,18 @@ export const desktopEditSessionEventsHandler = async (
   }
 
   const refreshLivenessInBackground = () => {
-    refreshLiveness().catch((error: unknown) => {
-      captureError(
-        error,
-        handlerErrorContext("entities.refreshLivenessInBackground", {
-          sessionId,
+    detached(
+      async () =>
+        refreshLiveness().catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("entities.refreshLivenessInBackground", {
+              sessionId,
+            }),
+          );
         }),
-      );
-    });
+      "desktop-edit-session-events.refresh-liveness",
+    );
   };
 
   const stream = new ReadableStream<Uint8Array>({
@@ -237,7 +246,18 @@ export const desktopEditSessionEventsHandler = async (
         sessionConns = new Set();
         connections.set(sessionId, sessionConns);
       }
-      sessionConns.add(conn);
+      addStreamWithinLimit({
+        close: (stale) => {
+          stale.cleanup();
+          Result.try(() => {
+            stale.controller.close();
+          }).unwrapOr(undefined);
+        },
+        connection: conn,
+        limit: LIMITS.desktopEditSessionStreams,
+        sameHolder: () => true,
+        set: sessionConns,
+      });
 
       // Send an SSE comment to flush response headers immediately.
       // Without this, Bun may buffer the response until the first

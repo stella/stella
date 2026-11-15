@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   expectNullableString,
@@ -38,7 +38,8 @@ const firm = fc
   .map((raw) => raw satisfies ZefixRawFirm);
 
 test("firm projections retain valid identities and typed optional fields", () => {
-  fc.assert(
+  assertProperty(
+    "firm projections retain valid identities and typed optional fields",
     fc.property(firm, (raw) => {
       const company = expectRegistryOutcome(() => parseFirm(raw));
       if (company === undefined) {
@@ -75,7 +76,7 @@ test("firm projections retain valid identities and typed optional fields", () =>
         expectNullableString(company.status.upstreamValue);
       }
     }),
-    propertyConfig({ seed: propertySeed() }),
+    { seed: propertySeed() },
   );
 });
 
@@ -97,7 +98,8 @@ const expectTypedOutput = (output: ZefixCompany) => {
 };
 
 test("firm response mutations retain typed projections or registry failures", async () => {
-  await fc.assert(
+  await assertProperty(
+    "firm response mutations retain typed projections or registry failures",
     fc.asyncProperty(
       firm,
       fc.nat(),
@@ -130,7 +132,7 @@ test("firm response mutations retain typed projections or registry failures", as
         expectTypedOutput(output);
       },
     ),
-    propertyConfig({ seed: propertySeed(), numRuns: 20 }),
+    { seed: propertySeed(), numRuns: 20 },
   );
 });
 

@@ -7,6 +7,8 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
+
 const workflow = v.parse(
   v.looseObject({
     name: v.string(),
@@ -252,7 +254,7 @@ describe("required dependency review workflow boundary", () => {
       step.uses?.startsWith("oven-sh/setup-bun@"),
     );
     const checkout = job.steps.find((step) =>
-      step.uses?.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(step.uses),
     );
     const review = job.steps.find((step) =>
       step.uses?.startsWith("actions/dependency-review-action@"),
@@ -265,7 +267,8 @@ describe("required dependency review workflow boundary", () => {
     expect(setup.with?.["bun-version-file"]).toBe(
       `\${{ steps.changes.outputs.manifest }}`,
     );
-    expect(setup.with?.["no-cache"]).toBe(true);
+    // setup-bun caches only its executable; no-cache would re-download it.
+    expect(setup.with?.["no-cache"]).toBeUndefined();
     const reviewCondition =
       "steps.changes.outputs.required == 'true' || steps.actions.outputs.required == 'true'";
     expect(checkout.if).toBe(reviewCondition);

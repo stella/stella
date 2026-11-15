@@ -39,6 +39,10 @@ import { cents } from "@/api/lib/money";
 import { effectiveOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  removeIssuingSeller,
+  seedIssuingSeller,
+} from "@/api/tests/helpers/issuing-seller";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -60,6 +64,7 @@ setDefaultTimeout(120_000); // timeout: the shared PGlite RLS fixture builds its
 let testDb: TestDatabase;
 let ids: TestIds;
 const seededInvoiceIds: SafeId<"invoice">[] = [];
+let issuingSellerId: SafeId<"sellerProfile">;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -79,6 +84,7 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
+  issuingSellerId = await seedIssuingSeller(testDb, ids.orgA);
 });
 
 afterAll(async () => {
@@ -92,6 +98,7 @@ afterAll(async () => {
         .delete(invoices)
         .where(inArray(invoices.id, seededInvoiceIds));
     }
+    await removeIssuingSeller(testDb, issuingSellerId);
   } finally {
     await releaseRlsFixture();
   }
@@ -142,6 +149,7 @@ const seedInvoice = async ({
       originalInvoiceId: original,
       invoiceDate: "2026-06-23",
       currency: "USD",
+      sellerProfileId: issuingSellerId,
       status,
       ...stored,
       totalAmount: cents(totalAmount),
@@ -155,6 +163,7 @@ const seedInvoice = async ({
     invoiceNumber: `INV-PAY-${invoiceId}`,
     invoiceDate: "2026-06-23",
     currency: "USD",
+    sellerProfileId: issuingSellerId,
     status,
     ...stored,
     totalAmount: cents(totalAmount),

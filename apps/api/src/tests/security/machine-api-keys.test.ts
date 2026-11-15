@@ -101,7 +101,7 @@ const expectRejected = async (): Promise<Error> => {
     throw new Error("expected the credential to be rejected");
   }
   if (!(rejection instanceof Error)) {
-    throw new Error("expected the rejection to be an Error");
+    throw new TypeError("expected the rejection to be an Error");
   }
   return rejection;
 };
@@ -130,7 +130,7 @@ describe("machine API key audience binding", () => {
       (error: unknown) => error,
     );
     if (!(rejection instanceof Error)) {
-      throw new Error(`expected the credential to be rejected on ${mode}`);
+      throw new TypeError(`expected the credential to be rejected on ${mode}`);
     }
     return rejection;
   };

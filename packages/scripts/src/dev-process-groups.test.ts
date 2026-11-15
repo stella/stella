@@ -14,7 +14,10 @@ import { PassThrough, type Readable } from "node:stream";
 import { json } from "node:stream/consumers";
 import * as v from "valibot";
 
-import { waitForExternalState } from "@stll/property-testing/external-state";
+import {
+  waitForExternalState,
+  waitForFileContent,
+} from "@stll/property-testing/external-state";
 
 import { down } from "./agent-session";
 import {
@@ -144,14 +147,17 @@ test("process-tree fixtures release a subprocess's output pipes after their lead
       { stdin: "ignore", stdout: "pipe", stderr: "pipe" },
     );
     try {
-      await waitForExternalState({
+      const stopped = await waitForFileContent({
         description: `${termMode} fixture leader to stop`,
         intervalMs: 20,
         timeoutMs: 2000,
-        read: () => existsSync(resultPath),
-        onTimeout: () => undefined,
+        path: resultPath,
+        // The leader writes its process tree as JSON once it has stopped.
+        parse: (content) =>
+          Result.try((): unknown => JSON.parse(content)).isOk() || undefined,
+        onTimeout: () => false,
       });
-      expect(existsSync(resultPath)).toBe(true);
+      expect(stopped).toBe(true);
       expect(await owner.exited).toBe(0);
 
       const pending = Symbol("output pipe still open");

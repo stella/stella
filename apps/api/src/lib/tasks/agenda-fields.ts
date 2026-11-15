@@ -3,6 +3,7 @@ import * as v from "valibot";
 import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 
 import type { AgendaAttendee } from "@/api/db/schema";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import {
   AGENDA_ATTENDEE_TYPES,
   AGENDA_AVAILABILITIES,
@@ -30,11 +31,11 @@ const agendaDateTimeSchema = v.nullable(
 );
 const agendaParticipantSchema = v.object({
   email: v.nullable(v.pipe(v.string(), v.email(), v.maxLength(320))),
-  name: v.nullable(v.pipe(v.string(), v.maxLength(512))),
+  name: v.nullable(displayNameSchema({ maxLength: 512, allowEmpty: true })),
 });
 const agendaAttendeeSchema = v.object({
   email: v.nullable(v.pipe(v.string(), v.email(), v.maxLength(320))),
-  name: v.nullable(v.pipe(v.string(), v.maxLength(512))),
+  name: v.nullable(displayNameSchema({ maxLength: 512, allowEmpty: true })),
   optional: v.exactOptional(v.boolean()),
   responseStatus: v.exactOptional(
     v.nullable(v.pipe(v.string(), v.maxLength(64))),

@@ -1,4 +1,6 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
+// parser-output-unchanged: validation reads the source paragraphs directly, as the markup built from them parsed to.
 /**
  * Unmarked opinion text: the `plain_text` column, and the preformatted
  * bodies CourtListener serves as `<pre>` runs with citation links between
@@ -13,13 +15,12 @@
  * paragraph is scoped alone.
  */
 
-import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
-
+import { load } from "@stll/html";
+import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
 
-import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
+import { validationParagraphs } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { isExcludedHtmlTag, visibleHtmlText } from "../shared-inlines";
 import { conservesText, createUnitBuilder, graphicsIn } from "./blocks";
@@ -126,11 +127,6 @@ const inlinesOf = (lines: readonly string[]): Inline[] =>
       : [{ type: "line-break" }, { type: "text", text: line }],
   );
 
-const escapeParagraphs = (text: string): string =>
-  buildValidationHtml(
-    text.split(/\n[ \t\f]*\n/u).map((part) => Bun.escapeHTML(part)),
-  );
-
 const parseLayoutText = (
   { budget, prefix, rowType }: FormatInput,
   source: string,
@@ -182,7 +178,9 @@ const parseLayoutText = (
         backlinkCharacters: 0,
         unknownConstructs: {},
       },
-      validationHtml: escapeParagraphs(visibleText),
+      validationParagraphs: validationParagraphs(
+        visibleText.split(/\n[ \t\f]*\n/u),
+      ),
     },
   };
 };
@@ -220,7 +218,7 @@ export const parsePreformatted = (input: FormatInput): FormatParse | null => {
   if (input.text.trim() === "") {
     return { status: "unusable", reason: TEXT_CANDIDATE_UNUSABLE.BLANK };
   }
-  const $ = cheerio.load(input.text, null, false);
+  const $ = load(input.text, null, false);
   const foreign = $.root()
     .children()
     .toArray()
@@ -247,7 +245,7 @@ export const parsePreformatted = (input: FormatInput): FormatParse | null => {
   }
   // The retention check reads the source through cheerio's own text, not
   // through the walk above.
-  const visible = cheerio.load(input.text, null, false);
+  const visible = load(input.text, null, false);
   return parseLayoutText(
     input,
     $.root().contents().toArray().map(textOf).join(""),

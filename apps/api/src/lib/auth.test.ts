@@ -451,7 +451,7 @@ describe("resolveWorkspaceRealtimeAudience", () => {
 });
 
 describe("resolveUserRealtimeAuthorization", () => {
-  test("returns only live sessions for a current organization member", async () => {
+  test("returns the membership and only the live sessions of a current member", async () => {
     const authorized = await resolveUserRealtimeAuthorization(
       {
         organizationId: orgFull,
@@ -465,7 +465,10 @@ describe("resolveUserRealtimeAuthorization", () => {
       testDb,
     );
 
-    expect(authorized).toEqual(new Set([liveOwnerSessionId]));
+    expect(authorized).toEqual({
+      member: true,
+      liveSessionIds: new Set([liveOwnerSessionId]),
+    });
   });
 
   test("refuses live sessions after their organization membership is removed", async () => {
@@ -478,7 +481,24 @@ describe("resolveUserRealtimeAuthorization", () => {
       testDb,
     );
 
-    expect(authorized).toEqual(new Set());
+    expect(authorized).toEqual({ member: false, liveSessionIds: new Set() });
+  });
+
+  test("answers membership for a stream no browser session holds", async () => {
+    for (const sessionIds of [[], [expiredOwnerSessionId]]) {
+      expect(
+        await resolveUserRealtimeAuthorization(
+          { organizationId: orgFull, sessionIds, userId: ownerInFull },
+          testDb,
+        ),
+      ).toEqual({ member: true, liveSessionIds: new Set() });
+    }
+    expect(
+      await resolveUserRealtimeAuthorization(
+        { organizationId: orgEmpty, sessionIds: [], userId: memberInFull },
+        testDb,
+      ),
+    ).toEqual({ member: false, liveSessionIds: new Set() });
   });
 });
 

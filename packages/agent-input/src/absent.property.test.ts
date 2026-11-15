@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { ABSENT_PLACEHOLDERS, isAbsentPlaceholder } from "./absent";
 
@@ -20,7 +20,8 @@ const whitespaceArb = fc
 
 describe("placeholders on optional filters", () => {
   test("every placeholder word is absent in any case and spacing", () => {
-    fc.assert(
+    assertProperty(
+      "every placeholder word is absent in any case and spacing",
       fc.property(
         fc.constantFrom(...ABSENT_PLACEHOLDERS),
         fc.array(fc.boolean(), { minLength: 1, maxLength: 8 }),
@@ -31,21 +32,23 @@ describe("placeholders on optional filters", () => {
           expect(isAbsentPlaceholder(spelled)).toBe(true);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a blank string is absent", () => {
-    fc.assert(
+    assertProperty(
+      "a blank string is absent",
       fc.property(whitespaceArb, (blank) => {
         expect(isAbsentPlaceholder(blank)).toBe(true);
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 
   test("a word outside the set is a value, not a placeholder", () => {
-    fc.assert(
+    assertProperty(
+      "a word outside the set is a value, not a placeholder",
       fc.property(fc.stringMatching(/^[a-zA-Z0-9]{5,20}$/u), (word) => {
         fc.pre(
           !ABSENT_PLACEHOLDERS.some(
@@ -54,7 +57,7 @@ describe("placeholders on optional filters", () => {
         );
         expect(isAbsentPlaceholder(word)).toBe(false);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

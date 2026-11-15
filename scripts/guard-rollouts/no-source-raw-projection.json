@@ -1,0 +1,18 @@
+{
+  "id": "no-source-raw-projection",
+  "rules": ["no-source-raw-projection/no-source-raw-projection"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-12T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-source-raw-projection/no-source-raw-projection",
+    "apps/api/src"
+  ]
+}

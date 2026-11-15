@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * What rozhodnuti.nsoud.cz served as a Supreme Court decision's text.
  *
@@ -13,7 +14,8 @@
  * `printHtml`.
  */
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import {
   RETENTION_PROJECTION_FAILURE,
@@ -67,7 +69,7 @@ const projectCzNs = (sourceRaw: string): RetentionProjection => {
     // page, and builds no document from it.
     return { type: "no-text", reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED };
   }
-  const $ = cheerio.load(page.html);
+  const $ = load(page.html);
   const body = $("body");
   body.find("#box-table-a").remove();
   return {

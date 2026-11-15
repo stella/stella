@@ -103,6 +103,7 @@ const CONSUMERS = {
   "apps/api/src/lib/legal-search/legislation-matter-link-provisions.ts":
     "search",
   "apps/api/src/lib/legal-search/legislation-work-names.ts": "search",
+  "apps/api/src/lib/legal-search/case-law-multi-country.ts": "search",
   "apps/api/src/handlers/chat/chat-prompt.ts": "search",
   "apps/api/src/lib/observability/data-invariants/catalog.ts": "search",
   "apps/web/src/lib/case-law-route.ts": "search",
@@ -124,6 +125,8 @@ const CONSUMERS = {
   "apps/api/src/mcp/stella-tools.ts": "mcp",
   "apps/api/src/mcp/legislation-tools.ts": "mcp",
   "apps/api/src/mcp/case-law-search-guidance.ts": "mcp",
+  "apps/api/src/mcp/case-law-search-input.ts": "mcp",
+  "apps/api/src/mcp/case-law-court-catalog-input.ts": "mcp",
   "apps/api/src/mcp/compat-corpus.ts": "mcp",
   "apps/api/src/mcp/compat-shared.ts": "mcp",
   "packages/mcp-apps/src/case-law-results/view.tsx": "mcp",

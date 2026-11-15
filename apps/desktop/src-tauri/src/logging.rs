@@ -10,7 +10,7 @@
 //! platform log directory. It carries levels, event names and codes only:
 //! see `TrailLayer`.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -185,8 +185,13 @@ where
     }
     line.push('\n');
     if let Ok(mut writer) = self.writer.lock() {
-      let _ = writer.write_all(line.as_bytes());
-      let _ = writer.flush();
+      #[expect(
+        clippy::let_underscore_must_use,
+        reason = "the log writer has nowhere to report its own failure"
+      )]
+      let _ = writer
+        .write_all(line.as_bytes())
+        .and_then(|()| writer.flush());
     }
   }
 }
@@ -207,7 +212,7 @@ struct RollingLog {
 
 impl RollingLog {
   fn open(dir: &Path, files: LogFiles) -> io::Result<Self> {
-    fs::create_dir_all(dir)?;
+    crate::local_store::create_private_dir(dir)?;
     let path = dir.join(files.name);
     let file = open_append(&path)?;
     let written = file.metadata()?.len();
@@ -239,7 +244,7 @@ impl RollingLog {
         fs::remove_file(&to)?;
       }
       if from.exists() {
-        fs::rename(&from, &to)?;
+        crate::local_store::rename_private(&from, &to)?;
       }
     }
     self.file = open_append(&self.path)?;
@@ -275,14 +280,15 @@ impl Write for RollingLog {
 // Log lines can name documents and accounts, so the file is private to
 // the user like the rest of the app data.
 fn open_append(path: &Path) -> io::Result<File> {
-  let mut options = OpenOptions::new();
-  options.create(true).append(true);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::OpenOptionsExt;
-    options.mode(0o600);
+  crate::local_store::open_private(crate::local_store::OpenMode::Append, path)
+}
+
+/// Logs a step whose failure must not stop the surrounding flow. Only use
+/// errors whose text carries no credentials or personal data.
+pub fn best_effort<T, E: std::fmt::Display>(result: Result<T, E>, what: &'static str) {
+  if let Err(error) = result {
+    log_cause(&error, what);
   }
-  options.open(path)
 }
 
 /// Logs `cause` as the reason for `what`. Only for causes whose text carries

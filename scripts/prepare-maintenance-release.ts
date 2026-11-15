@@ -1,21 +1,25 @@
 #!/usr/bin/env bun
 
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
 import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
 import { parseChangesetEntry } from "./changeset-entry";
+import {
+  DESKTOP_SUPPORT_FLOOR_PATH,
+  desktopBuildsFromTags,
+  type DesktopSupportFloorMove,
+  moveDesktopSupportFloor,
+} from "./check-desktop-support-floor";
 import { computeProvenanceVerdicts } from "./check-marketing-recordings";
 import { releaseQueueHistoryWarning } from "./check-release-queue-history";
 import {
@@ -31,7 +35,6 @@ import {
   selectPromotedReleaseBelow,
   serializeReleaseManifest,
 } from "./promoted-release-policy";
-import { heavyVerdict } from "./release-heavy-verdict";
 
 // Computed filesystem reads retain these repository Markdown inputs.
 export const CI_MARKDOWN_READER_INPUTS = [
@@ -308,6 +311,11 @@ export const foldSupersededChangelog = ({
   }
   return `${older.body}\n${PACKAGES_HEADING}\n\n${entries.map((entry) => `${entry}\n`).join("")}`;
 };
+
+const isVersionAhead = (version: StableVersion, reference: StableVersion) =>
+  (version.major - reference.major ||
+    version.minor - reference.minor ||
+    version.patch - reference.patch) > 0;
 
 export const parseStableVersion = (value: string): StableVersion => {
   const match = STABLE_VERSION_PATTERN.exec(value);
@@ -997,15 +1005,12 @@ export type ReleaseCutGate = {
   evidence: string;
   runUrl: string | null;
   failingJobs: readonly string[];
-  /** Advisory jobs that failed in a run the gate still counts as green. */
-  advisoryJobs: readonly string[];
 };
 
 const readGitHubPages = async (
   path: string,
   readJson: GitHubJsonReader,
   itemsOf: (payload: unknown) => unknown,
-  onPage?: (payload: unknown) => void,
 ): Promise<unknown[]> => {
   const items: unknown[] = [];
   for (let page = 1; page <= GITHUB_PAGE_LIMIT; page += 1) {
@@ -1013,7 +1018,6 @@ const readGitHubPages = async (
     const raw = await readJson(
       `${path}${separator}per_page=${String(GITHUB_PAGE_SIZE)}&page=${String(page)}`,
     );
-    onPage?.(raw);
     const payload = itemsOf(raw);
     if (!Array.isArray(payload)) {
       throw new MaintenanceReleaseError(
@@ -1043,8 +1047,6 @@ type RunJobsRead =
   | {
       readonly kind: "jobs";
       readonly jobs: readonly unknown[];
-      /** The API's own count of the run's jobs, to prove the pages complete. */
-      readonly total: unknown;
     }
   | { readonly kind: "unreadable"; readonly failing: string[] };
 
@@ -1059,15 +1061,11 @@ const readRunJobs = async (
       failing: [`(no workflow run linked: ${String(runUrl)})`],
     };
   }
-  let total: unknown;
   const jobsResult = await Result.tryPromise(async () =>
     readGitHubPages(
       `/actions/runs/${runId}/jobs?filter=latest`,
       readJson,
       (payload) => (isRecord(payload) ? payload["jobs"] : undefined),
-      (payload) => {
-        total ??= isRecord(payload) ? payload["total_count"] : undefined;
-      },
     ),
   );
   if (Result.isError(jobsResult)) {
@@ -1079,7 +1077,7 @@ const readRunJobs = async (
       ],
     };
   }
-  return { kind: "jobs", jobs: jobsResult.value, total };
+  return { kind: "jobs", jobs: jobsResult.value };
 };
 
 const failingJobNames = (read: RunJobsRead): string[] => {
@@ -1109,115 +1107,16 @@ const STATUS_STATES: Record<string, ReleaseCutGate["state"]> = {
   success: "success",
 };
 
-const HEAVY_RUN_EVENTS = new Set(["push", "workflow_dispatch", "schedule"]);
-
-/** The two artifacts ci-result uploads; each holds `<name>.json`. */
-export type RequiredArtifact = "ci-required-summary" | "ci-required-violations";
-export type RequiredRecordReader = (
-  runId: string,
-  artifact: RequiredArtifact,
-) => Promise<unknown>;
-
-const readRequiredRecord: RequiredRecordReader = async (runId, artifact) => {
-  const directory = mkdtempSync(
-    nodePath.join(tmpdir(), "stella-required-record-"),
-  );
-  try {
-    const token = githubToken();
-    const download = Bun.spawn(
-      [
-        "bash",
-        nodePath.join(ROOT_DIR, "scripts/gh-retry.sh"),
-        "run",
-        "download",
-        runId,
-        "-R",
-        "stella/stella",
-        "-n",
-        artifact,
-        "-D",
-        directory,
-      ],
-      {
-        env: token === null ? process.env : { ...process.env, GH_TOKEN: token },
-        stderr: "ignore",
-        stdout: "ignore",
-      },
-    );
-    if ((await download.exited) !== 0) {
-      throw new MaintenanceReleaseError(
-        `Could not download ${artifact} of run ${runId}`,
-      );
-    }
-    const text = readFileSync(
-      nodePath.join(directory, `${artifact}.json`),
-      "utf-8",
-    );
-    const record: unknown = JSON.parse(text);
-    return record;
-  } finally {
-    rmSync(directory, { force: true, recursive: true });
-  }
-};
-
-/**
- * Mirrors the shell gate's provenance check on a failed main/heavy run: the
- * linked run is this repository's main-heavy.yml on main for the cut commit,
- * and it completed with conclusion failure. Returns the run's current
- * attempt; unreadable or mismatched is null.
- */
-const failedHeavyRunMatches = async (
-  runUrl: string | null,
-  sha: string,
-  readJson: GitHubJsonReader,
-): Promise<number | null> => {
-  const runId = runIdFromUrl(runUrl);
-  if (runId === null) {
-    return null;
-  }
-  const runResult = await Result.tryPromise(async () =>
-    readJson(`/actions/runs/${runId}`),
-  );
-  if (Result.isError(runResult) || !isRecord(runResult.value)) {
-    return null;
-  }
-  const linked = runResult.value;
-  const repository = linked["repository"];
-  const event = linked["event"];
-  const attempt = linked["run_attempt"];
-  const matches =
-    typeof attempt === "number" &&
-    Number.isInteger(attempt) &&
-    attempt > 0 &&
-    String(linked["id"]) === runId &&
-    linked["html_url"] === runUrl &&
-    isRecord(repository) &&
-    repository["full_name"] === "stella/stella" &&
-    linked["path"] === ".github/workflows/main-heavy.yml" &&
-    linked["head_branch"] === "main" &&
-    typeof event === "string" &&
-    HEAVY_RUN_EVENTS.has(event) &&
-    linked["display_title"] === `Main heavy suites ${sha}` &&
-    (event === "workflow_dispatch" || linked["head_sha"] === sha) &&
-    linked["status"] === "completed" &&
-    linked["conclusion"] === "failure";
-  return matches ? attempt : null;
-};
-
 type GateFromStatusOptions = {
   spec: ReleaseCutGateSpec;
-  sha: string;
   status: Record<string, unknown>;
   readJson: GitHubJsonReader;
-  readRecord: RequiredRecordReader;
 };
 
 const gateFromStatus = async ({
   spec,
-  sha,
   status,
   readJson,
-  readRecord,
 }: GateFromStatusOptions): Promise<ReleaseCutGate> => {
   const creator = status["creator"];
   const login = isRecord(creator) ? creator["login"] : undefined;
@@ -1239,50 +1138,14 @@ const gateFromStatus = async ({
     evidence,
     runUrl,
     failingJobs: [],
-    advisoryJobs: [],
   };
   if (state === "success") {
     return gate;
   }
-  const read = await readRunJobs(runUrl, readJson);
-  // Only a plain `failure` status can be advisory: `error` means the run
-  // failed for infrastructure reasons, and an untrusted creator proves nothing.
-  if (
-    spec.context === "main/heavy" &&
-    login === TRUSTED_STATUS_CREATOR &&
-    status["state"] === "failure" &&
-    read.kind === "jobs"
-  ) {
-    const runAttempt = await failedHeavyRunMatches(runUrl, sha, readJson);
-    if (runAttempt === null) {
-      return { ...gate, failingJobs: failingJobNames(read) };
-    }
-    const runId = String(runIdFromUrl(runUrl));
-    const recordResult = await Result.tryPromise(async () =>
-      readRecord(runId, "ci-required-summary"),
-    );
-    const violationsResult = await Result.tryPromise(async () =>
-      readRecord(runId, "ci-required-violations"),
-    );
-    const verdict = heavyVerdict({
-      jobs: read.jobs,
-      total: read.total,
-      record: Result.isOk(recordResult) ? recordResult.value : null,
-      violations: Result.isOk(violationsResult) ? violationsResult.value : null,
-      runId: Number(runId),
-      runAttempt,
-      head: sha,
-    });
-    if (verdict.advisoryOnly) {
-      return {
-        ...gate,
-        state: "success",
-        evidence: `${evidence}; only advisory jobs failed`,
-        advisoryJobs: verdict.advisory,
-      };
-    }
-  }
-  return { ...gate, failingJobs: failingJobNames(read) };
+  return {
+    ...gate,
+    failingJobs: failingJobNames(await readRunJobs(runUrl, readJson)),
+  };
 };
 
 const gateFromScheduledRun = async (
@@ -1309,7 +1172,6 @@ const gateFromScheduledRun = async (
       evidence: "no status and no scheduled run on the commit",
       runUrl: null,
       failingJobs: [],
-      advisoryJobs: [],
     };
   }
   if (latest["head_sha"] !== sha || latest["event"] !== "schedule") {
@@ -1335,7 +1197,6 @@ const gateFromScheduledRun = async (
       state === "success"
         ? []
         : failingJobNames(await readRunJobs(runUrl, readJson)),
-    advisoryJobs: [],
   };
 };
 
@@ -1348,7 +1209,6 @@ const gateFromScheduledRun = async (
 export const readReleaseCutGates = async (
   sha: string,
   readJson: GitHubJsonReader = readGitHubJson,
-  readRecord: RequiredRecordReader = readRequiredRecord,
 ): Promise<readonly ReleaseCutGate[]> => {
   const unreadable = (
     spec: ReleaseCutGateSpec,
@@ -1360,7 +1220,6 @@ export const readReleaseCutGates = async (
     evidence: cause instanceof Error ? cause.message : String(cause),
     runUrl: null,
     failingJobs: [],
-    advisoryJobs: [],
   });
   const statusesResult = await Result.tryPromise(async () =>
     readGitHubPages(`/commits/${sha}/statuses`, readJson, (payload) => payload),
@@ -1379,7 +1238,7 @@ export const readReleaseCutGates = async (
       (entry) => isRecord(entry) && entry["context"] === spec.context,
     );
     if (isRecord(status)) {
-      return gateFromStatus({ spec, sha, status, readJson, readRecord });
+      return gateFromStatus({ spec, status, readJson });
     }
     if (spec.scheduledRunFallback) {
       return gateFromScheduledRun(spec, sha, readJson);
@@ -1391,7 +1250,6 @@ export const readReleaseCutGates = async (
       evidence: "no status on the commit",
       runUrl: null,
       failingJobs: [],
-      advisoryJobs: [],
     };
   };
   return Promise.all(
@@ -1440,13 +1298,55 @@ const resolveHeadSha = (rootDir: string): string => {
   return sha;
 };
 
+/** Whether a merge-group receipt stands in for main/heavy and main/pr-depth. */
+export type ReceiptCoverage = "covered" | "not_covered";
+
+/** Answers receipt coverage for a commit; a throw counts as not covered. */
+export type ReceiptCoverageReader = (sha: string) => Promise<ReceiptCoverage>;
+
+const RELEASE_REPOSITORY = "stella/stella";
+
+const RECEIPT_COVERAGE_COMMAND = [
+  "bash",
+  "scripts/check-release-receipt-coverage.sh",
+] as const;
+
+/**
+ * The proof the release health check (check-release-main-health.sh) accepts
+ * for a main commit that carries no release-candidate tag, asked of the
+ * script that owns it with the repository and commit appended to `command`.
+ * Only its exit 0 is coverage: no receipt, uncovered history, any other exit
+ * and a command that cannot start all keep both statuses required.
+ */
+export const receiptCoverageReader =
+  (
+    command: readonly string[] = RECEIPT_COVERAGE_COMMAND,
+  ): ReceiptCoverageReader =>
+  async (sha) => {
+    const spawned = Result.try(() =>
+      Bun.spawn([...command, RELEASE_REPOSITORY, sha], {
+        cwd: ROOT_DIR,
+        stderr: "inherit",
+        stdin: "ignore",
+        stdout: "ignore",
+      }),
+    );
+    if (Result.isError(spawned)) {
+      return "not_covered";
+    }
+    return (await spawned.value.exited) === 0 ? "covered" : "not_covered";
+  };
+
 export type ReleaseCutReaders = {
   json?: GitHubJsonReader;
-  record?: RequiredRecordReader;
+  coverage?: ReceiptCoverageReader;
 };
 
 /**
- * Refuses the cut unless main/heavy and main/pr-depth are green on it. With
+ * Refuses the cut unless main/heavy and main/pr-depth are green on it, or,
+ * when neither has failed, a merge-group receipt on it covers them: the same
+ * proof the release health check accepts for a main commit that carries no
+ * release-candidate tag. A failed gate is never covered. With
  * --allow-unproven-main the same verdict is printed and the cut goes on.
  */
 export const assertReleaseCutReady = async (
@@ -1457,22 +1357,28 @@ export const assertReleaseCutReady = async (
     process.stdout.write(text);
   },
 ): Promise<void> => {
-  const gates = await readReleaseCutGates(
-    sha,
-    readers.json ?? readGitHubJson,
-    readers.record ?? readRequiredRecord,
-  );
+  const gates = await readReleaseCutGates(sha, readers.json ?? readGitHubJson);
   const refusal = releaseCutRefusal(sha, gates);
-  for (const gate of gates) {
-    if (gate.advisoryJobs.length > 0) {
-      write(
-        `::warning::maintenance-release: ${gate.context} failed only in advisory jobs (${gate.advisoryJobs.join(", ")}) ${gate.runUrl ?? ""}\n`,
-      );
-    }
-  }
   if (refusal === null) {
     write(
       `maintenance-release: main/heavy and main/pr-depth are green on ${sha}\n`,
+    );
+    return;
+  }
+  // A receipt stands in only for evidence that is absent or not yet in; a
+  // gate that ran and failed refuses whatever the receipt says.
+  const failed = gates.some(({ state }) => state === "failure");
+  const readCoverage = readers.coverage ?? receiptCoverageReader();
+  const coverage = failed
+    ? null
+    : await Result.tryPromise(async () => readCoverage(sha));
+  if (
+    coverage !== null &&
+    Result.isOk(coverage) &&
+    coverage.value === "covered"
+  ) {
+    write(
+      `maintenance-release: a merge-group receipt and validated queue history stand in for main/heavy and main/pr-depth on ${sha}\n`,
     );
     return;
   }
@@ -1677,19 +1583,68 @@ export const assertPreCutGates = async ({
   );
 };
 
+export class IncompleteReleaseListingError extends TaggedError(
+  "IncompleteReleaseListingError",
+)<{ message: string }> {}
+
+const OPEN_RELEASE_LIST_LIMIT = 500;
+
+export const assertNoOpenReleasePullRequests = (listing: unknown): void => {
+  if (!Array.isArray(listing) || listing.length >= OPEN_RELEASE_LIST_LIMIT) {
+    throw new IncompleteReleaseListingError({
+      message:
+        "Open release pull request listing is incomplete; cannot cut a release",
+    });
+  }
+  const blockers: string[] = [];
+  for (const pull of listing) {
+    if (
+      !isRecord(pull) ||
+      typeof pull["title"] !== "string" ||
+      typeof pull["number"] !== "number" ||
+      !Number.isSafeInteger(pull["number"]) ||
+      pull["number"] <= 0 ||
+      typeof pull["headRefOid"] !== "string" ||
+      !/^[0-9a-f]{40}$/u.test(pull["headRefOid"])
+    ) {
+      throw new IncompleteReleaseListingError({
+        message:
+          "Open release pull request listing is incomplete or invalid; cannot cut a release",
+      });
+    }
+    if (pull["title"].startsWith("chore: release v")) {
+      blockers.push(
+        `#${pull["number"]} ${pull["title"]} (head ${pull["headRefOid"].slice(0, 7)}); land it first (merge-bar ${pull["number"]})`,
+      );
+    }
+  }
+  if (blockers.length > 0) {
+    throw new MaintenanceReleaseError(
+      `Earlier release pull requests are still open: ${blockers.join("; ")}`,
+    );
+  }
+};
+
 /** Everything the cut does besides its own release file writes. */
 export type MaintenanceCutEffects = {
   readonly rootDir: string;
   readonly assertCleanWorktree: () => void;
   readonly resolveHeadSha: () => string;
   readonly latestFinalVersion: () => string;
-  readonly assertNoOpenRelease: () => void;
+  readonly listOpenPullRequests: () => unknown;
   readonly openReleasePullRequest: (version: string) => void;
   readonly runGate: CutGateRunner;
   readonly queueHistoryWarning: (baseSha: string) => string | null;
   readonly readPreviousRelease: (tag: string) => Promise<PreviousRelease>;
   readonly ensureFreshRecordings: (reviewReason: string) => void;
   readonly versionPackages: (rootDir: string) => void;
+  /**
+   * Writes the desktop support floor that this cut's clock and the release
+   * dates give (docs/releases.md, "Desktop Support").
+   */
+  readonly moveDesktopSupportFloor: (
+    releaseDates: ReleaseDates,
+  ) => DesktopSupportFloorMove;
   /** Checks the written release: its changelog and marketing provenance. */
   readonly checkPreparedRelease: (version: string) => void;
   readonly write: (text: string) => void;
@@ -1706,25 +1661,43 @@ export const cutMaintenanceRelease = async (
   const { rootDir } = effects;
   const options = parseMaintenanceReleaseOptions(args);
   effects.assertCleanWorktree();
-  effects.assertNoOpenRelease();
-  const current = parseStableVersion(effects.latestFinalVersion());
-  const previousFinalTag = `v${current.value}`;
+  assertNoOpenReleasePullRequests(effects.listOpenPullRequests());
+  const latestFinal = parseStableVersion(effects.latestFinalVersion());
+  const previousFinalTag = `v${latestFinal.value}`;
+  const versionOnMain = parseStableVersion(
+    readFileSync(nodePath.join(rootDir, "VERSION"), "utf-8").trim(),
+  );
+  // A release pull request merged before its final tag leaves VERSION ahead of
+  // every final. Its number cannot be cut again: the changelog already exists
+  // and the release tree must change VERSION. The cut supersedes it instead.
+  const supersedesVersionOnMain = isVersionAhead(versionOnMain, latestFinal);
+  const current = supersedesVersionOnMain ? versionOnMain : latestFinal;
+  const previousTag = `v${current.value}`;
   const baseSha = effects.resolveHeadSha();
-  // GitHub's verdict on the previous final, read before any gate: the npm
+  // GitHub's verdict on the previous release, read before any gate: the npm
   // gate checks against the manifest the release PR will carry, which the
   // preparation writes.
-  const previousRelease = await effects.readPreviousRelease(previousFinalTag);
-  const recordedDates = readReleaseManifest(rootDir).releases;
+  const previousRelease = await effects.readPreviousRelease(previousTag);
+  // The fetch saw no final tag for VERSION, so any other verdict means one was
+  // pushed since. Cutting on would keep its notes out of the changelog and
+  // check npm against the older final.
+  if (supersedesVersionOnMain && previousRelease.kind !== "superseded") {
+    throw new MaintenanceReleaseError(
+      `${previousTag} gained a final tag after this cut fetched tags; run the cut again`,
+    );
+  }
+  // The publication manifest as the preparation below writes it.
+  const releaseDates = projectReleaseDates({
+    dates: readReleaseManifest(rootDir).releases,
+    previousRelease,
+    previousTag,
+  });
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
     context: {
       baseSha,
       previousFinalTag,
-      releaseDates: projectReleaseDates({
-        dates: recordedDates,
-        previousRelease,
-        previousTag: previousFinalTag,
-      }),
+      releaseDates,
       rootDir,
       write: effects.write,
     },
@@ -1748,13 +1721,17 @@ export const cutMaintenanceRelease = async (
         rootDir,
         versionPackages: effects.versionPackages,
       });
+      // The floor rides in the release change, so the API this release builds
+      // refuses exactly the builds its own dates end support for.
+      const desktopSupportFloor = effects.moveDesktopSupportFloor(releaseDates);
       effects.checkPreparedRelease(release.version);
-      return release;
+      return { ...release, desktopSupportFloor };
     },
     paths: [
       nodePath.join(rootDir, RECORDINGS_MANIFEST_PATH),
       nodePath.join(rootDir, "VERSION"),
       nodePath.join(rootDir, RELEASE_DATES_PATH),
+      nodePath.join(rootDir, DESKTOP_SUPPORT_FLOOR_PATH),
       nodePath.join(rootDir, `docs/changelog/v${next.value}.md`),
       nodePath.join(rootDir, `docs/changelog/v${current.value}.md`),
       nodePath.join(rootDir, CHANGESET_DIRECTORY, `release-v${next.value}.md`),
@@ -1773,6 +1750,9 @@ export const cutMaintenanceRelease = async (
             `  ${prepared.foldedChangelogPath} (removed: never tagged, notes folded into ${prepared.changelogPath})`,
           ]),
       `  ${RELEASE_DATES_PATH} (${prepared.previousTag}${PREVIOUS_RELEASE_NOTE[previousRelease.kind]})`,
+      prepared.desktopSupportFloor.from === prepared.desktopSupportFloor.to
+        ? `  ${DESKTOP_SUPPORT_FLOOR_PATH} (desktop support floor stays ${prepared.desktopSupportFloor.to})`
+        : `  ${DESKTOP_SUPPORT_FLOOR_PATH} (desktop support floor ${prepared.desktopSupportFloor.from} to ${prepared.desktopSupportFloor.to})`,
       ...(prepared.changesets.length === 0
         ? []
         : [
@@ -1827,7 +1807,7 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
   assertCleanWorktree: () => {
     assertCleanWorktree(rootDir);
   },
-  assertNoOpenRelease: () => {
+  listOpenPullRequests: () => {
     const listing = spawnOutput([
       "gh",
       "pr",
@@ -1839,30 +1819,16 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
       "--base",
       "main",
       "--limit",
-      "500",
+      String(OPEN_RELEASE_LIST_LIMIT),
       "--json",
-      "title",
+      "number,title,headRefOid",
     ]);
     if (listing === null) {
       throw new MaintenanceReleaseError(
         "Could not read open release pull requests",
       );
     }
-    const pulls: unknown = JSON.parse(listing);
-    if (
-      !Array.isArray(pulls) ||
-      pulls.length >= 500 ||
-      pulls.some(
-        (pull: unknown) =>
-          isRecord(pull) &&
-          typeof pull["title"] === "string" &&
-          pull["title"].startsWith("chore: release v"),
-      )
-    ) {
-      throw new MaintenanceReleaseError(
-        "An earlier release pull request is still open, or the listing is incomplete",
-      );
-    }
+    return JSON.parse(listing);
   },
   openReleasePullRequest: (version) => {
     // scripts/release-branch.sh owns the name the release source check accepts.
@@ -1901,6 +1867,15 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
   readPreviousRelease,
   ensureFreshRecordings,
   versionPackages: runChangesetVersion,
+  moveDesktopSupportFloor: (releases) =>
+    moveDesktopSupportFloor({
+      rootDir,
+      releases,
+      isDesktopBuild: desktopBuildsFromTags(rootDir),
+      // The cut's own clock: support ends as of the release being cut.
+      now: new Date(),
+      writeFile: atomicWriteFile,
+    }),
   checkPreparedRelease: (version) => {
     run(["bash", "scripts/check-release-changelog.sh", "--version", version]);
     run(["bun", "run", "marketing:provenance", "--strict"]);

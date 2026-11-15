@@ -26,6 +26,54 @@ const createTarget = (
 });
 
 describe("mark column flag metadata planning", () => {
+  test("flag and lock changes carry a person's replacement of a machine value", () => {
+    const target = createTarget("ent_override", "ver_override");
+    const override = {
+      machine: {
+        content: { version: 1, type: "text", value: "Acme Ltd" },
+        settlement: { type: "value", runId: "run-1", settledAt: LOCKED_AT },
+        justification: null,
+      },
+      editedBy: "user_editor",
+      editedAt: LOCKED_AT,
+      reason: null,
+    } as const;
+    const existingRows = [
+      {
+        entityVersionId: target.entityVersionId,
+        metadata: {
+          version: 1 as const,
+          manualFlags: [],
+          locked: true,
+          lockProvenance: {
+            lockedBy: "user_editor",
+            lockedAt: LOCKED_AT,
+            reason: "manual-edit" as const,
+          },
+          override,
+        },
+      },
+    ];
+    const common = {
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      targets: [target],
+      existingRows,
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    };
+
+    const flagged = buildColumnFlagMutation({
+      ...common,
+      flag: "needs-review",
+      set: true,
+    });
+    const unlocked = buildColumnLockMutation({ ...common, set: false });
+
+    expect(flagged.insertValues.at(0)?.metadata.override).toEqual(override);
+    expect(unlocked.insertValues.at(0)?.metadata.override).toEqual(override);
+  });
+
   test("sorts targets before advisory lock acquisition", () => {
     const first = createTarget("ent_first", "ver_001");
     const second = createTarget("ent_second", "ver_002");

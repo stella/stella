@@ -38,6 +38,8 @@
 
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
+import { declareFailureClass, type FailureReason } from "@stll/errors";
+
 import type {
   ImmediatePublisherSlotResult,
   PublisherPacingOutcome,
@@ -72,13 +74,29 @@ const READ_BUDGET_LABEL = "caseLaw.deferredDocumentRead";
 /** Concurrent read-through fetches allowed at a time. */
 const CONCURRENT_FETCH_LIMIT = 2;
 
+export type DocumentReadDeferral =
+  PublisherPacingOutcome | "ownership-busy" | "ownership-lost";
+
+/**
+ * Every deferral is a designed outcome: the reader gets the metadata-only
+ * decision and the queue keeps the work. None of them is a defect, so each
+ * is graded by its cause rather than by the tag's baseline.
+ */
+const DEFERRAL_REASON = {
+  "pacing-deferred": "work_capacity_unavailable",
+  "pacing-unavailable": "limiter_store_unavailable",
+  "ownership-busy": "deferred_document_owned_elsewhere",
+  "ownership-lost": "deferred_document_owned_elsewhere",
+} as const satisfies Record<DocumentReadDeferral, FailureReason>;
+
 class DocumentPacingOutcome extends TaggedError("DocumentPacingOutcome")<{
   message: string;
   outcome: DocumentReadDeferral;
-}> {}
-
-export type DocumentReadDeferral =
-  PublisherPacingOutcome | "ownership-busy" | "ownership-lost";
+}> {
+  static {
+    declareFailureClass(this, ({ outcome }) => DEFERRAL_REASON[outcome]);
+  }
+}
 
 const CAPTURE_SOURCE = "case-law-document-on-demand";
 
@@ -91,6 +109,15 @@ const inFlight = new Map<
   SafeId<"caseLawDecision">,
   Promise<BackfilledDocument | null>
 >();
+
+/**
+ * Frees every concurrency slot. A test whose fetch never settles keeps its
+ * slot for the life of the process, so each test starts from empty slots
+ * rather than from whatever the tests before it left running.
+ */
+export const resetDocumentFetchesForTesting = (): void => {
+  inFlight.clear();
+};
 
 export type DeferredDocumentState = {
   adapterKey: string;
@@ -196,10 +223,28 @@ export const recordDocumentPacingOutcome = (
  * under one event per slow read. `Result.tryPromise` reports a rejection
  * as an `UnhandledException` carrying the original as its cause, so the
  * label is read through that wrapper as well as directly.
+ *
+ * The request's public-read scope can run out before this budget does: its
+ * signal then aborts the fetch, or a read that starts after it, with the
+ * signal's own `TimeoutError`. That is the same designed expiry, reached
+ * through the caller's deadline instead of this one.
  */
 const isReadBudgetExpiry = (error: unknown): boolean => {
   const raised = error instanceof UnhandledException ? error.cause : error;
-  return TimeoutError.is(raised) && raised.label === READ_BUDGET_LABEL;
+  return (
+    (TimeoutError.is(raised) && raised.label === READ_BUDGET_LABEL) ||
+    (raised instanceof DOMException && raised.name === "TimeoutError")
+  );
+};
+
+/** Record a read-through failure unless it is the read running out of time. */
+const recordReadFailure = (
+  error: unknown,
+  decisionId: SafeId<"caseLawDecision">,
+): void => {
+  if (!isReadBudgetExpiry(error)) {
+    recordFailure(error, decisionId);
+  }
 };
 
 type FetchDeferredDocumentOptions = {
@@ -229,7 +274,7 @@ const runFetch = async ({
         deps.recordPacingOutcome(decision.id, budgeted.status);
         return null;
       case "failed":
-        recordFailure(budgeted.error, decision.id);
+        recordReadFailure(budgeted.error, decision.id);
         return null;
       case "completed":
         if (
@@ -255,7 +300,7 @@ const runFetch = async ({
   });
 
   if (Result.isError(outcome)) {
-    recordFailure(outcome.error, decision.id);
+    recordReadFailure(outcome.error, decision.id);
     return null;
   }
 
@@ -321,7 +366,7 @@ export const readThroughDeferredDocument = async ({
         async () => await deps.recordRequest(decision.id),
       );
       if (Result.isError(recorded)) {
-        recordFailure(recorded.error, decision.id);
+        recordReadFailure(recorded.error, decision.id);
       }
     }
 
@@ -357,9 +402,7 @@ export const readThroughDeferredDocument = async ({
       ),
   );
   if (Result.isError(outcome)) {
-    if (!isReadBudgetExpiry(outcome.error)) {
-      recordFailure(outcome.error, decision.id);
-    }
+    recordReadFailure(outcome.error, decision.id);
     return null;
   }
 

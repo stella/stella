@@ -42,7 +42,17 @@ import { MCP_DISCOVERY_PATH } from "@/api/mcp/resource-policy-contract";
 import { judgeMcpToolLatency } from "@/api/mcp/tool-latency-budgets";
 import { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "@/api/mcp/transport-contract";
 
+import {
+  type CallCaseLawTool,
+  sampleCaseLawIdentities,
+} from "./mcp-canary-case-law-identity";
 import { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
+import {
+  describeReleaseLoad,
+  jobsRunDuringLoad,
+  judgeReleaseLoad,
+  runReleaseLoad,
+} from "./mcp-canary-release-load";
 
 export { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
 
@@ -889,6 +899,55 @@ export const AUTHENTICATED_PROBES = [
   },
 ] as const satisfies readonly AuthenticatedProbe[];
 
+const CASE_LAW_IDENTITY_PROBE_ID = 4;
+
+/** A case-law tool call's JSON payload, or the line saying why there is none. */
+const caseLawToolCaller =
+  (
+    { baseUrl, token }: CanaryTarget,
+    fetcher: CanaryFetcher = deploymentFetcher,
+  ): CallCaseLawTool =>
+  async (name, args) => {
+    const response = await postJsonRpc(
+      {
+        baseUrl,
+        token,
+        era: "modern",
+        id: CASE_LAW_IDENTITY_PROBE_ID,
+        method: "tools/call",
+        params: { name, arguments: args },
+      },
+      fetcher,
+    );
+    const result = jsonRpcResult(response.body);
+    const text =
+      response.status === 200 && result && result["isError"] !== true
+        ? firstContentText(result)
+        : undefined;
+    if (text === undefined) {
+      return { type: "error", detail: describeToolCallFailure(response) };
+    }
+    const payload = Result.try((): unknown => JSON.parse(text));
+    return payload.isOk()
+      ? { type: "ok", payload: payload.value }
+      : { type: "error", detail: "tool content is not JSON" };
+  };
+
+/** One result per probed country: a sampled decision resolves to itself. */
+const runCaseLawIdentityProbes = async (
+  target: CanaryTarget,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> =>
+  (await sampleCaseLawIdentities(caseLawToolCaller(target, fetcher))).map(
+    ({ country, outcome: { status, detail } }) => ({
+      name: `case-law identity (${country})`,
+      status: status === "not_applicable" ? PROBE_STATUS.notApplicable : status,
+      detail,
+    }),
+  );
+
+// Concurrent because both eras are stateless: neither the legacy initialize
+// nor the modern per-request envelope establishes state for another probe.
 // Credentialed probes share the caller's action admission capacity.
 export const runAuthenticatedProbes = async (
   target: CanaryTarget,
@@ -1535,12 +1594,120 @@ export const runDesktopProbe = async (
   return results;
 };
 
+const RELEASE_LOAD_PROBE = "release load during scheduled jobs";
+
+const scheduledLoadRunsSchema = v.object({
+  runs: v.array(
+    v.object({
+      jobId: v.string(),
+      startedAt: v.string(),
+      finishedAt: v.nullable(v.string()),
+    }),
+  ),
+});
+
+/**
+ * Brings the scheduled corpus jobs forward, runs the MCP load while they run
+ * (`mcp-canary-release-load.ts`), and fails when a heavy tool's 95th
+ * percentile is over its budget or when no job ran inside the window.
+ */
+export const runReleaseLoadProbe = async (
+  { baseUrl, token, smokeSecret }: CanaryTarget & { smokeSecret: string },
+  fetcher: CanaryFetcher = deploymentFetcher,
+  load: typeof runReleaseLoad = runReleaseLoad,
+): Promise<ProbeResult> =>
+  await runNamedProbe(RELEASE_LOAD_PROBE, async () => {
+    const jobsUrl = new URL("/smoke/scheduled-jobs", baseUrl);
+    const smokeHeaders = { "x-smoke-secret": smokeSecret };
+    const forward = await readProbeResponse(
+      await fetcher(jobsUrl, {
+        method: "POST",
+        headers: smokeHeaders,
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    if (
+      forward.status !== 200 ||
+      !v.is(
+        v.object({ dueAt: v.string(), jobs: v.array(v.unknown()) }),
+        forward.body,
+      )
+    ) {
+      return failed(
+        RELEASE_LOAD_PROBE,
+        "could not bring the scheduled corpus jobs forward",
+      );
+    }
+    const search = await readProbeResponse(
+      await fetcher(new URL("/v1/case/decisions/search", baseUrl), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: "contract", country: "CZ", limit: 5 }),
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    const decisionIds = v.is(
+      v.object({ hits: v.array(v.object({ decisionId: v.string() })) }),
+      search.body,
+    )
+      ? search.body.hits.map(({ decisionId }) => decisionId)
+      : [];
+    if (decisionIds.length === 0) {
+      return failed(RELEASE_LOAD_PROBE, "no case-law decision to read");
+    }
+    let id = 100;
+    const { samples, window } = await load({
+      decisionIds,
+      call: async ({ toolName, arguments: args }) => {
+        id += 1;
+        const response = await postJsonRpc(
+          {
+            baseUrl,
+            token,
+            era: "modern",
+            id,
+            method: "tools/call",
+            params: { name: toolName, arguments: args },
+          },
+          fetcher,
+        );
+        if (response.status === 429) {
+          return "rate_limited";
+        }
+        return evaluateToolCall(response).status === PROBE_STATUS.passed
+          ? "answered"
+          : "failed";
+      },
+    });
+    const { verdicts, failures } = judgeReleaseLoad(samples);
+    const after = await readProbeResponse(
+      await fetcher(jobsUrl, {
+        method: "GET",
+        headers: smokeHeaders,
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    const ran =
+      window !== null && v.is(scheduledLoadRunsSchema, after.body)
+        ? jobsRunDuringLoad(after.body.runs, window)
+        : [];
+    if (ran.length === 0) {
+      failures.push("no scheduled corpus job ran during the load");
+    }
+    const detail = `${describeReleaseLoad(verdicts)}; jobs run during the load: ${ran.join(", ") || "none"}`;
+    return failures.length === 0
+      ? passed(RELEASE_LOAD_PROBE, detail)
+      : failed(RELEASE_LOAD_PROBE, `${failures.join("; ")}; ${detail}`);
+  });
+
 type StagingJourneyOptions = {
   baseUrl: string;
   smokeSecret?: string | undefined;
+  /** Runs the release load after the credentialed probes. */
+  load?: boolean | undefined;
 };
 export const runStagingCredentialJourneys = async (
-  { baseUrl, smokeSecret }: StagingJourneyOptions,
+  { baseUrl, smokeSecret, load = false }: StagingJourneyOptions,
   fetcher: CanaryFetcher = deploymentFetcher,
 ): Promise<ProbeResult[]> => {
   const bootstrapName = "staging credential bootstrap";
@@ -1554,6 +1721,9 @@ export const runStagingCredentialJourneys = async (
         skipped(name, "no staging smoke session available"),
       ),
       skipped("desktop handoff redeem", "missing SMOKE_SESSION_SECRET"),
+      ...(load
+        ? [skipped(RELEASE_LOAD_PROBE, "missing SMOKE_SESSION_SECRET")]
+        : []),
     ];
   }
   const results: ProbeResult[] = [];
@@ -1637,11 +1807,22 @@ export const runStagingCredentialJourneys = async (
           fetcher,
         )),
       );
+      if (load) {
+        results.push(
+          await runReleaseLoadProbe(
+            { baseUrl, token: mintedToken, smokeSecret },
+            fetcher,
+          ),
+        );
+      }
     } else {
       results.push(
         ...AUTHENTICATED_PROBES.map(({ name }) =>
           skipped(name, "staging credential bootstrap failed"),
         ),
+        ...(load
+          ? [skipped(RELEASE_LOAD_PROBE, "staging credential bootstrap failed")]
+          : []),
       );
     }
     const browserCookie = sessionCookie;
@@ -2560,6 +2741,213 @@ export const runReviewAccountJourney = async (
   return results;
 };
 
+const RESEARCH_JOURNEY_NAME = "case-law research column";
+/**
+ * A published decision the hourly read journeys also open
+ * (`scripts/check-journeys.sh`). Its source states no reuse restrictions, the
+ * case a research read once mistook for a missing source.
+ */
+export const RESEARCH_CANARY_DECISION_ID =
+  "01a10c6e-cd77-77cc-97bd-19a8dc2e360c";
+const RESEARCH_ANSWER_DEADLINE_MS = 180_000;
+const RESEARCH_POLL_INTERVAL_MS = 5000;
+const researchColumnSchema = v.object({ id: v.pipe(v.string(), v.nonEmpty()) });
+const researchRunSchema = v.object({ queued: v.literal(1) });
+const researchLookupSchema = v.object({
+  items: v.array(
+    v.object({
+      columnId: v.string(),
+      decisionId: v.string(),
+      state: v.string(),
+      failureReason: v.nullable(v.string()),
+    }),
+  ),
+});
+
+type ResearchColumnJourneyOptions = ReviewAccountJourneyOptions & {
+  environment: "staging" | "production";
+  /** Injected by tests; the poll otherwise waits on the wall clock. */
+  wait?: ((ms: number) => Promise<void>) | undefined;
+  now?: (() => number) | undefined;
+};
+
+/**
+ * Ask one AI research question of a known public decision, through the same
+ * browser API the case-law table uses, and fail on anything but an answer.
+ * Answer runs read the decision, its source terms and its text before any
+ * model is asked, so a read that breaks for every decision fails every cell;
+ * nothing else exercises that path end to end against production data.
+ */
+export const runResearchColumnJourney = async (
+  {
+    baseUrl,
+    configuredBaseUrl,
+    frontendUrl = baseUrl,
+    password,
+    email = "review@stll.app",
+    mode,
+    environment,
+    wait = async (ms) => {
+      await Bun.sleep(ms);
+    },
+    now = () => performance.now(),
+  }: ResearchColumnJourneyOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  if (mode !== "full") {
+    return [];
+  }
+  if (environment !== "production") {
+    return [
+      notApplicable(
+        `${RESEARCH_JOURNEY_NAME}: answer`,
+        "the known decision and the model budget are production's",
+      ),
+    ];
+  }
+  if (!password || baseUrl !== configuredBaseUrl) {
+    return [
+      skipped(
+        `${RESEARCH_JOURNEY_NAME}: sign-in`,
+        !password
+          ? "no REVIEW_ACCOUNT_PASSWORD configured"
+          : "credential withheld: target is not the configured endpoint",
+      ),
+    ];
+  }
+  const context = createReviewJourneyContext(
+    {
+      baseUrl,
+      configuredBaseUrl,
+      frontendUrl,
+      journey: RESEARCH_JOURNEY_NAME,
+    },
+    fetcher,
+  );
+  const { results, state, request, complete } = context;
+  const reject: (assertion: string) => never = context.reject;
+  // The browser reaches the API under the app origin's `/api` prefix, where
+  // the session cookie the sign-in set is sent.
+  const researchUrl = (path: string) =>
+    new URL(`/api/v1/case/research${path}`, frontendUrl);
+  const json = { "content-type": "application/json" };
+  let columnId: string | undefined;
+  const outcome = await Result.tryPromise({
+    try: async () => {
+      await signInReviewAccount({ context, email, password });
+      await checkReviewSession(context, email);
+
+      state.step = "create column";
+      const column = await request(researchUrl("/columns"), {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({
+          question: "Did the court grant the application?",
+          answerType: "single-select",
+          options: [
+            { color: "green", value: "yes" },
+            { color: "red", value: "no" },
+          ],
+        }),
+      });
+      if (!v.is(researchColumnSchema, column)) {
+        reject("expected the created column's id");
+      }
+      const createdColumnId = column.id;
+      columnId = createdColumnId;
+      complete();
+
+      state.step = "run";
+      const run = await request(researchUrl("/answers/run"), {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({
+          columnIds: [createdColumnId],
+          decisionIds: [RESEARCH_CANARY_DECISION_ID],
+          force: true,
+        }),
+      });
+      if (!v.is(researchRunSchema, run)) {
+        reject("expected exactly one queued cell");
+      }
+      complete();
+
+      state.step = "answer";
+      const deadline = now() + RESEARCH_ANSWER_DEADLINE_MS;
+      for (;;) {
+        const lookup = await request(researchUrl("/answers/lookup"), {
+          method: "POST",
+          headers: json,
+          body: JSON.stringify({ decisionIds: [RESEARCH_CANARY_DECISION_ID] }),
+        });
+        if (!v.is(researchLookupSchema, lookup)) {
+          reject("expected the decision's research cells");
+        }
+        const cell = lookup.items.find(
+          (item) => item.columnId === createdColumnId,
+        );
+        if (cell === undefined) {
+          reject("expected a cell for the per-run column");
+        }
+        if (cell.state === "answered" || cell.state === "not_stated") {
+          break;
+        }
+        if (cell.state !== "pending") {
+          reject(
+            `expected an answer, got ${cell.state}${cell.failureReason === null ? "" : ` (${cell.failureReason})`}`,
+          );
+        }
+        if (now() >= deadline) {
+          reject(
+            `cell still pending after ${String(RESEARCH_ANSWER_DEADLINE_MS / 1000)} s`,
+          );
+        }
+        await wait(RESEARCH_POLL_INTERVAL_MS);
+      }
+      complete();
+    },
+    catch: (error) => error,
+  });
+  if (outcome.isErr()) {
+    const error = outcome.error;
+    const name = `${RESEARCH_JOURNEY_NAME}: ${state.step}`;
+    results.push(
+      error instanceof CanaryRateLimitError
+        ? { name, status: PROBE_STATUS.rateLimited, detail: error.message }
+        : failed(
+            name,
+            error instanceof ReviewJourneyError
+              ? error.message
+              : `HTTP unavailable; envelope code none; ${describeProbeFailure(error)}`,
+          ),
+    );
+  }
+  if (columnId !== undefined) {
+    const id = columnId;
+    // A column left behind only clutters the review organization until its
+    // nightly reset, so a failed delete warns rather than fails.
+    const cleanup = await runNamedProbe(
+      `${RESEARCH_JOURNEY_NAME}: delete column`,
+      async () => {
+        state.step = "delete column";
+        await request(researchUrl(`/columns/${encodeURIComponent(id)}`), {
+          method: "DELETE",
+        });
+        return passed(
+          `${RESEARCH_JOURNEY_NAME}: delete column`,
+          "per-run column deleted",
+        );
+      },
+    );
+    results.push(
+      cleanup.status === PROBE_STATUS.failed
+        ? { ...cleanup, status: PROBE_STATUS.warned }
+        : cleanup,
+    );
+  }
+  return results;
+};
+
 const REFRESH_JOURNEY_NAME = "OAuth refresh";
 const REFRESH_ROUNDS = [1, 2, 3] as const;
 const refreshTokenSchema = v.object({
@@ -2977,6 +3365,22 @@ const run = async () => {
       mode,
     })),
   );
+  results.push(
+    ...(await runResearchColumnJourney({
+      baseUrl,
+      environment,
+      configuredBaseUrl:
+        process.env[
+          MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.configuredBaseUrl
+        ] ?? "https://api.stll.app",
+      frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
+      email:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.email],
+      password:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.password],
+      mode,
+    })),
+  );
   if (environment === "staging") {
     results.push(
       ...(await runStagingCredentialJourneys({
@@ -2985,6 +3389,7 @@ const run = async () => {
           process.env[
             MCP_CANARY_JOURNEY_CREDENTIALS.stagingSession.env.smokeSecret
           ],
+        load: process.env["MCP_CANARY_RELEASE_LOAD"] === "on",
       })),
     );
   } else {
@@ -2996,6 +3401,23 @@ const run = async () => {
     );
     if (token) {
       results.push(...(await runAuthenticatedProbes({ baseUrl, token })));
+      // Daily: it samples every court, a few hundred tool calls.
+      if (mode === "full") {
+        const identity = await Result.tryPromise({
+          try: async () => await runCaseLawIdentityProbes({ baseUrl, token }),
+          catch: (error) => error,
+        });
+        results.push(
+          ...(identity.isOk()
+            ? identity.value
+            : [
+                failed(
+                  "case-law identity",
+                  describeProbeFailure(identity.error),
+                ),
+              ]),
+        );
+      }
       results.push(
         await runNamedProbe(
           "canary bearer expiry",

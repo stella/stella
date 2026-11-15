@@ -4,7 +4,6 @@ import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { SettingsPageHeader } from "@/components/settings-page-header";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -17,6 +16,7 @@ import {
 } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
 import { MemoryPanel } from "@/routes/_protected.settings/-components/account/memory/memory-panel";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { memoriesOptions } from "@/routes/_protected.settings/-queries/memories";
 
 export const Route = createFileRoute("/_protected/settings/account/memory")({

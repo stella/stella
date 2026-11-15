@@ -335,8 +335,9 @@ export const findRustExternalModules = (source: string, file = "<source>") => {
 const globalStatics = (code: string) => {
   const names = new Set<string>();
   const declarations: Span[] = [];
+  // `'static` is a lifetime, and `name::` is a path, not a declared type.
   const declaration =
-    /\bstatic\s+(?:mut\s+)?([A-Za-z_]\w*)\s*:\s*([^\s=;][^=;]*)[=;]/gu;
+    /(?<!')\bstatic\s+(?:mut\s+)?([A-Za-z_]\w*)\s*:(?!:)\s*([^\s=;][^=;]*)[=;]/gu;
   for (const match of code.matchAll(declaration)) {
     if (!/\b(?:Mutex|RwLock|OnceLock)\b/u.test(match[2] ?? "")) {
       continue;

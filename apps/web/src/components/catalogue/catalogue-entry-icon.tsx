@@ -27,7 +27,21 @@ type CatalogueEntryIconProps = {
   iconUrl?: string | null;
   /** Pixel size for both the image and the SVG fallback. */
   size?: number;
+  /**
+   * Colour of a glyph drawn in the text colour (the built-in marks and the
+   * MCP fallback). Images and format marks keep their own colours. Without
+   * one, a built-in mark reads as foreground and the fallback as muted.
+   */
+  tone?: CatalogueEntryIconTone;
+  /** Layout only: the tone carries the colour. */
   className?: string;
+};
+
+type CatalogueEntryIconTone = "foreground" | "muted";
+
+const TONE_CLASS: Readonly<Record<CatalogueEntryIconTone, string>> = {
+  foreground: "text-foreground",
+  muted: "text-muted-foreground",
 };
 
 const SLUG_LUCIDE_OVERRIDES: Readonly<Record<string, LucideIcon>> = {
@@ -40,6 +54,7 @@ export const CatalogueEntryIcon = ({
   icon,
   iconUrl,
   size = 24,
+  tone,
   className,
 }: CatalogueEntryIconProps) => {
   const proxiedIconSrc = useProxiedIconSrc(iconUrl);
@@ -53,7 +68,7 @@ export const CatalogueEntryIcon = ({
     if (Icon) {
       return (
         <Icon
-          className={cn(className ?? "text-foreground")}
+          className={cn(TONE_CLASS[tone ?? "foreground"], className)}
           style={{ width: size, height: size }}
         />
       );
@@ -95,7 +110,7 @@ export const CatalogueEntryIcon = ({
 
   return (
     <McpIcon
-      className={cn(className ?? "text-muted-foreground")}
+      className={cn(TONE_CLASS[tone ?? "muted"], className)}
       style={{ width: size, height: size }}
     />
   );

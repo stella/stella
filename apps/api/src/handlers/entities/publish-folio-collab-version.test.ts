@@ -1,8 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import { envBase } from "@/api/env-base";
@@ -186,19 +185,17 @@ describe("publication validates the stored checkpoint identity", () => {
   test.each(["", "ordinary", "Žluťoučký kůň Łódź", "e\u0301"])(
     "accepts the legacy digest of exact DOCX bytes: %j",
     async (text) => {
-      const zip = new JSZip();
-      writeZipEntry(
-        zip,
+      const zip = new ZipArchive();
+      zip.set(
         "[Content_Types].xml",
         `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
       );
-      writeZipEntry(
-        zip,
+      zip.set(
         "word/document.xml",
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`,
       );
       const bytes = new Uint8Array(
-        await zip.generateAsync({ type: "arraybuffer" }),
+        (await zip.generate({ compression: "store" })).buffer,
       );
       const store = startFakeS3();
       const checkpointKey = testFileKey(

@@ -6,6 +6,7 @@ import {
   FOLIO_COLLAB_SEED_PREPARING_CODE,
   toFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { roles } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
@@ -120,7 +121,7 @@ const canStillEditWorkspace = async ({
   const membership = memberships.at(0);
   if (
     !membership ||
-    membership.workspaceStatus !== "active" ||
+    !workspaceAcceptsWrites(membership.workspaceStatus) ||
     !isMemberRole(membership.organizationRole)
   ) {
     return false;

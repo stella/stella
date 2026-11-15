@@ -14,7 +14,6 @@ import {
   oauthAccessToken,
   oauthClient,
   oauthRefreshToken,
-  organization,
   user,
 } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -41,6 +40,7 @@ import {
   refreshOAuthGrant,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -89,8 +89,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       async () => await rootDb.delete(user).where(eq(user.id, coOwnerId)),
     );
     cleanup.push(
-      async () =>
-        await rootDb.delete(organization).where(eq(organization.id, firm.id)),
+      async () => await deleteOrganizationsForTest(rootDb, [firm.id]),
     );
     await rootDb.insert(member).values({
       id: mintAuthProviderIdValue(),

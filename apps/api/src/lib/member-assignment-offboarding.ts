@@ -21,12 +21,17 @@ import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   billingDraftUserSettings,
+  chatBrowserSiteGrants,
+  chatLimitReminders,
   chatToolGrants,
   contacts,
   correspondence,
   desktopEditHandoffs,
   desktopEditSessions,
   desktopPresence,
+  desktopRunnerFolderRestores,
+  desktopRunnerRuns,
+  desktopRunners,
   entities,
   flowDefinitions,
   flowRuns,
@@ -37,6 +42,7 @@ import {
   mcpWebHandoff,
   pdfSigningSessions,
   requestIdempotencyReceipts,
+  searchHistoryCountryClears,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
@@ -44,6 +50,7 @@ import {
   sharepointOAuthState,
   taskAssignees,
   timeEntries,
+  timerActivityDevices,
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
   workObligationEvents,
@@ -71,6 +78,7 @@ import {
   lockOpenSigningPage,
   lockRequestReceiptPrincipalRows,
 } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
@@ -78,6 +86,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { MAX_FLOW_STEPS } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockTaskAssignmentMembers } from "@/api/lib/tasks/assignment-membership";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
@@ -602,7 +611,12 @@ const closeMemberExchanges = async ({
   }
 };
 
-const clearMemberContactAssignments = async ({
+/**
+ * The owner connection reaches one organization's contacts per scope, so the
+ * attorney references are cleared organization by organization: the one the
+ * member leaves, or every organization an account being deleted belongs to.
+ */
+const clearContactAssignmentsByOrganization = async ({
   tx,
   scope,
   userId,
@@ -611,10 +625,45 @@ const clearMemberContactAssignments = async ({
   if (scope.type === "workspace") {
     return;
   }
-  const contactScope =
+  const organizationIds =
     scope.type === "organization"
-      ? eq(contacts.organizationId, scope.organizationId)
-      : undefined;
+      ? [scope.organizationId]
+      : (
+          await tx
+            .select({ organizationId: member.organizationId })
+            .from(member)
+            .where(eq(member.userId, userId))
+        ).map((row) => brandPersistedOrganizationId(row.organizationId));
+  for (const organizationId of organizationIds) {
+    // db-await-in-loop: the owner policy admits one organization's contacts per scope.
+    await withOwnerOrganizationScope(
+      tx,
+      organizationId,
+      async (scopedTx) =>
+        await clearMemberContactAssignments({
+          tx: scopedTx,
+          organizationId,
+          userId,
+          actorUserId,
+        }),
+    );
+  }
+};
+
+type ClearMemberContactAssignmentsOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  actorUserId: SafeId<"user">;
+};
+
+const clearMemberContactAssignments = async ({
+  tx,
+  organizationId,
+  userId,
+  actorUserId,
+}: ClearMemberContactAssignmentsOptions) => {
+  const contactScope = eq(contacts.organizationId, organizationId);
   const attorneyScope = and(
     contactScope,
     or(
@@ -686,32 +735,34 @@ const clearMemberContactAssignments = async ({
     // db-await-in-loop: audit the changed contact page before consuming the next counted batch.
     await recordAuditGroups({
       tx,
-      groups: [...contactsByOrganization].map(([organizationId, rows]) => ({
-        bindings: {
-          organizationId,
-          workspaceId: null,
-          userId: actorUserId,
-          execution: {
-            performer: { type: "user", id: actorUserId },
-            trigger: { type: "system", source: "membership_removal" },
+      groups: [...contactsByOrganization].map(
+        ([auditOrganizationId, rows]) => ({
+          bindings: {
+            organizationId: auditOrganizationId,
+            workspaceId: null,
+            userId: actorUserId,
+            execution: {
+              performer: { type: "user", id: actorUserId },
+              trigger: { type: "system", source: "membership_removal" },
+            },
           },
-        },
-        events: rows.map((row) => ({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
-          resourceId: row.id,
-          workspaceId: null,
-          changes: {
-            ...(row.originatingAttorneyId === userId
-              ? { originatingAttorneyId: { old: userId, new: null } }
-              : {}),
-            ...(row.responsibleAttorneyId === userId
-              ? { responsibleAttorneyId: { old: userId, new: null } }
-              : {}),
-          },
-          metadata: { cause: "membership_removed" },
-        })),
-      })),
+          events: rows.map((row) => ({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
+            resourceId: row.id,
+            workspaceId: null,
+            changes: {
+              ...(row.originatingAttorneyId === userId
+                ? { originatingAttorneyId: { old: userId, new: null } }
+                : {}),
+              ...(row.responsibleAttorneyId === userId
+                ? { responsibleAttorneyId: { old: userId, new: null } }
+                : {}),
+            },
+            metadata: { cause: "membership_removed" },
+          })),
+        }),
+      ),
     });
   }
 };
@@ -879,7 +930,7 @@ export const clearMemberAssignments = async (
   await clearMemberTaskAssignments(options);
   await clearMemberTimeEntryApprovals(options);
   await closeMemberExchanges(options);
-  await clearMemberContactAssignments(options);
+  await clearContactAssignmentsByOrganization(options);
   await clearMemberRequestReceipts(options);
 };
 
@@ -1469,13 +1520,48 @@ type ClearMemberScopedDataOptions = Pick<
   "tx" | "organizationId" | "userId" | "memberId"
 > & { recordAuditEvent: AuditRecorder };
 
-const clearMemberScopedData = async ({
+/**
+ * The member's desktop runners, on the owner connection the runner tables
+ * admit. Runners go first, as a session claim locks a runner before its
+ * runs, so the two never wait on each other; their runs cascade, and the
+ * runs are then deleted by name too, since each keeps its output key.
+ * Queued commands, events and folder restores cascade, and an open runner
+ * socket closes on its next heartbeat.
+ */
+const clearMemberDesktopRunners = async ({
   tx,
   organizationId,
   userId,
   memberId,
   recordAuditEvent,
 }: ClearMemberScopedDataOptions) => {
+  await tx
+    .delete(desktopRunners)
+    .where(
+      and(
+        eq(desktopRunners.organizationId, organizationId),
+        eq(desktopRunners.userId, userId),
+      ),
+    );
+  await tx
+    .delete(desktopRunnerRuns)
+    .where(
+      and(
+        eq(desktopRunnerRuns.organizationId, organizationId),
+        eq(desktopRunnerRuns.userId, userId),
+      ),
+    );
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: organizationId,
+    metadata: { change: "member-desktop-runners-cleared", memberId, userId },
+  });
+};
+
+const clearMemberScopedData = async (options: ClearMemberScopedDataOptions) => {
+  const { tx, organizationId, userId, memberId, recordAuditEvent } = options;
+  await clearMemberDesktopRunners(options);
   await runScopedWorkInTransaction({
     tx,
     organizationId,
@@ -1496,6 +1582,16 @@ const clearMemberScopedData = async ({
           and(
             eq(billingDraftUserSettings.organizationId, organizationId),
             eq(billingDraftUserSettings.userId, userId),
+          ),
+        );
+      // The member's phones in this organization, with the keys their Lock
+      // Screen buttons act with.
+      await scopedTx
+        .delete(timerActivityDevices)
+        .where(
+          and(
+            eq(timerActivityDevices.organizationId, organizationId),
+            eq(timerActivityDevices.userId, userId),
           ),
         );
       await recordAuditEvent(scopedTx, {
@@ -1677,14 +1773,19 @@ export const removeOrganizationMemberInTransaction = async (
         eq(sharepointConnections.userId, userId),
       ),
     );
-  await tx
-    .delete(chatToolGrants)
-    .where(
-      and(
-        eq(chatToolGrants.organizationId, organizationId),
-        eq(chatToolGrants.userId, userId),
-      ),
-    );
+  // The member's own chat settings: tool grants, limit reminders and browser
+  // site approvals.
+  for (const table of [
+    chatToolGrants,
+    chatLimitReminders,
+    chatBrowserSiteGrants,
+  ] as const) {
+    await tx
+      .delete(table)
+      .where(
+        and(eq(table.organizationId, organizationId), eq(table.userId, userId)),
+      );
+  }
   await tx
     .delete(mcpOAuthState)
     .where(
@@ -1761,7 +1862,15 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [requestIdempotencyReceipts.responseBody, "cleared"],
   [member.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
+  [timerActivityDevices.userId, "cleared"],
+  // Removal deletes the member's runners; their runs, queued commands,
+  // events and folder restores cascade, and an open runner socket closes on
+  // its next heartbeat.
+  [desktopRunners.userId, "cleared"],
+  [desktopRunnerRuns.userId, "cleared"],
+  [desktopRunnerFolderRestores.userId, "cleared"],
   [searchHistoryEntries.userId, "cleared"],
+  [searchHistoryCountryClears.userId, "cleared"],
   [searchHistoryOwners.userId, "cleared"],
   [searchHistoryTombstones.userId, "cleared"],
   [workspaceMembers.userId, "cleared"],
@@ -1781,6 +1890,8 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [sharepointConnections.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
   [chatToolGrants.userId, "cleared"],
+  [chatLimitReminders.userId, "cleared"],
+  [chatBrowserSiteGrants.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
   // Revoked by `removeOrganizationMemberWithAuthArtifacts`.

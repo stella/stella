@@ -17,11 +17,11 @@ import {
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { PASTED_TEXT_CHIP_MAX_LINES } from "@/components/chat-pasted-text";
 import translations from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // Editing a sent message on the thread page, through the page's own wiring:
 // the session hook, the runtime registry, the chat runtime and the edit form,

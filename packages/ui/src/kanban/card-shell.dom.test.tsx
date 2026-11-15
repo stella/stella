@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { KanbanCardShell } from "./card-shell";
 import type { KanbanCardShellProps } from "./card-shell";
 
@@ -8,7 +10,7 @@ GlobalRegistrator.register({ url: "https://example.test" });
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 
 afterEach(() => cleanup());
-afterAll(async () => GlobalRegistrator.unregister());
+afterAll(async () => unregisterDomEnvironment());
 
 type SelectionClick = NonNullable<KanbanCardShellProps["onSelectionClick"]>;
 

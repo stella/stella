@@ -17,18 +17,21 @@ use stella_desktop_signing_core::{
 };
 
 use crate::failure::{OS_STATUS_DOMAIN, classify};
+use crate::merge::first_by_key;
 
-/// `errSecItemNotFound`: an empty keychain is a result, not a failure.
+/// `errSecItemNotFound`: an empty keychain, or no token inserted, is a
+/// result, not a failure.
 const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
 
 pub(crate) fn list_identities() -> Result<Vec<SigningIdentity>, SigningError> {
   let now = unix_now();
   let mut identities = Vec::new();
-  for identity in keychain_identities()? {
-    let Ok(certificate) = identity.certificate() else {
-      continue;
-    };
-    let certificate_der = certificate.to_der();
+  for KeychainIdentity {
+    certificate,
+    certificate_der,
+    ..
+  } in keychain_identities()?
+  {
     let chain_certificate_der = certificate_der.clone();
     if let Some(signing) = signing_identity(
       certificate_der,
@@ -61,46 +64,108 @@ pub(crate) fn sign_digest(
   })
 }
 
+/// Searches the same two places the listing does, so a smart card's key is
+/// found wherever its certificate was.
 fn private_key_for(identity_id: &str) -> Result<SecKey, SigningError> {
-  for identity in keychain_identities()? {
-    let Ok(certificate) = identity.certificate() else {
-      continue;
-    };
-    if certificate_fingerprint(&certificate.to_der()) != identity_id {
-      continue;
-    }
-    return identity
-      .private_key()
-      .map_err(|error| SigningError::SignatureFailed {
-        code: os_status_code(&error).unwrap_or(SigningErrorCode::SigningFailed),
-        detail: describe(error),
-      });
-  }
-  Err(SigningError::IdentityNotFound)
+  let identity = keychain_identities()?
+    .into_iter()
+    .find(|identity| identity.fingerprint == identity_id)
+    .ok_or(SigningError::IdentityNotFound)?;
+  identity
+    .identity
+    .private_key()
+    .map_err(|error| SigningError::SignatureFailed {
+      code: os_status_code(&error).unwrap_or(SigningErrorCode::SigningFailed),
+      detail: describe(error),
+    })
 }
 
-fn keychain_identities() -> Result<Vec<SecIdentity>, SigningError> {
-  let results = match ItemSearchOptions::new()
+/// An identity with its certificate already read out, keyed by the
+/// certificate's fingerprint.
+struct KeychainIdentity {
+  identity: SecIdentity,
+  certificate: SecCertificate,
+  certificate_der: Vec<u8>,
+  fingerprint: String,
+}
+
+impl KeychainIdentity {
+  /// `None` for an identity whose certificate cannot be read: nothing could
+  /// name it in the picker or sign with it.
+  fn read(identity: SecIdentity) -> Option<Self> {
+    let certificate = identity.certificate().ok()?;
+    let certificate_der = certificate.to_der();
+    Some(Self {
+      fingerprint: certificate_fingerprint(&certificate_der),
+      identity,
+      certificate,
+      certificate_der,
+    })
+  }
+}
+
+/// Where an identity search looks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SearchScope {
+  /// The file keychains: imported certificates and their keys.
+  Keychains,
+  /// `kSecAttrAccessGroupToken`: what CryptoTokenKit publishes for an
+  /// inserted smart card or other token. Those items live outside the file
+  /// keychains (TN3137 describes the split), so only a search scoped to this
+  /// access group returns them; Chromium's `client_cert_store_mac` runs the
+  /// same pair of searches.
+  Tokens,
+}
+
+/// The file keychains' identities, then the tokens' ones it does not already
+/// hold. One certificate answering both searches keeps the first entry.
+///
+/// Only the file keychain search can fail the listing: a token search that
+/// fails (a token driver error, an entitlement the system asks for) leaves
+/// the imported certificates usable and is logged instead.
+fn keychain_identities() -> Result<Vec<KeychainIdentity>, SigningError> {
+  let keychains = search_identities(SearchScope::Keychains).map_err(|error| {
+    SigningError::KeychainUnavailable {
+      code: os_status_code(&error).unwrap_or(SigningErrorCode::KeychainUnavailable),
+      detail: describe(error),
+    }
+  })?;
+  let tokens = search_identities(SearchScope::Tokens).unwrap_or_else(|error| {
+    let code = error.code();
+    tracing::warn!(
+      code,
+      error = %describe(error),
+      "smart card identities could not be listed"
+    );
+    Vec::new()
+  });
+  Ok(first_by_key([keychains, tokens], |identity| {
+    identity.fingerprint.as_str()
+  }))
+}
+
+fn search_identities(scope: SearchScope) -> Result<Vec<KeychainIdentity>, SecError> {
+  let mut options = ItemSearchOptions::new();
+  options
     .class(ItemClass::identity())
     .load_refs(true)
-    .limit(Limit::All)
-    .search()
-  {
+    .limit(Limit::All);
+  if scope == SearchScope::Tokens {
+    options.access_group_token();
+  }
+  let results = match options.search() {
     Ok(results) => results,
-    Err(error) if error.code() == ERR_SEC_ITEM_NOT_FOUND => Vec::new(),
-    Err(error) => {
-      return Err(SigningError::KeychainUnavailable {
-        code: os_status_code(&error).unwrap_or(SigningErrorCode::KeychainUnavailable),
-        detail: describe(error),
-      });
-    }
+    Err(error) if error.code() == ERR_SEC_ITEM_NOT_FOUND => return Ok(Vec::new()),
+    Err(error) => return Err(error),
   };
 
   Ok(
     results
       .into_iter()
       .filter_map(|result| match result {
-        SearchResult::Ref(Reference::Identity(identity)) => Some(identity),
+        SearchResult::Ref(Reference::Identity(identity)) => {
+          KeychainIdentity::read(identity)
+        }
         _ => None,
       })
       .collect(),
@@ -121,9 +186,17 @@ fn issuer_chain_der(certificate: &SecCertificate, leaf_der: &[u8]) -> Vec<Vec<u8
   // Fetching a missing issuer over the network would put an unbounded wait in
   // front of a picker: what the system already holds is the chain the user
   // can sign with.
+  #[expect(
+    clippy::let_underscore_must_use,
+    reason = "a refused setting only allows a network fetch the chain does not need"
+  )]
   let _ = trust.set_network_fetch_allowed(false);
   // The chain is only readable once an evaluation has run; a failed one still
   // leaves the constructed chain behind.
+  #[expect(
+    clippy::let_underscore_must_use,
+    reason = "a failed evaluation still leaves the constructed chain to read"
+  )]
   let _ = trust.evaluate_with_error();
 
   // `SecTrustCopyCertificateChain`, which `chain()` calls, arrived in macOS

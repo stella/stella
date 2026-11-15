@@ -212,6 +212,16 @@ export const SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET = {
   type: "truncated",
   reason: "exclusion_budget",
 } as const;
+/**
+ * A search that ran several phrasings at once returned the ones that finished
+ * and stopped the rest on its time budget. Only the agent tools merge
+ * phrasings, so only they report it; the HTTP search answers one phrasing and
+ * fails whole instead.
+ */
+export const SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET = {
+  type: "truncated",
+  reason: "time_budget",
+} as const;
 
 export type SearchPaginationOutcome =
   | typeof SEARCH_PAGINATION_COMPLETE

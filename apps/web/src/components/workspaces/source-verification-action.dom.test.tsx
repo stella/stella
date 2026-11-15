@@ -11,12 +11,12 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 
 import arabicMessages from "@/i18n/langs/ar.json";
 import englishMessages from "@/i18n/langs/en.json";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const sourceId = "019a0000-0000-7000-8000-000000000004";
@@ -42,6 +42,8 @@ const itemEntityId = "019a0000-0000-7000-8000-000000000003";
 const utcTimeZone =
   parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const settings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
   capabilities: {},
@@ -53,6 +55,7 @@ const settings = {
   promptCachingEnabled: true,
   managedAIResidency: "eu",
   memoryExtractionEnabled: false,
+  localRunMaxApprovalMode: "full_auto",
   timeMinimumUnitMinutes: 1,
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
@@ -206,8 +209,9 @@ for (const { locale } of [{ locale: "en" }, { locale: "ar" }] as const) {
     });
     await waitFor(() =>
       expect(
-        mounted.queryByRole("button", { name: messages.common.accept }),
-      ).toBeNull(),
+        mounted.queryByRole("button", { name: messages.common.accept }) ===
+          null,
+      ).toBe(true),
     );
     expect(requests).toHaveLength(1);
     mounted.unmount();

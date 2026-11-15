@@ -21,8 +21,10 @@ import {
 import { provisionHeadingLine } from "@stll/decision-reader/reader-outline";
 import type { ProvisionHeadingLine } from "@stll/decision-reader/reader-outline";
 import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
+import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
+import { Button } from "@stll/ui/button";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
@@ -72,6 +74,21 @@ const READER_STYLE = {
   fontSize: "var(--reader-body-size)",
   lineHeight: "var(--reader-body-line-height)",
 } as const;
+
+/**
+ * The blocks the statute reader draws marks in: the parsed provisions, or
+ * the plain text's paragraphs when the version has none. The marks are
+ * placed among these and drawn over these, so the two cannot disagree.
+ */
+export const statuteAnnotationBlocks = (
+  blocks: readonly Block[],
+  fulltext: string | null,
+): readonly Block[] => {
+  if (blocks.length > 0) {
+    return blocks;
+  }
+  return fulltext ? buildFulltextParagraphBlocks(fulltext) : [];
+};
 
 // The statutes reader carries no in-page find bar yet, so every block renders
 // with an empty highlight set.
@@ -149,7 +166,10 @@ export const StatuteText = ({
   }, [landingAnchorId]);
 
   if (blocks.length > 0) {
-    const anchorsByPieceId = buildAnnotationAnchors(annotationAnchors, blocks);
+    const anchorsByPieceId = buildAnnotationAnchors(
+      annotationAnchors,
+      statuteAnnotationBlocks(blocks, fulltext),
+    );
     return (
       <article
         className={cn(
@@ -218,7 +238,10 @@ export const StatuteText = ({
         </h1>
         <FulltextFallback
           activeMatchIndex={NO_ACTIVE_MATCH}
-          anchorsByPieceId={buildAnnotationAnchors(annotationAnchors)}
+          anchorsByPieceId={buildAnnotationAnchors(
+            annotationAnchors,
+            statuteAnnotationBlocks(blocks, fulltext),
+          )}
           rangesByPieceId={NO_RANGES}
           text={fulltext}
         />
@@ -316,24 +339,34 @@ const ProvisionDetailsAction = ({
   const t = useTranslations();
 
   return (
-    <button
-      aria-label={t("statutes.provisionDetailsFor", { provision })}
+    // The wrapper carries what the heading asks of its chrome: the reader's
+    // sans face at its own tracking, shown on wide panes and on screen only,
+    // and revealed with the heading's ¶ by the same rule.
+    <span
       className={cn(
-        "reader-chrome border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 text-sm font-normal tracking-normal focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden",
-        // Revealed with the heading's ¶, by the same rule.
+        "reader-chrome hidden tracking-normal md:inline-flex print:hidden",
         READER_BLOCK_CHROME_REVEAL_CLASS,
       )}
-      onClick={onOpen}
-      type="button"
     >
-      <span>{t("common.details")}</span>
-      {/* The count needs a wide pane; beside the designation in a narrow
-          one there is room for the action's name only. */}
-      {citationCount !== undefined && citationCount > 0 && (
-        <span className="text-muted-foreground ms-2 hidden tabular-nums @lg/provision:inline">
-          {t("caseLaw.citation.decisionCount", { count: citationCount })}
+      {/* A quiet hairline action beside the heading, lighter than an
+          outline button. */}
+      <Button
+        aria-label={t("statutes.provisionDetailsFor", { provision })}
+        className="group/plain"
+        onClick={onOpen}
+        variant="plain"
+      >
+        <span className="border-border text-foreground group-hover/plain:bg-muted group-hover/plain:border-foreground-disabled inline-flex h-8 items-center rounded-sm border px-3 text-sm font-normal">
+          <span>{t("common.details")}</span>
+          {/* The count needs a wide pane; beside the designation in a narrow
+              one there is room for the action's name only. */}
+          {citationCount !== undefined && citationCount > 0 && (
+            <span className="text-muted-foreground ms-2 hidden tabular-nums @lg/provision:inline">
+              {t("caseLaw.citation.decisionCount", { count: citationCount })}
+            </span>
+          )}
         </span>
-      )}
-    </button>
+      </Button>
+    </span>
   );
 };

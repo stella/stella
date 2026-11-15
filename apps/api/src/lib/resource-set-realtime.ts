@@ -89,6 +89,7 @@ type AnnounceResourceSetUpdatesOptions = {
   /** The matter the request proved access to; absent for root handlers. */
   workspaceId: SafeId<"workspace"> | undefined;
   broadcasts?: ResourceSetBroadcasts;
+  mutationDigest?: string;
 };
 
 /**
@@ -101,6 +102,7 @@ export const announceResourceSetUpdates = ({
   organizationId,
   workspaceId,
   broadcasts = DEFAULT_BROADCASTS,
+  mutationDigest,
 }: AnnounceResourceSetUpdatesOptions): void => {
   if (
     realtime === undefined ||
@@ -110,6 +112,7 @@ export const announceResourceSetUpdates = ({
     return;
   }
   const resourceTypes = resourceTypesOf(realtime.resourceTypes);
+  const options = mutationDigest === undefined ? {} : { mutationDigest };
   if (realtime.scope === "workspace") {
     // Root handlers cannot declare a workspace scope (see the factory types);
     // a missing matter here means there is no audience to announce to.
@@ -117,11 +120,11 @@ export const announceResourceSetUpdates = ({
       return;
     }
     for (const resourceType of resourceTypes) {
-      broadcasts.workspace(workspaceId, resourceType);
+      broadcasts.workspace(workspaceId, resourceType, options);
     }
     return;
   }
   for (const resourceType of resourceTypes) {
-    broadcasts.organization(organizationId, resourceType);
+    broadcasts.organization(organizationId, resourceType, options);
   }
 };

@@ -1,5 +1,7 @@
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+
 import type { rootDb } from "@/api/db/root";
 import {
   documentProcessingRuns,
@@ -141,7 +143,7 @@ export const persistManualOcrRun = async ({
             })
             .from(workspaces)
             .limit(1),
-        where: eq(workspaces.status, "active"),
+        where: eq(workspaces.status, WORKSPACE_STATUS.active),
       })
     ).rows;
     if (!workspaceRows.at(0)) {

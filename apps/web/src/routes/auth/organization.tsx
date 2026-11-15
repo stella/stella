@@ -12,6 +12,7 @@ import {
   createFileRoute,
   Navigate,
   redirect,
+  useLocation,
   useNavigate,
 } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
@@ -32,6 +33,7 @@ import {
 import { getInitials } from "@stll/ui/initials";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import {
   OAuthAccountList,
@@ -56,6 +58,7 @@ import {
 } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
+  getOauthContinuationHref,
   getOauthHashFragment,
   getOauthRedirectUrl,
   getSignedOauthQuery,
@@ -118,18 +121,31 @@ export const Route = createFileRoute("/auth/organization")({
     const isOauthPostLogin =
       bridgedQuery !== null || isOauthPostLoginFromSearch;
 
+    // A sign-in step hands the authorization on inside `redirectTo`. Picking
+    // here would set the organization without it and land on this page again
+    // with the request, or on the home page; resume it on this page first.
+    const continuation = isOauthPostLogin
+      ? null
+      : getOauthContinuationHref(search.redirectTo);
+
     const isDevQuickStart =
       import.meta.env.DEV && search.devQuickStart === true;
-    if (
+    const skipsPicking =
       !isDevQuickStart &&
       !isOauthPostLogin &&
-      (context.session.activeOrganizationId ||
-        isAcceptInvitationRedirect(search.redirectTo ?? "/"))
-    ) {
-      throw redirect(destinationNavigation(search.redirectTo ?? "/"));
+      Boolean(
+        context.session.activeOrganizationId ||
+        isAcceptInvitationRedirect(search.redirectTo ?? "/"),
+      );
+    if (continuation !== null || skipsPicking) {
+      throw redirect(
+        continuation === null
+          ? destinationNavigation(search.redirectTo ?? "/")
+          : { href: continuation, replace: true },
+      );
     }
 
-    return { isOauthPostLoginFromSearch, userId: context.session.userId };
+    return { userId: context.session.userId };
   },
   component: Organization,
 });
@@ -178,23 +194,16 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
   const organizationView = queryView(useQuery(organizationListOptions(userId)));
   const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
-  const isOauthPostLoginFromSearch = Route.useRouteContext({
-    select: (context) => context.isOauthPostLoginFromSearch,
+  // Read from the router, never from `window.location` during render: this
+  // page stays mounted when a navigation only changes its query or fragment,
+  // and a value read outside React's inputs keeps its first answer.
+  const signedOauthQuery = useLocation({
+    select: ({ hash, searchStr }) => getSignedOauthQuery({ hash, searchStr }),
   });
-  const isOauthPostLogin =
-    isOauthPostLoginFromSearch ||
-    (hydrated && getSignedOauthQueryFromHash(window.location.hash) !== null);
+  const isOauthPostLogin = signedOauthQuery !== null;
   // A client asking for account selection gets this step even for a single
   // membership, so the account can still be switched before consent.
-  const isAccountSelection =
-    hydrated &&
-    hasOauthPrompt(
-      getSignedOauthQuery({
-        hash: window.location.hash,
-        searchStr: window.location.search,
-      }),
-      "select_account",
-    );
+  const isAccountSelection = hasOauthPrompt(signedOauthQuery, "select_account");
 
   if (hydrated && organizationView.type === "empty" && !isOauthPostLogin) {
     return <Navigate {...onboardingNavigation(redirectTo)} />;
@@ -389,21 +398,30 @@ const OrganizationList = ({
       </FrameHeader>
       <FramePanel className="flex flex-col gap-2">
         {organizations.map((org) => (
-          <button
-            className="hover:bg-accent/50 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-start disabled:opacity-64"
+          <Button
+            className="w-full"
             disabled={isSelectPending}
             key={org.id}
             onClick={() => selectOrg(org.id)}
-            type="button"
+            variant="plain"
           >
-            <Avatar className="size-10">
-              <AvatarFallback>{getInitials(org.name)}</AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="font-medium">{org.name}</p>
-              <p className="text-muted-foreground text-sm">{org.slug}</p>
-            </div>
-          </button>
+            <span
+              className={cn(
+                "hover:bg-accent/50 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-start",
+                isSelectPending && "opacity-64",
+              )}
+            >
+              <Avatar className="size-10">
+                <AvatarFallback>{getInitials(org.name)}</AvatarFallback>
+              </Avatar>
+              <span>
+                <span className="block font-medium">{org.name}</span>
+                <span className="text-muted-foreground block text-sm">
+                  {org.slug}
+                </span>
+              </span>
+            </span>
+          </Button>
         ))}
       </FramePanel>
     </Frame>

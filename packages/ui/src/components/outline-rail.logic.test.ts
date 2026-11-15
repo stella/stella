@@ -55,6 +55,11 @@ describe("reconcileOutlineItems", () => {
     color: (item) => ({ ...item, color: "--option-blue" }),
     emphasis: (item) => ({ ...item, emphasis: "secondary" }),
     id: (item) => ({ ...item, id: "91" }),
+    portraits: (item) => ({
+      ...item,
+      portraits: [{ image: null, name: "Svatoň Jan" }],
+    }),
+    portraitCredit: (item) => ({ ...item, portraitCredit: "Source: Court" }),
   } as const satisfies Record<
     keyof OutlineItem,
     (item: OutlineItem) => OutlineItem

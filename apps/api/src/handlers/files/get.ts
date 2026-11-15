@@ -15,19 +15,23 @@ import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DocxArchiveError } from "@/api/lib/docx-archive";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import { emailToPreview } from "@/api/lib/files/email-to-html";
 import { convertToPdf, isConvertibleMimeType } from "@/api/lib/files/gotenberg";
 import {
-  FILE_READ_URL_EXPIRY_SECONDS,
   fileFieldQuery,
-} from "@/api/lib/files/read-file";
+  LIVE_VERSION_DELIVERY,
+  recordLiveVersionDelivery,
+} from "@/api/lib/files/live-version-field";
+import { FILE_READ_URL_EXPIRY_SECONDS } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -106,9 +110,12 @@ export const readEmailHtmlPreviewHandler = async ({
   }
 
   // The preview carries the message body; record the view once there is a
-  // preview to return.
-  await scopedDb(
-    async (tx) =>
+  // preview to return, and only while the version is still live.
+  const delivery = await recordLiveVersionDelivery({
+    scopedDb,
+    fieldId,
+    workspaceId,
+    record: async (tx) =>
       await recordAuditEvent(tx, {
         action: CONTENT_DELIVERY_AUDIT_ACTION.inline,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
@@ -122,7 +129,10 @@ export const readEmailHtmlPreviewHandler = async ({
           sizeBytes: content.sizeBytes,
         },
       }),
-  );
+  });
+  if (delivery === LIVE_VERSION_DELIVERY.withdrawn) {
+    return status(404);
+  }
 
   return {
     ...previewResult.value,
@@ -173,30 +183,45 @@ const pdfFileName = (fileName: string): string => {
   return `${fileName.slice(0, dotIndex)}.pdf`;
 };
 
-const fetchStoredFileResponse = async (
-  key: string,
-): Promise<Response | null> => {
-  // Both callers translate `null` into a 502, so the status is already the
-  // right one; what the discarded rejection cost was any way to tell a
-  // storage outage from a timeout.
-  const response = await fetchWithTimeout(
-    getS3().presign(key, { expiresIn: FILE_READ_URL_EXPIRY_SECONDS }),
-    {
-      timeoutMs: 30_000,
-    },
-  ).catch((error: unknown) => {
-    captureError(
-      error,
-      handlerErrorContext("files.response", { source: "stored-file-fetch" }),
-    );
-    return null;
+const STORED_FILE_UNREADABLE = failureSink({
+  event: "files.stored_file_unreadable",
+  expected: [],
+});
+
+const PDF_CONVERSION_FAILED = failureSink({
+  event: "files.pdf_conversion_failed",
+  expected: [],
+});
+
+/** The store answered, but not with the file. */
+const storedFileUnavailable = (storeStatus: number) =>
+  new HandlerError({
+    status: 502,
+    code: "upstream_unavailable",
+    message: `File storage answered ${String(storeStatus)}`,
   });
 
-  if (!response?.ok) {
-    return null;
-  }
+/** The 502 a download answers when the stored file cannot be read. */
+const storedFileUnreadable = (cause: unknown) =>
+  observedStatus({ sink: STORED_FILE_UNREADABLE, cause }, 502, "Bad Gateway");
 
-  return response;
+/** A stored file's response, or the rejection or store answer that kept it. */
+const fetchStoredFileResponse = async (
+  key: string,
+): Promise<Result<Response, unknown>> => {
+  const response = await Result.tryPromise(
+    async () =>
+      await fetchWithTimeout(
+        getS3().presign(key, { expiresIn: FILE_READ_URL_EXPIRY_SECONDS }),
+        { timeoutMs: 30_000 },
+      ),
+  );
+  if (Result.isError(response)) {
+    return Result.err(response.error);
+  }
+  return response.value.ok
+    ? Result.ok(response.value)
+    : Result.err(storedFileUnavailable(response.value.status));
 };
 
 const pdfResponse = (buffer: ArrayBuffer, fileName: string) =>
@@ -250,16 +275,21 @@ export const printPdfHandler = async ({
   // endpoint streams full content, so it needs the same audit row the
   // presigned-download path emits (GDPR Art. 30 / SOC 2 access record), but a
   // failed S3 fetch or conversion must not leave a spurious download record.
+  // The record re-checks the version, so a withdrawal during the read answers
+  // 404.
   const recordDownload = async () =>
-    await scopedDb(
-      async (tx) =>
+    await recordLiveVersionDelivery({
+      scopedDb,
+      fieldId,
+      workspaceId,
+      record: async (tx) =>
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.DOWNLOAD,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: row.entityId,
           metadata: { format: "pdf" },
         }),
-    );
+    });
 
   if (content.mimeType === PDF_MIME_TYPE || content.pdfFileId) {
     const fileKey = createFileKey({
@@ -270,12 +300,15 @@ export const printPdfHandler = async ({
     });
     const response = await fetchStoredFileResponse(fileKey);
 
-    if (!response) {
-      return status(502);
+    if (Result.isError(response)) {
+      return storedFileUnreadable(response.error);
     }
 
-    await recordDownload();
-    return streamedPdfResponse(response, outputName);
+    if ((await recordDownload()) === LIVE_VERSION_DELIVERY.withdrawn) {
+      await response.value.body?.cancel();
+      return status(404);
+    }
+    return streamedPdfResponse(response.value, outputName);
   }
 
   if (!isConvertibleMimeType(content.mimeType)) {
@@ -298,30 +331,26 @@ export const printPdfHandler = async ({
   );
 
   if (Result.isError(source)) {
-    captureError(
-      source.error,
-      handlerErrorContext("files.printPdfHandler.source_error", {
-        source: "stored-file-fetch",
-      }),
-    );
-    return status(502);
+    return storedFileUnreadable(source.error);
   }
 
   const conversionResult = await convertToPdf(source.value);
 
   if (Result.isError(conversionResult)) {
-    captureError(
-      conversionResult.error,
-      handlerErrorContext("files.printPdfHandler.conversionResult_error", {
-        fieldId,
-        mimeType: content.mimeType,
-        sizeBytes: String(content.sizeBytes),
-      }),
+    return observedStatus(
+      {
+        sink: PDF_CONVERSION_FAILED,
+        cause: conversionResult.error,
+        ctx: { workspaceId },
+      },
+      502,
+      "Bad Gateway",
     );
-    return status(502);
   }
 
-  await recordDownload();
+  if ((await recordDownload()) === LIVE_VERSION_DELIVERY.withdrawn) {
+    return status(404);
+  }
   return pdfResponse(conversionResult.value.buffer, outputName);
 };
 
@@ -377,7 +406,7 @@ export const stampedDownloadHandler = async ({
   });
 
   if (!response.ok) {
-    return status(502);
+    return storedFileUnreadable(storedFileUnavailable(response.status));
   }
 
   const buffer = await response.arrayBuffer();
@@ -430,9 +459,13 @@ export const stampedDownloadHandler = async ({
 
   // Record the access only once the requested rendition exists, matching the
   // presigned-download path's DOWNLOAD audit row. A failed read or transform
-  // must not leave a spurious download record.
-  await scopedDb(
-    async (tx) =>
+  // must not leave a spurious download record, and a version withdrawn while
+  // it ran answers 404.
+  const delivery = await recordLiveVersionDelivery({
+    scopedDb,
+    fieldId,
+    workspaceId,
+    record: async (tx) =>
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.DOWNLOAD,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
@@ -443,7 +476,10 @@ export const stampedDownloadHandler = async ({
           stamped: true,
         },
       }),
-  );
+  });
+  if (delivery === LIVE_VERSION_DELIVERY.withdrawn) {
+    return status(404);
+  }
 
   const body = new ArrayBuffer(renditionBytes.byteLength);
   new Uint8Array(body).set(renditionBytes);

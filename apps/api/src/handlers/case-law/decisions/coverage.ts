@@ -32,7 +32,7 @@ import {
 import {
   type CaseLawCourtStatusRow,
   caseLawCourtStatusRows,
-  readCaseLawCoverageCourtActivityQuery,
+  readCaseLawCourtActivityQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
 import { coverageSnapshotSchema } from "@/api/handlers/case-law/public-response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -44,6 +44,10 @@ import {
   type CaseLawCoverageFreshness,
   caseLawCoverageFreshness,
 } from "@/api/lib/case-law/coverage-freshness";
+import {
+  type CaseLawCoveragePart,
+  orderedCoverageParts,
+} from "@/api/lib/case-law/coverage-parts";
 import {
   type PopulationCountsFreshness,
   populationCountsFreshness,
@@ -57,7 +61,6 @@ import {
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { errorTag } from "@/api/lib/errors/utils";
 import {
   ADAPTER_MANIFESTS,
   type AdapterEdition,
@@ -173,6 +176,12 @@ type CaseLawCoverageCountryBase = {
   addedLastWeek: number | null;
   completeness: CaseLawCountryCompleteness;
   sources: readonly CaseLawCoverageSource[];
+  /**
+   * The parts of this country's figures the refresh could not read; empty
+   * when every figure was read. Each one left its figures in their own
+   * unknown state rather than a zero.
+   */
+  unreadParts: readonly CaseLawCoveragePart[];
 };
 
 type CaseLawCoverageCountry =
@@ -197,6 +206,8 @@ type CaseLawCoverageCountry =
 type CaseLawCoverage = {
   /** ISO 8601 instant the figures were computed. */
   generatedAt: string;
+  /** Every part some country's figures are missing; empty for a full answer. */
+  unreadParts: readonly CaseLawCoveragePart[];
   /**
    * The two populations, kept apart. Summing them would count a searchable
    * decision twice and imply that an in-preparation country can be searched.
@@ -216,6 +227,29 @@ const provisionStatusReadFailure = failureSink({
 
 const sliceCompletenessReadFailure = failureSink({
   event: "case_law.coverage.slice_completeness_unavailable",
+  expected: [],
+});
+
+// Every part the page answers without is observed with the error that cost it,
+// so the record carries the cause chain and the SQLSTATE rather than the
+// wrapper's tag alone.
+const arrivalsReadFailure = failureSink({
+  event: "case_law.coverage.arrivals_unavailable",
+  expected: [],
+});
+
+const facetsReadFailure = failureSink({
+  event: "case_law.coverage.facets_unavailable",
+  expected: [],
+});
+
+const courtsReadFailure = failureSink({
+  event: "case_law.coverage.courts_unavailable",
+  expected: [],
+});
+
+const coverageReadFailure = failureSink({
+  event: "case_law.coverage.unavailable",
   expected: [],
 });
 
@@ -427,20 +461,13 @@ const searchableCoverageTotals = (
   };
 };
 
-/** A part of the answer that can fail without failing the page. */
-export type CaseLawCoveragePart =
-  | "arrivals"
-  | "slice-completeness"
-  | "facets"
-  | "courts"
-  | "provision-processing";
+export type { CaseLawCoveragePart };
 
 type CoverageLoad = {
   excludedSourceIds: readonly SafeId<"caseLawSource">[];
   /**
    * Called by every branch that answers without a part it could not read.
-   * The page still answers; the caller decides what a partial answer may be
-   * used for (it is never kept as the shared answer).
+   * The page still answers, and names the part on each country it touches.
    */
   onPartialFailure: (part: CaseLawCoveragePart) => void;
   now: Date;
@@ -481,6 +508,26 @@ const coverageError = (fallback: string) => (cause: unknown) =>
     cause,
   });
 
+/** The earliest and latest decision year over the sources that state both. */
+const decisionYearRange = (
+  sources: readonly Pick<
+    CaseLawCoverageSource,
+    "decisionYearFrom" | "decisionYearTo"
+  >[],
+): { from: number | null; to: number | null } => {
+  const bounded = sources.flatMap(({ decisionYearFrom, decisionYearTo }) =>
+    decisionYearFrom === null || decisionYearTo === null
+      ? []
+      : [{ from: decisionYearFrom, to: decisionYearTo }],
+  );
+  return bounded.length === 0
+    ? { from: null, to: null }
+    : {
+        from: Math.min(...bounded.map(({ from }) => from)),
+        to: Math.max(...bounded.map(({ to }) => to)),
+      };
+};
+
 /**
  * The whole page, assembled from the source catalogue outward.
  *
@@ -510,9 +557,15 @@ export const loadCaseLawCoverage = async ({
 
   const withheld = new Set<string>(excludedSourceIds.map(String));
   const admitted = sources.value.filter(({ id }) => !withheld.has(String(id)));
+  // Parts read once for every country: a failure leaves each country without it.
+  const sharedUnread = new Set<CaseLawCoveragePart>();
+  const unreadEverywhere = (part: CaseLawCoveragePart) => {
+    sharedUnread.add(part);
+    onPartialFailure(part);
+  };
   const arrivals = await reportingNull(
     async () => await readArrivals(admitted.map(({ id }) => id)),
-    () => onPartialFailure("arrivals"),
+    () => unreadEverywhere("arrivals"),
   );
   // Per-year completeness is a per-source detail: a failed ledger read marks
   // every source not reconciled and the rest of the page still answers.
@@ -521,7 +574,7 @@ export const loadCaseLawCoverage = async ({
     catch: coverageError("reading case-law slice completeness failed"),
   });
   if (Result.isError(yearCompleteness)) {
-    onPartialFailure("slice-completeness");
+    unreadEverywhere("slice-completeness");
     observeFailure(yearCompleteness.error, {
       sink: sliceCompletenessReadFailure,
     });
@@ -627,6 +680,7 @@ export const loadCaseLawCoverage = async ({
         entry.sources.map(({ completeness }) => completeness),
       ),
       sources: entry.sources,
+      unreadParts: orderedCoverageParts(sharedUnread),
     } satisfies CaseLawCoverageCountryBase;
     storedTotal += entry.stored;
     if (
@@ -650,35 +704,20 @@ export const loadCaseLawCoverage = async ({
       // number, and zero is not that: the row degrades to what is stored,
       // which is true whatever the index is doing.
       onPartialFailure("facets");
-      logger.warn("case_law.coverage.facets_unavailable", { country });
+      observeFailure(facets.error, {
+        sink: facetsReadFailure,
+        ctx: { jurisdiction: country },
+      });
       countries.push({
         ...base,
         availability: CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION,
+        unreadParts: orderedCoverageParts([...sharedUnread, "facets"]),
       });
       continue;
     }
     const bucket = facets.value.country.find(({ value }) => value === country);
     const searchable = bucket?.count ?? 0;
-    const searchableSources = entry.sources.filter(
-      ({ decisionYearFrom, decisionYearTo }) =>
-        decisionYearFrom !== null && decisionYearTo !== null,
-    );
-    const from =
-      searchableSources.length === 0
-        ? null
-        : Math.min(
-            ...searchableSources.map(
-              ({ decisionYearFrom }) => decisionYearFrom ?? Infinity,
-            ),
-          );
-    const to =
-      searchableSources.length === 0
-        ? null
-        : Math.max(
-            ...searchableSources.map(
-              ({ decisionYearTo }) => decisionYearTo ?? -Infinity,
-            ),
-          );
+    const { from, to } = decisionYearRange(entry.sources);
     const courts = await Result.tryPromise({
       try: async () =>
         await readCourts({
@@ -690,9 +729,9 @@ export const loadCaseLawCoverage = async ({
     });
     if (Result.isError(courts)) {
       onPartialFailure("courts");
-      logger.warn("case_law.coverage.courts_unavailable", {
-        country,
-        "error.type": errorTag(courts.error),
+      observeFailure(courts.error, {
+        sink: courtsReadFailure,
+        ctx: { jurisdiction: country },
       });
     }
     countries.push({
@@ -702,11 +741,17 @@ export const loadCaseLawCoverage = async ({
       decisionYearFrom: from,
       decisionYearTo: to,
       courts: Result.isError(courts) ? null : courts.value,
+      unreadParts: Result.isError(courts)
+        ? orderedCoverageParts([...sharedUnread, "courts"])
+        : base.unreadParts,
     });
   }
 
   return Result.ok({
     generatedAt: now.toISOString(),
+    unreadParts: orderedCoverageParts(
+      countries.flatMap(({ unreadParts }) => unreadParts),
+    ),
     totals: {
       ...searchableCoverageTotals(countries),
       stored: { decisions: storedTotal, asOf: storedAsOf },
@@ -753,7 +798,8 @@ type CaseLawCoverageResponse =
 /**
  * One computed answer and whether every part of it was read. `complete` is
  * false as soon as any branch of the computation answered without a part,
- * and for an unavailable answer, so neither is ever shared.
+ * and for an unavailable answer. A partial answer names its unread parts on
+ * each country and may still be stored; an unavailable one never is.
  */
 export type CaseLawCoverageComputation = {
   answer: CaseLawCoverageAnswer;
@@ -838,9 +884,7 @@ export const assembleCaseLawCoverageAnswer = async ({
     // Unlike the hint beside the search box, this page IS the numbers:
     // degrading to zeros would publish a false corpus. It reports that it
     // cannot answer instead.
-    logger.warn("case_law.coverage.unavailable", {
-      "error.type": errorTag(result.error),
-    });
+    observeFailure(result.error, { sink: coverageReadFailure });
     return { answer: COVERAGE_UNAVAILABLE, complete: false };
   }
 
@@ -854,13 +898,28 @@ export const assembleCaseLawCoverageAnswer = async ({
       sink: provisionStatusReadFailure,
     });
   }
+  if (Result.isError(provisionProcessing)) {
+    return {
+      answer: {
+        ...result.value,
+        unreadParts: orderedCoverageParts([
+          ...result.value.unreadParts,
+          "provision-processing",
+        ]),
+        countries: result.value.countries.map((country) => ({
+          ...country,
+          unreadParts: orderedCoverageParts([
+            ...country.unreadParts,
+            "provision-processing",
+          ]),
+        })),
+        provisionProcessing: unavailableProvisionPendingCounts(),
+      },
+      complete: false,
+    };
+  }
   return {
-    answer: {
-      ...result.value,
-      provisionProcessing: Result.isError(provisionProcessing)
-        ? unavailableProvisionPendingCounts()
-        : provisionProcessing.value,
-    },
+    answer: { ...result.value, provisionProcessing: provisionProcessing.value },
     complete: failedParts.size === 0,
   };
 };
@@ -920,9 +979,7 @@ export const computeCaseLawCoverageAnswer = async (
           catch: coverageError("reading the week's arrivals failed"),
         });
         if (Result.isError(arrivals)) {
-          logger.warn("case_law.coverage.arrivals_unavailable", {
-            "error.type": errorTag(arrivals.error),
-          });
+          observeFailure(arrivals.error, { sink: arrivalsReadFailure });
           return null;
         }
         return arrivals.value;
@@ -950,7 +1007,7 @@ export const computeCaseLawCoverageAnswer = async (
           caseLawDb(async (tx) => await loadPublicCourtWeightsWithin(tx)),
           caseLawDb(
             async (tx) =>
-              await readCaseLawCoverageCourtActivityQuery(tx, {
+              await readCaseLawCourtActivityQuery(tx, {
                 country,
                 courts: buckets.map(({ value }) => value),
                 excludedSourceIds,
@@ -986,7 +1043,7 @@ export const computeCaseLawCoverageAnswer = async (
       },
     },
   });
-  if (!computation.complete || "message" in computation.answer) {
+  if ("message" in computation.answer) {
     return computation;
   }
   return {
@@ -994,6 +1051,6 @@ export const computeCaseLawCoverageAnswer = async (
       { ...computation.answer, countsFreshness },
       coverageSnapshotSchema,
     ),
-    complete: true,
+    complete: computation.complete,
   };
 };

@@ -4,7 +4,8 @@ export type FetchTimeout =
   { type: "total"; ms: number } | { type: "headers"; ms: number };
 
 export type TransportRequestInit = RequestInit & {
-  timeout?: FetchTimeout;
+  /** `false` turns off the runtime's own idle limit; the signal owns the deadline. */
+  timeout?: FetchTimeout | false;
   timeoutMs?: number;
 };
 
@@ -54,13 +55,19 @@ const executeFetchWithTimeout = async (
     // signal, and the caller gets the transport's response unchanged: a body
     // re-wrapped in a script stream is invisible to the browser's network
     // inspection and costs a stream hop on every response.
+    //
+    // Bun also cuts a response that stays silent for about five minutes, and it
+    // reads that limit from `timeout`. Left on, it overrules a longer deadline:
+    // an ingest waiting on a ten minute commit window fails with a TimeoutError
+    // its caller never set. The caller's deadline is the only limit here. A
+    // `headers` policy keeps Bun's limit, as nothing else bounds its body.
     return await activeFetcher(input, {
       ...init,
       signal: AbortSignal.any([
         ...callerSignals,
         AbortSignal.timeout(duration),
       ]),
-      ...(timeout === undefined ? {} : { timeout }),
+      timeout: false,
       timeoutMs: duration,
     });
   }

@@ -285,7 +285,9 @@ impl CallbackListener {
     let served = tokio::spawn(async move {
       let served = axum::serve(listener, router)
         .with_graceful_shutdown(async move {
-          let _ = stopped.await;
+          if stopped.await.is_err() {
+            tracing::debug!("ChatGPT sign-in callback listener lost its stop handle");
+          }
         })
         .await;
       if let Err(error) = served {
@@ -307,8 +309,10 @@ impl CallbackListener {
   /// Stops listening and waits until the socket is closed.
   #[cfg(test)]
   pub(crate) async fn close(mut self) {
-    if let Some(stop) = self.stop.take() {
-      let _ = stop.send(());
+    if let Some(stop) = self.stop.take()
+      && stop.send(()).is_err()
+    {
+      tracing::debug!("ChatGPT sign-in callback listener had already stopped");
     }
     if let Some(served) = self.served.take() {
       served.await.unwrap();
@@ -318,8 +322,10 @@ impl CallbackListener {
 
 impl Drop for CallbackListener {
   fn drop(&mut self) {
-    if let Some(stop) = self.stop.take() {
-      let _ = stop.send(());
+    if let Some(stop) = self.stop.take()
+      && stop.send(()).is_err()
+    {
+      tracing::debug!("ChatGPT sign-in callback listener had already stopped");
     }
   }
 }

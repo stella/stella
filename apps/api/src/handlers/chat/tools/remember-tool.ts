@@ -86,8 +86,7 @@ type CreateRememberToolProps = {
   // workspace-scoped memory and for the matter-specific kinds.
   workspaceId: SafeId<"workspace"> | null;
   /** The turn's statuses of the member's accessible matters. */
-  workspaceStatusById:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
 };
 
 type MemoryWriteScopeRequestOptions = Pick<
@@ -154,9 +153,7 @@ export const createRememberTool = ({
       }
       // Authorized on every call, with the same checks as the REST route.
       const workspaceStatus =
-        workspaceId === null
-          ? undefined
-          : workspaceStatusById?.get(workspaceId);
+        workspaceId === null ? undefined : workspaceStatusById.get(workspaceId);
       const authorizedScope = resolveMemoryWriteScope({
         accessibleWorkspaces:
           workspaceId === null || workspaceStatus === undefined

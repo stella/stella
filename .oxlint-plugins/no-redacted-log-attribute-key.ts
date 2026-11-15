@@ -45,6 +45,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "decisionId",
   "documentId",
   "entityId",
+  "eventId",
   "feature",
   "jobId",
   "jurisdiction",

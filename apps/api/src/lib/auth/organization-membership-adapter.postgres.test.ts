@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization as organizationPlugin } from "better-auth/plugins";
 import type { OrganizationOptions } from "better-auth/plugins";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
@@ -16,6 +16,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -166,11 +167,9 @@ if (!databaseUrl || !runPostgresTests) {
               expect(row.organizationId).toBe(row.organization.id);
             }
           } finally {
-            await db.delete(organization).where(
-              inArray(
-                organization.id,
-                organizations.map(({ id }) => id),
-              ),
+            await deleteOrganizationsForTest(
+              db,
+              organizations.map(({ id }) => id),
             );
             await db.delete(user).where(eq(user.id, userId));
           }
@@ -247,9 +246,7 @@ if (!databaseUrl || !runPostgresTests) {
             });
           });
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });

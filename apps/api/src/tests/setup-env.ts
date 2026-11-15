@@ -84,8 +84,6 @@ delete process.env["LEGAL_SEARCH_PROVIDER"];
 // require that endpoint only to build request URLs, so keep both sides local.
 delete process.env["PUBLIC_LAW_DATABASE_URL"];
 delete process.env["PUBLIC_LAW_DATABASE_POOL_MAX"];
-delete process.env["CASE_LAW_DATABASE_URL"];
-delete process.env["CASE_LAW_DATABASE_POOL_MAX"];
 
 // A fixed key so suites run the real AES-GCM content encryption instead of a
 // module mock; the value is test-only and derives per-organization keys the
@@ -100,6 +98,7 @@ process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 process.env["TRANSACTIONAL_EMAIL_FROM"] ??= "test@example.com";
 process.env["FRONTEND_URL"] ??= "http://localhost:3000";
+process.env["OUTLOOK_ADDIN_ORIGIN"] ??= "https://outlook.stella.example";
 // Never reached by tests: corpus-index tests stub global fetch and only
 // assert on the request contract.
 process.env["CORPUS_INDEX_Q09_ENDPOINT"] ??= "http://localhost:7290";

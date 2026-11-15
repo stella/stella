@@ -518,13 +518,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/chat/threads/delete.ts",
-    "function": "module/deleteThread/createSafeRootHandler[1]",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/clauses/export.ts",
     "function": "module/exportHandler",
     "kind": "constant-limit",
@@ -564,13 +557,6 @@
     "function": "module/listDocumentTypes/createSafeRootHandler[1]",
     "kind": "constant-limit",
     "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/handlers/entities/delete.ts",
-    "function": "module/deleteEntitiesHandler",
-    "kind": "constant-limit",
-    "count": 2,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
@@ -765,20 +751,6 @@
   {
     "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
     "function": "module/fetchAccountLabel",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
-    "function": "module/listDriveRootChildren",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
-    "function": "module/listDriveRootChildren",
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
@@ -1225,13 +1197,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/api/src/lib/hosted-usage-provider/client.ts",
-    "function": "module/postProviderJson",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
     "function": "module/readServingCorpusIndexGenerationTx",
     "kind": "constant-limit",
@@ -1328,13 +1293,6 @@
     "kind": "total-timeout-body",
     "count": 2,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/lists/verification/evidence.ts",
-    "function": "module/readVerificationEvidence",
-    "kind": "constant-limit",
-    "count": 2,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
     "file": "apps/api/src/lib/lists/verification/read-run.ts",
@@ -1974,13 +1932,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/web/src/features/chat/chat-fetch.ts",
-    "function": "module/chatFetchClient/assign[0]",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
     "function": "module/AddSkillForm/resolveLatestCommit",
     "kind": "numeric-timeout",
@@ -2179,13 +2130,6 @@
   {
     "file": "packages/cli/src/auth/token-exchange.ts",
     "function": "module/refreshAccessToken",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "packages/cli/src/cli-release-channel.ts",
-    "function": "module/fetchLatestCliVersion",
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."

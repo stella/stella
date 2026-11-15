@@ -12,6 +12,7 @@ import {
   SelectPopup,
   SelectTrigger,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover as DatePickerPopoverBase } from "@/components/date-picker-popover";
@@ -94,7 +95,7 @@ export const StatusSelect = ({ value, onChange }: StatusSelectProps) => {
         size="sm"
       >
         <StatusIcon status={value} />
-        <span className="truncate">{t(`statusValues.${value}`)}</span>
+        <TruncatedText>{t(`statusValues.${value}`)}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {TASK_STATUSES.map((s) => (
@@ -127,7 +128,7 @@ export const PrioritySelect = ({ value, onChange }: PrioritySelectProps) => {
         size="sm"
       >
         <PriorityIcon priority={value} />
-        <span className="truncate">{t(`priorityValues.${value}`)}</span>
+        <TruncatedText>{t(`priorityValues.${value}`)}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {TASK_PRIORITIES.map((p) => (
@@ -160,7 +161,7 @@ export const WorkTypeSelect = ({ value, onChange }: WorkTypeSelectProps) => {
         className="h-7 min-h-7 min-w-0 gap-1 border-none bg-transparent px-1.5 shadow-none"
         size="sm"
       >
-        <span className="truncate">{t(`workTypeValues.${value}`)}</span>
+        <TruncatedText>{t(`workTypeValues.${value}`)}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {WORK_TYPES.map((type) => (
@@ -196,7 +197,7 @@ export const ItemTypeSelect = ({
         className="h-7 min-h-7 min-w-0 border-none bg-transparent px-1.5 shadow-none"
         size="sm"
       >
-        <span className="truncate">{t(ITEM_TYPE_TRANSLATION_KEYS[value])}</span>
+        <TruncatedText>{t(ITEM_TYPE_TRANSLATION_KEYS[value])}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {LIST_ITEM_TYPES.map((itemType) => (
@@ -358,7 +359,7 @@ export const AssigneePicker = ({
             nameClassName="text-sm font-normal"
           />
           {hasDeletedAccount(a.user.deletedAt) ? (
-            <span className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5">
+            <span className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5">
               {t("deletedAccount")}
             </span>
           ) : null}

@@ -46,6 +46,7 @@ import {
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
 import { runWithContentDeliveryScope } from "@/api/lib/files/content-delivery";
+import { createPublicSearchCoalescer } from "@/api/lib/legal-search/public-search-coalescer";
 import { WorkRefusal } from "@/api/lib/load/work-admission";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -113,7 +114,7 @@ test.each([
   const response = await endpoint.handler(ctx);
   expect(Number(ctx.set.headers["Retry-After"])).toBeGreaterThanOrEqual(2);
   if (!(response instanceof HttpStatusResponse)) {
-    throw new Error("Expected a status response");
+    throw new TypeError("Expected a status response");
   }
   expect(response.response.retryable).toBe(true);
   expect(response.response.retryAfterMs).toBeGreaterThanOrEqual(1000);
@@ -516,14 +517,17 @@ const createContext = <TContext>(
     orgAIConfig = null,
     orgAIConfigStatus = ORG_AI_CONFIG_STATUS.ok,
     role = "owner",
+    request = new Request("https://example.test/usage-preflight"),
   }: {
     orgAIConfig?: OrgAIConfig | null;
     orgAIConfigStatus?: OrgAIConfigStatus;
     role?: "owner" | "admin" | "member" | "intern" | "external";
+    request?: Request;
   } = {},
 ): TContext =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
   ({
-    request: new Request("https://example.test/usage-preflight"),
+    request,
     route: "/usage-preflight",
     set: { headers: {} },
     user: {
@@ -548,7 +552,6 @@ const createContext = <TContext>(
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
   }) as unknown as TContext;
 
 const createOrgAIConfig = (): OrgAIConfig => ({
@@ -831,10 +834,9 @@ test("safe handlers preserve request scope through shared helpers and detached r
         new Error("Shared failure"),
         handlerErrorContext("test.sharedCapture"),
       );
-      detached(
-        Promise.reject(new Error("Detached failure")),
-        "test.shared-detached",
-      );
+      detached(async () => {
+        throw new Error("Detached failure");
+      }, "test.shared-detached");
       return Result.ok({ ok: true });
     },
   );
@@ -1233,6 +1235,105 @@ describe("a mapped status survives the transport wrapper", () => {
       const value = yield* Result.await(
         Result.tryPromise(async () => {
           throw new Error("engine socket closed");
+        }),
+      );
+
+      return Result.ok({ value });
+    });
+
+    if (!("code" in response)) {
+      throw new Error("expected a status response");
+    }
+    expect(response.code).toBe(500);
+  });
+});
+
+describe("a request its caller cancelled", () => {
+  const runEndpoint = async (
+    request: Request,
+    body: Parameters<typeof createSafeRootHandler>[1],
+  ) => {
+    const analytics = installRecordingAnalytics();
+    const recordingLogger = installRecordingLogger();
+    try {
+      const endpoint = createSafeRootHandler(
+        {
+          contract: "patch",
+          permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
+          mcp: { type: "internal", reason: "health_infra" },
+        },
+        body,
+      );
+      const safeDb: SafeDb = async <T>() =>
+        Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+
+      return await endpoint.handler(
+        createContext(endpoint, safeDb, { request }),
+      );
+    } finally {
+      recordingLogger.restore();
+      analytics.restore();
+    }
+  };
+
+  // A coalesced search answers a caller that leaves with its own signal's
+  // reason, which the route's Result.tryPromise wraps as UnhandledException.
+  test("a caller that leaves a shared search is answered as a client outcome, not a 500", async () => {
+    const coalescer = createPublicSearchCoalescer<{ hits: number }>({
+      limits: { maxEntries: 4, maxBytes: 4096, ttlMs: 1000 },
+      now: () => 0,
+    });
+    const caller = new AbortController();
+    const request = new Request("https://example.test/case/decisions/search", {
+      signal: caller.signal,
+    });
+    const response = await runEndpoint(request, async function* () {
+      const answer = coalescer.search({
+        key: "cancelled-search",
+        signal: request.signal,
+        cacheable: () => false,
+        run: async (signal) =>
+          await new Promise<{ hits: number }>((_resolve, reject) => {
+            signal.addEventListener(
+              "abort",
+              () => {
+                const reason: unknown = signal.reason;
+                reject(
+                  reason instanceof Error
+                    ? reason
+                    : new Error("Search aborted", { cause: reason }),
+                );
+              },
+              { once: true },
+            );
+          }),
+      });
+      caller.abort();
+      const value = yield* Result.await(
+        Result.tryPromise(async () => await answer),
+      );
+
+      return Result.ok({ value });
+    });
+
+    if (!("code" in response)) {
+      throw new Error("expected a status response");
+    }
+    expect(response.code).toBe(400);
+    expect(response.response).toMatchObject({ code: "request_aborted" });
+  });
+
+  test("another abort after the caller left is still graded a server fault", async () => {
+    const caller = new AbortController();
+    const request = new Request("https://example.test/case/decisions/search", {
+      signal: caller.signal,
+    });
+    const response = await runEndpoint(request, async function* () {
+      caller.abort();
+      const value = yield* Result.await(
+        Result.tryPromise(async () => {
+          throw new DOMException("The operation timed out.", "TimeoutError");
         }),
       );
 

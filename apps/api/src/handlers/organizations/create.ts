@@ -14,8 +14,8 @@ import {
 } from "@/api/lib/api-handlers";
 import { createOrganizationInTransaction } from "@/api/lib/auth/create-organization-in-transaction";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
+import { newOrganizationEvaluation } from "@/api/lib/usage/organization-access-state";
 
 const createOrganization = createSafeSessionHandler(
   {
@@ -42,9 +42,7 @@ const createOrganization = createSafeSessionHandler(
       createOrganizationForAccount(
         {
           userId: user.id,
-          evaluation: isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")
-            ? "grant"
-            : "none",
+          evaluation: newOrganizationEvaluation(),
           name,
           ...(slug === undefined ? {} : { slug }),
           idempotencyKey: request.headers.get("Idempotency-Key"),

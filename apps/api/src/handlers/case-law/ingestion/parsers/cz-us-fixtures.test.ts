@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import { readdir } from "node:fs/promises";
 import * as v from "valibot";
 
+import { load } from "@stll/html";
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { LINE_WRAP_TYPE, planBlockLineWrap } from "@stll/legal-ast/line-wrap";
 
@@ -12,8 +12,14 @@ import {
   buildValidationHtml,
   validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseUsDecisionHtml, usDocumentLinesOf } from "./cz-us";
+import {
+  parseUsDecisionHtml as uncheckedParseUsDecisionHtml,
+  usDocumentLinesOf,
+} from "./cz-us";
+
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 const SNAPSHOT = new URL(
@@ -161,6 +167,19 @@ describe("CZ ÚS decisions as the court numbered and set them", () => {
     }
   });
 
+  test("the President signs the judgment under his office", async () => {
+    const { documentAst } = await parsedFixture("cz-us-pl-us-42-2000.html.gz");
+    const blocks = bodyParagraphs(documentAst.blocks);
+    const office = blocks.findIndex(
+      (block) => block.plainText === "předseda Ústavního soudu",
+    );
+
+    expect(blocks[office - 1]?.plainText).toBe("JUDr. Zdeněk Kessler");
+    expect(blocks[office - 1]?.role).toBe("signature");
+    expect(blocks[office]?.role).toBe("signature");
+    expect(blocks[office - 2]?.role).toBe("closing");
+  });
+
   test("a sentence of an opinion that names it is not its heading", async () => {
     const { documentAst } = await parsedFixture("cz-us-pl-us-42-2000.html.gz");
 
@@ -262,6 +281,32 @@ describe("CZ ÚS decisions as the court numbered and set them", () => {
   });
 });
 
+describe("typewriter lines the margin broke", () => {
+  test("IV. ÚS 35/96: a citation wrapped after `písm.` stays in its sentence", async () => {
+    const { documentAst } = await parsedFixture("cz-us-iv-us-35-96.html.gz");
+    const texts = bodyParagraphs(documentAst.blocks).map(
+      (block) => block.plainText,
+    );
+    expect(texts.filter((text) => text.startsWith("b) uvedeného"))).toEqual([]);
+    expect(
+      texts.some((text) =>
+        text.includes("Podle § 1 odst. 1 písm. b) uvedeného dekretu"),
+      ),
+    ).toBe(true);
+  });
+
+  test("Pl. ÚS 42/2000: a paragraph's last line set one space in goes on", async () => {
+    const { documentAst } = await parsedFixture("cz-us-pl-us-42-2000.html.gz");
+    const texts = bodyParagraphs(documentAst.blocks).map(
+      (block) => block.plainText,
+    );
+    expect(texts.filter((text) => text.startsWith("pojistka."))).toEqual([]);
+    expect(
+      texts.some((text) => text.includes("jakákoli podobná pojistka.")),
+    ).toBe(true);
+  });
+});
+
 describe("committed CZ ÚS fixtures", () => {
   test("retain their complete serialized parser output", async () => {
     const names = await fixtureNames();
@@ -285,7 +330,7 @@ describe("committed CZ ÚS fixtures", () => {
   test("produce identical diagnostics from paragraphs and validation HTML", async () => {
     for (const name of await fixtureNames()) {
       const html = await gunzipText(new URL(name, FIXTURES));
-      const $ = cheerio.load(html);
+      const $ = load(html);
       const rtf = $("input#docContentHidden").attr("value") ?? "";
       expect(rtf.trim()).not.toBe("");
 
@@ -299,5 +344,27 @@ describe("committed CZ ÚS fixtures", () => {
         validateAst(buildValidationHtml(paragraphs), blocks),
       );
     }
+  });
+});
+
+describe("a CZ ÚS bench recital printed before a takto: of its own line", () => {
+  test("IV. ÚS 35/96: the court's name and the bench introduce the ruling", async () => {
+    const name = "cz-us-iv-us-35-96.html.gz";
+    const { documentAst } = parseUsDecisionHtml(
+      inputFor(
+        name,
+        await gunzipText(new URL(`decision-roles/${name}`, FIXTURES)),
+      ),
+    );
+    const head = bodyParagraphs(documentAst.blocks)
+      .slice(0, 4)
+      .map((block) => `${block.role ?? "-"} ${block.plainText.slice(0, 24)}`);
+
+    expect(head).toEqual([
+      "intro Ústavní soud České repub",
+      "intro v senátě rozhodl ve věci",
+      "intro takto:",
+      "holding 1. Rozsudek Krajského so",
+    ]);
   });
 });

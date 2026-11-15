@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 
@@ -139,7 +139,8 @@ const changedClaim = (
 
 describe("hosted DOCX editor: claiming", () => {
   test("equal claims preserve the registry while changed claims replace it", () => {
-    fc.assert(
+    assertProperty(
+      "equal claims preserve the registry while changed claims replace it",
       fc.property(
         fc.constantFrom(DOCX_EDITOR_SLOT.main, DOCX_EDITOR_SLOT.inspector),
         fc.constantFrom(
@@ -170,7 +171,7 @@ describe("hosted DOCX editor: claiming", () => {
           expect(next[hostKey]?.lastClaim).toBe(changed);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -445,7 +446,8 @@ const slotOperations = fc.array(
 
 describe("hosted DOCX editor: any order of claims and releases", () => {
   test("a slot that still holds a claim always drives the instance", () => {
-    fc.assert(
+    assertProperty(
+      "a slot that still holds a claim always drives the instance",
       fc.property(slotOperations, (operations) => {
         let registry = EMPTY_DOCX_EDITOR_REGISTRY;
         let sequence = 0;
@@ -497,7 +499,7 @@ describe("hosted DOCX editor: any order of claims and releases", () => {
           );
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

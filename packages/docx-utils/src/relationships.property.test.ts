@@ -3,7 +3,7 @@ import fc from "fast-check";
 import * as slimdom from "slimdom";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -34,7 +34,8 @@ const xmlAttributeValue = fc
 test(
   "relationship updates preserve identifier invariants",
   () => {
-    fc.assert(
+    assertProperty(
+      "relationship updates preserve identifier invariants",
       fc.property(
         fc.uniqueArray(existingRelationship, {
           selector: ({ id }) => id,
@@ -67,7 +68,7 @@ test(
           }
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(5000),

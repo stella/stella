@@ -28,6 +28,7 @@ import {
   UPLOADS_OUTPUT_MODES,
 } from "@/api/mcp/file-comparison-run";
 import type { FileComparisonRunResult } from "@/api/mcp/file-comparison-run";
+import { nullAsAbsent, uuidInputSchema } from "@/api/mcp/input-schemas";
 import type {
   InternalToolErrorResult,
   TypedMcpToolHandler,
@@ -37,10 +38,8 @@ import {
   bindWorkspaceRecorder,
   internalFailureResult,
   notFoundResult,
-  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {

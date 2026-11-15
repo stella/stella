@@ -41,7 +41,9 @@ const measure = async (page: Page, name: string): Promise<CaseGeometry> =>
     const viewport = frame.querySelector('[data-slot="scroll-area-viewport"]');
     const root = viewport?.parentElement;
     if (!(root instanceof HTMLElement) || !(viewport instanceof HTMLElement)) {
-      throw new Error("scroll area fixture case is missing its scroll area");
+      throw new TypeError(
+        "scroll area fixture case is missing its scroll area",
+      );
     }
     const footer = frame.querySelector('[data-slot="case-footer"]');
     const button = footer?.querySelector("button") ?? null;

@@ -37,6 +37,7 @@ import {
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const SOURCE_ID = toSafeId<"legislationSource">(
@@ -226,7 +227,7 @@ export const registerExpressionBackfillCases = ({
     await db.insert(schedulerJobs).values({
       description: "legislation expression id backfill test",
       id: JOB_ID,
-      lockedBy: LEASE,
+      ...heldSchedulerLease(LEASE),
       nextRunAt: new Date("2026-09-28T00:00:00.000Z"),
       schedule: { type: "interval", everyMs: 60_000 },
       task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,

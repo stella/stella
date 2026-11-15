@@ -49,13 +49,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import compilerPackage from "tsrs/package.json" with { type: "json" };
-import type { Node, SourceFile } from "tsrs/unstable/ast";
+import type { Node, SourceFile } from "tsrs/ast";
 import {
   isComputedPropertyName,
   isParameterDeclaration,
   isPropertySignatureDeclaration,
-} from "tsrs/unstable/ast/is";
+} from "tsrs/ast/is";
 import {
   type Checker,
   CheckFlags,
@@ -77,7 +76,8 @@ import {
   TypePredicateKind,
   type TypeReference,
   type UnionOrIntersectionType,
-} from "tsrs/unstable/async";
+} from "tsrs/async";
+import compilerPackage from "tsrs/package.json" with { type: "json" };
 import * as v from "valibot";
 
 import { printError } from "@stll/errors";

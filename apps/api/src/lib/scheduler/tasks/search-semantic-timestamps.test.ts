@@ -9,13 +9,6 @@ import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemet
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-beforeEach(() => {
-  executeMock.mockReset();
-  executeMock.mockImplementation(executeDefault);
-  upsertSearchDocumentMock.mockReset();
-  upsertSearchDocumentMock.mockImplementation(upsertSearchDocumentDefault);
-});
-
 const executeDefault = async (
   _query: SQL,
 ): Promise<Record<string, unknown>[]> => [];
@@ -38,6 +31,10 @@ const runRepair = async (
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  executeMock.mockReset();
+  executeMock.mockImplementation(executeDefault);
+  upsertSearchDocumentMock.mockReset();
+  upsertSearchDocumentMock.mockImplementation(upsertSearchDocumentDefault);
   analytics = installRecordingAnalytics();
   executeMock.mockClear();
   upsertSearchDocumentMock.mockClear();

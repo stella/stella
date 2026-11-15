@@ -10,6 +10,14 @@ export const INVOICE_COUNTRIES = ["SK", "CZ", "PL", "EU"] as const;
 export type InvoiceCountry = (typeof INVOICE_COUNTRIES)[number];
 export type InvoicePartyId = "registration" | "taxId" | "vatId";
 
+/** Domestic profiles that identify transfers with a variable symbol. */
+export const INVOICE_VARIABLE_SYMBOL_PROFILES = {
+  SK: "variable_symbol",
+  CZ: "variable_symbol",
+  PL: "reference",
+  EU: "reference",
+} as const satisfies Record<InvoiceCountry, "variable_symbol" | "reference">;
+
 type LegalNote = {
   mandated: string;
   translations: Record<InvoiceLanguage, string>;

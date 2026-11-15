@@ -20,7 +20,6 @@ import { readLatestDecisionsByCourt } from "@/api/handlers/case-law/decisions/la
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import { caseLawSearchPlan } from "@/api/handlers/case-law/decisions/search";
 import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
-import { readCaseLawCourtActivityQuery } from "@/api/handlers/case-law/decisions/status-courts";
 import { listMatterLinksHandler } from "@/api/handlers/case-law/matter-links/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
@@ -275,24 +274,6 @@ if (!databaseUrl || !runPostgresTests) {
         );
         expect(updatedAt).not.toBeNull();
         expect(new Date(updatedAt ?? "").toISOString()).toBe(NOW.toISOString());
-
-        const activity = await caseLawDb(
-          async (readerTx) =>
-            await readCaseLawCourtActivityQuery(readerTx, {
-              country,
-              courts: [COURT],
-              excludedSourceIds: [],
-              now: new Date("2026-10-11T13:00:00.000Z"),
-            }),
-        );
-        const courtActivity = activity.get(COURT);
-        expect(courtActivity).toMatchObject({
-          addedLastDay: 2,
-          addedLastWeek: 2,
-        });
-        expect(new Date(courtActivity?.updatedAt ?? "").toISOString()).toBe(
-          NOW.toISOString(),
-        );
 
         const arrivals = executedRows(
           await tx.execute(sourceArrivalsRefreshQuery(NOW)),

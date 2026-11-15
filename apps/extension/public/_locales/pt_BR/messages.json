@@ -5,8 +5,11 @@
   "adoptUnsupported": {
     "message": "Com a stella só é possível usar páginas HTTPS públicas."
   },
+  "usingTabs": {
+    "message": "Em uso:"
+  },
   "downloadKept": {
-    "message": "Downloads concluídos enquanto o stella controlava uma aba e mantidos: $COUNT$. Verifique a origem antes de abri-los.",
+    "message": "Downloads mantidos: $COUNT$, verifique antes de abrir",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -14,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "Downloads que o stella interrompeu enquanto controlava uma aba: $COUNT$.",
+    "message": "Downloads interrompidos: $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -22,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "Enquanto o stella controlava uma aba: downloads interrompidos: $STOPPED$. Downloads concluídos e mantidos (verifique a origem antes de abri-los): $KEPT$.",
+    "message": "Downloads interrompidos: $STOPPED$ · mantidos: $KEPT$, verifique antes de abrir",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -42,15 +45,10 @@
     "message": "Abra uma guia do aplicativo stella e tente novamente."
   },
   "connectionPurpose": {
-    "message": "Quando você pedir no chat, a stella poderá abrir e ler sites em outra guia usando suas sessões iniciadas."
+    "message": "Abre e lê sites para o chat usando suas sessões iniciadas."
   },
   "statusConnected": {
-    "message": "Conectada a $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
+    "message": "Conectada"
   },
   "statusNotConnected": {
     "message": "Não conectada"
@@ -60,14 +58,6 @@
   },
   "statusOpenStella": {
     "message": "Abra a stella para conectar"
-  },
-  "statusTabHandedOver": {
-    "message": "Guia entregue à stella: $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
   },
   "allowAndConnect": {
     "message": "Permitir acesso e conectar"
@@ -84,22 +74,28 @@
   "disconnectTab": {
     "message": "Desconectar"
   },
-  "disconnectDescription": {
-    "message": "A stella deixa de usar a guia conectada."
-  },
   "revokeAccess": {
-    "message": "Remover acesso a sites"
-  },
-  "revokeDescription": {
-    "message": "Remove a permissão para abrir e ler sites."
+    "message": "Remover acesso"
   },
   "checkingAccess": {
     "message": "Verificando a conexão…"
   },
   "statusConnectedElsewhere": {
-    "message": "O stella está conectado em outro endereço"
+    "message": "Conectada em outro lugar"
   },
   "connectStellaInstead": {
     "message": "Conectar o stella aqui no lugar"
+  },
+  "allowDesktop": {
+    "message": "Usar com o stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop conectado"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop não está em execução"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Atualize o stella desktop e esta extensão"
   }
 }

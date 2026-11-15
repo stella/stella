@@ -110,15 +110,17 @@ export const caseLawSourceHealth = ({
  * decision someone took, not a fault, so it must not outrank a working
  * sibling. `snapshot` sits just below `current`: a fixed release is no fault,
  * so a country that also follows a live publisher reads as that publisher
- * does, and only a country holding nothing but releases reads `snapshot`. A
- * country whose every source is switched off is reported `disabled` by the
- * rule below rather than by this ranking.
+ * does, and only a country holding nothing but releases reads `snapshot`.
+ * `unknown` sits below both: a source that has never run says nothing about
+ * the ones that have, so a country reads `unknown` only when none of its
+ * running sources has synced. A country whose every source is switched off is
+ * reported `disabled` by the rule below rather than by this ranking.
  */
 const HEALTH_SEVERITY = {
   disabled: 0,
-  snapshot: 1,
-  current: 2,
-  unknown: 3,
+  unknown: 1,
+  snapshot: 2,
+  current: 3,
   delayed: 4,
   stalled: 5,
 } as const satisfies Record<CaseLawCoverageHealth, number>;

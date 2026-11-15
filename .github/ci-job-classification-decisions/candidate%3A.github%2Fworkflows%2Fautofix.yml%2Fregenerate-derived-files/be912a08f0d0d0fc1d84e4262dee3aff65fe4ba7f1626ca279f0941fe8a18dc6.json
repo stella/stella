@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "regenerates and pushes scoped pull-request autofix commits (derived files, lockfile refresh, reviewed safe source fixes); no release publication, tag creation or deployment",
+  "reviewedDigest": "be912a08f0d0d0fc1d84e4262dee3aff65fe4ba7f1626ca279f0941fe8a18dc6"
+}

@@ -13,6 +13,7 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { CryptoKey, JWK } from "jose";
 import * as v from "valibot";
 
+import { OPAQUE_ORGANIZATION_SLUG_PATTERN } from "@stll/auth-model";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -33,7 +34,7 @@ import { oauthClient, organization, user } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { withoutContentEncryptionKeyForTesting } from "@/api/env-content-encryption";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
@@ -66,13 +67,6 @@ const testFetchState = createTestFetch();
 // accepts it; every other issuer stays rejected.
 
 let priorStorageSetting = false;
-beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
-});
 
 type Json = Record<string, unknown>;
 
@@ -119,6 +113,8 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
   // Stub only the issuer JWKS URL; everything else hits the real fetch.
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
@@ -149,6 +145,7 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
   testFetchState.restore();
   await rootDb
     .delete(agentTrustedIssuer)
@@ -356,8 +353,7 @@ describe("agent-auth ID-JAG storage configuration", () => {
       sub: `sub-stepup-${Bun.randomUUIDv7()}`,
     };
     await createHumanSession(stepUpIdentity.email);
-    const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
-    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = undefined;
+    const restoreKey = withoutContentEncryptionKeyForTesting();
     try {
       for (const identity of [readyIdentity, stepUpIdentity]) {
         const response = await postIdentity(
@@ -370,7 +366,7 @@ describe("agent-auth ID-JAG storage configuration", () => {
         expect(body["claim_token"]).toBeUndefined();
       }
     } finally {
-      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = originalKey;
+      restoreKey();
     }
   });
 });
@@ -461,9 +457,7 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
         .where(eq(organization.id, delegation.organizationId))
         .limit(1)
     ).at(0);
-    expect(createdOrganization?.slug).toMatch(
-      /^agent-[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
-    );
+    expect(createdOrganization?.slug).toMatch(OPAQUE_ORGANIZATION_SLUG_PATTERN);
   });
 });
 

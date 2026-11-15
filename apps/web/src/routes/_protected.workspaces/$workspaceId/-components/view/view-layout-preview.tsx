@@ -1,5 +1,9 @@
 import { useTranslations } from "use-intl";
 
+import {
+  AnimatedPreview,
+  AnimatedPreviewMotion,
+} from "@stll/ui/animated-preview";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   BookmarkIcon,
@@ -23,6 +27,8 @@ import {
   STATUS_COLORS,
   STATUS_ICONS,
 } from "@/components/workspaces/tasks/task-detail-constants";
+import { stateHue } from "@/features/avt/state-chip";
+import type { ClaimState } from "@/features/avt/types";
 import type { TranslationKey } from "@/i18n/types";
 import { DOCX_MIME } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
@@ -32,6 +38,7 @@ import { CalendarEntityChip } from "@/routes/_protected.workspaces/$workspaceId/
 import { TASK_STATUS_DOT_COLORS } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
 
 import "./view-layout-preview.css";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 export type ViewLayoutPreviewKind = ViewLayoutType | "template";
 
@@ -115,19 +122,31 @@ const KanbanPreview = ({ workspaceId }: { workspaceId: string }) => {
           status="in_progress"
         >
           <KanbanCard entity={KANBAN_STAYING_TASK} workspaceId={workspaceId} />
-          <div className="view-layout-preview-move relative">
-            <div className="view-layout-preview-fade-out">
-              <KanbanCard
-                entity={KANBAN_MOVING_IN_PROGRESS_TASK}
-                workspaceId={workspaceId}
+          <div className="view-layout-preview-kanban-carry">
+            <AnimatedPreviewMotion>
+              <AnimatedPreview
+                stages={[
+                  {
+                    id: "in-progress",
+                    content: (
+                      <KanbanCard
+                        entity={KANBAN_MOVING_IN_PROGRESS_TASK}
+                        workspaceId={workspaceId}
+                      />
+                    ),
+                  },
+                  {
+                    id: "done",
+                    content: (
+                      <KanbanCard
+                        entity={KANBAN_MOVING_DONE_TASK}
+                        workspaceId={workspaceId}
+                      />
+                    ),
+                  },
+                ]}
               />
-            </div>
-            <div className="view-layout-preview-fade-in absolute inset-0">
-              <KanbanCard
-                entity={KANBAN_MOVING_DONE_TASK}
-                workspaceId={workspaceId}
-              />
-            </div>
+            </AnimatedPreviewMotion>
           </div>
         </PreviewKanbanColumn>
         <PreviewKanbanColumn label={t(STATUS_LABEL_KEYS.done)} status="done" />
@@ -152,7 +171,7 @@ const PreviewKanbanColumn = ({
         className="size-2 shrink-0 rounded-full"
         style={{ backgroundColor: TASK_STATUS_DOT_COLORS[status] }}
       />
-      <span className="truncate">{label}</span>
+      <TruncatedText>{label}</TruncatedText>
     </span>
     {children}
   </div>
@@ -191,8 +210,8 @@ const TablePreview = () => {
   return (
     <div className="flex h-full flex-col justify-center text-xs">
       <div className="text-muted-foreground grid grid-cols-[1.6fr_1fr] gap-2 border-b px-1 pb-1.5 font-medium">
-        <span className="truncate">{t("common.name")}</span>
-        <span className="truncate">{t("tasks.status")}</span>
+        <TruncatedText>{t("common.name")}</TruncatedText>
+        <TruncatedText>{t("tasks.status")}</TruncatedText>
       </div>
       <PreviewTableRow
         icon={
@@ -233,7 +252,7 @@ const PreviewTableRow = ({ icon, name, status }: PreviewTableRowProps) => (
   <div className="grid grid-cols-[1.6fr_1fr] items-center gap-2 border-b px-1 py-1.5 last:border-0">
     <span className="flex min-w-0 items-center gap-1.5">
       {icon}
-      <span className="truncate">{name}</span>
+      <TruncatedText>{name}</TruncatedText>
     </span>
     {status ? (
       <span className="min-w-0">
@@ -254,9 +273,9 @@ const PreviewStatusChip = ({ status }: { status: TaskStatus }) => {
   const Icon = STATUS_ICONS[status];
 
   return (
-    <span className="bg-muted/60 text-muted-foreground flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs leading-none">
+    <span className="bg-muted/60 text-muted-foreground flex max-w-full min-w-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs leading-none">
       <Icon className={cn("size-3 shrink-0", STATUS_COLORS[status])} />
-      <span className="truncate">{t(labelKey)}</span>
+      <TruncatedText>{t(labelKey)}</TruncatedText>
     </span>
   );
 };
@@ -266,7 +285,7 @@ const ListPreview = () => (
     <span className="flex min-w-0 items-center gap-1.5 px-1 py-0.5 font-medium">
       <ChevronDownIcon className="text-muted-foreground size-3 shrink-0" />
       <EntityKindIcon className="size-3.5 shrink-0" kind="folder" />
-      <span className="truncate">{SAMPLE_NAMES.folder}</span>
+      <TruncatedText>{SAMPLE_NAMES.folder}</TruncatedText>
     </span>
     <span className="flex min-w-0 items-center gap-1.5 py-0.5 ps-6">
       <EntityKindIcon
@@ -274,7 +293,7 @@ const ListPreview = () => (
         kind="document"
         mimeType={DOCX_MIME}
       />
-      <span className="truncate">{SAMPLE_NAMES.contract}</span>
+      <TruncatedText>{SAMPLE_NAMES.contract}</TruncatedText>
     </span>
     <span className="flex min-w-0 items-center gap-1.5 px-1 py-0.5 font-medium">
       <DirectionalIcon
@@ -282,7 +301,7 @@ const ListPreview = () => (
         icon={ChevronRightIcon}
       />
       <EntityKindIcon className="size-3.5 shrink-0" kind="folder" />
-      <span className="truncate">{SAMPLE_NAMES.evidence}</span>
+      <TruncatedText>{SAMPLE_NAMES.evidence}</TruncatedText>
     </span>
   </div>
 );
@@ -335,24 +354,131 @@ const TimelinePreview = () => (
   </div>
 );
 
-// Prose lines whose claims carry verdict underlines.
+// A statement's claims (start side) linked to the anchor facts (end side)
+// that grade them. Each link draws in on its own beat in its verdict's hue;
+// the last claim finds no fact and keeps the dotted no-coverage mark.
 const AvtPreview = () => (
-  <div className="flex h-full flex-col justify-center gap-2.5 px-1">
-    <div className="flex items-center gap-1.5">
-      <div className="bg-muted h-1.5 w-1/4 rounded-full" />
-      <div className="border-success h-2.5 w-2/5 border-b-2" />
-      <div className="bg-muted h-1.5 flex-1 rounded-full" />
-    </div>
-    <div className="flex items-center gap-1.5">
-      <div className="border-destructive h-2.5 w-1/3 border-b-2" />
-      <div className="bg-muted h-1.5 flex-1 rounded-full" />
-    </div>
-    <div className="flex items-center gap-1.5">
-      <div className="bg-muted h-1.5 w-1/5 rounded-full" />
-      <div className="border-warning h-2.5 w-1/2 border-b-2" />
-    </div>
+  <div className="relative size-full rtl:-scale-x-100">
+    <svg className="absolute inset-0 size-full" viewBox={AVT_VIEWBOX}>
+      <rect
+        className="fill-card stroke-border"
+        height={112}
+        rx={6}
+        width={AVT_CARD_END - 4}
+        x={4}
+        y={8}
+      />
+      <rect
+        className="fill-muted-foreground/30"
+        height={4}
+        rx={2}
+        width={40}
+        x={12}
+        y={16}
+      />
+      {AVT_PREVIEW_CLAIMS.flatMap((claim) =>
+        claim.prose.map(([x1, x2]) => (
+          <rect
+            className="fill-muted"
+            height={5}
+            key={`${claim.id}:${x1}`}
+            rx={2.5}
+            width={x2 - x1}
+            x={x1}
+            y={claim.y - 2.5}
+          />
+        )),
+      )}
+      {AVT_PREVIEW_CLAIMS.map((claim) => (
+        <rect
+          className="fill-muted-foreground/25"
+          height={5}
+          key={claim.id}
+          rx={2.5}
+          width={claim.span[1] - claim.span[0]}
+          x={claim.span[0]}
+          y={claim.y - 2.5}
+        />
+      ))}
+      {AVT_PREVIEW_FACTS.map((fact) => (
+        <g key={fact.id}>
+          <rect
+            className="fill-card stroke-border"
+            height={AVT_FACT_HEIGHT}
+            rx={5}
+            width={236 - AVT_FACT_START}
+            x={AVT_FACT_START}
+            y={fact.y - AVT_FACT_HEIGHT / 2}
+          />
+          <rect
+            className="fill-muted-foreground/30"
+            height={4}
+            rx={2}
+            width={fact.width}
+            x={AVT_FACT_START + 8}
+            y={fact.y - 2}
+          />
+        </g>
+      ))}
+    </svg>
+    {AVT_PREVIEW_CLAIMS.map((claim, index) => (
+      <AnimatedPreview
+        className="absolute inset-0"
+        key={claim.id}
+        pace="beat"
+        stagger={index * 3}
+        stages={[
+          { id: "pending", content: null },
+          { id: "graded", content: <AvtPreviewLink claim={claim} /> },
+        ]}
+      />
+    ))}
   </div>
 );
+
+const AvtPreviewLink = ({ claim }: { claim: AvtPreviewClaim }) => {
+  const hue = stateHue(claim.state);
+  const [x1, x2] = claim.span;
+  const underline = claim.y + 5;
+  if (claim.factY === null) {
+    return (
+      <svg className="size-full" viewBox={AVT_VIEWBOX}>
+        <line
+          stroke={hue}
+          strokeDasharray="1.5 2"
+          strokeLinecap="round"
+          strokeWidth={1.5}
+          x1={x1}
+          x2={x2}
+          y1={underline}
+          y2={underline}
+        />
+      </svg>
+    );
+  }
+  const bend = (AVT_CARD_END + AVT_FACT_START) / 2;
+  return (
+    <svg className="size-full" viewBox={AVT_VIEWBOX}>
+      <line
+        stroke={hue}
+        strokeLinecap="round"
+        strokeWidth={1.5}
+        x1={x1}
+        x2={x2}
+        y1={underline}
+        y2={underline}
+      />
+      <path
+        d={`M ${AVT_CARD_END} ${claim.y} C ${bend} ${claim.y}, ${bend} ${claim.factY}, ${AVT_FACT_START} ${claim.factY}`}
+        fill="none"
+        stroke={hue}
+        strokeWidth={1.5}
+      />
+      <circle cx={AVT_CARD_END} cy={claim.y} fill={hue} r={2.5} />
+      <circle cx={AVT_FACT_START} cy={claim.factY} fill={hue} r={2.5} />
+    </svg>
+  );
+};
 
 // The matter's address above the messages filed to it.
 const CorrespondencePreview = () => (
@@ -386,6 +512,64 @@ const CORRESPONDENCE_PREVIEW_ROWS = [
 
 // Fixed timestamp: previews are static mock data, and the ambient clock would make
 // the rendered output differ between sessions for no reason.
+const AVT_VIEWBOX = "0 0 240 128";
+const AVT_CARD_END = 124;
+const AVT_FACT_START = 168;
+const AVT_FACT_HEIGHT = 22;
+
+const AVT_PREVIEW_FACTS = [
+  { id: "a", y: 30, width: 44 },
+  { id: "b", y: 64, width: 36 },
+  { id: "c", y: 98, width: 48 },
+] as const;
+
+type AvtPreviewClaim = {
+  id: string;
+  state: ClaimState;
+  y: number;
+  /** The claim's words: where its verdict mark is drawn. */
+  span: readonly [number, number];
+  /** The sentence around the claim. */
+  prose: readonly (readonly [number, number])[];
+  /** The fact the claim is graded against; null for no coverage. */
+  factY: number | null;
+};
+
+const AVT_PREVIEW_CLAIMS = [
+  {
+    id: "c1",
+    state: "supported",
+    y: 34,
+    span: [40, 104],
+    prose: [[12, 36]],
+    factY: AVT_PREVIEW_FACTS[0].y,
+  },
+  {
+    id: "c2",
+    state: "contradicted",
+    y: 56,
+    span: [12, 72],
+    prose: [[76, 112]],
+    factY: AVT_PREVIEW_FACTS[1].y,
+  },
+  {
+    id: "c3",
+    state: "tension",
+    y: 78,
+    span: [34, 96],
+    prose: [[12, 30]],
+    factY: AVT_PREVIEW_FACTS[0].y,
+  },
+  {
+    id: "c4",
+    state: "nocover",
+    y: 100,
+    span: [12, 80],
+    prose: [[84, 112]],
+    factY: null,
+  },
+] as const satisfies readonly AvtPreviewClaim[];
+
 const PREVIEW_CREATED_AT = "2026-01-15T09:00:00.000Z";
 
 type MockTaskOptions = {

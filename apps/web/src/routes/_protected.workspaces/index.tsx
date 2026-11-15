@@ -2,12 +2,19 @@ import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  stripSearchParams,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 import { useShallow } from "zustand/shallow";
 
-import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
+import {
+  VISIBLE_WORKSPACE_STATUSES,
+  WORKSPACE_STATUS,
+} from "@stll/api-contract/workspace-status";
 import { Button } from "@stll/ui/button";
 import { Frame } from "@stll/ui/frame";
 import {
@@ -30,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -42,6 +50,10 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import {
+  isMatterInStatusView,
+  matterCardDragMode,
+} from "@/lib/workspaces/archived-matters.logic";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { captureDialogReturnFocus } from "@/lib/workspaces/dialog-return-focus";
 import {
@@ -74,6 +86,10 @@ import {
 import { useConfigStore } from "@/stores/config-store";
 
 const searchSchema = routeSearchSchema({
+  status: v.optional(
+    v.picklist(VISIBLE_WORKSPACE_STATUSES),
+    WORKSPACE_STATUS.active,
+  ),
   // Client id to scroll into view and flash on arrival (set by the matter
   // breadcrumb's company link). Cleared by the route once consumed.
   focusClient: v.optional(v.string()),
@@ -82,12 +98,17 @@ const searchSchema = routeSearchSchema({
 export const Route = createFileRoute("/_protected/workspaces/")({
   staticData: { presentation: routePresentation({ type: "inherit" }) },
   validateSearch: searchSchema,
-  loader: async ({ context }) => {
+  // Active is the default view, so `/workspaces` stays the canonical address.
+  search: {
+    middlewares: [stripSearchParams({ status: WORKSPACE_STATUS.active })],
+  },
+  loaderDeps: ({ search }) => ({ status: search.status }),
+  loader: async ({ context, deps }) => {
     // Prime the workspaces query the page suspends on so the fetch starts
     // during navigation instead of after the component mounts and suspends.
     await ensureRouteQueryData(
       context.queryClient,
-      workspacesRouteOptions(context.user.activeOrganizationId),
+      workspacesRouteOptions(context.user.activeOrganizationId, deps.status),
     );
   },
   head: () => ({
@@ -133,8 +154,9 @@ const MattersContent = ({
   const t = useTranslations();
   const locale = useFormattingLocale();
   const queryClient = useQueryClient();
+  const status = Route.useSearch({ select: (s) => s.status });
   const { data, isFetching } = useSuspenseQuery(
-    workspacesRouteOptions(activeOrganizationId),
+    workspacesRouteOptions(activeOrganizationId, status),
   );
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
@@ -172,9 +194,11 @@ const MattersContent = ({
     );
   });
 
-  const workspaces = data.workspaces;
+  const workspaces = data.workspaces.filter((matter) =>
+    isMatterInStatusView(matter.status, status),
+  );
   const canOpenCreateMatter =
-    canCreateMatter && workspaces.length < WORKSPACES_PER_ORGANIZATION_MAX;
+    canCreateMatter && data.creationCapacity.canCreate;
 
   const searched = filterWorkspacesBySearch(workspaces, search);
 
@@ -262,6 +286,14 @@ const MattersContent = ({
     <MattersPageContextMenu canCreateMatter={canOpenCreateMatter}>
       <div className="flex min-h-0 flex-1 flex-col">
         <MattersToolbar
+          status={status}
+          onStatusChange={(nextStatus) => {
+            setFocusIndex(-1);
+            detached(
+              navigate({ to: "/workspaces", search: { status: nextStatus } }),
+              "workspaces.status",
+            );
+          }}
           onSearchChange={setSearch}
           search={search}
           searchRef={searchRef}
@@ -290,7 +322,10 @@ const MattersContent = ({
                   </div>
                 );
               }
-              if (workspaces.length === 0) {
+              if (
+                workspaces.length === 0 &&
+                status === WORKSPACE_STATUS.active
+              ) {
                 return (
                   <EmptyScreen
                     className="min-h-full"
@@ -471,7 +506,7 @@ const MattersTableSkeleton = () => {
           <TableRow>
             {columns.map((col) => (
               <TableHead key={col.id}>
-                <span className="truncate">{headerLabel(col.id)}</span>
+                <TruncatedText>{headerLabel(col.id)}</TruncatedText>
               </TableHead>
             ))}
           </TableRow>
@@ -673,7 +708,10 @@ const MattersContentView = ({
                       {!collapsed &&
                         group.workspaces.map((workspace, i) => (
                           <MatterCard
-                            drag={canReassignClient ? "client-group" : "none"}
+                            drag={matterCardDragMode(
+                              workspace.status,
+                              canReassignClient,
+                            )}
                             focused={focusIndex === baseIndex + i}
                             hideClientName
                             key={workspace.id}

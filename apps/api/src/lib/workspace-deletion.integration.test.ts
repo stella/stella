@@ -53,6 +53,10 @@ import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion
 import type { WorkspaceDeletionDatabase } from "@/api/lib/workspace-deletion";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  deleteAccountExports,
+  seedReadyOrganizationAuditExport,
+} from "@/api/tests/helpers/organization-audit-export";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -473,13 +477,20 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await seedReadyOrganizationAuditExport({
+    db: testDb,
+    userId: fixture.actorUserId,
+    organizationId: fixture.organizationId,
+  });
   await testDb.transaction(
     async (tx) =>
       await completeOrganizationDeletion({
+        deletedBy: fixture.actorUserId,
         organizationId: fixture.organizationId,
         tx: asTestRaw<Transaction>(tx),
       }),
   );
+  await deleteAccountExports(testDb, fixture.actorUserId);
   await testDb
     .delete(entityDeletionCleanupRequests)
     .where(

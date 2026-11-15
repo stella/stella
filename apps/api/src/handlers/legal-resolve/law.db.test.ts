@@ -149,7 +149,10 @@ beforeAll(async () => {
     },
   ]);
   await db.insert(legislationDocuments).values(versions);
-  await syncLegislationWorkNamesTx(asTestRaw(db), versions);
+  await syncLegislationWorkNamesTx(
+    asTestRaw(db),
+    versions.map((version) => ({ ...version, documentType: null })),
+  );
   await db.insert(legislationDocuments).values({
     id: czechId,
     sourceId,

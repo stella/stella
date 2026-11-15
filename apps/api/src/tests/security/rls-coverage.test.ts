@@ -535,6 +535,7 @@ describe("policy coverage", () => {
     "agent_delegation",
     // Operator-managed OAuth bindings use the auth deny policy asserted below.
     "service_oauth_clients",
+    "oauth_grant_revocations",
     // Root-owned OAuth state denies all app-role access.
     "mcp_web_handoff",
     // Filed feedback reports: organization_id/user_id record who filed a
@@ -548,10 +549,23 @@ describe("policy coverage", () => {
     // one owner-only policy and every privilege is revoked from stella; the
     // dedicated assertion below covers that instead of tenant CRUD.
     "chat_content_v3_backfill_receipts",
+    // Account exports belong to the requesting account: RLS admits a row by
+    // user_id alone. An organization audit export names the organization its
+    // archive covers, but that organization_id is never a tenant scope, and
+    // the row outlives the organization so its owner can still download it.
+    "account_exports",
     // Professional-use acceptances are written once at organization creation
     // on the owner connection and deny the request role entirely
     // (asserted in rls-table-grants.test.ts).
     "organization_professional_use_acceptances",
+    // Desktop runner sockets, runs and folder restores are served on the
+    // owner connection: every row is bound to an account, organization,
+    // installation and device key the socket proved, and the request role is
+    // denied outright (owner-only policies, privileges revoked; asserted in
+    // rls-table-grants.test.ts).
+    "desktop_runners",
+    "desktop_runner_runs",
+    "desktop_runner_folder_restores",
     // Account-owned creation receipts exist before membership; organization_id
     // is a cascade pointer. Owner-only RLS and revoked request-role grants are
     // asserted in rls-table-grants.test.ts instead of tenant CRUD policies.
@@ -573,6 +587,7 @@ describe("policy coverage", () => {
     // the organization is a routing column for delivery, never a permission.
     // The dedicated assertion below covers the user-only policies.
     "push_devices",
+    "timer_activity_devices",
     // The entry timer projection has member reads and truth-bound owner/admin
     // INSERT/UPDATE, with identity immutability enforced by its trigger.
     "time_entry_timer_states",
@@ -591,6 +606,12 @@ describe("policy coverage", () => {
     // workspace policies would hide exactly the rows the check exists to
     // find. Organization is the real boundary and the org policies pin it.
     "document_reference_counters",
+    // A legal hold is an organization record: an item hold carries no
+    // workspace_id, so workspace policies would hide it from the deletion
+    // checks that must see it. The request role places and releases holds but
+    // never deletes one (no DELETE grant or policy); the dedicated assertion
+    // below covers that boundary.
+    "legal_holds",
   ]);
   const APPEND_ONLY = new Set([
     "audit_logs",
@@ -1062,6 +1083,31 @@ describe("policy coverage", () => {
     }
   });
 
+  test("legal holds pin the organization and the request role never deletes one", async () => {
+    const policies = (await fetchStellaPolicies(testDb)).filter(
+      (policy) =>
+        policy.table_name === "legal_holds" &&
+        policy.policy_name !== "legal_holds_owner_access",
+    );
+    expect(policies.map(({ command }) => command).toSorted()).toEqual([
+      "a",
+      "r",
+      "w",
+    ]);
+    for (const policy of policies) {
+      const expr =
+        policy.command === "a" ? policy.check_expr : policy.using_expr;
+      expect(expr).toContain("organization_id");
+      expect(expr).toContain(SETTING_ORGANIZATION_ID);
+    }
+    expect(
+      privilegesForTable(
+        await fetchStellaTablePrivileges(testDb),
+        "legal_holds",
+      ),
+    ).not.toContain("DELETE");
+  });
+
   test("chat tables have user + optional workspace policies", async () => {
     const policies = await fetchStellaPolicies(testDb);
 
@@ -1117,21 +1163,24 @@ describe("policy coverage", () => {
     expect(updatePolicy?.check_expr).toContain(SETTING_ORGANIZATION_ID);
   });
 
-  test("push devices admit only the person who registered them", async () => {
-    const tablePolicies = (await fetchStellaPolicies(testDb)).filter(
-      (p) => p.table_name === "push_devices",
-    );
-    expect(new Set(tablePolicies.map((p) => p.command))).toEqual(
-      new Set(["r", "a", "w", "d"]),
-    );
-    for (const policy of tablePolicies) {
-      expect(policy.permissive).toBe(true);
-      const expr =
-        policy.command === "a" ? policy.check_expr : policy.using_expr;
-      expect(expr).toContain("user_id");
-      expect(expr).toContain(SETTING_USER_ID);
-    }
-  });
+  test.each(["push_devices", "timer_activity_devices"])(
+    "%s admit only the person who registered them",
+    async (table) => {
+      const tablePolicies = (await fetchStellaPolicies(testDb)).filter(
+        (p) => p.table_name === table,
+      );
+      expect(new Set(tablePolicies.map((p) => p.command))).toEqual(
+        new Set(["r", "a", "w", "d"]),
+      );
+      for (const policy of tablePolicies) {
+        expect(policy.permissive).toBe(true);
+        const expr =
+          policy.command === "a" ? policy.check_expr : policy.using_expr;
+        expect(expr).toContain("user_id");
+        expect(expr).toContain(SETTING_USER_ID);
+      }
+    },
+  );
 
   test("user_files policies derive full scope from the owning thread", async () => {
     const policies = await fetchStellaPolicies(testDb);
@@ -1568,6 +1617,7 @@ describe("policy coverage", () => {
       "jwks",
       "oauth_access_token",
       "oauth_client",
+      "oauth_grant_revocations",
       "service_oauth_clients",
       "mcp_web_handoff",
       "oauth_consent",

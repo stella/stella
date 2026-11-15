@@ -17,7 +17,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -25,7 +25,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  defaultVarcharSchema,
+  displayNameSchema,
   resourceIdSchema,
   userIdSchema,
 } from "@/api/lib/custom-schema";
@@ -36,10 +36,12 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const updateWorkspaceBodySchema = v.object({
   billingNarrativeLanguage: v.optional(narrativeLanguageSchema),
-  name: v.optional(defaultVarcharSchema),
+  name: v.optional(displayNameSchema()),
   clientId: v.optional(resourceIdSchema("contact")),
   expectedClientId: v.optional(v.nullable(resourceIdSchema("contact"))),
   reference: v.optional(v.pipe(v.string(), v.maxLength(64), v.minLength(1))),
@@ -167,6 +169,48 @@ export type UpdateWorkspaceHandlerProps = {
   body: v.InferOutput<typeof updateWorkspaceBodySchema>;
 };
 
+/** Repairs the matter's search projection after the response, off the request. */
+const flushUpdatedWorkspaceSearch = (workspaceId: SafeId<"workspace">) => {
+  detached(
+    async () =>
+      flushWorkspaceSearchRepairs([workspaceId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "updateWorkspaceHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
+      ),
+    "workspaces-update.flush-workspace-search-repairs",
+  );
+};
+
+type HeldClientOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  body: { clientId?: SafeId<"contact"> | undefined };
+  workspace: { id: SafeId<"workspace">; clientId: SafeId<"contact"> | null };
+};
+
+/** A held matter keeps the client its evidence names. */
+const heldClient = async ({
+  tx,
+  organizationId,
+  body,
+  workspace,
+}: HeldClientOptions) => {
+  if (body.clientId === undefined || body.clientId === workspace.clientId) {
+    return null;
+  }
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "matter", workspaceId: workspace.id },
+  });
+  return hold.isErr()
+    ? { ok: false as const, refusal: legalHoldRefusal(hold.error) }
+    : null;
+};
+
 // Shared matter-update logic reused by the HTTP handler and the
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
@@ -210,6 +254,11 @@ export const updateWorkspaceHandler = async function* ({
         status: 404 as const,
         message: "Workspace not found",
       };
+    }
+
+    const held = await heldClient({ tx, organizationId, body, workspace });
+    if (held) {
+      return held;
     }
 
     if (body.clientId !== undefined) {
@@ -369,19 +418,17 @@ export const updateWorkspaceHandler = async function* ({
   const failure = txResult.value;
   if (!failure.ok) {
     return yield* Result.err(
-      new HandlerError({
-        status: failure.status,
-        message: failure.message,
-        ...(failure.status === 409 ? { code: failure.code } : {}),
-      }),
+      "refusal" in failure
+        ? failure.refusal
+        : new HandlerError({
+            status: failure.status,
+            message: failure.message,
+            ...(failure.status === 409 ? { code: failure.code } : {}),
+          }),
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(
-    createErrorCapture(
-      handlerErrorContext("updateWorkspaceHandler.flushWorkspaceSearchRepairs"),
-    ),
-  );
+  flushUpdatedWorkspaceSearch(workspaceId);
 
   return Result.ok({});
 };

@@ -3,24 +3,18 @@ import type { MouseEvent, ReactNode } from "react";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 
-import { LEGAL_CITATION_LINK_CLASS_NAME } from "@stll/decision-reader/citation-link";
 import {
   CitedProvisionExpansion as ProvisionExpansion,
   CitedProvisionLink as ProvisionLink,
+  CitedProvisionPeek,
 } from "@stll/decision-reader/cited-provision";
 import type { FullProvisionRead } from "@stll/decision-reader/cited-provision";
 import { fullProvisionOutcome } from "@stll/decision-reader/provision-card.logic";
 import type { CitedWording } from "@stll/decision-reader/provision-card.logic";
-import { useReaderAdapters } from "@stll/decision-reader/reader-adapters";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
-import { cn } from "@stll/ui/utils";
 
-import {
-  CITED_PROVISION_CLICK,
-  citedProvisionClick,
-} from "@/components/legal-reader/cited-provision-link.logic";
 import {
   keepReadingPosition,
   readerScrollOwner,
@@ -166,6 +160,21 @@ export const CitedProvisionExpansion = ({
   );
 };
 
+/**
+ * The peek's body. Mounted only while the peek is open, so a decision that
+ * cites dozens of provisions reads none of their wording up front.
+ */
+const CitedProvisionPeekBody = ({
+  provision,
+}: {
+  provision: CitedProvisionTarget;
+}) => (
+  <CitedProvisionPeek
+    provision={provision}
+    wordings={useCitedWordings({ citations: [provision], enabled: true })}
+  />
+);
+
 export const CitedProvisionLink = ({
   children,
   className,
@@ -174,70 +183,29 @@ export const CitedProvisionLink = ({
   children: ReactNode;
   className?: string | undefined;
   provision: CitedProvisionTarget;
-}) => {
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const { loadProvisionPreview } = useReaderAdapters();
-  const onPreviewOpenChange = (open: boolean) => {
-    setPreviewOpen(open);
-    if (!open || provision.preview !== null) {
-      return;
-    }
-    // The Query observer below owns preview failures; the demand read shares
-    // its cache entry and must not report the same failure a second time.
-    detached(
-      Result.tryPromise(
-        async () =>
-          await loadProvisionPreview({
-            anchor: provision.payload.anchorId,
-            citedAnchor: provision.payload.highlightAnchorId,
-            documentId: provision.document.id,
-          }),
-      ),
-      "legal-reader.provision-preview",
-    );
-  };
-  const wordings = useCitedWordings({
-    citations: [provision],
-    enabled: previewOpen,
-  });
-  const onProvisionClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    const click = citedProvisionClick(event);
-    switch (click) {
-      case CITED_PROVISION_CLICK.navigate:
-        break;
-      case CITED_PROVISION_CLICK.peek:
-        event.preventDefault();
-        onPreviewOpenChange(true);
-        break;
-      default:
-        click satisfies never;
-        panic(`Unhandled cited-provision click: ${String(click)}`);
-    }
-  };
-  const link = (
-    <Link
-      aria-expanded={previewOpen}
-      className={cn(LEGAL_CITATION_LINK_CLASS_NAME, className)}
-      hash={provision.payload.highlightAnchorId ?? provision.payload.anchorId}
-      onClick={onProvisionClick}
-      {...createStatuteLinkTarget({
-        country: provision.document.country,
-        documentId: provision.document.id,
-        eli: provision.document.eli,
-        slug: provision.document.slug,
-        versionValidFrom: provision.document.versionValidFrom,
-      })}
-    />
-  );
-  return (
-    <ProvisionLink
-      provision={provision}
-      previewOpen={previewOpen}
-      onPreviewOpenChange={onPreviewOpenChange}
-      link={link}
-      wordings={wordings}
-    >
-      {children}
-    </ProvisionLink>
-  );
-};
+}) => (
+  <ProvisionLink
+    body={<CitedProvisionPeekBody provision={provision} />}
+    className={className}
+    provision={provision}
+  >
+    {children}
+  </ProvisionLink>
+);
+
+/** The provision on its act's own page, as the reader's actions link to it. */
+export const provisionPageLink = ({
+  document,
+  payload,
+}: CitedProvisionTarget) => (
+  <Link
+    hash={payload.highlightAnchorId ?? payload.anchorId}
+    {...createStatuteLinkTarget({
+      country: document.country,
+      documentId: document.id,
+      eli: document.eli,
+      slug: document.slug,
+      versionValidFrom: document.versionValidFrom,
+    })}
+  />
+);

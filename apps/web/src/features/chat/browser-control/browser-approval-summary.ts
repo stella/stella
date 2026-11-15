@@ -56,6 +56,10 @@ export const getBrowserApprovalDetails = (
       ];
     case BROWSER_CONTROL_ACTION.pressKey:
       return [...targetDetails(command), { type: "key", value: command.key }];
+    case BROWSER_CONTROL_ACTION.find:
+      return command.search.query === undefined || command.search.query === ""
+        ? []
+        : [{ type: "value", value: command.search.query }];
     case BROWSER_CONTROL_ACTION.goBack:
     case BROWSER_CONTROL_ACTION.snapshot:
       return [];

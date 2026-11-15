@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   CHAT_UNAVAILABLE_REF_TEXT,
@@ -85,7 +85,8 @@ afterEach(() => {
 
 describe("chat refs across the requests of a thread", () => {
   test("a ref keeps its target in every later request, and no spelling names two targets", () => {
-    fc.assert(
+    assertProperty(
+      "a ref keeps its target in every later request, and no spelling names two targets",
       fc.property(
         fc.array(fc.array(fc.nat({ max: 12 }), { maxLength: 6 }), {
           minLength: 1,
@@ -111,7 +112,7 @@ describe("chat refs across the requests of a thread", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { ZipArchive } from "@stll/docx-core/zip";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { JustificationContent } from "@/api/db/schema";
 import type { PropertyTool } from "@/api/db/schema-validators";
@@ -340,11 +340,11 @@ describe("table export", () => {
         [textCell("Beta"), textCell("Net 30")],
       ],
     });
-    const zip = await JSZip.loadAsync(bytes);
-    const documentXml = await zip.file("word/document.xml")?.async("text");
+    const zip = await ZipArchive.read(bytes);
+    const documentXml = await zip.entry("word/document.xml")?.text();
 
-    expect(zip.file("[Content_Types].xml")).not.toBeNull();
-    expect(zip.file("_rels/.rels")).not.toBeNull();
+    expect(zip.entry("[Content_Types].xml")).toBeDefined();
+    expect(zip.entry("_rels/.rels")).toBeDefined();
     expect(documentXml).toContain("<w:tbl>");
     expect(documentXml).toContain("<w:tblHeader/>");
     expect(documentXml).toContain("Terms &amp; notes");
@@ -360,8 +360,8 @@ describe("table export", () => {
       ],
       rows: [[textCell("First\u0000\r\nSecond\rThird")]],
     });
-    const zip = await JSZip.loadAsync(bytes);
-    const documentXml = await zip.file("word/document.xml")?.async("text");
+    const zip = await ZipArchive.read(bytes);
+    const documentXml = await zip.entry("word/document.xml")?.text();
 
     expect(documentXml).toContain("First");
     expect(documentXml).not.toContain("\u0000");
@@ -381,8 +381,8 @@ describe("table export", () => {
       ],
       rows: [[textCell('=1+1 & "quoted" <tag>')]],
     });
-    const zip = await JSZip.loadAsync(bytes);
-    const sheet = await zip.file("xl/worksheets/sheet1.xml")?.async("text");
+    const zip = await ZipArchive.read(bytes);
+    const sheet = await zip.entry("xl/worksheets/sheet1.xml")?.text();
 
     expect(sheet).toContain('t="inlineStr"');
     expect(sheet).not.toContain("<f>");
@@ -415,9 +415,9 @@ describe("table export", () => {
     );
 
     const bytes = await buildXlsxExport(table);
-    const zip = await JSZip.loadAsync(bytes);
-    const sheet = await zip.file("xl/worksheets/sheet1.xml")?.async("text");
-    const styles = await zip.file("xl/styles.xml")?.async("text");
+    const zip = await ZipArchive.read(bytes);
+    const sheet = await zip.entry("xl/worksheets/sheet1.xml")?.text();
+    const styles = await zip.entry("xl/styles.xml")?.text();
 
     expect(sheet).toMatch(/<c r="A2" s="\d+"><v>875000<\/v><\/c>/u);
     expect(sheet).not.toContain('t="inlineStr"><is><t>€875,000</t>');
@@ -461,8 +461,8 @@ describe("table export", () => {
       rows: [],
       worksheetName: "Atlas disclosure / privilege review",
     });
-    const zip = await JSZip.loadAsync(bytes);
-    const workbook = await zip.file("xl/workbook.xml")?.async("text");
+    const zip = await ZipArchive.read(bytes);
+    const workbook = await zip.entry("xl/workbook.xml")?.text();
 
     expect(workbook).toContain('name="Atlas disclosure   privilege re"');
   });
@@ -505,9 +505,9 @@ describe("table export", () => {
     );
 
     const bytes = await buildXlsxExport(table);
-    const zip = await JSZip.loadAsync(bytes);
-    const sheet = await zip.file("xl/worksheets/sheet1.xml")?.async("text");
-    const styles = await zip.file("xl/styles.xml")?.async("text");
+    const zip = await ZipArchive.read(bytes);
+    const sheet = await zip.entry("xl/worksheets/sheet1.xml")?.text();
+    const styles = await zip.entry("xl/styles.xml")?.text();
 
     expect(sheet).toContain('<pane ySplit="1"');
     expect(sheet).toContain('<autoFilter ref="A1:D1"/>');
@@ -536,17 +536,15 @@ describe("table export", () => {
         [textCell('http://example.test =HYPERLINK("http://example.test")')],
       ],
     });
-    const zip = await JSZip.loadAsync(bytes);
-    const relFiles = Object.keys(zip.files).filter((path) =>
-      path.endsWith(".rels"),
-    );
+    const zip = await ZipArchive.read(bytes);
+    const relFiles = zip.paths().filter((path) => path.endsWith(".rels"));
 
-    expect(Object.keys(zip.files)).not.toContain("xl/vbaProject.bin");
-    expect(
-      Object.keys(zip.files).some((path) => path.includes("externalLink")),
-    ).toBe(false);
+    expect(zip.paths()).not.toContain("xl/vbaProject.bin");
+    expect(zip.paths().some((path) => path.includes("externalLink"))).toBe(
+      false,
+    );
     for (const relFile of relFiles) {
-      const relXml = await zip.file(relFile)?.async("text");
+      const relXml = await zip.entry(relFile)?.text();
       expect(relXml).not.toContain('TargetMode="External"');
       expect(relXml).not.toContain("hyperlink");
     }
@@ -555,7 +553,8 @@ describe("table export", () => {
   test(
     "xlsx uses the same flag color family as table metadata flags",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "xlsx uses the same flag color family as table metadata flags",
         fc.asyncProperty(fc.constantFrom(...cellFlagIds), async (flagId) => {
           const columns = buildExportColumns(tableLayout(), [
             { id: "p1", name: "AI status", tool: manualTool },
@@ -594,18 +593,16 @@ describe("table export", () => {
           );
 
           const bytes = await buildXlsxExport(table);
-          const zip = await JSZip.loadAsync(bytes);
-          const sheet = await zip
-            .file("xl/worksheets/sheet1.xml")
-            ?.async("text");
-          const styles = await zip.file("xl/styles.xml")?.async("text");
+          const zip = await ZipArchive.read(bytes);
+          const sheet = await zip.entry("xl/worksheets/sheet1.xml")?.text();
+          const styles = await zip.entry("xl/styles.xml")?.text();
 
           expect(sheet).toContain(
             `<c r="A2" s="${flagStyleIds[flagId]}" t="inlineStr">`,
           );
           expect(styles).toContain(`fgColor rgb="${flagFillColors[flagId]}"`);
         }),
-        propertyConfig({ numRuns: cellFlagIds.length }),
+        { numRuns: cellFlagIds.length },
       );
     },
     propertyTestTimeout(20_000),
@@ -614,7 +611,8 @@ describe("table export", () => {
   test(
     "xlsx property: arbitrary text remains inline string data",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "xlsx property: arbitrary text remains inline string data",
         fc.asyncProperty(
           fc.array(fc.string({ maxLength: 80 }), {
             minLength: 1,
@@ -634,14 +632,12 @@ describe("table export", () => {
                 textCell(sanitizeSpreadsheetCellForTest(value)),
               ]),
             });
-            const zip = await JSZip.loadAsync(bytes);
-            const sheet = await zip
-              .file("xl/worksheets/sheet1.xml")
-              ?.async("text");
+            const zip = await ZipArchive.read(bytes);
+            const sheet = await zip.entry("xl/worksheets/sheet1.xml")?.text();
             const workbookRels = await zip
-              .file("xl/_rels/workbook.xml.rels")
-              ?.async("text");
-            const rootRels = await zip.file("_rels/.rels")?.async("text");
+              .entry("xl/_rels/workbook.xml.rels")
+              ?.text();
+            const rootRels = await zip.entry("_rels/.rels")?.text();
 
             expect(sheet).not.toContain("<f>");
             expect(sheet).not.toContain("<hyperlink");
@@ -650,13 +646,13 @@ describe("table export", () => {
             );
             expect(workbookRels).not.toContain('TargetMode="External"');
             expect(rootRels).not.toContain('TargetMode="External"');
-            expect(Object.keys(zip.files)).not.toContain("xl/vbaProject.bin");
+            expect(zip.paths()).not.toContain("xl/vbaProject.bin");
             expect(sheet?.match(/t="inlineStr"/gu)?.length).toBe(
               values.length + 1,
             );
           },
         ),
-        propertyConfig({ numRuns: 50 }),
+        { numRuns: 50 },
       );
       // 50 zip builds + parses brush the default 5s timeout on loaded CI
       // runners; the explicit timeout keeps the property run deterministic.
@@ -667,7 +663,8 @@ describe("table export", () => {
   test(
     "xlsx property: long arbitrary values are capped before XML output",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "xlsx property: long arbitrary values are capped before XML output",
         fc.asyncProperty(
           fc
             .integer({ min: 1, max: 200 })
@@ -686,16 +683,14 @@ describe("table export", () => {
               ],
               rows: [[textCell(sanitizeSpreadsheetCellForTest(value))]],
             });
-            const zip = await JSZip.loadAsync(bytes);
-            const sheet = await zip
-              .file("xl/worksheets/sheet1.xml")
-              ?.async("text");
+            const zip = await ZipArchive.read(bytes);
+            const sheet = await zip.entry("xl/worksheets/sheet1.xml")?.text();
 
             expect(sheet).toContain("[truncated]");
             expect(sheet).not.toContain(value);
           },
         ),
-        propertyConfig({ numRuns: 20 }),
+        { numRuns: 20 },
       );
     },
     propertyTestTimeout(20_000),
@@ -704,7 +699,8 @@ describe("table export", () => {
   test(
     "xlsx property: generated column widths stay readable and bounded",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "xlsx property: generated column widths stay readable and bounded",
         fc.asyncProperty(
           fc.array(fc.string({ minLength: 1, maxLength: 40 }), {
             minLength: 1,
@@ -726,10 +722,8 @@ describe("table export", () => {
               ),
             );
             const bytes = await buildXlsxExport({ columns, rows });
-            const zip = await JSZip.loadAsync(bytes);
-            const sheet = await zip
-              .file("xl/worksheets/sheet1.xml")
-              ?.async("text");
+            const zip = await ZipArchive.read(bytes);
+            const sheet = await zip.entry("xl/worksheets/sheet1.xml")?.text();
             const widthMatches = [
               ...(sheet?.matchAll(/ width="(?<width>\d+)"/gu) ?? []),
             ];
@@ -742,7 +736,7 @@ describe("table export", () => {
             }
           },
         ),
-        propertyConfig({ numRuns: 50 }),
+        { numRuns: 50 },
       );
       // 50 zip builds + parses can exceed Bun's default 5s timeout on loaded
       // CI runners; keep the invariant broad while making runtime deterministic.
@@ -914,12 +908,12 @@ describe("table export", () => {
     );
 
     const bytes = await buildXlsxExport(table);
-    const zip = await JSZip.loadAsync(bytes);
-    const sheet = await zip.file("xl/worksheets/sheet1.xml")?.async("text");
+    const zip = await ZipArchive.read(bytes);
+    const sheet = await zip.entry("xl/worksheets/sheet1.xml")?.text();
     const sheetRels = await zip
-      .file("xl/worksheets/_rels/sheet1.xml.rels")
-      ?.async("text");
-    const comments = await zip.file("xl/comments1.xml")?.async("text");
+      .entry("xl/worksheets/_rels/sheet1.xml.rels")
+      ?.text();
+    const comments = await zip.entry("xl/comments1.xml")?.text();
 
     expect(sheet).toContain('<hyperlink ref="A2" r:id="rId1"/>');
     expect(sheetRels).toContain('TargetMode="External"');

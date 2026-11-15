@@ -8,7 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { findingFingerprint } from "@/api/lib/document-review/finding-fingerprint";
@@ -109,11 +109,30 @@ describe("findingFingerprint", () => {
     );
   });
 
-  test("changes when the extracted value changes", () => {
+  test("changes when the text the value was read from changes", () => {
     expect(findingFingerprint(playbookPayload(), "compliant")).not.toBe(
       findingFingerprint(
         playbookPayload({
-          extracted: { value: "New York", text: "governed by English law" },
+          extracted: {
+            value: "England and Wales",
+            text: "governed by Delaware law",
+          },
+        }),
+        "compliant",
+      ),
+    );
+  });
+
+  // A tier-match value is a summary the model writes afresh on every run; the
+  // cited passages it was read from are the evidence.
+  test("ignores a reworded summary over the same passages", () => {
+    expect(findingFingerprint(playbookPayload(), "compliant")).toBe(
+      findingFingerprint(
+        playbookPayload({
+          extracted: {
+            value: "English law governs",
+            text: "governed by English law",
+          },
         }),
         "compliant",
       ),
@@ -238,7 +257,8 @@ describe("findingFingerprint", () => {
 
   // Re-extraction can rewrap a quoted passage without changing what it quotes.
   test("normalizes whitespace inside an excerpt", () => {
-    fc.assert(
+    assertProperty(
+      "normalizes whitespace inside an excerpt",
       fc.property(
         fc.stringMatching(/^[a-z]{1,12}$/u),
         fc.stringMatching(/^[a-z]{1,12}$/u),
@@ -260,14 +280,15 @@ describe("findingFingerprint", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   // Distinct evidence must not collide onto one fingerprint, or a decision
   // would carry onto a finding about different text.
   test("distinguishes any two different excerpts", () => {
-    fc.assert(
+    assertProperty(
+      "distinguishes any two different excerpts",
       fc.property(
         fc.stringMatching(/^[a-z ]{1,24}$/u),
         fc.stringMatching(/^[a-z ]{1,24}$/u),
@@ -291,7 +312,7 @@ describe("findingFingerprint", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

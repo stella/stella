@@ -3,14 +3,18 @@ import { describe, expect, it } from "bun:test";
 import type { Block, ParagraphRole } from "@stll/legal-ast/document-ast";
 
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   type AtCourtTextSection,
   type AtPrintedLine,
   readAtDecisionRoles,
 } from "./at-decision-regions";
-import { parseFindokDecisionXml } from "./at-findok";
-import { parseRisDecisionXml } from "./at-ris";
+import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "./at-findok";
+import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "./at-ris";
+
+const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
+const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 
 type Expected = readonly (readonly [string, ParagraphRole | undefined])[];
 

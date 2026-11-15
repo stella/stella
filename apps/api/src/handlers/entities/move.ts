@@ -7,13 +7,14 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { lockWorkspaceLifecycle } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   isTreeParentGuardError,
@@ -189,6 +190,7 @@ export const moveEntities = async ({
   ...options
 }: MoveEntitiesOptions): Promise<Result<LockedMove[], HandlerError>> => {
   const { tx, workspaceId, entityIds, parentId } = options;
+  await lockWorkspaceLifecycle(tx, workspaceId);
   // Serialize ancestry decisions before taking any entity locks. Disjoint
   // source/target row pairs can still join into a cycle across two moves;
   // the `entities_parent_acyclic` trigger holds the rule for any writer
@@ -255,10 +257,14 @@ export const moveEntityHandler = async function* ({
   const moved = yield* attempt;
   yield* moved;
 
-  syncSearchActivity(workspaceId).catch(
-    createErrorCapture(
-      handlerErrorContext("moveEntityHandler.syncSearchActivity"),
-    ),
+  detached(
+    async () =>
+      syncSearchActivity(workspaceId).catch(
+        createErrorCapture(
+          handlerErrorContext("moveEntityHandler.syncSearchActivity"),
+        ),
+      ),
+    "entities-move.sync-search-activity",
   );
 
   return Result.ok({});

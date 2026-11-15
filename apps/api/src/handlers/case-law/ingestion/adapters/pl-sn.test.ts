@@ -57,9 +57,9 @@ type RecordedPage = {
 };
 
 const recordedDecision = async (): Promise<IngestionResult> => {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- committed fixture JSON, recorded by update-adapter-fixtures.ts from this adapter's own SyncPage
   const record = (await readGzipJson(
     new URL("pl-sn-page.json.gz", FIXTURES_DIR),
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- committed fixture JSON, recorded by update-adapter-fixtures.ts from this adapter's own SyncPage
   )) as RecordedPage;
   const [decision] = record.page.decisions;
   if (decision === undefined) {

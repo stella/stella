@@ -14,6 +14,7 @@ import { useTranslations } from "use-intl";
 
 import { Text } from "@stll/ui/text";
 
+import { useRevisedLoad } from "@/components/changes";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { EntityRow } from "@/components/entity-row";
 import { LoadFailedCard } from "@/components/load-failure";
@@ -68,7 +69,10 @@ export const MatterEntities = ({
     }
     return applyEntityPage(previous, result, epochMilliseconds());
   };
-  const [load, setLoad] = useState(async () => loadPage(EMPTY_ENTITIES_LOAD));
+  const [load, setLoad] = useRevisedLoad(
+    async () => await loadPage(EMPTY_ENTITIES_LOAD),
+    ["documents", "tasks"],
+  );
   const [refreshing, startRefresh] = useTransition();
   const [loadingMore, startLoadMore] = useTransition();
   const reload = () => {

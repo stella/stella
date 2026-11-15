@@ -23,6 +23,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 
 import type { AnswerEditAnchor } from "./answer-edit-api";
+import { AnswerEditFrame } from "./answer-edit-panel";
 import type { AnswerSourceSelection } from "./answer-edit-selection";
 import { AnswerFormatProposal } from "./answer-format-proposal";
 import { AnswerLinkForm } from "./answer-link-form";
@@ -97,11 +98,9 @@ export const AnswerFormatPanel = ({
       );
     }
     return (
-      <div
+      <AnswerEditFrame
         className="w-80 space-y-2 p-2"
-        role="dialog"
         aria-label={t("chat.answerEdit.textStyle")}
-        tabIndex={-1}
         ref={(node) => {
           if (node === null) {
             return undefined;
@@ -133,7 +132,7 @@ export const AnswerFormatPanel = ({
         <Button size="sm" variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-      </div>
+      </AnswerEditFrame>
     );
   }
   return (

@@ -1,6 +1,4 @@
 import { expect, test } from "bun:test";
-import { is } from "drizzle-orm";
-import { PgTable } from "drizzle-orm/pg-core";
 
 import { entityFeatureGateMetadata } from "../src/db/entity-feature-gate-metadata";
 import {
@@ -10,6 +8,7 @@ import {
 } from "../src/db/entity-feature-gate-migrations";
 import { entityFeaturePolicyDefinitions } from "../src/db/entity-feature-policies";
 import * as schema from "../src/db/schema";
+import { schemaTables } from "../src/db/schema-tables";
 import rolePrivilegeCensus from "../src/lib/db/role-privilege-census.json" with { type: "json" };
 import { createPolicyStatementsOf } from "../src/tests/helpers/lock-taking-sql";
 import {
@@ -23,14 +22,14 @@ const expectedGateRoutineReview =
   "-- stella-migration-safety: reviewed security-definer - a gate routine generated from the schema's gate graph, replaced in place as its owner, the gate role, which is neither superuser nor BYPASSRLS; search_path is pinned to pg_catalog, then pg_temp";
 
 test("the committed census supports the gate routine review", () => {
-  expect(gateRoutineReview(rolePrivilegeCensus)).toBe(
+  expect(gateRoutineReview(rolePrivilegeCensus.roles)).toBe(
     expectedGateRoutineReview,
   );
 });
 
 for (const attribute of ["SUPERUSER", "BYPASSRLS"]) {
   test(`${attribute}:true invalidates the gate routine review`, () => {
-    const census = rolePrivilegeCensus.map((entry) =>
+    const census = rolePrivilegeCensus.roles.map((entry) =>
       entry.role === "stella_entity_gate"
         ? {
             ...entry,
@@ -46,7 +45,7 @@ for (const attribute of ["SUPERUSER", "BYPASSRLS"]) {
   });
 
   test(`${attribute}:true beside ${attribute}:false invalidates the gate routine review`, () => {
-    const census = rolePrivilegeCensus.map((entry) =>
+    const census = rolePrivilegeCensus.roles.map((entry) =>
       entry.role === "stella_entity_gate"
         ? { ...entry, attributes: [...entry.attributes, `${attribute}:true`] }
         : entry,
@@ -58,14 +57,14 @@ for (const attribute of ["SUPERUSER", "BYPASSRLS"]) {
 }
 
 test("a second gate role entry invalidates the routine review", () => {
-  const gateRole = rolePrivilegeCensus.find(
+  const gateRole = rolePrivilegeCensus.roles.find(
     ({ role }) => role === "stella_entity_gate",
   );
   if (gateRole === undefined) {
     throw new Error("The committed census has no gate role");
   }
   const census = [
-    ...rolePrivilegeCensus,
+    ...rolePrivilegeCensus.roles,
     { ...gateRole, attributes: ["BYPASSRLS:true", "SUPERUSER:true"] },
   ];
   expect(() => gateRoutineReview(census)).toThrow(
@@ -74,7 +73,7 @@ test("a second gate role entry invalidates the routine review", () => {
 });
 
 test("a missing gate role attribute invalidates the routine review", () => {
-  const census = rolePrivilegeCensus.map((entry) =>
+  const census = rolePrivilegeCensus.roles.map((entry) =>
     entry.role === "stella_entity_gate"
       ? {
           ...entry,
@@ -90,7 +89,7 @@ test("a missing gate role attribute invalidates the routine review", () => {
 });
 
 test("a missing gate role invalidates the routine review", () => {
-  const census = rolePrivilegeCensus.filter(
+  const census = rolePrivilegeCensus.roles.filter(
     ({ role }) => role !== "stella_entity_gate",
   );
   expect(() => gateRoutineReview(census)).toThrow(
@@ -107,7 +106,7 @@ const reviewedRoleSwitch = (set: "TRUE" | "FALSE") =>
     ),
   );
 
-const tables = Object.values(schema).filter((table) => is(table, PgTable));
+const tables = schemaTables(schema);
 const descriptors = entityFeatureGateMetadata(tables);
 
 test("today's schema needs no gate DDL", async () => {

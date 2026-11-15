@@ -15,6 +15,7 @@ import {
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
+  PlusIcon,
   SunIcon,
 } from "@stll/ui/icons";
 import {
@@ -31,6 +32,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { CreateOrganizationDialog } from "@/components/create-organization-dialog";
@@ -65,7 +67,6 @@ import {
   organizationCreationView,
 } from "@/lib/organization/creation-state";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -138,12 +139,12 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                 {user.name ? (
                   <>
                     <div className="flex min-w-0 items-center gap-1.5">
-                      <BidiText
-                        as="span"
-                        className="min-w-0 truncate text-sm font-medium"
+                      <TruncatedText
+                        className="text-sm font-medium"
+                        render={<BidiText as="span" />}
                       >
                         {user.name}
-                      </BidiText>
+                      </TruncatedText>
                       {role && (
                         <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
                           {t(`organization.roles.${role}`)}
@@ -151,24 +152,27 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                       )}
                     </div>
                     {user.email && (
-                      <BidiText
-                        as="span"
-                        className="text-muted-foreground truncate text-xs"
-                        direction="ltr"
+                      <TruncatedText
+                        className="text-muted-foreground text-xs"
+                        render={<BidiText as="span" direction="ltr" />}
                       >
                         {user.email}
-                      </BidiText>
+                      </TruncatedText>
                     )}
                   </>
                 ) : (
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <BidiText
-                      as="span"
-                      className="min-w-0 truncate text-sm font-medium"
-                      direction={user.email ? "ltr" : "auto"}
+                    <TruncatedText
+                      className="text-sm font-medium"
+                      render={
+                        <BidiText
+                          as="span"
+                          direction={user.email ? "ltr" : "auto"}
+                        />
+                      }
                     >
                       {user.email || t("common.user")}
-                    </BidiText>
+                    </TruncatedText>
                     {role && (
                       <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
                         {t(`organization.roles.${role}`)}
@@ -208,16 +212,6 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
             <CogIcon />
             {t("common.settings")}
           </MenuItem>
-          {hasOrganizationManagementAccess(role) && (
-            <MenuItem
-              onClick={() =>
-                detached(navigate({ to: "/admin" }), "sidebar-user-menu.admin")
-              }
-            >
-              <BuildingIcon />
-              {t("admin.title")}
-            </MenuItem>
-          )}
           <MenuSeparator />
           <MenuSub>
             <MenuSubTrigger>
@@ -331,8 +325,9 @@ type OrganizationMenuSectionProps = {
   userId: string;
 };
 
-/** Active organization block at the top of the user menu: a plain label for
- * single-organization users, a switcher sub-menu for everyone else.
+/** Organization block at the top of the user menu: every organization the user
+ * belongs to in one list, the active one checked, then the create action. One
+ * shape for one organization or many, so the list never reads as a header.
  *
  * Owns the organization list query rather than taking it as a prop so the
  * sidebar reads the active organization and the switchable ones from one cache
@@ -387,66 +382,37 @@ const OrganizationMenuSection = ({
     return null;
   }
 
-  if (organizations.length < 2) {
-    return (
-      <>
-        <QueryViewFeedback view={organizationsView} />
-        <MenuGroup>
-          <MenuGroupLabel className="flex min-w-0 items-center gap-1.5 text-sm">
-            <BidiText as="span" className="min-w-0 truncate">
-              {activeOrganization.name}
-            </BidiText>
-            <OrganizationRoleBadge role={role} />
-          </MenuGroupLabel>
-        </MenuGroup>
-        <MenuItem onClick={onCreate}>
-          <BuildingIcon />
-          {t("organization.newOrganization")}
-        </MenuItem>
-        <MenuSeparator />
-      </>
-    );
-  }
-
   return (
     <>
       <QueryViewFeedback view={organizationsView} />
-      <MenuSub>
-        <MenuSubTrigger>
-          <BuildingIcon />
-          <BidiText as="span" className="min-w-0 truncate">
-            {activeOrganization.name}
-          </BidiText>
-          <OrganizationRoleBadge role={role} />
-        </MenuSubTrigger>
-        <MenuSubPopup>
-          <MenuGroup>
-            <MenuGroupLabel>
-              {t("organization.switchOrganization")}
-            </MenuGroupLabel>
-            <MenuRadioGroup value={activeOrganizationId}>
-              {organizations.map((organization) => (
-                <MenuRadioItem
-                  key={organization.id}
-                  disabled={isSwitchPending}
-                  onClick={() => {
-                    if (organization.id !== activeOrganizationId) {
-                      switchOrganization(organization.id);
-                    }
-                  }}
-                  value={organization.id}
-                >
-                  <BidiText as="span" className="min-w-0 truncate">
-                    {organization.name}
-                  </BidiText>
-                </MenuRadioItem>
-              ))}
-            </MenuRadioGroup>
-          </MenuGroup>
-        </MenuSubPopup>
-      </MenuSub>
+      <MenuGroup>
+        <MenuGroupLabel>{t("common.organizations")}</MenuGroupLabel>
+        <MenuRadioGroup value={activeOrganizationId}>
+          {organizations.map((organization) => (
+            <MenuRadioItem
+              key={organization.id}
+              disabled={isSwitchPending}
+              onClick={() => {
+                if (organization.id !== activeOrganizationId) {
+                  switchOrganization(organization.id);
+                }
+              }}
+              value={organization.id}
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <TruncatedText render={<BidiText as="span" />}>
+                  {organization.name}
+                </TruncatedText>
+                {organization.id === activeOrganization.id && (
+                  <OrganizationRoleBadge role={role} />
+                )}
+              </span>
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+      </MenuGroup>
       <MenuItem onClick={onCreate}>
-        <BuildingIcon />
+        <PlusIcon />
         {t("organization.newOrganization")}
       </MenuItem>
       <MenuSeparator />

@@ -51,6 +51,13 @@ import { checkedSourceRegistrations } from "./source-registrations";
  */
 export { listDeferredDocumentDrains } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 
+/**
+ * The graded budget each deferred-document fetch starts, carried with the
+ * drains so a drain outside this slice grades a slow publisher the same way
+ * the read-through path does.
+ */
+export { startDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
+
 type AdapterRegistry = {
   readonly [TKey in AdapterKey]: SourceAdapter & { readonly key: TKey };
 };

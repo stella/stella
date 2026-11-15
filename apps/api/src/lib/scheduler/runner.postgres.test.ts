@@ -85,6 +85,7 @@ if (!databaseUrl || !runPostgresTests) {
             .update(schedulerJobs)
             .set({
               lockedBy: "evicted",
+              lockedAt: dbClock.ago(61_000),
               lockedUntil: dbClock.ago(1000),
             })
             .where(eq(schedulerJobs.id, jobId));

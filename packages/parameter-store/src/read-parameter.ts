@@ -92,13 +92,13 @@ export const readParameter = async ({
     return result;
   }
   const parameter = result.value.Parameter;
-  if (parameter?.Value === undefined || parameter.Version === undefined) {
-    return Result.err(
-      new ParameterStoreError({
-        message: "Parameter store returned an incomplete value",
-        reason: "unavailable",
-      }),
-    );
+  if (parameter?.Value !== undefined && parameter.Version !== undefined) {
+    return Result.ok({ value: parameter.Value, version: parameter.Version });
   }
-  return Result.ok({ value: parameter.Value, version: parameter.Version });
+  return Result.err(
+    new ParameterStoreError({
+      message: "Parameter store returned an incomplete value",
+      reason: "unavailable",
+    }),
+  );
 };

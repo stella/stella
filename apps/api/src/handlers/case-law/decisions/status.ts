@@ -24,7 +24,10 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
-import { populationCountsCacheVersion } from "@/api/lib/case-law/population-count-freshness";
+import {
+  isCaseLawPopulationBuilding,
+  populationCountsCacheVersion,
+} from "@/api/lib/case-law/population-count-freshness";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -325,8 +328,18 @@ const EMPTY_STATUS: CaseLawCorpusStatus = {
   health: CASE_LAW_COVERAGE_HEALTH.UNKNOWN,
 };
 
+/** No count is stated while the seed is pending; the state says why. */
+const BUILDING_STATUS: CaseLawCorpusStatus = {
+  ...EMPTY_STATUS,
+  countsFreshness: { status: "building" },
+};
+
 /** The status is a hint beside the box, not the page: degrade to "unknown". */
 const unavailableCorpusStatus = (error: unknown): CaseLawCorpusStatus => {
+  if (isCaseLawPopulationBuilding(error)) {
+    logger.info("case_law.corpus_status.building");
+    return BUILDING_STATUS;
+  }
   logger.warn("case_law.corpus_status.unavailable", {
     "error.type": errorTag(error),
   });

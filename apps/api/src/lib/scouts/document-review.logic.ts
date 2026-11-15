@@ -65,9 +65,13 @@ const truncate = (value: string): string =>
     : `${value.slice(0, REVIEW_QUOTE_MAX_CHARS - 1)}…`;
 
 /** Findings graded against an authored tier ladder become inbox findings;
- *  reference comparisons are out of scope. */
+ *  reference comparisons are out of scope. `quoteRationale` is false when the
+ *  run drew on another matter's references: one grading call can cover
+ *  positions from several matters, so a tier rationale can restate them, and
+ *  the signal reaches readers of this matter only. */
 export const toReviewSignalFindings = (
   payloads: readonly DocumentReviewFindingPayload[],
+  { quoteRationale }: { quoteRationale: boolean },
 ): ReviewSignalFinding[] =>
   payloads
     .flatMap((payload) => {
@@ -85,7 +89,10 @@ export const toReviewSignalFindings = (
         {
           title: payload.finding.issue,
           severity,
-          quote: truncate(payload.finding.rationale ?? payload.finding.issue),
+          quote: truncate(
+            (quoteRationale ? payload.finding.rationale : null) ??
+              payload.finding.issue,
+          ),
         },
       ];
     })

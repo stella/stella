@@ -12,14 +12,13 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+
 import { documentReviewRuns, entities } from "@/api/db/schema";
 import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  defaultVarcharSchema,
-  resourceIdSchema,
-} from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import type { ReviewPerspective } from "@/api/lib/document-review/contract";
 import {
   readableReferenceWorkspaces,
@@ -32,7 +31,7 @@ import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 const fromRunBodySchema = v.object({
   workspaceId: resourceIdSchema("workspace"),
   runId: resourceIdSchema("documentReviewRun"),
-  name: v.optional(defaultVarcharSchema),
+  name: v.optional(displayNameSchema()),
 });
 
 const config = {
@@ -121,7 +120,7 @@ const createPlaybookFromRun = createSafeRootHandler(
       status: 404,
       message: "Review run not found",
     });
-    if (!workspace || workspace.status !== "active") {
+    if (!workspaceAcceptsWrites(workspace?.status)) {
       return Result.err(notFound);
     }
 

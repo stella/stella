@@ -11,15 +11,20 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 import {
+  CHAT_TOOL_DECLINED_ERROR,
   chatToolExecutor,
-  isServerChatToolCall,
   isUnsupportedChatPart,
 } from "@stll/api-contract/chat";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import {
   GENERATED_VISUAL_MIME_TYPE,
   generatedVisualPartSchema,
 } from "@stll/api-contract/generated-visual";
 import { isOwnKey, ownEntry } from "@stll/api-contract/own-key";
+import {
+  STELLA_MCP_APP_MIME_TYPE,
+  stellaMcpAppPartSchema,
+} from "@stll/api-contract/stella-mcp-app";
 
 import { carriedChatPart } from "@/api/db/stored-chat-part-codec";
 import type { STORED_CHAT_PART_TYPES } from "@/api/db/stored-chat-part-codec";
@@ -28,7 +33,7 @@ import {
   TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
   TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
 } from "@/api/handlers/chat/tanstack-chat-lifecycle";
-import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import { retainToolResultsInParts } from "@/api/handlers/chat/tool-result-retention";
 import type {
   ChatAttachmentMetadata,
   ChatAttachmentPart,
@@ -46,6 +51,10 @@ import type {
 } from "@/api/handlers/chat/types";
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  appPresentsTool,
+  chatMcpAppByUri,
+} from "@/api/lib/chat/mcp-app-catalog";
 import {
   isPersistedJsonObject,
   isPersistedJsonValue,
@@ -339,6 +348,19 @@ export const isChatAttachmentPart = (
   isRecord(part["source"]) &&
   "value" in part["source"] &&
   typeof part["source"]["value"] === "string";
+
+/**
+ * A file on an assistant message is one the answer handed the member. Nobody
+ * sent it to the model, so it never goes to one, and its bytes are never
+ * fetched to prepare a turn or copied to a computer as an attachment. Every
+ * reader that turns a message's files into model input or a run's attachments
+ * asks this first; the message itself keeps the part, so it still shows.
+ */
+export const isAnswerFilePart = (
+  role: ChatMessage["role"],
+  part: unknown,
+): part is ChatAttachmentPart =>
+  role === "assistant" && isChatAttachmentPart(part);
 
 export const isChatDocumentPart = (part: unknown): part is ChatAttachmentPart =>
   isChatAttachmentPart(part) && part.type === "document";
@@ -754,50 +776,6 @@ const CHAT_PART_POLICY = {
 export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
   CHAT_PART_POLICY[part.type].providerVisibility === "model";
 
-/**
- * Whether a client-executed tool call still awaits its client resolution.
- * Input readiness alone cannot identify its executor: sequential server calls
- * can remain input-complete behind an unanswered approval.
- */
-const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
-  "approval-requested": false,
-  // Only an approved client-executed call: `isApprovedClientCallAwaitingResult`.
-  "approval-responded": false,
-  // A terminal stream can end while the provider has only announced a call or
-  // is still emitting its JSON arguments. Neither state carries usable input,
-  // so neither may take durable turn ownership.
-  "awaiting-input": false,
-  complete: false,
-  error: false,
-  "input-complete": true,
-  "input-streaming": false,
-} as const satisfies Record<TanStackToolCallState, boolean>;
-
-/** A tool call as stored, or as read back over the API. */
-type ApprovableToolCall = {
-  type: "tool-call";
-  state: TanStackToolCallState;
-  approval?: { approved?: boolean };
-  metadata?: unknown;
-  output?: unknown;
-};
-
-/**
- * An approved client-executed call whose result has not arrived. Resuming the
- * approval hands the call to the client, so it stays `approval-responded` with
- * input only until the client posts its result.
- */
-export const isApprovedClientCallAwaitingResult = (
-  part: ApprovableToolCall,
-): boolean =>
-  part.state === "approval-responded" &&
-  part.approval?.approved === true &&
-  part.output === undefined &&
-  chatToolExecutor(part) === "client";
-
-const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
-  name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool";
-
 export type AwaitingUserInteraction = Extract<
   NonNullable<ChatMessageMetadata["turnOutcome"]>,
   { type: "awaiting-user" }
@@ -851,20 +829,58 @@ const terminalToolCallError = (part: ChatToolCallPart): ChatToolCallPart => {
   });
 };
 
+type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
+
+/** A declined call as it is stored, and the result answering it. */
+type DeclinedToolCall = {
+  call: ChatToolCallPart;
+  result: ChatToolResultPart;
+};
+
+/**
+ * `part` declined, in the one shape a declined call is stored in: the shape
+ * the chat engine writes when the user denies an approval. The call settles
+ * as an error whose output is the engine's denial and keeps its approval with
+ * `approved: false`, and a `denied` result answers it, so the model is told
+ * the user declined and every reader (`isDeclinedChatToolCall`) sees the same
+ * decision whoever declined the call.
+ */
+export const declineToolCall = (
+  part: ChatToolCallPart,
+  approval: ChatApprovalMetadata,
+): DeclinedToolCall => {
+  const output = { error: CHAT_TOOL_DECLINED_ERROR };
+  return {
+    call: toChatToolCallPart({
+      ...part,
+      approval: { ...approval, approved: false },
+      output,
+      state: "error",
+    }),
+    result: {
+      content: JSON.stringify(output),
+      error: CHAT_TOOL_DECLINED_ERROR,
+      outcome: "denied",
+      state: "error",
+      toolCallId: part.id,
+      type: "tool-result",
+    },
+  };
+};
+
+/** What a terminated turn leaves of one of its calls: the call, and the
+ *  result that now answers it, if any. */
 const cancelPendingToolCallPart = (
   part: ChatToolCallPart,
-): ChatToolCallPart => {
+): { call: ChatToolCallPart; result?: ChatToolResultPart } => {
   switch (part.state) {
     case "approval-requested": {
       const approval = getChatToolCallExtension(part, "approval");
       if (!isChatApprovalMetadata(approval)) {
-        return terminalToolCallError(part);
+        return { call: terminalToolCallError(part) };
       }
-      return toChatToolCallPart({
-        ...part,
-        approval: { ...approval, approved: false },
-        state: "approval-responded",
-      });
+      // Nobody can answer the approval any more, so it is declined.
+      return declineToolCall(part, approval);
     }
     case "awaiting-input":
     case "input-streaming":
@@ -872,11 +888,11 @@ const cancelPendingToolCallPart = (
       // Do not leave a partial or client-owned call in a state that a fresh
       // hydration can execute after its owning turn was superseded. Omitting
       // input/approval/output also removes now-invalid user controls.
-      return terminalToolCallError(part);
+      return { call: terminalToolCallError(part) };
     case "approval-responded":
     case "complete":
     case "error":
-      return part;
+      return { call: part };
     default:
       part.state satisfies never;
       return panic(`Unhandled state: ${String(part.state)}`);
@@ -886,55 +902,26 @@ const cancelPendingToolCallPart = (
 /**
  * Keep a terminal assistant message internally consistent: metadata records
  * its turn's outcome, and its parts no longer expose an approval or input
- * control that belongs to that terminated turn.
+ * control that belongs to that terminated turn. The results answering the
+ * approvals it declines go at the end of the message, where the engine
+ * stores the results it writes (`answerCallsInTheirStep` puts each in its
+ * step for a provider request).
  */
 export const cancelPendingChatToolCalls = (
   message: PersistableChatMessage,
 ): PersistableChatMessage => {
-  const parts = message.parts.map((part) =>
-    part.type === "tool-call"
-      ? continueStoredChatPart(part, cancelPendingToolCallPart(part))
-      : part,
-  );
-  return { ...message, parts };
-};
-
-/**
- * Every approval-requested call remains actionable. A chat turn is owned by
- * its assistant message, not by whichever pending approval happened to arrive
- * first in the stream.
- */
-export const getAwaitingUserInteractions = (
-  message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
-): AwaitingUserInteraction[] => {
-  const turnOutcome = message?.metadata?.turnOutcome;
-  if (
-    message?.role !== "assistant" ||
-    (turnOutcome !== undefined && turnOutcome.type !== "awaiting-user")
-  ) {
-    return [];
-  }
-  const interactions: AwaitingUserInteraction[] = [];
-  for (const part of message.parts) {
+  const results: ChatToolResultPart[] = [];
+  const parts = message.parts.map((part) => {
     if (part.type !== "tool-call") {
-      continue;
+      return part;
     }
-    if (part.state === "approval-requested") {
-      interactions.push({ type: "approval", toolCallId: part.id });
-      continue;
+    const { call, result } = cancelPendingToolCallPart(part);
+    if (result !== undefined) {
+      results.push(result);
     }
-    if (
-      (CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
-        !isServerChatToolCall(part)) ||
-      isApprovedClientCallAwaitingResult(part)
-    ) {
-      interactions.push({
-        type: clientToolInteractionType(part.name),
-        toolCallId: part.id,
-      });
-    }
-  }
-  return interactions;
+    return continueStoredChatPart(part, call);
+  });
+  return { ...message, parts: [...parts, ...results] };
 };
 
 /** The tools whose calls in `message` await an approval. */
@@ -945,7 +932,7 @@ export const getAwaitedApprovalToolNames = (
     return new Set();
   }
   const awaitedCallIds = new Set(
-    getAwaitingUserInteractions(message).flatMap((interaction) =>
+    memberWaitsOf(message).flatMap((interaction) =>
       interaction.type === "approval" ? [interaction.toolCallId] : [],
     ),
   );
@@ -960,8 +947,7 @@ export const getAwaitedApprovalToolNames = (
 
 export const getAwaitingUserInteraction = (
   message: Pick<ChatMessage, "parts" | "role"> | null,
-): AwaitingUserInteraction | null =>
-  getAwaitingUserInteractions(message).at(0) ?? null;
+): AwaitingUserInteraction | null => memberWaitsOf(message).at(0) ?? null;
 
 /**
  * Whether an incoming tool-call state answers an awaited interaction:
@@ -999,13 +985,24 @@ const CLIENT_INTERACTION_RESOLUTION = {
     "input-complete": "unchanged",
     "input-streaming": null,
   },
+  // The call never moves: the answer travels as the resume payload of the
+  // question's interrupt, and the harness reports the call's result itself.
+  "harness-question": {
+    "approval-requested": null,
+    "approval-responded": null,
+    "awaiting-input": null,
+    complete: null,
+    error: null,
+    "input-complete": "unchanged",
+    "input-streaming": null,
+  },
 } as const satisfies Record<
   AwaitingUserInteraction["type"],
   Record<TanStackToolCallState, "resolved" | "unchanged" | null>
 >;
 
 type GetResumedUserInteractionOptions = {
-  /** Interactions the persisted turn awaits (`getAwaitingUserInteractions`). */
+  /** Interactions the persisted turn awaits (`memberWaitsOf`). */
   awaited: readonly AwaitingUserInteraction[];
   message: Pick<ChatMessage, "parts" | "role">;
 };
@@ -1146,6 +1143,16 @@ const isUiResourcePart = (part: Record<string, unknown>): boolean => {
   const resource = part["resource"];
   if (resource["mimeType"] === GENERATED_VISUAL_MIME_TYPE) {
     return v.is(generatedVisualPartSchema, part);
+  }
+  if (resource["mimeType"] === STELLA_MCP_APP_MIME_TYPE) {
+    const app = v.safeParse(stellaMcpAppPartSchema, part);
+    if (!app.success) {
+      return false;
+    }
+    const presented = chatMcpAppByUri(app.output.resource.uri);
+    return (
+      presented !== undefined && appPresentsTool(presented, app.output.toolName)
+    );
   }
   if (
     typeof resource["uri"] !== "string" ||
@@ -1438,7 +1445,10 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
       };
     case "ui-resource": {
       const { resource } = part;
-      if (resource.mimeType === GENERATED_VISUAL_MIME_TYPE) {
+      if (
+        resource.mimeType === GENERATED_VISUAL_MIME_TYPE ||
+        resource.mimeType === STELLA_MCP_APP_MIME_TYPE
+      ) {
         return part;
       }
       const normalizedResource =
@@ -1497,10 +1507,12 @@ export const classifyChatPartForPersistence = (
     panic("Cannot classify a malformed chat part for persistence");
   }
   const type = part["type"];
+  // A server resource is persisted only as the server minted it.
   if (
     type === "ui-resource" &&
     isRecord(part["resource"]) &&
-    part["resource"]["mimeType"] === GENERATED_VISUAL_MIME_TYPE &&
+    (part["resource"]["mimeType"] === GENERATED_VISUAL_MIME_TYPE ||
+      part["resource"]["mimeType"] === STELLA_MCP_APP_MIME_TYPE) &&
     !visualOrigin?.accepts(part)
   ) {
     return { type: "drop", partType: type };
@@ -1533,7 +1545,9 @@ const normalizeChatPartsForPersistence = (
   parts: readonly ChatPart[],
 ): ChatPart[] => {
   const normalized: ChatPart[] = [];
-  for (const part of parts) {
+  // A message stores each superseded tool result as its projection, as the
+  // model reads it, so a browsing turn stores one page however many it read.
+  for (const part of retainToolResultsInParts(parts, continueStoredChatPart)) {
     normalized.push(normalizeChatPartForPersistence(part));
   }
   return applyChatPartPersistenceBudget(normalized).parts;
@@ -1720,11 +1734,16 @@ const persistedToolInputFromChatPart = (
   if (part.input === undefined) {
     return { rawArguments: part.arguments, status: "raw" };
   }
-  // Keep the argument text only when the parsed input cannot reproduce it.
+  // Successful inputs are canonicalized by their schema. Failed calls keep
+  // the model's exact rejected text, alongside the parsed preview shown live.
+  const preserveFailedArguments =
+    part.state === "error" && JSON.stringify(part.input) !== part.arguments;
   const reproduced = Result.try((): unknown => JSON.parse(part.arguments));
   return proveParsedToolInput(
     part.input,
-    reproduced.isOk() && deepEquals(reproduced.value, part.input)
+    !preserveFailedArguments &&
+      reproduced.isOk() &&
+      deepEquals(reproduced.value, part.input)
       ? undefined
       : part.arguments,
   );
@@ -1827,7 +1846,11 @@ export const mergeAnonRestorations = (
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
+  metadata.answerQuotes === undefined &&
   metadata.contextNotice === undefined &&
+  metadata.localFilesUndone === undefined &&
+  metadata.localRunContext === undefined &&
+  metadata.localRunFilesNotShared === undefined &&
   metadata.mentions === undefined &&
   metadata.refContext === undefined &&
   metadata.refEncoding === undefined &&
@@ -1835,6 +1858,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
+  metadata.turnSpend === undefined &&
   metadata.turnTiming === undefined &&
   metadata.turnModel === undefined &&
   metadata.usage === undefined;

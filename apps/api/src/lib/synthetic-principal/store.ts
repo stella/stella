@@ -19,6 +19,8 @@ import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-co
 import { createSafeId } from "@/api/lib/branded-types";
 import { readAccountProfileForExport } from "@/api/lib/db/account-row";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { insertOrganizationWithEvaluation } from "@/api/lib/db/organization-creation";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { SYNTHETIC_SESSION_CONTROL_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
 import { logger } from "@/api/lib/observability/logger";
@@ -27,7 +29,10 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
-import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import {
+  newOrganizationEvaluation,
+  recordNewOrganizationAccessState,
+} from "@/api/lib/usage/organization-access-state";
 
 import {
   SYNTHETIC_PRINCIPAL,
@@ -73,17 +78,28 @@ export const createSyntheticSessionStore = (
           updatedAt: now,
         });
       }
-      await tx
-        .insert(organization)
-        .values({
-          ...principal.org,
-          createdAt: now,
-        })
-        .onConflictDoNothing({ target: organization.id });
-      await recordNewOrganizationAccessState(tx, {
-        organizationId: brandPersistedOrganizationId(principal.org.id),
-        now,
-      });
+      const organizationId = brandPersistedOrganizationId(principal.org.id);
+      // The control row lock above serializes mints, so the read decides the insert.
+      const [existingOrganization] = await tx
+        .select({ id: organization.id })
+        .from(organization)
+        .where(eq(organization.id, organizationId))
+        .limit(1);
+      if (existingOrganization === undefined) {
+        const created = await insertOrganizationWithEvaluation(tx, {
+          userId: brandPersistedUserId(principal.user.id),
+          evaluation: newOrganizationEvaluation(),
+          organization: {
+            ...principal.org,
+            id: organizationId,
+            createdAt: now,
+          },
+        });
+        if (created.isErr()) {
+          return abortTransaction(created.error);
+        }
+      }
+      await recordNewOrganizationAccessState(tx, { organizationId, now });
       const insertedMembers = await tx
         .insert(member)
         .values({

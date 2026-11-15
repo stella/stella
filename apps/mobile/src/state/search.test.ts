@@ -79,6 +79,7 @@ const documentResult: SearchResult = {
   matterName: "Matter One",
   title: "Lease agreement",
   updatedAt: UPDATED,
+  format: { kind: "pdf", label: "PDF" },
 };
 
 const pageOf = (results: readonly SearchResult[]): SearchPage => ({
@@ -120,6 +121,7 @@ describe("the search request", () => {
           title: "Lease agreement",
           headline: "the <mark>lease</mark>",
           updatedAt: UPDATED,
+          mimeType: "application/pdf; charset=binary",
           entityId: "doc-1",
           workspaceId: "matter-1",
           workspaceName: "Matter One",

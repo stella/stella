@@ -45,8 +45,9 @@ const subdivisionBlocks = (
  * provision. Nested subdivisions stay inside, which is what a reader
  * comparing two consolidations of a section expects to see.
  *
- * A subdivision (`par_1729-odst_1`, `paragraf-36.pismeno-a`) owns itself and
- * the subdivisions nested under it. Both spellings are addressable because
+ * A subdivision (`par_1729-odst_1`, `paragraf-36.pismeno-a`) owns itself, the
+ * subdivisions nested under it and, for a subsection, the unnumbered wording
+ * that carries it on. Both spellings are addressable because
  * both are what a citation names. The narrowing rule and the anchor grammar
  * are the shared ones in `@stll/legal-ast`, read through the publisher's
  * scheme, rather than a second reading of the path here.

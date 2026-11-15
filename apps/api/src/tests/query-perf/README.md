@@ -21,6 +21,8 @@ not use the in-process database.
 
 Tenant and corpus profiles run in fresh databases cloned from the migrated
 template; each fixture database is dropped after its clients close. The
+corpus is seeded once per run into a kept database (`corpus-template.ts`),
+and each corpus test measures its own clone of it, dropped after the suite. The
 coverage profile uses an isolated schema with a single connection and drops
 it before closing the connection.
 
@@ -36,7 +38,14 @@ it before closing the connection.
   shape at a fraction of its size, measured as the owner role scheduled jobs
   run as. Statements run against it with fixed inputs. A scheduled job is
   measured per run: its registered task runs once through a client that
-  records every statement, and each recorded read is analyzed. Each case-law
+  records every statement, and each recorded statement is analyzed. A
+  statement whose plan modifies rows, or that calls a routine listed in
+  `QUERY_PERF_WRITING_FUNCTIONS`, is a write; every other statement is a read.
+  The job's `reads.pages` bounds its read pages; a job that writes declares
+  `writes` (pages per written row and a per-run ceiling), a job that writes
+  nothing declares none, and `combinedPagesPerRun` keeps an existing whole-run
+  envelope. Rows written come from the plan's row counts, not from returned
+  rows. Each case-law
   scenario (a converged generation, and a generation whose whole queue is
   waiting) exists at one size and at twice that size; the run must stay in
   its budget at both and read the same pages at both (10% plus 64 pages for
@@ -45,14 +54,6 @@ it before closing the connection.
   jurisdictions flipped to their own), each with a queue past the freshness
   report's scan cap, so a cap applied per generation instead of per run goes
   over the budget.
-
-- Global Case Law search (`case-law-search-fixture.ts`): 3,000 and 30,000
-  decisions with 200 fixed full-text matches and an 11-row page. Wide section
-  bodies exercise TOAST reads. The production statement must fit its buffer
-  budget at both sizes and preserve the same rows, fields and ordering as a
-  control that moves the page bound after enrichment. That control must exceed
-  the budget. Logs report both measurements and plans; the read cost must stay
-  stable as unrelated decisions grow.
 
 The corpus fixture uses 60,000-row generations and a 120,000-row twin (a 2x
 scale factor); equal reads at both sizes establish the bound independently of
@@ -86,7 +87,8 @@ Each statement runs once to warm the cache, then five times; the maximum
 block count is the measurement. Row counts must match exactly. Fixture
 sessions use a 3-second lock timeout and a 30-second statement timeout. Each
 profile shares one deadline across database creation, seed and measurements
-(150 seconds for a tenant profile, 300 for the corpus profile); teardown has
+(150 seconds for a tenant profile, 300 for each corpus test, which also pays
+for the shared seed when it is the first to need it); teardown has
 its own 35-second deadline. Phase logs identify pending work; failures dump
 bounded activity and lock diagnostics through a separate connection.
 

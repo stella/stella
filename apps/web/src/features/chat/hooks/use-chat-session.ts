@@ -19,6 +19,7 @@ import type {
   ConnectConnectorDecision,
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
@@ -41,15 +42,18 @@ import type {
   AskUserOutput,
   ChatUITools,
   PersistedChatMessage,
+  PlaybookSaveTarget,
 } from "@/components/chat/chat-ui-tools";
 import {
   consumePlaybookSaveToolCalls,
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
+  getChatWorkAwaitedAtOpen,
   getCurrentApprovalPendingMessageId,
   isChatClientRequestActive,
   isNonPersistentGrantChatToolName,
   isSuggestChangesApplyOutput,
+  openMemberWaitKeys,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
@@ -65,7 +69,6 @@ import {
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
 import {
-  buildCreateDocumentDownloadFileName,
   buildCreateDocumentDraftPayload,
   CREATE_DOCUMENT_DRAFT_VIEW,
   type CreateDocumentDraft,
@@ -103,7 +106,10 @@ import {
   sendThreadChatMessage,
   sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
-import { showStoredChatThread } from "@/features/chat/chat-runtime-registry";
+import {
+  resendLatestChatMessage,
+  showStoredChatThread,
+} from "@/features/chat/chat-runtime-registry";
 import {
   chatToolGrantsOptions,
   projectChatToolGrants,
@@ -127,6 +133,7 @@ import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-ch
 import {
   followReconciledPlaybookSave,
   playbookPaneReaction,
+  playbookPaneState,
   reconcilePlaybookSaveToolCalls,
 } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import type { PlaybookPaneMode } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
@@ -137,9 +144,11 @@ import {
   describeQueuedMessage,
   type QueuedChatEntry,
   reduceSendQueue,
+  sendNowRoute,
   type SendQueueEvent,
   type SendQueueState,
   snapshotChatRequestOptions,
+  steerFallback,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import {
   fetchChatMessage,
@@ -245,7 +254,7 @@ type OpenCreateDocumentDraftOptions = {
 };
 
 type FollowPlaybookSaveOptions = {
-  playbookId: string;
+  saved: PlaybookSaveTarget;
   /** The thread pane that was current when the save was reconciled. */
   paneTabId: string;
 };
@@ -377,6 +386,13 @@ export const useChatSession = ({
     chat.getSnapshot,
     chat.getSnapshot,
   );
+  // What the thread already waits on when this page opens it: it resumes only
+  // once the user acts. Read per page open, not per runtime, because the
+  // registry keeps a waiting thread's runtime across a reopen.
+  const workAwaitedAtOpen = useMemo(
+    () => getChatWorkAwaitedAtOpen(chat.getSnapshot().messages),
+    [chat],
+  );
   const {
     error: runtimeError,
     isLoading: clientLoading,
@@ -385,6 +401,9 @@ export const useChatSession = ({
     status,
     stop: stopState,
     turnAbandoned,
+    computerWait,
+    turnSentAt,
+    turnsStarted,
   } = snapshot;
   const notifyError = useLatestCallback((nextError: Error) => {
     onError?.(nextError);
@@ -857,6 +876,15 @@ export const useChatSession = ({
     ],
   );
 
+  // A turn paused on its budget runs its next step only on the user's word:
+  // Continue sends that word as their next message, which opens a new budget.
+  const continuePausedTurn = useCallback(async () => {
+    await sendMessage({
+      content: t("chat.turnPaused.continue"),
+      id: toSafeId<"chatMessage">(createUuid()),
+    });
+  }, [sendMessage, t]);
+
   const removeQueuedMessage = useCallback(
     (id: string) => {
       applySendQueueEvent({ type: "queued-message-removed", id });
@@ -865,12 +893,48 @@ export const useChatSession = ({
   );
 
   // "Send now" on a queued message: it moves to the front of the queue.
-  // During a turn the turn is stopped, and the queue drain sends it once
-  // the stop settles; with the queue held after a failed turn it is sent
+  // During a turn on the member's computer the turn is handed the message
+  // and goes on with it; a turn that cannot take it is stopped, and the
+  // queue drain sends the message once the stop settles. A turn that ends
+  // before it says leaves the message first in the queue, sent next. Until
+  // the steer settles nothing queued is sent, so a message the turn took
+  // is never sent again. With the queue held after a failed turn it is sent
   // at once, like a manual send.
   const sendQueuedMessageNow = useCallback(
     (id: string) => {
       applySendQueueEvent({ type: "queued-message-promoted", id });
+      const entry = sendQueueRef.current.queue.find(
+        (queued) => queued.id === id,
+      );
+      const route =
+        entry === undefined ? null : sendNowRoute(sendQueueRef.current, entry);
+      if (route?.type === "steer") {
+        if (sendQueueRef.current.steeringIds.includes(id)) {
+          return;
+        }
+        applySendQueueEvent({ type: "steer-started", id });
+        const steer = async () => {
+          const outcome = await chat.steerLocalTurn({
+            inputId: id,
+            text: route.text,
+          });
+          const next = steerFallback(outcome);
+          const dispatched = applySendQueueEvent({
+            type: "steer-settled",
+            id,
+            next,
+          });
+          if (dispatched) {
+            await dispatchQueuedMessage(dispatched).catch(
+              ignoreQueuedDispatchError,
+            );
+          } else if (next === "stop") {
+            stop();
+          }
+        };
+        detached(steer(), "use-chat-session.steer-queued-message");
+        return;
+      }
       if (sendQueueRef.current.isGenerating) {
         stop();
         return;
@@ -885,7 +949,7 @@ export const useChatSession = ({
         );
       }
     },
-    [applySendQueueEvent, dispatchQueuedMessage, stop],
+    [applySendQueueEvent, chat, dispatchQueuedMessage, stop],
   );
 
   const resendLatestMessage = useCallback(
@@ -901,7 +965,8 @@ export const useChatSession = ({
         return;
       }
 
-      await chat.reload(
+      await resendLatestChatMessage(
+        chat,
         sendMode === undefined ? undefined : { body: { sendMode } },
       );
     },
@@ -1311,23 +1376,25 @@ export const useChatSession = ({
    * save that finishes after the page moved to another thread is dropped.
    */
   const followPlaybookSave = useLatestCallback(
-    ({ playbookId, paneTabId }: FollowPlaybookSaveOptions) => {
+    ({ saved, paneTabId }: FollowPlaybookSaveOptions) => {
       if (paneTabId !== playbookPaneTabId) {
         return;
       }
+      const { playbookId } = saved;
       const inspector = useInspectorTabsStore.getState();
       const tab = inspector.tabs.find(({ id }) => id === playbookPaneTabId);
       const reaction = playbookPaneReaction({
         mode: playbookPane,
         isMobile,
         openedThisSession: openedPlaybookPaneIdsRef.current.has(paneTabId),
-        shownPlaybookId:
+        pane: playbookPaneState(
           tab?.type === "view" &&
-          tab.viewType === PLAYBOOK_DRAFT_VIEW &&
-          isPlaybookDraftViewPayload(tab.payload)
-            ? tab.payload.playbookId
+            tab.viewType === PLAYBOOK_DRAFT_VIEW &&
+            isPlaybookDraftViewPayload(tab.payload)
+            ? tab.payload
             : null,
-        savedPlaybookId: playbookId,
+        ),
+        saved,
       });
       switch (reaction) {
         case "none":
@@ -1373,7 +1440,7 @@ export const useChatSession = ({
       return;
     }
     const paneTabId = playbookPaneTabId;
-    if (reconciliation.playbookId !== null) {
+    if (reconciliation.target?.source === "live") {
       playbookSaveSequenceRef.current += 1;
     }
     const sequence = playbookSaveSequenceRef.current;
@@ -1384,7 +1451,7 @@ export const useChatSession = ({
         isCurrent: () =>
           seededChatRef.current === requestedChat &&
           playbookSaveSequenceRef.current === sequence,
-        follow: (playbookId) => followPlaybookSave({ playbookId, paneTabId }),
+        follow: (saved) => followPlaybookSave({ saved, paneTabId }),
       }),
       "use-chat-session.reconcile-playbook-save-tool-calls",
     );
@@ -1726,6 +1793,12 @@ export const useChatSession = ({
   // ended: TanStack can report a turn ready while it still loads, and a send
   // then would be refused as busy with no later turn end to retry it on.
   const queueTurnRunning = isGenerating || clientLoading;
+  // A turn paused on the member holds the queue until the wait is over.
+  const turnAwaitsMember =
+    openMemberWaitKeys({
+      localRunQuestion: snapshot.localRunQuestion,
+      messages,
+    }).length > 0;
   useExternalSyncEffect(() => {
     applySendQueueEvent({
       type: "generation-status-synced",
@@ -1800,6 +1873,7 @@ export const useChatSession = ({
       type: "turn-boundary-checked",
       isGenerating: queueTurnRunning,
       status,
+      awaitingMember: turnAwaitsMember,
     });
     if (!dispatched) {
       return;
@@ -1823,10 +1897,13 @@ export const useChatSession = ({
     // matching the original effect's re-run cadence 1:1.
     queuedMessages,
     status,
+    turnAwaitsMember,
   ]);
 
   return {
     activitySession: chat,
+    approvalIdsAwaitedAtOpen: workAwaitedAtOpen.approvalIds,
+    workAwaitedAtOpen,
     clientStatus: status,
     reconnecting,
     refreshAnswers,
@@ -1838,13 +1915,19 @@ export const useChatSession = ({
     loadOlderError,
     resendLatestMessage,
     sendMessage,
+    continuePausedTurn,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
+    /** A stop was asked for and the turn has not ended yet. */
+    stopPending: stopState.status === "pending",
     turnAbandoned,
+    computerWait,
+    turnSentAt,
+    turnsStarted,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,
@@ -1871,5 +1954,7 @@ export const useChatSession = ({
     addToolResult,
     streamdownComponents,
     approvalPendingMessageId,
+    localRunQuestion: snapshot.localRunQuestion,
+    answerLocalRunQuestion: chat.answerLocalRunQuestion,
   };
 };

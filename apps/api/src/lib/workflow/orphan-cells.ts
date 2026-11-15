@@ -162,6 +162,10 @@ export const errorPendingCells = async (
         'runId', ${fields.ownerRunId},
         'settledAt', ${settledAt}::text
       )`,
+      ownerRunId: null,
+      ownerBatchId: null,
+      deadlineAt: null,
+      attempt: null,
     })
     .where(
       and(

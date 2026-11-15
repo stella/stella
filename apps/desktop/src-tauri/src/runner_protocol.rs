@@ -2,17 +2,89 @@
 //! `@stll/api-contract/desktop-runner`.
 //!
 //! The tests round-trip every message in the contract's shared fixture file
-//! and compare each closed value list with it, so a field, tag or value that
-//! differs from the API schema fails here.
+//! and compare each closed value list, the socket path, the installation
+//! header, the close codes and the timings with it, so a field, tag or value
+//! that differs from the API fails here.
 
-use std::num::NonZeroU32;
+use std::{collections::BTreeMap, num::NonZeroU32, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub(crate) const PROTOCOL: u32 = 1;
+pub(crate) const PROTOCOL: u32 = 2;
 /// Largest frame either side sends or accepts, in UTF-8 bytes.
 pub(crate) const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
+/// Sequenced messages one run may store; the API refuses more.
+pub(crate) const MAX_MESSAGES_PER_RUN: u32 = 20_000;
+/// UTF-8 bytes of sequenced messages one run may store.
+pub(crate) const MAX_MESSAGE_BYTES_PER_RUN: u64 = 64 * 1024 * 1024;
+/// Where the runner socket lives under the API base URL.
+pub(crate) const PATH: &str = "/v1/desktop/runner";
+/// Names the installation the socket belongs to.
+pub(crate) const DESKTOP_ID_HEADER: &str = "stella-desktop-id";
+/// The API pings this often and closes a socket after two silent intervals.
+pub(crate) const PING_INTERVAL: Duration = Duration::from_millis(20_000);
+/// The API closes a socket that sent no `hello` within this.
+pub(crate) const HELLO_TIMEOUT: Duration = Duration::from_millis(10_000);
+/// The close code of a frame the contract rejects; its reason says why.
+pub(crate) const POLICY_VIOLATION_CODE: u16 = 1008;
+/// Questions one `run.answer` may answer.
+pub(crate) const MAX_ANSWERED_QUESTIONS: usize = 32;
+/// Answers one question may take.
+pub(crate) const MAX_ANSWERS_PER_QUESTION: usize = 64;
+/// UTF-16 code units of one answer, as the API counts them.
+pub(crate) const MAX_ANSWER_LENGTH: usize = 16_384;
+/// UTF-16 code units of a question id.
+pub(crate) const MAX_QUESTION_ID_LENGTH: usize = 256;
+/// UTF-16 code units of the text one `run.input` steers a running turn with
+/// (`DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH`).
+pub(crate) const MAX_INPUT_TEXT_LENGTH: usize = 65_536;
+
+/// Why the API closed a runner socket, with the contract's key for each.
+macro_rules! close_codes {
+  ($($variant:ident => $key:literal, $code:literal, $reason:literal);+ $(;)?) => {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum CloseCode {
+      $($variant,)+
+    }
+
+    impl CloseCode {
+      pub(crate) fn from_code(code: u16) -> Option<Self> {
+        match code {
+          $($code => Some(Self::$variant),)+
+          _ => None,
+        }
+      }
+
+      #[cfg(test)]
+      const ALL: &[Self] = &[$(Self::$variant),+];
+
+      #[cfg(test)]
+      const fn contract(self) -> (&'static str, u16, &'static str) {
+        match self {
+          $(Self::$variant => ($key, $code, $reason),)+
+        }
+      }
+    }
+  };
+}
+
+close_codes! {
+  GoingAway => "goingAway", 1001, "going_away";
+  UnsupportedData => "unsupportedData", 1003, "binary_frame";
+  TooLarge => "tooLarge", 1009, "too_large";
+  InternalError => "internalError", 1011, "internal_error";
+  Overloaded => "overloaded", 1013, "overloaded";
+  UpgradeRequired => "upgradeRequired", 4001, "upgrade_required";
+  Superseded => "superseded", 4002, "superseded";
+  HeartbeatTimeout => "heartbeatTimeout", 4003, "heartbeat_timeout";
+  SequenceGap => "sequenceGap", 4004, "sequence_gap";
+  HelloTimeout => "helloTimeout", 4005, "hello_timeout";
+  UnknownRun => "unknownRun", 4006, "unknown_run";
+  TooManyRunners => "tooManyRunners", 4007, "too_many_runners";
+  CredentialRevoked => "credentialRevoked", 4008, "credential_revoked";
+  FeatureDisabled => "featureDisabled", 4009, "feature_disabled";
+}
 
 /// A closed string value whose variant list is also its `ALL` list.
 macro_rules! wire_values {
@@ -25,6 +97,10 @@ macro_rules! wire_values {
       )+
     }
 
+    #[cfg_attr(
+      not(test),
+      allow(dead_code, reason = "the tests compare every closed list with the contract")
+    )]
     impl $name {
       pub(crate) const ALL: &[Self] = &[$(Self::$variant),+];
 
@@ -50,6 +126,7 @@ macro_rules! wire_union {
     }
 
     impl $name {
+      #[cfg(test)]
       pub(crate) const TAGS: &[&str] = &[$($wire),+];
     }
   };
@@ -66,6 +143,7 @@ wire_values!(HarnessCapability {
   Interrupt => "interrupt",
   Resume => "resume",
   ImageInput => "image_input",
+  Steer => "steer",
 });
 
 wire_values!(RejectReason {
@@ -73,11 +151,43 @@ wire_values!(RejectReason {
   HarnessNeedsLogin => "harness_needs_login",
   HarnessLimited => "harness_limited",
   HarnessUnsupported => "harness_unsupported",
+  HarnessUnavailable => "harness_unavailable",
   HarnessVersionUnavailable => "harness_version_unavailable",
   ModelUnavailable => "model_unavailable",
   PolicyUnsupported => "policy_unsupported",
   AtCapacity => "at_capacity",
+  RunTooLarge => "run_too_large",
   UnknownRun => "unknown_run",
+  FolderBusy => "folder_busy",
+  FolderUnlinked => "folder_unlinked",
+  FolderOffline => "folder_offline",
+  FolderMoved => "folder_moved",
+  FolderProtected => "folder_protected",
+  FolderUnreadable => "folder_unreadable",
+});
+
+// How a folder linked on the computer stands, as `hello` and
+// `linked_folders.status` report it.
+wire_values!(LinkedFolderState {
+  Available => "available",
+  Offline => "offline",
+  Moved => "moved",
+  Protected => "protected",
+  Unreadable => "unreadable",
+});
+
+wire_values!(FolderRestoreOutcome {
+  Restored => "restored",
+  NoCheckpoint => "no_checkpoint",
+  NotNewest => "not_newest",
+  FolderBusy => "folder_busy",
+  Failed => "failed",
+});
+
+wire_values!(HarnessUnavailableReason {
+  HarnessFailed => "harness_failed",
+  UnexpectedAnswer => "unexpected_answer",
+  ProbeFailed => "probe_failed",
 });
 
 wire_values!(ApprovalKind {
@@ -106,6 +216,26 @@ wire_values!(NetworkPolicy { Open => "open" });
 
 wire_values!(FsPolicy { Workspace => "workspace" });
 
+// How much a run asks before it acts, from the mode that does least on its
+// own; `Ask` is every harness's default.
+wire_values!(ApprovalMode {
+  Plan => "plan",
+  Ask => "ask",
+  Auto => "auto",
+  FullAuto => "full_auto",
+});
+
+// The effort a run asks the model for, weakest first.
+wire_values!(ReasoningEffort {
+  None => "none",
+  Minimal => "minimal",
+  Low => "low",
+  Medium => "medium",
+  High => "high",
+  Xhigh => "xhigh",
+  Max => "max",
+});
+
 /// A run-scoped MCP token. `Debug` never prints it.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -117,20 +247,78 @@ impl std::fmt::Debug for McpToken {
   }
 }
 
+/// Answers to a blocking question, keyed by question id: option labels or
+/// free text. They may hold a secret the question asked for, so `Debug`
+/// prints only the question ids. Parsing enforces the contract's bounds.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "BTreeMap<String, Vec<String>>")]
+pub(crate) struct QuestionAnswers(BTreeMap<String, Vec<String>>);
+
+impl QuestionAnswers {
+  pub(crate) fn question_ids(&self) -> impl Iterator<Item = &str> {
+    self.0.keys().map(String::as_str)
+  }
+}
+
+fn utf16_length(value: &str) -> usize {
+  value.encode_utf16().count()
+}
+
+impl TryFrom<BTreeMap<String, Vec<String>>> for QuestionAnswers {
+  type Error = String;
+
+  fn try_from(answers: BTreeMap<String, Vec<String>>) -> Result<Self, Self::Error> {
+    if answers.len() > MAX_ANSWERED_QUESTIONS {
+      return Err(format!(
+        "at most {MAX_ANSWERED_QUESTIONS} questions are answered at once"
+      ));
+    }
+    for (id, given) in &answers {
+      if id.is_empty() || utf16_length(id) > MAX_QUESTION_ID_LENGTH {
+        return Err("a question id is empty or too long".to_owned());
+      }
+      if given.len() > MAX_ANSWERS_PER_QUESTION
+        || given
+          .iter()
+          .any(|answer| utf16_length(answer) > MAX_ANSWER_LENGTH)
+      {
+        return Err(format!("the answers to question {id} exceed the limits"));
+      }
+    }
+    Ok(Self(answers))
+  }
+}
+
+impl std::fmt::Debug for QuestionAnswers {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter.debug_set().entries(self.question_ids()).finish()
+  }
+}
+
 /// A TanStack `StreamChunk` or `ModelMessage`, relayed without reading it.
 pub(crate) type JsonObject = Map<String, Value>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct HarnessModel {
   pub(crate) id: String,
   pub(crate) label: String,
+  /// The model the harness runs when none is named; the chat offers it
+  /// first as the recommended one. Sent only when set.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub(crate) is_default: bool,
+  /// The efforts a run of this model may ask for; empty when there is no choice.
+  pub(crate) reasoning_efforts: Vec<ReasoningEffort>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ReadyHarness {
   pub(crate) id: Harness,
   pub(crate) version: String,
   pub(crate) capabilities: Vec<HarnessCapability>,
+  /// The approval modes this desktop can run the harness in; lists `Ask`.
+  pub(crate) approval_modes: Vec<ApprovalMode>,
   pub(crate) models: Vec<HarnessModel>,
 }
 
@@ -160,12 +348,21 @@ pub(crate) struct UnsupportedHarness {
   pub(crate) version: Option<String>,
 }
 
+/// An installed harness this desktop could not check, so it can neither offer
+/// it nor say it is unsupported.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct UnavailableHarness {
+  pub(crate) id: Harness,
+  pub(crate) reason: HarnessUnavailableReason,
+}
+
 wire_union!(HarnessReport tagged "state" {
   Ready(ReadyHarness) => "ready",
   NeedsLogin(SignedOutHarness) => "needs_login",
   LimitUntil(LimitedHarness) => "limit_until",
   NotInstalled(MissingHarness) => "not_installed",
   Unsupported(UnsupportedHarness) => "unsupported",
+  Unavailable(UnavailableHarness) => "unavailable",
 });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -183,6 +380,23 @@ pub(crate) struct Hello {
   pub(crate) sidecar_version: String,
   pub(crate) harnesses: Vec<HarnessReport>,
   pub(crate) active_runs: Vec<ActiveRun>,
+  #[serde(default)]
+  pub(crate) linked_folders: Vec<LinkedFolderReport>,
+}
+
+/// A folder the member linked on this computer, as the API knows it: its id
+/// and name, never its path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct LinkedFolderReport {
+  pub(crate) id: FolderId,
+  pub(crate) name: String,
+  pub(crate) state: LinkedFolderState,
+}
+
+/// Every linked folder, sent whenever the list or a folder's state changed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct LinkedFoldersStatus {
+  pub(crate) folders: Vec<LinkedFolderReport>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -230,6 +444,24 @@ pub(crate) struct RunFinished {
   pub(crate) harness_session_id: Option<String>,
 }
 
+/// How many tasks the harness process a finished run left behind keeps
+/// running in the background; 0 once none. Not sequenced: the latest count
+/// holds, and every live one is sent again after each `welcome`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunBackground {
+  pub(crate) run_id: String,
+  pub(crate) count: u32,
+}
+
+/// How a folder restore ended; it names no file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestored {
+  pub(crate) restore_id: String,
+  pub(crate) outcome: FolderRestoreOutcome,
+}
+
 wire_union!(DesktopMessage tagged "type" {
   Hello(Hello) => "hello",
   HarnessStatus(HarnessStatus) => "harness.status",
@@ -238,6 +470,9 @@ wire_union!(DesktopMessage tagged "type" {
   RunEvent(RunEvent) => "run.event",
   RunApprovalRequest(RunApprovalRequest) => "run.approval_request",
   RunFinished(RunFinished) => "run.finished",
+  FolderRestored(FolderRestored) => "folder.restored",
+  LinkedFoldersStatus(LinkedFoldersStatus) => "linked_folders.status",
+  RunBackground(RunBackground) => "run.background",
 });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -270,6 +505,7 @@ pub(crate) struct Reconnect {
 pub(crate) struct RunPolicy {
   pub(crate) network: NetworkPolicy,
   pub(crate) fs: FsPolicy,
+  pub(crate) approvals: ApprovalMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -285,14 +521,31 @@ pub(crate) struct McpBinding {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RunStart {
   pub(crate) run_id: String,
+  /// The folder the run works in; a chat's runs share one.
+  pub(crate) folder_id: String,
+  /// A folder the member linked on this computer, worked in instead of the
+  /// chat's own; the chat's folder still keeps its cache.
+  pub(crate) linked_folder_id: Option<FolderId>,
   pub(crate) harness: Harness,
   pub(crate) harness_version: String,
   pub(crate) model: String,
+  /// An effort the desktop reported for the model; `None` leaves it to the harness.
+  pub(crate) reasoning_effort: Option<ReasoningEffort>,
   pub(crate) harness_session_id: Option<String>,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
+  /// Files the sidecar copies into the run's folder before the harness starts.
+  #[serde(default)]
+  pub(crate) attachments: Vec<RunAttachment>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunAttachment {
+  pub(crate) path: String,
+  pub(crate) url: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -300,7 +553,37 @@ pub(crate) struct RunStart {
 pub(crate) struct RunInput {
   pub(crate) run_id: String,
   pub(crate) input_id: String,
-  pub(crate) message: JsonObject,
+  pub(crate) message: InputMessage,
+}
+
+/// The user message a `run.input` carries, relayed as it came. Parsing
+/// enforces the contract: role `user` and text content of 1 to
+/// `MAX_INPUT_TEXT_LENGTH` UTF-16 code units.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "JsonObject", into = "JsonObject")]
+pub(crate) struct InputMessage(JsonObject);
+
+impl TryFrom<JsonObject> for InputMessage {
+  type Error = String;
+
+  fn try_from(message: JsonObject) -> Result<Self, Self::Error> {
+    if message.get("role").and_then(Value::as_str) != Some("user") {
+      return Err("a run input is a user message".to_owned());
+    }
+    let Some(text) = message.get("content").and_then(Value::as_str) else {
+      return Err("a run input's content is its text".to_owned());
+    };
+    if text.is_empty() || utf16_length(text) > MAX_INPUT_TEXT_LENGTH {
+      return Err("a run input's text is empty or too long".to_owned());
+    }
+    Ok(Self(message))
+  }
+}
+
+impl From<InputMessage> for JsonObject {
+  fn from(message: InputMessage) -> Self {
+    message.0
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -309,6 +592,16 @@ pub(crate) struct RunApproval {
   pub(crate) run_id: String,
   pub(crate) request_id: String,
   pub(crate) decision: ApprovalDecision,
+}
+
+/// Answers to a blocking question the run asked. The request id is the id of
+/// the question's interrupt in the run's chunks.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunAnswer {
+  pub(crate) run_id: String,
+  pub(crate) request_id: String,
+  pub(crate) answers: QuestionAnswers,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -326,17 +619,57 @@ pub(crate) struct Ack {
   pub(crate) seq: NonZeroU32,
 }
 
+/// A chat folder's id. Only a UUID names a folder, so no path rides in it;
+/// anything else fails to parse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub(crate) struct FolderId(uuid::Uuid);
+
+impl FolderId {
+  pub(crate) const fn uuid(self) -> uuid::Uuid {
+    self.0
+  }
+}
+
+impl TryFrom<String> for FolderId {
+  type Error = uuid::Error;
+
+  fn try_from(id: String) -> Result<Self, Self::Error> {
+    uuid::Uuid::parse_str(&id).map(Self)
+  }
+}
+
+impl From<FolderId> for String {
+  fn from(id: FolderId) -> Self {
+    id.0.to_string()
+  }
+}
+
+/// Put a chat's folder back as it was before the run, from the checkpoint the
+/// run took. Sent again on a new socket until it is answered.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestore {
+  pub(crate) restore_id: String,
+  pub(crate) folder_id: FolderId,
+  /// The linked folder the run worked in, when it worked in one.
+  pub(crate) linked_folder_id: Option<FolderId>,
+  pub(crate) run_id: String,
+}
+
 wire_union!(ServerMessage tagged "type" {
   Welcome(Welcome) => "welcome",
   UpgradeRequired(UpgradeRequired) => "upgrade_required",
   Reconnect(Reconnect) => "reconnect",
-  RunStart(RunStart) => "run.start",
+  RunStart(Box<RunStart>) => "run.start",
   RunInput(RunInput) => "run.input",
   RunApproval(RunApproval) => "run.approval",
+  RunAnswer(RunAnswer) => "run.answer",
   RunInterrupt(RunRef) => "run.interrupt",
   RunCancel(RunRef) => "run.cancel",
   RunToken(RunTokenRefresh) => "run.token",
   Ack(Ack) => "ack",
+  FolderRestore(FolderRestore) => "folder.restore",
 });
 
 #[cfg(test)]
@@ -428,6 +761,14 @@ mod tests {
         names(HarnessCapability::ALL.iter().map(|value| value.wire_name())),
       ),
       (
+        "harnessUnavailableReasons",
+        names(
+          HarnessUnavailableReason::ALL
+            .iter()
+            .map(|value| value.wire_name()),
+        ),
+      ),
+      (
         "runRejectReasons",
         names(RejectReason::ALL.iter().map(|value| value.wire_name())),
       ),
@@ -444,12 +785,32 @@ mod tests {
         names(RunOutcome::ALL.iter().map(|value| value.wire_name())),
       ),
       (
+        "folderRestoreOutcomes",
+        names(
+          FolderRestoreOutcome::ALL
+            .iter()
+            .map(|value| value.wire_name()),
+        ),
+      ),
+      (
+        "linkedFolderStates",
+        names(LinkedFolderState::ALL.iter().map(|value| value.wire_name())),
+      ),
+      (
         "networkPolicies",
         names(NetworkPolicy::ALL.iter().map(|value| value.wire_name())),
       ),
       (
         "fsPolicies",
         names(FsPolicy::ALL.iter().map(|value| value.wire_name())),
+      ),
+      (
+        "approvalModes",
+        names(ApprovalMode::ALL.iter().map(|value| value.wire_name())),
+      ),
+      (
+        "reasoningEfforts",
+        names(ReasoningEffort::ALL.iter().map(|value| value.wire_name())),
       ),
       ("harnessStates", names(HarnessReport::TAGS.iter().copied())),
       (
@@ -474,6 +835,130 @@ mod tests {
       fixtures["vocabulary"]["maxFrameBytes"].as_u64(),
       u64::try_from(MAX_FRAME_BYTES).ok()
     );
+    let limits = &fixtures["vocabulary"]["runLimits"];
+    assert_eq!(
+      limits["maxMessagesPerRun"].as_u64(),
+      Some(u64::from(MAX_MESSAGES_PER_RUN))
+    );
+    assert_eq!(
+      limits["maxMessageBytesPerRun"].as_u64(),
+      Some(MAX_MESSAGE_BYTES_PER_RUN)
+    );
+    let answers = &fixtures["vocabulary"]["answerLimits"];
+    for (name, rust) in [
+      ("maxQuestions", MAX_ANSWERED_QUESTIONS),
+      ("maxAnswersPerQuestion", MAX_ANSWERS_PER_QUESTION),
+      ("maxAnswerLength", MAX_ANSWER_LENGTH),
+      ("maxQuestionIdLength", MAX_QUESTION_ID_LENGTH),
+    ] {
+      assert_eq!(answers[name].as_u64(), u64::try_from(rust).ok(), "{name}");
+    }
+  }
+
+  #[test]
+  fn answers_take_each_bound_and_refuse_one_past_it() {
+    let parses = |answers: Value| {
+      serde_json::from_value::<ServerMessage>(serde_json::json!({
+        "type": "run.answer",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+        "answers": answers,
+      }))
+      .is_ok()
+    };
+    let questions = |count: usize| {
+      Value::Object(
+        (0..count)
+          .map(|index| (format!("q{index}"), serde_json::json!(["a"])))
+          .collect(),
+      )
+    };
+    let answers = |count: usize| serde_json::json!({ "tone": vec!["a"; count] });
+    let answer = |text: String| serde_json::json!({ "tone": [text] });
+    let id = |length: usize| {
+      let mut map = Map::new();
+      map.insert("q".repeat(length), serde_json::json!(["a"]));
+      Value::Object(map)
+    };
+    let cases = [
+      (
+        "questions",
+        questions(MAX_ANSWERED_QUESTIONS),
+        questions(MAX_ANSWERED_QUESTIONS + 1),
+      ),
+      (
+        "answers",
+        answers(MAX_ANSWERS_PER_QUESTION),
+        answers(MAX_ANSWERS_PER_QUESTION + 1),
+      ),
+      (
+        "answer length",
+        answer("a".repeat(MAX_ANSWER_LENGTH)),
+        answer("a".repeat(MAX_ANSWER_LENGTH + 1)),
+      ),
+      (
+        "question id",
+        id(MAX_QUESTION_ID_LENGTH),
+        id(MAX_QUESTION_ID_LENGTH + 1),
+      ),
+    ];
+    for (name, at_bound, past_bound) in cases {
+      assert!(parses(at_bound), "{name} at the bound");
+      assert!(!parses(past_bound), "{name} past the bound");
+    }
+    // Two UTF-8 bytes, one UTF-16 code unit: the bound is on code units.
+    assert!(parses(answer("é".repeat(MAX_ANSWER_LENGTH))));
+  }
+
+  #[test]
+  fn answers_stay_out_of_debug_output() {
+    let fixtures = fixtures();
+    for message in entries(&fixtures, "/valid/server") {
+      if message["type"] != "run.answer" {
+        continue;
+      }
+      let parsed: ServerMessage = serde_json::from_value(message.clone()).unwrap();
+      let debug = format!("{parsed:?}");
+      for answers in message["answers"].as_object().unwrap().values() {
+        for answer in answers.as_array().unwrap() {
+          assert!(!debug.contains(answer.as_str().unwrap()), "{debug}");
+        }
+      }
+      assert!(debug.contains("tone"), "{debug}");
+    }
+  }
+
+  #[test]
+  fn socket_path_header_close_codes_and_timings_match_the_contract() {
+    let fixtures = fixtures();
+    let vocabulary = &fixtures["vocabulary"];
+    assert_eq!(vocabulary["path"], PATH);
+    assert_eq!(vocabulary["desktopIdHeader"], DESKTOP_ID_HEADER);
+    assert_eq!(vocabulary["policyViolationCode"], POLICY_VIOLATION_CODE);
+    let millis = |name: &str| {
+      Duration::from_millis(
+        vocabulary["timing"][name]
+          .as_u64()
+          .unwrap_or_else(|| panic!("timing {name}")),
+      )
+    };
+    assert_eq!(millis("pingIntervalMs"), PING_INTERVAL);
+    assert_eq!(millis("helloTimeoutMs"), HELLO_TIMEOUT);
+
+    let contract = vocabulary["close"].as_object().expect("close codes");
+    let rust: BTreeSet<String> = CloseCode::ALL
+      .iter()
+      .map(|close| close.contract().0.to_owned())
+      .collect();
+    assert_eq!(rust, contract.keys().cloned().collect::<BTreeSet<_>>());
+    for close in CloseCode::ALL {
+      let (key, code, reason) = close.contract();
+      assert_eq!(contract[key]["code"], code, "{key}");
+      assert_eq!(contract[key]["reason"], reason, "{key}");
+      assert_eq!(CloseCode::from_code(code), Some(*close));
+    }
+    assert_eq!(CloseCode::from_code(POLICY_VIOLATION_CODE), None);
+    assert_eq!(CloseCode::from_code(1000), None);
   }
 
   #[test]
@@ -484,6 +969,9 @@ mod tests {
       let debug = format!("{parsed:?}");
       for token in ["run-token-1", "run-token-2"] {
         assert!(!debug.contains(token), "{debug}");
+      }
+      if let Some(key) = message["outputKey"].as_str() {
+        assert!(!debug.contains(key), "{debug}");
       }
     }
   }

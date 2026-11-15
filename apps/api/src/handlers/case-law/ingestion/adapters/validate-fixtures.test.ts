@@ -20,6 +20,7 @@ import {
   toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { ukFclFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { assertReaderAcceptsAst } from "@/api/tests/helpers/parser-reader-guard";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -67,6 +68,8 @@ const validateDecision = (
     raw,
     metadataUrlSchemaForAdapter(adapter),
   ).unwrap(prefix);
+
+  assertReaderAcceptsAst(d.documentAst);
 
   // Required fields
   expect(d.caseNumber, `${prefix}.caseNumber`).toBeTruthy();

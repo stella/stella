@@ -1,0 +1,399 @@
+name: Deploy Outlook add-in
+
+defaults:
+  run:
+    shell: bash
+
+# Deploys the Outlook add-in task pane after every main merge that changes
+# what the add-in build reads: staging first, then production once staging
+# has deployed. The public repo cannot call private reusable workflows
+# directly, so each deploy job dispatches the private deploy and follows it to
+# its result, because production must wait for staging.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push replaces a run still pending here, so a run's own pushed range
+# can miss commits; the scope step therefore diffs from the last deployed run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scope:
+    # The trigger already restricts pushes to main, but a manual dispatch
+    # can name another ref. The private workflow refuses non-main refs too.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # Reads this workflow's last successful run as the diff base.
+      actions: read
+    outputs:
+      affected: ${{ steps.scope.outputs.affected }}
+    steps:
+      - name: Checkout
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
+        with:
+          # The pushed range can span several commits; blobless keeps the
+          # history cheap and fetches only the files the check reads.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      # scripts/landing-deploy-scope.ts owns what a deployed package reads:
+      # its workspace graph, the packages that graph resolves to, and the
+      # outside files turbo.json declares for its build. A manual dispatch
+      # always deploys, and a check that cannot decide deploys too.
+      # The base is the head of this workflow's last successful main run, not
+      # the push's own before: a replaced pending run or a failed deploy then
+      # leaves its commits in the next run's range instead of dropping them.
+      - name: Decide whether the push changes the add-in
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base_sha=""
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            base_sha="$(
+              bash scripts/gh-retry.sh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-outlook-addin.yml/runs?branch=main&status=success&per_page=1" \
+                --jq '.workflow_runs[0].head_sha // empty'
+            )" || base_sha=""
+          fi
+          if [[ "$EVENT_NAME" != "push" ]]; then
+            affected=true
+          elif [[ ! "$base_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::warning::No earlier successful deploy run to diff from; deploying."
+            affected=true
+          elif ! affected="$(
+            bun scripts/landing-deploy-scope.ts --package @stll/outlook --base "$base_sha" --head "$GITHUB_SHA"
+          )"; then
+            echo "::warning::Could not scope the Outlook add-in deploy; deploying."
+            affected=true
+          fi
+          echo "affected=${affected}" >> "$GITHUB_OUTPUT"
+
+  # Both environments are built here, from the pushed commit, with no secrets
+  # in reach. Each private deploy downloads its environment's artifact and
+  # checks where it came from before publishing it.
+  build:
+    needs: scope
+    if: needs.scope.outputs.affected == 'true'
+    name: Build Outlook add-in
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      staging-artifact-name: ${{ steps.names.outputs.staging }}
+      staging-artifact-digest: ${{ steps.upload-staging.outputs.artifact-digest }}
+      production-artifact-name: ${{ steps.names.outputs.production }}
+      production-artifact-digest: ${{ steps.upload-production.outputs.artifact-digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN; the build installs nothing private.
+          NPM_TOKEN: ""
+
+      # Every published manifest needs a higher version, and Office reads
+      # each of its four parts as a 16-bit number. The run number grows with
+      # every run of this workflow and the attempt with every re-run, so
+      # 1.0.<run>.<attempt> increases in deploy order; both environments of
+      # one run share it. The private deploy refuses a version that is not
+      # above the live one.
+      - name: Choose the release version
+        id: version
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          if (( RUN_NUMBER > 65535 || RUN_ATTEMPT > 65535 )); then
+            echo "::error::Run ${RUN_NUMBER} attempt ${RUN_ATTEMPT} does not fit a manifest version part; raise the minor version."
+            exit 1
+          fi
+          echo "version=1.0.${RUN_NUMBER}.${RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
+      # Only the prod build mode emits deployment-headers.json, so both
+      # environments build with it and differ only in their origins.
+      - name: Build for staging
+        env:
+          STELLA_OUTLOOK_VERSION: ${{ steps.version.outputs.version }}
+          STELLA_TASKPANE_ORIGIN: https://outlook-staging.stll.app
+          STELLA_API_ORIGIN: https://api-staging.stll.app
+          STELLA_WEB_ORIGIN: https://staging.stll.app
+          STELLA_UPLOAD_ORIGIN: https://stella-staging-documents.s3.eu-central-1.amazonaws.com
+        run: bun --filter @stll/outlook build -- --env=prod --out-dir=dist-staging
+
+      - name: Build for production
+        env:
+          STELLA_OUTLOOK_VERSION: ${{ steps.version.outputs.version }}
+          STELLA_TASKPANE_ORIGIN: https://outlook.stll.app
+          STELLA_API_ORIGIN: https://api.stll.app
+          STELLA_WEB_ORIGIN: https://my.stll.app
+          STELLA_UPLOAD_ORIGIN: https://stella-prod-documents.s3.eu-central-1.amazonaws.com
+        run: bun --filter @stll/outlook build -- --env=prod --out-dir=dist-production
+
+      - name: Name the artifacts
+        id: names
+        run: |
+          {
+            echo "staging=outlook-addin-staging-${GITHUB_SHA}"
+            echo "production=outlook-addin-production-${GITHUB_SHA}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload the staging build
+        id: upload-staging
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.names.outputs.staging }}
+          path: apps/outlook/dist-staging/
+          if-no-files-found: error
+          # A re-run replaces the artifact instead of failing on the name.
+          overwrite: true
+          retention-days: 1
+
+      - name: Upload the production build
+        id: upload-production
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.names.outputs.production }}
+          path: apps/outlook/dist-production/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+
+      # The rendered manifests, kept for sideloading and store submission.
+      - name: Upload the staging manifest
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: outlook-addin-manifest-staging-${{ steps.version.outputs.version }}
+          path: apps/outlook/dist-staging/manifest.xml
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 90
+
+      - name: Upload the production manifest
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: outlook-addin-manifest-production-${{ steps.version.outputs.version }}
+          path: apps/outlook/dist-production/manifest.xml
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 90
+
+  deploy-staging:
+    needs: build
+    name: Deploy staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    # Release App key lives in this environment (main and v* tags only).
+    environment: release-app
+    # Production deploys a build only after staging deployed that same build.
+    outputs:
+      covered: ${{ steps.covered.outputs.covered }}
+    env:
+      DEPLOY_ENVIRONMENT: staging
+      TASKPANE_ORIGIN: https://outlook-staging.stll.app
+      ARTIFACT_NAME: ${{ needs.build.outputs.staging-artifact-name }}
+      ARTIFACT_DIGEST: ${{ needs.build.outputs.staging-artifact-digest }}
+    steps: &deploy-steps
+      - name: Checkout
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      # Runs of this workflow queue behind each other, so this one can start
+      # after main has moved on. When main has since moved by a commit that
+      # changes the add-in, that newer run deploys it, and this older build
+      # must not replace it. Anything that cannot be decided deploys; the
+      # deploy side still refuses a build older than the live one.
+      - name: Check whether a newer deploy covers this one
+        timeout-minutes: 5
+        id: covered
+        run: |
+          covered=false
+          if ! bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --quiet --filter=blob:none origin main; then
+            echo "::warning::Could not fetch main; deploying."
+          else
+            main_sha="$(git rev-parse FETCH_HEAD)"
+            if [[ "$main_sha" != "$GITHUB_SHA" ]]; then
+              if affected="$(
+                bun scripts/landing-deploy-scope.ts --package @stll/outlook --base "$GITHUB_SHA" --head "$main_sha"
+              )"; then
+                if [[ "$affected" == "true" ]]; then
+                  covered=true
+                  echo "::notice::main moved to ${main_sha} with add-in changes; its deploy covers ${GITHUB_SHA}."
+                fi
+              else
+                echo "::warning::Could not scope ${GITHUB_SHA}..${main_sha}; deploying."
+              fi
+            fi
+          fi
+          echo "covered=${covered}" >> "$GITHUB_OUTPUT"
+
+      - name: Mint App token for the private workflows repo
+        id: app-token
+        if: steps.covered.outputs.covered != 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: private-workflows
+          permission-actions: write
+          permission-contents: read
+
+      # The private run publishes, invalidates the edge and waits for the
+      # invalidation, so its success means the new build is being served.
+      - name: Dispatch deploy-outlook-addin.yml and follow it
+        if: steps.covered.outputs.covered != 'true'
+        timeout-minutes: 40
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          AWS_ROLE_ARN_DEPLOY: ${{ env.DEPLOY_ENVIRONMENT == 'production' && secrets.AWS_ROLE_ARN_DEPLOY_OUTLOOK_ADDIN_PRODUCTION || secrets.AWS_ROLE_ARN_DEPLOY_OUTLOOK_ADDIN_STAGING }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          # One failed status read must not end the follow.
+          retries: 2
+          script: |
+            const owner = context.repo.owner;
+            const repo = 'private-workflows';
+            const workflow_id = 'deploy-outlook-addin.yml';
+            const ref = 'main';
+            const environment = process.env.DEPLOY_ENVIRONMENT;
+            const POLL_MS = 20_000;
+            const MAX_POLLS = 114;
+            const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+            // The private workflow's run-name, so a run the dispatch answer
+            // does not name can be found by listing.
+            const title = `Deploy Outlook add-in ${environment} ${context.sha} from run ${context.runId}`;
+            const since = new Date(Date.now() - 5_000).toISOString();
+            const { data } = await github.rest.actions.createWorkflowDispatch({
+              owner, repo, workflow_id, ref, return_run_details: true,
+              inputs: {
+                environment,
+                source_repository: `${context.repo.owner}/${context.repo.repo}`,
+                source_ref: context.ref,
+                source_sha: context.sha,
+                source_run_id: String(context.runId),
+                artifact_name: process.env.ARTIFACT_NAME,
+                artifact_digest: process.env.ARTIFACT_DIGEST,
+                aws_role_arn_deploy: process.env.AWS_ROLE_ARN_DEPLOY,
+              },
+            });
+            let id = data?.workflow_run_id;
+            if (!Number.isSafeInteger(id) || id <= 0) {
+              id = undefined;
+              for (let attempt = 0; attempt < 6 && id === undefined; attempt += 1) {
+                await sleep(5_000);
+                const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+                  owner, repo, workflow_id, branch: ref,
+                  event: 'workflow_dispatch', created: `>=${since}`, per_page: 100,
+                });
+                id = runs
+                  .filter(run => Number.isSafeInteger(run.id) && run.id > 0 && run.display_title === title)
+                  .sort((a, b) => a.id - b.id)[0]?.id;
+              }
+            }
+            if (id === undefined) {
+              core.setFailed(`The dispatched ${environment} deploy run was not found`);
+              return;
+            }
+            core.notice(`${workflow_id} (${environment}): run ${id}`);
+            // A freshly dispatched run can read as Not Found for a few
+            // seconds; wait for it to appear before following it.
+            const readRun = async () => {
+              for (let attempt = 0; ; attempt += 1) {
+                try {
+                  return (await github.rest.actions.getWorkflowRun({ owner, repo, run_id: id })).data;
+                } catch (error) {
+                  if (error?.status !== 404 || attempt >= 6) throw error;
+                  await sleep(5_000);
+                }
+              }
+            };
+            for (let poll = 0; ; poll += 1) {
+              const run = await readRun();
+              if (run.status === 'completed') {
+                if (run.conclusion !== 'success') {
+                  core.setFailed(`The ${environment} deploy ended ${run.conclusion}: ${run.html_url}`);
+                }
+                return;
+              }
+              if (poll >= MAX_POLLS) {
+                core.setFailed(`The ${environment} deploy did not finish within ${MAX_POLLS * POLL_MS / 60_000} minutes`);
+                return;
+              }
+              await sleep(POLL_MS);
+            }
+
+      - name: Note the unprobed staging deploy
+        if: steps.covered.outputs.covered != 'true' && env.DEPLOY_ENVIRONMENT == 'staging'
+        run: echo "::notice::probe:deployment sends no staging edge header, so the staging deploy is not probed."
+
+      - name: Install dependencies
+        if: steps.covered.outputs.covered != 'true' && env.DEPLOY_ENVIRONMENT == 'production'
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      # The served manifest, documents, assets and their headers must all
+      # come from the one release this run built. A retry covers an edge
+      # error right after the invalidation.
+      - name: Probe the deployment
+        if: steps.covered.outputs.covered != 'true' && env.DEPLOY_ENVIRONMENT == 'production'
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun --filter @stll/outlook probe:deployment -- --origin="$TASKPANE_ORIGIN"
+
+  deploy-production:
+    needs: [build, deploy-staging]
+    # A staging run that a newer deploy covered published nothing, so this
+    # build never reached staging; the newer run deploys both environments.
+    if: needs.deploy-staging.outputs.covered == 'false'
+    name: Deploy production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    # Release App key lives in this environment (main and v* tags only).
+    environment: release-app
+    env:
+      DEPLOY_ENVIRONMENT: production
+      TASKPANE_ORIGIN: https://outlook.stll.app
+      ARTIFACT_NAME: ${{ needs.build.outputs.production-artifact-name }}
+      ARTIFACT_DIGEST: ${{ needs.build.outputs.production-artifact-digest }}
+    steps: *deploy-steps

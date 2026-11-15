@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { validateToolCallParts } from "@/api/handlers/chat/chat-schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -99,6 +99,7 @@ const toolCallOutcome = ({
   input?: unknown;
 }): ToolCallOutcome => {
   const result = validateToolCallParts({
+    ownership: "cloud",
     message: {
       id: toSafeId<"chatMessage">("msg_property_tool_call"),
       role: "assistant",
@@ -123,7 +124,8 @@ const toolCallOutcome = ({
 test(
   "a strict provider's null-widened text is the call its folded input describes",
   () => {
-    fc.assert(
+    assertProperty(
+      "a strict provider's null-widened text is the call its folded input describes",
       fc.property(inputArbitrary, (input) => {
         const widenedText = stringifyDifferently(nullWidenedRecord(input));
 
@@ -180,7 +182,7 @@ test(
           ).toBe(mismatch);
         }
       }),
-      propertyConfig({ numRuns: 60 }),
+      { numRuns: 60 },
     );
   },
   propertyTestTimeout(15_000),
@@ -204,6 +206,7 @@ test("keeps a null the tool's schema admits and omits one it refuses", () => {
   const argumentsText = JSON.stringify({ instructions: null, note: null });
   const validate = (part: { input?: unknown }) =>
     validateToolCallParts({
+      ownership: "cloud",
       message: {
         id: toSafeId<"chatMessage">("msg_nullable_tool_call"),
         role: "assistant",

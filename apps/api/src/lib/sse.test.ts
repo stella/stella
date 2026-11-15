@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 
 import {
+  newNotificationRealtimeEvent,
   RESOURCE_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
@@ -26,12 +27,14 @@ import {
 import type {
   announceMcpToolProjectionChange as AnnounceMcpToolProjectionChange,
   broadcast as Broadcast,
+  broadcastToUser as BroadcastToUser,
   registerMcpToolProjectionDelivery as RegisterMcpToolProjectionDelivery,
   revokeWorkspaceSseAccess as RevokeWorkspaceSseAccess,
   SseSessionLivenessReader,
   startSse as StartSse,
   stopSse as StopSse,
   subscribe as Subscribe,
+  subscribeUser as SubscribeUser,
 } from "@/api/lib/sse";
 import {
   createSseBroadcastPublisher,
@@ -51,11 +54,13 @@ beforeEach(async () => {
   ({
     announceMcpToolProjectionChange,
     broadcast,
+    broadcastToUser,
     registerMcpToolProjectionDelivery,
     revokeWorkspaceSseAccess,
     startSse,
     stopSse,
     subscribe,
+    subscribeUser,
   } = await import("@/api/lib/sse"));
   clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
   redisClientsCreatedDuringImport =
@@ -174,11 +179,13 @@ let clearIntervalSpy: Mock<typeof globalThis.clearInterval>;
 
 let announceMcpToolProjectionChange: typeof AnnounceMcpToolProjectionChange;
 let broadcast: typeof Broadcast;
+let broadcastToUser: typeof BroadcastToUser;
 let registerMcpToolProjectionDelivery: typeof RegisterMcpToolProjectionDelivery;
 let revokeWorkspaceSseAccess: typeof RevokeWorkspaceSseAccess;
 let startSse: typeof StartSse;
 let stopSse: typeof StopSse;
 let subscribe: typeof Subscribe;
+let subscribeUser: typeof SubscribeUser;
 
 // Measure the import itself. Bun's --rerun-each retains mock history between
 // iterations, so absolute call counts include lifecycle calls from earlier
@@ -257,7 +264,7 @@ const authorizeAllUserConnections = async ({
   sessionIds,
 }: {
   sessionIds: readonly string[];
-}) => new Set(sessionIds);
+}) => ({ member: true, liveSessionIds: new Set(sessionIds) });
 const holdAllSessions: SseSessionLivenessReader = async (sessions) =>
   await Promise.resolve(new Set(sessions.map((session) => session.sessionId)));
 const startTestSse = (): void => {
@@ -625,6 +632,106 @@ describe("subscribe: already-aborted signal", () => {
 
     const second = await reader.read();
     expect(second.done).toBe(true);
+  });
+});
+
+describe("subscribe: streams per session", () => {
+  test("a session keeps at most the limit of streams on one workspace, newest first", async () => {
+    startTestSse();
+    stopSse();
+    await settlePendingWork();
+
+    const opened = Array.from(
+      { length: LIMITS.sseStreamsPerSession + 2 },
+      () => {
+        const controller = new AbortController();
+        return {
+          controller,
+          reader: subscribeToWorkspace(controller.signal).getReader(),
+        };
+      },
+    );
+    const otherSession = new AbortController();
+    const otherReader = subscribeToWorkspace(
+      otherSession.signal,
+      toSafeId<"user">("user_other_session"),
+    ).getReader();
+
+    broadcastTestEvent(workspaceId, testEvent("within-limit"));
+
+    const results = await Promise.all(
+      opened.map(async ({ reader }) => await reader.read()),
+    );
+    expect(results.slice(0, 2).every(({ done }) => done)).toBe(true);
+    for (const { done, value } of results.slice(2)) {
+      expect(done).toBe(false);
+      expect(new TextDecoder().decode(value)).toContain("within-limit");
+    }
+    const other = await otherReader.read();
+    expect(new TextDecoder().decode(other.value)).toContain("within-limit");
+
+    for (const { controller } of opened) {
+      controller.abort();
+    }
+    otherSession.abort();
+    await settlePendingWork();
+  });
+});
+
+describe("subscribeUser: what each delivery re-checks", () => {
+  test("an app credential's stream holds by membership, a browser session's by its live session", async () => {
+    let member = true;
+    const sessionChecks: (readonly string[])[] = [];
+    startSse(
+      {
+        sessions: holdAllSessions,
+        // A member whose browser sessions have all ended.
+        user: async ({ sessionIds }) => {
+          sessionChecks.push(sessionIds);
+          return await Promise.resolve({ member, liveSessionIds: new Set() });
+        },
+        workspace: authorizeAllWorkspaceConnections,
+      },
+      { createClient: createRedisClientMock, publisher: testPublisher },
+    );
+    stopSse();
+    await settlePendingWork();
+
+    // Both holders share an id, so neither kind can stand in for the other.
+    const holderId = "oauth-client:app";
+    const credential = new AbortController();
+    const credentialReader = subscribeUser({
+      organizationId,
+      holder: { id: holderId, kind: "credential" },
+      signal: credential.signal,
+      userId,
+    }).getReader();
+    const session = new AbortController();
+    const sessionReader = subscribeUser({
+      organizationId,
+      holder: { id: holderId, kind: "session" },
+      signal: session.signal,
+      userId,
+    }).getReader();
+
+    broadcastToUser(userId, organizationId, newNotificationRealtimeEvent());
+
+    const delivered = await credentialReader.read();
+    expect(new TextDecoder().decode(delivered.value)).toContain(
+      newNotificationRealtimeEvent().type,
+    );
+    expect((await sessionReader.read()).done).toBe(true);
+    // Only the browser session's id is asked about as a session.
+    expect(sessionChecks).toEqual([[holderId]]);
+
+    member = false;
+    broadcastToUser(userId, organizationId, newNotificationRealtimeEvent());
+    expect((await credentialReader.read()).done).toBe(true);
+    expect(sessionChecks.at(-1)).toEqual([]);
+
+    credential.abort();
+    session.abort();
+    await settlePendingWork();
   });
 });
 
@@ -1159,8 +1266,8 @@ describe("startSse: subscriber attach retry", () => {
     const realSetTimeout = globalThis.setTimeout;
     // A timer stub that fires the callback promptly, ignoring the delay. Matching
     // Bun's full overloaded setTimeout type adds no test value, so assert it.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
     const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
       realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
     const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
       immediateSetTimeout,
@@ -1206,8 +1313,8 @@ describe("startSse: subscriber attach retry", () => {
     closeFailuresRemaining = 3;
 
     const realSetTimeout = globalThis.setTimeout;
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
     const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
       realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
     const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
       immediateSetTimeout,

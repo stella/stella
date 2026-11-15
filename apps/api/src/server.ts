@@ -24,6 +24,10 @@ import { clientAddressConfigurationWarning } from "@/api/lib/client-ip";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  drainDesktopRunnerGateway,
+  startDesktopRunnerGateway,
+} from "@/api/lib/desktop-runner/runtime";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   openFreshLoginClient,
@@ -156,17 +160,25 @@ const startS3RefreshLoop = () => {
     // `refreshStale*` own both the staleness test and the deduplication, so a
     // resolution still in flight when the next tick arrives is joined rather
     // than started again.
-    refreshStaleS3().catch((error: unknown) => {
-      logger.error("s3.refresh_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+    detached(
+      async () =>
+        refreshStaleS3().catch((error: unknown) => {
+          logger.error("s3.refresh_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+      "server.refresh-stale-s3",
+    );
 
-    refreshStaleCorpusS3().catch((error: unknown) => {
-      logger.error("s3.corpus_refresh_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+    detached(
+      async () =>
+        refreshStaleCorpusS3().catch((error: unknown) => {
+          logger.error("s3.corpus_refresh_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+      "server.refresh-stale-corpus-s3",
+    );
   }, S3_REFRESH_CHECK_INTERVAL_MS);
 
   timer.unref();
@@ -196,10 +208,13 @@ const startServer = async (): Promise<void> => {
     }).unwrap("Redis connection configuration must be valid.");
     logger.info("redis.connection.mode", { mode });
     if (isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-      detached(startActionAdmissionRedis(), "admission-store.start");
+      detached(
+        async () => startActionAdmissionRedis(),
+        "admission-store.start",
+      );
     }
     if (isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")) {
-      detached(startMcpReadFenceRedis(), "read-fence-store.start");
+      detached(async () => startMcpReadFenceRedis(), "read-fence-store.start");
     }
   }
 
@@ -243,6 +258,9 @@ const startServer = async (): Promise<void> => {
     : startDatabaseLoginProbe({
         openClient: () => openFreshLoginClient(envBase.DATABASE_URL),
       });
+
+  // Before the listener opens, so no runner upgrade finds the gateway absent.
+  await startDesktopRunnerGateway();
 
   const server = Bun.serve({
     port: getApiPort(),
@@ -298,6 +316,9 @@ const startServer = async (): Promise<void> => {
       },
       relinquishChatTurnRuns,
       stopHttp: async () => {
+        // Runner sockets are asked to reconnect elsewhere before the
+        // listener stops waiting on open connections.
+        await drainDesktopRunnerGateway();
         await server.stop();
       },
       // Stop claiming new jobs before draining, so a tick in flight finishes
@@ -345,10 +366,10 @@ const startServer = async (): Promise<void> => {
     }
   };
   process.once("SIGTERM", () => {
-    detached(shutdownWorkers("SIGTERM"), "server.shutdown");
+    detached(async () => shutdownWorkers("SIGTERM"), "server.shutdown");
   });
   process.once("SIGINT", () => {
-    detached(shutdownWorkers("SIGINT"), "server.shutdown");
+    detached(async () => shutdownWorkers("SIGINT"), "server.shutdown");
   });
 
   // Scheduled jobs run here rather than in a process of their own. A separate

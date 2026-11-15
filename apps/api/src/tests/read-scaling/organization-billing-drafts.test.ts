@@ -11,6 +11,7 @@ import readBillingDraftConfiguration from "@/api/handlers/organization-settings/
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { executeRowsSafeDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -83,7 +84,7 @@ test("billing configuration reads require the actor's current database enrollmen
       );
     expect(await read()).toMatchObject({ code: 404 });
   } finally {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
     await releaseTestDb();
   }

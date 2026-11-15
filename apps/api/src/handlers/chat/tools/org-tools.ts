@@ -1,5 +1,9 @@
 import { toolDefinition } from "@tanstack/ai";
-import * as v from "valibot";
+
+import {
+  askUserInputSchema,
+  askUserOutputSchema,
+} from "@stll/api-contract/chat-ask-user";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
@@ -38,56 +42,10 @@ export const createOrgTools = (_context: OrgToolsContext) => ({
       "(no `options`) for genuinely open-ended answers like " +
       "names, dates, free text. Once the user answers, " +
       "synthesize their input into a plan and execute it.",
-    inputSchema: toTanStackToolSchema(
-      v.strictObject({
-        analysis: v.pipe(
-          v.string(),
-          v.description(
-            "Brief analysis of the task and what you " +
-              "already know from context",
-          ),
-        ),
-        questions: v.pipe(
-          v.array(
-            v.strictObject({
-              question: v.string(),
-              reason: v.pipe(
-                v.string(),
-                v.description("Why this matters for the task"),
-              ),
-              options: v.optional(
-                v.pipe(
-                  v.array(v.string()),
-                  v.description(
-                    "Suggested options (A/B/C style). " +
-                      "The user can also write their " +
-                      "own answer.",
-                  ),
-                ),
-              ),
-              default: v.optional(
-                v.pipe(
-                  v.string(),
-                  v.description("Preselected option or default value"),
-                ),
-              ),
-            }),
-          ),
-          v.minLength(1),
-          v.maxLength(10),
-          v.description("Clarifying questions to ask"),
-        ),
-      }),
-    ),
-    outputSchema: toTanStackToolSchema(
-      v.strictObject({
-        answers: v.array(
-          v.strictObject({
-            question: v.string(),
-            answer: v.string(),
-          }),
-        ),
-      }),
-    ),
+    inputSchema: toTanStackToolSchema(askUserInputSchema, {
+      nullUnionStrategy: "json-schema",
+      omitValidationActions: ["check"],
+    }),
+    outputSchema: toTanStackToolSchema(askUserOutputSchema),
   }),
 });

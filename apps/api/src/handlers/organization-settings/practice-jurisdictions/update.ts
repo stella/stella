@@ -91,9 +91,10 @@ const updatePracticeJurisdictions = createSafeRootHandler(
       practiceJurisdictions,
     );
     detached(
-      publishMcpToolProjectionChange({
-        organizationId: session.activeOrganizationId,
-      }),
+      async () =>
+        await publishMcpToolProjectionChange({
+          organizationId: session.activeOrganizationId,
+        }),
       "mcp.practice-jurisdiction-tool-projection",
     );
 

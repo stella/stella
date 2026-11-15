@@ -1,16 +1,15 @@
 import { MCP_REGISTRY_VERSION_HEADER } from "@stll/api-contract/mcp-registry";
 
+import { rebuildResponse } from "@/api/lib/observability/server-error-answer";
+
 export const withMcpRegistryVersionHeader = (
   response: Response,
   registryVersion: string | undefined,
-): Response =>
-  registryVersion === undefined
-    ? response
-    : new Response(response.body, {
-        headers: new Headers({
-          ...Object.fromEntries(response.headers),
-          [MCP_REGISTRY_VERSION_HEADER]: registryVersion,
-        }),
-        status: response.status,
-        statusText: response.statusText,
-      });
+): Response => {
+  if (registryVersion === undefined) {
+    return response;
+  }
+  const rebuilt = rebuildResponse(response, response.body);
+  rebuilt.headers.set(MCP_REGISTRY_VERSION_HEADER, registryVersion);
+  return rebuilt;
+};

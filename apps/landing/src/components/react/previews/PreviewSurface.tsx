@@ -1,5 +1,7 @@
 import type { PropsWithChildren } from "react";
 
+import { TruncatedText } from "@stll/ui/truncated-text";
+
 // Faux app-window chrome shared by every product preview, so each one reads as a
 // real product surface. This is the preview's own window (border, radius,
 // shadow), matching the frameless language every other media type on product
@@ -22,7 +24,7 @@ export const PreviewSurface = ({ title, children }: PreviewSurfaceProps) => (
       // --card is translucent in the dark theme; composite it over the page
       // background for an opaque window instead of a translucency artifact.
       background: "linear-gradient(var(--card), var(--card)) var(--background)",
-      boxShadow: "0 42px 110px -54px rgba(15, 23, 42, 0.5)",
+      boxShadow: "0 42px 110px -54px var(--preview-window-shadow)",
     }}
     aria-hidden="true"
   >
@@ -35,14 +37,14 @@ export const PreviewSurface = ({ title, children }: PreviewSurfaceProps) => (
       <span className="h-2 w-2 rounded-full" style={DOT(30)} />
       <span className="h-2 w-2 rounded-full" style={DOT(20)} />
       <span className="h-2 w-2 rounded-full" style={DOT(14)} />
-      <span
-        className="ms-2 truncate text-[0.6rem] font-medium tracking-wide"
+      <TruncatedText
+        className="ms-2 text-[0.6rem] font-medium tracking-wide"
         style={{
           color: "color-mix(in srgb, var(--muted-foreground) 80%, transparent)",
         }}
       >
         {title}
-      </span>
+      </TruncatedText>
     </div>
     <div className="relative min-h-0 flex-1 overflow-hidden p-3">
       {children}

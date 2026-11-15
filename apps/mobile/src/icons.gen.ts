@@ -64,6 +64,14 @@ export { CopyIcon as CopyFromMenuIcon } from "lucide-react-native";
 // sharedOnPurpose: CopyFromMenuIcon, as above.
 export { CopyIcon as DuplicateIcon } from "lucide-react-native";
 
+// Dictating a message: speech that becomes text in the message box. The
+// mobile composer's round button shows it while there is nothing to send.
+export { MicIcon as DictateIcon } from "lucide-react-native";
+
+// Opening a document's pages to reorder, rotate, crop or delete them: a stack
+// of pages with no pen, so it never reads as signing the document.
+export { FileStackIcon as EditPagesIcon } from "lucide-react-native";
+
 // --- Plain re-exports ------------------------------------------------------
 // @generated-start by scripts/codemod-icons.ts: edit by importing a lucide name and rerunning it
 export type { LucideIcon } from "lucide-react-native";
@@ -120,10 +128,10 @@ export {
   ClipboardListIcon,
   Clock3Icon,
   ClockIcon,
+  CloudIcon,
   CogIcon,
   Columns2Icon,
   Columns3Icon,
-  ColumnsIcon,
   CommandIcon,
   CompassIcon,
   CopyPlusIcon,
@@ -149,7 +157,6 @@ export {
   FileIcon,
   FileImageIcon,
   FileOutputIcon,
-  FilePenLineIcon,
   FilePlus2Icon,
   FilePlusIcon,
   FileQuestionIcon,

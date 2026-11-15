@@ -99,8 +99,8 @@
       "version": 0
     },
     "hu-bhgy::decision": {
-      "fingerprint": "de0829bb5dc48e0fba27acd58766d30b56a7f11cfdcb4821be6a827881683e95",
-      "storedInputIdentity": "b06fac23cb55c8d3788f79579d67aa34d260722d0a9f104dda6fc9f001d4f010",
+      "fingerprint": "f67e12e7e7ddb7394ae99e14351857119e61ed18f2a609b636f6fabce1f3851d",
+      "storedInputIdentity": "501c400415fec47ca77c75e00c27544433695a49cdad2946c7fd1b7bcc0950ec",
       "version": 0
     },
     "pl-courts::decision": {
@@ -164,8 +164,8 @@
       "version": 0
     },
     "sk-us::decision": {
-      "fingerprint": "c05bbec99dff08e2264309c93d88c81fba23cb47bdcf37556c260a21a80def95",
-      "storedInputIdentity": "53094fbfbff9a41848104a4dcf7c17864d2d07a83e97610dbd525154f71c1c9d",
+      "fingerprint": "e495b6710fe9bf0fd4fad5115fd68b1b2a1514c9dff848f986ae846f1196d4cc",
+      "storedInputIdentity": "1357474df35f10d8a31e82b28328f4bd8d6cbb9adb46c96c98d6d3ae41c7e235",
       "version": 0
     },
     "uk-fcl::decision": {

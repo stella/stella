@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { InspectorTab } from "./inspector-store-types";
 
@@ -46,7 +46,6 @@ const { RouteProviderScopeBoundary } =
   await import("@/components/route-provider-scope/route-provider-scope");
 const { MEMBER_PROVIDER_SCOPES } = await import("@/routes/-app-frame-scope");
 const { InspectorPanel } = await import("./inspector-panel");
-const { BUILT_IN_KINDS } = await import("./view-registry-builtins");
 const { getInspectorViews } = await import("./view-registry");
 const { genericPanelFixtures, warmPanelViewRenderers } =
   await import("@/__fixtures__/panel-tab-view-fixtures");
@@ -156,6 +155,7 @@ afterAll(async () => {
 // signed-in providers is exercised, even when it also serves visitors.
 const routeRoot = new URL("../../routes/", import.meta.url);
 const families: string[] = [];
+const familiesWithoutId: string[] = [];
 for (const path of new Bun.Glob("**/*.tsx").scanSync({
   cwd: routeRoot.pathname,
 })) {
@@ -170,14 +170,19 @@ for (const path of new Bun.Glob("**/*.tsx").scanSync({
     continue;
   }
   const id = /createFileRoute\("([^"]+)"\)/u.exec(source)?.[1];
-  expect(id).toBeDefined();
-  if (id !== undefined) {
+  if (id === undefined) {
+    familiesWithoutId.push(path);
+  } else {
     families.push(id);
   }
 }
-expect(families).toEqual(
-  expect.arrayContaining(["/_protected", "/knowledge", "/law", "/tools"]),
-);
+
+test("every signed-in route family is found by its route id", () => {
+  expect(familiesWithoutId).toEqual([]);
+  expect(families).toEqual(
+    expect.arrayContaining(["/_protected", "/knowledge", "/law", "/tools"]),
+  );
+});
 
 const sourceRoot = new URL("../../", import.meta.url);
 const registrationPaths = [
@@ -201,29 +206,31 @@ await Promise.all(
 );
 
 const panelFixtures = [
-  ...BUILT_IN_KINDS.map((kind) => builtinFixtures[kind]),
+  ...Object.values(builtinFixtures),
   ...genericPanelFixtures,
   ...knowledgePanelFixtures,
 ];
-expect(
-  getInspectorViews()
-    .map(({ type }) => type)
-    .toSorted(),
-).toEqual(
-  [
-    ...BUILT_IN_KINDS,
-    ...genericPanelFixtures.map(({ viewType }) => viewType),
-    ...knowledgePanelFixtures.map(({ viewType }) => viewType),
-  ].toSorted(),
-);
-for (const tab of [...genericPanelFixtures, ...knowledgePanelFixtures]) {
+
+test("every registered inspector view has a valid panel fixture", () => {
   expect(
     getInspectorViews()
-      .find(({ type }) => type === tab.viewType)
-      ?.validate(tab.payload),
-    tab.viewType,
-  ).toBe(true);
-}
+      .map(({ type }) => type)
+      .toSorted(),
+  ).toEqual(
+    [
+      ...genericPanelFixtures.map(({ viewType }) => viewType),
+      ...knowledgePanelFixtures.map(({ viewType }) => viewType),
+    ].toSorted(),
+  );
+  for (const tab of [...genericPanelFixtures, ...knowledgePanelFixtures]) {
+    expect(
+      getInspectorViews()
+        .find(({ type }) => type === tab.viewType)
+        ?.validate(tab.payload),
+      tab.viewType,
+    ).toBe(true);
+  }
+});
 
 for (const family of families) {
   for (const tab of panelFixtures) {

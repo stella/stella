@@ -27,6 +27,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -34,7 +35,7 @@ import { oauthDomainsMatch } from "@/api/lib/mcp-upstream/oauth";
 
 const requestBody = v.object({
   url: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
-  displayName: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(160))),
+  displayName: v.optional(displayNameSchema({ maxLength: 160 })),
   description: v.optional(
     v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
   ),

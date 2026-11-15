@@ -3,6 +3,7 @@ import { useId } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -161,9 +162,9 @@ const DrawnBoxPreview = ({
     data-stamp-preview={check}
     style={boxStyle(box)}
   >
-    <span className="text-2xs max-h-full min-w-0 truncate p-1 leading-tight">
+    <TruncatedText className="text-2xs max-h-full p-1 leading-tight">
       {label}
-    </span>
+    </TruncatedText>
   </div>
 );
 
@@ -230,9 +231,9 @@ const StampBoxControl = ({ draft }: { draft: StampDraft }) => {
         aria-hidden
         className="border-primary bg-primary/10 absolute inset-0 border before:absolute before:inset-x-[min(0px,calc(50%-1.375rem))] before:inset-y-[min(0px,calc(50%-1.375rem))] before:content-['']"
       />
-      <span className="text-primary text-2xs relative max-h-full min-w-0 truncate p-1 leading-tight">
+      <TruncatedText className="text-primary text-2xs relative max-h-full p-1 leading-tight">
         {t("workspaces.files.pdfSigning.stampSignedBy")}
-      </span>
+      </TruncatedText>
       <span className="sr-only" id={hintId}>
         {t("workspaces.files.pdfSigning.placementHint")}
       </span>

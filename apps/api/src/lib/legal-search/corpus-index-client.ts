@@ -10,11 +10,25 @@ import { Temporal } from "@stll/time";
 import { envBase } from "@/api/env-base";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  type CorpusSearchAdmission,
+  type CorpusSearchAdmissionGate,
+  createCorpusSearchAdmission,
+} from "@/api/lib/legal-search/corpus-index-admission";
+import {
   CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
-import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
-import { requestBoundedTimeoutMs } from "@/api/lib/load/request-latency-budget";
+import {
+  getPublicReadSignal,
+  withPublicReadIo,
+} from "@/api/lib/legal-search/public-read-timeout-context";
+import { LIMITS } from "@/api/lib/limits";
+import {
+  requestBoundedTimeout,
+  requestBudgetExpiry,
+} from "@/api/lib/load/request-latency-budget";
+import { logger } from "@/api/lib/observability/logger";
+import { rebuildResponse } from "@/api/lib/observability/server-error-answer";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -28,17 +42,38 @@ type CorpusIndexErrorRejection = "definite" | "unknown" | "transient";
 
 /**
  * Whether the engine was there to answer. `unreachable` is a request that
- * never got an answer (refused or reset connection, failed DNS lookup, an
- * expired budget) or one a gateway in front of the engine answered for it
- * (502, 503, 504): the index is down or scaled away, and the same request can
- * succeed once it is back. `index_missing` is the engine answering that the
- * index the request named does not exist on the cluster: every path this
+ * never got an answer (refused or reset connection, failed DNS lookup, its
+ * own timeout expiring) or one a gateway in front of the engine answered for
+ * it (502, 503, 504): the index is down or scaled away, and the same request
+ * can succeed once it is back. `index_missing` is the engine answering that
+ * the index the request named does not exist on the cluster: every path this
  * client sends to is a Stella-built route naming the index, so a 404 from the
  * engine means the index, not the route, and the same request succeeds once
- * the index is created. `answered` is everything else, including a response
+ * the index is created. `budget_expired` is the latency budget of the request
+ * being served (an MCP tool call) running out before the engine answered: the
+ * engine may be up and merely slower than the caller can wait, so it is the
+ * caller's timeout, never an outage; its cause is the budget's own
+ * `TimeoutError` (`requestBudgetExpiry`). `caller_aborted` is the signal the
+ * caller passed ending the request: whoever asked stopped waiting, which says
+ * nothing of the engine. `answered` is everything else, including a response
  * this client could not read, which no retry fixes.
  */
-type CorpusIndexErrorReach = "answered" | "unreachable" | "index_missing";
+type CorpusIndexErrorReach =
+  | "answered"
+  | "unreachable"
+  | "index_missing"
+  | "budget_expired"
+  | "caller_aborted";
+
+/**
+ * What a failed exchange says of the engine itself. `budget_expired` is named
+ * only by `corpusIndexBudgetExpiry`, which carries the budget's own expiry,
+ * so no failure reads as the budget's without the budget's evidence.
+ */
+type EngineReach = Exclude<
+  CorpusIndexErrorReach,
+  "budget_expired" | "caller_aborted"
+>;
 
 export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
   message: string;
@@ -88,6 +123,8 @@ export const isCorpusIndexUnavailable = (error: CorpusIndexError): boolean => {
     case "index_missing":
       return true;
     case "answered":
+    case "budget_expired":
+    case "caller_aborted":
       return false;
     default:
       error.reach satisfies never;
@@ -477,6 +514,18 @@ export type CorpusIndexDeleteSettlementRead = Result<
 type CorpusIndexConfigAttestation =
   { status: "missing" } | { status: "matching"; indexUri: string };
 
+export type CorpusIndexPublishedSplitCount = {
+  indexId: string;
+  publishedSplits: number;
+};
+
+type CorpusIndexPublishedSplitCountsInput = {
+  includes: (indexId: string) => boolean;
+  observer: RegistryRequestObservation;
+  /** Ends every read of the census at once, so slow indexes share one budget. */
+  signal?: AbortSignal | undefined;
+};
+
 export type CorpusIndexClient = {
   createIndex: (
     config: CorpusIndexConfig,
@@ -490,6 +539,13 @@ export type CorpusIndexClient = {
     indexId: string,
     observer: RegistryRequestObservation,
   ) => Promise<Result<boolean, CorpusIndexError>>;
+  /**
+   * Published split count of each index the predicate admits, from the search
+   * endpoint, which answers while the build lane is parked.
+   */
+  readPublishedSplitCounts: (
+    input: CorpusIndexPublishedSplitCountsInput,
+  ) => Promise<Result<CorpusIndexPublishedSplitCount[], CorpusIndexError>>;
   /**
    * Read the engine's materialized config and compare every manifest-pinned
    * value. Quickwit adds defaults and a random doc-mapping UID to the GET
@@ -640,13 +696,9 @@ export const probeCorpusIndexSearchLiveness = async (
     init: { timeoutMs },
     observer,
     consume: async (response) =>
-      new Response(
+      rebuildResponse(
+        response,
         response.body === null ? null : await response.arrayBuffer(),
-        {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers,
-        },
       ),
   });
 
@@ -683,7 +735,24 @@ type CorpusIndexRequest = {
   signal?: AbortSignal | undefined;
 };
 
-const requestLabel = ({ init, path }: CorpusIndexRequest): string =>
+/**
+ * A request whose timeout the request's latency budget has bounded, with
+ * whether that timeout is the request's deadline rather than its own.
+ */
+type BoundedCorpusIndexRequest = CorpusIndexRequest & {
+  endsAtRequestDeadline: boolean;
+};
+
+/** What a failure reads off the request it names. */
+type RequestIdentity = Pick<
+  BoundedCorpusIndexRequest,
+  "init" | "path" | "timeoutMs" | "signal" | "endsAtRequestDeadline"
+>;
+
+const requestLabel = ({
+  init,
+  path,
+}: Pick<CorpusIndexRequest, "init" | "path">): string =>
   `${init.method ?? "GET"} ${path}`;
 
 /**
@@ -696,15 +765,53 @@ const isAborted = (error: unknown): boolean =>
   (error.name === "TimeoutError" || error.name === "AbortError");
 
 type RequestFailureOptions = {
-  request: CorpusIndexRequest;
+  request: RequestIdentity;
   error: unknown;
   /** How to describe a failure the budget did not cause. */
   unaborted: string;
 };
 
 /**
+ * The failure of a request the latency budget of the request being served
+ * ended, as a `budget_expired` error carrying the budget's `TimeoutError`, or
+ * undefined outside a request scope.
+ */
+export const corpusIndexBudgetExpiry = ({
+  label,
+  cause,
+}: {
+  label: string;
+  cause: unknown;
+}): CorpusIndexError | undefined => {
+  const expiry = requestBudgetExpiry(cause, { clampedTimeout: true });
+  return expiry === undefined
+    ? undefined
+    : new CorpusIndexError({
+        message: `corpus index ${label} ran out of the request's latency budget: ${expiry.message}`,
+        cause: expiry,
+        rejection: "unknown",
+        reach: "budget_expired",
+      });
+};
+
+/**
+ * Whether the request's own timer, set to the request's deadline, is what
+ * ended it. A caller's abort, and a timeout of the request's own that fired
+ * while the budget still had time, are not the budget's.
+ */
+const endedByRequestDeadline = (
+  request: RequestIdentity,
+  error: unknown,
+): boolean =>
+  request.endsAtRequestDeadline &&
+  request.signal?.aborted !== true &&
+  error instanceof Error &&
+  error.name === "TimeoutError";
+
+/**
  * Names the request that failed, and the budget when the budget is what
- * ended it.
+ * ended it: the request's latency budget (`budget_expired`) when its deadline
+ * was the request's, else the request's own (the `reach` given).
  *
  * `fetchWithTimeout` rejects with the abort reason alone, so an expired
  * budget reaches the caller as "The operation timed out." and says
@@ -718,44 +825,173 @@ const requestFailure = ({
   unaborted,
   reach,
 }: RequestFailureOptions & {
-  reach: CorpusIndexErrorReach;
-}): CorpusIndexError =>
-  new CorpusIndexError({
-    message: isAborted(error)
-      ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
-      : `corpus index ${requestLabel(request)} ${unaborted}: ${String(error)}`,
-    cause: error,
-    rejection: "unknown",
-    reach,
-  });
+  reach: EngineReach;
+}): CorpusIndexError => {
+  if (request.signal?.aborted === true) {
+    return new CorpusIndexError({
+      message: `corpus index ${requestLabel(request)} was cancelled by its caller: ${String(error)}`,
+      cause: error,
+      rejection: "unknown",
+      reach: "caller_aborted",
+    });
+  }
+  return (
+    (endedByRequestDeadline(request, error)
+      ? corpusIndexBudgetExpiry({
+          label: `${requestLabel(request)} after ${request.timeoutMs}ms`,
+          cause: error,
+        })
+      : undefined) ??
+    new CorpusIndexError({
+      message: isAborted(error)
+        ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
+        : `corpus index ${requestLabel(request)} ${unaborted}: ${String(error)}`,
+      cause: error,
+      rejection: "unknown",
+      reach,
+    })
+  );
+};
 
 /**
  * A body that stopped arriving (the budget expired or the connection dropped
  * mid-stream) is the engine going away; a body that arrived and does not
  * parse is a response, and a retry reads the same bytes.
  */
-const bodyReadReach = (error: unknown): CorpusIndexErrorReach =>
+const bodyReadReach = (error: unknown): EngineReach =>
   error instanceof SyntaxError ? "answered" : "unreachable";
 
 /**
  * Inside a request latency scope (an MCP tool call) every corpus request gives
  * up when the request's budget does, whatever its own timeout: a search, an
  * aggregation or a page of highlights never outwaits the caller. The bounded
- * timeout is the one a failure names.
+ * timeout is the one a failure names, and when it is the request's deadline
+ * its expiry is the budget's (`budget_expired`), not the engine's.
  */
 const boundToRequestBudget = (
   request: CorpusIndexRequest,
-): CorpusIndexRequest => ({
-  ...request,
-  timeoutMs: requestBoundedTimeoutMs(request.timeoutMs),
-});
+): BoundedCorpusIndexRequest => {
+  const { timeoutMs, endsAtRequestDeadline } = requestBoundedTimeout(
+    request.timeoutMs,
+  );
+  return { ...request, timeoutMs, endsAtRequestDeadline };
+};
+
+type ConsumeResponse<T> = (
+  response: Response,
+  request: BoundedCorpusIndexRequest,
+) => T | Promise<T>;
+
+/**
+ * Why a queued read was not sent, in the terms a sent one fails in: a wait
+ * its timeout ended is that timeout expiring (the request's budget when the
+ * budget set it), a read the queue estimates cannot start in time is that
+ * budget's expiry too, a caller's cancel is the cancel, and a full queue is
+ * the index turning the read away, which a retry can get past.
+ */
+export const admissionRefusal = (
+  request: RequestIdentity,
+  refused: Extract<CorpusSearchAdmission, { type: "refused" }>,
+): CorpusIndexError => {
+  logger.warn("corpus_index.search_admission.refused", {
+    reason: refused.reason,
+    queued: refused.queued,
+    waitedMs: Math.round(refused.waitedMs),
+  });
+  switch (refused.reason) {
+    case "busy":
+    case "deadline": {
+      const notQueued = new CorpusIndexError({
+        message: `corpus index ${requestLabel(request)} was not queued: ${String(refused.queued)} reads are already waiting`,
+        rejection: "transient",
+        reach: "unreachable",
+      });
+      return refused.reason === "deadline"
+        ? (corpusIndexBudgetExpiry({
+            label: `${requestLabel(request)} before it could start`,
+            cause: notQueued,
+          }) ?? notQueued)
+        : notQueued;
+    }
+    case "expired":
+    case "aborted":
+      return requestFailure({
+        request,
+        error: refused.cause,
+        unaborted: `waited ${String(Math.round(refused.waitedMs))}ms in the search queue`,
+        reach: "unreachable",
+      });
+    default:
+      refused.reason satisfies never;
+      return panic(`Unhandled admission refusal: ${String(refused.reason)}`);
+  }
+};
 
 const sendRequest = async <T>(
   unbounded: CorpusIndexRequest,
-  consume: (response: Response) => T | Promise<T>,
-): Promise<T> => {
-  const request = boundToRequestBudget(unbounded);
-  return await fetchCorpusIndex({
+  consume: ConsumeResponse<T>,
+): Promise<T> =>
+  await sendBoundedRequest(boundToRequestBudget(unbounded), consume);
+
+/** A search read: where it goes, as its failures name it, and how long it may take. */
+type SearchRead = {
+  path: string;
+  timeoutMs: number;
+  signal?: AbortSignal | undefined;
+};
+
+/**
+ * A search read waits for one of the process's engine slots first
+ * (`corpus-index-admission.ts`). The wait is bounded by the read's own
+ * timeout and comes out of it: `send` gets what is left, which every corpus
+ * request clamps to the request's budget again, so a queued read never holds
+ * its caller longer than an unqueued one could. A refusal is the read's
+ * failure, returned like any other.
+ */
+const withSearchAdmission = async <T>(
+  admission: CorpusSearchAdmissionGate,
+  read: SearchRead,
+  send: (remainingAfterWait: number) => Promise<Result<T, CorpusIndexError>>,
+): Promise<Result<T, CorpusIndexError>> => {
+  const waiting = requestBoundedTimeout(read.timeoutMs);
+  // The public-read scope ends with its lease: a read queued under a lost
+  // lease leaves the queue instead of holding its place for a response
+  // nobody will read.
+  const scopeSignal = getPublicReadSignal();
+  const signal =
+    scopeSignal === undefined || read.signal === undefined
+      ? (read.signal ?? scopeSignal)
+      : AbortSignal.any([read.signal, scopeSignal]);
+  const admitted = await admission.acquire({
+    waitLimit: AbortSignal.timeout(waiting.timeoutMs),
+    maxWaitMs: waiting.timeoutMs,
+    signal,
+  });
+  if (admitted.type === "refused") {
+    return Result.err(
+      admissionRefusal(
+        {
+          init: { method: "POST" },
+          path: read.path,
+          signal: read.signal,
+          ...waiting,
+        },
+        admitted,
+      ),
+    );
+  }
+  // Rounded up: a read admitted at once keeps its whole timeout, not one
+  // shaved by the sub-millisecond the admission itself took.
+  return await send(
+    Math.max(1, Math.ceil(read.timeoutMs - admitted.waitedMs)),
+  ).finally(admitted.release);
+};
+
+const sendBoundedRequest = async <T>(
+  request: BoundedCorpusIndexRequest,
+  consume: ConsumeResponse<T>,
+): Promise<T> =>
+  await fetchCorpusIndex({
     baseUrl: request.baseUrl,
     path: request.path,
     init: {
@@ -764,7 +1000,7 @@ const sendRequest = async <T>(
       signal: request.signal,
     },
     observer: request.observer,
-    consume,
+    consume: async (response) => await consume(response, request),
   }).catch((error: unknown) => {
     if (error instanceof CorpusIndexError) {
       throw error;
@@ -776,11 +1012,9 @@ const sendRequest = async <T>(
       reach: "unreachable",
     });
   });
-};
 
-const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> => {
-  const request = boundToRequestBudget(unbounded);
-  return await sendRequest(request, async (response) => {
+const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> =>
+  await sendRequest(unbounded, async (response, request) => {
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       throw new CorpusIndexError({
@@ -799,7 +1033,6 @@ const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> => {
       });
     });
   });
-};
 
 type SettlementSplit = {
   evidence: CorpusIndexSettlementSplit;
@@ -1293,7 +1526,10 @@ const configDifference = (
   return Object.is(expected, observed) ? null : path;
 };
 
-const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
+const buildClient = (
+  cluster: QuickwitCluster,
+  searchAdmission: CorpusSearchAdmissionGate,
+): CorpusIndexClient => ({
   createIndex: async (config, observer) =>
     await Result.tryPromise({
       try: async () => {
@@ -1325,6 +1561,59 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       },
       catch: toCorpusIndexError,
     }),
+
+  readPublishedSplitCounts: async ({ includes, observer, signal }) => {
+    const read = async (path: string) =>
+      await Result.tryPromise({
+        try: async () =>
+          await requestJson({
+            observer,
+            baseUrl: searchBaseUrl(cluster),
+            path,
+            init: { method: "GET" },
+            timeoutMs: ADMIN_TIMEOUT_MS,
+            signal,
+          }),
+        catch: toCorpusIndexError,
+      });
+    const listed = await read("/api/v1/indexes");
+    if (Result.isError(listed)) {
+      return Result.err(listed.error);
+    }
+    const indexes = parseRecordArray(listed.value);
+    if (indexes === null) {
+      return Result.err(
+        new CorpusIndexError({
+          message: "corpus index split census: malformed index list",
+        }),
+      );
+    }
+    const indexIds = indexes.flatMap((metadata) => {
+      const config = metadata["index_config"];
+      const indexId = isRecord(config) ? config["index_id"] : undefined;
+      return typeof indexId === "string" && includes(indexId) ? [indexId] : [];
+    });
+    const counts: CorpusIndexPublishedSplitCount[] = [];
+    // Sequential: a handful of metastore reads an hour needs no fan-out.
+    for (const indexId of indexIds) {
+      const described = await read(`/api/v1/indexes/${indexId}/describe`);
+      if (Result.isError(described)) {
+        return Result.err(described.error);
+      }
+      const publishedSplits = isRecord(described.value)
+        ? described.value["num_published_splits"]
+        : undefined;
+      if (typeof publishedSplits !== "number") {
+        return Result.err(
+          new CorpusIndexError({
+            message: `corpus index split census: ${indexId} reported no num_published_splits`,
+          }),
+        );
+      }
+      counts.push({ indexId, publishedSplits });
+    }
+    return Result.ok(counts);
+  },
 
   indexExists: async (indexId, observer) =>
     await Result.tryPromise({
@@ -1363,7 +1652,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           init: { method: "GET" },
           timeoutMs: ADMIN_TIMEOUT_MS,
         } satisfies CorpusIndexRequest;
-        return await sendRequest(request, async (response) => {
+        return await sendRequest(request, async (response, bounded) => {
           if (response.status === 404) {
             return { status: "missing" } as const;
           }
@@ -1375,7 +1664,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           }
           const metadata = await response.json().catch((error: unknown) => {
             throw requestFailure({
-              request,
+              request: bounded,
               error,
               unaborted: "returned an unreadable body",
               reach: bodyReadReach(error),
@@ -1454,106 +1743,126 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
     timeoutMs = CORPUS_INDEX_SEARCH_TIMEOUT_MS,
     signal,
   }) =>
-    await Result.tryPromise({
-      try: async () => {
-        const body: Record<string, unknown> = {
-          query,
-          max_hits: maxHits,
-          format: SEARCH_RESPONSE_FORMAT,
-        };
-        if (startOffset !== undefined) {
-          body["start_offset"] = startOffset;
-        }
-        if (sortBy !== undefined) {
-          body["sort_by"] = sortBy;
-        }
-        if (snippetFields !== undefined && snippetFields.length > 0) {
-          body["snippet_fields"] = snippetFields.join(",");
-        }
-        const response = await requestJson({
-          observer,
-          baseUrl: searchBaseUrl(cluster),
-          path: `/api/v1/${indexId}/search`,
-          init: {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(body),
-          },
-          timeoutMs: Math.min(timeoutMs, CORPUS_INDEX_SEARCH_TIMEOUT_MS),
-          signal,
-        });
-        if (!isRecord(response)) {
-          throw new CorpusIndexError({
-            message: "corpus index search returned an invalid response",
-          });
-        }
-        const numHits = response["num_hits"];
-        const hits = parseRecordArray(response["hits"]);
-        // The engine includes `snippets` only when snippet fields were
-        // requested and at least one hit exists: without either, a missing
-        // key carries no snippets; with both, a missing key is a malformed
-        // response.
-        const snippetsExpected =
-          snippetFields !== undefined &&
-          snippetFields.length > 0 &&
-          hits !== null &&
-          hits.length > 0;
-        const snippets =
-          response["snippets"] === undefined && !snippetsExpected
-            ? []
-            : parseRecordArray(response["snippets"]);
-        if (
-          typeof numHits !== "number" ||
-          !Number.isFinite(numHits) ||
-          numHits < 0 ||
-          hits === null ||
-          snippets === null
-        ) {
-          throw new CorpusIndexError({
-            message: "corpus index search returned an invalid response",
-          });
-        }
-        return {
-          numHits,
-          hits,
-          snippets,
-        };
+    await withSearchAdmission(
+      searchAdmission,
+      {
+        path: `/api/v1/${indexId}/search`,
+        timeoutMs: Math.min(timeoutMs, CORPUS_INDEX_SEARCH_TIMEOUT_MS),
+        signal,
       },
-      catch: toCorpusIndexError,
-    }),
+      async (remainingAfterWait) =>
+        await Result.tryPromise({
+          try: async () => {
+            const body: Record<string, unknown> = {
+              query,
+              max_hits: maxHits,
+              format: SEARCH_RESPONSE_FORMAT,
+            };
+            if (startOffset !== undefined) {
+              body["start_offset"] = startOffset;
+            }
+            if (sortBy !== undefined) {
+              body["sort_by"] = sortBy;
+            }
+            if (snippetFields !== undefined && snippetFields.length > 0) {
+              body["snippet_fields"] = snippetFields.join(",");
+            }
+            const response = await requestJson({
+              observer,
+              baseUrl: searchBaseUrl(cluster),
+              path: `/api/v1/${indexId}/search`,
+              init: {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(body),
+              },
+              timeoutMs: remainingAfterWait,
+              signal,
+            });
+            if (!isRecord(response)) {
+              throw new CorpusIndexError({
+                message: "corpus index search returned an invalid response",
+              });
+            }
+            const numHits = response["num_hits"];
+            const hits = parseRecordArray(response["hits"]);
+            // The engine includes `snippets` only when snippet fields were
+            // requested and at least one hit exists: without either, a missing
+            // key carries no snippets; with both, a missing key is a malformed
+            // response.
+            const snippetsExpected =
+              snippetFields !== undefined &&
+              snippetFields.length > 0 &&
+              hits !== null &&
+              hits.length > 0;
+            const snippets =
+              response["snippets"] === undefined && !snippetsExpected
+                ? []
+                : parseRecordArray(response["snippets"]);
+            if (
+              typeof numHits !== "number" ||
+              !Number.isFinite(numHits) ||
+              numHits < 0 ||
+              hits === null ||
+              snippets === null
+            ) {
+              throw new CorpusIndexError({
+                message: "corpus index search returned an invalid response",
+              });
+            }
+            return {
+              numHits,
+              hits,
+              snippets,
+            };
+          },
+          catch: toCorpusIndexError,
+        }),
+    ),
 
-  scoredSearch: async (input) =>
-    await Result.tryPromise({
-      try: async () => {
-        const { path, body } = corpusIndexScoredSearchRequest(input);
-        const response = await requestJson({
-          observer: input.observer,
-          baseUrl: searchBaseUrl(cluster),
-          path,
-          init: {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(body),
-          },
-          timeoutMs: Math.min(
-            input.timeoutMs ?? CORPUS_INDEX_SEARCH_TIMEOUT_MS,
-            CORPUS_INDEX_SEARCH_TIMEOUT_MS,
-          ),
-          signal: input.signal,
-        });
-        const parsed = parseCorpusIndexScoredSearchResponse(
-          response,
-          input.requiredFields,
-        );
-        if (parsed === null) {
-          throw new CorpusIndexError({
-            message: "corpus index scored search returned an invalid response",
-          });
-        }
-        return parsed;
+  scoredSearch: async (input) => {
+    const { path, body } = corpusIndexScoredSearchRequest(input);
+    return await withSearchAdmission(
+      searchAdmission,
+      {
+        path,
+        timeoutMs: Math.min(
+          input.timeoutMs ?? CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+          CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+        ),
+        signal: input.signal,
       },
-      catch: toCorpusIndexError,
-    }),
+      async (remainingAfterWait) =>
+        await Result.tryPromise({
+          try: async () => {
+            const response = await requestJson({
+              observer: input.observer,
+              baseUrl: searchBaseUrl(cluster),
+              path,
+              init: {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(body),
+              },
+              timeoutMs: remainingAfterWait,
+              signal: input.signal,
+            });
+            const parsed = parseCorpusIndexScoredSearchResponse(
+              response,
+              input.requiredFields,
+            );
+            if (parsed === null) {
+              throw new CorpusIndexError({
+                message:
+                  "corpus index scored search returned an invalid response",
+              });
+            }
+            return parsed;
+          },
+          catch: toCorpusIndexError,
+        }),
+    );
+  },
 
   aggregate: async ({
     indexId,
@@ -1563,64 +1872,81 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
     observer,
     timeoutMs = CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
     signal,
-  }) =>
-    await Result.tryPromise({
-      try: async () => {
-        const response = await requestJson({
-          observer,
-          baseUrl: searchBaseUrl(cluster),
-          path:
-            filter === undefined
-              ? `/api/v1/${indexId}/search`
-              : `/api/v1/_elastic/${indexId}/_search`,
-          init: {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            // Aggregations only: hits are the expensive part of the
-            // response and the caller wants counts, not documents.
-            body: JSON.stringify(
-              filter === undefined
-                ? {
-                    query,
-                    max_hits: 0,
-                    aggs,
-                    format: SEARCH_RESPONSE_FORMAT,
-                  }
-                : {
-                    size: 0,
-                    track_total_hits: false,
-                    query: {
-                      bool: {
-                        must: [
-                          { query_string: { query, default_operator: "AND" } },
-                        ],
-                        filter: [
-                          {
-                            query_string: {
-                              query: filter,
-                              default_operator: "AND",
-                              lenient: true,
-                            },
-                          },
-                        ],
-                      },
-                    },
-                    aggs,
-                  },
-            ),
-          },
-          timeoutMs: Math.min(timeoutMs, CORPUS_INDEX_AGGREGATION_TIMEOUT_MS),
-          signal,
-        });
-        if (!isRecord(response) || !isRecord(response["aggregations"])) {
-          throw new CorpusIndexError({
-            message: "corpus index aggregation returned an invalid response",
-          });
-        }
-        return response["aggregations"];
+  }) => {
+    const path =
+      filter === undefined
+        ? `/api/v1/${indexId}/search`
+        : `/api/v1/_elastic/${indexId}/_search`;
+    return await withSearchAdmission(
+      searchAdmission,
+      {
+        path,
+        timeoutMs: Math.min(timeoutMs, CORPUS_INDEX_AGGREGATION_TIMEOUT_MS),
+        signal,
       },
-      catch: toCorpusIndexError,
-    }),
+      async (remainingAfterWait) =>
+        await Result.tryPromise({
+          try: async () => {
+            const response = await requestJson({
+              observer,
+              baseUrl: searchBaseUrl(cluster),
+              path,
+              init: {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                // Aggregations only: hits are the expensive part of the
+                // response and the caller wants counts, not documents.
+                body: JSON.stringify(
+                  filter === undefined
+                    ? {
+                        query,
+                        max_hits: 0,
+                        aggs,
+                        format: SEARCH_RESPONSE_FORMAT,
+                      }
+                    : {
+                        size: 0,
+                        track_total_hits: false,
+                        query: {
+                          bool: {
+                            must: [
+                              {
+                                query_string: {
+                                  query,
+                                  default_operator: "AND",
+                                },
+                              },
+                            ],
+                            filter: [
+                              {
+                                query_string: {
+                                  query: filter,
+                                  default_operator: "AND",
+                                  lenient: true,
+                                },
+                              },
+                            ],
+                          },
+                        },
+                        aggs,
+                      },
+                ),
+              },
+              timeoutMs: remainingAfterWait,
+              signal,
+            });
+            if (!isRecord(response) || !isRecord(response["aggregations"])) {
+              throw new CorpusIndexError({
+                message:
+                  "corpus index aggregation returned an invalid response",
+              });
+            }
+            return response["aggregations"];
+          },
+          catch: toCorpusIndexError,
+        }),
+    );
+  },
 
   deleteByQuery: async (indexId, query, observer) =>
     await Result.tryPromise({
@@ -1745,6 +2071,19 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
 });
 
 const cachedClients = new Map<QuickwitCluster, CorpusIndexClient>();
+const searchAdmissions = new Map<QuickwitCluster, CorpusSearchAdmissionGate>();
+
+/**
+ * The longest wait a corpus read arriving now should expect, across this
+ * process's search queues; zero until a queue has seen enough reads to say.
+ */
+export const estimatedCorpusSearchWaitMs = (): number =>
+  Math.max(
+    0,
+    ...[...searchAdmissions.values()].map((admission) =>
+      admission.estimatedWaitMs(),
+    ),
+  );
 
 export const getCorpusIndexClient = (
   cluster: QuickwitCluster,
@@ -1753,7 +2092,13 @@ export const getCorpusIndexClient = (
   if (cached !== undefined) {
     return cached;
   }
-  const client = buildClient(cluster);
+  // One search queue per cluster for the life of the process: every search
+  // read of this process to that engine waits in it.
+  const admission = createCorpusSearchAdmission({
+    slots: LIMITS.corpusIndexSearchConcurrency,
+  });
+  const client = buildClient(cluster, admission);
+  searchAdmissions.set(cluster, admission);
   cachedClients.set(cluster, client);
   return client;
 };

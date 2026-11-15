@@ -25,6 +25,7 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const TARGET_LINKS = 10;
 const VERSION = "2025-01-01";
@@ -157,7 +158,7 @@ export const seedLegislationMatterLinkScaling = async (
       await db
         .delete(legislationSources)
         .where(eq(legislationSources.id, sourceId));
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, userId));
     },
   };

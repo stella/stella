@@ -9,9 +9,19 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
 
 import committedWeights from "../../mcp-connect-tool-weights.json" with { type: "json" };
 
-// Full contact writes expose their shared validation and nested input readers.
+// Full contact writes expose their shared validation and nested input readers,
+// the template list takes a limit and cursor like every other list, and the
+// reader annotation list says how it reports passages it can no longer place,
+// and the audit log takes a performer filter. The case-law results app pages
+// a country's courts through list_case_law_courts (844 characters). A
+// citation read offers a compact detail and a passage filter (499 characters).
+// The two public-law searches say they can answer "still running" and take its
+// continuation_token (492 characters). search_case_law says how it reports a
+// phrasing that ran out of time (67).
+// Regulator guidance adds search_guidance and read_guidance (3,268 characters
+// together).
 // These measured limits include that shape; lower them as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 132_997;
+const TOTAL_CONNECT_CHAR_BUDGET = 140_375;
 const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {

@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { ContextMenu, type ContextMenuAction } from "@stll/ui/context-menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -109,11 +110,12 @@ export const CatalogueRow = ({
         tabIndex={0}
       >
         <CatalogueEntryIcon
-          className="text-muted-foreground mt-0.5 shrink-0"
+          className="mt-0.5 shrink-0"
           icon={display.icon}
           iconUrl={display.iconUrl ?? null}
           size={24}
           slug={display.slug}
+          tone="muted"
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex min-h-7 items-center gap-2 sm:min-h-6">
@@ -124,12 +126,13 @@ export const CatalogueRow = ({
             <div className="ms-auto flex items-center gap-2">{actions}</div>
           </div>
           {description.length > 0 && (
-            <p
-              className="text-muted-foreground line-clamp-1 text-xs"
+            <TruncatedText
+              className="text-muted-foreground text-xs"
               dir="auto"
+              render={<p />}
             >
               {description}
-            </p>
+            </TruncatedText>
           )}
           {notice !== undefined && (
             <p className="text-muted-foreground text-xs" dir="auto">

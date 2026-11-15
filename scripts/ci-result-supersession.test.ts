@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 import {
   chmodSync,
-  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -49,12 +48,6 @@ const outcome = result?.steps?.find(
 );
 if (!outcome?.run || !outcome.env || !Array.isArray(result?.needs)) {
   panic("Missing ci-result/Evaluate CI outcome");
-}
-const violationsWriter = result.steps?.find(
-  ({ name }) => name === "Write required-violations record",
-)?.run;
-if (!violationsWriter) {
-  panic("Missing ci-result/Write required-violations record");
 }
 const needs = result.needs;
 const script = outcome.run;
@@ -191,37 +184,8 @@ const runOutcome = (
   );
   const lines = readFileSync(output, "utf-8").split("\n");
   const line = lines.find((entry) => entry.startsWith("required_summary="));
-  const violationsLine = lines.find((entry) =>
-    entry.startsWith("required_violations="),
-  );
-  const violationsPath = path.join(directory, "ci-required-violations.json");
-  const write = Bun.spawnSync(
-    ["bash", "-e", "-o", "pipefail", "-c", violationsWriter],
-    {
-      timeout: 10_000,
-      env: {
-        PATH: process.env["PATH"] ?? "",
-        REQUIRED_VIOLATIONS:
-          violationsLine?.slice("required_violations=".length) ?? "",
-        RECORD_PATH: violationsPath,
-      },
-    },
-  );
   return {
     exitCode: child.exitCode,
-    violationsWriteExitCode: write.exitCode,
-    violationsRecord: existsSync(violationsPath)
-      ? v.parse(
-          v.object({
-            run_id: v.nullable(v.number()),
-            run_attempt: v.nullable(v.number()),
-            head_sha: v.nullable(v.string()),
-            evaluated: v.boolean(),
-            violations: v.nullable(v.string()),
-          }),
-          JSON.parse(readFileSync(violationsPath, "utf-8")),
-        )
-      : undefined,
     log: child.stdout.toString() + child.stderr.toString(),
     record: line
       ? v.parse(
@@ -459,6 +423,93 @@ test("a metadata run mirrors a code run's evaluated success", () => {
   });
 });
 
+const enqueue = (fixtures: Fixtures) =>
+  runOutcome(
+    {
+      PR_ACTION: "enqueued",
+      QUEUE_VALIDATION: "true",
+      RUN_REQUIRED: "false",
+      NEEDS: JSON.stringify(
+        Object.fromEntries([
+          ...needs.map((job) => [job, { result: "skipped" }]),
+          ["ci-plan", { result: "success" }],
+        ]),
+      ),
+    },
+    fixtures,
+  );
+
+test("queue entries retain a direct reference to the evaluated head beyond recent pass-through runs", () => {
+  const run = enqueue(
+    mirrorFixtures([
+      ...[99, 98, 97, 96, 95].map((id) => ({
+        id,
+        record: record(id, {
+          basis: "pass_through",
+          pass_through_reason: "enqueued",
+          required: [],
+        }),
+      })),
+      { id: 90, record: record(90) },
+    ]),
+  );
+  expect(run.exitCode, run.log).toBe(0);
+  expect(run.record).toMatchObject({
+    basis: "pass_through",
+    pass_through_reason: "enqueued",
+    reused_from_run_id: 90,
+    verdict: "success",
+  });
+});
+
+test("every evidence-bearing pass-through resolves directly to the evaluated run", () => {
+  for (const reason of ["metadata", "enqueued", "reused"]) {
+    const fixtures = mirrorFixtures(
+      [
+        {
+          id: 91,
+          record: record(91, {
+            basis: "pass_through",
+            pass_through_reason: reason,
+            reused_from_run_id: 80,
+            required: [],
+          }),
+        },
+      ],
+      { "record:80": record(80), ...codeRunJobs(80, 1) },
+    );
+    for (const carrier of [enqueue, mirror]) {
+      const run = carrier(fixtures);
+      expect(run.exitCode, `${reason}: ${run.log}`).toBe(0);
+      expect(run.record?.reused_from_run_id, reason).toBe(80);
+    }
+  }
+});
+
+test("queue entries cannot certify absent, stale or unevaluated evidence", () => {
+  for (const source of [
+    [],
+    [{ id: 90, record: record(90, { head_sha: "c".repeat(40) }) }],
+    [{ id: 90, record: record(90), attempt: 2 }],
+    [{ id: 90, record: superseded(90) }],
+    [
+      {
+        id: 90,
+        record: record(90, {
+          basis: "pass_through",
+          pass_through_reason: "draft",
+          required: [],
+        }),
+      },
+    ],
+    [{ id: 90, record: record(90, { verdict: "failure" }) }],
+  ]) {
+    const run = enqueue(mirrorFixtures(source));
+    expect(run.exitCode, run.log).not.toBe(0);
+    expect(run.record?.verdict).toBe("failure");
+  }
+});
+
 test("a metadata run never waits on a newer run of its head", () => {
   // A newer metadata run waits on this run's concurrency group, listing no
   // job yet: waiting on it would deadlock until the deadline.
@@ -592,36 +643,14 @@ test("metadata mirroring and verified supersession remain fail closed", () => {
   expect(script).toContain("CI run was superseded by a newer run");
 });
 
-test("every missing evaluator input still writes required violations", () => {
+test("every missing evaluator input fails the outcome", () => {
   for (const missingInput of ["needs", "plan"] as const) {
     const run = runOutcome({ NEEDS: "{}" }, {}, missingInput);
     expect(run.exitCode, run.log).not.toBe(0);
-    expect(run.violationsWriteExitCode, run.log).toBe(0);
-    expect(run.violationsRecord).toEqual({
-      run_id: RUN,
-      run_attempt: 1,
-      head_sha: HEAD,
-      evaluated: false,
-      violations: null,
-    });
   }
 });
 
-test("a failed required-jobs serialization cannot suppress required violations", () => {
-  const run = runOutcome(
-    { NEEDS: "malformed-json", PLAN_RESULT: "failure" },
-    {},
-  );
-  expect(run.exitCode, run.log).not.toBe(0);
-  expect(run.record).toBeUndefined();
-  expect(run.violationsWriteExitCode, run.log).toBe(0);
-  expect(run.violationsRecord).toMatchObject({
-    evaluated: false,
-    violations: null,
-  });
-});
-
-test("heavy infrastructure cancellations and code failures always write required violations", () => {
+test("heavy infrastructure cancellations and code failures always record a failure", () => {
   for (const job of [
     { conclusion: "cancelled", runner_name: "", steps: [] },
     {
@@ -674,11 +703,5 @@ test("heavy infrastructure cancellations and code failures always write required
     );
     expect(run.exitCode, run.log).toBe(1);
     expect(run.record?.verdict, run.log).toBe("failure");
-    expect(run.violationsWriteExitCode, run.log).toBe(0);
-    expect(run.violationsRecord).toMatchObject({
-      run_id: RUN,
-      run_attempt: 1,
-      head_sha: HEAD,
-    });
   }
 });

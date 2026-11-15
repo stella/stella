@@ -213,11 +213,11 @@ export const IntegrationsGroup = ({
             >
               <ListItemMedia>
                 <CatalogueEntryIcon
-                  className="text-muted-foreground"
                   icon={entry.icon}
                   iconUrl={entry.iconUrl ?? null}
                   size={18}
                   slug={entry.slug}
+                  tone="muted"
                 />
               </ListItemMedia>
               <ListItemContent>

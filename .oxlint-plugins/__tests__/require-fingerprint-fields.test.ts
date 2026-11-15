@@ -38,3 +38,16 @@ test("registered dimensions and errors without finite local dimensions remain cl
     ),
   ).toEqual([]);
 });
+
+test("the fingerprint-fields subpath registers dimensions like the package root", async () => {
+  expect(
+    await lintSingleRule(
+      "require-fingerprint-fields",
+      [
+        'import { TaggedError as Tagged } from "better-result"; import { declareFingerprintFields as declare } from "@stll/errors/fingerprint-fields";',
+        'class Registered extends Tagged("Registered")<{ message: string; reason: "read" }> { static { declare(this, ["reason"]); } }',
+        'class Missing extends Tagged("Missing")<{ message: string; reason: "read" }> {}',
+      ].join("\n"),
+    ),
+  ).toEqual([3]);
+});
