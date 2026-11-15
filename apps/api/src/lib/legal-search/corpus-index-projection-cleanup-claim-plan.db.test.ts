@@ -11,7 +11,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { corpusProjectionCleanupClaimPage } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import { legacyServedCopyRetirePageQuery } from "@/api/lib/legal-search/corpus-index-projection-legacy-retire";
-import { caseLawWaitingReplacementsQuery } from "@/api/lib/observability/case-law-freshness-metrics";
+import {
+  CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP,
+  caseLawWaitingReplacementsQuery,
+} from "@/api/lib/observability/case-law-freshness-metrics";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -299,5 +302,49 @@ test("the waiting-replacement gauge walks only the replacement index", async () 
   );
   expect(counted.rows).toEqual([
     expect.objectContaining({ index_id: INDEX_ID, count: 300 }),
+  ]);
+}, 600_000);
+
+// timeout: seeds and vacuums thousands of rows in PGlite, with no signal to await.
+test("the waiting-replacement gauge stops at its bound behind a long uncounted prefix", async () => {
+  // Older than every waiting replacement, and none of them counted: their
+  // revisions were queued for cleanup by an earlier release.
+  const PREFIX = CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP + 500;
+  await seedServed({
+    first: 1,
+    count: PREFIX,
+    waiting: true,
+    queuedAt: "2026-07-10",
+  });
+  await seedServed({
+    first: PREFIX + 1,
+    count: 50,
+    waiting: true,
+    queuedAt: null,
+  });
+  await analyze();
+  const gauge = await explain(() =>
+    caseLawWaitingReplacementsQuery(GENERATION),
+  );
+  const text = gauge.lines.join("\n");
+  expect(text).not.toContain("Seq Scan");
+  const walked = gauge.lines
+    .filter((line) =>
+      line.includes("corpus_index_projection_states_replacement_route_idx"),
+    )
+    .map((line) => Number(/actual [^)]*rows=(\d+)/u.exec(line)?.[1]));
+  expect(walked.length).toBeGreaterThan(0);
+  expect(Math.max(...walked)).toBeLessThanOrEqual(
+    CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP + 1,
+  );
+  // The window holds no waiting replacement, so neither the count nor the
+  // oldest age is known: both are reported as unmeasured, not as zero.
+  const counted = await db.execute<{
+    index_id: string;
+    count: number | null;
+    age: number | null;
+  }>(caseLawWaitingReplacementsQuery(GENERATION));
+  expect(counted.rows).toEqual([
+    { index_id: INDEX_ID, count: null, age: null },
   ]);
 }, 600_000);
