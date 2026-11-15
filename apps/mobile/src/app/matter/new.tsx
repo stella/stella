@@ -3,12 +3,13 @@ import { Suspense, use, useState, useTransition } from "react";
 import { Result } from "better-result";
 import { randomUUID } from "expo-crypto";
 import { Stack, useRouter } from "expo-router";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { getPossibleDuplicateMatters } from "@stll/api-contract/matter-duplicates";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { Text } from "@stll/ui/text";
 
@@ -29,7 +30,6 @@ import {
   newMatterMembers,
 } from "@/state/matters";
 import type { MatterSummary, MemberCandidate } from "@/state/matters";
-import { useAppColors } from "@/theme";
 
 /** How many look-alike matters the sheet names, as the web's dialog does. */
 const DUPLICATES_SHOWN = 3;
@@ -53,7 +53,6 @@ const NewMatterScreen = () => {
 const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("matters");
   const tabs = useTranslations("tabs");
-  const colors = useAppColors();
   const router = useRouter();
   const { end } = useSession();
   const changed = useChanged();
@@ -193,7 +192,7 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
               <Text variant="section">{t("team")}</Text>
               <Text variant="caption">{t("teamHint")}</Text>
             </View>
-            <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+            <Suspense fallback={<Loader />}>
               <MemberChooser
                 chosen={chosen}
                 disabled={creating}

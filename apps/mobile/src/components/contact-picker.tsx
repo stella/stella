@@ -2,11 +2,14 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { randomUUID } from "expo-crypto";
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import type { ContactType } from "@stll/api-contract/workspace-contacts";
+import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
+import { Separator } from "@stll/ui/separator";
 import { Text } from "@stll/ui/text";
 
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
@@ -17,7 +20,7 @@ import { BuildingIcon, PlusIcon, UserIcon, XIcon } from "@/icons.gen";
 import { createContact, searchContacts } from "@/state/contacts";
 import type { ContactChoice } from "@/state/contacts";
 import { SEARCH_DEBOUNCE_MS } from "@/state/search";
-import { useAppColors, useUiColors } from "@/theme";
+import { useUiColors } from "@/theme";
 
 type Found =
   | { readonly status: "idle" }
@@ -64,7 +67,6 @@ export const ContactPicker = ({
 }) => {
   const t = useTranslations("matters");
   const ui = useUiColors();
-  const colors = useAppColors();
   const { end } = useSession();
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Found>({ status: "idle" });
@@ -158,18 +160,18 @@ export const ContactPicker = ({
           <Text className="flex-1" numberOfLines={1} variant="rowTitle">
             {selected.displayName}
           </Text>
-          <Pressable
+          <Button
             accessibilityLabel={clearLabel}
-            accessibilityRole="button"
-            className="p-1 active:opacity-60"
             disabled={busy}
             hitSlop={8}
             onPress={() => {
               onSelect(null);
             }}
+            size="icon-xs"
+            variant="ghost"
           >
             <XIcon color={ui.mutedForeground} size={18} />
-          </Pressable>
+          </Button>
         </View>
       )}
       <Input
@@ -186,7 +188,7 @@ export const ContactPicker = ({
         <View className="border-border bg-card rounded-xl border px-3">
           {found.status === "searching" ? (
             <View className="border-border items-start border-b py-3">
-              <ActivityIndicator color={colors.muted} />
+              <Loader />
             </View>
           ) : null}
           {found.status === "failed" ? (
@@ -201,43 +203,53 @@ export const ContactPicker = ({
           ) : null}
           {found.status === "found"
             ? found.contacts.map((contact) => (
-                <Pressable
-                  accessibilityRole="button"
-                  className="border-border active:bg-accent min-h-11 flex-row items-center gap-3 border-b py-3"
+                <Button
                   disabled={busy}
                   key={contact.id}
                   onPress={() => {
                     choose(contact);
                   }}
+                  size="row"
+                  variant="ghost"
                 >
-                  <ContactGlyph type={contact.type} />
-                  <Text className="flex-1" numberOfLines={1} variant="rowTitle">
-                    {contact.displayName}
-                  </Text>
-                </Pressable>
+                  <Separator className="absolute inset-x-0 bottom-0" />
+                  <View className="flex-1 flex-row items-center gap-3">
+                    <ContactGlyph type={contact.type} />
+                    <Text
+                      className="flex-1"
+                      numberOfLines={1}
+                      variant="rowTitle"
+                    >
+                      {contact.displayName}
+                    </Text>
+                  </View>
+                </Button>
               ))
             : null}
           {(["person", "organization"] as const).map((type, index) => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: busy }}
-              className={`active:bg-accent min-h-11 flex-row items-center gap-3 py-3 ${
-                index === 0 ? "border-border border-b" : ""
-              }`}
+            <Button
               disabled={busy}
               key={type}
               onPress={() => {
                 add(type);
               }}
+              size="row"
+              variant="ghost"
             >
-              <PlusIcon color={ui.foreground} size={18} />
-              <Text className="flex-1" numberOfLines={2} variant="rowTitle">
-                {type === "person"
-                  ? t("addPerson", { name: typed })
-                  : t("addOrganization", { name: typed })}
-              </Text>
-              {adding ? <ActivityIndicator color={colors.muted} /> : null}
-            </Pressable>
+              <View
+                className={`flex-1 flex-row items-center gap-3 ${
+                  index === 0 ? "border-border border-b" : ""
+                }`}
+              >
+                <PlusIcon color={ui.foreground} size={18} />
+                <Text className="flex-1" numberOfLines={2} variant="rowTitle">
+                  {type === "person"
+                    ? t("addPerson", { name: typed })
+                    : t("addOrganization", { name: typed })}
+                </Text>
+                {adding ? <Loader size="sm" variant="decorative" /> : null}
+              </View>
+            </Button>
           ))}
         </View>
       )}

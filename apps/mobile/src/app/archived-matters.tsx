@@ -2,16 +2,13 @@ import { Suspense, use, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useRouter } from "expo-router";
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  View,
-} from "react-native";
+import { FlatList, RefreshControl, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { Separator } from "@stll/ui/separator";
 import { Text } from "@stll/ui/text";
 
 import { useRevisedLoad } from "@/components/changes";
@@ -45,7 +42,6 @@ const ArchivedMattersScreen = () => {
 };
 
 const ArchivedMatters = ({ source }: { source: AccessTokenSource }) => {
-  const colors = useAppColors();
   const { end } = useSession();
   const load = async () => {
     const result = await listMatters({ fetch, source, status: "archived" });
@@ -57,9 +53,7 @@ const ArchivedMatters = ({ source }: { source: AccessTokenSource }) => {
   const [archived, setArchived] = useRevisedLoad(load, ["matters"]);
   const [refreshing, startRefresh] = useTransition();
   return (
-    <Suspense
-      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
-    >
+    <Suspense fallback={<Loader className="flex-1" />}>
       <LoadedArchived
         load={archived}
         onReload={() => {
@@ -117,28 +111,31 @@ const LoadedArchived = ({
         />
       }
       renderItem={({ item: matter }) => (
-        <Pressable
-          accessibilityRole="button"
-          className="border-border active:bg-accent flex-row items-center gap-3 border-b px-4 py-3"
+        <Button
           onPress={() => {
             router.push({
               pathname: "/matter/[workspaceId]",
               params: { name: matter.name, workspaceId: matter.id },
             });
           }}
+          size="row"
+          variant="ghost"
         >
-          <MatterIcon matter={matter} size={18} />
-          <View className="flex-1 gap-0.5">
-            <Text numberOfLines={1} variant="rowTitle">
-              {matter.name}
-            </Text>
-            {matter.client?.displayName !== undefined ? (
-              <Text numberOfLines={1} variant="caption">
-                {matter.client.displayName}
+          <Separator className="absolute inset-x-0 bottom-0" />
+          <View className="flex-1 flex-row items-center gap-3 px-4">
+            <MatterIcon matter={matter} size={18} />
+            <View className="flex-1 gap-0.5">
+              <Text numberOfLines={1} variant="rowTitle">
+                {matter.name}
               </Text>
-            ) : null}
+              {matter.client?.displayName !== undefined ? (
+                <Text numberOfLines={1} variant="caption">
+                  {matter.client.displayName}
+                </Text>
+              ) : null}
+            </View>
           </View>
-        </Pressable>
+        </Button>
       )}
     />
   );

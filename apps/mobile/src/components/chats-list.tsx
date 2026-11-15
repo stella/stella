@@ -1,9 +1,9 @@
 import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator } from "react-native";
 
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
+import { Loader } from "@stll/ui/loader";
 
 import { useActiveChatRuns } from "@/components/active-chat-runs";
 import { useRevisedLoad } from "@/components/changes";
@@ -14,7 +14,6 @@ import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { listChats } from "@/state/chat-threads";
-import { useAppColors } from "@/theme";
 
 /**
  * Loads the signed-in person's pinned and recent threads once, again on
@@ -25,7 +24,6 @@ import { useAppColors } from "@/theme";
  * button, as t3code's does.
  */
 export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
-  const colors = useAppColors();
   const { settledQuery } = useHeaderSearch();
   const searched = settledQuery.slice(0, SEARCH_QUERY_MAX_LENGTH);
   const { end } = useSession();
@@ -58,9 +56,7 @@ export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
   };
 
   return (
-    <Suspense
-      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
-    >
+    <Suspense fallback={<Loader className="flex-1" />}>
       <LoadedChats
         load={load}
         onReload={reload}

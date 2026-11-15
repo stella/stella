@@ -1,10 +1,12 @@
 import { startTransition, Suspense, use, useState } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator, Alert, Pressable, View } from "react-native";
+import { Alert, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
+import { Separator } from "@stll/ui/separator";
 import { Text } from "@stll/ui/text";
 
 import { MemberChooser } from "@/components/member-chooser";
@@ -23,7 +25,7 @@ import { listMemberCandidates } from "@/state/matters";
 import type { MemberCandidate } from "@/state/matters";
 import { listMatterMembers } from "@/state/tasks";
 import type { MatterMember } from "@/state/tasks";
-import { useAppColors, useUiColors } from "@/theme";
+import { useUiColors } from "@/theme";
 
 type MembersLoad = Promise<Result<MatterMember[], ApiError>>;
 
@@ -47,13 +49,12 @@ export const MatterTeam = ({
   onChanged: () => void;
   source: AccessTokenSource;
 }) => {
-  const colors = useAppColors();
   const loadMembers = async () =>
     await listMatterMembers({ fetch, matterId, source });
   const [members, setMembers] = useState<MembersLoad>(loadMembers);
 
   return (
-    <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+    <Suspense fallback={<Loader />}>
       <LoadedTeam
         disabled={disabled}
         leadUserId={leadUserId}
@@ -88,7 +89,6 @@ const LoadedTeam = ({
 }) => {
   const t = useTranslations("matterInfo");
   const ui = useUiColors();
-  const colors = useAppColors();
   const { end } = useSession();
   const { failure, saving, write } = useMatterWrite(source);
   const [choosingLead, setChoosingLead] = useState(false);
@@ -211,26 +211,33 @@ const LoadedTeam = ({
           </View>
           {choosingLead
             ? leadChoices.map((choice) => (
-                <Pressable
+                <Button
                   accessibilityRole="radio"
                   accessibilityState={{
-                    disabled: busy,
                     selected: choice.userId === leadUserId,
                   }}
-                  className="border-border active:bg-accent min-h-11 flex-row items-center gap-3 border-t py-2"
                   disabled={busy}
                   key={choice.userId ?? "none"}
                   onPress={() => {
                     chooseLead(choice.userId);
                   }}
+                  size="row"
+                  variant="ghost"
                 >
-                  <Text className="flex-1" numberOfLines={1} variant="rowTitle">
-                    {choice.name}
-                  </Text>
-                  {choice.userId === leadUserId ? (
-                    <CheckIcon color={ui.foreground} size={18} />
-                  ) : null}
-                </Pressable>
+                  <Separator className="absolute inset-x-0 top-0" />
+                  <View className="flex-1 flex-row items-center gap-3">
+                    <Text
+                      className="flex-1"
+                      numberOfLines={1}
+                      variant="rowTitle"
+                    >
+                      {choice.name}
+                    </Text>
+                    {choice.userId === leadUserId ? (
+                      <CheckIcon color={ui.foreground} size={18} />
+                    ) : null}
+                  </View>
+                </Button>
               ))
             : null}
         </View>
@@ -249,18 +256,18 @@ const LoadedTeam = ({
                 {nameOf(member)}
               </Text>
               {disabled || team.length < 2 ? null : (
-                <Pressable
+                <Button
                   accessibilityLabel={t("removeMember")}
-                  accessibilityRole="button"
-                  className="p-1 active:opacity-60"
                   disabled={busy}
                   hitSlop={8}
                   onPress={() => {
                     remove(member);
                   }}
+                  size="icon-xs"
+                  variant="ghost"
                 >
                   <XIcon color={ui.mutedForeground} size={18} />
-                </Pressable>
+                </Button>
               )}
             </View>
           ))}
@@ -271,7 +278,7 @@ const LoadedTeam = ({
           </Button>
         )}
         {candidates === null ? null : (
-          <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+          <Suspense fallback={<Loader />}>
             <MemberChooser
               chosen={new Set()}
               disabled={busy}

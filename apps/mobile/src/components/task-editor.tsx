@@ -1,13 +1,7 @@
 import { Suspense, use, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  View,
-} from "react-native";
+import { Alert, Platform, View } from "react-native";
 import { useFormatter, useTimeZone, useTranslations } from "use-intl";
 
 import {
@@ -19,6 +13,7 @@ import {
 } from "@stll/api-contract/entity-options";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -47,7 +42,7 @@ import {
   updateTask,
 } from "@/state/tasks";
 import type { TaskChange, TaskDetail } from "@/state/tasks";
-import { useAppColors, useUiColors } from "@/theme";
+import { useUiColors } from "@/theme";
 
 type TaskProps = {
   readonly matterId: string;
@@ -65,7 +60,6 @@ type TaskProps = {
  * edit tasks, or a task synced from an outside calendar, shows read-only.
  */
 export const TaskEditor = (props: TaskProps) => {
-  const colors = useAppColors();
   const { end } = useSession();
   const { matterId, source, taskId } = props;
   const [load] = useState(async () => {
@@ -77,7 +71,7 @@ export const TaskEditor = (props: TaskProps) => {
   });
 
   return (
-    <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+    <Suspense fallback={<Loader />}>
       <LoadedTask load={load} {...props} />
     </Suspense>
   );
@@ -473,31 +467,36 @@ const Subtasks = ({
         {initial.map((child, index) => {
           const done = isTaskClosed(statuses.get(child.id) ?? TASK_STATUS.OPEN);
           return (
-            <Pressable
+            <Button
               accessibilityRole="checkbox"
-              accessibilityState={{ checked: done, disabled: !editable }}
-              className={`active:bg-accent flex-row items-center gap-3 py-3 ${
-                index === 0 ? "" : "border-border border-t"
-              }`}
+              accessibilityState={{ checked: done }}
               disabled={!editable || saving}
               key={child.id}
               onPress={() => {
                 toggle(child.id);
               }}
+              size="row"
+              variant="ghost"
             >
-              {done ? (
-                <CircleCheckIcon color={ui.successForeground} size={18} />
-              ) : (
-                <CircleIcon color={ui.mutedForeground} size={18} />
-              )}
-              <Text className="flex-1" numberOfLines={2} variant="rowTitle">
-                {child.name === null ||
-                child.name === undefined ||
-                child.name === ""
-                  ? t("untitled")
-                  : child.name}
-              </Text>
-            </Pressable>
+              <View
+                className={`flex-1 flex-row items-center gap-3 ${
+                  index === 0 ? "" : "border-border border-t"
+                }`}
+              >
+                {done ? (
+                  <CircleCheckIcon color={ui.successForeground} size={18} />
+                ) : (
+                  <CircleIcon color={ui.mutedForeground} size={18} />
+                )}
+                <Text className="flex-1" numberOfLines={2} variant="rowTitle">
+                  {child.name === null ||
+                  child.name === undefined ||
+                  child.name === ""
+                    ? t("untitled")
+                    : child.name}
+                </Text>
+              </View>
+            </Button>
           );
         })}
       </View>

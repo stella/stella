@@ -2,14 +2,7 @@ import { Suspense, use, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 
 import { panic } from "better-result";
-import {
-  ActivityIndicator,
-  Image,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Image, Platform, ScrollView, StyleSheet, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import {
@@ -25,6 +18,7 @@ import {
 import type { ChatLocalRunConversationEntry } from "@stll/api-contract/chat-local-run-step-output";
 import { Button } from "@stll/ui/button";
 import { formatFileSize } from "@stll/ui/file-size";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { MarkdownView } from "@/components/markdown-view";
@@ -62,7 +56,6 @@ export const StepContentView = ({
 }) => {
   const thread = use(ThreadSteps) ?? panic("A step's content needs its thread");
   const { end } = useSession();
-  const colors = useAppColors();
   const read = async (from: StepContentRead) => {
     const next = await readStepContent({
       callId,
@@ -80,15 +73,7 @@ export const StepContentView = ({
   const [reading, startReading] = useTransition();
 
   return (
-    <Suspense
-      fallback={
-        <ActivityIndicator
-          color={colors.muted}
-          size="small"
-          style={styles.pending}
-        />
-      }
-    >
+    <Suspense fallback={<Loader size="sm" style={styles.pending} />}>
       <ReadContent
         load={load}
         name={name}

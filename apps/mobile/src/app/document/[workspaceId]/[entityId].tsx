@@ -3,10 +3,8 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
-  ActivityIndicator,
   Alert,
   Platform,
-  Pressable,
   StyleSheet,
   useColorScheme,
   View,
@@ -15,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import DocumentView from "@/components/document-viewer/document-view.dom";
@@ -238,7 +237,7 @@ const OpenedDocument = ({
 
   const body = (() => {
     if (source === null || phase.status === "opening") {
-      return <ActivityIndicator color={colors.muted} style={styles.center} />;
+      return <Loader style={styles.center} />;
     }
     if (phase.status === "failed") {
       return (
@@ -346,7 +345,7 @@ const OpenedDocument = ({
               { backgroundColor: colors.background },
             ]}
           >
-            <ActivityIndicator color={colors.muted} />
+            <Loader />
           </View>
         )}
       </View>
@@ -359,9 +358,8 @@ const OpenedDocument = ({
         options={{
           headerRight: () =>
             editing.phase.status === "viewing" ? (
-              <Pressable
+              <Button
                 accessibilityLabel={t("details")}
-                accessibilityRole="button"
                 hitSlop={8}
                 onPress={() => {
                   router.push({
@@ -369,9 +367,11 @@ const OpenedDocument = ({
                     params: { workspaceId, entityId },
                   });
                 }}
+                size="icon-sm"
+                variant="ghost"
               >
                 <LucideGlyphs color={colors.text} name="info" size={22} />
-              </Pressable>
+              </Button>
             ) : (
               <EditingStatus
                 onDone={editing.requestFinish}
@@ -403,16 +403,16 @@ const EditingStatus = ({
   const t = useTranslations("document.edit");
   const colors = useAppColors();
   if (phase !== "editing") {
-    return <ActivityIndicator color={colors.muted} />;
+    return <Loader />;
   }
   return (
     <View style={styles.editing}>
       <Text variant="caption">{t(saveState)}</Text>
-      <Pressable accessibilityRole="button" hitSlop={8} onPress={onDone}>
+      <Button hitSlop={8} onPress={onDone} size="inline" variant="link">
         <Text style={{ color: colors.text }} variant="headline">
           {t("done")}
         </Text>
-      </Pressable>
+      </Button>
     </View>
   );
 };

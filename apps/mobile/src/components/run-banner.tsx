@@ -7,7 +7,6 @@ import {
   Animated,
   Easing,
   Platform,
-  Pressable,
   StyleSheet,
   View,
 } from "react-native";
@@ -16,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
 import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
+import { Button } from "@stll/ui/button";
 import { RunStateMark } from "@stll/ui/run-state-mark";
 import type { RunMarkState } from "@stll/ui/run-state-mark";
 import { Text } from "@stll/ui/text";
@@ -232,11 +232,9 @@ const Banner = ({
   });
 
   const content = (
-    <Pressable
+    <Button
       accessibilityActions={[{ label: tabs("close"), name: "dismiss" }]}
       accessibilityHint={t("runBanner.openHint")}
-      accessibilityRole="button"
-      className="flex-row items-center gap-3 px-4 py-3 active:opacity-70"
       onAccessibilityAction={({ nativeEvent }) => {
         if (nativeEvent.actionName === "dismiss") {
           leave();
@@ -248,17 +246,20 @@ const Banner = ({
         onOpen();
       }}
       onPressOut={wait}
+      variant="plain"
     >
-      {mark === undefined ? null : <RunStateMark state={mark} />}
-      <View className="flex-1">
-        <Text numberOfLines={1} variant="label">
-          {t(heading)}
-        </Text>
-        <Text numberOfLines={1} variant="caption">
-          {title}
-        </Text>
+      <View className="flex-row items-center gap-3 px-4 py-3">
+        {mark === undefined ? null : <RunStateMark state={mark} />}
+        <View className="flex-1">
+          <Text numberOfLines={1} variant="label">
+            {t(heading)}
+          </Text>
+          <Text numberOfLines={1} variant="caption">
+            {title}
+          </Text>
+        </View>
       </View>
-    </Pressable>
+    </Button>
   );
 
   // The dock spans the width so the banner centres on a wide screen; only

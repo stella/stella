@@ -2,12 +2,13 @@ import { startTransition, Suspense, use, useState } from "react";
 
 import { panic, Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Alert, ScrollView, View } from "react-native";
+import { Alert, ScrollView, View } from "react-native";
 import { useNow, useTimeZone, useTranslations } from "use-intl";
 
 import { resolveReferenceEdit } from "@stll/api-contract/matter-reference-edit";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { ContactPicker } from "@/components/contact-picker";
@@ -33,7 +34,7 @@ import {
   updateMatter,
 } from "@/state/matter-detail";
 import type { MatterDetail, MatterNumbering } from "@/state/matter-detail";
-import { useAppColors, useUiColors } from "@/theme";
+import { useUiColors } from "@/theme";
 
 type DetailLoad = Promise<Result<MatterDetail, ApiError>>;
 
@@ -63,7 +64,6 @@ const MatterInfo = ({
   matterId: string;
   source: AccessTokenSource;
 }) => {
-  const colors = useAppColors();
   const load = async () => await readMatter({ fetch, matterId, source });
   const [detail, setDetail] = useState<DetailLoad>(load);
   return (
@@ -74,7 +74,7 @@ const MatterInfo = ({
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
     >
-      <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+      <Suspense fallback={<Loader />}>
         <LoadedMatterInfo
           detail={detail}
           matterId={matterId}

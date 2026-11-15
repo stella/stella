@@ -1,9 +1,10 @@
 import { Suspense, use, useState } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { screenStyles } from "@/components/empty-state-screen";
@@ -48,11 +49,7 @@ export const EntityDetailSheet = ({
 
   return (
     <View style={[styles.sheet, { backgroundColor: colors.card }]}>
-      <Suspense
-        fallback={
-          <ActivityIndicator color={colors.accent} style={styles.loading} />
-        }
-      >
+      <Suspense fallback={<Loader style={styles.loading} />}>
         <LoadedEntity
           load={load}
           onDeleted={onDeleted}

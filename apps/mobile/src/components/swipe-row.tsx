@@ -6,12 +6,12 @@ import {
   Animated,
   Easing,
   I18nManager,
-  Pressable,
   StyleSheet,
   View,
 } from "react-native";
 import type { GestureResponderEvent, ViewProps } from "react-native";
 
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import type { LucideIcon } from "@/icons.gen";
@@ -216,12 +216,13 @@ export const SwipeRow = ({
           })}
         </View>
         {rest.type === "open" ? (
-          <Pressable
+          <Button
             accessible={false}
             className="absolute inset-0"
             onPress={() => {
               settle(SWIPE_CLOSED);
             }}
+            variant="plain"
           />
         ) : null}
       </Animated.View>
@@ -266,21 +267,23 @@ const ActionUnder = ({
       <View
         className={`bg-primary flex-1 flex-row ${side === SWIPE_SIDE.leading ? "justify-start" : "justify-end"}`}
       >
-        <Pressable
+        <Button
           accessible={false}
-          className="items-center justify-center gap-1 px-2 active:opacity-70"
           onPress={onRun}
           style={{ width: SWIPE_REVEAL_WIDTH }}
+          variant="plain"
         >
-          <action.icon color={ui.primaryForeground} size={20} />
-          <Text
-            className="text-primary-foreground text-center"
-            numberOfLines={2}
-            variant="label"
-          >
-            {action.label}
-          </Text>
-        </Pressable>
+          <View className="flex-1 items-center justify-center gap-1 px-2">
+            <action.icon color={ui.primaryForeground} size={20} />
+            <Text
+              className="text-primary-foreground text-center"
+              numberOfLines={2}
+              variant="label"
+            >
+              {action.label}
+            </Text>
+          </View>
+        </Button>
       </View>
     </Animated.View>
   );

@@ -1,8 +1,9 @@
 import { Suspense, useTransition } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator } from "react-native";
 import { useTimeZone } from "use-intl";
+
+import { Loader } from "@stll/ui/loader";
 
 import { useRevisedLoad } from "@/components/changes";
 import { LoadedTasks } from "@/components/loaded-tasks";
@@ -16,7 +17,6 @@ import {
   NO_TASKS_LOADED,
 } from "@/state/tasks";
 import type { TasksLoad, TasksView } from "@/state/tasks";
-import { useAppColors } from "@/theme";
 
 /**
  * The tasks `view` asks for, loaded once, again on every pull to refresh,
@@ -51,7 +51,6 @@ const TasksLoader = ({
   source: AccessTokenSource;
   view: TasksView;
 }) => {
-  const colors = useAppColors();
   const { end } = useSession();
   const timeZone = useTimeZone() ?? "UTC";
   // A session the server ended sends the person back to sign in, from the
@@ -92,9 +91,7 @@ const TasksLoader = ({
   };
 
   return (
-    <Suspense
-      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
-    >
+    <Suspense fallback={<Loader className="flex-1" />}>
       <LoadedTasks
         load={load}
         loadingMore={loadingMore}

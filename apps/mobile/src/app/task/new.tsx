@@ -2,10 +2,11 @@ import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Platform, ScrollView, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 import { useFormatter, useTimeZone, useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -30,7 +31,6 @@ import {
   newTaskAssignees,
 } from "@/state/tasks";
 import type { DueChoice } from "@/state/tasks";
-import { useAppColors } from "@/theme";
 
 /**
  * A new task, presented as a sheet over the tasks: its name, when it is due
@@ -48,7 +48,6 @@ const NewTaskScreen = () => {
 const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("tasks");
   const tabs = useTranslations("tabs");
-  const colors = useAppColors();
   const router = useRouter();
   const { end } = useSession();
   const changed = useChanged();
@@ -213,7 +212,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           <View className="px-1">
             <Text variant="section">{t("matterTitle")}</Text>
           </View>
-          <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+          <Suspense fallback={<Loader />}>
             <MatterPicker
               matters={matters}
               onSelect={(id) => {
@@ -229,7 +228,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
             <View className="px-1">
               <Text variant="section">{t("assignedTo")}</Text>
             </View>
-            <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+            <Suspense fallback={<Loader />}>
               <MemberList
                 assigned={chosen}
                 load={members.load}
