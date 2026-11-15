@@ -33,9 +33,9 @@ const UNDO_REQUEST =
 
 /** The chat's read of its thread. */
 const THREAD_MESSAGES = /\/v1\/chat\/threads\/[^/]+\/messages(?:\?|$)/u;
-/** The send's refusal while none of the member's computers is connected. */
+/** Why a turn failed while none of the member's computers was connected. */
 const NO_COMPUTER = "None of your computers is connected.";
-/** The refusal's button that opens stella desktop and sends again. */
+/** The failed turn's button that opens stella desktop and sends again. */
 const OPEN_DESKTOP = "Open stella desktop";
 /** What a turn, and that button, say while stella desktop opens. */
 const OPENING_DESKTOP = "Opening stella desktop...";
@@ -173,12 +173,7 @@ test("undo is refused while the computer is offline, and the file stays", async 
 test("the first send of a new chat while no computer is connected says why and keeps the message", async ({
   page,
   request,
-  browserErrors,
 }) => {
-  // The browser logs the refused send, and the development build echoes its
-  // failed stream read.
-  browserErrors.expectCaptured(/status of 409 \(Conflict\)/u);
-  browserErrors.expectCaptured(/Stream response body read failed/u);
   await openNewChat(page);
   await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
   await setComputerOnline(request, false);
@@ -225,10 +220,11 @@ const answers = (page: Page) =>
   transcript(page).getByText(TEXT_ANSWER, { exact: true });
 
 /**
- * A chat whose send was just refused because the page had last read the
- * computer as connected, so the send went out and the API refused it.
+ * A chat whose latest turn just failed: the page had last read the computer
+ * as connected, so the send went out, the API stored it, and its run found
+ * no computer to start on.
  */
-const refusedSend = async (page: Page, request: APIRequestContext) => {
+const failedSend = async (page: Page, request: APIRequestContext) => {
   await answeredChat(page);
   await setComputerOnline(request, false);
   await send(page, "Second question");
@@ -237,17 +233,11 @@ const refusedSend = async (page: Page, request: APIRequestContext) => {
   });
 };
 
-test("a send refused because no computer is connected says why, keeps the message and offers to open stella desktop", async ({
+test("a send while no computer is connected is stored and fails with the reason, also after a reload, and offers to open stella desktop", async ({
   page,
   request,
-  browserErrors,
 }) => {
-  // The browser logs the refused send, and the development build echoes its
-  // failed stream read.
-  browserErrors.expectCaptured(/status of 409 \(Conflict\)/u);
-  browserErrors.expectCaptured(/Stream response body read failed/u);
-
-  await refusedSend(page, request);
+  await failedSend(page, request);
 
   await expect(transcript(page)).toContainText("Second question");
   await expect(
@@ -257,17 +247,22 @@ test("a send refused because no computer is connected says why, keeps the messag
     transcript(page).getByRole("button", { name: "Resend" }),
   ).toBeEnabled();
   await expect(answers(page)).toHaveCount(1);
+
+  // The server holds the message and why its turn failed: a reload shows
+  // both, read from the stored thread.
+  await page.reload({ waitUntil: "commit" });
+  await expect(transcript(page)).toContainText("Second question", {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+  await expect(transcript(page).getByText(NO_COMPUTER)).toBeVisible();
+  await expect(answers(page)).toHaveCount(1);
 });
 
-test("Open stella desktop on a refused send sends it again once a computer is back", async ({
+test("Open stella desktop on a turn that failed with no computer sends it again once a computer is back", async ({
   page,
   request,
-  browserErrors,
 }) => {
-  // The refused send, as above; the resend logs nothing.
-  browserErrors.expectCaptured(/status of 409 \(Conflict\)/u);
-  browserErrors.expectCaptured(/Stream response body read failed/u);
-  await refusedSend(page, request);
+  await failedSend(page, request);
 
   await transcript(page).getByRole("button", { name: OPEN_DESKTOP }).click();
   // The launch waits for a computer, and says so in the button's place.

@@ -39,6 +39,8 @@ const LINKED_FOLDER_ID: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000d1";
 const OFFLINE_FOLDER_ID: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000d2";
 /// The approval request id the stand-in holder asks with.
 const REQUEST_ID: &str = "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f";
+/// A `run.input` id; the stand-in holder's harness takes every input.
+const INPUT_ID: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000c3";
 /// The stand-in's scenarios, each a model the probe reports.
 const MODELS: &[&str] = &[
   "gpt-test",
@@ -653,7 +655,6 @@ fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_and_step_outputs_bes
  {
   let place = Place::new();
   let id = run_id();
-  let output_key = "cd".repeat(32);
   // The member's own folder, with their work in it.
   let member = place.fixture.root.join("member");
   let linked = member.join("Smith v Jones");
@@ -668,7 +669,6 @@ fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_and_step_outputs_bes
     let mut connection = connect(&gateway, &[], "ready").await;
     let mut start = run_start(&id, "gpt-test");
     start["linkedFolderId"] = json!(LINKED_FOLDER_ID);
-    start["outputKey"] = json!(output_key);
     connection.send(start).await;
     assert_eq!(
       connection.receive().await,
@@ -684,34 +684,12 @@ fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_and_step_outputs_bes
   let cache = place.workspaces().join(format!("{id}.cache"));
   assert_eq!(start["cacheDir"], cache.to_str().unwrap());
   assert!(cache.is_dir());
-  // The run's outputs and their key are kept in stella's runs folder, where
-  // the bridge looks, and nothing is written in or beside the member's.
+  // The run's step outputs are spooled in stella's runs folder, where the
+  // app drains what a run hands over, and nothing is written in or beside
+  // the member's.
   let store = place.workspaces().join(format!("{id}.step-outputs"));
   assert_eq!(start["stepOutputDir"], store.to_str().unwrap());
-  assert_eq!(
-    std::fs::read_to_string(store.join(&id).join("key")).unwrap(),
-    output_key
-  );
   assert_eq!(tree_of(&member), before);
-  // A step the sidecar keeps where `run.start` named opens through the
-  // bridge for the member's page.
-  let step = "ab".repeat(32);
-  std::fs::write(store.join(&id).join(&step), "{\"bytes\":3}\nok\n").unwrap();
-  run(async {
-    let response = crate::bridge::tests::read_step_at(
-      &place.workspaces(),
-      &output_key,
-      "user-fixture-1",
-      uuid::Uuid::parse_str(&id).unwrap(),
-      &step,
-    )
-    .await;
-    assert_eq!(response.status(), axum::http::StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 4096)
-      .await
-      .unwrap();
-    assert_eq!(&body[..], b"ok\n");
-  });
 }
 
 #[test]
@@ -858,7 +836,7 @@ fn approvals_answers_interrupts_and_cancels_reach_the_harness_and_its_end_comes_
 }
 
 #[test]
-fn a_holder_that_dies_ends_its_runs_failed_and_input_is_answered_on_the_stream() {
+fn a_holder_that_dies_ends_its_runs_failed_and_input_reaches_the_holder() {
   let place = Place::new();
   run(async {
     let host = place.host(None, Duration::from_secs(3600));
@@ -875,15 +853,19 @@ fn a_holder_that_dies_ends_its_runs_failed_and_input_is_answered_on_the_stream()
       .send(json!({
         "type": "run.input",
         "runId": waiting,
-        "inputId": "input-1",
+        "inputId": INPUT_ID,
         "message": {"role": "user", "content": "And the appeal?"},
       }))
       .await;
+    // The holder answers on the run's stream whether its harness took it.
     let answered = connection.receive_type("run.event").await;
     assert_eq!(answered["seq"], 2);
-    assert_eq!(answered["chunk"]["type"], "RUN_ERROR");
-    assert_eq!(answered["chunk"]["code"], "input_unsupported");
-    assert_eq!(answered["chunk"]["runId"], waiting.as_str());
+    assert_eq!(answered["chunk"]["type"], "CUSTOM");
+    assert_eq!(answered["chunk"]["name"], "stella.run-input");
+    assert_eq!(
+      answered["chunk"]["value"],
+      json!({"inputId": INPUT_ID, "status": "accepted"})
+    );
 
     let crashed = run_id();
     connection.send(run_start(&crashed, "crash")).await;

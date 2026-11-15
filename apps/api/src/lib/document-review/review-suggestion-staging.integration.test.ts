@@ -184,7 +184,7 @@ const seedRunningRun = async (
     contentSha256: CONTENT_SHA256,
     basis: runBasis,
     status: "running",
-    startedAt: new Date(),
+    startedAt: new Date("2026-04-30T09:00:00.000Z"),
     total,
     requestedBy: ids.userA1,
     executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,

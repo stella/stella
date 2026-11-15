@@ -20,9 +20,9 @@
 //! - A harness process whose launch needs the desktop's authorization (Codex
 //!   on the user's ChatGPT plan) is granted when the holder reports it, and
 //!   again when a restarted app resumes the run.
-//! - `run.input` is not supported: each chat turn is its own run that
-//!   resumes the harness's session. Input is answered with a `RUN_ERROR`
-//!   chunk (`input_unsupported`) on the run's stream; the run goes on.
+//! - `run.input` steers the run's running turn: the holder hands the message
+//!   to the harness and answers with a `stella.run-input` chunk on the run's
+//!   stream, saying whether the harness took it.
 //! - A run works in its chat's folder under the app's data, so the next turn
 //!   finds what this one left (`run_folders`), or in a folder the member
 //!   linked on this computer (`local_linked_folders`). The chat's folder
@@ -52,7 +52,6 @@ use super::harness::{
 };
 use super::journal::SharedJournal;
 use super::run_folders;
-use super::step_outputs;
 use crate::harness_sidecar::{
   self, BackgroundTasks, HarnessLaunchSettings, HarnessProbe, HarnessProcess,
   HarnessSidecar, RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore,
@@ -75,7 +74,6 @@ pub(crate) const FAILED_PROBE_RECHECK: Duration = Duration::from_secs(30);
 /// Retries of an output the journal could not record, doubling up to this.
 const STORAGE_RETRY_CAP: Duration = Duration::from_secs(30);
 const STORAGE_RETRY_FIRST: Duration = Duration::from_millis(250);
-const INPUT_UNSUPPORTED: &str = "input_unsupported";
 /// How long a run's start waits for its skill folders. A folder can sit on a
 /// mount that hangs, and a start runs on the runner's loop.
 const SKILL_FOLDER_BUDGET: Duration = Duration::from_secs(2);
@@ -1162,15 +1160,10 @@ impl HarnessHost for SidecarHarnessHost {
     // Made with the chat's folder; the one place outside the folder the run
     // works in that it may write.
     let cache = run_folders::chat_cache(&chat_folder);
-    // Beside the chat's own folder, where the bridge looks, whatever folder
-    // the run works in: nothing of stella's goes in or beside a linked one.
+    // Beside the chat's own folder, where the app drains what a run hands
+    // over at its end, whatever folder the run works in: nothing of stella's
+    // goes in or beside a linked one.
     let step_output_dir = run_folders::step_output_store(&chat_folder);
-    // Kept before the harness starts, so every step it keeps can be read.
-    if let Some(key) = &start.output_key
-      && let Err(error) = step_outputs::keep_key(&chat_folder, &start.run_id, &key.0)
-    {
-      tracing::warn!(target: LOG_TARGET, %error, "a run's output key was not kept");
-    }
     let workspace = linked.unwrap_or(chat_folder);
     let credentials = cached.and_then(|cached| cached.credentials);
     let thread_id = start
@@ -1229,27 +1222,10 @@ impl HarnessHost for SidecarHarnessHost {
     Ok(())
   }
 
-  /// Local harnesses take no follow-up input: each chat turn is its own run.
-  /// The input is answered on the run's stream instead of dropped.
+  /// A message that steers the run's running turn; the holder answers on the
+  /// run's stream whether the harness took it.
   fn input(&self, input: RunInput) -> Forwarded {
-    tracing::warn!(target: LOG_TARGET, "a run received input local harnesses do not take");
-    let held = locked(&self.shared.runs)
-      .get(&input.run_id)
-      .map(|run| (run.sink.clone(), run.model.clone(), run.thread_id.clone()));
-    let Some((sink, model, thread_id)) = held else {
-      return Ok(());
-    };
-    let error = run_error(
-      &input.run_id,
-      model.as_deref(),
-      thread_id.as_deref(),
-      INPUT_UNSUPPORTED,
-      "Local harnesses take no input while a run is going; send it as the next turn.",
-    );
-    tokio::spawn(async move {
-      emit(&sink, &error).await;
-    });
-    Ok(())
+    self.forward("input", |sidecar| sidecar.input(input))
   }
 
   fn approval(&self, approval: RunApproval) -> Forwarded {

@@ -23,7 +23,9 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createTemplateFromStylesBodySchema = v.object({
   name: displayNameSchema(),
-  styleSource: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  styleSource: fileSchema({
+    maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument,
+  }),
 });
 
 const DOCX_EXTENSION = ".docx";

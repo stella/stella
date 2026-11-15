@@ -99,6 +99,9 @@ const accountBearerOwners = {
   "time_entry_submit.rs": "account: &AccountRequest",
   "billing_draft_submit.rs": "account: &AccountRequest",
   "dictation_cleanup.rs": "account: &AccountRequest",
+  "dictation_cloud.rs": "account: &AccountRequest",
+  // Holds the runner's authorization, whose lease is the account request's.
+  "desktop_runner/awaited_steps.rs": "authorized: Authorized,",
   // The development stand-in computer proves the device key it linked itself.
   "desktop_runner/stand_in.rs": "let device = DeviceKey::from_pkcs8(&pkcs8)?;",
 } as const;

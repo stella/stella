@@ -23,7 +23,11 @@ import {
 } from "@stll/api-contract/browser-control";
 import { waitFor } from "@stll/test-kit";
 
-import { type BrowserBridge, startBrowserBridge } from "./bridge";
+import {
+  type BrowserBridge,
+  type BrowserBridgeDownload,
+  startBrowserBridge,
+} from "./bridge";
 import { readLocalBrowserResult } from "./local-result";
 import {
   encodeNativeMessage,
@@ -116,7 +120,7 @@ const startChrome = (
     input.end();
     await exited;
   });
-  return { exited, input, received };
+  return { exited, input, received, toHost };
 };
 
 const extension = (request: Record<string, unknown>) => {
@@ -177,6 +181,61 @@ describe("the browser bridge and its native host", () => {
       source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
       turnId: "run-1",
     });
+  });
+
+  test("hand a download the extension reports unasked to the listener", async () => {
+    const { bridge } = await startBridge();
+    const reports: BrowserBridgeDownload[] = [];
+    bridge.onDownload((report) => {
+      reports.push(report);
+    });
+    const chrome = startChrome(bridge, { answer: extension });
+    await ready(bridge);
+    const download = {
+      outcome: "stopped",
+      reason: "not-pdf",
+      sourceUrl: "https://fixture-library.test/setup",
+      suggestedName: "setup.dmg",
+    } as const;
+
+    const deliveryId = "0b6c1f4e-8a52-4d0e-9f3a-2c7d5e6f7a81";
+    chrome.toHost({
+      controllerId: "thread-1",
+      deliveryId,
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      shownDocument: null,
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "download-started",
+    });
+    chrome.toHost({
+      controllerId: "thread-1",
+      deliveryId,
+      download,
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      shownDocument: null,
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "download",
+    });
+
+    expect(
+      await waitFor(() => (reports.length === 2 ? reports : undefined), {
+        description: "both download reports",
+      }),
+    ).toEqual([
+      {
+        controllerId: "thread-1",
+        deliveryId,
+        shownDocument: null,
+        type: "started",
+      },
+      {
+        controllerId: "thread-1",
+        deliveryId,
+        download,
+        shownDocument: null,
+        type: "settled",
+      },
+    ]);
   });
 
   test("answer disconnected while no extension is connected", async () => {

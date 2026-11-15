@@ -22,7 +22,9 @@ import * as v from "valibot";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_MAX_BACKGROUND_TASKS,
+  DESKTOP_RUNNER_SERVER_MESSAGE,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   type DesktopRunnerHarnessReport,
@@ -31,6 +33,7 @@ import {
   type DesktopRunnerLinkedFolder,
   desktopRunnerLinkedFolderSchema,
   type DesktopRunnerReasoningEffort,
+  desktopRunnerServerMessageSchema,
 } from "@stll/api-contract/desktop-runner";
 
 import type { RootDatabase, Transaction } from "@/api/db/root";
@@ -73,12 +76,6 @@ import {
   hasUnnotedFolderRestore,
   markFolderRestoreNotesTold,
 } from "@/api/lib/desktop-runner/folder-restores";
-import {
-  mintRunOutputKey,
-  type SealedRunOutputKey,
-  sealRunOutputKey,
-  storedRunOutputKey,
-} from "@/api/lib/desktop-runner/output-keys";
 import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
 import {
   DESKTOP_RUNNER_LEASED_RUN_STATES,
@@ -88,6 +85,10 @@ import {
   type DesktopRunnerLostReason,
   type DesktopRunnerRunState,
 } from "@/api/lib/desktop-runner/states";
+import {
+  announcedAwaitedSteps,
+  recordAwaitedSteps,
+} from "@/api/lib/desktop-runner/step-contents";
 import {
   brandPersistedChatThreadId,
   brandPersistedWorkspaceId,
@@ -1210,6 +1211,20 @@ export const persistRunMessage = async (
         requestId: requestIdOf(message),
         message,
       });
+      // A run's word on which steps it still has to send is recorded with
+      // the event that carries it: both are stored, or neither is and the
+      // computer sends the event again.
+      const awaited =
+        message.type === DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent
+          ? announcedAwaitedSteps(message.chunk)
+          : null;
+      if (awaited !== null) {
+        await recordAwaitedSteps(tx, {
+          owner: binding,
+          runId: message.runId,
+          stepKeys: awaited,
+        });
+      }
       return { type: "persisted", seq: message.seq };
     }
     const run = await readBoundRun(tx, binding, message.runId);
@@ -1493,8 +1508,6 @@ export type PendingCommand = {
   readonly kind: DesktopRunnerCommandKind;
   readonly payload: unknown;
   readonly workspaceIds: readonly SafeId<"workspace">[];
-  /** The run's output key, which a `run.start` carries; never logged. */
-  readonly sealedOutputKey: SealedRunOutputKey | null;
 };
 
 type PendingCommandsOptions = SessionOptions & {
@@ -1529,8 +1542,6 @@ export const readPendingCommands = async (
       kind: desktopRunnerCommands.kind,
       payload: desktopRunnerCommands.payload,
       workspaceIds: runs.workspaceIds,
-      outputKeyEncrypted: runs.outputKeyEncrypted,
-      outputKeyIv: runs.outputKeyIv,
     })
     .from(desktopRunnerCommands)
     .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
@@ -1558,13 +1569,10 @@ export const readPendingCommands = async (
   }
   return {
     type: "current",
-    commands: rows.map(
-      ({ outputKeyEncrypted, outputKeyIv, workspaceIds, ...row }) => ({
-        ...row,
-        workspaceIds: workspaceIds.map(brandPersistedWorkspaceId),
-        sealedOutputKey: storedRunOutputKey(outputKeyEncrypted, outputKeyIv),
-      }),
-    ),
+    commands: rows.map(({ workspaceIds, ...row }) => ({
+      ...row,
+      workspaceIds: workspaceIds.map(brandPersistedWorkspaceId),
+    })),
   };
 };
 
@@ -1846,18 +1854,13 @@ export type InsertedRun =
  * Bind a new run to a connected runner and queue its `run.start`, both or
  * neither. The runner must report the harness ready at the requested version
  * with the requested model and approval mode. The caller mints the run id, so nothing here
- * answers for a run id another tenant holds. The run gets its own output key
- * (`output-keys.ts`), stored encrypted for its organization.
+ * answers for a run id another tenant holds.
  */
 export const insertAssignedRun = async (
   db: DesktopRunnerDb,
   options: InsertRunOptions,
-): Promise<InsertedRun> => {
-  const sealedOutputKey = await sealRunOutputKey(
-    options.owner.organizationId,
-    mintRunOutputKey(),
-  );
-  return await withAggregateTransaction(db, async (tx) => {
+): Promise<InsertedRun> =>
+  await withAggregateTransaction(db, async (tx) => {
     const { owner, runId, desktopId, harness, harnessVersion, now } = options;
     // Serialized with the account's restore requests and settlements, so a
     // restore is either pending here (refused below) or settled and noted.
@@ -1954,8 +1957,6 @@ export const insertAssignedRun = async (
       chatTurnId: options.chat?.turnId ?? null,
       state: "assigned",
       leaseExpiresAt: leaseUntil(now, options.leaseMs),
-      outputKeyEncrypted: sealedOutputKey.ciphertext,
-      outputKeyIv: sealedOutputKey.iv,
       createdAt: now,
       updatedAt: now,
     });
@@ -1977,7 +1978,6 @@ export const insertAssignedRun = async (
       holder: { sessionId: target.sessionId, instanceId: target.instanceId },
     };
   });
-};
 
 type InsertCommandOptions = {
   owner: RunOwner;
@@ -2178,41 +2178,6 @@ export const readRun = async (
       )
       .limit(1)
   ).at(0) ?? null;
-
-/**
- * The stored output key of one run of `owner`: `null` when it has no run by
- * that id, a `null` key when the run keeps none. Read apart from `readRun`,
- * so no view of a run carries it.
- */
-export const readRunOutputKey = async (
-  db: Pick<DesktopRunnerDb, "select">,
-  { owner, runId }: ReadRunOptions,
-): Promise<{ readonly sealedOutputKey: SealedRunOutputKey | null } | null> => {
-  const row = (
-    await db
-      .select({
-        outputKeyEncrypted: runs.outputKeyEncrypted,
-        outputKeyIv: runs.outputKeyIv,
-      })
-      .from(runs)
-      .where(
-        and(
-          eq(runs.runId, runId),
-          eq(runs.userId, owner.userId),
-          eq(runs.organizationId, owner.organizationId),
-        ),
-      )
-      .limit(1)
-  ).at(0);
-  return row === undefined
-    ? null
-    : {
-        sealedOutputKey: storedRunOutputKey(
-          row.outputKeyEncrypted,
-          row.outputKeyIv,
-        ),
-      };
-};
 
 /**
  * The chat thread of the owner's run that is still going; `null` for a run of
@@ -2580,6 +2545,103 @@ export const readChatRunForRequest = async (
       )
       .limit(1)
   ).at(0) ?? null;
+
+type ChatTurnRunOptions = { owner: RunOwner; chat: ChatRunBinding };
+
+/** A chat turn's run that is still going, and whether it can be steered. */
+export type SteerableChatRun = {
+  readonly runId: string;
+  /** The run's harness, on its computer, reports `steer`. */
+  readonly steerable: boolean;
+};
+
+/**
+ * The open run of chat turn `chat.turnId`, with what its harness on the
+ * computer running it last reported; `null` when the turn has no run still
+ * going for this member.
+ */
+export const readSteerableChatRun = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, chat }: ChatTurnRunOptions,
+): Promise<SteerableChatRun | null> => {
+  const row = (
+    await db
+      .select({
+        runId: runs.runId,
+        harness: runs.harness,
+        harnesses: runner.harnesses,
+      })
+      .from(runs)
+      .innerJoin(
+        runner,
+        and(
+          eq(runner.userId, runs.userId),
+          eq(runner.organizationId, runs.organizationId),
+          eq(runner.desktopId, runs.desktopId),
+          eq(runner.deviceJkt, runs.deviceJkt),
+        ),
+      )
+      .where(
+        and(
+          eq(runs.chatThreadId, chat.threadId),
+          eq(runs.chatTurnId, chat.turnId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        ),
+      )
+      // A turn starts one run; a paused one is answered on the same run.
+      .limit(1)
+  ).at(0);
+  if (row === undefined) {
+    return null;
+  }
+  const report = storedHarnessReports(row.harnesses).find(
+    ({ id }) => id === row.harness,
+  );
+  return {
+    runId: row.runId,
+    steerable:
+      report?.state === DESKTOP_RUNNER_HARNESS_STATE.ready &&
+      report.capabilities.includes("steer"),
+  };
+};
+
+type RunInputOptions = { owner: RunOwner; runId: string; inputId: string };
+
+/**
+ * The text the owner's `run.input` `inputId` handed run `runId`, as the API
+ * queued it; `null` when no such input was queued for that run.
+ */
+export const readRunInputText = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, runId, inputId }: RunInputOptions,
+): Promise<string | null> => {
+  const row = (
+    await db
+      .select({ payload: desktopRunnerCommands.payload })
+      .from(desktopRunnerCommands)
+      .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
+      .where(
+        and(
+          eq(desktopRunnerCommands.runId, runId),
+          eq(desktopRunnerCommands.kind, "run.input"),
+          eq(desktopRunnerCommands.commandKey, inputId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (row === undefined) {
+    return null;
+  }
+  const parsed = v.safeParse(desktopRunnerServerMessageSchema, row.payload);
+  return parsed.success &&
+    parsed.output.type === DESKTOP_RUNNER_SERVER_MESSAGE.runInput
+    ? parsed.output.message.content
+    : panic("A stored run.input no longer validates");
+};
 
 type ChatReadSeqOptions = { owner: RunOwner; runId: string; seq: number };
 

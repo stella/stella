@@ -482,7 +482,7 @@ test("an awaiting-user owner does not offer cards from an outcome already settle
   expect(offeredInteractionsOf(snapshot)).toEqual([]);
 });
 
-test("one snapshot uses two reads and orders equal timestamps by message and turn ids", async () => {
+test("one snapshot uses two reads and orders messages of equal timestamps by id and turns by acceptance", async () => {
   const { testDb, ids } = await getRlsFixture();
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   const firstMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
@@ -534,6 +534,8 @@ test("one snapshot uses two reads and orders equal timestamps by message and tur
       createdAt: born,
       settledAt: born,
     } as const;
+    // Stored in this order at one instant: the turn with the later id is
+    // accepted first, and acceptance orders turns, not their ids.
     await testDb.insert(chatTurns).values([
       { ...owner, id: secondTurnId },
       { ...owner, id: firstTurnId },
@@ -556,9 +558,10 @@ test("one snapshot uses two reads and orders equal timestamps by message and tur
     expect(snapshot.messages.map(({ id }) => id)).toEqual(
       [firstMessageId, secondMessageId].toSorted(),
     );
-    expect(snapshot.turns.map(({ id }) => id)).toEqual(
-      [firstTurnId, secondTurnId].toSorted(),
-    );
+    expect(snapshot.turns.map(({ id }) => id)).toEqual([
+      secondTurnId,
+      firstTurnId,
+    ]);
     expect(threadInvariantViolationsOf(snapshot)).toEqual({
       turnOutcomeMismatches: [],
       unownedPendingInteractions: [],

@@ -1379,7 +1379,7 @@ type ReconcileDocumentTranslationRunsResult = {
   handedOff: number;
 };
 
-export const reconcileDocumentTranslationRuns = async (
+const reconcileDocumentTranslationRuns = async (
   db: Pick<typeof rootDb, "select" | "update">,
 ): Promise<ReconcileDocumentTranslationRunsResult> => {
   const runningCutoff = new Date(

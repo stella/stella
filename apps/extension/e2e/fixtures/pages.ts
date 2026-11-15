@@ -21,7 +21,8 @@ export const HANDOFF_SECRET = "typed during the hand-off";
 /** Text the containment fixture hides from view in every supported way. */
 export const HIDDEN_TEXT_MARKER = "Hidden instruction";
 
-const LONG_TEXT = Array.from(
+/** One block of the index page far longer than a reading window. */
+export const LONG_TEXT = Array.from(
   { length: 900 },
   (_, index) =>
     `Paragraph ${index + 1}: the notice period runs from delivery, not from dispatch, and the appeal was dismissed with costs.`,
@@ -51,6 +52,12 @@ export const FIXTURE_PAGES: Record<string, string> = {
   <select aria-label="Court">
     <option value="">Any court</option>
     <option value="supreme">Supreme Court</option>
+    <optgroup disabled label="Closed">
+      <option value="closed">Closed court</option>
+    </optgroup>
+  </select>
+  <select aria-label="Saved card">
+    <option value="card">Card 4111111111111111</option>
   </select>
   <button type="submit">Run search</button>
 </form>

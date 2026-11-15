@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import type { ChatLocalRunSteerOutcome } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
@@ -32,11 +33,18 @@ import {
   requestFolderRestore,
   type TurnFolderRestore,
 } from "@/api/lib/desktop-runner/folder-restores";
-import { openRunOutputKey } from "@/api/lib/desktop-runner/output-keys";
 import {
   type RunAnswerMessage,
   sealRunAnswer,
 } from "@/api/lib/desktop-runner/sealed-answers";
+import {
+  copyStepContents,
+  isStepRunOpen,
+  openStepImage,
+  recordStepTooLarge,
+  storeStepImage,
+  storeStepText,
+} from "@/api/lib/desktop-runner/step-contents";
 import {
   type AnsweredRequest,
   approveLinkedFolder,
@@ -54,8 +62,9 @@ import {
   readMemberRunners,
   readOpenRunChatThread,
   readRun,
+  readRunInputText,
   readRunOutputFile,
-  readRunOutputKey,
+  readSteerableChatRun,
   readStoredRunEvents,
   readThreadBackgroundTasks,
   recordChatReadSeq,
@@ -184,8 +193,6 @@ const TOKEN_SHAPE = "t".repeat(DESKTOP_RUNNER_MAX_TOKEN_LENGTH);
 const ATTACHMENT_LINK_SHAPE = `https://${"l".repeat(
   DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH - "https://".length,
 )}`;
-/** A run's output key, derived when the command is sent. */
-const OUTPUT_KEY_SHAPE = "0".repeat(64);
 
 /** Whether `message`, as sent, fits one frame. */
 const fitsOneFrame = (message: unknown) =>
@@ -218,6 +225,48 @@ type ControlDeps = {
 
 const toDatabaseError = (cause: unknown) =>
   new DatabaseError({ message: "Desktop runner store is unavailable", cause });
+
+/** What a run's steps produced, as the gateway's owner connection handles it. */
+const stepContentControl = (db: DesktopRunnerDb) => ({
+  /** Store a step's text for the owner's run that is still going. */
+  storeStepText: async (options: Parameters<typeof storeStepText>[1]) =>
+    await Result.tryPromise({
+      try: async () => await storeStepText(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Record a step whose content was too large to send. */
+  recordStepTooLarge: async (
+    options: Parameters<typeof recordStepTooLarge>[1],
+  ) =>
+    await Result.tryPromise({
+      try: async () => await recordStepTooLarge(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Whether a step of the owner's run takes an image. */
+  openStepImage: async (options: Parameters<typeof openStepImage>[1]) =>
+    await Result.tryPromise({
+      try: async () => await openStepImage(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Name a stored chat file as a step's image. */
+  storeStepImage: async (options: Parameters<typeof storeStepImage>[1]) =>
+    await Result.tryPromise({
+      try: async () => await storeStepImage(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Copy the stored steps of a forked thread's messages to the fork. */
+  copyStepContents: async (options: Parameters<typeof copyStepContents>[1]) =>
+    await Result.tryPromise({
+      try: async () => await copyStepContents(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Whether the owner's run is still going in this thread. */
+  isStepRunOpen: async (options: Parameters<typeof isStepRunOpen>[1]) =>
+    await Result.tryPromise({
+      try: async () => await isStepRunOpen(db, options),
+      catch: toDatabaseError,
+    }),
+});
 
 const invalid = (
   kind: DesktopRunnerServerMessage["type"],
@@ -351,7 +400,6 @@ const startRun = async (
       token: TOKEN_SHAPE,
       expiresAt: deps.now().toISOString(),
     },
-    outputKey: OUTPUT_KEY_SHAPE,
   });
   if (!checked.success) {
     return Result.err(invalid(message.type, checked.issues));
@@ -586,6 +634,40 @@ const readEvents = async (
   });
 };
 
+type SteerChatTurnOptions = {
+  owner: RunOwner;
+  chat: ChatRunBinding;
+  inputId: string;
+  text: string;
+};
+
+const steerChatTurn = async (
+  deps: ControlDeps,
+  { owner, chat, inputId, text }: SteerChatTurnOptions,
+): Promise<Result<ChatLocalRunSteerOutcome, DesktopRunnerControlError>> => {
+  const run = await Result.tryPromise({
+    try: async () => await readSteerableChatRun(deps.db, { owner, chat }),
+    catch: toDatabaseError,
+  });
+  if (run.isErr()) {
+    return run;
+  }
+  if (run.value === null || !run.value.steerable) {
+    return Result.ok("unavailable");
+  }
+  const queued = await queue(deps, owner, {
+    type: DESKTOP_RUNNER_SERVER_MESSAGE.runInput,
+    runId: run.value.runId,
+    inputId,
+    message: { role: "user", content: text },
+  });
+  return queued.map((outcome) =>
+    outcome.type === "queued" || outcome.type === "duplicate"
+      ? "queued"
+      : "unavailable",
+  );
+};
+
 type BackgroundTasksOptions = {
   owner: RunOwner;
   threadId: SafeId<"chatThread">;
@@ -602,6 +684,17 @@ const readBackgroundTasks = async (
         threadId,
         freshSince: seenSince(deps),
       }),
+    catch: toDatabaseError,
+  });
+
+type RunInputTextOptions = Parameters<typeof readRunInputText>[1];
+
+const readSteeredText = async (
+  deps: ControlDeps,
+  options: RunInputTextOptions,
+): Promise<Result<string | null, DatabaseError>> =>
+  await Result.tryPromise({
+    try: async () => await readRunInputText(deps.db, options),
     catch: toDatabaseError,
   });
 
@@ -656,6 +749,16 @@ export const createDesktopRunnerControl = ({
         inputId,
         message,
       }),
+    /**
+     * Steer chat turn `chat.turnId` with `text`: hand it to the turn's run
+     * when its harness reports `steer`; idempotent on `inputId`. `queued`
+     * means the computer will say on the run's stream whether it took it.
+     */
+    steerChatTurn: async (options: SteerChatTurnOptions) =>
+      await steerChatTurn(deps, options),
+    /** The text the owner's run was steered with under `inputId`. */
+    readRunInputText: async (options: RunInputTextOptions) =>
+      await readSteeredText(deps, options),
     /** Answer an approval the run requested; idempotent on `requestId`. */
     answerApproval: async ({
       owner,
@@ -713,30 +816,6 @@ export const createDesktopRunnerControl = ({
         try: async () => await readRun(db, { owner, runId }),
         catch: toDatabaseError,
       }),
-    /**
-     * The output key of the owner's run, to sign a grant with; `null` for a
-     * run that is not theirs or keeps no key. Never logged or answered.
-     */
-    readRunOutputKey: async ({
-      owner,
-      runId,
-    }: RunOptions): Promise<Result<string | null, DatabaseError>> => {
-      const stored = await Result.tryPromise({
-        try: async () => await readRunOutputKey(db, { owner, runId }),
-        catch: toDatabaseError,
-      });
-      if (stored.isErr()) {
-        return Result.err(stored.error);
-      }
-      if (stored.value === null) {
-        return Result.ok(null);
-      }
-      const opened = await openRunOutputKey(
-        owner.organizationId,
-        stored.value.sealedOutputKey,
-      );
-      return Result.ok(opened.type === "opened" ? opened.outputKey : null);
-    },
     /** The chat thread of the owner's run that is still going. */
     readOpenRunChatThread: async (
       options: RunOptions,
@@ -753,6 +832,7 @@ export const createDesktopRunnerControl = ({
         try: async () => await readRunOutputFile(db, options),
         catch: toDatabaseError,
       }),
+    ...stepContentControl(db),
     /** Record what the server answered the run for a tool an app presents. */
     recordAppCall: async (options: Parameters<typeof recordAppCall>[1]) =>
       await Result.tryPromise({

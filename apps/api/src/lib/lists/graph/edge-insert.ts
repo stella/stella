@@ -11,7 +11,6 @@
 
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { executedRows } from "@/api/lib/db/executed-rows";
 
@@ -23,10 +22,9 @@ export const INSERT_EDGE = sql`INSERT INTO ${sql.identifier(GRAPH_EDGES_TABLE)} 
     provenance_reason, producer_kind, producer_id
   )`;
 
-export type EdgeWriteTransaction = Pick<
-  PgAsyncDatabase<PgQueryResultHKT>,
-  "execute"
->;
+export type EdgeWriteTransaction = {
+  execute: (statement: SQL) => PromiseLike<unknown>;
+};
 
 /**
  * Run one derived edge insert in the caller's transaction, so the edges

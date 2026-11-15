@@ -361,6 +361,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
       "--setting-sources",
       "",
       "--strict-mcp-config",
+      "--replay-user-messages",
       "--include-partial-messages",
       "--permission-mode",
       "acceptEdits",
@@ -456,8 +457,8 @@ describe("Claude Code adapter over stream-json stdio", () => {
           name: "command_execution",
           input: { command: "ls" },
         },
-        // The command's output stays on the computer: kept for the member to
-        // open there, never in what the turn reports.
+        // The command's output is the step's content: kept and sent beside the
+        // turn's events, never in what the turn reports.
         result: {
           content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
@@ -1069,6 +1070,62 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(terminal(events)).toEqual({ type: "turn.interrupted" });
   });
 
+  test("a steer is written to the running turn and settled accepted where the CLI echoes it", async () => {
+    const inputId = crypto.randomUUID();
+    const { events, received } = await run("steered", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          expect(
+            await turn.steer({ inputId, text: "Also check the annex." }),
+          ).toEqual(Result.ok());
+        }
+      },
+    });
+    const users = received().filter(({ type }) => type === "user");
+    // The turn's prompt, then the steer, each with the session it belongs to.
+    expect(users).toHaveLength(2);
+    expect(users[1]).toMatchObject({
+      message: { role: "user", content: "Also check the annex." },
+      parent_tool_use_id: null,
+      session_id: users[0]?.["session_id"],
+      uuid: expect.any(String),
+      // Taken at the agent's next step; the CLI's default would hold it to
+      // the turn's end.
+      priority: "next",
+    });
+    const settled = events.findIndex(({ type }) => type === "input.settled");
+    expect(events[settled]).toEqual({
+      type: "input.settled",
+      inputId,
+      status: "accepted",
+    });
+    // The echo is not output: the tool's result and the answer follow it.
+    expect(toolCompletions(events)).toHaveLength(1);
+    expect(
+      events.findIndex(
+        (event) =>
+          event.type === "text.completed" &&
+          event.text === "Checked the annex as well.",
+      ),
+    ).toBeGreaterThan(settled);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a steer the turn's result arrives before is settled rejected ahead of the turn's end", async () => {
+    const inputId = crypto.randomUUID();
+    const { events } = await run("steer_too_late", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId, text: "Also check the annex." });
+        }
+      },
+    });
+    expect(events.slice(-2)).toEqual([
+      { type: "input.settled", inputId, status: "rejected" },
+      expect.objectContaining({ type: "turn.completed" }),
+    ]);
+  });
+
   test("resuming a missing session falls back to the transcript and says so", async () => {
     const { events, startups, received } = await run("resume_missing", {
       overrides: {
@@ -1281,7 +1338,13 @@ describe("Claude Code adapter over stream-json stdio", () => {
           inputModalities: ["text"],
         },
       ],
-      capabilities: ["approvals", "interrupt", "resume", "image_input"],
+      capabilities: [
+        "approvals",
+        "interrupt",
+        "resume",
+        "image_input",
+        "steer",
+      ],
       approvalModes: ["plan", "ask", "auto", "full_auto"],
       // The exhausted model-specific window does not count.
       usageLimit: { resetsAt: "2099-10-28T14:00:00Z" },
@@ -2291,8 +2354,8 @@ describe("Claude Code skill folders", () => {
       }),
       expect.objectContaining({
         toolCall: expect.objectContaining({ input: { command: "ls" } }),
-        // The command's output stays on the computer; a step on the skill
-        // keeps none, even there.
+        // The command's output is the step's content; a step on the skill
+        // keeps none.
         result: {
           content: JSON.stringify({ status: "completed" }),
           status: "succeeded",

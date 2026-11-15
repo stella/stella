@@ -725,11 +725,21 @@ export const identityFields = (
   const fields: Record<string, string> = {
     "error.class": root.className ?? UNKNOWN_ERROR_CLASS,
     "error.code":
-      root.extraction?.["workerErrorClass"] !== undefined
+      root.timeout?.label ??
+      (root.extraction?.["workerErrorClass"] !== undefined
         ? `${root.code ?? root.tag}:${root.extraction["workerErrorClass"]}`
-        : (root.code ?? root.awsName ?? root.tag),
+        : (root.code ?? root.awsName ?? root.tag)),
   };
-  const frame = frameValue(root.frame);
+  const rootFrame = frameValue(root.frame);
+  // A deadline fires from a timer, whose stack often holds no caller frame;
+  // then the helper frame stays rather than leaving the field empty.
+  const callerFrame =
+    root.timeout !== undefined &&
+    rootFrame?.includes("packages/concurrency/src/with-timeout.ts:") === true
+      ? frameValue(root.timeout.callerFrame)
+      : undefined;
+  const frame =
+    callerFrame === undefined || callerFrame === "" ? rootFrame : callerFrame;
   if (frame !== undefined) {
     fields["error.frame"] = frame;
   }
@@ -770,6 +780,12 @@ export const systemFields = (
   if (root.syscall !== undefined) {
     fields["error.syscall"] = root.syscall;
   }
+  if (root.timeout !== undefined) {
+    fields["error.timeout.label"] = root.timeout.label;
+    if (root.timeout.timeoutMs !== undefined) {
+      fields["error.timeout.ms"] = String(root.timeout.timeoutMs);
+    }
+  }
   const cause =
     evidence.nodes.at(1) ??
     (evidence.cycleTo === undefined
@@ -782,6 +798,9 @@ export const systemFields = (
       : undefined;
     if (causeCode !== undefined) {
       fields["error.cause.code"] = causeCode;
+    }
+    if (cause.timeout !== undefined) {
+      fields["error.cause.timeout.label"] = cause.timeout.label;
     }
   }
   return { ...fields, ...pgIdentityFields(evidence) };

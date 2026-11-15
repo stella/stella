@@ -589,7 +589,6 @@ export default defineConfig(({ mode, command }) => {
         "@tanstack/router-core/isServer",
         "@tanstack/router-core/ssr/client",
         "@tanstack/router-core/ssr/server",
-        "h3-v2",
         "seroval",
         // 4. The native-first Temporal adapter reaches this only when the
         //    browser lacks Temporal. Pre-bundling is dev-server preparation;
@@ -619,7 +618,6 @@ export default defineConfig(({ mode, command }) => {
         "prosemirror-tables",
         "prosemirror-transform",
         "prosemirror-view",
-        "jszip",
         "fast-xml-parser",
         "marked",
         // 4. Editor, chat, table, and drag-and-drop deps reached only through

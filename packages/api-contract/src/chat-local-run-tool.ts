@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { BROWSER_CONTROL_KEYS } from "./browser-control";
 import { CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH } from "./chat-local-run-step-output";
 
 /**
  * A step a coding agent took itself on the member's computer (a command, a
- * file it read or changed, a search, a plan), as a chat turn keeps it. Only
- * what the step was about leaves the computer: a command line, file names, a
+ * file it read or changed, a search, a plan), as a chat turn keeps it. A call
+ * holds only what the step was about: a command line, file names, a
  * search query or web address, the titles of a plan, a plan the agent
  * proposes for the member to approve, in its own words, the short description
  * and agent type of a subagent it started, and the name of an image it
@@ -14,6 +15,9 @@ import { CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH } from "./chat-local-run-step-output"
  * code, the files a change touched. A command's output, a file's contents, a
  * diff, search matches, a fetched page, a subagent's prompt, messages and
  * report, and an image's bytes are never part of the call or its result.
+ * What a step produced that the member may open (a command's output, a diff,
+ * a subagent's conversation, a viewed image) is stored beside the call
+ * instead (`chat-local-run-step-content`).
  *
  * A call a subagent made, a native step or a tool of a connected server,
  * names the subagent's own step, so chat shows it under that step. The link
@@ -65,6 +69,8 @@ export const CHAT_LOCAL_RUN_TOOL_LIMITS = {
   approval: 300,
   /** What a subagent was started for, in the agent's few words. */
   description: 200,
+  /** A page element's accessible name, or a select option, a browser step names. */
+  elementName: 200,
 } as const;
 
 const ELLIPSIS = "…";
@@ -215,15 +221,21 @@ const fileChangesSchema = shownList(
 );
 
 /**
- * What a coding agent did in the member's Chrome. The page it read, the
- * element it clicked and the text it typed stay on the computer; only the
- * kind of step and, for `open`, the address it opened are kept.
+ * What a coding agent did in the member's Chrome. The page it read and the
+ * text it typed stay on the computer. A step keeps its kind; `open` keeps
+ * the address it opened, and a step the member was asked to allow keeps
+ * what they were asked about (`BROWSER_STEP_KEEPS`).
  */
 export const CHAT_LOCAL_RUN_BROWSER_ACTIONS = [
   "open",
   "snapshot",
+  "find",
   "click",
   "type",
+  "press_key",
+  "select",
+  "go_back",
+  "switch_tab",
 ] as const;
 
 export type ChatLocalRunBrowserAction =
@@ -236,6 +248,62 @@ const BROWSER_ACTIONS: ReadonlySet<string> = new Set(
 export const isChatLocalRunBrowserAction = (
   name: string,
 ): name is ChatLocalRunBrowserAction => BROWSER_ACTIONS.has(name);
+
+/**
+ * What chat keeps of each kind of browser step beside its kind: the address
+ * `open` went to, what the member was asked to allow for a step that acts on
+ * an element of the page, or nothing more.
+ */
+const BROWSER_STEP_KEEPS = {
+  open: "address",
+  snapshot: "kind",
+  find: "kind",
+  click: "asked",
+  type: "asked",
+  press_key: "asked",
+  select: "asked",
+  go_back: "kind",
+  switch_tab: "kind",
+} as const satisfies Record<
+  ChatLocalRunBrowserAction,
+  "address" | "asked" | "kind"
+>;
+
+/** A browser step on an element of the page: the member may be asked first. */
+export type ChatLocalRunBrowserElementAction = {
+  [
+    Action in ChatLocalRunBrowserAction
+  ]: (typeof BROWSER_STEP_KEEPS)[Action] extends "asked" ? Action : never;
+}[ChatLocalRunBrowserAction];
+
+type ChatLocalRunBrowserKindAction = {
+  [
+    Action in ChatLocalRunBrowserAction
+  ]: (typeof BROWSER_STEP_KEEPS)[Action] extends "kind" ? Action : never;
+}[ChatLocalRunBrowserAction];
+
+const BROWSER_ELEMENT_ACTIONS = CHAT_LOCAL_RUN_BROWSER_ACTIONS.filter(
+  (action): action is ChatLocalRunBrowserElementAction =>
+    BROWSER_STEP_KEEPS[action] === "asked",
+);
+
+const BROWSER_KIND_ACTIONS = CHAT_LOCAL_RUN_BROWSER_ACTIONS.filter(
+  (action): action is ChatLocalRunBrowserKindAction =>
+    BROWSER_STEP_KEEPS[action] === "kind",
+);
+
+/**
+ * What the member was asked to allow, as the question named it: the page's
+ * address, the element's role and accessible name, and the key pressed or
+ * the option chosen. Never the text typed, nor any other page content.
+ */
+const browserAskedSchema = v.object({
+  url: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.url),
+  role: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.name),
+  name: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.elementName),
+  key: v.optional(v.picklist(BROWSER_CONTROL_KEYS)),
+  option: v.optional(shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.elementName)),
+});
 
 /** A browser step that stopped at a sign-in the member completes. */
 export const CHAT_LOCAL_RUN_NEEDS_MEMBER = "needs_member" as const;
@@ -274,21 +342,20 @@ export const chatLocalRunToolCallSchema = v.variant("name", [
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.browser),
-    // Only `open` keeps an address: the one the agent chose. Any other
-    // step keeps its kind alone, whatever else it carries.
+    // `open` keeps the address the agent chose, and a step on an element
+    // what the member was asked to allow; anything else a step carries is
+    // dropped.
     input: v.union([
       v.object({
         action: v.literal("open"),
         url: v.optional(shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.url)),
       }),
       v.object({
-        action: v.picklist(
-          CHAT_LOCAL_RUN_BROWSER_ACTIONS.filter(
-            (action): action is Exclude<ChatLocalRunBrowserAction, "open"> =>
-              action !== "open",
-          ),
-        ),
+        action: v.picklist(BROWSER_ELEMENT_ACTIONS),
+        // A question that does not parse leaves the step its kind.
+        asked: v.fallback(v.optional(browserAskedSchema), undefined),
       }),
+      v.object({ action: v.picklist(BROWSER_KIND_ACTIONS) }),
     ]),
   }),
 ]);

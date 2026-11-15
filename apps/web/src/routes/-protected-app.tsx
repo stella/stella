@@ -35,6 +35,7 @@ import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
+import { useTrailEndsAtMatter } from "@/components/breadcrumbs/use-trail-ends-at-matter";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DocxEditorHost } from "@/components/docx/docx-editor-host";
@@ -64,6 +65,7 @@ import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-t
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
+import { MakeSkillReviewDialog } from "@/features/chat/make-skill-review-dialog";
 import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
@@ -304,6 +306,7 @@ export const ProtectedAppFrame = ({
                 <DocxEditorHost />
                 <QuickEntry />
                 <CreateMatterDialog />
+                <MakeSkillReviewDialog />
                 <AttachedTemplateUploadDialog />
                 <DocumentReferenceUploadDialog />
                 <ShortcutEchoHud />
@@ -333,6 +336,7 @@ function ProtectedContent() {
     shouldThrow: false,
   });
   const workspaceId = projectMatch?.params.workspaceId;
+  const showMatterActions = useTrailEndsAtMatter();
   const isPinned = workspaceId ? pinnedIds.has(workspaceId) : false;
   // Not mounting the bell is the whole gate: it is the only consumer of the
   // notifications query and of the user event stream.
@@ -418,7 +422,7 @@ function ProtectedContent() {
       className="ms-auto flex shrink-0 items-center gap-0.5"
       onContextMenu={handleIconRowContextMenu}
     >
-      {workspaceId && (
+      {workspaceId && showMatterActions && (
         <>
           {/* A phone's bar leaves the matter's crumb too little room with
               this beside it; the matter's menu and inspector still pin. */}

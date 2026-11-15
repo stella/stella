@@ -1124,6 +1124,7 @@
     "./field-trigger": ["FIELD_TRIGGER_CLASS_NAME"],
     "./file-input": ["FileInput"],
     "./file-picker": ["openFilePicker"],
+    "./file-size": ["formatFileSize", "getFileSizeDisplay"],
     "./form": ["Form", "formVariants"],
     "./frame": [
       "Frame",
@@ -1227,6 +1228,7 @@
       "DownloadIcon",
       "DuplicateIcon",
       "EditIcon",
+      "EditPagesIcon",
       "EllipsisIcon",
       "EllipsisVerticalIcon",
       "EqualIcon",
@@ -1242,7 +1244,6 @@
       "FileIcon",
       "FileImageIcon",
       "FileOutputIcon",
-      "FilePenLineIcon",
       "FilePlus2Icon",
       "FilePlusIcon",
       "FileQuestionIcon",

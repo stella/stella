@@ -99,7 +99,13 @@
       "unsupported",
       "unavailable"
     ],
-    "harnessCapabilities": ["approvals", "interrupt", "resume", "image_input"],
+    "harnessCapabilities": [
+      "approvals",
+      "interrupt",
+      "resume",
+      "image_input",
+      "steer"
+    ],
     "harnessUnavailableReasons": [
       "harness_failed",
       "unexpected_answer",
@@ -217,7 +223,13 @@
             "id": "codex",
             "state": "ready",
             "version": "0.48.0",
-            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "capabilities": [
+              "approvals",
+              "interrupt",
+              "resume",
+              "image_input",
+              "steer"
+            ],
             "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
@@ -615,7 +627,6 @@
       },
       {
         "type": "run.start",
-        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "linkedFolderId": null,
@@ -670,7 +681,6 @@
       },
       {
         "type": "run.start",
-        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "linkedFolderId": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
@@ -891,7 +901,7 @@
       }
     },
     {
-      "name": "run.start ignores unknown fields beside the policy",
+      "name": "run.start ignores unknown fields beside the policy, and the output key an earlier API sent",
       "direction": "server",
       "input": {
         "type": "run.start",
@@ -947,7 +957,6 @@
       },
       "parsed": {
         "type": "run.start",
-        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "linkedFolderId": null,
@@ -1251,6 +1260,27 @@
         }
       },
       {
+        "name": "run.input with content parts instead of text",
+        "message": {
+          "type": "run.input",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "inputId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "message": {
+            "role": "user",
+            "content": [{ "type": "text", "content": "Also check the annex." }]
+          }
+        }
+      },
+      {
+        "name": "run.input with an empty message",
+        "message": {
+          "type": "run.input",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "inputId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "message": { "role": "user", "content": "" }
+        }
+      },
+      {
         "name": "unknown approval decision",
         "message": {
           "type": "run.approval",
@@ -1304,7 +1334,6 @@
         "name": "restricted network policy",
         "message": {
           "type": "run.start",
-          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "linkedFolderId": null,
@@ -1357,7 +1386,6 @@
         "name": "home filesystem policy",
         "message": {
           "type": "run.start",
-          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "linkedFolderId": null,
@@ -1410,7 +1438,6 @@
         "name": "unknown harness",
         "message": {
           "type": "run.start",
-          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "linkedFolderId": null,
@@ -1463,7 +1490,6 @@
         "name": "run.start without an MCP binding",
         "message": {
           "type": "run.start",
-          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "linkedFolderId": null,
@@ -1533,7 +1559,6 @@
         "name": "unknown approval mode",
         "message": {
           "type": "run.start",
-          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "linkedFolderId": null,
@@ -1586,7 +1611,6 @@
         "name": "unknown reasoning effort",
         "message": {
           "type": "run.start",
-          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "attachments": [],
@@ -1638,7 +1662,6 @@
         "name": "run.start without an approval mode",
         "message": {
           "type": "run.start",
-          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "linkedFolderId": null,

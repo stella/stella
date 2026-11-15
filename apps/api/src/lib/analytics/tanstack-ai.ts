@@ -88,9 +88,17 @@ type RunAnalyticsState = {
     totalTokens: number;
   };
   usageReported: boolean;
+  /** Each onUsage is a billable call, including retries within one iteration. */
+  usageCalls: number;
   /** What the call that failed reported before it failed, for its
    *  generation record. */
   failedCallUsage: { promptTokens: number; completionTokens: number } | null;
+  /** Structured output reports usage before its terminal chunk. */
+  pendingGeneration: {
+    ctx: ChatMiddlewareContext;
+    iterationStartedAt: number;
+    usage: TokenUsage;
+  } | null;
   /** The provider detail the run error carried, which the error TanStack
    *  hands `onError` no longer holds. */
   runErrorDetail: unknown;
@@ -98,7 +106,7 @@ type RunAnalyticsState = {
 
 /** Which model call reported the usage: one that finished, or one whose run
  *  error carried what the provider reported before it failed. */
-type UsageSource = "failed-call" | "finished-call";
+type UsageSource = "failed-call" | "finished-call" | "pending-call";
 
 export type TanStackAIUsageMetering = {
   actionType: UsageActionType;
@@ -321,7 +329,7 @@ const recordTanStackConsumption = async ({
   cacheWriteTokens,
   completionTokens,
   config,
-  iteration,
+  usageCallIndex,
   modelInfo,
   runId,
   serviceTier,
@@ -331,7 +339,7 @@ const recordTanStackConsumption = async ({
   cacheWriteTokens: number;
   completionTokens: number;
   config: TanStackAIAnalyticsProps;
-  iteration: number;
+  usageCallIndex: number;
   modelInfo: ResolvedTanStackTextModelInfo;
   runId: string;
   serviceTier: UsageServiceTier;
@@ -369,7 +377,7 @@ const recordTanStackConsumption = async ({
       organizationId: metering.organizationId,
       rawUsageMicroUnits,
       serviceTier: effectiveServiceTier,
-      idempotencyKey: `${config.traceId}:${runId}:${iteration}`,
+      idempotencyKey: `${config.traceId}:${runId}:${usageCallIndex}`,
       traceId: config.traceId,
       userId: metering.userId,
       workspaceId: metering.workspaceId,
@@ -463,7 +471,9 @@ const createFamilyMember = (
       toolCount: 0,
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       usageReported: false,
+      usageCalls: 0,
       failedCallUsage: null,
+      pendingGeneration: null,
       runErrorDetail: undefined,
     };
     runs.set(ctx.runId, created);
@@ -725,6 +735,48 @@ const createFamilyMember = (
     });
   };
 
+  const captureSuccessfulUsage = (
+    ctx: ChatMiddlewareContext,
+    usage: TokenUsage,
+    iterationStartedAt: number,
+  ): void => {
+    const resolvedModelInfo = resolveAnalyticsModelInfo();
+    if (!resolvedModelInfo) {
+      return;
+    }
+    const captured = Result.try({
+      try: () =>
+        captureGeneration({
+          ctx,
+          iterationStartedAt,
+          modelInfo: resolvedModelInfo,
+          usage,
+        }),
+      catch: (error) => error,
+    });
+    if (Result.isError(captured)) {
+      captureTelemetryError(
+        captured.error,
+        handlerErrorContext("analytics.meterUsage.captured_error", {
+          source: "analytics.tanstack_ai",
+          trace_id: config.traceId,
+        }),
+      );
+    }
+  };
+
+  const flushPendingGeneration = (run: RunAnalyticsState): void => {
+    const pending = run.pendingGeneration;
+    run.pendingGeneration = null;
+    if (pending) {
+      captureSuccessfulUsage(
+        pending.ctx,
+        pending.usage,
+        pending.iterationStartedAt,
+      );
+    }
+  };
+
   // A fault here must never propagate into the provider stream and take
   // the process down with it. Metering and observability are isolated so
   // an analytics fault cannot drop a billable usage event. A bug loses
@@ -758,6 +810,7 @@ const createFamilyMember = (
       );
       return;
     }
+    const usageCallIndex = run.usageCalls++;
     run.outputTokens = usageSnapshot.value.completionTokens;
     run.usage.promptTokens += usageSnapshot.value.promptTokens;
     run.usage.completionTokens += usageSnapshot.value.completionTokens;
@@ -809,7 +862,7 @@ const createFamilyMember = (
             cacheWriteTokens,
             completionTokens: usage.completionTokens,
             config,
-            iteration: ctx.iteration,
+            usageCallIndex,
             modelInfo: resolvedModelInfo,
             runId: ctx.runId,
             serviceTier: usageServiceTierFromModelOptions({
@@ -858,25 +911,18 @@ const createFamilyMember = (
       };
       return;
     }
-    const captured = Result.try({
-      try: () =>
-        captureGeneration({
-          ctx,
-          iterationStartedAt: run.iterationStartedAt,
-          modelInfo: resolvedModelInfo,
-          usage,
-        }),
-      catch: (error) => error,
-    });
-    if (Result.isError(captured)) {
-      captureTelemetryError(
-        captured.error,
-        handlerErrorContext("analytics.meterUsage.captured_error", {
-          source: "analytics.tanstack_ai",
-          trace_id: config.traceId,
-        }),
-      );
+    if (source === "pending-call") {
+      // A second billable call can share an iteration (for example a retry).
+      // Flush its predecessor instead of deduplicating by the iteration id.
+      flushPendingGeneration(run);
+      run.pendingGeneration = {
+        ctx: { ...ctx },
+        iterationStartedAt: run.iterationStartedAt,
+        usage: usageSnapshot.value,
+      };
+      return;
     }
+    captureSuccessfulUsage(ctx, usage, run.iterationStartedAt);
   };
 
   return {
@@ -886,18 +932,21 @@ const createFamilyMember = (
     usageMetering: config.usageMetering,
     middleware: {
       name: "stella-tanstack-analytics",
-      // Each agent-loop iteration is one model call: `onIteration` marks its
-      // start and `onUsage` closes it, so per-generation latency covers only
-      // that call (the run-level `duration` spans every iteration and tool).
+      // Iterations delimit model turns, while retries can report several
+      // billable calls within one iteration. Usage is never deduplicated by
+      // iteration (the run-level duration spans every iteration and tool).
       onIteration: (ctx) => {
         const run = runState(ctx);
         run.iterationStartedAt = performance.now();
         run.finishReason = null;
         run.providerStopReason = undefined;
         run.outputTokens = undefined;
+        run.failedCallUsage = null;
       },
       onStructuredOutputConfig: (ctx) => {
         const run = runState(ctx);
+        flushPendingGeneration(run);
+        run.failedCallUsage = null;
         run.finishReason = null;
         run.providerStopReason = undefined;
         run.outputTokens = undefined;
@@ -907,17 +956,23 @@ const createFamilyMember = (
           const run = runState(ctx);
           run.finishReason = finishReasonOf(chunk);
           run.providerStopReason = recordedStopReasonOf(chunk);
+          flushPendingGeneration(run);
         }
-        // TanStack reports usage for a finished model call only. A call that
-        // failed after the provider reported usage was billed as well, so its
-        // run error is metered the same way.
+        // v1 calls onUsage for failed calls too. Keep error attribution here;
+        // billing and cache metrics have one owner in onUsage.
         if (chunk.type === EventType.RUN_ERROR) {
-          runState(ctx).runErrorDetail =
+          const run = runState(ctx);
+          run.runErrorDetail =
             chunk.rawEvent ?? providerErrorBody(chunk.message);
-          const usage = tokenUsageFromTerminalChunk(chunk);
+          const usage =
+            tokenUsageFromTerminalChunk(chunk) ?? run.pendingGeneration?.usage;
           if (usage !== undefined) {
-            meterUsage(ctx, usage, "failed-call");
+            run.failedCallUsage = {
+              promptTokens: usage.promptTokens,
+              completionTokens: usage.completionTokens,
+            };
           }
+          run.pendingGeneration = null;
         }
       },
       onAfterToolCall: (ctx) => {
@@ -928,6 +983,10 @@ const createFamilyMember = (
       },
       onError: (ctx, { duration, error }) => {
         const run = runs.get(ctx.runId);
+        if (run?.pendingGeneration) {
+          run.failedCallUsage = run.pendingGeneration.usage;
+          run.pendingGeneration = null;
+        }
         runs.delete(ctx.runId);
         captureGenerationError(withRunErrorDetail(error, run?.runErrorDetail), {
           durationMs: duration,
@@ -936,6 +995,9 @@ const createFamilyMember = (
       },
       onFinish: (ctx, { duration, usage }) => {
         const run = runs.get(ctx.runId);
+        if (run) {
+          flushPendingGeneration(run);
+        }
         runs.delete(ctx.runId);
         // Sum of every iteration's reported usage. TanStack's `onFinish`
         // usage is the LAST iteration's only (`finishedEvent` resets per
@@ -972,7 +1034,15 @@ const createFamilyMember = (
         });
       },
       onUsage: (ctx, usage) => {
-        meterUsage(ctx, usage, "finished-call");
+        const outcome =
+          runState(ctx).failedCallUsage === null
+            ? "finished-call"
+            : "failed-call";
+        meterUsage(
+          ctx,
+          usage,
+          ctx.phase === "structuredOutput" ? "pending-call" : outcome,
+        );
       },
     },
   };

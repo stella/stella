@@ -27,3 +27,14 @@ export const declaredBreadcrumbs = (matches: readonly BreadcrumbMatch[]) =>
       { decision, key: match.routeId },
     ];
   });
+
+/**
+ * Whether the trail's deepest crumb is the matter itself, so the header
+ * stands for the matter. A document opened inside it is the deeper crumb
+ * then, and the matter's own actions (pin, matter info, upload) leave the
+ * header to that document's.
+ */
+export const trailEndsAtMatter = (matches: readonly BreadcrumbMatch[]) => {
+  const deepest = declaredBreadcrumbs(matches).at(-1)?.decision;
+  return deepest?.type === "entity" && deepest.entity === "matter";
+};

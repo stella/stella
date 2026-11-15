@@ -222,8 +222,10 @@ describe("a verification limited to a paragraph range", () => {
         fileId: ids.fileObjectA1,
         mimeType: DOCX_MIME_TYPE,
         pdfFileId: null,
+        sizeBytes: Bun.file(statementPath).size,
       },
       signal: AbortSignal.timeout(30_000),
+      admissionWaitMs: 30_000,
     });
     if (document.type !== "read") {
       throw new Error(`Expected the statement to read, got ${document.type}`);
