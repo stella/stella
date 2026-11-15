@@ -1828,6 +1828,14 @@ export const withAggregateLock = async (
 /** The queue claim owns this nonblocking row-lock clause. */
 export const chatCompactionQueueClaimLock = () => sql`FOR UPDATE SKIP LOCKED`;
 
+/**
+ * A sitemap touch fold claims each queued decision with this clause on the
+ * alias `claim`: a share lock that never waits, so a writer still in flight
+ * keeps its touch queued and a later writer waits for the fold to commit.
+ */
+export const caseLawSitemapTouchClaimLock = () =>
+  sql`FOR SHARE OF claim SKIP LOCKED`;
+
 type OpenSigningPageOptions = {
   tx: Transaction;
   sessions: readonly AggregateIdentities["signingSession"][];
@@ -3389,6 +3397,30 @@ export const lockCaseLawSitemapSnapshot = async (
 ): Promise<void> => {
   await tx.execute(sql`LOCK TABLE case_law_sitemap_shard_counts, case_law_sitemap_shards
     IN SHARE ROW EXCLUSIVE MODE`);
+};
+
+/**
+ * The same fence for work that yields to a recount or removal rather than
+ * waiting behind it. A held fence rolls back only the attempt's savepoint and
+ * answers false; the caller's transaction stays usable.
+ */
+export const tryLockCaseLawSitemapSnapshot = async (
+  tx: SavepointTransaction,
+): Promise<boolean> => {
+  const attempt = await Result.tryPromise(
+    async () =>
+      await withAggregateSavepoint(tx, async (savepoint) => {
+        await savepoint.execute(sql`LOCK TABLE case_law_sitemap_shard_counts, case_law_sitemap_shards
+          IN SHARE ROW EXCLUSIVE MODE NOWAIT`);
+      }),
+  );
+  if (attempt.isOk()) {
+    return true;
+  }
+  if (getPgErrorCode(attempt.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+    return false;
+  }
+  return abortTransaction(attempt.error.cause);
 };
 
 /** A coverage answer holds its snapshot fence before reading its inputs. */

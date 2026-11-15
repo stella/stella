@@ -216,6 +216,7 @@ const TABLE_CLASSIFICATIONS = {
   caseLawSitemapRefreshCursor: RESEARCH_CORPUS_EXCLUSION,
   caseLawSitemapShardCounts: RESEARCH_CORPUS_EXCLUSION,
   caseLawSitemapShards: RESEARCH_CORPUS_EXCLUSION,
+  caseLawSitemapTouches: RESEARCH_CORPUS_EXCLUSION,
   caseLawSourceArrivals: RESEARCH_CORPUS_EXCLUSION,
   caseLawSources: RESEARCH_CORPUS_EXCLUSION,
   caseLawStatuteCitationCountState: RESEARCH_CORPUS_EXCLUSION,
