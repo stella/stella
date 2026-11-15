@@ -3580,7 +3580,7 @@ export const realtimeAuthorizers = {
  * Letting inference flow keeps the real (wide) transaction type, which is
  * what every handler's `ctx.scopedDb`/`ctx.safeDb` callback expects.
  */
-type ResolveValidateAuthOptions = {
+type ResolveRequestMemberOptions = {
   getSession?: AuthSessionReader | undefined;
   request: Request;
   /** The matched route pattern, which decides whether an API access token may open it. */
@@ -3750,7 +3750,7 @@ const resolveSessionIdentity = async ({
   initialWorkspaceId,
   responseHeaders,
 }: Omit<
-  ResolveValidateAuthOptions,
+  ResolveRequestMemberOptions,
   "route" | "server"
 >): Promise<IdentityResolution> => {
   const { sessionResult, memberAuthorizationResult } =
@@ -3817,7 +3817,7 @@ const resolveAccessTokenIdentity = async ({
   route,
   initialWorkspaceId,
   responseHeaders,
-}: Omit<ResolveValidateAuthOptions, "getSession" | "server"> & {
+}: Omit<ResolveRequestMemberOptions, "getSession" | "server"> & {
   token: string;
 }): Promise<IdentityResolution> => {
   const authenticated = await authenticateApiAccessToken(token, {
@@ -3924,36 +3924,26 @@ const resolveAccessTokenIdentity = async ({
   };
 };
 
-const resolveValidateAuth = async ({
-  getSession,
-  request,
-  route,
-  server,
+type ResolveValidateAuthOptions = {
+  identity: ResolvedIdentity;
+  initialWorkspaceId: SafeId<"workspace"> | null;
+  request: Request;
+  server: ResolveRequestMemberOptions["server"];
+};
+
+/**
+ * The member context handlers read, from an identity a credential proved:
+ * the professional-use gate, the role, feature access, organization
+ * settings, the member's own scoped connections, matter access and the audit
+ * recorder. Every way a member is proved builds it here, so none of them can
+ * hand a handler a context the others would not.
+ */
+export const resolveValidateAuth = async ({
+  identity,
   initialWorkspaceId,
-  responseHeaders,
+  request,
+  server,
 }: ResolveValidateAuthOptions) => {
-  // Told apart by shape, never by fallback: a request carrying a JWT bearer
-  // is judged on that token alone, so a rejected token cannot fall through to
-  // a browser session that happens to ride along.
-  const accessToken = readAccessTokenBearer(request.headers);
-  const resolved =
-    accessToken === undefined
-      ? await resolveSessionIdentity({
-          getSession,
-          request,
-          initialWorkspaceId,
-          responseHeaders,
-        })
-      : await resolveAccessTokenIdentity({
-          token: accessToken,
-          request,
-          route,
-          initialWorkspaceId,
-          responseHeaders,
-        });
-  if (!resolved.ok) {
-    return resolved;
-  }
   const {
     authorization,
     email,
@@ -3963,7 +3953,7 @@ const resolveValidateAuth = async ({
     stream,
     grantedScopes,
     userId,
-  } = resolved.identity;
+  } = identity;
   // A signed-in account uses the product only once it has accepted the
   // professional-use statement, whether it signed in here or in the browser
   // that granted an app its token. An account created where it was not
@@ -4132,10 +4122,48 @@ const resolveValidateAuth = async ({
   return { ok: true as const, value: caller };
 };
 
+const resolveRequestMember = async ({
+  getSession,
+  request,
+  route,
+  server,
+  initialWorkspaceId,
+  responseHeaders,
+}: ResolveRequestMemberOptions) => {
+  // Told apart by shape, never by fallback: a request carrying a JWT bearer
+  // is judged on that token alone, so a rejected token cannot fall through to
+  // a browser session that happens to ride along.
+  const accessToken = readAccessTokenBearer(request.headers);
+  const resolved =
+    accessToken === undefined
+      ? await resolveSessionIdentity({
+          getSession,
+          request,
+          initialWorkspaceId,
+          responseHeaders,
+        })
+      : await resolveAccessTokenIdentity({
+          token: accessToken,
+          request,
+          route,
+          initialWorkspaceId,
+          responseHeaders,
+        });
+  if (!resolved.ok) {
+    return resolved;
+  }
+  return await resolveValidateAuth({
+    identity: resolved.identity,
+    initialWorkspaceId,
+    request,
+    server,
+  });
+};
+
 /** The member a browser session proved for this request. */
 export type ValidateAuthValue = SessionMemberCaller;
 
-type ValidateAuthResolution = Awaited<ReturnType<typeof resolveValidateAuth>>;
+type ValidateAuthResolution = Awaited<ReturnType<typeof resolveRequestMember>>;
 
 const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
   const validateAuthResolutionCache = new WeakMap<
@@ -4159,7 +4187,7 @@ const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
       validateAuthResolutionCache,
       request,
       async () =>
-        await resolveValidateAuth({
+        await resolveRequestMember({
           getSession,
           request,
           route,
