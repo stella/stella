@@ -58,6 +58,11 @@ describe("CSS correctness guard", () => {
       ".sample { display: block; display: block; }",
     ],
     ["declaration-property-value-no-unknown", ".sample { display: blcok; }"],
+    ["value-no-invalid", ".sample { top: calc(1px + 2); }"],
+    [
+      "declaration-property-value-no-unknown",
+      ":root { --offset: block; } .sample { top: var(--offset); }",
+    ],
     ["property-no-unknown", ".sample { colro: red; }"],
     ["selector-no-unmatchable", "label:checked { color: red; }"],
     // conventions-ux: never `transition: all`, animate transform/opacity only.

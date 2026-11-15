@@ -5,5 +5,7 @@
   "noMatter": "Bez spisu",
   "noDescription": "Bez popisu",
   "more": "{count, plural, one {a # další časovač} few {a # další časovače} other {a # dalších časovačů}}",
-  "startedElsewhere": "Na jiném zařízení se spustil časovač"
+  "startedElsewhere": "Na jiném zařízení se spustil časovač",
+  "pause": "Pozastavit",
+  "resume": "Pokračovat"
 }

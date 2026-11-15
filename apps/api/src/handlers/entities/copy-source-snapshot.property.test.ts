@@ -45,6 +45,7 @@ const snapshots = fc
             ),
             propertyId: toSafeId<"property">(`property_${String(fieldNumber)}`),
             content: { type: "text", version: 1, value } as const,
+            aiSettlement: null,
           })),
         }));
         return {

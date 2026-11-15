@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -87,6 +88,9 @@ const NEW_GROUP_OPTION_VALUE = "new-group";
 const EDITOR_HEADER_PADDING_CLASS = navigator.userAgent.includes("Macintosh")
   ? "ps-24"
   : "ps-5";
+
+/** `clipboard_get_editor_context`'s rejection when the open clip no longer exists. */
+const CLIPBOARD_ITEM_GONE_ERROR = "clipboard item no longer exists";
 
 type EditorState =
   | { type: "loading" }
@@ -609,6 +613,15 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
 
   useEffect(() => {
     let disposed = false;
+    // A reload must never take away a draft that is already open: saving says
+    // so in place if the clip is gone by then.
+    const showLoadError = () => {
+      setState((current) =>
+        current.type === "ready"
+          ? current
+          : { message: loadError, type: "error" },
+      );
+    };
     const loadContext = () => {
       void invoke<unknown>("clipboard_get_editor_context")
         .then((value) => {
@@ -625,7 +638,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
               window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
             });
-            setState({ message: loadError, type: "error" });
+            showLoadError();
             return undefined;
           }
           setState((current) => {
@@ -658,13 +671,16 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
           if (disposed) {
             return;
           }
-          reportDesktopError({
-            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-            detail: describeError(error),
-            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
-            window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
-          });
-          setState({ message: loadError, type: "error" });
+          // History pruned or replaced the open clip, which it may do at any time.
+          if (error !== CLIPBOARD_ITEM_GONE_ERROR) {
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+              detail: describeError(error),
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+            });
+          }
+          showLoadError();
         });
     };
     loadContext();
@@ -941,9 +957,11 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
         data-tauri-drag-region
       >
         <div className="min-w-0 flex-1" data-tauri-drag-region>
-          <h1 className="truncate text-sm font-semibold" data-tauri-drag-region>
-            {t("editItem")}
-          </h1>
+          <TruncatedText
+            className="text-sm font-semibold"
+            render={<h1 data-tauri-drag-region>{t("editItem")}</h1>}
+            tooltip={t("editItem")}
+          />
           {sourceName ? (
             // The source line truncates in the narrow header; the tooltip
             // names the app and page in full.
@@ -951,7 +969,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               <TooltipTrigger
                 render={
                   <p
-                    className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs"
+                    className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs"
                     data-tauri-drag-region
                   />
                 }
@@ -971,9 +989,9 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
                     }}
                   />
                 )}
-                <span className="truncate" dir="auto">
+                <TruncatedText dir="auto" hint={false}>
                   {sourceName}
-                </span>
+                </TruncatedText>
               </TooltipTrigger>
               <TooltipPopup>{sourceTitle}</TooltipPopup>
             </Tooltip>
@@ -1031,6 +1049,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               }
             }}
             placeholder={clipboardUntitledName(item, {
+              dictation: t("dictation"),
               image: t("image"),
               text: t("unnamedClip"),
             })}

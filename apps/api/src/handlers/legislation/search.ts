@@ -15,6 +15,7 @@ import {
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -39,6 +40,7 @@ import {
   blendedRankSql,
   noCourtTierSql,
 } from "@/api/lib/legal-search/authority-sql";
+import { canonicalCorpusJson } from "@/api/lib/legal-search/corpus-aggregate-cache";
 import {
   type CorpusHitDispositionCounter,
   createCorpusHitDispositionCounter,
@@ -133,6 +135,7 @@ import type {
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
+import { createPublicSearchCoalescer } from "@/api/lib/legal-search/public-search-coalescer";
 import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
@@ -180,6 +183,10 @@ type SearchLegislationDependencies = {
     isAdmitted: typeof isPublicLegislationCountry;
   };
   readServingGeneration?: typeof readServingCorpusIndexGenerationTx;
+  /** The serving generation already read for this request's coalescing key. */
+  servingGeneration?: Awaited<
+    ReturnType<typeof readLegislationServingGeneration>
+  >;
   now?: () => number;
   emitStage?: typeof emitRequestStage;
   stageTool?: string;
@@ -1743,11 +1750,91 @@ const createSearchStageAccumulator = (
   return { observeStage, recordIndexScan, settle };
 };
 
+type LegislationSearchAnswer = Awaited<ReturnType<typeof runSearchLegislation>>;
+
+/** Answers kept per process; a burst's length, as for case-law search. */
+const LEGISLATION_SEARCH_COALESCER_TTL_MS = 30 * 1000;
+const LEGISLATION_SEARCH_COALESCER_MAX_ENTRIES = 256;
+const LEGISLATION_SEARCH_COALESCER_MAX_BYTES = 16 * 1024 * 1024;
+
+const legislationSearchCoalescer =
+  createPublicSearchCoalescer<LegislationSearchAnswer>({
+    limits: {
+      maxEntries: LEGISLATION_SEARCH_COALESCER_MAX_ENTRIES,
+      maxBytes: LEGISLATION_SEARCH_COALESCER_MAX_BYTES,
+      ttlMs: LEGISLATION_SEARCH_COALESCER_TTL_MS,
+    },
+    now: () => Temporal.Now.instant().epochMilliseconds,
+  });
+
+/**
+ * The identity of a legislation search's answer: the request as normalized
+ * for the caller's page limit and the generation it reads. As for case-law
+ * search, no caller identity enters it, because the corpus is public.
+ */
+export const legislationSearchCoalescingKey = (
+  body: SearchLegislationBody,
+  serving: ServingCorpusIndexGeneration,
+): string =>
+  hashSha256Hex(
+    canonicalCorpusJson({
+      family: "legislation",
+      serving,
+      request: {
+        ...body,
+        limit: normalizeTenantPageLimit(
+          body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+        ),
+      },
+    }),
+  );
+
 export const searchLegislationHandler = async (
   body: SearchLegislationBody,
   legislationDb: LegislationReadDb,
   observer: RegistryRequestObservation,
   dependencies = defaultSearchLegislationDependencies,
+) => {
+  // A continuation page is validated before any read, and an injected engine
+  // or generation is a test's or script's own corpus: neither has an answer
+  // to share.
+  if (
+    body.cursor !== undefined ||
+    dependencies.corpusSearch !== undefined ||
+    dependencies.readServingGeneration !== undefined
+  ) {
+    return await runSearchLegislation(
+      body,
+      legislationDb,
+      observer,
+      dependencies,
+    );
+  }
+  const servingRead = await readLegislationServingGeneration(
+    legislationDb,
+    dependencies,
+  );
+  const run = async () =>
+    await runSearchLegislation(body, legislationDb, observer, {
+      ...dependencies,
+      servingGeneration: servingRead,
+    });
+  if (Result.isError(servingRead) || servingRead.value === null) {
+    return await run();
+  }
+  return await legislationSearchCoalescer.search({
+    key: legislationSearchCoalescingKey(body, servingRead.value),
+    cacheable: (answer) =>
+      "items" in answer && answer.paginationOutcome.type === "complete",
+    run,
+  });
+};
+
+const runSearchLegislation = async (
+  body: SearchLegislationBody,
+  legislationDb: LegislationReadDb,
+  observer: RegistryRequestObservation,
+  dependencies: SearchLegislationDependencies,
 ) => {
   const now = dependencies.now ?? (() => performance.now());
   const emitStage = dependencies.emitStage ?? emitRequestStage;
@@ -1846,10 +1933,9 @@ export const searchLegislationHandler = async (
     return status(400, { message: "Invalid cursor" });
   }
 
-  const servingRead = await readLegislationServingGeneration(
-    legislationDb,
-    dependencies,
-  );
+  const servingRead =
+    dependencies.servingGeneration ??
+    (await readLegislationServingGeneration(legislationDb, dependencies));
   if (Result.isError(servingRead)) {
     return searchIndexUnavailableResponse(servingRead.error);
   }

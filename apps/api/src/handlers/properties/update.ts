@@ -46,6 +46,7 @@ import {
 } from "@/api/lib/properties/dependency-limits";
 import { propertyKindsForUpdate } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
+import { UPDATE_PROPERTY_TABLE_ANALYSIS_ACCESS } from "@/api/lib/properties/table-analysis-access";
 
 type PropertyWithDeps = {
   id: SafeId<"property">;
@@ -255,6 +256,7 @@ const config = {
     "changed to or from another type. Keep the existing type when renaming; " +
     "use properties.create for a custom column with another value type.",
   permissions: { property: ["update"] },
+  featureAccess: UPDATE_PROPERTY_TABLE_ANALYSIS_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: propertyRealtimeUpdates,
   mcp: {

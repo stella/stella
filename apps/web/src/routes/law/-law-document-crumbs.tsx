@@ -15,6 +15,7 @@ import {
 } from "@stll/ui/breadcrumb";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { formatYear } from "@/features/case-law/citation-format";
@@ -124,7 +125,6 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
                     className="shrink-0"
                     role="img"
                     aria-label={statusLabel}
-                    title={statusLabel}
                   >
                     <StatuteStatusDot
                       expression={trail.expression}
@@ -139,9 +139,9 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
                     </BidiText>
                   )}
                   {trail.shortTitle !== null && (
-                    <BidiText as="span" className="min-w-0 truncate">
+                    <TruncatedText hint={false} render={<BidiText as="span" />}>
                       {trail.shortTitle}
-                    </BidiText>
+                    </TruncatedText>
                   )}
                 </TooltipTrigger>
                 <TooltipPopup>
@@ -154,6 +154,11 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
                         </>
                       )}
                     <BidiText>{trail.fullTitle}</BidiText>
+                    {/* The status dot's own hover hint: it sits inside this
+                        trigger, so it shares this popup instead of opening a
+                        second one over it. */}
+                    <br />
+                    <span className="text-muted-foreground">{statusLabel}</span>
                   </span>
                 </TooltipPopup>
               </Tooltip>
@@ -199,9 +204,9 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
           <BreadcrumbSeparator className="shrink-0" />
           <BreadcrumbItem className="min-w-0 flex-1">
             <BreadcrumbPage className="min-w-0">
-              <BidiText as="span" className="block truncate">
+              <TruncatedText render={<BidiText as="span" />}>
                 {trail.caseNumber}
-              </BidiText>
+              </TruncatedText>
             </BreadcrumbPage>
             {trail.caseFile !== null && (
               <CaseFileSwitcher
@@ -210,9 +215,9 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
               />
             )}
             {trail.legalArea !== null && (
-              <span className="text-muted-foreground min-w-0 truncate">
+              <TruncatedText className="text-muted-foreground">
                 {DECISION_TITLE_SEPARATOR} {trail.legalArea}
-              </span>
+              </TruncatedText>
             )}
           </BreadcrumbItem>
         </>

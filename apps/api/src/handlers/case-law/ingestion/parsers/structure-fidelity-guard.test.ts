@@ -28,7 +28,11 @@ type FixtureCoverage =
 
 const RECORDED = { type: "recorded" } as const satisfies FixtureCoverage;
 
-const FIXTURE_COVERAGE = {
+// Typed as the coverage a source may declare, so a source that stops
+// recording fixtures can state why without changing the check.
+const FIXTURE_COVERAGE: Readonly<
+  Record<SourceRegistrationKey, FixtureCoverage>
+> = {
   "at-asylgh": RECORDED,
   "at-bks": RECORDED,
   "at-bvwg": RECORDED,
@@ -57,15 +61,11 @@ const FIXTURE_COVERAGE = {
   "pl-tk": RECORDED,
   "pl-uodo": RECORDED,
   "pl-uokik": RECORDED,
-  "sk-courts": {
-    type: "unrecorded",
-    reason:
-      "Decision documents are PDFs the deferred document walk parses; the parser-output harness replays no recorded PDF for this source yet.",
-  },
+  "sk-courts": RECORDED,
   "sk-us": RECORDED,
   "uk-fcl": RECORDED,
   "us-courtlistener": RECORDED,
-} as const satisfies Record<SourceRegistrationKey, FixtureCoverage>;
+};
 
 const BASELINE_PATH =
   "apps/api/src/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json";
@@ -130,9 +130,11 @@ test(
       actual: census,
       expected: baseline.findings,
     });
-    // A new finding is a parser storing printed-page layout as structure:
-    // fix the parser through the shared owners (hard-wrapped-lines.ts,
-    // page-furniture.ts, letter-spacing.ts), never by raising the baseline.
+    // A new finding is a parser storing printed-page layout as structure, or
+    // a role its language's grammar reads otherwise: fix the parser through
+    // the shared owners (hard-wrapped-lines.ts, page-furniture.ts,
+    // letter-spacing.ts, the `@stll/legal-ast` role grammars), never by
+    // raising the baseline.
     expect(added).toEqual([]);
     // A finding the parsers no longer produce leaves the baseline, so the
     // ratchet keeps the gain.

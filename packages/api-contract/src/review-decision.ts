@@ -5,6 +5,73 @@ import { Temporal } from "@stll/time";
 export const REVIEW_DECISION = ["accepted", "rejected"] as const;
 export type ReviewDecision = (typeof REVIEW_DECISION)[number];
 
+/**
+ * Each review surface's own status words, read as the shared decision: the
+ * one place a status becomes accepted, rejected or open (null). A verified
+ * claim marked `needs-evidence` stays open until the record can answer it;
+ * a finding is born `open`; a list item sent back for changes is rejected.
+ * Every reader (AVT's review fold, a finding's decision history, its trigger
+ * and backfill, a source's history, the browser's queue) reads through this
+ * map. A lint bans a second one (`review-decision-map-owner`), and a
+ * Postgres test pins the finding trigger's SQL to it.
+ */
+export const REVIEW_STATUS_DECISION = {
+  /** A verified claim's review status (AVT). */
+  claim: {
+    reviewed: "accepted",
+    disputed: "rejected",
+    "needs-evidence": null,
+  },
+  /** A document review finding's decision. */
+  finding: {
+    open: null,
+    accepted: "accepted",
+    dismissed: "rejected",
+  },
+  /** An AI DOCX suggestion's status. */
+  docxSuggestion: {
+    pending: null,
+    accepted: "accepted",
+    rejected: "rejected",
+  },
+  /** A list item's review decision. */
+  listItem: {
+    verified: "accepted",
+    changes_requested: "rejected",
+    rejected: "rejected",
+  },
+  /** A list item source's verification status. */
+  listItemSource: {
+    unverified: null,
+    verified: "accepted",
+    rejected: "rejected",
+  },
+  /** A generated list candidate's status. */
+  listGenerationCandidate: {
+    pending: null,
+    accepting: null,
+    accepted: "accepted",
+    rejected: "rejected",
+  },
+} as const satisfies Record<string, Record<string, ReviewDecision | null>>;
+
+type ReviewSurface = keyof typeof REVIEW_STATUS_DECISION;
+
+/**
+ * `true` when a surface's map reads exactly `Status`. Each surface asserts
+ * it where its statuses are declared (`true satisfies ReadsExactly<…>`), so
+ * a status the map lacks, or one it reads that no longer exists, fails to
+ * compile there.
+ */
+export type ReadsExactly<
+  Surface extends ReviewSurface,
+  Status extends string,
+> = [keyof (typeof REVIEW_STATUS_DECISION)[Surface]] extends [Status]
+  ? [Status] extends [keyof (typeof REVIEW_STATUS_DECISION)[Surface]]
+    ? true
+    : false
+  : false;
+
 export type ReviewDecisionEvent = {
   decision: ReviewDecision | null;
   reason: string | null;

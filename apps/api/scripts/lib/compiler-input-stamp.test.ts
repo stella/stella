@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { API } from "tsrs/unstable/async";
+import { API } from "tsrs/async";
 import * as v from "valibot";
 
 import {

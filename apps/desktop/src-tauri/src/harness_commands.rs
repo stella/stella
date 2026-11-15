@@ -112,7 +112,10 @@ pub fn manage(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
       while changes.changed().await.is_ok() {
-        let _ = app.emit(CHANGED_EVENT, ());
+        crate::logging::best_effort(
+          app.emit(CHANGED_EVENT, ()),
+          "harness change was not announced",
+        );
       }
     });
   }
@@ -125,7 +128,10 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   if let Some(auto) = app.try_state::<HarnessAutoInstall>() {
     auto.set_enabled(enabled);
   }
-  let _ = app.emit(CHANGED_EVENT, ());
+  crate::logging::best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "harness change was not announced",
+  );
 }
 
 #[cfg(test)]

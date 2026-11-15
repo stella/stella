@@ -33,6 +33,7 @@ import {
   SITEMAP_UNDATED_YEAR,
   sitemapDocumentRepresentativeFor,
   sitemapHasLanguageAlternatesFor,
+  sitemapLastModifiedSqlFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
   lockCaseLawSitemapRefreshCursor,
@@ -203,9 +204,11 @@ const monthRangeSql = ({ year, month }: SitemapMonth): SQL => {
  * An empty month answers one row with no bucket.
  *
  * The country and the month's date range are the leading keys of
- * `case_law_decisions_sitemap_shard_published_idx` and the publication gate is
+ * `case_law_decisions_sitemap_month_published_idx` and the publication gate is
  * its partial predicate, so the count reads that month's index range and
- * nothing else. Exported for the plan contract.
+ * nothing else. The language group probes read
+ * `case_law_decisions_language_group_published_idx`, so neither touches the
+ * heap of an all-visible page. Exported for the plan contract.
  */
 export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
   WITH counts AS (
@@ -214,7 +217,7 @@ export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
       count(*)::int AS total,
       sum(CASE WHEN ${sitemapHasLanguageAlternatesFor(caseLawDecisions)}
         THEN ${SITEMAP_MULTILINGUAL_URL_WEIGHT} ELSE 1 END)::int AS weighted_total,
-      (extract(epoch FROM max(${caseLawDecisions.updatedAt})) * 1000)::float8 AS last_modified_ms
+      (extract(epoch FROM ${sitemapLastModifiedSqlFor(caseLawDecisions)}) * 1000)::float8 AS last_modified_ms
     FROM ${caseLawDecisions}
     INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${caseLawDecisions.sourceId}
     WHERE ${publishedCaseLawDecisionFor(caseLawDecisions)}

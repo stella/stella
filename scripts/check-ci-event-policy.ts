@@ -96,6 +96,8 @@ export const WHOLE_CONTEXT_ENV_BUDGET_CASES = {
   },
   "publish-npm.yml/release-summary/Report published, failed and skipped packages/NPM_RELEASE_NEEDS":
     { context: "needs", budget: "publish-npm release-summary needs" },
+  "release-desktop.yml/release-complete/Require all release jobs to complete/NEEDS":
+    { context: "needs", budget: "release-desktop release-complete needs" },
 } as const satisfies Record<string, WholeContextBudgetCase>;
 
 const WHOLE_CONTEXT_BUDGETS = new Map(

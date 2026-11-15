@@ -55,6 +55,8 @@ import { detached } from "@/lib/detached";
 import { folioUIComponents } from "@/lib/folio-ui-components";
 import "@/components/pdf/peek/peek-docx.css";
 
+import { TruncatedText } from "@stll/ui/truncated-text";
+
 import {
   editSessionErrorDescriptionKey,
   getDocxEditorBlockingError,
@@ -467,6 +469,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
           <DocxEditor
             key={`docx-${previewIdentity}-${collaborationSession?.roomId ?? "local"}`}
             ref={attachEditor}
+            accessibleName={previewFile.fileName}
             autoOpenReviewSidebar={false}
             // Docked, the pane has a find bar of its own and no Folio binding
             // may answer beside it. Full view keeps Folio's bindings for a
@@ -960,7 +963,7 @@ const DocxLoadingPriorityExtra = () => {
         variant="ghost"
       >
         <PenLineIcon className="size-3.5" />
-        <span className="truncate">{t("trackingOff")}</span>
+        <TruncatedText>{t("trackingOff")}</TruncatedText>
       </Button>
       <StSelect value="all-markup" onValueChange={noop}>
         <StSelectTrigger

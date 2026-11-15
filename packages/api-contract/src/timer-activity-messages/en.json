@@ -5,5 +5,7 @@
   "noMatter": "No matter",
   "noDescription": "No description",
   "more": "{count, plural, one {# more timer} other {# more timers}}",
-  "startedElsewhere": "A timer started on another device"
+  "startedElsewhere": "A timer started on another device",
+  "pause": "Pause",
+  "resume": "Resume"
 }

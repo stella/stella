@@ -19,6 +19,7 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -125,13 +126,15 @@ export const MatterSwitcher = ({
     <Popover onOpenChange={changeOpen} open={open}>
       {/* While more crumbs follow, the caret waits for a hover over its crumb
           (the `group/crumb` item), so at rest it never sits beside the
-          separator chevron. Focus, an open popup and touch, which has no
-          hover, show it. */}
+          separator chevron. At rest it also takes no room, item gap
+          included, so the trail holds no blank where it will appear; it stays
+          focusable, and focus, an open popup and touch, which has no hover,
+          show it. */}
       <span
         className={cn(
           "inline-flex",
           revealOnHover &&
-            "opacity-0 transition-opacity group-focus-within/crumb:opacity-100 group-hover/crumb:opacity-100 has-data-popup-open:opacity-100 pointer-coarse:opacity-100",
+            "-ms-1.5 w-0 overflow-hidden opacity-0 group-focus-within/crumb:ms-0 group-focus-within/crumb:w-auto group-focus-within/crumb:overflow-visible group-focus-within/crumb:opacity-100 group-hover/crumb:ms-0 group-hover/crumb:w-auto group-hover/crumb:overflow-visible group-hover/crumb:opacity-100 has-data-popup-open:ms-0 has-data-popup-open:w-auto has-data-popup-open:overflow-visible has-data-popup-open:opacity-100 pointer-coarse:ms-0 pointer-coarse:w-auto pointer-coarse:overflow-visible pointer-coarse:opacity-100",
         )}
       >
         <TooltipRoot>
@@ -193,13 +196,13 @@ export const MatterSwitcher = ({
               })}
               <CommandSeparator className="my-1" />
               <CommandItem onClick={openMatterList} value="__all-matters__">
-                <span className="min-w-0 truncate">
+                <TruncatedText>
                   {client === null
                     ? t("workspaces.switcher.viewAll")
                     : t("workspaces.switcher.viewAllForClient", {
                         clientName: client.displayName,
                       })}
-                </span>
+                </TruncatedText>
               </CommandItem>
             </div>
           </CommandList>

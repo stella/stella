@@ -1528,7 +1528,13 @@ export const registerLoopItemPatchValues = (
   itemIdx: number,
 ): void => {
   if (isRecord(item)) {
-    registerItemPatchValues(patchValues, item, arrayPath, itemIdx, "");
+    registerItemPatchValues({
+      patchValues,
+      item,
+      arrayPath,
+      itemIdx,
+      prefix: "",
+    });
     return;
   }
   if (
@@ -1544,18 +1550,26 @@ export const registerLoopItemPatchValues = (
   patchValues[eachKey(arrayPath, itemIdx, "value")] = value;
 };
 
+type RegisterItemPatchValuesOptions = {
+  patchValues: Record<string, RichPatchValue>;
+  item: Record<string, unknown>;
+  arrayPath: string;
+  itemIdx: number;
+  prefix: string;
+};
+
 /**
  * Recursively register patch values for an array item,
  * flattening nested objects into dot-joined keys so that
  * deep paths like `{{sellers.address.city}}` resolve.
  */
-const registerItemPatchValues = (
-  patchValues: Record<string, RichPatchValue>,
-  item: Record<string, unknown>,
-  arrayPath: string,
-  itemIdx: number,
-  prefix: string,
-): void => {
+const registerItemPatchValues = ({
+  patchValues,
+  item,
+  arrayPath,
+  itemIdx,
+  prefix,
+}: RegisterItemPatchValuesOptions): void => {
   for (const [field, value] of Object.entries(item)) {
     const fullField = prefix ? `${prefix}.${field}` : field;
     const key = eachKey(arrayPath, itemIdx, fullField);
@@ -1570,13 +1584,13 @@ const registerItemPatchValues = (
     } else if (Array.isArray(value)) {
       // Arrays inside items are not expanded
     } else if (isRecord(value)) {
-      registerItemPatchValues(
+      registerItemPatchValues({
         patchValues,
-        value,
+        item: value,
         arrayPath,
         itemIdx,
-        fullField,
-      );
+        prefix: fullField,
+      });
     }
   }
 };

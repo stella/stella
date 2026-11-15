@@ -189,3 +189,38 @@ test("a decision numbered as structure names only its own paragraphs", () => {
     expect(text.slice(start)).toStartWith(title);
   }
 });
+
+test("anonymised initials are not numbered sections", () => {
+  const text = [
+    "I. Stan faktyczny",
+    "M. T. poznała pozwanego w 2010 r.",
+    "M. D., poszukując w związku z działalnością gospodarczą",
+    "L. wniósł o oddalenie powództwa.",
+    "II. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. A. Stan prawny",
+    "V. Posouzení věci",
+  ].join("\n\n");
+  const { entries } = decisionOutline({ text, blocks: null });
+  expect(entries.map(({ title }) => title)).toEqual([
+    "I. Stan faktyczny",
+    "II. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. A. Stan prawny",
+    "V. Posouzení věci",
+  ]);
+});
+
+test("a lettered run keeps its lower-case sections, a party line with a second initial does not", () => {
+  const text = [
+    "I. A. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. B. oddala powództwo w pozostałym zakresie",
+    "M. T. Pozwana wniosła o oddalenie powództwa.",
+    "V. K. poznała pozwanego w 2010 r.",
+    "C. Rozważania sądu",
+  ].join("\n\n");
+  const { entries } = decisionOutline({ text, blocks: null });
+  expect(entries.map(({ title }) => title)).toEqual([
+    "I. A. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. B. oddala powództwo w pozostałym zakresie",
+    "C. Rozważania sądu",
+  ]);
+});

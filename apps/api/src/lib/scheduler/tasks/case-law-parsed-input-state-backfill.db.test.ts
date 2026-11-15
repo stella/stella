@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { SQL } from "bun";
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -12,6 +13,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -46,7 +48,7 @@ beforeEach(async () => {
     id: JOB_ID,
     task: BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK,
     description: "Parsed input state backfill fixture",
-    lockedBy: "test-lease",
+    ...heldSchedulerLease("test-lease"),
     nextRunAt: new Date("2026-10-30T12:00:00Z"),
     schedule: { type: "interval", everyMs: 300_000 },
   });
@@ -200,6 +202,42 @@ test("derives only NULL states in cursor pages and retires durably after the ful
   expect(await rows()).toEqual(completedRows);
   expect(await checkpoint()).toEqual(completedCheckpoint);
   expect(later.events).toEqual([]);
+});
+
+test("a batch a writer's lock refused is taken again instead of failing the run", async () => {
+  await insertDecisions();
+  let refusals = 0;
+  const { run, continuations } = fixture({
+    createRuntime: (runtimeOptions) => {
+      const runtime = createScriptBackfillRuntime({
+        ...runtimeOptions,
+        slot: { tryAcquire: async () => true, release: () => {} },
+      });
+      return {
+        ...runtime,
+        step: async (work) => {
+          if (refusals === 0) {
+            refusals += 1;
+            throw new SQL.PostgresError(
+              "canceling statement due to lock timeout",
+              {
+                code: "ERR_POSTGRES_SERVER_ERROR",
+                errno: "55P03",
+                detail: "",
+                hint: "",
+                severity: "ERROR",
+              },
+            );
+          }
+          return await runtime.step(work);
+        },
+      };
+    },
+  });
+  await run();
+  expect(refusals).toBe(1);
+  expect(continuations).toHaveLength(1);
+  expect((await checkpoint())?.cursor).not.toBeNull();
 });
 
 test("kill switch logs once without touching the database", async () => {

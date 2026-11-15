@@ -13,6 +13,7 @@ import {
   TRANSCRIPTION_AUDIO_MEDIA_TYPES,
   TRANSCRIPTION_DURATION_TOLERANCE_MS,
 } from "@stll/api-contract/transcription";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { classifyFailure } from "@stll/errors";
 
 import type { SafeDbError } from "@/api/db/safe-db";
@@ -24,6 +25,7 @@ import {
 } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { dictationBodySchema } from "@/api/handlers/dictation/schema";
+import type { OrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
@@ -82,10 +84,19 @@ const config = {
   response: safeHandlerResponseSchemas(transcriptionResultSchema),
 } as const satisfies HandlerConfig;
 
-type UsageCaller = Pick<
-  MemberCaller,
-  "safeDb" | "session" | "user" | "recordAuditEvent" | "managedAIResidency"
->;
+/** Who dictates: a signed-in member, or a linked desktop's account. */
+type DictationIdentity = {
+  readonly user: { readonly id: SafeId<"user"> };
+  readonly session: { readonly activeOrganizationId: SafeId<"organization"> };
+};
+
+type UsageCaller = DictationIdentity &
+  Pick<MemberCaller, "safeDb" | "recordAuditEvent" | "managedAIResidency">;
+
+/** What transcription reads from its caller, whichever credential proved it. */
+export type DictationCaller = Readonly<OrgSettingsForAuth> &
+  DictationIdentity &
+  Pick<MemberCaller, "safeDb" | "recordAuditEvent" | "getWorkspaceAccess">;
 type PreflightOptions = {
   caller: UsageCaller;
   isByok: boolean;
@@ -198,11 +209,13 @@ type DictationDependencies = {
   settle: typeof settleUsage;
 };
 
-type DictationContext = MemberCaller & {
+type DictationContext = DictationCaller & {
   body: v.InferOutput<typeof dictationBodySchema>;
   request: Request;
   modelAdmission?: ModelDispatchAdmission;
 };
+
+export type { DictationDependencies };
 
 export const executeDictation = async (
   ctx: DictationContext,
@@ -230,7 +243,7 @@ export const executeDictation = async (
             ),
         }),
       );
-      if (access === null || access.status === "deleting") {
+      if (access === null || !workspaceIsVisible(access.status)) {
         return Result.err(
           new HandlerError({
             status: 404,
@@ -352,6 +365,14 @@ export const executeDictation = async (
     );
     return Result.ok(result);
   });
+
+export const DEFAULT_DICTATION_DEPENDENCIES = {
+  transcribe: transcribeAudio,
+  credential: getManagedOpenRouterCredential,
+  limit: consumeDictationLimit,
+  preflight: checkUsage,
+  settle: settleUsage,
+} satisfies DictationDependencies;
 
 export const createDictationTranscribeEndpoint = ({
   transcribe = transcribeAudio,

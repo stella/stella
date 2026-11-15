@@ -20,6 +20,10 @@ const TIMER_WRITERS: Record<string, typeof SCHEDULES | { reason: string }> = {
   "handlers/time-timers/admin/stop.ts": SCHEDULES,
   // Pause and resume run `timerStateTransition`, which schedules.
   "lib/billing/time-timers.ts": SCHEDULES,
+  "handlers/me/timer-activity-devices/act.ts": {
+    reason:
+      "A Lock Screen button runs `timerStateTransition`, which schedules.",
+  },
   "handlers/time-timers/pause.ts": {
     reason: "Its handler is `timerStateTransition`, which schedules.",
   },

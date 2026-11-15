@@ -12,7 +12,7 @@ set -euo pipefail
 # Official images pinned by digest. The Rust tag must match
 # rust-toolchain.toml and the Bun tag bun-toolchain.json; both are checked
 # below. bun formats the generated glue as the last build step.
-readonly RUST_IMAGE="docker.io/library/rust:1.99.1-bookworm@sha256:48b7f435b8fc6378ce43b44f15e3a47fd8919b2825f835c39bd4bd3da50af5b8"
+readonly RUST_IMAGE="docker.io/library/rust:1.99.1-bookworm@sha256:e6f2cff35d0f309acf8433b4f05878ed77092602c5065cc81801177da0bb3a9c"
 readonly BUN_IMAGE="docker.io/oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4"
 readonly PLATFORM="linux/amd64"
 

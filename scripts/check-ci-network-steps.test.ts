@@ -40,6 +40,21 @@ const check = (files: Files, allowlist: readonly string[] = []) => {
 };
 
 describe("run step fetches", () => {
+  test("a workflow cannot use a direct partial-clone checkout", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+`),
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Checkout: partial-clone actions/checkout must use stella/.github/actions/partial-clone-checkout`,
+    ]);
+  });
+
   test("a curl wrapped in retry.sh with a step timeout passes", () => {
     const report = check({
       [WORKFLOW]: workflow(`      - name: Download tool
@@ -193,6 +208,46 @@ ${stepEnv}        run: cargo build --locked
     expect(report.errors).toEqual([
       `${WORKFLOW}: build: Build: route ${resolution} (${WORKFLOW}) through scripts/retry.sh`,
       `${WORKFLOW}: build: Build: ${resolution} (${WORKFLOW}) needs a step timeout-minutes`,
+    ]);
+  });
+
+  test("a package.json script run by name needs the step timeout", () => {
+    const step = (timeout: string) =>
+      workflow(`      - name: Install the docs MCP server
+${timeout}        run: bash scripts/retry.sh bun run setup:mcp
+`);
+    const manifest = JSON.stringify({
+      scripts: {
+        "setup:mcp": "bun install --cwd .claude/mcp --frozen-lockfile",
+      },
+    });
+
+    expect(
+      check({ [WORKFLOW]: step(""), "package.json": manifest }).errors,
+    ).toEqual([
+      `${WORKFLOW}: build: Install the docs MCP server: bun install (package.json#setup:mcp) needs a step timeout-minutes`,
+    ]);
+    expect(
+      check({
+        [WORKFLOW]: step("        timeout-minutes: 5\n"),
+        "package.json": manifest,
+      }).errors,
+    ).toEqual([]);
+  });
+
+  test("a package.json script run by name outside retry.sh fails", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Install the docs MCP server
+        timeout-minutes: 5
+        run: bun run setup:mcp
+`),
+      "package.json": JSON.stringify({
+        scripts: { "setup:mcp": "bun install --cwd .claude/mcp" },
+      }),
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Install the docs MCP server: route bun install (package.json#setup:mcp) through scripts/retry.sh`,
     ]);
   });
 

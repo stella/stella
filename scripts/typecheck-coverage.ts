@@ -25,7 +25,7 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
-import { API } from "tsrs/unstable/async";
+import { API } from "tsrs/async";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
@@ -86,6 +86,10 @@ const OXC_PROJECT_PROXIES = [
   {
     config: "apps/api/e2e/tsconfig.json",
     target: "apps/api/tsconfig.visual-sandbox.json",
+  },
+  {
+    config: "apps/desktop/scripts/tsconfig.json",
+    target: "apps/desktop/tsconfig.test.json",
   },
   {
     config: "apps/desktop/tests/tsconfig.json",

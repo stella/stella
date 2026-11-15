@@ -21,12 +21,15 @@ import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   billingDraftUserSettings,
+  chatBrowserSiteGrants,
+  chatLimitReminders,
   chatToolGrants,
   contacts,
   correspondence,
   desktopEditHandoffs,
   desktopEditSessions,
   desktopPresence,
+  desktopRunnerFolderRestores,
   desktopRunnerRuns,
   desktopRunners,
   entities,
@@ -39,6 +42,7 @@ import {
   mcpWebHandoff,
   pdfSigningSessions,
   requestIdempotencyReceipts,
+  searchHistoryCountryClears,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
@@ -46,6 +50,7 @@ import {
   sharepointOAuthState,
   taskAssignees,
   timeEntries,
+  timerActivityDevices,
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
   workObligationEvents,
@@ -1517,7 +1522,10 @@ type ClearMemberScopedDataOptions = Pick<
 
 /**
  * The member's desktop runners, on the owner connection the runner tables
- * admit; their runs, queued commands and events cascade, and an open runner
+ * admit. Runners go first, as a session claim locks a runner before its
+ * runs, so the two never wait on each other; their runs cascade, and the
+ * runs are then deleted by name too, since each keeps its output key.
+ * Queued commands, events and folder restores cascade, and an open runner
  * socket closes on its next heartbeat.
  */
 const clearMemberDesktopRunners = async ({
@@ -1533,6 +1541,14 @@ const clearMemberDesktopRunners = async ({
       and(
         eq(desktopRunners.organizationId, organizationId),
         eq(desktopRunners.userId, userId),
+      ),
+    );
+  await tx
+    .delete(desktopRunnerRuns)
+    .where(
+      and(
+        eq(desktopRunnerRuns.organizationId, organizationId),
+        eq(desktopRunnerRuns.userId, userId),
       ),
     );
   await recordAuditEvent(tx, {
@@ -1566,6 +1582,16 @@ const clearMemberScopedData = async (options: ClearMemberScopedDataOptions) => {
           and(
             eq(billingDraftUserSettings.organizationId, organizationId),
             eq(billingDraftUserSettings.userId, userId),
+          ),
+        );
+      // The member's phones in this organization, with the keys their Lock
+      // Screen buttons act with.
+      await scopedTx
+        .delete(timerActivityDevices)
+        .where(
+          and(
+            eq(timerActivityDevices.organizationId, organizationId),
+            eq(timerActivityDevices.userId, userId),
           ),
         );
       await recordAuditEvent(scopedTx, {
@@ -1747,14 +1773,19 @@ export const removeOrganizationMemberInTransaction = async (
         eq(sharepointConnections.userId, userId),
       ),
     );
-  await tx
-    .delete(chatToolGrants)
-    .where(
-      and(
-        eq(chatToolGrants.organizationId, organizationId),
-        eq(chatToolGrants.userId, userId),
-      ),
-    );
+  // The member's own chat settings: tool grants, limit reminders and browser
+  // site approvals.
+  for (const table of [
+    chatToolGrants,
+    chatLimitReminders,
+    chatBrowserSiteGrants,
+  ] as const) {
+    await tx
+      .delete(table)
+      .where(
+        and(eq(table.organizationId, organizationId), eq(table.userId, userId)),
+      );
+  }
   await tx
     .delete(mcpOAuthState)
     .where(
@@ -1831,11 +1862,15 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [requestIdempotencyReceipts.responseBody, "cleared"],
   [member.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
-  // Removal deletes the member's runners; their runs, queued commands and
-  // events cascade, and an open runner socket closes on its next heartbeat.
+  [timerActivityDevices.userId, "cleared"],
+  // Removal deletes the member's runners; their runs, queued commands,
+  // events and folder restores cascade, and an open runner socket closes on
+  // its next heartbeat.
   [desktopRunners.userId, "cleared"],
   [desktopRunnerRuns.userId, "cleared"],
+  [desktopRunnerFolderRestores.userId, "cleared"],
   [searchHistoryEntries.userId, "cleared"],
+  [searchHistoryCountryClears.userId, "cleared"],
   [searchHistoryOwners.userId, "cleared"],
   [searchHistoryTombstones.userId, "cleared"],
   [workspaceMembers.userId, "cleared"],
@@ -1855,6 +1890,8 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [sharepointConnections.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
   [chatToolGrants.userId, "cleared"],
+  [chatLimitReminders.userId, "cleared"],
+  [chatBrowserSiteGrants.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
   // Revoked by `removeOrganizationMemberWithAuthArtifacts`.

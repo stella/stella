@@ -14,7 +14,7 @@ import {
 } from "@stll/errors/fingerprint-fields";
 
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
-import { API_ERROR_TAG } from "@/lib/errors/api-tag";
+import { API_ERROR_TAG, AUTH_CLIENT_ERROR_TAG } from "@/lib/errors/api-tag";
 
 // Capture owners declare these keys in source. Engine-inferred symbols can
 // contain computed user data and minified names, so they are never identity.
@@ -78,7 +78,11 @@ export const capturedApiErrorIdentity = (
       seen.size < MAX_EXCEPTION_CAUSE_DEPTH
     ) {
       seen.add(current);
-      if (isTaggedError(current) && current._tag === API_ERROR_TAG) {
+      if (
+        isTaggedError(current) &&
+        (current._tag === API_ERROR_TAG ||
+          current._tag === AUTH_CLIENT_ERROR_TAG)
+      ) {
         return readApiErrorIdentity({
           status: Reflect.get(current, "status"),
           code: Reflect.get(current, "code"),

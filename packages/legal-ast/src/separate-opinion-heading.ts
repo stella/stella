@@ -1,3 +1,5 @@
+// parser-output-unchanged: [cz-uohs] only adds separateOpinionHeadingEndsAsSentence, which only the NSS reader calls; this source's headings are read as before.
+// parser-output-unchanged: [sk-us] only adds separateOpinionHeadingEndsAsSentence, which only the NSS reader calls; this source's headings are read as before.
 import { escapeRegExp, stripDiacritics } from "@stll/text-normalize";
 
 const OPINION_HEADING_KINDS = ["dissent", "concurring"] as const;
@@ -218,6 +220,23 @@ export const separateOpinionHeadingNamesAuthor = (tail: string): boolean =>
 /** Whether a line after a bare title begins by naming its author. */
 export const separateOpinionAuthorLine = (text: string): boolean =>
   AUTHOR_LINE_RE.test(stripDiacritics(text));
+
+/** A period closing a reference: the docket a heading ends on (`– 160.`). */
+const REFERENCE_PERIOD_RE = /\p{N}\s*\.$/u;
+
+/**
+ * Whether a candidate heading ends the way a sentence does: on a period that
+ * closes no reference. A heading ends on its title, its author or the
+ * decision it names ("…, č. j. 7 As 155/2015 – 160."); a sentence reporting
+ * the opinions ends on a word ("Odlišné stanovisko k rozsudku … uplatnil
+ * soudce Karel Šimka. Text odlišného stanoviska je připojen.").
+ */
+export const separateOpinionHeadingEndsAsSentence = (
+  plainText: string,
+): boolean => {
+  const text = plainText.trimEnd();
+  return text.endsWith(".") && !REFERENCE_PERIOD_RE.test(text);
+};
 
 /** A separate opinion's heading: whether it dissents or concurs, and the
  * original text after its title. */

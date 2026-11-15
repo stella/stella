@@ -53,18 +53,27 @@ type CorpusIndexErrorRejection = "definite" | "unknown" | "transient";
  * being served (an MCP tool call) running out before the engine answered: the
  * engine may be up and merely slower than the caller can wait, so it is the
  * caller's timeout, never an outage; its cause is the budget's own
- * `TimeoutError` (`requestBudgetExpiry`). `answered` is everything else,
- * including a response this client could not read, which no retry fixes.
+ * `TimeoutError` (`requestBudgetExpiry`). `caller_aborted` is the signal the
+ * caller passed ending the request: whoever asked stopped waiting, which says
+ * nothing of the engine. `answered` is everything else, including a response
+ * this client could not read, which no retry fixes.
  */
 type CorpusIndexErrorReach =
-  "answered" | "unreachable" | "index_missing" | "budget_expired";
+  | "answered"
+  | "unreachable"
+  | "index_missing"
+  | "budget_expired"
+  | "caller_aborted";
 
 /**
  * What a failed exchange says of the engine itself. `budget_expired` is named
  * only by `corpusIndexBudgetExpiry`, which carries the budget's own expiry,
  * so no failure reads as the budget's without the budget's evidence.
  */
-type EngineReach = Exclude<CorpusIndexErrorReach, "budget_expired">;
+type EngineReach = Exclude<
+  CorpusIndexErrorReach,
+  "budget_expired" | "caller_aborted"
+>;
 
 export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
   message: string;
@@ -115,6 +124,7 @@ export const isCorpusIndexUnavailable = (error: CorpusIndexError): boolean => {
       return true;
     case "answered":
     case "budget_expired":
+    case "caller_aborted":
       return false;
     default:
       error.reach satisfies never;
@@ -504,6 +514,18 @@ export type CorpusIndexDeleteSettlementRead = Result<
 type CorpusIndexConfigAttestation =
   { status: "missing" } | { status: "matching"; indexUri: string };
 
+export type CorpusIndexPublishedSplitCount = {
+  indexId: string;
+  publishedSplits: number;
+};
+
+type CorpusIndexPublishedSplitCountsInput = {
+  includes: (indexId: string) => boolean;
+  observer: RegistryRequestObservation;
+  /** Ends every read of the census at once, so slow indexes share one budget. */
+  signal?: AbortSignal | undefined;
+};
+
 export type CorpusIndexClient = {
   createIndex: (
     config: CorpusIndexConfig,
@@ -517,6 +539,13 @@ export type CorpusIndexClient = {
     indexId: string,
     observer: RegistryRequestObservation,
   ) => Promise<Result<boolean, CorpusIndexError>>;
+  /**
+   * Published split count of each index the predicate admits, from the search
+   * endpoint, which answers while the build lane is parked.
+   */
+  readPublishedSplitCounts: (
+    input: CorpusIndexPublishedSplitCountsInput,
+  ) => Promise<Result<CorpusIndexPublishedSplitCount[], CorpusIndexError>>;
   /**
    * Read the engine's materialized config and compare every manifest-pinned
    * value. Quickwit adds defaults and a random doc-mapping UID to the GET
@@ -797,21 +826,32 @@ const requestFailure = ({
   reach,
 }: RequestFailureOptions & {
   reach: EngineReach;
-}): CorpusIndexError =>
-  (endedByRequestDeadline(request, error)
-    ? corpusIndexBudgetExpiry({
-        label: `${requestLabel(request)} after ${request.timeoutMs}ms`,
-        cause: error,
-      })
-    : undefined) ??
-  new CorpusIndexError({
-    message: isAborted(error)
-      ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
-      : `corpus index ${requestLabel(request)} ${unaborted}: ${String(error)}`,
-    cause: error,
-    rejection: "unknown",
-    reach,
-  });
+}): CorpusIndexError => {
+  if (request.signal?.aborted === true) {
+    return new CorpusIndexError({
+      message: `corpus index ${requestLabel(request)} was cancelled by its caller: ${String(error)}`,
+      cause: error,
+      rejection: "unknown",
+      reach: "caller_aborted",
+    });
+  }
+  return (
+    (endedByRequestDeadline(request, error)
+      ? corpusIndexBudgetExpiry({
+          label: `${requestLabel(request)} after ${request.timeoutMs}ms`,
+          cause: error,
+        })
+      : undefined) ??
+    new CorpusIndexError({
+      message: isAborted(error)
+        ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
+        : `corpus index ${requestLabel(request)} ${unaborted}: ${String(error)}`,
+      cause: error,
+      rejection: "unknown",
+      reach,
+    })
+  );
+};
 
 /**
  * A body that stopped arriving (the budget expired or the connection dropped
@@ -845,10 +885,11 @@ type ConsumeResponse<T> = (
 /**
  * Why a queued read was not sent, in the terms a sent one fails in: a wait
  * its timeout ended is that timeout expiring (the request's budget when the
- * budget set it), a caller's cancel is the cancel, and a full queue is the
- * index turning the read away, which a retry can get past.
+ * budget set it), a read the queue estimates cannot start in time is that
+ * budget's expiry too, a caller's cancel is the cancel, and a full queue is
+ * the index turning the read away, which a retry can get past.
  */
-const admissionRefusal = (
+export const admissionRefusal = (
   request: RequestIdentity,
   refused: Extract<CorpusSearchAdmission, { type: "refused" }>,
 ): CorpusIndexError => {
@@ -859,11 +900,19 @@ const admissionRefusal = (
   });
   switch (refused.reason) {
     case "busy":
-      return new CorpusIndexError({
+    case "deadline": {
+      const notQueued = new CorpusIndexError({
         message: `corpus index ${requestLabel(request)} was not queued: ${String(refused.queued)} reads are already waiting`,
         rejection: "transient",
         reach: "unreachable",
       });
+      return refused.reason === "deadline"
+        ? (corpusIndexBudgetExpiry({
+            label: `${requestLabel(request)} before it could start`,
+            cause: notQueued,
+          }) ?? notQueued)
+        : notQueued;
+    }
     case "expired":
     case "aborted":
       return requestFailure({
@@ -915,6 +964,7 @@ const withSearchAdmission = async <T>(
       : AbortSignal.any([read.signal, scopeSignal]);
   const admitted = await admission.acquire({
     waitLimit: AbortSignal.timeout(waiting.timeoutMs),
+    maxWaitMs: waiting.timeoutMs,
     signal,
   });
   if (admitted.type === "refused") {
@@ -923,7 +973,7 @@ const withSearchAdmission = async <T>(
         {
           init: { method: "POST" },
           path: read.path,
-          signal,
+          signal: read.signal,
           ...waiting,
         },
         admitted,
@@ -1512,6 +1562,59 @@ const buildClient = (
       catch: toCorpusIndexError,
     }),
 
+  readPublishedSplitCounts: async ({ includes, observer, signal }) => {
+    const read = async (path: string) =>
+      await Result.tryPromise({
+        try: async () =>
+          await requestJson({
+            observer,
+            baseUrl: searchBaseUrl(cluster),
+            path,
+            init: { method: "GET" },
+            timeoutMs: ADMIN_TIMEOUT_MS,
+            signal,
+          }),
+        catch: toCorpusIndexError,
+      });
+    const listed = await read("/api/v1/indexes");
+    if (Result.isError(listed)) {
+      return Result.err(listed.error);
+    }
+    const indexes = parseRecordArray(listed.value);
+    if (indexes === null) {
+      return Result.err(
+        new CorpusIndexError({
+          message: "corpus index split census: malformed index list",
+        }),
+      );
+    }
+    const indexIds = indexes.flatMap((metadata) => {
+      const config = metadata["index_config"];
+      const indexId = isRecord(config) ? config["index_id"] : undefined;
+      return typeof indexId === "string" && includes(indexId) ? [indexId] : [];
+    });
+    const counts: CorpusIndexPublishedSplitCount[] = [];
+    // Sequential: a handful of metastore reads an hour needs no fan-out.
+    for (const indexId of indexIds) {
+      const described = await read(`/api/v1/indexes/${indexId}/describe`);
+      if (Result.isError(described)) {
+        return Result.err(described.error);
+      }
+      const publishedSplits = isRecord(described.value)
+        ? described.value["num_published_splits"]
+        : undefined;
+      if (typeof publishedSplits !== "number") {
+        return Result.err(
+          new CorpusIndexError({
+            message: `corpus index split census: ${indexId} reported no num_published_splits`,
+          }),
+        );
+      }
+      counts.push({ indexId, publishedSplits });
+    }
+    return Result.ok(counts);
+  },
+
   indexExists: async (indexId, observer) =>
     await Result.tryPromise({
       try: async () =>
@@ -1968,6 +2071,19 @@ const buildClient = (
 });
 
 const cachedClients = new Map<QuickwitCluster, CorpusIndexClient>();
+const searchAdmissions = new Map<QuickwitCluster, CorpusSearchAdmissionGate>();
+
+/**
+ * The longest wait a corpus read arriving now should expect, across this
+ * process's search queues; zero until a queue has seen enough reads to say.
+ */
+export const estimatedCorpusSearchWaitMs = (): number =>
+  Math.max(
+    0,
+    ...[...searchAdmissions.values()].map((admission) =>
+      admission.estimatedWaitMs(),
+    ),
+  );
 
 export const getCorpusIndexClient = (
   cluster: QuickwitCluster,
@@ -1978,10 +2094,11 @@ export const getCorpusIndexClient = (
   }
   // One search queue per cluster for the life of the process: every search
   // read of this process to that engine waits in it.
-  const client = buildClient(
-    cluster,
-    createCorpusSearchAdmission({ slots: LIMITS.corpusIndexSearchConcurrency }),
-  );
+  const admission = createCorpusSearchAdmission({
+    slots: LIMITS.corpusIndexSearchConcurrency,
+  });
+  const client = buildClient(cluster, admission);
+  searchAdmissions.set(cluster, admission);
   cachedClients.set(cluster, client);
   return client;
 };

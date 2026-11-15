@@ -276,9 +276,13 @@ const embeddedReadingOf = (
     const longest = Math.min(tokens.length, start + EMBEDDED_WINDOW_MAX_TOKENS);
     for (let end = start + 1; end <= longest; end += 1) {
       const window = tokens.slice(start, end).join(" ");
-      // Every docket grammar the entry can reach writes a slash; an ECLI is a
-      // single word. Anything else is not worth a grammar's time.
-      if (!window.includes("/") && !/ecli:|^eu:[ctf]:/iu.test(window)) {
+      // Try windows carrying a digit (CNJ and superior-court numbers write no
+      // slash), a slash, or an ECLI prefix.
+      if (
+        !/\p{Nd}/u.test(window) &&
+        !window.includes("/") &&
+        !/ecli:|^eu:[ctf]:/iu.test(window)
+      ) {
         continue;
       }
       const reading = readingOfWindow({ end, grammar, start, tokens });
@@ -591,10 +595,11 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
  *   carry, so the file's decisions come back rather than one of them, even
  *   when the file shows one; for a sheet, only those whose sheet is unknown,
  *   since one known under another sheet is not the decision named.
- * - `incomplete_identifier`: a bare docket finding one
- *   decision where stored dockets can still carry their sheet
+ * - `incomplete_identifier`: a bare docket finding exactly one decision
+ *   where stored dockets can still carry their sheet
  *   (`DECISION_DOCKETS_STORED_WITH_SHEETS`), so the file may hold members the
- *   read did not reach.
+ *   read did not reach. It carries that one decision: several are
+ *   `ambiguous`, never a bare request for a sheet.
  * - `none`: nothing answers to it, which includes a sheet where every
  *   candidate is known under another sheet.
  *
@@ -616,7 +621,7 @@ export type DecisionIdentityResolution<THit> =
     }
   | {
       readonly status: "incomplete_identifier";
-      readonly candidates: readonly THit[];
+      readonly decision: THit;
       readonly missing: readonly ["sheet"];
     };
 
@@ -882,7 +887,7 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
     ) {
       return {
         status: "incomplete_identifier",
-        candidates: family,
+        decision: only,
         missing: ["sheet"],
       };
     }
@@ -977,9 +982,9 @@ export const namedDecisionsOf = <THit extends DecisionHitIdentity>(
     case "none":
       return [];
     case "unique":
+    case "incomplete_identifier":
       return [resolution.decision];
     case "ambiguous":
-    case "incomplete_identifier":
       return resolution.candidates;
     default: {
       resolution satisfies never;

@@ -52,15 +52,14 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/actions/setup-bun-cached@2ba6dc5822df5213c500aa6edb7b6c4bdec56804
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -98,6 +97,14 @@ jobs:
 
       - name: Generate sources
         run: bun run generate
+
+      - name: Install the docs MCP server
+        # typecheck:repo checks .claude/mcp against the packages installed
+        # there, which are outside the root lockfile.
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun run setup:mcp
+        env:
+          NPM_TOKEN: ""
 
       - name: Run check
         id: run-check

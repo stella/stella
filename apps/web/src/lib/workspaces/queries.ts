@@ -1,6 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
@@ -146,7 +148,7 @@ const getInitialWorkspaceActivityCursor = (): string | undefined => undefined;
 
 const readWorkspaces = async (
   signal?: AbortSignal,
-  status: MatterListStatus = "active",
+  status: MatterListStatus = WORKSPACE_STATUS.active,
 ) => {
   const response = await api.workspaces.get({
     query: { status },
@@ -168,11 +170,11 @@ export const workspacesOptions = (activeOrganizationId: string) =>
 
 export const workspacesRouteOptions = (
   activeOrganizationId: string,
-  status: MatterListStatus = "active",
+  status: MatterListStatus = WORKSPACE_STATUS.active,
 ) =>
   queryOptions({
     queryKey:
-      status === "active"
+      status === WORKSPACE_STATUS.active
         ? workspacesKeys.list(activeOrganizationId)
         : [...workspacesKeys.list(activeOrganizationId), status],
     queryFn: async ({ signal }) => await readWorkspaces(signal, status),

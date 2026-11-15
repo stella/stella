@@ -42,8 +42,11 @@ import type {
   ErrorCaptureContext,
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
-import { APIError, isCancellation } from "@/lib/errors/api";
-import { isNativeFetchFailure } from "@/lib/errors/native-fetch-failure";
+import { APIError, isCancellation, isTypedCodeRefusal } from "@/lib/errors/api";
+import {
+  isNativeFetchFailure,
+  isNativeFetchTimeout,
+} from "@/lib/errors/native-fetch-failure";
 import { logDevError } from "@/lib/errors/telemetry";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
@@ -150,10 +153,12 @@ const CANCELLED_REQUEST_CLASS = "AbortError";
 // Errors whose type names an expected outcome, handled where it happens: no
 // desktop app running, a public-law source down, a signed-out session, a
 // model provider's failure the chat shows with its setup guidance (the API
-// reports the provider failures it does not classify itself).
+// reports the provider failures it does not classify itself), a coding agent
+// on the member's computer at its usage limit.
 const EXPECTED_OUTCOME_TYPES: ReadonlySet<string> = new Set([
   "AuthClientError",
   "DesktopBridgeUnavailableError",
+  "LocalRunLimitError",
   "ProviderDiagnosticError",
   "PublicLawUnavailableError",
 ]);
@@ -807,13 +812,16 @@ const registerBuildProperties = () => {
 };
 
 // Clients outside the API client (the auth client) reject with the native
-// fetch error. It must be classified here, before redaction blanks the message
-// that tells it apart from a TypeError of ours.
+// fetch error or deadline reason. It must be classified here, before redaction
+// blanks the message that tells it apart from a TypeError of ours.
 const transportFailureKind = (error: unknown): APIError["transportKind"] => {
   if (APIError.is(error)) {
     return error.transportKind;
   }
-  return isNativeFetchFailure(error) ? "network" : undefined;
+  if (isNativeFetchFailure(error)) {
+    return "network";
+  }
+  return isNativeFetchTimeout(error) ? "timeout" : undefined;
 };
 
 const captureError: Analytics["captureError"] = (
@@ -833,6 +841,11 @@ const captureError: Analytics["captureError"] = (
   }
   // A cancelled request is expected control flow, not an operational failure.
   if (isCancellation(error)) {
+    return;
+  }
+  // A mistyped or expired code is the form's to answer, wherever it is captured:
+  // the status and code the tracker keeps cannot tell this 400 from a defect.
+  if (isTypedCodeRefusal(error)) {
     return;
   }
   // Cheap guards before the SDK call: a stray `captureError(null)`

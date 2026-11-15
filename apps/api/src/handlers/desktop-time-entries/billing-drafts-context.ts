@@ -2,7 +2,10 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { DesktopBillingDraftRequest } from "@stll/api-contract/desktop-billing-drafts";
-import { DESKTOP_BILLING_DRAFT_LIMITS } from "@stll/api-contract/desktop-billing-drafts";
+import {
+  DESKTOP_BILLING_DRAFT_LIMITS,
+  DESKTOP_BILLING_DRAFT_REFUSAL_CODE,
+} from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -15,6 +18,7 @@ import {
 } from "@/api/lib/billing/billing-guidelines";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { brandValidatedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 import { draftingModeFor } from "./billing-draft-mode";
@@ -271,6 +275,21 @@ export const loadBillingDraftContext = async ({
         new HandlerError({
           status: 413,
           message: "Too many billing guideline files in the selected context",
+        }),
+      );
+    }
+    // Each guideline goes into the drafting prompt whole.
+    if (
+      guidelines.some(
+        ({ content }) =>
+          content.length > LIMITS.agentSkillResourceModelContextMaxChars,
+      )
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 413,
+          code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.contextTooLarge,
+          message: "A billing guideline file is too large to draft from",
         }),
       );
     }

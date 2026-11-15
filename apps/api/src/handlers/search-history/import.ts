@@ -123,6 +123,7 @@ const importSearchHistory = createSafeRootHandler(
             tx,
             rows,
             mode: "import",
+            timestampSource: "prepared",
             recordAuditEvent,
           }),
       ),

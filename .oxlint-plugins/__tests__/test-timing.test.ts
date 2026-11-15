@@ -13,6 +13,20 @@ const lintWith = (rule: string) => async (source: string) =>
 const lint = lintWith("no-real-time-wait");
 
 describe("no-real-time-wait", () => {
+  test("reports scheduler.wait from the timer promises modules", async () => {
+    expect(
+      await lint(
+        [
+          'import { scheduler } from "node:timers/promises";',
+          'import * as timers from "timers/promises";',
+          "await scheduler.wait(5);",
+          "await timers.scheduler.wait(5);",
+          "await scheduler.yield();",
+        ].join("\n"),
+      ),
+    ).toEqual([3, 4]);
+  });
+
   test("reports Bun, timers/promises and shared-helper sleeps", async () => {
     expect(
       await lint(

@@ -36,6 +36,7 @@ import type {
   PositionTermKind,
   ReferencePassage,
 } from "@/api/lib/workflow/playbook-positions";
+import { selectEnabledPositions } from "@/api/lib/workflow/position-runtime";
 
 /** A passage together with its words, as the proposal pass and the grader
  *  hold it in memory. Never part of a persisted position. */
@@ -178,11 +179,38 @@ export const pinProposedPositions = async (
  */
 export const basisReferenceWorkspaceIds = (
   basis: DocumentReviewRunBasis,
-): SafeId<"workspace">[] => {
+): SafeId<"workspace">[] =>
+  referenceWorkspaceIds({
+    basis,
+    positions: basis.playbook.definitionSnapshot.positions.items,
+  });
+
+/**
+ * The matters a run's proposed fixes can draw text from: the pinned
+ * references and the matters its enabled positions quote. A disabled position
+ * is never graded, so its passages never reach a fix.
+ */
+export const basisFixSourceWorkspaceIds = (
+  basis: DocumentReviewRunBasis,
+): SafeId<"workspace">[] =>
+  referenceWorkspaceIds({
+    basis,
+    positions: selectEnabledPositions(
+      basis.playbook.definitionSnapshot.positions.items,
+    ),
+  });
+
+const referenceWorkspaceIds = ({
+  basis,
+  positions,
+}: {
+  basis: DocumentReviewRunBasis;
+  positions: readonly Position[];
+}): SafeId<"workspace">[] => {
   const ids = new Set<SafeId<"workspace">>(
     basis.references.map((reference) => reference.workspaceId),
   );
-  for (const position of basis.playbook.definitionSnapshot.positions.items) {
+  for (const position of positions) {
     if (
       position.mode !== "graded" ||
       position.standard.source !== "reference"

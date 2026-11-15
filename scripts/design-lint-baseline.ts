@@ -1,9 +1,10 @@
 // Design-system lint backlog guard.
 //
 // `oxlint.config.ts` enables the tracked rules (the `@shadcn/lint` pair, the
-// local `no-raw-overflow-scroll` and `no-imported-class-constant`, the API
-// size-bound rules `require-bounded-request-schema` and
-// `no-unbounded-response-body`, `no-computed-key-record-assignment`, and the
+// local `no-raw-overflow-scroll`, `no-raw-context-menu` and
+// `no-imported-class-constant`, the API size-bound rules
+// `require-bounded-request-schema` and `no-unbounded-response-body`,
+// `no-computed-key-record-assignment`, `exhaustive-union-map`, and the
 // function size limits `complexity`,
 // `max-lines-per-function` and `max-params`) for every file in their scope
 // except the ones this baseline lists per rule (scripts/design-lint-policy.ts
@@ -44,9 +45,10 @@ import {
   type DesignLintBacklog,
   type DesignLintBacklogRule,
 } from "./design-lint-policy.ts";
+import { LINT_CONFIGS, lintCommand } from "./lint-command.ts";
 
 const BASELINE_PATH = BASELINE_PATHS.designLint;
-const CONFIG_PATH = "oxlint.design.config.ts";
+const CONFIG_PATH = LINT_CONFIGS.design;
 /** The paths `code-check` lints; the baseline is measured on the same tree. */
 const LINT_SCOPE = [".claude/mcp", "apps", "packages"];
 /**
@@ -105,10 +107,12 @@ export const emptyBacklog = (): DesignLintBacklog => ({
   "shadcn/no-arbitrary-values": {},
   "shadcn/no-restyle": {},
   "no-raw-overflow-scroll/no-raw-overflow-scroll": {},
+  "no-raw-context-menu/no-raw-context-menu": {},
   "no-imported-class-constant/no-imported-class-constant": {},
   "require-bounded-request-schema/require-bounded-request-schema": {},
   "no-unbounded-response-body/no-unbounded-response-body": {},
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {},
+  "exhaustive-union-map/exhaustive-union-map": {},
   "no-direct-status-set/no-direct-status-set": {},
   "require-polite-publisher-fetch/require-polite-publisher-fetch": {},
   "no-native-ui/no-native-accordion": {},
@@ -181,8 +185,16 @@ const lint = (paths: readonly string[]): DesignLintBacklog => {
   const reportDirectory = mkdtempSync(path.join(tmpdir(), "design-lint-"));
   const reportPath = path.join(reportDirectory, "report.json");
   const result = Bun.spawnSync(
-    ["bun", "--bun", "oxlint", "-c", CONFIG_PATH, "--format=json", ...paths],
-    { cwd: REPOSITORY_ROOT, stdout: Bun.file(reportPath), stderr: "pipe" },
+    lintCommand({ config: "design" }, ["--format=json", ...paths]),
+    {
+      cwd: REPOSITORY_ROOT,
+      // The backlog counts every finding: a rule still in its changed-lines
+      // rollout (scripts/guard-rollouts) reports only changed lines unless the
+      // full scope is asked for, which would read its backlog files as clean.
+      env: { ...process.env, STELLA_GUARD_SCOPE: "all" },
+      stdout: Bun.file(reportPath),
+      stderr: "pipe",
+    },
   );
   const report = readFileSync(reportPath, "utf-8");
   rmSync(reportDirectory, { recursive: true, force: true });
@@ -317,7 +329,7 @@ const run = (): number => {
     }
     console.error(
       "\nThe rule is off in these files only for the findings already there.\n" +
-        "Fix the new finding: `bun --bun oxlint -c oxlint.design.config.ts <file>`\n" +
+        "Fix the new finding: `bun scripts/lint.ts --config=design <file>`\n" +
         "names the replacement to use, or the function to split.",
     );
   }

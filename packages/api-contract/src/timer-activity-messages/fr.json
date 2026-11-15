@@ -5,5 +5,7 @@
   "noMatter": "Sans dossier",
   "noDescription": "Sans description",
   "more": "{count, plural, one {# autre minuteur} other {# autres minuteurs}}",
-  "startedElsewhere": "Un minuteur a démarré sur un autre appareil"
+  "startedElsewhere": "Un minuteur a démarré sur un autre appareil",
+  "pause": "Mettre en pause",
+  "resume": "Reprendre"
 }

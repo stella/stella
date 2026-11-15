@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic, Result } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { localeInputText } from "@stll/money";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
@@ -198,7 +199,11 @@ describe("TimeEntryForm activity pricing", () => {
 
   const pricingCases = {
     automatic: { type: "automatic" },
-    manual: { type: "manual", draft: "275.50", currency: "EUR" },
+    manual: {
+      type: "manual",
+      draft: localeInputText({ value: "275.50", tagName: "INPUT" }),
+      currency: "EUR",
+    },
   } as const satisfies Record<
     TimeEntryPricingSelection["type"],
     TimeEntryPricingSelection

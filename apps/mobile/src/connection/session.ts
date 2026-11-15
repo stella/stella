@@ -32,7 +32,7 @@ export const storedSessionSchema = v.object({
 
 export type StoredSession = v.InferOutput<typeof storedSessionSchema>;
 
-type SessionPersistence = {
+export type SessionPersistence = {
   /** `null` marks an unusable entry (a tombstone or invalid stored shape). */
   readonly read: () => Promise<StoredSession | null | undefined>;
   readonly write: (session: StoredSession) => Promise<void>;

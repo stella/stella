@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/desktop-handoff";
+import { createTestClock } from "@stll/test-kit";
 
 import { invitation, member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -27,6 +28,7 @@ import {
   properties,
   requestIdempotencyReceipts,
   searchHistoryEntries,
+  searchHistoryOwners,
   sharepointConnections,
   sharepointOAuthState,
   taskAssignees,
@@ -73,6 +75,8 @@ import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-del
 import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
+
+const stateClock = createTestClock();
 
 setDefaultTimeout(60_000);
 const databaseUrl = process.env["DATABASE_URL"];
@@ -415,6 +419,14 @@ if (!databaseUrl || !runPostgresTests) {
           ),
         );
         const historyLookupKey = Bun.randomUUIDv7();
+        await db
+          .insert(searchHistoryOwners)
+          .values([
+            { organizationId, userId },
+            { organizationId, userId: actorUserId },
+            { organizationId: otherOrganizationId, userId },
+          ])
+          .onConflictDoNothing();
         await db.insert(searchHistoryEntries).values(
           [
             { organizationId, userId },
@@ -1190,6 +1202,7 @@ if (!databaseUrl || !runPostgresTests) {
           definitionId,
           definitionSnapshot: { name: "Removal flow", steps },
           status: "awaiting_review",
+          startedAt: new Date(stateClock.now()),
           triggerSource: { type: "manual", userId: leaver.userId },
         });
         await db.insert(flowRunSteps).values(
@@ -1199,8 +1212,12 @@ if (!databaseUrl || !runPostgresTests) {
             runId,
             index,
             kind,
-            status:
-              index === 0 ? ("awaiting_review" as const) : ("pending" as const),
+            ...(index === 0
+              ? {
+                  status: "awaiting_review" as const,
+                  startedAt: new Date(stateClock.now()),
+                }
+              : { status: "pending" as const }),
           })),
         );
         await db.insert(mcpConnectors).values({

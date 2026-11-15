@@ -5,6 +5,7 @@ import {
   API_VALIDATION_ERROR_CODE,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 
 import messages from "@/i18n/langs/en.json";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
@@ -201,5 +202,33 @@ describe("a refusal of who is asking", () => {
     expect(userErrorMessage({ status, value }, "Generic fallback")).toBe(
       "Generic fallback",
     );
+  });
+});
+
+describe("organization run caps", () => {
+  test("a refusal reads the same wherever it surfaces, whichever feature's run was refused", () => {
+    const expected = {
+      [MODEL_RUN_CAP_CODES.active]:
+        messages.errors.apiCodes.runActiveLimitReached,
+      [MODEL_RUN_CAP_CODES.daily]:
+        messages.errors.apiCodes.runDailyLimitReached,
+    };
+    for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
+      // The server names its own runs; the surface says what to do next.
+      for (const serverMessage of [
+        "This organization has reached its daily limit of document reviews.",
+        "This organization has reached its limit of list AI runs in progress (verifications and fact extractions).",
+      ]) {
+        const response = {
+          status: 429,
+          value: { code, message: serverMessage, retryable: true },
+        };
+        // The document review panel's message and the toast AVT raises.
+        expect(userErrorMessage(response, "Generic failure")).toBe(
+          expected[code],
+        );
+        expect(toAPIError(response).message).toBe(expected[code]);
+      }
+    }
   });
 });

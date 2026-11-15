@@ -299,7 +299,7 @@ const loadSendQueue = async (): Promise<SendQueueModule> => {
 
 // --- Scenarios ------------------------------------------------------------------
 
-const SCENARIOS = {
+const SCENARIOS: Record<string, ReplayScenario> = {
   // CHAT_ORACLE.ledgerEffectsAuthorized: a call stopped while its input
   // streams never runs, and the next message settles the thread around it.
   "interrupt-mid-tool": {
@@ -528,7 +528,7 @@ const SCENARIOS = {
       ).toContain("could not delete memo");
     },
   },
-} as const satisfies Record<string, ReplayScenario>;
+};
 
 const isNamed = (input: unknown, name: string) =>
   typeof input === "object" &&

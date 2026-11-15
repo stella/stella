@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
+import type { AiCellSettlement } from "@stll/api-contract";
+import { toMajorUnitsText } from "@stll/money";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { fields } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
@@ -9,11 +12,15 @@ import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";
 import {
   Unreachable,
   WorkflowValidationError,
 } from "@/api/lib/errors/tagged-errors";
-import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import type {
+  DocumentTooLargeError,
+  WorkflowIntegrationError,
+} from "@/api/lib/errors/tagged-errors";
 import { recordText } from "@/api/lib/fields/record-text";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type {
@@ -63,7 +70,11 @@ export type GenerateBatchProps = {
 };
 
 export type BatchSettlement =
-  "answered" | "notStated" | "unsupported" | "refused";
+  | "answered"
+  | "notStated"
+  | "notFoundInCutDocument"
+  | "unsupported"
+  | "refused";
 
 export type GenerateBatchResult = Result<
   {
@@ -73,8 +84,10 @@ export type GenerateBatchResult = Result<
     unsupportedPropertyIds: SafeId<"property">[];
     /** One terminal disposition for every property claimed by this batch. */
     settlements: ReadonlyMap<SafeId<"property">, BatchSettlement>;
+    /** Sources cut to fit the request, empty when all were read whole. */
+    withheld: readonly ReviewWithheldSource[];
   },
-  WorkflowValidationError | WorkflowIntegrationError
+  WorkflowValidationError | WorkflowIntegrationError | DocumentTooLargeError
 >;
 
 const isFieldContentEmpty = (content: FieldContentForAI): boolean => {
@@ -106,6 +119,8 @@ const isFieldContentEmpty = (content: FieldContentForAI): boolean => {
 export type TextInput = {
   propertyId: SafeId<"property">;
   value: string;
+  /** A `label` is a select option; `content` can hold any wording. */
+  valueKind: "label" | "content";
 };
 
 type PreparedBatchInput = {
@@ -121,10 +136,11 @@ type PrepareBatchInputResult = Result<
   WorkflowValidationError
 >;
 
-type InputFieldRow = {
+export type InputFieldRow = {
   id: SafeId<"field">;
   propertyId: SafeId<"property">;
   content: FieldContent;
+  aiSettlement: AiCellSettlement | null;
 };
 
 type FetchInputFieldsForBatchProps = {
@@ -148,6 +164,7 @@ export const fetchInputFieldsForBatch = async ({
         id: fields.id,
         propertyId: fields.propertyId,
         content: fields.content,
+        aiSettlement: fields.aiSettlement,
       })
       .from(fields)
       .where(
@@ -169,7 +186,7 @@ export type ResolvedFile = {
 };
 
 export const prepareBatchInput = (
-  inputFields: InputFieldRow[],
+  inputFields: Omit<InputFieldRow, "aiSettlement">[],
   batch: PropertyBatch,
 ): PrepareBatchInputResult => {
   const skippedPropertyIds: SafeId<"property">[] = [];
@@ -201,6 +218,14 @@ export const prepareBatchInput = (
     textInputs.push({
       propertyId,
       value,
+      valueKind: "content",
+    });
+  };
+  const pushLabelInput = (propertyId: SafeId<"property">, value: string) => {
+    textInputs.push({
+      propertyId,
+      value,
+      valueKind: "label",
     });
   };
 
@@ -234,9 +259,9 @@ export const prepareBatchInput = (
     if (content.type === "text") {
       pushTextInput(field.propertyId, content.value);
     } else if (content.type === "single-select" && content.value !== null) {
-      pushTextInput(field.propertyId, content.value);
+      pushLabelInput(field.propertyId, content.value);
     } else if (content.type === "multi-select") {
-      pushTextInput(field.propertyId, content.value.join(", "));
+      pushLabelInput(field.propertyId, content.value.join(", "));
     } else if (content.type === "date" && content.value) {
       pushTextInput(field.propertyId, content.value);
     } else if (content.type === "record") {
@@ -248,6 +273,13 @@ export const prepareBatchInput = (
           ? `${content.value} ${content.currency}`
           : String(content.value),
       );
+    } else if (content.type === "money") {
+      pushTextInput(
+        field.propertyId,
+        `${toMajorUnitsText({ amountCents: content.amountCents, currency: content.currency })} ${content.currency}`,
+      );
+    } else if (content.type === "person") {
+      pushTextInput(field.propertyId, content.name);
     }
   }
 

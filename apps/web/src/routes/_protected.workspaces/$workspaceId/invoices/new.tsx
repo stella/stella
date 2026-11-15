@@ -25,7 +25,7 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/invoices/new",
 )({
   beforeLoad: async ({ context, params }) => {
-    const role = await ensureRouteQueryData(context.queryClient, roleOptions);
+    const role = await context.queryClient.query(roleOptions);
     if (
       !authClient.organization.checkRolePermission({
         role,

@@ -9,6 +9,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { TextMark } from "@stll/ui/text-mark";
 import { Tooltip, TooltipFactTrigger, TooltipPopup } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { CitedDecisionChip } from "@/components/legal-reader/cited-decision-link";
@@ -169,13 +170,16 @@ export const CitingDecisionItem = ({
       </div>
       {snippet !== null && snippet.length > 0 && (
         <div className="flex flex-col items-start gap-0.5">
-          <BidiText
-            as="p"
+          {/* The toggle below shows the whole snippet, so no hint. */}
+          <TruncatedText
             className={cn(
               "text-foreground-strong-muted text-2xs m-0 leading-snug",
-              isSnippetExpanded ? "whitespace-pre-wrap" : "line-clamp-2",
+              isSnippetExpanded && "whitespace-pre-wrap",
             )}
+            hint={false}
             id={snippetId}
+            lines={isSnippetExpanded ? "none" : 2}
+            render={<BidiText as="p" />}
           >
             {citationRange ? (
               <>
@@ -188,7 +192,7 @@ export const CitingDecisionItem = ({
             ) : (
               snippet
             )}
-          </BidiText>
+          </TruncatedText>
           <Button
             aria-controls={snippetId}
             aria-expanded={isSnippetExpanded}

@@ -17,6 +17,8 @@
 
 import { panic, Result, UnhandledException } from "better-result";
 
+import type { FailureGrade } from "@stll/errors";
+
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type {
   FailureGrading,
@@ -30,6 +32,7 @@ import {
   gradeFailure,
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { failureOutputPolicy } from "@/api/lib/observability/failure-output-policy";
 import { logger } from "@/api/lib/observability/logger";
 import type { ReleaseFailureIdentity } from "@/api/lib/observability/release-failures";
 import {
@@ -230,7 +233,9 @@ export const resetFailureObservationsForTesting = (): void => {
 type ShadowObservation = {
   readonly error: unknown;
   readonly sink: FailureSink;
-  readonly channel: LegacyChannel;
+  /** A function when the grade decides the channel. */
+  readonly channel:
+    LegacyChannel | ((grading: FailureGrading) => LegacyChannel);
   readonly request?: Request | undefined;
   /** The matched route template, when the sink knows it. */
   readonly route?: string | undefined;
@@ -275,7 +280,7 @@ export const observeShadow = ({
     countFailureObservation({
       sink,
       grading,
-      channel,
+      channel: typeof channel === "function" ? channel(grading) : channel,
       degradation: fingerprintDegradation(evidence),
       route,
       identity: releaseFailureIdentity(evidence),
@@ -290,6 +295,22 @@ export const observeShadow = ({
     return undefined;
   }
   return observed.value;
+};
+
+/**
+ * The severity of a record answering a failure at `statusCode`. A 5xx takes its
+ * grade's: a dependency graded transient logs at WARN and is alarmed on its
+ * sustained rate from the failure metric, so a single blip pages no one and an
+ * outage still does. A 5xx with no grade is reported as a fault.
+ */
+export const answeredFailureSeverity = (
+  statusCode: number,
+  grade: FailureGrade | undefined,
+): "ERROR" | "WARN" => {
+  if (statusCode < 500) {
+    return "WARN";
+  }
+  return grade === undefined ? "ERROR" : failureOutputPolicy(grade).severity;
 };
 
 /** The fields a shadow-graded record carries. */

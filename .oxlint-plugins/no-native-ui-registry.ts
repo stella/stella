@@ -205,6 +205,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   "document-identity-badge": noNative("a domain badge for a document"),
   "document-mark": noNative("file format artwork drawn as SVG"),
   "document-identity-badge.logic": notComponent("badge formatting helpers"),
+  "entity-actions": owned(
+    "no-raw-context-menu/no-raw-context-menu",
+    "hand-written contextmenu handlers are reported there",
+  ),
   field: owned(
     nativeRuleId("label"),
     "Field pairs a Label with a control; the native label is the label rule's",
@@ -214,6 +218,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   "file-picker": notComponent(
     "an imperative file chooser; native file inputs are no-raw-file-input's",
   ),
+  "file-size": notComponent("byte size formatting"),
   form: native("Form from @stll/ui/form", { elements: ["form"] }),
   frame: noNative("a layout surface with header and footer slots"),
   "hex-color-picker": owned(
@@ -275,6 +280,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   "middle-truncate": noNative(
     "a truncated name; plain text cut at its end is the other rule's",
   ),
+  "native-context-menu": notComponent(
+    "decides when a right-click keeps the native menu",
+  ),
   "number-input": native("NumberInput from @stll/ui/number-input", {
     roles: ["spinbutton"],
     inputTypes: ["number"],
@@ -311,6 +319,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   "review-severity-dot": noNative("a review severity marker"),
   "review-status-badge": noNative("a review status badge"),
   "review-word-diff": notComponent("word diff computation"),
+  "run-state-mark": owned(
+    "no-hand-drawn-run-state/no-hand-drawn-run-state",
+    "a run state drawn outside the mark is reported there",
+  ),
   "scroll-area": owned(
     OVERFLOW_RULE,
     "raw overflow scrolling is reported there",

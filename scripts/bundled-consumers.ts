@@ -388,6 +388,26 @@ export const BUNDLED_CONSUMERS = [
     },
   },
   {
+    file: "apps/legal-atlas-runner/Dockerfile",
+    command:
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir apps/legal-atlas-runner/dist/workers --entry-naming pdf-worker.js apps/api/src/lib/files/pdf-worker.ts",
+    bootCheck: {
+      type: "docker-run",
+      dockerfile: "apps/legal-atlas-runner/Dockerfile",
+      run: 'RUN status=0; printf \'not a pdf\' | bun apps/legal-atlas-runner/dist/workers/pdf-worker.js text-lines >/dev/null 2>&1 || status=$?; [ "$status" -eq 65 ] || { echo "ERROR: pdf worker smoke exited $status, expected 65" >&2; exit 1; }',
+    },
+  },
+  {
+    file: "apps/skill-runner/Dockerfile",
+    command:
+      "bun build apps/skill-runner/src/handler.ts --target=node --format=esm --outfile /app/handler.mjs",
+    bootCheck: {
+      type: "none",
+      reason:
+        "The Lambda image packages a handler export rather than a directly bootable program.",
+    },
+  },
+  {
     file: "apps/visual-preview/Dockerfile",
     command:
       "bun build apps/visual-preview/src/handler.ts --target=node --format=esm --external playwright-core --outfile /app/handler.mjs",

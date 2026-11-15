@@ -14,6 +14,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
   "apps/api/src/mcp/**/*.{ts,tsx}",
   "apps/web/src/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.{ts,tsx}",
+  "apps/skill-runner/src/**/*.{ts,tsx}",
   "packages/*/src/**/*.{ts,tsx}",
 ] as const;
 
@@ -27,7 +28,9 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "packages/deadlines/src/**/*.ts",
   "packages/html/src/**/*.{ts,tsx}",
+  "apps/api/src/lib/data-sources/**/*.ts",
   "apps/api/src/db/online-migration-entries/**/*.ts",
   "packages/playwright-tools/src/**/*.ts",
   "packages/render-probe/src/**/*.{ts,tsx}",
@@ -44,12 +47,17 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/mobile/src/app/task/**/*.{ts,tsx}",
   "apps/mobile/src/app/timers/**/*.{ts,tsx}",
   "apps/mobile/src/app/scan/**/*.{ts,tsx}",
+  "apps/mobile/src/app/share/**/*.{ts,tsx}",
   "apps/mobile/src/components/ui/**/*.{ts,tsx}",
   "apps/mobile/src/native/**/*.{ts,tsx}",
   "apps/mobile/src/widgets/**/*.{ts,tsx}",
   "apps/mobile/src/app/document/**/*.{ts,tsx}",
   "apps/mobile/src/components/document-viewer/**/*.{ts,tsx}",
+  "apps/outlook/src/components/**/*.{ts,tsx}",
+  "apps/outlook/src/i18n/**/*.{ts,tsx}",
+  "apps/outlook/src/lib/oauth/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.ts",
+  "apps/skill-runner/src/**/*.ts",
   "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts",
@@ -58,12 +66,15 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
+  "apps/api/src/handlers/ai/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
   "apps/api/src/handlers/audit-logs/**/*.ts",
   "apps/api/src/handlers/auth/**/*.ts",
   "apps/api/src/handlers/bilingual-translations/**/*.ts",
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
+  "apps/api/src/handlers/conflict-checks/**/*.ts",
+  "apps/api/src/lib/conflict-check/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
   "apps/api/src/handlers/client-invoices/**/*.ts",
   "apps/api/src/handlers/desktop-feature-access/**/*.ts",
@@ -96,6 +107,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/organization-settings/**/*.ts",
   "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
+  "apps/api/src/handlers/data-exports/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",
   "apps/api/src/handlers/saved-time-narratives/**/*.ts",
   "apps/api/src/handlers/saved-searches/**/*.ts",
@@ -115,13 +127,16 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/work-obligations/**/*.ts",
   "apps/api/src/lib/account-export/**/*.ts",
   "apps/api/src/lib/ai-generation/**/*.ts",
+  "apps/api/src/lib/chat/artefact-provenance.ts",
   "apps/api/src/lib/bbox/**/*.ts",
   "apps/api/src/lib/billing/**/*.ts",
   "apps/api/src/lib/clauses/**/*.ts",
   "apps/api/src/lib/conditions/**/*.ts",
+  "apps/api/src/lib/data-export/**/*.ts",
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
+  "apps/api/src/lib/queue/**/*.ts",
   "apps/api/src/lib/imports/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/email/correspondence/**/*.ts",
@@ -129,6 +144,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/extraction-runs/**/*.ts",
   "apps/api/src/lib/feature-access/**/*.ts",
   "apps/api/src/lib/kill-switches/**/*.ts",
+  "apps/api/src/lib/workspaces/legal-holds/**/*.ts",
   "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/github/**/*.ts",
@@ -189,6 +205,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/inbox/**/*.{ts,tsx}",
   "apps/web/src/features/knowledge/**/*.{ts,tsx}",
   "apps/web/src/features/my-week/**/*.{ts,tsx}",
+  "apps/web/src/features/sharepoint/**/*.{ts,tsx}",
   "apps/web/src/features/time-review/**/*.{ts,tsx}",
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
@@ -257,6 +274,10 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // The page script runs serialised inside a web page and may reference
+  // nothing outside itself, so it cannot import better-result; its catches
+  // turn a DOM parse that throws into a fallback value.
+  "packages/browser-page/src/page-script.ts",
   // Adapter definitions return typed stored-read failures; the existing replay
   // callback protocol consumes those failures through Promise rejection.
   "apps/api/src/lib/legal-search/stored-raw-reparse-boundary.ts",
@@ -289,6 +310,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth invokes these hooks and consumes rejected APIError values.
   // Better Auth organization hooks reject invalid slug operations through APIError.
   "apps/api/src/lib/auth/organization-slug-hooks.ts",
+  "apps/api/src/lib/auth/organization-logo-hooks.ts",
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
   "apps/api/src/lib/auth/request-budget-hooks.ts",
@@ -297,6 +319,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // The OAuth provider consumes a client discovery's refusal as a rejected
   // APIError, which the stale-if-error wrapper passes through unchanged.
   "apps/api/src/lib/auth/cimd-stale-if-error.ts",
+  // Better Auth maps a rejected code exchange to its callback error, so the
+  // retry wrapper hands the provider's rejection back unchanged.
+  "apps/api/src/lib/auth/social-token-exchange.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
@@ -338,18 +363,28 @@ export const RESULT_BOUNDARY_GLOBS = [
   // append/read/close failure only from a rejection, and the throw is what
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
+  // Wraps that StreamDurability adapter for a chat turn: the SDK still reads a
+  // delivery failure only from a rejection, now carrying its AI error kind.
+  "apps/api/src/handlers/chat/chat-delivery-failure.ts",
   // Drizzle rolls back transaction callbacks through rejection; returning a
   // Result would commit their writes instead of preserving the original refusal.
   "apps/api/src/lib/db/transaction-abort.ts",
   "apps/api/src/lib/workflow-queue.ts",
+  // Queue worker entry point: BullMQ consumes the job's rejection, and the
+  // run turns every failure into the export row's state.
+  "apps/api/src/handlers/data-exports/data-export-worker.ts",
+  // An async generator: its consumer learns that a streamed entry ended at
+  // the wrong length only from the iteration rejecting.
+  "apps/api/src/handlers/data-exports/zip-writer.ts",
   // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
   // reservation callbacks whose rejection rolls back the kickoff transaction.
   "apps/api/src/lib/rate-limit/queued-action-admission.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
   "apps/api/src/handlers/visual-sandbox/**",
-  // Lambda invokes this entry point and reports a failure through rejection.
+  // Lambda invokes these entry points and reports a failure through rejection.
   "apps/visual-preview/src/handler.ts",
+  "apps/skill-runner/src/handler.ts",
   // Web worker entry modules. The browser, not our code, invokes the message
   // handler, and a failure has to travel back over `postMessage` instead of
   // returning to a caller that could read a `Result`.
@@ -515,6 +550,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   },
   {
     reason:
+      "Chrome extension offscreen document: its chrome.runtime message listener is the runtime boundary, answering the worker with typed reads. Enrol together with apps/extension/src/entrypoints.",
+    unit: "apps/extension/src/entrypoints/offscreen",
+  },
+  {
+    reason:
       "Chrome extension popup: DOM lookups and chrome.* calls are the runtime boundary. Enrol together with apps/extension/src/entrypoints.",
     unit: "apps/extension/src/entrypoints/popup",
   },
@@ -522,6 +562,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
     reason:
       "Chrome extension library: tab-executor is the boundary that maps chrome.* rejections to protocol error codes. Enrol once chrome.* calls sit behind Result.tryPromise.",
     unit: "apps/extension/src/lib",
+  },
+  {
+    reason:
+      "Shared page code of the browser hosts, moved here from the extension library unchanged. Enrol it with that library; the page script itself is a boundary module.",
+    unit: "packages/browser-page/src",
   },
   { reason: "unreviewed", unit: "apps/landing/src" },
   { reason: "unreviewed", unit: "apps/landing/src/components" },
@@ -539,6 +584,21 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "apps/mobile/src/app" },
   { reason: "unreviewed", unit: "apps/mobile/src/app/(tabs)" },
   { reason: "unreviewed", unit: "apps/mobile/src/components" },
+  {
+    reason:
+      "Outlook add-in adapters and entry scripts: api.ts and outlook.ts reject with typed errors that the hooks consume through Result.tryPromise, and the entry scripts catch Office.js startup failures. Enrol once those adapters return Result.",
+    unit: "apps/outlook/src",
+  },
+  {
+    reason:
+      "Outlook hooks turn adapter rejections into task pane state through Result.tryPromise, and a stale mail item rejects inside that wrapper. Enrol together with apps/outlook/src.",
+    unit: "apps/outlook/src/hooks",
+  },
+  {
+    reason:
+      "Office.js and API client adapters: office.ts reads callback APIs that fail by throwing, and outlook-api-client.ts rejects with typed errors its callers wrap in Result.tryPromise. Enrol together with apps/outlook/src.",
+    unit: "apps/outlook/src/lib",
+  },
   { reason: "unreviewed", unit: "apps/playground/src" },
   { reason: "unreviewed", unit: "apps/web/src" },
   { reason: "unreviewed", unit: "apps/web/src/components" },

@@ -37,6 +37,11 @@ import type {
   ChatRunRescanReferenceState,
   ChatRunTrackedReferenceState,
 } from "@/api/lib/chat/run-log-reference-state";
+import {
+  CHAT_RUN_LOG_REFUSALS,
+  ChatRunLogRefusedError,
+} from "@/api/lib/chat/run-log-refusal";
+import type { ChatRunLogRefusalReason } from "@/api/lib/chat/run-log-refusal";
 import { createRunMessageRoles } from "@/api/lib/chat/run-log-roles";
 import type { OpenRunMessage } from "@/api/lib/chat/run-log-roles";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
@@ -50,6 +55,11 @@ import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 const MAX_CHUNK_BYTES = 1024 * 1024;
 export const MAX_RUN_BYTES = 32 * MAX_CHUNK_BYTES;
+/**
+ * Room the run budget keeps for the batch that reports how the run failed, so
+ * a run refused for its size can still store its terminal error and close.
+ */
+const TERMINAL_ERROR_RESERVE_BYTES = 64 * 1024;
 export const READ_PAGE_SIZE = 256;
 const REFERENCE_TEXT_CARRY_CHARS = 256;
 const TAIL_POLL_MS = 250;
@@ -69,6 +79,29 @@ type ChatRunLogExecution = {
 class ChatRunLogError extends TaggedError("ChatRunLogError")<{
   message: string;
 }> {}
+
+const refusal = (reason: ChatRunLogRefusalReason) =>
+  new ChatRunLogRefusedError({
+    message: CHAT_RUN_LOG_REFUSALS[reason],
+    reason,
+  });
+
+const CHAT_RUN_LOG_REFUSED = failureSink({
+  event: "chat.run_log.append_refused",
+  expected: [],
+});
+
+/**
+ * Which refusals this log reports as failures. A size refusal ends a turn the
+ * member watches; a lost fence or a closed log means another owner settles
+ * the turn, which is an expected outcome rather than a defect.
+ */
+const OBSERVED_REFUSALS = {
+  "chunk-too-large": true,
+  "run-too-large": true,
+  "fence-lost": false,
+  closed: false,
+} as const satisfies Record<ChatRunLogRefusalReason, boolean>;
 
 /** A resume cursor this run's log never issued: the caller's input, not a defect. */
 export class ChatRunLogOffsetBeyondTailError extends TaggedError(
@@ -1250,14 +1283,28 @@ export const createChatRunLogReplay = async ({
   };
 };
 
-const assertRunLogOwner = async ({
+type RunLogOwnerOptions = Pick<
+  ChatRunLogOptions,
+  "execution" | "organizationId" | "runId"
+> & {
+  tx: Transaction;
+};
+
+const assertRunLogOwner = async (options: RunLogOwnerOptions) => {
+  if (!(await holdsRunLogFence(options))) {
+    throw new ChatRunLogError({
+      message: CHAT_RUN_LOG_REFUSALS["fence-lost"],
+    });
+  }
+};
+
+/** Locks the turn row while this execution still owns the running turn. */
+const holdsRunLogFence = async ({
   tx,
   execution,
   organizationId,
   runId,
-}: Pick<ChatRunLogOptions, "execution" | "organizationId" | "runId"> & {
-  tx: Transaction;
-}) => {
+}: RunLogOwnerOptions): Promise<boolean> => {
   const rows = await tx
     .select({ id: chatTurns.id })
     .from(chatTurns)
@@ -1272,12 +1319,194 @@ const assertRunLogOwner = async ({
     )
     .for("update")
     .limit(1);
-  if (rows.length !== 1) {
-    throw new ChatRunLogError({
-      message: "Chat run log execution fence lost",
-    });
-  }
+  return rows.length === 1;
 };
+
+/**
+ * Which events a batch reporting the run's failure may carry: the error and
+ * the assistant message end that finalizes its timing. Only such a batch may
+ * spend the terminal reserve, so ordinary output can never use it up. Total
+ * over the SDK's events, so a new one needs a decision here.
+ */
+const SPENDS_TERMINAL_ERROR_RESERVE = {
+  [EventType.RUN_ERROR]: true,
+  [EventType.TEXT_MESSAGE_END]: true,
+  [EventType.TEXT_MESSAGE_START]: false,
+  [EventType.TEXT_MESSAGE_CONTENT]: false,
+  [EventType.TEXT_MESSAGE_CHUNK]: false,
+  [EventType.TOOL_CALL_START]: false,
+  [EventType.TOOL_CALL_ARGS]: false,
+  [EventType.TOOL_CALL_END]: false,
+  [EventType.TOOL_CALL_CHUNK]: false,
+  [EventType.TOOL_CALL_RESULT]: false,
+  [EventType.STATE_SNAPSHOT]: false,
+  [EventType.STATE_DELTA]: false,
+  [EventType.MESSAGES_SNAPSHOT]: false,
+  [EventType.ACTIVITY_SNAPSHOT]: false,
+  [EventType.ACTIVITY_DELTA]: false,
+  [EventType.RAW]: false,
+  [EventType.CUSTOM]: false,
+  [EventType.RUN_STARTED]: false,
+  [EventType.RUN_FINISHED]: false,
+  [EventType.STEP_STARTED]: false,
+  [EventType.STEP_FINISHED]: false,
+  [EventType.REASONING_START]: false,
+  [EventType.REASONING_MESSAGE_START]: false,
+  [EventType.REASONING_MESSAGE_CONTENT]: false,
+  [EventType.REASONING_MESSAGE_END]: false,
+  [EventType.REASONING_MESSAGE_CHUNK]: false,
+  [EventType.REASONING_END]: false,
+  [EventType.REASONING_ENCRYPTED_VALUE]: false,
+  [EventType.SUBAGENT_STARTED]: false,
+  [EventType.SUBAGENT_FINISHED]: false,
+  [EventType.SUBAGENT_ERROR]: false,
+} as const satisfies Record<StreamChunk["type"], boolean>;
+
+const isTerminalErrorBatch = (chunks: readonly StreamChunk[]): boolean =>
+  chunks.some((chunk) => chunk.type === EventType.RUN_ERROR) &&
+  chunks.every((chunk) => SPENDS_TERMINAL_ERROR_RESERVE[chunk.type]);
+
+/**
+ * What one append transaction did. A refusal is returned rather than thrown,
+ * and is decided before the batch writes a row, so only a failure whose commit
+ * outcome is unknown (the transaction threw) can leave the batch pending.
+ */
+type RunLogAppendOutcome =
+  | { type: "stored"; offsets: string[] }
+  | { type: "refused"; reason: ChatRunLogRefusalReason };
+
+/** One transaction for one batch. It throws only when the database did, so a
+ *  throw is the one outcome that may still have committed. */
+const appendRunLogBatch = async ({
+  db,
+  execution,
+  organizationId,
+  runId,
+  batch,
+  chunks,
+  bytes,
+}: Omit<ChatRunLogOptions, "resumeOffset"> & {
+  batch: { id: string };
+  chunks: StreamChunk[];
+  bytes: number[];
+}): Promise<RunLogAppendOutcome> =>
+  await db(async (tx): Promise<RunLogAppendOutcome> => {
+    if (!(await holdsRunLogFence({ tx, execution, organizationId, runId }))) {
+      return { type: "refused", reason: "fence-lost" };
+    }
+    // audit: skip — ephemeral delivery log of a turn; the turn's settlement is audited by its caller
+    await tx
+      .insert(chatRunLogs)
+      .values({
+        organizationId,
+        runId,
+        turnId: execution.id,
+        referenceSummary: {
+          type: "checkpointed",
+          through: "0",
+          decisionIds: [],
+          messages: [],
+        },
+      })
+      .onConflictDoNothing();
+    const [log] = await tx
+      .select({
+        bytesUsed: chatRunLogs.bytesUsed,
+        closedAt: chatRunLogs.closedAt,
+        nextSeq: chatRunLogs.nextSeq,
+        turnId: chatRunLogs.turnId,
+      })
+      .from(chatRunLogs)
+      .where(logKey(organizationId, runId))
+      .for("update")
+      .limit(1);
+    if (
+      log === undefined ||
+      log.turnId !== execution.id ||
+      log.closedAt !== null
+    ) {
+      return { type: "refused", reason: "closed" };
+    }
+    const alreadyStored = await tx
+      .select({
+        chunk: chatRunLogEntries.chunk,
+        seq: chatRunLogEntries.seq,
+      })
+      .from(chatRunLogEntries)
+      .where(
+        and(
+          entryKey(organizationId, runId),
+          eq(chatRunLogEntries.batchId, batch.id),
+        ),
+      )
+      .orderBy(asc(chatRunLogEntries.batchIndex))
+      .limit(chunks.length + 1);
+    if (alreadyStored.length > 0) {
+      // The batch id is minted per fingerprint above, so its stored rows
+      // can only be this exact batch.
+      if (
+        alreadyStored.length !== chunks.length ||
+        alreadyStored.some((row, index) => {
+          const chunk = chunks.at(index);
+          return (
+            chunk === undefined ||
+            canonicalChunk(row.chunk) !== canonicalChunk(chunk)
+          );
+        })
+      ) {
+        panic("Chat run log retry differs from stored batch");
+      }
+      return {
+        type: "stored",
+        offsets: alreadyStored.map((row) => row.seq.toString()),
+      };
+    }
+    const nextBytes =
+      log.bytesUsed + BigInt(bytes.reduce((sum, size) => sum + size, 0));
+    const budget = isTerminalErrorBatch(chunks)
+      ? MAX_RUN_BYTES
+      : MAX_RUN_BYTES - TERMINAL_ERROR_RESERVE_BYTES;
+    if (nextBytes > BigInt(budget)) {
+      return { type: "refused", reason: "run-too-large" };
+    }
+    const [reference] = await tx
+      .select({ state: chatRunLogs.referenceSummary })
+      .from(chatRunLogs)
+      .where(logKey(organizationId, runId))
+      .limit(1);
+    const previous =
+      reference?.state ?? panic("Locked run log reference state disappeared");
+    const referenceSummary = nextRunReferenceState({
+      state: previous,
+      chunks,
+      firstSeq: log.nextSeq,
+    });
+    const first = log.nextSeq;
+    // audit: skip — ephemeral delivery log of a turn; the turn's settlement is audited by its caller
+    await tx.insert(chatRunLogEntries).values(
+      chunks.map((chunk, index) => ({
+        organizationId,
+        runId,
+        seq: first + BigInt(index),
+        batchId: batch.id,
+        batchIndex: index,
+        chunk,
+      })),
+    );
+    // audit: skip — ephemeral delivery log of a turn; the turn's settlement is audited by its caller
+    await tx
+      .update(chatRunLogs)
+      .set({
+        nextSeq: first + BigInt(chunks.length),
+        bytesUsed: nextBytes,
+        referenceSummary,
+      })
+      .where(logKey(organizationId, runId));
+    return {
+      type: "stored",
+      offsets: chunks.map((_, index) => (first + BigInt(index)).toString()),
+    };
+  });
 
 /** PostgreSQL owns the turn fence, event prefix, and close marker together. */
 export const createChatRunLog = ({
@@ -1289,7 +1518,6 @@ export const createChatRunLog = ({
 }: ChatRunLogOptions): StreamDurability => {
   let pendingBatch: { id: string; fingerprint: string } | null = null;
   const reader = createRunLogReader({ db, organizationId, runId });
-
   return {
     ...reader,
     resumeFrom: () => resumeOffset,
@@ -1303,129 +1531,45 @@ export const createChatRunLog = ({
           message: "A chat run log append is awaiting retry",
         });
       }
-      pendingBatch ??= { id: Bun.randomUUIDv7(), fingerprint };
-      const batch = pendingBatch;
       const bytes = chunks.map(chunkBytes);
-      if (bytes.some((size) => size > MAX_CHUNK_BYTES)) {
-        throw new ChatRunLogError({
-          message: "Chat run log chunk exceeds its size limit",
-        });
-      }
       const startedAt = performance.now();
-      const offsets = await db(async (tx) => {
-        await assertRunLogOwner({ tx, execution, organizationId, runId });
-        await tx
-          .insert(chatRunLogs)
-          .values({
+      const outcome: RunLogAppendOutcome = bytes.some(
+        (size) => size > MAX_CHUNK_BYTES,
+      )
+        ? { type: "refused", reason: "chunk-too-large" }
+        : await appendRunLogBatch({
+            db,
+            execution,
             organizationId,
             runId,
-            turnId: execution.id,
-            referenceSummary: {
-              type: "checkpointed",
-              through: "0",
-              decisionIds: [],
-              messages: [],
-            },
-          })
-          .onConflictDoNothing();
-        const [log] = await tx
-          .select({
-            bytesUsed: chatRunLogs.bytesUsed,
-            closedAt: chatRunLogs.closedAt,
-            nextSeq: chatRunLogs.nextSeq,
-            turnId: chatRunLogs.turnId,
-          })
-          .from(chatRunLogs)
-          .where(logKey(organizationId, runId))
-          .for("update")
-          .limit(1);
-        if (
-          log === undefined ||
-          log.turnId !== execution.id ||
-          log.closedAt !== null
-        ) {
-          throw new ChatRunLogError({
-            message: "Chat run log is closed or bound to another turn",
+            batch: (pendingBatch ??= { id: Bun.randomUUIDv7(), fingerprint }),
+            chunks,
+            bytes,
           });
-        }
-        const alreadyStored = await tx
-          .select({
-            chunk: chatRunLogEntries.chunk,
-            seq: chatRunLogEntries.seq,
-          })
-          .from(chatRunLogEntries)
-          .where(
-            and(
-              entryKey(organizationId, runId),
-              eq(chatRunLogEntries.batchId, batch.id),
-            ),
-          )
-          .orderBy(asc(chatRunLogEntries.batchIndex))
-          .limit(chunks.length + 1);
-        if (alreadyStored.length > 0) {
-          // The batch id is minted per fingerprint above, so its stored rows
-          // can only be this exact batch.
-          if (
-            alreadyStored.length !== chunks.length ||
-            alreadyStored.some((row, index) => {
-              const chunk = chunks.at(index);
-              return (
-                chunk === undefined ||
-                canonicalChunk(row.chunk) !== canonicalChunk(chunk)
-              );
-            })
-          ) {
-            panic("Chat run log retry differs from stored batch");
-          }
-          return alreadyStored.map((row) => row.seq.toString());
-        }
-        const nextBytes =
-          log.bytesUsed + BigInt(bytes.reduce((sum, size) => sum + size, 0));
-        if (nextBytes > BigInt(MAX_RUN_BYTES)) {
-          throw new ChatRunLogError({
-            message: "Chat run log exceeds its size limit",
-          });
-        }
-        const [reference] = await tx
-          .select({ state: chatRunLogs.referenceSummary })
-          .from(chatRunLogs)
-          .where(logKey(organizationId, runId))
-          .limit(1);
-        const previous =
-          reference?.state ??
-          panic("Locked run log reference state disappeared");
-        const referenceSummary = nextRunReferenceState({
-          state: previous,
-          chunks,
-          firstSeq: log.nextSeq,
-        });
-        const first = log.nextSeq;
-        await tx.insert(chatRunLogEntries).values(
-          chunks.map((chunk, index) => ({
-            organizationId,
-            runId,
-            seq: first + BigInt(index),
-            batchId: batch.id,
-            batchIndex: index,
-            chunk,
-          })),
-        );
-        await tx
-          .update(chatRunLogs)
-          .set({
-            nextSeq: first + BigInt(chunks.length),
-            bytesUsed: nextBytes,
-            referenceSummary,
-          })
-          .where(logKey(organizationId, runId));
-        return chunks.map((_, index) => (first + BigInt(index)).toString());
-      });
+      // Reached only when the transaction settled: a stored batch and a
+      // refused one both have a known outcome, so neither is retried.
       pendingBatch = null;
-      emitChatRunLogMetric({
-        type: "append",
-        durationMs: performance.now() - startedAt,
-      });
-      return offsets;
+      switch (outcome.type) {
+        case "stored":
+          emitChatRunLogMetric({
+            type: "append",
+            durationMs: performance.now() - startedAt,
+          });
+          return outcome.offsets;
+        case "refused": {
+          const error = refusal(outcome.reason);
+          if (OBSERVED_REFUSALS[outcome.reason]) {
+            observeFailure(error, {
+              sink: CHAT_RUN_LOG_REFUSED,
+              ctx: { runId },
+            });
+          }
+          throw error;
+        }
+        default:
+          outcome satisfies never;
+          return panic("Unhandled chat run log append outcome");
+      }
     },
     // Settlement/recovery must close while holding the execution fence; the
     // SDK's later close call may only acknowledge an already-closed log.

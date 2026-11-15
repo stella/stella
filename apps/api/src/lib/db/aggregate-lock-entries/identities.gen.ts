@@ -14,6 +14,7 @@ import type { Identity as ChatThreadIdentity } from "./chatThread";
 import type { Identity as ChatToolGrantsIdentity } from "./chatToolGrants";
 import type { Identity as ChatTurnIdentity } from "./chatTurn";
 import type { Identity as ContactCapacityIdentity } from "./contactCapacity";
+import type { Identity as CorpusProjectionOfflineRequestIdentity } from "./corpusProjectionOfflineRequest";
 import type { Identity as CorrespondenceIdentity } from "./correspondence";
 import type { Identity as CurrentStepIdentity } from "./currentStep";
 import type { Identity as DefinitionIdentity } from "./definition";
@@ -37,6 +38,7 @@ import type { Identity as OrgFeatureAdmissionIdentity } from "./orgFeatureAdmiss
 import type { Identity as OrganizationIdentity } from "./organization";
 import type { Identity as OrganizationDataBoxesIdentity } from "./organizationDataBoxes";
 import type { Identity as OrganizationObjectIntentIdentity } from "./organizationObjectIntent";
+import type { Identity as OrganizationSettingsIdentity } from "./organizationSettings";
 import type { Identity as PersonalCatalogIdentity } from "./personalCatalog";
 import type { Identity as ProcessingClaimIdentity } from "./processingClaim";
 import type { Identity as ProfessionalUseAcceptanceIdentity } from "./professionalUseAcceptance";
@@ -72,6 +74,7 @@ export type AggregateIdentities = {
   "chatToolGrants": ChatToolGrantsIdentity;
   "chatTurn": ChatTurnIdentity;
   "contactCapacity": ContactCapacityIdentity;
+  "corpusProjectionOfflineRequest": CorpusProjectionOfflineRequestIdentity;
   "correspondence": CorrespondenceIdentity;
   "currentStep": CurrentStepIdentity;
   "definition": DefinitionIdentity;
@@ -95,6 +98,7 @@ export type AggregateIdentities = {
   "organization": OrganizationIdentity;
   "organizationDataBoxes": OrganizationDataBoxesIdentity;
   "organizationObjectIntent": OrganizationObjectIntentIdentity;
+  "organizationSettings": OrganizationSettingsIdentity;
   "personalCatalog": PersonalCatalogIdentity;
   "processingClaim": ProcessingClaimIdentity;
   "professionalUseAcceptance": ProfessionalUseAcceptanceIdentity;

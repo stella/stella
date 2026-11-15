@@ -3,10 +3,13 @@ import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
+  cellMetadata,
   desktopEditSessions,
   entities,
   fields,
@@ -38,8 +41,13 @@ import {
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
 import { DESKTOP_EDIT_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import {
+  CELL_COMPANION_BATCH,
+  planCellCompanions,
+} from "@/api/lib/entity-versions/cell-companions";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { findDesktopEditableFileForProperty } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { CARRIED_FIELD_COLUMNS } from "@/api/lib/entity-versions/field-clone-policy";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import {
@@ -264,7 +272,7 @@ export const finalizeDesktopEditSessionHandler = async ({
         .where(eq(workspaces.id, authorizedSession.value.workspaceId))
         .limit(1)
         .for("update");
-      if (workspaceRows.at(0)?.status !== "active") {
+      if (!workspaceAcceptsWrites(workspaceRows.at(0)?.status)) {
         return {
           error: { message: "Workspace is not active", statusCode: 409 },
         } as const;
@@ -441,12 +449,7 @@ export const finalizeDesktopEditSessionHandler = async ({
           versionNumber: true,
         },
         with: {
-          fields: {
-            columns: {
-              content: true,
-              propertyId: true,
-            },
-          },
+          fields: { columns: CARRIED_FIELD_COLUMNS },
         },
       });
 
@@ -641,6 +644,27 @@ export const finalizeDesktopEditSessionHandler = async ({
         .insert(fields)
         .values(clonedFields)
         .returning({ id: fields.id, propertyId: fields.propertyId });
+      // A cell a member locked stays locked across the edit; the edited
+      // file's own cell describes new bytes.
+      const companions = await planCellCompanions({
+        tx,
+        kind: "desktop-edit",
+        sourceWorkspaceId: authorizedSession.value.workspaceId,
+        targetWorkspaceId: authorizedSession.value.workspaceId,
+        versions: [
+          {
+            sourceVersionId: editSession.baseVersionId,
+            targetVersionId: nextVersionId,
+          },
+        ],
+        replacedPropertyIds: [editSession.propertyId],
+      });
+      for (const rows of chunkItems(
+        companions.metadata,
+        CELL_COMPANION_BATCH,
+      )) {
+        await tx.insert(cellMetadata).values(rows);
+      }
 
       const nextField = insertedFields.find(
         (field) => field.propertyId === editSession.propertyId,

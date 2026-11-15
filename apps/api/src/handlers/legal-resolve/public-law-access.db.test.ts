@@ -101,8 +101,7 @@ const decision = {
     readerUrl: "/case/fixture",
     text: {
       status: "readable",
-      blocks: [{ text: "Public decision text" }],
-      extent: { type: "complete" },
+      charCount: 20,
     },
   },
 } as const satisfies LegalResolveResponse;

@@ -46,7 +46,13 @@ export const timerActivityPushFor = ({
 }: {
   device: Pick<
     TimerActivityDevice,
-    "locale" | "link" | "details" | "startToken" | "activityToken" | "starting"
+    | "locale"
+    | "link"
+    | "details"
+    | "startToken"
+    | "activityToken"
+    | "starting"
+    | "actions"
   >;
   matterNames: ReadonlyMap<string, string>;
   now: number;
@@ -54,6 +60,7 @@ export const timerActivityPushFor = ({
 }): TimerActivityPush => {
   const labels = timerActivityLabels(resolveUiLocale(device.locale) ?? "en");
   const props = timerActivityOf({
+    actions: device.actions,
     details: device.details ? "shown" : "hidden",
     labels,
     link: device.link,
@@ -79,6 +86,9 @@ export const timerActivityPushFor = ({
             timestamp,
             event: "end",
             "content-state": contentState({
+              actionLabel: "",
+              actionTarget: "",
+              actions: false,
               clock: "",
               countingFromMs: now,
               detail: "",

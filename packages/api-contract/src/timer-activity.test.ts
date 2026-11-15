@@ -5,6 +5,7 @@ import {
   clockOf,
   elapsedSeconds,
   TIMER_ACTIVITY_TEXT_MAX_LENGTH,
+  timerActivityActionTarget,
   timerActivityDeviceRegistrationSchema,
   timerActivityOf,
 } from "./timer-activity";
@@ -20,7 +21,9 @@ const labels: TimerActivityLabels = {
   more: (count) => `+${count} more`,
   noDescription: "No description",
   noMatter: "No matter",
+  pause: "Pause",
   paused: "Paused",
+  resume: "Resume",
   running: "Running",
   timer: "Timer",
 };
@@ -41,6 +44,7 @@ const activity = (
   details: TimerActivityDetails = "shown",
 ) =>
   timerActivityOf({
+    actions: true,
     details,
     labels,
     link: "app.stll.dev://timers",
@@ -85,6 +89,9 @@ describe("the timer's Live Activity", () => {
 
   test("counts a running timer on from when it would have started", () => {
     expect(activity([RUNNING])).toEqual({
+      actionLabel: "Pause",
+      actionTarget: "stella-timer:pause:t1",
+      actions: true,
       clock: "0:15:00",
       countingFromMs: NOW - 900_000,
       detail: "Novák v. Acme",
@@ -120,6 +127,9 @@ describe("the timer's Live Activity", () => {
   test("with details hidden, names neither the description nor the matter", () => {
     const shown = activity([RUNNING], "hidden");
     expect(shown).toEqual({
+      actionLabel: "Pause",
+      actionTarget: "stella-timer:pause:t1",
+      actions: true,
       clock: "0:15:00",
       countingFromMs: NOW - 900_000,
       detail: "",
@@ -161,6 +171,14 @@ describe("the timer's Live Activity", () => {
     expect(shown?.timerId).toBe("later");
   });
 
+  test("offers to resume a paused timer, and names the button's target", () => {
+    const shown = activity([timer({ accumulatedSeconds: 60, id: "t9" })]);
+    expect(shown?.actionLabel).toBe("Resume");
+    expect(timerActivityActionTarget("resume", "t9")).toBe(
+      "stella-timer:resume:t9",
+    );
+  });
+
   test("with none running, shows the paused timer with the most time, still", () => {
     const shown = activity([
       timer({ accumulatedSeconds: 60, id: "short" }),
@@ -186,6 +204,7 @@ describe("the timer's Live Activity", () => {
 describe("a phone's registration", () => {
   const registration = {
     sequence: 1,
+    actionKey: false,
     activity: null,
     bundleId: "app.stll.mobile.preview",
     details: true,

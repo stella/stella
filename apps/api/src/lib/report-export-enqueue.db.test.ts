@@ -53,6 +53,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -181,7 +182,7 @@ const seedSchedulerJob = async () => {
       task: RECONCILE_REPORT_EXPORTS_TASK,
       schedule: { type: "interval", everyMs: 300_000 },
       nextRunAt: new Date(),
-      lockedBy: "test-report-export-lease",
+      ...heldSchedulerLease("test-report-export-lease"),
     })
     .returning();
   return job ?? panic("Expected scheduler job");

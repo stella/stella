@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Points the final release image tags and manifest at the proven release-candidate digests, without rebuilding.",
+  "reviewedDigest": "0182e4a0f4344f336774f96e25dec5aaa66784f8191c0c89c7b024f9eb5911c2"
+}

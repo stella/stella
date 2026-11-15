@@ -12,6 +12,59 @@ const OUTLINE_LIMIT = 100;
 // opening words, and a hundred long openings would outweigh the page itself.
 const TITLE_LIMIT = 80;
 const NUMBERED_SECTION = /^(?:[IVXLCDM]+[.)]|\d+[.)]|\[\d+\])(?:\s|$)/u;
+// Anonymised names print as capital initials, and `M.`, `L.`, `D.`, `C.`
+// (or `V.`, `I.`) read as Roman numerals. A run of two initials that goes on
+// in lower case or after a comma ("M. T. poznała", "M. D., poszukując") is a
+// party. A lone `L.`, `C.`, `D.` or `M.` that goes on in lower case, after a
+// comma or with a second initial ("M. T. Pozwana") is one too: those numerals
+// never open a lettered subsection. "I. zasądza" (a lone I, V or X) and
+// "I. A. Stan" (a numeral, then a lettered subsection) stay sections.
+const ANONYMISED_INITIALS =
+  /^(?:\p{Lu}\.\s*){2,}(?:[,;:]|\p{Ll})|^[LCDM]\.\s*(?:[,;:]|\p{Ll}|\p{Lu}\.)/u;
+// `I.`, `V.` or `X.` followed by a letter: a lettered subsection or a party's
+// initials. Only the text tells them apart.
+const LETTERED_SUBSECTION = /^([IVX])\.\s*(\p{Lu})\.\s/u;
+
+const letteredKey = (numeral: string, letter: string): string =>
+  `${numeral}.${letter}`;
+
+/**
+ * The numeral-and-letter pairs the text prints. Lettered subsections come in
+ * runs ("I. A.", "I. B."), while a party's initials stand alone, so a pair
+ * whose neighbouring letter also opens a line is a subsection.
+ */
+const letteredSubsections = (text: string): ReadonlySet<string> => {
+  const keys = new Set<string>();
+  for (const line of text.matchAll(/[^\r\n]+/gu)) {
+    const match = LETTERED_SUBSECTION.exec(line[0].trim());
+    if (match?.[1] !== undefined && match[2] !== undefined) {
+      keys.add(letteredKey(match[1], match[2]));
+    }
+  }
+  return keys;
+};
+
+const inLetteredRun = (
+  title: string,
+  lettered: ReadonlySet<string>,
+): boolean => {
+  const match = LETTERED_SUBSECTION.exec(title);
+  const numeral = match?.[1];
+  const code = match?.[2]?.codePointAt(0);
+  if (numeral === undefined || code === undefined) {
+    return false;
+  }
+  return [code - 1, code + 1].some((neighbour) =>
+    lettered.has(letteredKey(numeral, String.fromCodePoint(neighbour))),
+  );
+};
+
+const opensNumberedSection = (
+  title: string,
+  lettered: ReadonlySet<string>,
+): boolean =>
+  NUMBERED_SECTION.test(title) &&
+  (!ANONYMISED_INITIALS.test(title) || inLetteredRun(title, lettered));
 
 /** A block found in the served plain text, with where it sits there. */
 export type LocatedDecisionBlock = {
@@ -167,10 +220,11 @@ const printedNumberedCandidates = (
   text: string,
 ): NumberedCandidate[] => {
   const candidates: NumberedCandidate[] = [];
+  const lettered = letteredSubsections(text);
   let blockIndex = 0;
   for (const line of text.matchAll(/[^\r\n]+/gu)) {
     const title = line[0].trim();
-    if (!NUMBERED_SECTION.test(title)) {
+    if (!opensNumberedSection(title, lettered)) {
       continue;
     }
     const start = line.index + line[0].indexOf(title);

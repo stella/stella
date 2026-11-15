@@ -198,7 +198,9 @@ export type RawIngestionResult = {
    * Exact source URLs emitted by an older adapter version for this same
    * publisher document. This is a narrowly scoped identity-migration hint:
    * the pipeline may use it to attach a newly learned `sourceDocumentId` to
-   * the right legacy null-id row without guessing from a shared docket.
+   * the right legacy null-id row without guessing from a shared docket. A URL
+   * that holds the document id itself proves the row even over a contradicting
+   * ECLI: a publisher can reissue one when it adds a sibling to the docket.
    */
   legacySourceUrls?: readonly string[] | undefined;
   /**
@@ -1251,10 +1253,78 @@ export type HeldRowRules = {
 };
 
 /**
+ * What recapturing one stored row's missing publisher responses produced.
+ *
+ * `identity-mismatch` is a finding, not a failure to retry: the listed item and
+ * the payload already held describe different decisions, and neither is
+ * written over the other.
+ */
+export type StoredRawRecaptureOutcome =
+  | {
+      type: "recaptured";
+      /** The envelope the crawl would have stored for this row. */
+      raw: string;
+      contentType: string;
+    }
+  | { type: "identity-mismatch"; detail: string }
+  | { type: "not-recapturable"; detail: string };
+
+export type StoredRawRecaptureInput = {
+  /** One item exactly as the slice listing serves it. */
+  listingPayload: unknown;
+  stored: StoredRawReparseInput;
+};
+
+/**
+ * Re-reading the publisher responses an older stored payload never kept.
+ *
+ * A row the crawl wrote before the adapter stored a response (most often the
+ * listing row) cannot be replayed: the replay rebuilds from retained bytes
+ * alone. The listing is cheap to ask again, so the row is upgraded to the
+ * envelope a crawl writes today and then rebuilt by `reparseStoredRaw` like
+ * any other row; the envelope and the decision each keep a single builder.
+ */
+export type SourceRecapture = {
+  /**
+   * What to ask the publisher for to find the stored row, read off what the
+   * row holds: a slice where the publisher lists by slice (one request then
+   * serves every row it lists), a narrower query where a slice is too large to
+   * be served whole. Null where the row names nothing to ask for.
+   */
+  lookupOf: (stored: StoredRawReparseInput) => string | null;
+  /** One page of what the publisher lists for a lookup, keyed as the crawl keys it. */
+  listLookup: (
+    options: ReconciliationSlicePageOptions,
+  ) => Promise<ReconciliationSlicePage>;
+  /**
+   * Whether a listed item is the stored row. The adapter decides, because a
+   * row stored without the publisher's id can only be told by what it holds.
+   */
+  matchesStored: (
+    item: ReconciliationListingItem,
+    stored: StoredRawReparseInput,
+  ) => boolean;
+  /**
+   * The envelope for `stored` with the listed item added. Pure: the payload
+   * already held is reused, never fetched again.
+   *
+   * Absent where what a legacy row holds cannot stand in for the responses a
+   * crawl reads (a document file the adapter no longer parses, where the text
+   * comes from another rendition): such a row is located here and then
+   * re-observed through `buildDecision`, never upgraded from bytes that would
+   * build a poorer decision than the one stored.
+   */
+  recaptureStoredRaw?:
+    ((input: StoredRawRecaptureInput) => StoredRawRecaptureOutcome) | undefined;
+};
+
+/**
  * The capability that makes a source reconcilable: the publisher can be asked
  * what it holds for a slice, independently of the cursor the crawl advanced.
  */
 export type SourceReconciliation = SourceSliceWalk & {
+  /** Present where rows stored without a listing can be upgraded from it. */
+  recapture?: SourceRecapture | undefined;
   /**
    * Per-record content/identity signal, excluding listing coordinates and corpus-wide revisions.
    * Classify each new payload field as content/identity (include it) or traversal/repair metadata (exclude it).
@@ -1438,22 +1508,78 @@ export type SourceFieldDisposition =
   | { readonly disposition: "stored"; readonly target: SourceFieldTarget }
   | {
       readonly disposition: "excluded";
+      readonly reason: SourceExclusionReason;
+      readonly justification: string;
+      readonly pointer: string;
+      readonly [STATED_REASON]: true;
+    }
+  | {
+      readonly disposition: "excluded";
+      readonly legacy: true;
       readonly reason: string;
       readonly [STATED_REASON]: true;
     };
 
-/**
- * State why a field the source publishes is not stored. The reason has to say
- * something: `""` and `"   "` are compile errors rather than a check somebody
- * has to remember to run.
- */
-export const excludedSourceField = <const TText extends string>(
+/** Migration-only constructor, held to the exact legacy source exclusion census. */
+export const legacyExcludedSourceField = <const TText extends string>(
   reason: StatedReason<TText>,
 ): SourceFieldDisposition => ({
   disposition: "excluded",
   reason,
+  legacy: true,
   [STATED_REASON]: true,
 });
+
+/** Closed policy vocabulary; exclusion is a decision that must be reviewable. */
+export const SOURCE_EXCLUSION_REASONS = [
+  "duplicate_of",
+  "personal_data_minimisation",
+  "publisher_noise",
+  "licence_restriction",
+  "unsupported_format_tracked",
+] as const;
+
+export type SourceExclusionReason = (typeof SOURCE_EXCLUSION_REASONS)[number];
+
+type SourceFieldExclusionOptions<
+  TJustification extends string,
+  TPointer extends string,
+> = {
+  reason: SourceExclusionReason;
+  justification: StatedReason<TJustification>;
+  /** Stored field, minimisation rule, publisher element, licence term, or issue. */
+  pointer: StatedReason<TPointer>;
+};
+
+/** Literal blanks fail typecheck; dynamic inputs fail before an inventory exists. */
+export const excludedSourceField = <
+  const TJustification extends string,
+  const TPointer extends string,
+>({
+  reason,
+  justification,
+  pointer,
+}: SourceFieldExclusionOptions<
+  TJustification,
+  TPointer
+>): SourceFieldDisposition => {
+  if (
+    !SOURCE_EXCLUSION_REASONS.includes(reason) ||
+    !justification.trim() ||
+    !pointer.trim()
+  ) {
+    return panic(
+      "Source exclusions require an allowed reason, justification and pointer",
+    );
+  }
+  return {
+    disposition: "excluded",
+    reason,
+    justification,
+    pointer,
+    [STATED_REASON]: true,
+  };
+};
 
 /**
  * The adapters that may still declare a surface they do not record.
@@ -1656,8 +1782,9 @@ export type SourceAdapter = {
    * decisions, one blob cannot be mapped back to one row, and the adapter
    * omits this rather than guessing.
    *
-   * The outcome may be returned directly by a parser that needs no I/O, or
-   * as a promise by one that does (an office-format extractor, say).
+   * Replays use retained publisher bytes and must not fetch the publisher.
+   * Await the outcome: common field inspection is asynchronous even for pure
+   * parsers; office-format extraction may also require local or service I/O.
    */
   reparseStoredRaw?: (
     stored: StoredRawReparseInput,
@@ -1725,6 +1852,23 @@ type ScopedCallbacks<TSource> = {
   ]-?: TSource[TKey] | undefined;
 };
 
+/** The publisher record a stored replay produced, for field-coverage inspection. */
+const replayedPublisherRecord = (
+  outcome: StoredRawReparseOutcome,
+): IngestionResult | undefined => {
+  switch (outcome.type) {
+    case "parsed":
+      return outcome.result;
+    case "supplement":
+      return outcome.supplement.document;
+    case "rejected":
+      return undefined;
+    default:
+      outcome satisfies never;
+      return panic("Unhandled publisher replay outcome");
+  }
+};
+
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <
   const TKey extends AdapterKey,
@@ -1745,6 +1889,44 @@ export const defineSourceAdapter = <
     function (this: unknown, ...args: TArgs) {
       return withExceptionScope(scope, () => operation.apply(this, args));
     };
+  const inspectRecord = async (result: IngestionResult) => {
+    const { inspectPublisherFieldCoverage } =
+      await import("@/api/lib/legal-search/publisher-field-coverage");
+    await inspectPublisherFieldCoverage({
+      adapterKey: adapter.key,
+      inventory: adapter.sourceFields,
+      result,
+    });
+  };
+  const inspectBuild = <
+    TArgs extends unknown[],
+    TOutcome extends ReconciliationBuildOutcome,
+  >(
+    operation: (...args: TArgs) => Promise<TOutcome>,
+  ) =>
+    scoped(async function (this: unknown, ...args: TArgs) {
+      const outcome = await operation.apply(this, args);
+      switch (outcome.type) {
+        case "built":
+          await inspectRecord(outcome.decision);
+          if (outcome.companions !== undefined) {
+            for (const companion of outcome.companions) {
+              await inspectRecord(companion);
+            }
+          }
+          break;
+        case "built-supplement":
+          await inspectRecord(outcome.supplement.document);
+          break;
+        case "unkeyable":
+        case "detail-unavailable":
+          break;
+        default:
+          outcome satisfies never;
+          return panic("Unhandled publisher build outcome");
+      }
+      return outcome;
+    });
   const reconciliation = adapter.reconciliation;
   const createSliceBuildDecision = reconciliation.createSliceBuildDecision;
   const textlessHeldRecheck = reconciliation.textlessHeldRecheck;
@@ -1766,9 +1948,18 @@ export const defineSourceAdapter = <
       reparseStoredRaw === undefined
         ? undefined
         : scoped(async function (this: unknown, stored: StoredRawReparseInput) {
-            return readStoredRawReparseResult(
+            const outcome = readStoredRawReparseResult(
               await reparseStoredRaw.call(this, stored),
             );
+            const record = replayedPublisherRecord(outcome);
+            if (
+              record !== undefined &&
+              (stored.contentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE ||
+                decodeSourceRawEnvelope(record.sourceRaw ?? "") !== null)
+            ) {
+              await inspectRecord(record);
+            }
+            return outcome;
           }),
     fetchPage: async (cursor, config, signal, onDocumentObservation) =>
       await observeDocumentStage({
@@ -1783,7 +1974,24 @@ export const defineSourceAdapter = <
                 cause,
               }),
           });
-          return fetched.andThen((page) => page);
+          const page = fetched.andThen((outcome) => outcome);
+          if (Result.isError(page)) {
+            return page;
+          }
+          for (const decision of page.value.decisions) {
+            await inspectRecord(decision);
+          }
+          if (page.value.supplements !== undefined) {
+            for (const supplement of page.value.supplements) {
+              await inspectRecord(supplement.document);
+            }
+          }
+          if (page.value.unreadItems !== undefined) {
+            for (const unread of page.value.unreadItems) {
+              await inspectRecord(unread.listing);
+            }
+          }
+          return page;
         },
         observe: onDocumentObservation,
       }),
@@ -1796,7 +2004,7 @@ export const defineSourceAdapter = <
     nextSlice: scoped(reconciliation.nextSlice),
     previousSlice: scoped(reconciliation.previousSlice),
     listSlicePage: scoped(reconciliation.listSlicePage),
-    buildDecision: scoped(reconciliation.buildDecision),
+    buildDecision: inspectBuild(reconciliation.buildDecision),
     heldWithoutDetail:
       reconciliation.heldWithoutDetail === undefined
         ? undefined
@@ -1805,9 +2013,21 @@ export const defineSourceAdapter = <
       createSliceBuildDecision === undefined
         ? undefined
         : scoped(function (this: unknown) {
-            return scoped(createSliceBuildDecision.call(this));
+            return inspectBuild(createSliceBuildDecision.call(this));
           }),
   } satisfies ScopedCallbacks<SourceReconciliation>;
+  const recapture =
+    reconciliation.recapture === undefined
+      ? undefined
+      : ({
+          lookupOf: scoped(reconciliation.recapture.lookupOf),
+          listLookup: scoped(reconciliation.recapture.listLookup),
+          matchesStored: scoped(reconciliation.recapture.matchesStored),
+          recaptureStoredRaw:
+            reconciliation.recapture.recaptureStoredRaw === undefined
+              ? undefined
+              : scoped(reconciliation.recapture.recaptureStoredRaw),
+        } satisfies SourceRecapture);
   const sourceFieldCallbacks = {
     listSourceFields: scoped(adapter.sourceFields.listSourceFields),
   } satisfies ScopedCallbacks<SourceFieldInventory>;
@@ -1827,7 +2047,7 @@ export const defineSourceAdapter = <
       : {
           ...textlessHeldRecheck,
           ...({
-            buildDecisionFromStored: scoped(
+            buildDecisionFromStored: inspectBuild(
               textlessHeldRecheck.buildDecisionFromStored,
             ),
           } satisfies ScopedCallbacks<TextlessHeldRecheck>),
@@ -1846,6 +2066,7 @@ export const defineSourceAdapter = <
       ...reconciliation,
       ...reconciliationCallbacks,
       textlessHeldRecheck: textless,
+      recapture,
     },
   };
 };

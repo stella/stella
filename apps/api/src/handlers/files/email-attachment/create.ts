@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 
 import { env } from "@/api/env";
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -95,7 +96,7 @@ export default createSafeHandler(
         async () => await getWorkspaceAccess(destinationWorkspaceId),
       ),
     );
-    if (!destinationWorkspace || destinationWorkspace.status !== "active") {
+    if (!workspaceAcceptsWrites(destinationWorkspace?.status)) {
       return Result.err(
         new HandlerError({ status: 404, message: "Target matter not found" }),
       );

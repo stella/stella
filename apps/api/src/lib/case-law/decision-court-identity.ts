@@ -1,3 +1,4 @@
+// parser-output-unchanged: listing court identity uses the existing stored-field converter; stored court resolution is unchanged.
 /**
  * How a decision's court is identified at the ingestion boundary.
  *
@@ -20,6 +21,7 @@ import {
   type CourtDirectoryJurisdiction,
   isCourtDirectoryJurisdiction,
 } from "@/api/lib/case-law/decision-court-id-sql";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 
 /**
  * The directory that admits a jurisdiction's court ids for writing: every
@@ -113,4 +115,29 @@ export const resolveDecisionCourtId = ({
   return resolution.court.canonicalName === court
     ? Result.ok(courtId)
     : reject("name-mismatch");
+};
+
+/** Exact court partition shared by listing and stored-decision identity. */
+export type ListingCourtIdentity =
+  | { type: "court-id"; courtId: string }
+  | { type: "court-name"; name: string }
+  | { type: "unknown-court" };
+
+type ListingCourtIdentityOptions = {
+  court: string;
+  courtId?: string | null | undefined;
+};
+
+/** Uses the same plain-text conversion as stored decision assembly. */
+export const listingCourtIdentity = ({
+  court,
+  courtId,
+}: ListingCourtIdentityOptions): ListingCourtIdentity => {
+  if (courtId !== undefined && courtId !== null) {
+    return { type: "court-id", courtId };
+  }
+  const canonicalCourt = toPlainText(court).unwrapOr("");
+  return canonicalCourt.length === 0
+    ? { type: "unknown-court" }
+    : { type: "court-name", name: canonicalCourt };
 };

@@ -29,11 +29,32 @@ type BrowserExtensionRow =
       /** What is true this turn; a statement, never an instruction. */
       availability: string;
       recoveryStep: BrowserRecoveryStep;
+    }
+  | {
+      toolOffered: false;
+      /**
+       * The computer that runs the turn states what is true of its browser
+       * (agent-engine `withLocalBrowserInstructions`): this prompt says
+       * nothing about it.
+       */
+      statedByRun: true;
     };
 
 export const BROWSER_EXTENSION_PROTOCOL_MISMATCH = "protocol-mismatch";
 
+/**
+ * The turn runs on the member's computer. Whatever the tab reports about the
+ * extension is out of that agent's reach: it gets stella's browser tools, or
+ * none, from stella desktop there, which tells it which.
+ */
+export const BROWSER_EXTENSION_LOCAL_RUN = "local-run";
+
+/** What a turn's browser prompt line and browser tool offer derive from. */
+export type TurnBrowserExtension =
+  BrowserExtensionCapability | typeof BROWSER_EXTENSION_LOCAL_RUN;
+
 export const BROWSER_EXTENSION_CAPABILITY = {
+  [BROWSER_EXTENSION_LOCAL_RUN]: { toolOffered: false, statedByRun: true },
   // The tab's page and the stella server run different versions: the tab was
   // open across an update, and a reload brings it to the server's version.
   [BROWSER_EXTENSION_PROTOCOL_MISMATCH]: {
@@ -102,31 +123,43 @@ export const BROWSER_EXTENSION_CAPABILITY = {
       "that you can use their browser when they chat with stella in Google Chrome on a computer with the stella browser extension",
   },
 } satisfies Record<
-  BrowserExtensionStatus | typeof BROWSER_EXTENSION_PROTOCOL_MISMATCH,
+  | BrowserExtensionStatus
+  | typeof BROWSER_EXTENSION_PROTOCOL_MISMATCH
+  | typeof BROWSER_EXTENSION_LOCAL_RUN,
   BrowserExtensionRow
 >;
 
 /**
  * The only place a browser row becomes prompt text. A missing-tools row is
  * wrapped so the model raises the recovery step only when the user asks for
- * a website; an ordinary request never hears about the extension.
+ * a website; an ordinary request never hears about the extension. A row the
+ * run states becomes no text here.
  */
 export const composeBrowserExtensionPromptLine = (
   row: BrowserExtensionRow,
-): string =>
-  row.toolOffered
+): string => {
+  if ("statedByRun" in row) {
+    return "";
+  }
+  return row.toolOffered
     ? `BROWSER: ${row.availability}`
     : `BROWSER: ${row.availability} Only if the user asks you to open, visit, read or operate a website, or to do something in their browser, tell them, in their language, ${row.recoveryStep}, before you answer another way such as with web search; otherwise do not mention the browser extension. Do not claim you have no way to use a browser.`;
+};
+
+const browserExtensionRowKey = (extension: TurnBrowserExtension) => {
+  if (extension === BROWSER_EXTENSION_LOCAL_RUN) {
+    return BROWSER_EXTENSION_LOCAL_RUN;
+  }
+  return extension.protocolVersion === BROWSER_CONTROL_PROTOCOL_VERSION
+    ? extension.status
+    : BROWSER_EXTENSION_PROTOCOL_MISMATCH;
+};
 
 export const browserExtensionPolicy = (
-  extension: BrowserExtensionCapability,
+  extension: TurnBrowserExtension,
 ): BrowserExtensionPolicy => {
   const row: BrowserExtensionRow =
-    BROWSER_EXTENSION_CAPABILITY[
-      extension.protocolVersion === BROWSER_CONTROL_PROTOCOL_VERSION
-        ? extension.status
-        : BROWSER_EXTENSION_PROTOCOL_MISMATCH
-    ];
+    BROWSER_EXTENSION_CAPABILITY[browserExtensionRowKey(extension)];
   return {
     promptLine: composeBrowserExtensionPromptLine(row),
     toolOffered: row.toolOffered,

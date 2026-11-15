@@ -77,14 +77,17 @@ export type AnswerSource = {
   text: string;
 };
 
+// Free text has no candidate set to choose from, and a money amount needs a
+// currency read alongside its number, which a numeric candidate does not carry.
 export type SystemOneAnswerableContent = Exclude<
   AiExtractablePropertyContent,
-  { type: "text" }
+  { type: "text" | "money" }
 >;
 
 export const isSystemOneAnswerable = (
   content: AiExtractablePropertyContent,
-): content is SystemOneAnswerableContent => content.type !== "text";
+): content is SystemOneAnswerableContent =>
+  content.type !== "text" && content.type !== "money";
 
 export type AnswerQuestion = {
   id: string;

@@ -109,8 +109,12 @@ export type OnlineStepIntroduction = string | CodeOwnedOnlineStep;
  * `pending` checkpoint under any release, so the data it produces must read
  * as not ready, never as complete, until `readCompletion` says `complete`;
  * the migrate run or the repair's scheduled owner resumes it. `incomplete`
- * work has no checkpoint to resume: startup reports it only for the newest
- * applied migration and refuses it once a newer one exists.
+ * work has no checkpoint to resume: the migrate run refuses to finish while
+ * it remains. Startup never refuses a migration-owned repair, because tasks
+ * already running serve the same data; once a newer migration exists it
+ * reports an `incomplete` one as regressed, an error for an operator. So
+ * `readCompletion` must hold for every row live code writes: a writer that
+ * breaks it is the defect.
  */
 export type OnlineRepair = {
   introducedBy: OnlineStepIntroduction;

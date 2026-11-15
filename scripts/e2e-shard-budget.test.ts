@@ -111,6 +111,7 @@ const budgetViolations = (candidate: typeof job) => {
                 "github.event.pull_request.head.repo.fork": false,
                 "github.token": "test-token",
                 "matrix.shard": shard,
+                "steps.checkout.outcome": "success",
                 "steps.e2e-stack.outcome": "success",
                 // Merge groups plan every production leg.
                 "needs.ci-plan.outputs.e2e_production_mode": "full",

@@ -12,6 +12,11 @@ import {
 } from "drizzle-orm";
 import * as v from "valibot";
 
+import {
+  VISIBLE_WORKSPACE_STATUSES,
+  WORKSPACE_STATUS,
+} from "@stll/api-contract/workspace-status";
+
 import { member, user } from "@/api/db/auth-schema";
 import {
   entities,
@@ -38,7 +43,7 @@ const config = {
   mcp: { type: "tool", name: "list_matters" },
   access: "read",
   query: v.object({
-    status: v.optional(v.picklist(["active", "archived"])),
+    status: v.optional(v.picklist(VISIBLE_WORKSPACE_STATUSES)),
   }),
 } satisfies HandlerConfig;
 
@@ -53,7 +58,7 @@ const readWorkspaces = createSafeRootHandler(
             readWorkspaceListRows({
               tx,
               organizationId,
-              status: query.status ?? "active",
+              status: query.status ?? WORKSPACE_STATUS.active,
               limit: LIMITS.workspacesCount,
             }),
             tx

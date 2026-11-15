@@ -5,5 +5,7 @@
   "noMatter": "Nincs ügy",
   "noDescription": "Nincs leírás",
   "more": "{count, plural, other {még # időmérő}}",
-  "startedElsewhere": "Egy másik eszközön elindult egy időzítő"
+  "startedElsewhere": "Egy másik eszközön elindult egy időzítő",
+  "pause": "Szüneteltetés",
+  "resume": "Folytatás"
 }

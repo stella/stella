@@ -18,6 +18,8 @@ import {
   nextSuggestion,
   segmentTitles,
   shortSegmentThresholdMs,
+  suggestionPieces,
+  suggestionSummary,
   titleRows,
   TOPIC_BRIDGE_GAP_MS,
   undraftedParts,
@@ -777,6 +779,147 @@ describe("suggestions", () => {
   });
 });
 
+describe("a selected range's starting matter", () => {
+  const select = (segments: ActivitySegment[], from: number, to: number) =>
+    manualSuggestion({
+      drafted: [],
+      id: "manual:range",
+      range: { startMs: ms(from), endMs: ms(to) },
+      segments: day(segments).segments,
+    });
+
+  test("a matter holding a minority of the recorded time is not preselected", () => {
+    // 42 minutes of mail no matter claimed, 18 of the lease draft.
+    const manual = select(
+      [
+        segment({ from: 0, to: 42, app: "browser", title: "Training invite" }),
+        segment({ from: 42, to: 60, matterId: "lease", title: "Lease.docx" }),
+      ],
+      0,
+      60,
+    );
+    expect(manual).toMatchObject({
+      matter: null,
+      matterBasis: "mostlyUnmatched",
+      type: "manual",
+    });
+    // The evidence still names the minority matter beside its own row.
+    expect(
+      titleRows(manual).map((row) => [row.label, row.matter?.id ?? null]),
+    ).toEqual([
+      ["Training invite", null],
+      ["Lease.docx", "lease"],
+    ]);
+    expect(
+      appRows(manual).map((row) => [row.label, row.matter?.id ?? null]),
+    ).toEqual([
+      ["Example Browser", null],
+      ["Example Editor", "lease"],
+    ]);
+  });
+
+  test("a matter holding at least half of the recorded time is preselected", () => {
+    const half = select(
+      [
+        segment({ from: 0, to: 30, matterId: "lease" }),
+        segment({ from: 30, to: 60, app: "browser" }),
+      ],
+      0,
+      60,
+    );
+    expect(half).toMatchObject({ matter: { id: "lease" } });
+    expect(half.matterBasis).toBe("majority");
+    // Unrecorded time in the range does not count against the matter.
+    const sparse = select(
+      [
+        segment({ from: 0, to: 12, matterId: "lease" }),
+        segment({ from: 12, to: 20, app: "browser" }),
+      ],
+      0,
+      60,
+    );
+    expect(sparse.matter?.id).toBe("lease");
+  });
+
+  test("time split between matters with no majority preselects none", () => {
+    const manual = select(
+      [
+        segment({ from: 0, to: 25, matterId: "lease" }),
+        segment({ from: 25, to: 45, matterId: "services" }),
+        segment({ from: 45, to: 60, app: "browser" }),
+      ],
+      0,
+      60,
+    );
+    expect(manual).toMatchObject({
+      matter: null,
+      matterBasis: "splitBetweenMatters",
+    });
+  });
+
+  test("a range with nothing recorded preselects no matter", () => {
+    const manual = select(
+      [segment({ from: 0, to: 30, matterId: "lease" })],
+      120,
+      150,
+    );
+    expect(manual).toMatchObject({
+      matter: null,
+      matterBasis: "nothingRecorded",
+      segments: [],
+    });
+  });
+
+  test(
+    "a range starts on a matter exactly when that matter holds at least half its recorded time",
+    () => {
+      const stretch = fc.record({
+        length: fc.integer({ min: 1, max: 20 }),
+        matterId: fc.constantFrom("lease", "services", undefined),
+      });
+      assertProperty(
+        "a range starts on a matter exactly when that matter holds at least half its recorded time",
+        fc.property(
+          fc.array(stretch, { maxLength: 8 }),
+          fc.integer({ min: 0, max: 80 }),
+          fc.integer({ min: 0, max: 80 }),
+          (stretches, from, length) => {
+            let cursor = 0;
+            const segments = stretches.map(({ length: minutes, matterId }) => {
+              const recorded = segment({
+                from: cursor,
+                to: cursor + minutes,
+                matterId,
+              });
+              cursor += minutes;
+              return recorded;
+            });
+            const manual = select(segments, from, from + length);
+            const recordedMs = manual.segments.reduce(
+              (sum, { startMs, endMs }) => sum + endMs - startMs,
+              0,
+            );
+            const matterMs = (id: string) =>
+              manual.segments
+                .filter((recorded) => recorded.matter?.id === id)
+                .reduce((sum, { startMs, endMs }) => sum + endMs - startMs, 0);
+            const majority = ["lease", "services"].some(
+              (id) => recordedMs > 0 && matterMs(id) * 2 >= recordedMs,
+            );
+            expect(manual.matter !== null).toBe(majority);
+            if (manual.matter !== null) {
+              expect(matterMs(manual.matter.id) * 2).toBeGreaterThanOrEqual(
+                recordedMs,
+              );
+            }
+          },
+        ),
+      );
+    },
+    propertyTestTimeout(5000),
+  );
+});
+
 describe("suggestion evidence", () => {
   test("title and app rows share the suggestion's time", () => {
     const [suggestion] = matchedSuggestions(
@@ -804,6 +947,166 @@ describe("suggestion evidence", () => {
       "Lease draft",
       "Land registry",
     ]);
+  });
+});
+
+describe("suggestion pieces", () => {
+  const onlySuggestion = (segments: ActivitySegment[]) => {
+    const [suggestion] = matchedSuggestions(day(segments).groups, new Set());
+    if (!suggestion) {
+      throw new TypeError("The fixture must produce a suggestion");
+    }
+    return suggestion;
+  };
+
+  test("each piece counts its own recorded time, and the card's summary adds them up", () => {
+    const suggestion = onlySuggestion([
+      segment({ from: 0, to: 30, matterId: "lease", title: "Lease draft" }),
+      // A two-minute pause keeps one piece but is not time worked.
+      segment({ from: 32, to: 40, matterId: "lease", title: "Lease draft" }),
+      segment({ from: 120, to: 188, matterId: "lease", title: "Annex" }),
+    ]);
+    const pieces = suggestionPieces(suggestion);
+    expect(pieces).toEqual([
+      { startMs: ms(0), endMs: ms(40), minutes: 38 },
+      { startMs: ms(120), endMs: ms(188), minutes: 68 },
+    ]);
+    expect(suggestionSummary(suggestion)).toEqual({
+      count: 2,
+      minutes: 106,
+      tenths: suggestion.roundedTenths,
+      type: "pieces",
+    });
+  });
+
+  test("a suggestion in one piece keeps its range in the summary", () => {
+    const suggestion = onlySuggestion([
+      segment({ from: 10, to: 55, matterId: "lease", title: "Lease draft" }),
+    ]);
+    expect(suggestionSummary(suggestion)).toEqual({
+      endMs: ms(55),
+      minutes: 45,
+      startMs: ms(10),
+      tenths: 8,
+      type: "range",
+    });
+  });
+
+  test("a selected range's pieces are the parts no entry covers, at full length", () => {
+    const suggestion = manualSuggestion({
+      drafted: [{ start: at(20), end: at(30) }],
+      id: "manual:test",
+      range: { startMs: ms(0), endMs: ms(60) },
+      segments: [],
+    });
+    expect(suggestionPieces(suggestion).map(({ minutes }) => minutes)).toEqual([
+      20, 30,
+    ]);
+    expect(suggestionSummary(suggestion)).toMatchObject({
+      count: 2,
+      minutes: 50,
+      type: "pieces",
+    });
+  });
+
+  test(
+    "pieces round together: their minutes add up to the rounded total and each is within a minute of its time",
+    () => {
+      assertProperty(
+        "pieces round together: their minutes add up to the rounded total and each is within a minute of its time",
+        fc.property(
+          // Seconds worked in each piece; pieces sit ten minutes apart, so
+          // each is its own.
+          fc.array(fc.integer({ min: 1, max: 90 * 60 }), {
+            minLength: 1,
+            maxLength: 8,
+          }),
+          (seconds) => {
+            let from = 0;
+            const segments = seconds.map((length) => {
+              const piece = segment({
+                from,
+                to: from + length / 60,
+                matterId: "lease",
+                title: "Lease draft",
+              });
+              from += length / 60 + 10;
+              return piece;
+            });
+            const pieces = suggestionPieces(onlySuggestion(segments));
+            expect(pieces).toHaveLength(seconds.length);
+            const totalSeconds = seconds.reduce((sum, value) => sum + value, 0);
+            expect(pieces.reduce((sum, { minutes }) => sum + minutes, 0)).toBe(
+              Math.round(totalSeconds / 60),
+            );
+            for (const [index, piece] of pieces.entries()) {
+              expect(
+                Math.abs(piece.minutes - (seconds[index] ?? 0) / 60),
+              ).toBeLessThan(1);
+            }
+          },
+        ),
+      );
+    },
+    propertyTestTimeout(5000),
+  );
+});
+
+describe("untitled time in the Titles tab", () => {
+  test("an app's time without a title is its own row, so the tab adds up to the suggestion", () => {
+    const [suggestion] = matchedSuggestions(
+      day([
+        segment({ from: 0, to: 30, matterId: "lease", title: "Lease draft" }),
+        segment({ from: 30, to: 38, app: "browser", matterId: "lease" }),
+        // A title that only repeats the app's name is no title.
+        segment({
+          from: 38,
+          to: 40,
+          app: "browser",
+          matterId: "lease",
+          title: "Example Browser",
+        }),
+      ]).groups,
+      new Set(),
+    );
+    if (!suggestion) {
+      throw new TypeError("The fixture must produce a suggestion");
+    }
+    const rows = titleRows(suggestion);
+    expect(
+      rows.map(({ appIdentifier, durationMs, label, type }) => ({
+        appIdentifier,
+        durationMs,
+        label,
+        type,
+      })),
+    ).toEqual([
+      {
+        appIdentifier: "com.example.editor",
+        durationMs: 30 * MINUTE,
+        label: "Lease draft",
+        type: "named",
+      },
+      {
+        appIdentifier: "com.example.browser",
+        durationMs: 10 * MINUTE,
+        label: "Example Browser",
+        type: "untitled",
+      },
+    ]);
+    expect(rows.reduce((sum, { share }) => sum + share, 0)).toBeCloseTo(1);
+  });
+
+  test("a fully titled suggestion has no untitled row", () => {
+    const [suggestion] = matchedSuggestions(
+      day([
+        segment({ from: 0, to: 30, matterId: "lease", title: "Lease draft" }),
+      ]).groups,
+      new Set(),
+    );
+    expect(suggestion && titleRows(suggestion).map(({ type }) => type)).toEqual(
+      ["named"],
+    );
   });
 });
 

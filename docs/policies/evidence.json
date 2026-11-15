@@ -188,7 +188,10 @@
         },
         {
           "path": "apps/api/src/lib/workspace-deletion.ts",
-          "contains": ["status: \"deleting\"", "completeWorkspaceDeletion"]
+          "contains": [
+            "status: WORKSPACE_STATUS.deleting",
+            "completeWorkspaceDeletion"
+          ]
         },
         {
           "path": "apps/api/src/lib/organization-storage-teardown.ts",

@@ -163,8 +163,12 @@ export const CORPUS_FINAL_INDEX_INDEXING_DEFAULT = {
  * siblings join it is never merged again, so a longer commit window stages
  * fewer splits and a longer maturation keeps merging them. Deletes apply to
  * mature splits only; repeated merges can restart maturity, so physical
- * deletion and settlement can exceed the period. Passage reads filter on the
- * revision Postgres records as applied.
+ * deletion and settlement can exceed the period. Only a generation that
+ * stores the projection revision filters candidate passages on the revision
+ * Postgres records as applied; on a `query_only` one (case_law_v8 and
+ * legislation_v3 among them) every copy still in the index is a candidate and
+ * ranks with the applied one, and only the snippet read is narrowed to the
+ * applied revision.
  */
 export const CORPUS_FINAL_INDEX_INDEXING_V8 = {
   commitTimeoutSecs: 600,

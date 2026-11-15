@@ -9,6 +9,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -435,14 +436,14 @@ export const DocumentAiSourceBar = ({
           onClick={() => setIsAnswerExpanded((expanded) => !expanded)}
           variant="plain"
         >
-          <span className="block truncate">
+          <TruncatedText>
             {propertyName && (
               <span className="text-muted-foreground">{propertyName}: </span>
             )}
             <span className="font-medium">
               {shortAnswer ?? t("workspaces.pdf.evidence")}
             </span>
-          </span>
+          </TruncatedText>
         </Button>
         <Button
           aria-label={t("common.previous")}

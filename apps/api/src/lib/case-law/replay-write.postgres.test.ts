@@ -231,22 +231,26 @@ if (!databaseUrl || !enabled) {
               ),
           );
         };
-        const WAL_ATTEMPTS = 5;
-        let pair: { measured: number; control: number } | undefined;
-        for (let attempt = 0; attempt < WAL_ATTEMPTS && !pair; attempt += 1) {
-          // db-await-in-loop: each attempt replays and measures sequentially on one client.
-          const measured = await walOf(replay);
-          // db-await-in-loop: the lock control runs after the replay on the same client.
-          const control = await walOf(lockControl);
-          if (measured.images === 0 && control.images === 0) {
-            pair = { measured: measured.bytes, control: control.bytes };
+        // Other suites share this server and their database clones force
+        // checkpoints, so each window retries on its own: requiring both clean
+        // in one attempt fails while either window alone would have measured.
+        const WAL_ATTEMPTS = 10;
+        const cleanWalBytes = async (work: () => Promise<void>) => {
+          for (let attempt = 0; attempt < WAL_ATTEMPTS; attempt += 1) {
+            // db-await-in-loop: each attempt measures sequentially on one client.
+            const wal = await walOf(work);
+            if (wal.images === 0) {
+              return wal.bytes;
+            }
           }
-        }
-        if (!pair) {
           throw new Error(
             `Every WAL measurement crossed a checkpoint in ${WAL_ATTEMPTS} attempts`,
           );
-        }
+        };
+        const pair = {
+          measured: await cleanWalBytes(replay),
+          control: await cleanWalBytes(lockControl),
+        };
         process.stdout.write(`REPLAY_WAL_${ROWS} ${pair.measured}\n`);
         process.stdout.write(`REPLAY_LOCK_CONTROL_${ROWS} ${pair.control}\n`);
         const after = await versions();

@@ -1,3 +1,4 @@
+// parser-output-unchanged: the decision-type availability marker is derived only from metadata a source sets; only cz-uohs sets it, and it bumps its own version.
 // parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 // parser-output-unchanged: Text and publication absence sidecars change metadata only; canonical documents and replay comparison inputs are unchanged.
 // parser-output-unchanged: The text fidelity check only validates a `textFidelity` entry a source sets and adds, drops or changes nothing; no source's parsed output differs.
@@ -13,11 +14,13 @@ import {
   DECISION_TEXT_FIELD,
   DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_METADATA_KEYS,
+  DECISION_TYPE_AVAILABILITY_STATUSES,
   type DecisionDateAvailability,
   type DecisionHeadnotePreview,
   type DecisionTextAbsenceEntry,
   type DecisionTextAbsenceParseResult,
   type DecisionTextFieldKey,
+  type DecisionTypeAvailability,
   isDecisionTextFidelity,
   parseDecisionTextAbsence,
   type ReadDecisionTextFields,
@@ -182,6 +185,14 @@ const DECISION_DATE_ABSENCE_REASON_BY_STATUS = {
   TextAbsenceReason | undefined
 >;
 
+const DECISION_TYPE_ABSENCE_REASON_BY_STATUS = {
+  published: undefined,
+  "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+} as const satisfies Record<
+  DecisionTypeAvailability["status"],
+  TextAbsenceReason | undefined
+>;
+
 const SOURCE_URL_ABSENCE_REASON_BY_STATUS = {
   published: undefined,
   "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
@@ -201,6 +212,11 @@ const isDecisionDateAvailabilityStatus = (
   status: unknown,
 ): status is DecisionDateAvailability["status"] =>
   DECISION_DATE_AVAILABILITY_STATUSES.some((candidate) => candidate === status);
+
+const isDecisionTypeAvailabilityStatus = (
+  status: unknown,
+): status is DecisionTypeAvailability["status"] =>
+  DECISION_TYPE_AVAILABILITY_STATUSES.some((candidate) => candidate === status);
 
 const isSourceUrlStatus = (
   status: unknown,
@@ -315,6 +331,22 @@ export const storeDecisionTextFields = ({
       ];
     if (reason !== undefined) {
       absent.push({ field: "decisionDate", reason });
+    }
+  }
+  const decisionTypeAvailability = metadata["decisionTypeAvailability"];
+  if (decisionTypeAvailability !== undefined) {
+    if (
+      !isRecord(decisionTypeAvailability) ||
+      !isDecisionTypeAvailabilityStatus(decisionTypeAvailability["status"])
+    ) {
+      return panic("Decision type availability must carry a source status");
+    }
+    const reason =
+      DECISION_TYPE_ABSENCE_REASON_BY_STATUS[
+        decisionTypeAvailability["status"]
+      ];
+    if (reason !== undefined) {
+      absent.push({ field: "decisionType", reason });
     }
   }
   const textFidelity = metadata[DECISION_TEXT_FIDELITY_METADATA_KEY];

@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
+import type { ChatTurnBudget } from "@stll/chat-limits";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
@@ -22,6 +23,7 @@ import type {
 } from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -268,6 +270,7 @@ export const createApprovalHarness = ({
   failingApprovalNames = [],
   grantableApprovalConnectorId,
   ids,
+  localRunOf,
   model,
   organizationAIConfig = orgAIConfig,
   promptCachingEnabled = false,
@@ -283,6 +286,12 @@ export const createApprovalHarness = ({
 }: {
   /** Observe or control the real send's pre-model compaction boundary. */
   compactMessages?: typeof compactMessagesForContext | undefined;
+  /**
+   * The run on the member's computer a thread's next turn answers through, as
+   * the send's routing would hand it over. `undefined` is a cloud turn.
+   */
+  localRunOf?:
+    ((threadId: SafeId<"chatThread">) => LocalChatRun | undefined) | undefined;
   /**
    * Replaces the anonymizer an anonymized turn's provider boundary calls, so a
    * test can make it fail. The real pipeline by default.
@@ -367,6 +376,8 @@ export const createApprovalHarness = ({
     notify: () => void;
   }>();
   const turnSettlementFailures = new Map<string, unknown>();
+  /** Per thread: the narrower budget its turns run under. */
+  const turnBudgets = new Map<string, ChatTurnBudget>();
   /** Every run started on a thread, by its terminal promise. */
   const runSettlements = new Map<string, Promise<unknown>[]>();
   const notifyTurnSettlement = (threadId: string) => {
@@ -534,8 +545,13 @@ export const createApprovalHarness = ({
           notifyTurnSettlement(props.threadId);
         },
       );
+      const turnBudget = turnBudgets.get(props.threadId);
       return await streamChat({
         ...props,
+        ...(turnBudget === undefined ? {} : { turnBudget }),
+        ...(localRunOf === undefined
+          ? {}
+          : { localRun: localRunOf(props.threadId) }),
         onFinish: async (event) => {
           await beforeTurnSettles?.({
             outcome: event.outcome,
@@ -590,16 +606,18 @@ export const createApprovalHarness = ({
     });
     if (sources.contextMatterIds !== undefined) {
       // The matters the page's context names, as its composer sends them
-      // (TanStack mirrors the forwarded props as `data`).
+      // (older TanStack clients also mirror forwarded props as `data`).
       const contextMatterIds = [...sources.contextMatterIds];
       Object.assign(body.forwardedProps, { contextMatterIds });
-      Object.assign(body.data, { contextMatterIds });
+      if (body.data !== undefined) {
+        Object.assign(body.data, { contextMatterIds });
+      }
     }
     if (user?.context !== undefined) {
       // The profile the page sends with every message.
       const userContext = { ...user.context };
       Object.assign(body.forwardedProps, { userContext });
-      if (typeof body.data === "object") {
+      if (body.data !== undefined) {
         Object.assign(body.data, { userContext });
       }
     }
@@ -632,6 +650,7 @@ export const createApprovalHarness = ({
       route: "/v1/chat" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
+      set: { headers: {}, status: 200 },
       session: { activeOrganizationId: ids.orgA },
       user: { id: userId },
     });
@@ -1829,6 +1848,16 @@ export const createApprovalHarness = ({
     /** From now on, `threadId`'s responses reach the page whole again. */
     streamWhole: (threadId: SafeId<"chatThread">) => {
       liveThreads.delete(threadId);
+    },
+    /**
+     * From now on, `threadId`'s turns run under `budget` instead of
+     * `CHAT_TURN_BUDGET`, so a scripted turn reaches a cap in a few steps.
+     */
+    limitTurnBudget: (
+      threadId: SafeId<"chatThread">,
+      budget: ChatTurnBudget,
+    ) => {
+      turnBudgets.set(threadId, budget);
     },
     /**
      * Runs `race` once, when the next send has read its thread and is about

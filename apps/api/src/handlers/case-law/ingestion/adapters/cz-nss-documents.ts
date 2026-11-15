@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-nss] imports the shared PDF reader from its new owner, pdf-bands.ts, under its new names; the default reading is the same code.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import { Result } from "better-result";
 
@@ -9,10 +10,10 @@ import { PublisherTargetError } from "@/api/handlers/case-law/ingestion/adapters
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import {
-  assemblePlSnParagraphs,
-  extractPlSnLines,
-  plSnParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  assemblePdfParagraphs,
+  extractPdfLines,
+  pdfParagraphsToHtml,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import {
   ownTableRows,
   visibleHtmlText,
@@ -117,8 +118,8 @@ type ParseNssPdfOptions = {
 export const parseNssPdf = async ({ input, bytes }: ParseNssPdfOptions) =>
   parseNssDecisionHtml({
     ...input,
-    html: plSnParagraphsToHtml(
-      assemblePlSnParagraphs(await extractPlSnLines(bytes)),
+    html: pdfParagraphsToHtml(
+      assemblePdfParagraphs(await extractPdfLines(bytes)),
     ),
   });
 
@@ -152,4 +153,81 @@ export const listNssRegistryFields = (html: string): string[] => {
           `registry:${visibleHtmlText($(node)).trim().replace(/:$/u, "")}`,
       ),
   ];
+};
+
+type ReadNssRegistryMetadataOptions = {
+  html: string | undefined;
+  reference: string;
+};
+
+/** Only the registry row naming this exact original describes this decision. */
+export const readNssRegistryMetadata = ({
+  html,
+  reference,
+}: ReadNssRegistryMetadataOptions) => {
+  if (html === undefined) {
+    return {};
+  }
+  const $ = load(html);
+  const anchor = $("tbody a[href]")
+    .toArray()
+    .find((node) => {
+      const link = $(node);
+      if (
+        normalizedReference(visibleHtmlText(link)) !==
+        normalizedReference(reference)
+      ) {
+        return false;
+      }
+      const cell = link.closest("td");
+      if (cell.length === 0) {
+        return false;
+      }
+      const index = cell.parent().children("td").index(cell);
+      const header = cell
+        .closest("table")
+        .children("thead")
+        .children("tr")
+        .children("th")
+        .toArray()
+        .at(index);
+      return (
+        index !== -1 &&
+        header !== undefined &&
+        visibleHtmlText($(header)).trim() === "Rozhodnutí RS"
+      );
+    });
+  if (anchor === undefined) {
+    return {};
+  }
+  const row = $(anchor).closest("tr");
+  const headers = row
+    .closest("table")
+    .children("thead")
+    .children("tr")
+    .children("th")
+    .toArray();
+  const cells = row.children("td").toArray();
+  const read = (label: string) => {
+    const index = headers.findIndex(
+      (node) => visibleHtmlText($(node)).trim() === label,
+    );
+    const cell = cells.at(index);
+    if (index === -1 || cell === undefined) {
+      return undefined;
+    }
+    return visibleHtmlText($(cell)).trim();
+  };
+  const annotation = row.next(".nssext-extra-table-row").clone();
+  annotation.find("strong").remove();
+  return {
+    nssRegistryCaseNumber: read("Spisová značka"),
+    nssRegistryReferral: read("Předkládací usnesení"),
+    nssRegistryReferralDate: read("Datum předložení"),
+    nssRegistryAgainstCases: read("Proti věci"),
+    nssRegistryStatus: read("Stav"),
+    ...(annotation.length === 0
+      ? {}
+      : { nssRegistryAnnotation: visibleHtmlText(annotation).trim() }),
+  };
 };

@@ -2,15 +2,25 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { AiCellSettlement } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { cellMetadata, entities, fields } from "@/api/db/schema";
+import {
+  cellMetadata,
+  entities,
+  fields,
+  justifications,
+} from "@/api/db/schema";
 import { currencyCodeSchema } from "@/api/db/schema-validators";
-import type { CellMetadata } from "@/api/db/schema-validators";
+import type {
+  CellMetadata,
+  FieldContent,
+  MachineCellValue,
+} from "@/api/db/schema-validators";
 import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -19,6 +29,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { displayNameSchema, userIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { nextCellOverride } from "@/api/lib/fields/cell-override";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -133,23 +144,35 @@ export const upsertFieldContentSchema = v.pipe(
 
 export type FieldWriteContent = v.InferOutput<typeof upsertFieldContentSchema>;
 
-type LockCellArgs = {
+type MarkManualEditArgs = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
   propertyId: SafeId<"property">;
   userId: string;
+  /** The field row this write replaces, read under the cell lock. */
+  replaced: ReplacedFieldRow | undefined;
 };
 
-const lockCellOnManualEdit = async ({
+type ReplacedFieldRow = {
+  content: FieldContent;
+  aiSettlement: AiCellSettlement | null;
+  justification: MachineCellValue["justification"];
+};
+
+/**
+ * Locks the cell against later runs and, when the write replaces a run's
+ * outcome, keeps that outcome (value and citations) as the cell's override.
+ * The caller holds the cell lock.
+ */
+const markCellManuallyEdited = async ({
   tx,
   workspaceId,
   entityVersionId,
   propertyId,
   userId,
-}: LockCellArgs) => {
-  await acquireCellLock({ tx, entityVersionId, propertyId });
-
+  replaced,
+}: MarkManualEditArgs) => {
   const existingRows = await tx
     .select({ metadata: cellMetadata.metadata })
     .from(cellMetadata)
@@ -161,6 +184,7 @@ const lockCellOnManualEdit = async ({
     )
     .limit(1);
   const existing = existingRows.at(0)?.metadata;
+  const now = Temporal.Now.instant().toString({ fractionalSecondDigits: 3 });
 
   // Preserve an explicit lock so we don't overwrite its provenance/reason.
   const lockProvenance =
@@ -168,11 +192,15 @@ const lockCellOnManualEdit = async ({
       ? existing.lockProvenance
       : {
           lockedBy: userId,
-          lockedAt: Temporal.Now.instant().toString({
-            fractionalSecondDigits: 3,
-          }),
+          lockedAt: now,
           reason: "manual-edit" as const,
         };
+  const override = nextCellOverride({
+    existing: existing?.override,
+    replaced,
+    editedBy: userId,
+    editedAt: now,
+  });
 
   const metadata: CellMetadata = {
     version: 1,
@@ -182,6 +210,7 @@ const lockCellOnManualEdit = async ({
     }),
     locked: true,
     ...(lockProvenance && { lockProvenance }),
+    ...(override && { override }),
   };
 
   // audit: skip - caller records the manual field edit that this lock supports.
@@ -203,6 +232,58 @@ const lockCellOnManualEdit = async ({
         updatedAt: new Date(),
       },
     });
+  return override;
+};
+
+/** The field row a write replaces, with its citations, read under the cell lock. */
+const readReplacedField = async ({
+  tx,
+  entityVersionId,
+  propertyId,
+}: {
+  tx: Transaction;
+  entityVersionId: SafeId<"entityVersion">;
+  propertyId: SafeId<"property">;
+}): Promise<ReplacedFieldRow | undefined> => {
+  const rows = await tx
+    .select({
+      content: fields.content,
+      aiSettlement: fields.aiSettlement,
+      justificationContent: justifications.content,
+      boundingBoxes: justifications.boundingBoxes,
+      fileFieldIds: justifications.fileFieldIds,
+    })
+    .from(fields)
+    .leftJoin(
+      justifications,
+      and(
+        eq(justifications.fieldId, fields.id),
+        eq(justifications.workspaceId, fields.workspaceId),
+      ),
+    )
+    .where(
+      and(
+        eq(fields.propertyId, propertyId),
+        eq(fields.entityVersionId, entityVersionId),
+      ),
+    )
+    .limit(1);
+  const row = rows.at(0);
+  if (row === undefined) {
+    return undefined;
+  }
+  return {
+    content: row.content,
+    aiSettlement: row.aiSettlement,
+    justification:
+      row.justificationContent === null
+        ? null
+        : {
+            content: row.justificationContent,
+            boundingBoxes: row.boundingBoxes,
+            fileFieldIds: arrayOrEmpty(row.fileFieldIds),
+          },
+  };
 };
 
 // What counts as an empty cell is per content type. A clip cannot reach here
@@ -357,25 +438,24 @@ export const writeFieldValue = async function* ({
 
       const entityVersionId = entity.currentVersionId;
 
-      await lockCellOnManualEdit({
+      await acquireCellLock({
+        tx,
+        entityVersionId,
+        propertyId: property.id,
+      });
+      const existingField = await readReplacedField({
+        tx,
+        entityVersionId,
+        propertyId: property.id,
+      });
+      const override = await markCellManuallyEdited({
         tx,
         workspaceId,
         entityVersionId,
         propertyId: property.id,
         userId,
+        replaced: existingField,
       });
-
-      const existingFieldRows = await tx
-        .select({ content: fields.content })
-        .from(fields)
-        .where(
-          and(
-            eq(fields.propertyId, property.id),
-            eq(fields.entityVersionId, entityVersionId),
-          ),
-        )
-        .limit(1);
-      const existingField = existingFieldRows.at(0);
 
       await tx
         .delete(fields)
@@ -422,6 +502,11 @@ export const writeFieldValue = async function* ({
           kind: entity.kind,
           propertyId: property.id,
           entityVersionId,
+          // Names the run whose value this edit replaces, so the audit trail
+          // reads "value from run R, replaced by U" without a join.
+          ...(override !== undefined && {
+            overridesMachineRunId: override.machine.settlement.runId,
+          }),
         },
         // The cell's own matter, whichever matter the recorder is bound to
         // (a chat turn may write into any matter it is authorized for).

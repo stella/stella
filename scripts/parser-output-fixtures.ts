@@ -58,6 +58,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   toPlainTextIngestionResult,
 } from "../apps/api/src/lib/legal-search/ingestion-types";
+import { parsePendingDocument } from "../apps/api/src/lib/legal-search/sk-document-parser";
 import {
   type LogRecord,
   resetLogSinkForTesting,
@@ -960,6 +961,55 @@ const collectFindokDocuments = async ({
   });
 };
 
+/**
+ * Slovak courts' decision PDFs, read the way the deferred document walk
+ * reads a decision's file. A PDF whose page seams still cut a sentence is
+ * left out until the shared line reflow joins it (19c-150-2006).
+ */
+const SK_COURTS_DECISION_PDFS = [
+  "sk-courts-0t-107-2015.pdf",
+  "sk-courts-15copr-4-2020.pdf",
+  "sk-courts-16c-45-2025.pdf",
+  "sk-courts-2t-103-2020.pdf",
+  "sk-courts-4cdo-21-2022.pdf",
+  "sk-courts-6cop-34-2011.pdf",
+] as const;
+
+const collectSlovakCourtDocuments = async ({
+  parserFixtures,
+  add,
+  seeds,
+}: CollectorContext) => {
+  const seed =
+    seeds.get("sk-courts") ?? panic("Missing sk-courts fixture seed");
+  for (const filename of SK_COURTS_DECISION_PDFS) {
+    const parsed = (
+      await parsePendingDocument(
+        {
+          caseNumber: seed.caseNumber,
+          ecli: seed.ecli ?? null,
+          court: seed.court,
+          decisionDate: seed.decisionDate ?? null,
+          decisionType: seed.decisionType ?? null,
+        },
+        new Uint8Array(
+          await Bun.file(path.join(parserFixtures, filename)).arrayBuffer(),
+        ),
+      )
+    ).unwrap(
+      "A recorded Slovak court PDF parses as a stored decision document",
+    );
+    if (parsed === undefined) {
+      panic(`${filename} holds no decision document`);
+    }
+    add({
+      adapter: "sk-courts",
+      fixture: `${filename} (recorded document; census metadata)`,
+      decision: { ...seed, ...parsed },
+    });
+  }
+};
+
 const collectPolishDocuments = async ({
   fixtureRoot,
   add,
@@ -979,6 +1029,7 @@ const collectOutputs = async (fixtureRoot: string, warnings: LogRecord[]) => {
   await collectSeeds(context);
   await collectCzechDocuments(context);
   await collectSlovakDocuments(context);
+  await collectSlovakCourtDocuments(context);
   await collectEuropeanDocuments(context);
   await collectAmericanDocuments(context);
   await collectHungarianDocuments(context);

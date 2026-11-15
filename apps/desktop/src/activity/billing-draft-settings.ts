@@ -16,6 +16,7 @@ import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
+  failureReason,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import { scopedDraftSettingsFrom } from "./billing-draft-logic";
@@ -51,10 +52,12 @@ const reportFailure = (
     "activityRead" | "activityUpdate"],
   code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
     "invalidResponse" | "invokeFailed"],
+  rejection?: unknown,
 ) => {
   reportDesktopError({
     code,
     operation,
+    ...(rejection === undefined ? {} : { reason: failureReason(rejection) }),
     window: DESKTOP_TELEMETRY_WINDOWS.activity,
   });
 };
@@ -145,6 +148,7 @@ export const useBillingDraftSettings = (
         reportFailure(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          intent.error,
         );
         return false;
       }
@@ -188,6 +192,7 @@ export const useBillingDraftSettings = (
           reportFailure(
             DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
             DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            result.isErr() ? result.error : undefined,
           );
           return false;
         }
@@ -237,6 +242,7 @@ export const useBillingDraftSettings = (
         reportFailure(
           DESKTOP_TELEMETRY_OPERATIONS.activityRead,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          result.error,
         );
         consent.refresh("unavailable");
         setLoaded({ type: "failed" });
@@ -288,6 +294,7 @@ export const useBillingDraftSettings = (
           reportFailure(
             DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
             DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            result.isErr() ? result.error : undefined,
           );
           return false;
         }

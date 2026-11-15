@@ -35,12 +35,12 @@ const guardEnforcesLine = (
     ...options,
     rollouts: [
       {
-        id: "portable-path",
+        id: "fixture-guard",
         type: "changed-lines",
         expiresAt: "2026-10-20T00:00:00.000Z",
         check: ["bun", "scripts/check-fixture.ts"],
       },
-      ...GUARD_ROLLOUTS.filter(({ id }) => id !== "portable-path"),
+      ...GUARD_ROLLOUTS,
     ],
   });
 
@@ -57,7 +57,7 @@ const readFixtures = (directory: string) =>
     encoding: "utf-8",
     recursive: true,
   })
-    .filter((name) => /\.fixture\.tsx?$/u.test(name))
+    .filter((name) => /\.fixture(?:\.test)?\.tsx?$/u.test(name))
     .map((name) => {
       const file = `${directory}/${name}`;
       return { file, source: readFileSync(path.join(ROOT, file), "utf-8") };
@@ -65,17 +65,19 @@ const readFixtures = (directory: string) =>
 
 const fixtures = readFixtures(FIXTURES);
 
-test("fixture discovery reads .fixture.tsx files", () => {
+test("fixture discovery reads TypeScript and test fixture suffixes", () => {
   const directory = mkdtempSync(path.join(ROOT, ".fixture-discovery-"));
   try {
     writeFileSync(path.join(directory, "rule.fixture.tsx"), "tsx");
     writeFileSync(path.join(directory, "rule.fixture.ts"), "ts");
+    writeFileSync(path.join(directory, "rule.fixture.test.ts"), "test-ts");
+    writeFileSync(path.join(directory, "rule.fixture.test.tsx"), "test-tsx");
     writeFileSync(path.join(directory, "rule.ts"), "other");
     expect(
       readFixtures(path.basename(directory))
         .map(({ source }) => source)
         .toSorted(),
-    ).toEqual(["ts", "tsx"]);
+    ).toEqual(["test-ts", "test-tsx", "ts", "tsx"]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -114,7 +116,7 @@ for (const { id: guard, rules = [] } of GUARD_ROLLOUTS) {
 test("fixture scope does not include similarly named directories", () => {
   expect(
     guardEnforcesLine({
-      guard: "portable-path",
+      guard: "fixture-guard",
       file: `${FIXTURES}-other/path.ts`,
       line: 1,
       changedLines: new Map(),
@@ -124,7 +126,7 @@ test("fixture scope does not include similarly named directories", () => {
 
 test("a rollout past its deadline still enforces only changed lines", () => {
   const options = {
-    guard: "portable-path",
+    guard: "fixture-guard",
     file: "scripts/path.ts",
     changedLines: new Map([["scripts/path.ts", new Set([4])]]),
   };
@@ -136,7 +138,7 @@ test("the healing probe's full scope enforces unchanged lines", () => {
   testState.setEnv("STELLA_GUARD_SCOPE", "all");
   expect(
     guardEnforcesLine({
-      guard: "portable-path",
+      guard: "fixture-guard",
       file: "scripts/path.ts",
       line: 3,
       changedLines: new Map(),

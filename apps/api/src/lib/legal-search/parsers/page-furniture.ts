@@ -1,3 +1,4 @@
+// parser-output-unchanged: the page-break list item test moved unchanged into the printed-label grammar.
 /**
  * Page furniture of Czech court decisions, and the sentences page breaks cut.
  *
@@ -16,6 +17,7 @@
  */
 
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
+import { PAGE_LIST_ITEM_RE } from "@stll/legal-ast/printed-paragraph-labels";
 
 /**
  * A docket as a running header prints it: "sp. zn." or "č. j." optionally,
@@ -72,7 +74,6 @@ const SENTENCE_END_RE = /[.!?:;][“”"'»«)\]]*\s*$/u;
  */
 const CONTINUATION_START_RE = /^\s*„?(?:\p{Ll}|§|\d)/u;
 const STATUTE_NUMBER_START_RE = /^\s*č\.\s*\d/u;
-const LIST_ITEM_RE = /^\s*(?:\d{1,4}[.)]|\p{L}[.)]|[-–•])\s/u;
 /**
  * Shortest text a page can have cut. Short lines without closing
  * punctuation are names, labels and titles ("Josef Baxa" over "předseda
@@ -92,7 +93,7 @@ export const continuesAcrossPageBreak = (
   previous.trim().length >= MIN_CUT_PARAGRAPH_CHARS &&
   (!SENTENCE_END_RE.test(previous) || DOCKET_PREFIX_END_RE.test(previous)) &&
   CONTINUATION_START_RE.test(next) &&
-  (!LIST_ITEM_RE.test(next) || STATUTE_NUMBER_START_RE.test(next)) &&
+  (!PAGE_LIST_ITEM_RE.test(next) || STATUTE_NUMBER_START_RE.test(next)) &&
   !opensWithCourtParagraphMarker(next);
 
 /**

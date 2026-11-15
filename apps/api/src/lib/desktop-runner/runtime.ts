@@ -1,3 +1,5 @@
+import { chatBackgroundTasksChangedRealtimeEvent } from "@stll/api-contract";
+
 import { rootDb } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
 import type { HttpServer } from "@/api/http/context";
@@ -23,6 +25,7 @@ import {
   desktopRunnerUnavailable,
 } from "@/api/lib/desktop-runner/gateway";
 import { createRedisClient } from "@/api/lib/redis-client";
+import { broadcastToUser } from "@/api/lib/sse";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
 
 /**
@@ -76,6 +79,13 @@ export const startDesktopRunnerGateway = async () => {
     db: rootDb,
     doorbell: getDoorbell(),
     runBell: getRunBell(),
+    announceBackgroundTasks: (owner) => {
+      broadcastToUser(
+        owner.userId,
+        owner.organizationId,
+        chatBackgroundTasksChangedRealtimeEvent(),
+      );
+    },
     instanceId: INSTANCE_ID,
     authorize: authorizeRunnerWith(authorizeDesktopAccount),
     mintRunToken: mintAgentRunToken,

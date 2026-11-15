@@ -9,6 +9,8 @@ type WorkBudgetRefusal = {
 type WorkBudgetAdmission = {
   type: "admitted";
   release: () => void;
+  /** Whether the request waited in the queue before it was admitted. */
+  queued: boolean;
 };
 
 export type WorkBudgetResult = WorkBudgetAdmission | WorkBudgetRefusal;
@@ -111,6 +113,7 @@ export const createWorkBudget = ({
     waiter.finish({
       type: "admitted",
       release: releaseFor(waiter.slots, waiter.bytes),
+      queued: true,
     });
   };
 
@@ -154,7 +157,11 @@ export const createWorkBudget = ({
     if (waiters.length === 0 && fits(slots, bytes)) {
       slotsInUse += slots;
       bytesInUse += bytes;
-      return { type: "admitted", release: releaseFor(slots, bytes) };
+      return {
+        type: "admitted",
+        release: releaseFor(slots, bytes),
+        queued: false,
+      };
     }
     if (waiters.length >= maxWaiters) {
       return { type: "refused", reason: "busy", retryAfterMs: maxWaitMs };

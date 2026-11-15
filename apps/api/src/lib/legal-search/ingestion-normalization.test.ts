@@ -20,6 +20,7 @@ import {
 import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
 import {
   fitsDecisionSearchCandidateRow,
+  normalizeDecisionType,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -43,6 +44,28 @@ const fields = [
   },
   { field: "court", errorField: UNPERSISTABLE_DECISION_FIELDS.COURT_LENGTH },
 ] as const;
+
+describe("decision type at the write boundary", () => {
+  test("a publisher list folded into one field names each type once", () => {
+    expect(normalizeDecisionType("uznesenie,uznesenie")).toBe("uznesenie");
+    expect(normalizeDecisionType("Nález, uznesenie")).toBe("nález, uznesenie");
+  });
+
+  test("an address or a docket is no type", () => {
+    expect(
+      normalizeDecisionType(
+        "https://uohs.gov.cz/cs/ciselniky/typy-rozhodnuti/36.html",
+      ),
+    ).toBeUndefined();
+    expect(normalizeDecisionType("63 Az 17/2026 - 28")).toBeUndefined();
+  });
+
+  test("keeps the existing casing and formula rules", () => {
+    expect(normalizeDecisionType("Rozsudok")).toBe("rozsudok");
+    expect(normalizeDecisionType("ROZSUDEK JMÉNEM REPUBLIKY")).toBe("rozsudek");
+    expect(normalizeDecisionType("  ")).toBeUndefined();
+  });
+});
 
 describe("decision storage normalization", () => {
   for (const { field, errorField } of fields) {

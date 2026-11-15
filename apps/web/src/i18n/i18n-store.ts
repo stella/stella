@@ -249,6 +249,57 @@ const WEEK_START_KEYWORD = {
   monday: "mon",
 } as const satisfies Record<Exclude<WeekStartPreference, "auto">, string>;
 
+/**
+ * The digits the reader sees: "auto" means Eastern Arabic-Indic for Arabic
+ * and Western digits elsewhere. One owner for both locales below, so a number
+ * formatted by the formatter and one an ICU message formats (a plural's `#`)
+ * never differ in digits.
+ */
+const resolveNumberingSystem = (
+  language: string,
+  numberingSystem: NumberingPreference,
+) => {
+  const autoNumbers = language === "ar" ? "arab" : "latn";
+  const numbers = numberingSystem === "auto" ? autoNumbers : numberingSystem;
+  return { autoNumbers, numbers };
+};
+
+type MessageLocaleOptions = Pick<
+  FormattingLocaleOptions,
+  "lang" | "region" | "regionalFormat" | "numberingSystem"
+>;
+
+/**
+ * BCP-47 locale messages render in: the UI language, carrying the formatting
+ * locale's number system as a -u-nu- keyword so the numbers ICU formats
+ * inside a message (a plural's `#`, `{n, number}`) use the same digits as
+ * `format.number`. Plural rules and the language itself stay the UI
+ * language's; read the language with `useMessageLocale`, which drops the
+ * keyword.
+ */
+export const buildMessageLocale = ({
+  lang,
+  region,
+  regionalFormat,
+  numberingSystem,
+}: MessageLocaleOptions): string => {
+  const autoBase = region && !lang.includes("-") ? `${lang}-${region}` : lang;
+  const base = regionalFormat === "auto" ? autoBase : regionalFormat;
+  const { numbers } = resolveNumberingSystem(
+    new Intl.Locale(base).language,
+    numberingSystem,
+  );
+  // Western digits need no keyword, except in a language whose own default
+  // Intl may resolve differently (Arabic).
+  const languageDefault = resolveNumberingSystem(
+    new Intl.Locale(lang).language,
+    "auto",
+  ).numbers;
+  return numbers === "latn" && languageDefault === "latn"
+    ? lang
+    : `${lang}-u-nu-${numbers}`;
+};
+
 type FormattingLocaleOptions = {
   lang: SupportedLanguage;
   region: string;
@@ -284,8 +335,10 @@ export const buildFormattingLocale = ({
   const base = regionalFormat === "auto" ? autoBase : regionalFormat;
   const formattingLanguage = new Intl.Locale(base).language;
   const calendarSystem = calendar === "auto" ? "gregory" : calendar;
-  const autoNumbers = formattingLanguage === "ar" ? "arab" : "latn";
-  const numbers = numberingSystem === "auto" ? autoNumbers : numberingSystem;
+  const { autoNumbers, numbers } = resolveNumberingSystem(
+    formattingLanguage,
+    numberingSystem,
+  );
 
   // Unicode extension keywords, kept in canonical (alphabetical) order: ca, fw, nu.
   const keywords: string[] = [];
@@ -385,7 +438,12 @@ const applyMessages = ({
 }: ApplyMessagesArgs): void => {
   setTranslator(
     createTranslator({
-      locale: lang,
+      locale: buildMessageLocale({
+        lang,
+        region,
+        regionalFormat,
+        numberingSystem,
+      }),
       messages,
     }),
   );
@@ -403,6 +461,18 @@ const applyMessages = ({
 
 /** Rebuild the non-React formatter from the current store state. */
 const recomputeFormatterForState = (state: State): void => {
+  // The translator's digits follow the number system too (buildMessageLocale).
+  setTranslator(
+    createTranslator({
+      locale: buildMessageLocale({
+        lang: state.loadedLang,
+        region: state.region,
+        regionalFormat: state.regionalFormat,
+        numberingSystem: state.numberingSystem,
+      }),
+      messages: state.messages,
+    }),
+  );
   refreshFormatter(
     buildFormattingLocale({
       lang: state.loadedLang,

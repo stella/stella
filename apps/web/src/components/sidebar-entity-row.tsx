@@ -5,52 +5,48 @@ import { useTranslations } from "use-intl";
 
 import { ENTITY_NAME_MAX_LENGTH } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
+import { type EntityAction, EntityActions } from "@stll/ui/entity-actions";
 import { PenLineIcon, Trash2Icon } from "@stll/ui/icons";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
-import { MenuItem } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
-import { contextMenuBelongsTo } from "@/components/context-menu-target";
-import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 import { MatterActivityRow } from "@/components/matter-activity-row";
 import { SidebarMenuSubItem } from "@/components/sidebar";
+import type { TaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
+import { useTaskStatusAction } from "@/components/workspaces/tasks/task-status-menu";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
-import { useRenameEntityForUser } from "@/lib/workspaces/mutations/entities";
+import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
 type SidebarEntityRowProps = {
-  activeOrganizationId: string;
   children: ReactNode;
   entityId: string;
   entityKind: string;
   onDelete: (opener: HTMLElement | null) => void;
   name: string;
   onOpen: () => void;
+  /** A task's status, which its menu can change; `null` for other kinds. */
+  taskStatus: TaskStatus | null;
   workspaceId: string;
-  userId: string;
 };
 
 /** Activity summaries have identity, but no full row or file-cell payload. */
 export const SidebarEntityRow = ({
-  activeOrganizationId,
   children,
   entityId,
   entityKind,
   onDelete,
   name,
   onOpen,
+  taskStatus,
   workspaceId,
-  userId,
 }: SidebarEntityRowProps) => {
   const t = useTranslations();
   const returnFocus = useRef<HTMLButtonElement | null>(null);
-  const renameEntity = useRenameEntityForUser({
-    activeOrganizationId,
-    inspectorStore: undefined,
-    userId,
-  });
-  const canRename = usePermissions({ entity: ["update"] });
+  const renameEntity = useRenameEntity();
+  const canUpdate = usePermissions({ entity: ["update"] });
+  const taskStatusAction = useTaskStatusAction(workspaceId);
   const canDelete = usePermissions({ entity: ["delete"] });
   const rename = useInlineRename({
     initial: name,
@@ -61,28 +57,30 @@ export const SidebarEntityRow = ({
       );
     },
   });
-  const menu = useAnchoredMenu({
-    returnFocus,
-    children: (
-      <>
-        {canRename && (
-          <MenuItem onClick={() => rename.startEditing()}>
-            <PenLineIcon />
-            {t("common.rename")}
-          </MenuItem>
-        )}
-        {canDelete && (
-          <MenuItem
-            onClick={() => onDelete(returnFocus.current)}
-            variant="destructive"
-          >
-            <Trash2Icon />
-            {t("workspaces.deleteFromMatter")}
-          </MenuItem>
-        )}
-      </>
-    ),
-  });
+  const actions: EntityAction[] = [
+    ...(canUpdate
+      ? [
+          {
+            icon: <PenLineIcon />,
+            label: t("common.rename"),
+            onClick: () => rename.startEditing(),
+          },
+        ]
+      : []),
+    ...(canUpdate && taskStatus !== null
+      ? [taskStatusAction(entityId, taskStatus)]
+      : []),
+    ...(canDelete
+      ? [
+          {
+            icon: <Trash2Icon />,
+            label: t("workspaces.deleteFromMatter"),
+            onClick: () => onDelete(returnFocus.current),
+            variant: "destructive" as const,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <SidebarMenuSubItem data-context-menu-target={entityId}>
@@ -101,31 +99,21 @@ export const SidebarEntityRow = ({
           {rename.state.error && <span role="alert">{rename.state.error}</span>}
         </div>
       ) : (
-        <MatterActivityRow>
-          <Button
-            data-entity-id={entityId}
-            data-entity-kind={entityKind}
-            onClick={containedEventHandler(onOpen)}
-            onContextMenu={containedEventHandler((event) => {
-              if (
-                !contextMenuBelongsTo(event, { id: entityId, kind: entityKind })
-              ) {
-                return;
-              }
-              if (canRename || canDelete) {
-                menu.openAt(event);
-              }
-            })}
-            onKeyDown={canRename || canDelete ? menu.onKeyDown : undefined}
-            ref={returnFocus}
-            size="sm"
-            variant="ghost"
-          >
-            {children}
-          </Button>
-        </MatterActivityRow>
+        <EntityActions actions={actions} label={t("common.actions")}>
+          <MatterActivityRow>
+            <Button
+              data-entity-id={entityId}
+              data-entity-kind={entityKind}
+              onClick={containedEventHandler(onOpen)}
+              ref={returnFocus}
+              size="sm"
+              variant="ghost"
+            >
+              {children}
+            </Button>
+          </MatterActivityRow>
+        </EntityActions>
       )}
-      {menu.element}
     </SidebarMenuSubItem>
   );
 };

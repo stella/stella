@@ -20,6 +20,7 @@ import type {
   EntityFind,
   OcrExportStatus,
 } from "@stll/api-contract";
+import { PROPERTY_SORT_KINDS } from "@stll/api-contract";
 import type { EntityContextReference } from "@stll/api-contract/entity-reference";
 import { ENTITY_VIEW_ROW_KIND } from "@stll/api-contract/entity-views";
 import type { ConditionNode } from "@stll/conditions";
@@ -40,12 +41,14 @@ import {
   entityVersions,
   extractedContent,
   fields,
+  properties,
   searchDocuments,
   taskAssignees,
   workspaces,
 } from "@/api/db/schema";
 import type {
   CellMetadata,
+  CellOverride,
   EntityKind,
   FieldContent,
 } from "@/api/db/schema-validators";
@@ -85,9 +88,11 @@ import {
   buildFindConditions,
   createdByNameSortExpr,
   displayedNameExpr,
+  propertySortValues,
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { activeCellOverride } from "@/api/lib/fields/cell-override";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -95,6 +100,7 @@ import {
   brandPersistedEntityId,
   brandPersistedSignalId,
 } from "@/api/lib/safe-id-boundaries";
+import { typedPgArray } from "@/api/lib/search/sql";
 import type { ViewSort } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -120,12 +126,31 @@ export type QueryEntityAssignee = {
   image: string | null;
 };
 
+/**
+ * A person's value over a machine one, as a table shows it: the machine value
+ * and when its run settled, who replaced it last and why. Citations of the
+ * machine value stay server-side (they are restored with it), so a table read
+ * does not carry them for every edited cell.
+ */
+type CellOverrideResult = {
+  machine: {
+    content: CellOverride["machine"]["content"];
+    settledAt: string;
+  };
+  editedBy: string;
+  editedByName: string | null;
+  editedByImage: string | null;
+  editedAt: string;
+  reason: string | null;
+};
+
 type CellMetadataResult = Omit<
   CellMetadata,
-  "flagProvenance" | "lockProvenance"
+  "flagProvenance" | "lockProvenance" | "override"
 > & {
   flagProvenance?: Record<string, CellMetadataFlagProvenanceResult>;
   lockProvenance?: CellLockProvenanceResult;
+  override?: CellOverrideResult;
 };
 
 /**
@@ -288,6 +313,9 @@ const getCellMetadataActorIds = (
     if (row.metadata.lockProvenance) {
       userIds.add(row.metadata.lockProvenance.lockedBy);
     }
+    if (row.metadata.override) {
+      userIds.add(row.metadata.override.editedBy);
+    }
   }
   return [...userIds];
 };
@@ -298,10 +326,37 @@ type CellMetadataActor = {
   image: string | null;
 };
 
-const enrichCellMetadata = (
-  metadata: CellMetadata,
+const enrichCellOverride = (
+  override: CellOverride,
   actorMap: Map<string, CellMetadataActor>,
-): CellMetadataResult => {
+): CellOverrideResult => {
+  const editor = actorMap.get(override.editedBy);
+  return {
+    machine: {
+      content: override.machine.content,
+      settledAt: override.machine.settlement.settledAt,
+    },
+    editedBy: override.editedBy,
+    editedByName: editor?.name ?? null,
+    editedByImage: editor?.image ?? null,
+    editedAt: override.editedAt,
+    reason: override.reason,
+  };
+};
+
+type EnrichCellMetadataArgs = {
+  metadata: CellMetadata;
+  actorMap: Map<string, CellMetadataActor>;
+  /** The cell's current settlement; a settled cell's stored override is stale. */
+  aiSettlement: AiCellSettlement | null | undefined;
+};
+
+const enrichCellMetadata = ({
+  metadata,
+  actorMap,
+  aiSettlement,
+}: EnrichCellMetadataArgs): CellMetadataResult => {
+  const override = activeCellOverride({ metadata, aiSettlement });
   const provenanceEntries = Object.entries(metadata.flagProvenance ?? {});
   const lockActor = metadata.lockProvenance
     ? actorMap.get(metadata.lockProvenance.lockedBy)
@@ -334,6 +389,7 @@ const enrichCellMetadata = (
     }),
     ...(metadata.locked === true && { locked: true }),
     ...(lockProvenance && { lockProvenance }),
+    ...(override && { override: enrichCellOverride(override, actorMap) }),
   };
 };
 
@@ -461,21 +517,62 @@ const dateSortKey = ({
   type: "date",
 });
 
-const propertySortValueExpr = (propertyId: string): SQL => sql`(
-  SELECT left(
-    COALESCE(
-      ${fields.content}->>'value',
-      ${fields.content}->>'fileName',
-      ''
-    ),
-    ${ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH}
-  )
-  FROM ${fields}
-  WHERE ${fields.workspaceId} = ${entities.workspaceId}
-    AND ${fields.entityVersionId} = ${entities.currentVersionId}
-    AND ${fields.propertyId} = ${propertyId}
-  LIMIT 1
-)`;
+/**
+ * How a property column orders, keyed by property id. A sort on a property
+ * that is not here (deleted since the view saved it) orders by text, where
+ * every row reads as empty.
+ */
+type PropertySortKinds = ReadonlyMap<string, PropertySortKind>;
+
+type PropertySortKind =
+  (typeof PROPERTY_SORT_KINDS)[keyof typeof PROPERTY_SORT_KINDS];
+
+// Past either end of every amount a JS number holds exactly, so a row with no
+// number sorts after the rest in both directions and its cursor round-trips.
+const MISSING_NUMBER_SORT_VALUE = Number.MAX_SAFE_INTEGER;
+
+/**
+ * The keys a custom property sort contributes: the same currency, number and
+ * text values the calendar orders by (`propertySortValues`), with NULLs
+ * replaced by direction-aware sentinels because keyset cursors cannot compare
+ * NULL. A missing currency or number sorts last; a missing text keeps its
+ * empty-string slot. Non-number columns skip the first two keys, which would
+ * be NULL on every row.
+ */
+const propertySortKeys = ({
+  desc,
+  kind,
+  propertyId,
+}: {
+  desc: boolean;
+  kind: PropertySortKind;
+  propertyId: string;
+}): EntitySortKey[] => {
+  const direction: SortDirection = desc ? "desc" : "asc";
+  const { currency, number, text } = propertySortValues(propertyId);
+  const textKey = legacyNullableTextSortKey({
+    direction,
+    expr: sql`left(${text}, ${ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH})`,
+  });
+  if (kind !== "number") {
+    return [textKey];
+  }
+  return [
+    textSortKey({
+      direction,
+      expr: desc
+        ? sql`COALESCE(${currency}, '')`
+        : sql`COALESCE(${currency}, ${HIGH_TEXT_SENTINEL})`,
+    }),
+    numberSortKey({
+      direction,
+      expr: sql`COALESCE(${number}, ${
+        desc ? -MISSING_NUMBER_SORT_VALUE : MISSING_NUMBER_SORT_VALUE
+      })`,
+    }),
+    textKey,
+  ];
+};
 
 const internalSortKey = (
   {
@@ -543,6 +640,7 @@ const internalSortKey = (
 const buildViewSortKeys = (
   sorts: readonly ViewSort[],
   organizationId: SafeId<"organization">,
+  propertySortKinds: PropertySortKinds,
 ): EntitySortKey[] => {
   if (sorts.length === 0) {
     return [
@@ -559,9 +657,10 @@ const buildViewSortKeys = (
     }
 
     keys.push(
-      legacyNullableTextSortKey({
-        direction: sort.desc ? "desc" : "asc",
-        expr: propertySortValueExpr(sort.propertyId),
+      ...propertySortKeys({
+        desc: sort.desc,
+        kind: propertySortKinds.get(sort.propertyId) ?? "text",
+        propertyId: sort.propertyId,
       }),
     );
   }
@@ -621,30 +720,69 @@ const sourceTiebreakKeys = (source: EntityWindowSource): EntitySortKey[] => {
 
 const buildSortKeys = ({
   organizationId,
+  propertySortKinds,
   search,
   sorts,
   source = { type: "entities" },
 }: {
   organizationId: SafeId<"organization">;
+  propertySortKinds: PropertySortKinds;
   search?: string | undefined;
   sorts: readonly ViewSort[];
   source?: EntityWindowSource;
 }): EntitySortKey[] => [
   ...buildSearchSortKeys(search),
-  ...buildViewSortKeys(sorts, organizationId),
+  ...buildViewSortKeys(sorts, organizationId, propertySortKinds),
   ...sourceTiebreakKeys(source),
   textSortKey({ direction: "asc", expr: sql`${entities.id}` }),
 ];
 
 export const buildEntitySortExpressions = ({
   organizationId,
+  propertySortKinds,
   search,
   sorts,
 }: {
   organizationId: SafeId<"organization">;
+  propertySortKinds: PropertySortKinds;
   search?: string | undefined;
   sorts: readonly ViewSort[];
-}): SQL[] => buildSortKeys({ organizationId, search, sorts }).map(orderSortKey);
+}): SQL[] =>
+  buildSortKeys({ organizationId, propertySortKinds, search, sorts }).map(
+    orderSortKey,
+  );
+
+/** The sort kind of each custom property a view sorts by. */
+const readPropertySortKinds = async ({
+  organizationId,
+  safeDb,
+  sorts,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  sorts: readonly ViewSort[];
+}): Promise<Result<PropertySortKinds, SafeDbError>> => {
+  const propertyIds = sorts
+    .filter((sort) => internalSortKey(sort, organizationId) === null)
+    .map((sort) => sort.propertyId);
+  if (propertyIds.length === 0) {
+    return Result.ok(new Map());
+  }
+  const rows = await safeDb((tx) =>
+    tx
+      .select({ id: properties.id, content: properties.content })
+      .from(properties)
+      .where(sql`${properties.id} = ANY(${typedPgArray(propertyIds, "uuid")})`),
+  );
+  if (Result.isError(rows)) {
+    return Result.err(rows.error);
+  }
+  return Result.ok(
+    new Map(
+      rows.value.map((row) => [row.id, PROPERTY_SORT_KINDS[row.content.type]]),
+    ),
+  );
+};
 
 const parseCursorValue = (
   key: EntitySortKey,
@@ -884,8 +1022,16 @@ const queryEntitiesGenerator = async function* ({
     ...extraConditions,
   ];
   const entityAccess = and(workspaceCondition, ...entityConditions);
+  const propertySortKinds = yield* Result.await(
+    readPropertySortKinds({
+      organizationId: currentOrganizationId,
+      safeDb,
+      sorts,
+    }),
+  );
   const sortKeys = buildSortKeys({
     organizationId: currentOrganizationId,
+    propertySortKinds,
     search,
     sorts,
     source,
@@ -1354,7 +1500,13 @@ const queryEntitiesGenerator = async function* ({
       })),
       cellMetadata: entityCellMetadata.map((entry) => ({
         propertyId: entry.propertyId,
-        metadata: enrichCellMetadata(entry.metadata, cellMetadataActorMap),
+        metadata: enrichCellMetadata({
+          metadata: entry.metadata,
+          actorMap: cellMetadataActorMap,
+          aiSettlement: entityFields.find(
+            (field) => field.propertyId === entry.propertyId,
+          )?.aiSettlement,
+        }),
       })),
       assignees: arrayOrEmpty(assigneesByEntityId.get(entity.id)),
     });

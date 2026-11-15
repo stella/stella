@@ -7,7 +7,8 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  type BrowserExtensionCapability,
+  CHAT_INPUT_REFUSAL_CODE,
+  CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -23,7 +24,13 @@ import {
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+import {
+  CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
@@ -40,10 +47,10 @@ import {
   resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
 import { createTurnAnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
+import type { TurnBrowserExtension } from "@/api/handlers/chat/browser-extension-capability";
 import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
-  getAwaitingUserInteractions,
   getResumedUserInteraction,
   isChatPart,
   toPersistableChatMessage,
@@ -63,10 +70,12 @@ import {
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
   chatVolatilePromptSection,
+  CLOUD_PROMPT_TARGET,
   extendChatUntrustedPromptSuffix,
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
+  ChatPromptTarget,
   ChatSafePromptLayers,
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
@@ -92,9 +101,10 @@ import {
   CHAT_RUN_MODE,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
+  hasAgUiEnvelopeCorrelationMismatch,
   parseMessage,
   requireUserMessageContent,
-  resolveBrowserExtensionCapability,
+  resolveTurnBrowserExtension,
   toolCallOwnershipOf,
   validateMessage,
   validateToolCallParts,
@@ -113,6 +123,7 @@ import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistenc
 import {
   CHAT_TURN_BOUNDARY_MODE,
   ChatTurnRun,
+  chatTurnRunBoundOf,
   countChatTurnSettlement,
   processChatTurnOwnership,
 } from "@/api/handlers/chat/chat-turn-run";
@@ -147,6 +158,10 @@ import {
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
 import { sourceScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-source-scopes";
+import type {
+  LocalChatRun,
+  LocalRunAppIssuer,
+} from "@/api/handlers/chat/local-run-chunks";
 import {
   resolveChatLocalRun,
   type ResolveChatLocalRunOptions,
@@ -174,7 +189,11 @@ import {
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
 import { enforceLoadedSkillHistoryBindings } from "@/api/handlers/chat/skill-history-binding";
-import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
+import {
+  hydrateMessages,
+  localRunAttachmentsOf,
+  streamChat,
+} from "@/api/handlers/chat/stream-chat";
 import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
 import {
@@ -267,6 +286,7 @@ import {
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -282,6 +302,7 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { resolveCredentialMemberExecutionContext } from "@/api/lib/chat/credential-member-execution-context";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
+import { readLocalRunApprovalCeiling } from "@/api/lib/chat/local-run-approval-ceiling";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_ENCODING,
@@ -294,13 +315,18 @@ import {
   isChatRefContext,
   resolveChatRefInputState,
 } from "@/api/lib/chat/ref-token";
-import { encodeChatRunTarget } from "@/api/lib/chat/run-target";
+import {
+  chatRunTargetOf,
+  sameChatRunTarget,
+  storedChatRunTarget,
+} from "@/api/lib/chat/run-target";
 import {
   type ChatThreadNamesRead,
   readChatThreadNames,
 } from "@/api/lib/chat/thread-names";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
+import type { LocalRunAttachment } from "@/api/lib/desktop-runner/control";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
@@ -332,6 +358,8 @@ import {
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { previewVisual } from "@/api/lib/visual-preview";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -413,7 +441,7 @@ const usableWorkspaceIds = (
 ): AccessibleWorkspace["id"][] => {
   const ids: AccessibleWorkspace["id"][] = [];
   for (const workspace of workspaces) {
-    if (workspace.status !== "deleting") {
+    if (workspaceIsVisible(workspace.status)) {
       ids.push(workspace.id);
     }
   }
@@ -536,6 +564,7 @@ type ChatSendLifecycleOptions = {
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
   /** The boundary mode the turn's settlement is counted under. */
   mode: ChatTurnObservation["mode"];
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
@@ -870,7 +899,7 @@ export class ChatSendLifecycle {
     ) {
       return false;
     }
-    const interaction = getAwaitingUserInteractions(this.checkpoint).at(0);
+    const interaction = memberWaitsOf(this.checkpoint).at(0);
     if (interaction === undefined) {
       return false;
     }
@@ -907,7 +936,10 @@ export class ChatSendLifecycle {
    * run gets nothing of the request, so it behaves the same once the request
    * is gone.
    */
-  startRun(connectors: LoadedExternalMcpTools | undefined): ChatTurnRun {
+  startRun(
+    connectors: LoadedExternalMcpTools | undefined,
+    runsOn: ChatRunTarget["kind"],
+  ): ChatTurnRun {
     if (this.claimedTurn.status !== "preflight") {
       return panic("Cannot start a run for a turn this send does not hold");
     }
@@ -916,7 +948,7 @@ export class ChatSendLifecycle {
       admission: this.admission,
       checkpoint: this.checkpoint,
       connectors,
-      deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
+      bound: chatTurnRunBoundOf(runsOn),
       mode: this.options.mode,
       owner: {
         indexThread: this.options.indexThread,
@@ -1138,6 +1170,7 @@ export class ChatSendLifecycle {
       }
       if (this.pendingSideEffects !== undefined) {
         const rollbackResult = await this.options.rollbackSideEffects({
+          organizationId: this.options.organizationId,
           recordAuditEvent: this.options.recordAuditEvent,
           safeDb: this.options.safeDb,
           threadId: this.options.threadId,
@@ -1336,15 +1369,15 @@ const keepThreadRunTarget = async ({
   if (!routedLocally || runTarget === undefined) {
     return Result.ok();
   }
-  const runsOn = encodeChatRunTarget(runTarget);
-  const stored = thread.data.chatRunTarget;
-  if (stored === runsOn) {
+  const runsOn = storedChatRunTarget(runTarget);
+  const stored = thread.data.chatLocalRunTarget;
+  if (sameChatRunTarget(chatRunTargetOf(stored), runTarget)) {
     return Result.ok();
   }
   return await safeDb(async (tx) => {
     await tx
       .update(chatThreads)
-      .set({ chatRunTarget: runsOn })
+      .set({ chatLocalRunTarget: runsOn })
       .where(
         and(
           eq(chatThreads.id, thread.data.id),
@@ -1357,7 +1390,7 @@ const keepThreadRunTarget = async ({
       resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
       resourceId: thread.data.id,
       workspaceId,
-      changes: { chatRunTarget: { old: stored, new: runsOn } },
+      changes: { chatLocalRunTarget: { old: stored, new: runsOn } },
     });
   });
 };
@@ -1635,7 +1668,7 @@ const acceptIncomingTurn = async ({
           acceptedTurnId: null,
           continuationInteraction:
             getResumedUserInteraction({
-              awaited: getAwaitingUserInteractions(
+              awaited: memberWaitsOf(
                 validationThreadState.persistedMessage === null
                   ? null
                   : chatMessageFromPersisted({
@@ -1837,6 +1870,11 @@ type PrepareValidatedIncomingMessageOptions = {
 };
 
 /** Validates the provider-facing message and adopts thread/file rollback ownership. */
+/** An upload a legal hold refused answers with the shared hold refusal. */
+const uploadRefusal = <UploadError>(
+  error: UploadError | LegalHoldActiveError,
+) => (LegalHoldActiveError.is(error) ? legalHoldRefusal(error) : error);
+
 const prepareValidatedIncomingMessage = async ({
   dependencies: { caseLawDb, loadWebSearchProviders, uploadMessageFiles },
   authorization: {
@@ -2240,7 +2278,7 @@ const prepareValidatedIncomingMessage = async ({
       // The upload helper already cleans a partial upload (and a newly
       // created thread) before returning an error.
       lifecycle.releaseSideEffects();
-      return Result.err(uploadResult.error);
+      return Result.err(uploadRefusal(uploadResult.error));
     }
     lifecycle.trackUploadedFiles(uploadResult.value.uploadedFiles);
 
@@ -2368,6 +2406,38 @@ const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
   dependencies.resolveCurrentExecutionContext ??
   resolveCredentialMemberExecutionContext;
 
+/** A turn on the computer gets its files, unless a raw copy would defeat anonymization. */
+/**
+ * A coding agent on the member's computer answers with its own tools, so its
+ * prompt names none of stella's cloud tools or settings, and says how its web
+ * search runs at the turn's permission level. A turn bound for a computer
+ * runs there or is refused, so the run target alone decides.
+ */
+const turnPromptTarget = (
+  runTarget: ChatRunTarget | undefined,
+): ChatPromptTarget =>
+  runTarget === undefined || runTarget.kind === CHAT_RUN_TARGET_KIND.cloud
+    ? CLOUD_PROMPT_TARGET
+    : {
+        type: "local_run",
+        webSearch:
+          CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS[runTarget.harness][
+            runTarget.approvals
+          ],
+      };
+
+const turnCopiesFiles = (
+  localRun: LocalChatRun | undefined,
+  sendMode: ChatSendMode,
+) => localRun !== undefined && sendMode !== CHAT_SEND_MODE.anonymized;
+
+const localRunForTurn = (
+  localRun: LocalChatRun | undefined,
+  attachments: readonly LocalRunAttachment[],
+  origin: LocalRunAppIssuer,
+): LocalChatRun | undefined =>
+  localRun?.withAttachments(attachments).withResourceOrigin(origin);
+
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
 ) =>
@@ -2389,6 +2459,7 @@ export const createSendMessage = (
       safeDb,
       scopedDb,
       session,
+      set,
       usageLane,
       user,
     }) {
@@ -2399,10 +2470,6 @@ export const createSendMessage = (
       const body = transportBody.forwardedProps;
       const parentRunId = "parentRunId" in body ? body.parentRunId : undefined;
       const resume = "resume" in body ? body.resume : undefined;
-      const transportParentRunId =
-        "parentRunId" in transportBody ? transportBody.parentRunId : undefined;
-      const transportResume =
-        "resume" in transportBody ? transportBody.resume : undefined;
       let acceptedLifecycle: ChatSendLifecycle | undefined = undefined;
       const isClientConnectionAborted = () =>
         acceptedLifecycle === undefined
@@ -2425,18 +2492,7 @@ export const createSendMessage = (
         task: "chat",
       });
 
-      const hasEnvelopeCorrelationMismatch = (): boolean =>
-        transportBody.threadId !== body.threadId ||
-        transportBody.runId !== body.runId ||
-        transportParentRunId !== parentRunId ||
-        !deepEquals(transportResume, resume) ||
-        !deepEquals(transportBody.data, body) ||
-        !transportBody.messages.some(
-          (message) =>
-            message.id === body.message.id &&
-            message.role === body.message.role,
-        );
-      if (hasEnvelopeCorrelationMismatch()) {
+      if (hasAgUiEnvelopeCorrelationMismatch(transportBody)) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -2600,13 +2656,14 @@ export const createSendMessage = (
         : (body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE);
       const docxEditRepresentation =
         body.docxEditRepresentation ?? DEFAULT_DOCX_EDIT_REPRESENTATION;
+      const activeFile = body.activeFile;
       const activeFileEntity =
-        body.activeFile?.supportsDocxEdits === true && workspaceId !== null
+        activeFile?.supportsDocxEdits === true && workspaceId !== null
           ? yield* Result.await(
               safeDb((tx) =>
                 tx.query.entities.findFirst({
                   where: {
-                    id: { eq: body.activeFile?.entityId },
+                    id: { eq: activeFile.entityId },
                     workspaceId: { eq: workspaceId },
                   },
                   columns: { currentVersionId: true },
@@ -2692,6 +2749,7 @@ export const createSendMessage = (
         indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
         mode: CHAT_TURN_BOUNDARY_MODE[body.sendMode],
+        organizationId: session.activeOrganizationId,
         recordAuditEvent,
         safeDb,
         scopedDb,
@@ -2778,8 +2836,10 @@ export const createSendMessage = (
           webSearchProviders,
         } = preparedIncomingMessage;
 
-        // A turn bound for a computer is routed before it is admitted or
-        // stored: a computer that cannot take it refuses the send.
+        // Whether a turn may be asked to run on a computer at all. Which
+        // computer takes it is decided once the turn is stored, as its run
+        // starts, so a computer that cannot take it fails the turn the
+        // member's message is stored with.
         const localRun = yield* Result.await(
           resolveChatLocalRun({
             runTarget: body.runTarget,
@@ -2793,6 +2853,11 @@ export const createSendMessage = (
               pinnedIds: effectiveContextMatterIds,
               accessibleWorkspaceIds,
             }),
+            readApprovalCeiling: async () =>
+              await readLocalRunApprovalCeiling(
+                safeDb,
+                session.activeOrganizationId,
+              ),
             ...(dependencies.localRunRuntime === undefined
               ? {}
               : { runtime: dependencies.localRunRuntime }),
@@ -2802,7 +2867,9 @@ export const createSendMessage = (
           keepThreadRunTarget({
             organizationId: session.activeOrganizationId,
             recordAuditEvent,
-            routedLocally: localRun !== undefined,
+            // A resumed run keeps the policy it started with, so its target
+            // was stored then; storing this request's would misstate it.
+            routedLocally: localRun !== undefined && resume === undefined,
             runTarget: body.runTarget,
             safeDb,
             thread,
@@ -2810,6 +2877,12 @@ export const createSendMessage = (
             workspaceId,
           }),
         );
+        // One decision for the turn: the prompt's browser line and the
+        // browser tool offer both read it, so they cannot disagree.
+        const turnBrowserExtension = resolveTurnBrowserExtension({
+          reported: body.browserExtension,
+          runsLocally: localRun !== undefined,
+        });
 
         const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
@@ -2861,6 +2934,12 @@ export const createSendMessage = (
           toolWorkspaceIds,
           turnExecution,
         } = acceptedTurnResult.value;
+        // From here the member's message and its turn are stored, so every
+        // answer names the turn, a refusal included: a client then knows
+        // from the response alone that the thread holds what it sent. A
+        // stream refused before it opens (`ChatTurnFailureResponse`) gets the
+        // header from here too.
+        set.headers[CHAT_TURN_ID_HEADER] = turnExecution.id;
 
         const skillBindingScope = yield* Result.await(
           settleInternalPreflight(
@@ -3074,6 +3153,7 @@ export const createSendMessage = (
         };
         const chatToolContext = {
           visualTools,
+          appTools: { origin: visualOrigin },
           featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
@@ -3105,9 +3185,7 @@ export const createSendMessage = (
           hasActiveDocxEditClient,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
-          browserExtension: resolveBrowserExtensionCapability(
-            body.browserExtension,
-          ),
+          browserExtension: turnBrowserExtension,
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,
@@ -3158,6 +3236,9 @@ export const createSendMessage = (
         };
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
+          copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
+          promptTarget: turnPromptTarget(body.runTarget),
+          recordAuditEvent,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
           activeDraft: body.activeDraft,
@@ -3191,9 +3272,7 @@ export const createSendMessage = (
               toolScope: body.toolScope,
             }),
           },
-          browserExtension: resolveBrowserExtensionCapability(
-            body.browserExtension,
-          ),
+          browserExtension: turnBrowserExtension,
           userContext: body.userContext,
           userId: user.id,
           workspaceId,
@@ -3273,6 +3352,7 @@ export const createSendMessage = (
             externalConnectors,
             modelAdmission,
             externalTools: externalMcpTools?.tools ?? {},
+            organizationAIInstructions: chatContext.organizationAIInstructions,
             skillMetadata: chatContext.skillMetadata,
             skillBindingScope: chatContext.skillBindingScope,
             activeSkillContext: chatContext.activeSkillContext,
@@ -3440,7 +3520,10 @@ export const createSendMessage = (
               // The run owns the turn and the loaded connectors from here.
               // Agent runs load none for streaming, so the send's cleanup
               // closes any validation-only load.
-              const run = lifecycle.startRun(externalMcpTools);
+              const run = lifecycle.startRun(
+                externalMcpTools,
+                body.runTarget?.kind ?? CHAT_RUN_TARGET_KIND.cloud,
+              );
               try {
                 // The streamed turn's persistence: every expected failure
                 // comes back as a `Result` naming the turn row's failure code,
@@ -3576,7 +3659,11 @@ export const createSendMessage = (
                   promptCachingEnabled,
                   runMode: turnRunModeOf(body),
                   sandboxRun,
-                  localRun,
+                  localRun: localRunForTurn(
+                    localRun,
+                    chatContext.localRunAttachments,
+                    visualOrigin,
+                  ),
                   usageLane: turnLane.lane,
                   decisionPassageStamper: createTurnDecisionPassageStamper({
                     caseLawDb: dependencies.caseLawDb,
@@ -3797,6 +3884,9 @@ const turnRunModeOf = (
 
 type PrepareChatContextProps = {
   caseLawDb?: SendMessageDependencies["caseLawDb"];
+  copiesFilesToComputer: boolean;
+  promptTarget: ChatPromptTarget;
+  recordAuditEvent: AuditRecorder;
   featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft: IncomingActiveDraft | undefined;
@@ -3819,7 +3909,7 @@ type PrepareChatContextProps = {
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   toolAvailability: ChatToolAvailability;
-  browserExtension: BrowserExtensionCapability;
+  browserExtension: TurnBrowserExtension;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -3827,7 +3917,10 @@ type PrepareChatContextProps = {
 
 type PrepareChatContextResult = Result<
   {
+    organizationAIInstructions: string;
     hydratedMessages: ChatMessage[];
+    /** The files a turn on the member's computer copies into its folder. */
+    localRunAttachments: readonly LocalRunAttachment[];
     promptCacheKey: string;
     /**
      * Server-built scaffold. Safe to send to the LLM verbatim.
@@ -3854,8 +3947,52 @@ type PrepareChatContextResult = Result<
   HandlerError<403 | 404 | 422 | 500> | SafeDbError
 >;
 
+/**
+ * The files this turn copies to the member's computer, each recorded as their
+ * download. The run's links are signed later, when its command is sent.
+ */
+const auditedLocalRunAttachments = async ({
+  messages,
+  recordAuditEvent,
+  safeDb,
+  userId,
+  workspaceId,
+}: {
+  messages: ChatMessage[];
+  recordAuditEvent: AuditRecorder;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+}) =>
+  await Result.gen(async function* () {
+    const attachments = yield* Result.await(
+      localRunAttachmentsOf({ messages, safeDb, userId }),
+    );
+    if (attachments.length > 0) {
+      yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await recordAuditEvent(
+              tx,
+              attachments.map(({ fileId, fileName }) => ({
+                action: CONTENT_DELIVERY_AUDIT_ACTION.attachment,
+                resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
+                resourceId: fileId,
+                workspaceId,
+                metadata: { fileName, destination: "local_run" },
+              })),
+            ),
+        ),
+      );
+    }
+    return Result.ok(attachments);
+  });
+
 const prepareChatContext = async ({
   caseLawDb,
+  copiesFilesToComputer,
+  promptTarget,
+  recordAuditEvent,
   featureAccessSnapshot,
   activeDecision,
   activeDraft,
@@ -3887,10 +4024,11 @@ const prepareChatContext = async ({
       safeDb((tx) =>
         tx.query.organizationSettings.findFirst({
           where: { organizationId: { eq: organizationId } },
-          columns: { practiceJurisdictions: true },
+          columns: { aiInstructions: true, practiceJurisdictions: true },
         }),
       ),
     );
+    const organizationAIInstructions = orgSettingsRow?.aiInstructions ?? "";
     const practiceJurisdictions = normalizeOptionalArray(
       orgSettingsRow?.practiceJurisdictions,
     );
@@ -3911,6 +4049,7 @@ const prepareChatContext = async ({
         offeredToolNamesForSkills,
         organizationId,
         practiceJurisdictions,
+        organizationAIInstructions,
         refRegistry,
         safeDb,
         messages: messageWindow,
@@ -3918,12 +4057,14 @@ const prepareChatContext = async ({
         skillBindingScope,
         threadId,
         toolAvailability,
+        promptTarget,
         browserExtension,
         userContext,
         userId,
         workspaceId,
       }),
       hydrateMessages({
+        copiesFilesToComputer,
         messages: messageWindow,
         safeDb,
         sendMode,
@@ -3940,6 +4081,17 @@ const prepareChatContext = async ({
             })
           : error,
       );
+    const localRunAttachments = copiesFilesToComputer
+      ? yield* Result.await(
+          auditedLocalRunAttachments({
+            messages: messageWindow,
+            recordAuditEvent,
+            safeDb,
+            userId,
+            workspaceId,
+          }),
+        )
+      : [];
 
     const messagesWithActiveFileFallback = yield* Result.await(
       attachActiveFileFallbackWhenExtractionIsEmpty({
@@ -3966,6 +4118,7 @@ const prepareChatContext = async ({
     );
 
     return Result.ok({
+      organizationAIInstructions,
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
       systemSafe: systemPrompt.safeLayers,
       systemUntrusted: systemPrompt.untrustedSuffix,
@@ -3974,6 +4127,7 @@ const prepareChatContext = async ({
       activeSkillContext: systemPrompt.activeSkillContext,
       decisionPassageNumbers: systemPrompt.decisionPassageNumbers,
       hydratedMessages: messagesWithMentionKinds,
+      localRunAttachments,
     });
   });
 
@@ -4191,6 +4345,7 @@ type ActiveFileFallbackForModel =
 
 const activeFileSizeLimitError = () =>
   new HandlerError({
+    code: CHAT_INPUT_REFUSAL_CODE.activeFileTooLarge,
     status: 422,
     message: `Active file exceeds the ${String(CHAT_CONTEXT_FILE_MAX_MEGABYTES)} MB chat context limit`,
   });
@@ -4248,6 +4403,7 @@ const readActiveFileFallbackForModel = async ({
       if (extracted.value === null) {
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.activeFileNoText,
             status: 422,
             message: "Active file does not contain extractable text",
           }),

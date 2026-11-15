@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { isDownloadOnlyFileMimeType } from "@stll/api-contract/chat-file-types";
+
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -12,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { storedUserFileKey } from "@/api/lib/file-key";
 import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const readUserFileContent = createSafeRootHandler(
   {
@@ -34,6 +37,8 @@ const readUserFileContent = createSafeRootHandler(
         const file = (
           await tx
             .select({
+              fileName: userFiles.fileName,
+              mimeType: userFiles.mimeType,
               s3Key: userFiles.s3Key,
               userId: userFiles.userId,
               workspaceId: chatThreads.workspaceId,
@@ -80,6 +85,10 @@ const readUserFileContent = createSafeRootHandler(
           s3Key,
           expiresInSeconds: 900,
           workspaceId: file.workspaceId,
+          // A name forces a download; every other file reads in the browser.
+          ...(isDownloadOnlyFileMimeType(file.mimeType)
+            ? { fileName: sanitizeFilename(file.fileName) }
+            : {}),
         });
 
         return presignedUrl;

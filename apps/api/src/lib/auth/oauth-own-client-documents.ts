@@ -6,11 +6,17 @@ import {
   mobileClientMetadataUrl,
 } from "@stll/api-contract/mobile-client";
 import {
+  buildOutlookClientMetadataDocument,
+  type OutlookClientMetadataDocument,
+  outlookClientMetadataUrl,
+} from "@stll/api-contract/outlook-client";
+import {
   buildCliClientMetadataDocument,
   type CliClientMetadataDocument,
   cliClientMetadataUrl,
 } from "@stll/cli/client-metadata-document";
 
+import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import type { FirstPartyOAuthClient } from "@/api/lib/auth/oauth-consent-info";
 import {
@@ -39,16 +45,32 @@ export const getMobileClientMetadataDocument = ():
   return clientId ? buildMobileClientMetadataDocument(clientId) : undefined;
 };
 
+/**
+ * The Outlook add-in's published client document for this deployment. A
+ * deployment without an https issuer or a configured task-pane origin has
+ * none.
+ */
+export const getOutlookClientMetadataDocument = ():
+  OutlookClientMetadataDocument | undefined => {
+  const clientId = outlookClientMetadataUrl(getAuthIssuerUrl());
+  const taskPaneOrigin = env.OUTLOOK_ADDIN_ORIGIN;
+  return clientId === undefined || taskPaneOrigin === undefined
+    ? undefined
+    : buildOutlookClientMetadataDocument({ clientId, taskPaneOrigin });
+};
+
 /** Every first-party client's document, so none resolves over the network. */
 const FIRST_PARTY_CLIENT_DOCUMENTS = {
   cli: getCliClientMetadataDocument,
   mobile: getMobileClientMetadataDocument,
+  outlook: getOutlookClientMetadataDocument,
   mcp_connector: buildMcpClientMetadataDocument,
 } as const satisfies Record<
   FirstPartyOAuthClient,
   () =>
     | CliClientMetadataDocument
     | MobileClientMetadataDocument
+    | OutlookClientMetadataDocument
     | McpClientMetadataDocument
     | undefined
 >;

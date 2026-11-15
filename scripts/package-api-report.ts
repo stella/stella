@@ -308,6 +308,89 @@ export const resolvingExportKey = (
   return best;
 };
 
+const declarationPrinter = ts.createPrinter({
+  removeComments: true,
+  newLine: ts.NewLineKind.LineFeed,
+});
+
+/**
+ * Prints a declaration file with every union's members sorted by their
+ * printed text, and every type literal's property signatures sorted by name.
+ * TypeScript prints an inferred union, and the properties of a mapped type it
+ * expands, in type-creation order: whatever the checker met first anywhere in
+ * the program. A new type in one module would then reorder another module's
+ * entry. Neither order has meaning, so sorting makes each entry a function of
+ * its own declared API. Intersections, overloads and other type literal
+ * members keep their order: TypeScript preserves their source order, and it
+ * decides which signature a call resolves to.
+ */
+export const printCanonicalDeclaration = (
+  fileName: string,
+  contents: string,
+): string => {
+  const source = ts.createSourceFile(
+    fileName,
+    contents,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const printed = (node: ts.Node): string =>
+    declarationPrinter.printNode(ts.EmitHint.Unspecified, node, source);
+  // Each node is printed once, not once per comparison.
+  const sortedByText = <T extends ts.Node>(
+    nodes: readonly T[],
+    key: (node: T) => ts.Node,
+  ): T[] =>
+    nodes
+      .map((node) => ({ node, text: printed(key(node)) }))
+      .toSorted((a, b) => compareCodeUnit(a.text, b.text))
+      .map(({ node }) => node);
+  const transformed = ts.transform(source, [
+    (context) => {
+      const visit: ts.Visitor = (node) => {
+        const visited = ts.visitEachChild(node, visit, context);
+        if (ts.isUnionTypeNode(visited)) {
+          return ts.factory.updateUnionTypeNode(
+            visited,
+            ts.factory.createNodeArray(
+              sortedByText(visited.types, (type) => type),
+            ),
+          );
+        }
+        if (!ts.isTypeLiteralNode(visited)) {
+          return visited;
+        }
+        // Properties fill the positions properties held; call, construct,
+        // index and method signatures stay where they were.
+        const properties = sortedByText(
+          visited.members.filter(ts.isPropertySignature),
+          ({ name }) => name,
+        ).values();
+        return ts.factory.updateTypeLiteralNode(
+          visited,
+          ts.factory.createNodeArray(
+            visited.members.map((member) =>
+              ts.isPropertySignature(member)
+                ? (properties.next().value ??
+                  panic("Type literal properties changed while sorting"))
+                : member,
+            ),
+          ),
+        );
+      };
+      return (node) =>
+        ts.visitNode(node, visit, ts.isSourceFile) ??
+        panic("Declaration canonicalisation lost its source");
+    },
+  ]);
+  const result =
+    transformed.transformed.at(0) ??
+    panic("Declaration canonicalisation produced no source");
+  const text = declarationPrinter.printFile(result);
+  transformed.dispose();
+  return text;
+};
+
 export const generateApiReport = (packageDir: string): ApiReport => {
   const manifest: unknown = JSON.parse(
     readFileSync(path.join(packageDir, "package.json"), "utf-8"),
@@ -427,10 +510,6 @@ export const generateApiReport = (packageDir: string): ApiReport => {
     });
   }
   const declarations = new Map<string, string>();
-  const printer = ts.createPrinter({
-    removeComments: true,
-    newLine: ts.NewLineKind.LineFeed,
-  });
   for (const source of program
     .getSourceFiles()
     .toSorted((a, b) => compareCodeUnit(a.fileName, b.fileName))) {
@@ -439,7 +518,10 @@ export const generateApiReport = (packageDir: string): ApiReport => {
       continue;
     }
     if (source.isDeclarationFile) {
-      declarations.set(`./${relative}`, printer.printFile(source));
+      declarations.set(
+        `./${relative}`,
+        printCanonicalDeclaration(source.fileName, source.text),
+      );
       continue;
     }
     if (relative.endsWith(".json")) {
@@ -455,15 +537,9 @@ export const generateApiReport = (packageDir: string): ApiReport => {
         if (!/\.d\.[cm]?ts$/u.test(file)) {
           return;
         }
-        const declaration = ts.createSourceFile(
-          file,
-          contents,
-          ts.ScriptTarget.Latest,
-          true,
-        );
         declarations.set(
           `./${declarationPath(relative)}`,
-          printer.printFile(declaration),
+          printCanonicalDeclaration(file, contents),
         );
       },
       undefined,

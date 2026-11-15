@@ -63,6 +63,7 @@ import {
   TableRow,
 } from "@stll/ui/table";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ContactReadError } from "@/components/contact-read-error";
@@ -261,7 +262,7 @@ function ContactsPage() {
             />
             <FilterButton
               active={filter === "organization"}
-              label={t("contacts.filterOrganizations")}
+              label={t("common.organizations")}
               onClick={() => changeFilter("organization")}
             />
           </div>
@@ -513,12 +514,11 @@ const useContactColumns = ({
             }
             return (
               <a
-                className="text-muted-foreground hover:text-foreground inline-block max-w-xs truncate align-middle hover:underline"
+                className="text-muted-foreground hover:text-foreground inline-block max-w-xs align-middle hover:underline"
                 href={`mailto:${primaryEmail.address}`}
                 onClick={(event) => event.stopPropagation()}
-                title={primaryEmail.address}
               >
-                {primaryEmail.address}
+                <TruncatedText>{primaryEmail.address}</TruncatedText>
               </a>
             );
           },
@@ -560,10 +560,10 @@ const renderContactSkeletonCell = (
   column: Column<ContactTableFeatures, ContactItem>,
 ): ReactNode => {
   if (column.id === "select") {
-    return <Skeleton className="size-4 rounded" />;
+    return <Skeleton className="size-4 rounded-sm" />;
   }
   if (column.id === "icon") {
-    return <Skeleton className="size-4 rounded" />;
+    return <Skeleton className="size-4 rounded-sm" />;
   }
   if (column.id === "matters") {
     return <Skeleton className="ms-auto h-4 w-6" />;
@@ -794,7 +794,7 @@ const ContactsToolbarPlaceholder = () => {
             {t("contacts.filterPersons")}
           </Button>
           <Button disabled size="sm" variant="outline">
-            {t("contacts.filterOrganizations")}
+            {t("common.organizations")}
           </Button>
         </div>
       </ResponsiveActionToolbarItem>

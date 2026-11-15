@@ -179,8 +179,8 @@ test("selecting another version invalidates an expired attempt's retained Retry"
   act(() => confirmPdfSignPlacement(undefined));
   await waitFor(() =>
     expect(
-      screen.queryByRole("button", { name: en.common.retry }),
-    ).not.toBeNull(),
+      screen.queryByRole("button", { name: en.common.retry }) === null,
+    ).toBe(false),
   );
   hook.rerender({ fieldId: otherFieldId });
 

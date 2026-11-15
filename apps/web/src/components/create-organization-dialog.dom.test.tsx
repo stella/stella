@@ -442,7 +442,7 @@ test("closing an edited draft requires confirmation and discards it before reope
     fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
     await drainReactScheduler();
   });
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
   await openDialog();
   expect(
     screen
@@ -546,7 +546,7 @@ test("a committed creation with a lost response survives sidebar remount and rep
     );
     await drainReactScheduler();
   });
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
   await act(async () => {
     original.unmount();
     await drainReactScheduler();
@@ -763,7 +763,9 @@ test.each(
     fireEvent.click(
       screen.getByRole("button", { name: original.messages.common.cancel }),
     );
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog") === null).toBe(true),
+    );
     await act(async () => {
       original.unmount();
       await drainReactScheduler();
@@ -833,8 +835,8 @@ test("starting over after an unknown outcome requires confirmation and preserves
     expect(
       screen.queryByRole("dialog", {
         name: messages.organization.startOverTitle,
-      }),
-    ).toBeNull(),
+      }) === null,
+    ).toBe(true),
   );
 
   let input = screen.getByRole("textbox", {
@@ -877,8 +879,8 @@ test("starting over after an unknown outcome requires confirmation and preserves
     expect(
       screen.queryByRole("dialog", {
         name: messages.organization.startOverTitle,
-      }),
-    ).toBeNull(),
+      }) === null,
+    ).toBe(true),
   );
   input = screen.getByRole("textbox", {
     name: messages.common.organizationName,

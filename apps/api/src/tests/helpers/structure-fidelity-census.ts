@@ -41,7 +41,7 @@ const decisionOf = (output: unknown): Record<string, unknown> | null => {
 const findingsOf = (
   decision: Record<string, unknown>,
 ): StructureFidelityCensus[string][string] | null => {
-  const { documentAst, fulltext } = decision;
+  const { documentAst, fulltext, language } = decision;
   if (!isDocumentAst(documentAst)) {
     return typeof fulltext === "string" && fulltext.trim().length > 0
       ? [
@@ -53,7 +53,10 @@ const findingsOf = (
         ]
       : null;
   }
-  return structureFidelityIn(documentAst.blocks);
+  return structureFidelityIn(
+    documentAst.blocks,
+    typeof language === "string" ? language : undefined,
+  );
 };
 
 export const collectStructureFidelityCensus =

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { CHAT_MEMBER_SEND_ACTION } from "@stll/api-contract/chat-send-intent";
 import {
   COMPOSER_BOX_ANONYMIZED_CLASS,
   COMPOSER_BOX_CLASS,
@@ -14,7 +15,7 @@ import {
   COMPOSER_LARGE_ACTION_ROW_CLASS,
   COMPOSER_LARGE_TEXT_WELL_CLASS,
   COMPOSER_LEADING_GROUP_CLASS,
-  COMPOSER_PLACEHOLDER_CLASS,
+  ComposerPlaceholder,
 } from "@stll/ui/composer";
 import { cn } from "@stll/ui/utils";
 
@@ -24,6 +25,7 @@ import type {
   ChatSend,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
+import { ChatComposerQueueButton } from "@/components/chat/chat-composer-queue-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
@@ -41,6 +43,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { keepKeyPressLocal } from "@/lib/hotkeys";
 import type { ComposerSkillChatContext } from "@/lib/prompts/chat-skill-availability.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 
@@ -70,6 +73,16 @@ type ChatInputSurfaceProps = {
   isGenerating?: boolean;
   onStop?: () => void;
   /**
+   * The member's queue action (Cmd/Ctrl+Enter, and a button beside the
+   * primary one while `queueOffered`): it holds the draft until the turn
+   * ends. Omit on surfaces whose plain send always queues behind a turn.
+   */
+  onQueue?: ChatSend | undefined;
+  /** A plain send would steer the turn, so the queue button is shown. */
+  queueOffered?: boolean | undefined;
+  /** See `ChatComposerActionButton`'s `stopping`. */
+  stopping?: boolean;
+  /**
    * Whether this surface will send the next request anonymized, driving
    * the box's blue-ring "shield active" treatment. The surface feeds this
    * from the shared per-thread send-mode store — the same source the dock's
@@ -89,10 +102,11 @@ type ChatInputSurfaceProps = {
    */
   onNewThread?: (() => void) | null | undefined;
   /**
-   * When provided, the (+) menu gains a Models submenu. Omit on surfaces
-   * without a model picker.
+   * The (+) menu's Models submenu, with where the thread's turns run.
+   * Required, so a composer cannot drop the Run on choice by leaving a prop
+   * out; `null` only on a surface that pins the model.
    */
-  models?: ComposerModelsMenuProps | undefined;
+  models: ComposerModelsMenuProps | null;
   /**
    * When provided, the (+) menu gains a Skills submenu, wired to this
    * surface's own editor. Omit on surfaces without skill insertion
@@ -136,6 +150,9 @@ export const ChatInputSurface = ({
   onFocusChange,
   isGenerating = false,
   onStop,
+  onQueue,
+  queueOffered,
+  stopping = false,
   anonymized = false,
   dock,
   onNewThread,
@@ -167,6 +184,7 @@ export const ChatInputSurface = ({
   // during a turn is queued by `useChatSession` and dispatched once
   // the response finishes, so overlapping requests can't happen.
   const submitDisabled = Boolean(disabled || sendDisabled);
+  const canSend = !submitDisabled && canSubmit;
 
   // A failed send has already restored the draft (see `submit` in
   // chat-editor-provider), so the only thing missing is a user-visible
@@ -187,6 +205,7 @@ export const ChatInputSurface = ({
     controller,
     inputDisabled,
     onSubmit,
+    onQueue,
     onSubmitError: handleSubmitError,
     submitDisabled,
   });
@@ -263,9 +282,7 @@ export const ChatInputSurface = ({
                     ]
                   : ["relative min-w-0", COMPOSER_LARGE_TEXT_WELL_CLASS],
               )}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-              }}
+              onKeyDown={keepKeyPressLocal}
               role="presentation"
             >
               <ReferenceRenderScope
@@ -291,17 +308,9 @@ export const ChatInputSurface = ({
                 />
               </ReferenceRenderScope>
               {isBlank && (
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    COMPOSER_PLACEHOLDER_CLASS,
-                    variant === "compact"
-                      ? "start-0 end-0 top-1/2 -translate-y-1/2"
-                      : "start-3 end-3 top-2",
-                  )}
-                >
+                <ComposerPlaceholder stature={variant}>
                   {placeholder}
-                </span>
+                </ComposerPlaceholder>
               )}
             </div>
             <div
@@ -367,14 +376,23 @@ export const ChatInputSurface = ({
                 {/* The single primary affordance morphs in place: the button
                   itself resolves send vs. stop from the state it is fed, so
                   this surface cannot render a second, parallel control. */}
+                <ChatComposerQueueButton
+                  canSend={canSend}
+                  offered={queueOffered}
+                  submitDraft={submitDraft}
+                />
                 <ChatComposerActionButton
-                  canSend={!submitDisabled && canSubmit}
+                  canSend={canSend}
                   guideAnchorsEnabled={guideAnchorsEnabled}
                   isGenerating={isGenerating}
                   onSend={() => {
-                    detached(submitDraft(), "chat-input-surface.submit-draft");
+                    detached(
+                      submitDraft(CHAT_MEMBER_SEND_ACTION.send),
+                      "chat-input-surface.submit-draft",
+                    );
                   }}
                   onStop={onStop}
+                  stopping={stopping}
                 />
               </ControlGroup>
             </div>

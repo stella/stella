@@ -23,6 +23,18 @@ export class SafeOutboundFetchError extends TaggedError(
   message: string;
 }> {}
 
+const REQUEST_TIMED_OUT_MESSAGE = "Request timed out";
+
+/**
+ * Whether the request reached the network and failed there, by its timeout or
+ * a transport error it carries as its cause. Any other refusal is this client's
+ * own: a URL its policy rejects, a redirect, a response over the size limit.
+ */
+export const isOutboundTransportFailure = (
+  error: SafeOutboundFetchError,
+): boolean =>
+  error.cause !== undefined || error.message === REQUEST_TIMED_OUT_MESSAGE;
+
 export type SafeOutboundAddress = {
   address: string;
   family: 4 | 6;
@@ -89,7 +101,7 @@ const attachRequestGuards = ({
 }): RequestGuards | null => {
   const timeout = setTimeout(() => {
     request.destroy(
-      new SafeOutboundFetchError({ message: "Request timed out" }),
+      new SafeOutboundFetchError({ message: REQUEST_TIMED_OUT_MESSAGE }),
     );
   }, timeoutMs);
   const abort = () => {

@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_KIS",
   "key": "pl-kis",
-  "parserVersion": 17,
+  "parserVersion": 34,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Re-read word-processor HTML so single printed line breaks stay inside their sentence and blank lines alone end paragraphs. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."
+    "reason": "Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."
   }
 }

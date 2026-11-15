@@ -19,8 +19,18 @@ import type {
   ConnectConnectorDecision,
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  CHAT_SEND_INTENT,
+  CHAT_TURN_STEERING,
+  type ChatMemberSendAction,
+  chatSendIntent,
+  type ChatThreadSendState,
+  type ChatTurnSteering,
+} from "@stll/api-contract/chat-send-intent";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import { sleep } from "@stll/concurrency/sleep";
 import type { HandlerExceptionScope } from "@stll/errors";
@@ -41,15 +51,19 @@ import type {
   AskUserOutput,
   ChatUITools,
   PersistedChatMessage,
+  PlaybookSaveTarget,
 } from "@/components/chat/chat-ui-tools";
 import {
   consumePlaybookSaveToolCalls,
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
+  getChatWorkAwaitedAtOpen,
   getCurrentApprovalPendingMessageId,
   isChatClientRequestActive,
   isNonPersistentGrantChatToolName,
   isSuggestChangesApplyOutput,
+  openHarnessApprovalRequestIds,
+  openMemberWaitKeys,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
@@ -65,7 +79,6 @@ import {
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
 import {
-  buildCreateDocumentDownloadFileName,
   buildCreateDocumentDraftPayload,
   CREATE_DOCUMENT_DRAFT_VIEW,
   type CreateDocumentDraft,
@@ -103,7 +116,10 @@ import {
   sendThreadChatMessage,
   sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
-import { showStoredChatThread } from "@/features/chat/chat-runtime-registry";
+import {
+  resendLatestChatMessage,
+  showStoredChatThread,
+} from "@/features/chat/chat-runtime-registry";
 import {
   chatToolGrantsOptions,
   projectChatToolGrants,
@@ -127,6 +143,7 @@ import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-ch
 import {
   followReconciledPlaybookSave,
   playbookPaneReaction,
+  playbookPaneState,
   reconcilePlaybookSaveToolCalls,
 } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import type { PlaybookPaneMode } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
@@ -137,9 +154,13 @@ import {
   describeQueuedMessage,
   type QueuedChatEntry,
   reduceSendQueue,
+  sendNowRoute,
   type SendQueueEvent,
   type SendQueueState,
   snapshotChatRequestOptions,
+  steerableText,
+  steerFallback,
+  type SteerOrigin,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import {
   fetchChatMessage,
@@ -208,6 +229,11 @@ type UseChatSessionOptions = {
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
+  /**
+   * Whether the thread's turns take a message mid-turn (`chatTurnSteering`);
+   * a surface without it has turns that never do, so its sends queue.
+   */
+  getTurnSteering?: (() => ChatTurnSteering) | undefined;
   /** Cursor for the first older page, seeded from the thread fetch. */
   initialOlderCursor: string | null;
   /**
@@ -245,7 +271,7 @@ type OpenCreateDocumentDraftOptions = {
 };
 
 type FollowPlaybookSaveOptions = {
-  playbookId: string;
+  saved: PlaybookSaveTarget;
   /** The thread pane that was current when the save was reconciled. */
   paneTabId: string;
 };
@@ -339,6 +365,7 @@ export const useChatSession = ({
   getContextMatterIds,
   getEditApplyMode,
   getSendMode,
+  getTurnSteering,
   initialOlderCursor,
   onError,
   playbookPane,
@@ -377,6 +404,13 @@ export const useChatSession = ({
     chat.getSnapshot,
     chat.getSnapshot,
   );
+  // What the thread already waits on when this page opens it: it resumes only
+  // once the user acts. Read per page open, not per runtime, because the
+  // registry keeps a waiting thread's runtime across a reopen.
+  const workAwaitedAtOpen = useMemo(
+    () => getChatWorkAwaitedAtOpen(chat.getSnapshot().messages),
+    [chat],
+  );
   const {
     error: runtimeError,
     isLoading: clientLoading,
@@ -385,7 +419,9 @@ export const useChatSession = ({
     status,
     stop: stopState,
     turnAbandoned,
-    waitingForComputer,
+    computerWait,
+    turnSentAt,
+    turnsStarted,
   } = snapshot;
   const notifyError = useLatestCallback((nextError: Error) => {
     onError?.(nextError);
@@ -755,6 +791,9 @@ export const useChatSession = ({
   const sendQueueRef = useRef<SendQueueState>(
     createInitialSendQueueState(conversationId),
   );
+  /** Whether a turn of this page runs, as the queue last synced it; a
+   *  conversation switch starts from it rather than from no turn. */
+  const queueTurnRunningRef = useRef(false);
   const [queuedMessages, setQueuedMessages] = useState<
     readonly QueuedChatEntry[]
   >([]);
@@ -800,6 +839,7 @@ export const useChatSession = ({
         ...(options === undefined ? {} : { options }),
       };
       applySendQueueEvent({ type: "message-enqueued", entry });
+      return entry.id;
     },
     [applySendQueueEvent],
   );
@@ -820,13 +860,176 @@ export const useChatSession = ({
     [applySendQueueEvent, sendChatMessage],
   );
 
-  const sendMessage = useCallback(
-    async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
+  // Hand a queued message to the running turn; it moves to the front of the
+  // queue. During a turn on the member's computer the turn is handed the
+  // message and goes on with it. One that cannot take it is stopped after
+  // "Send now", and the queue drain sends the message once the stop
+  // settles; after a plain send's steer the turn runs on and the message
+  // waits for its end. A turn that ends before it says leaves the message
+  // first in the queue, sent next. Until the steer settles nothing queued is
+  // sent, so a message the turn took is never sent again. With the queue
+  // held after a failed turn it is sent at once, like a manual send.
+  const handQueuedMessageToTurn = useCallback(
+    (id: string, origin: SteerOrigin) => {
+      const entry = sendQueueRef.current.queue.find(
+        (queued) => queued.id === id,
+      );
+      const route =
+        entry === undefined ? null : sendNowRoute(sendQueueRef.current, entry);
+      // A plain send that cannot steer keeps its place in the queue, so
+      // messages queued one after another go in the order they were sent.
+      if (route?.type === "steer" || origin === "send_now") {
+        applySendQueueEvent({ type: "queued-message-promoted", id });
+      }
+      if (route?.type === "steer") {
+        if (sendQueueRef.current.steeringIds.includes(id)) {
+          return;
+        }
+        applySendQueueEvent({ type: "steer-started", id });
+        const steer = async () => {
+          const outcome = await chat.steerLocalTurn({
+            inputId: id,
+            text: route.text,
+          });
+          const next = steerFallback(outcome, origin);
+          const dispatched = applySendQueueEvent({
+            type: "steer-settled",
+            id,
+            next,
+          });
+          if (dispatched) {
+            await dispatchQueuedMessage(dispatched).catch(
+              ignoreQueuedDispatchError,
+            );
+          } else if (next === "stop") {
+            stop();
+          }
+        };
+        detached(steer(), "use-chat-session.steer-queued-message");
+        return;
+      }
+      if (sendQueueRef.current.isGenerating) {
+        if (origin === "send_now") {
+          stop();
+        }
+        return;
+      }
+      const dispatched = applySendQueueEvent({
+        type: "oldest-dispatch-started",
+      });
+      if (dispatched) {
+        detached(
+          dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError),
+          "use-chat-session.send-queued-message-now",
+        );
+      }
+    },
+    [applySendQueueEvent, chat, dispatchQueuedMessage, stop],
+  );
+
+  // "Send now" on a queued message: now, even if the running turn has to
+  // stop for it.
+  const sendQueuedMessageNow = useCallback(
+    (id: string) => {
+      handQueuedMessageToTurn(id, "send_now");
+    },
+    [handQueuedMessageToTurn],
+  );
+
+  /** A message a plain send steers into a turn waiting on the member, handed
+   *  to the turn once declining the wait lets it run again. */
+  const steerOnResumeRef = useRef<string | null>(null);
+
+  // A plain send while a turn on the member's computer waits on them: the
+  // shown approval is declined, explicitly, as the member's own Deny would,
+  // so the turn goes on, and the message is handed to it once it runs again.
+  // A question is never dismissed for it: dismissing one stops the run's
+  // turn. The message then waits in the queue behind the question, as does
+  // one that cannot steer.
+  const steerWaitingTurn = useCallback(
+    (id: string) => {
+      const entry = sendQueueRef.current.queue.find(
+        (queued) => queued.id === id,
+      );
+      const approvalIds = openHarnessApprovalRequestIds(
+        projectCanonicalChatUIMessages(chat.getSnapshot().messages),
+      );
+      if (
+        entry === undefined ||
+        steerableText(entry) === null ||
+        approvalIds.length === 0
+      ) {
+        return;
+      }
+      applySendQueueEvent({ type: "queued-message-promoted", id });
+      steerOnResumeRef.current = id;
+      for (const approvalId of approvalIds) {
+        detached(
+          resolveToolApproval({ id: approvalId, approved: false }),
+          "use-chat-session.decline-for-steer",
+        );
+      }
+    },
+    [applySendQueueEvent, chat, resolveToolApproval],
+  );
+
+  /** What the thread is doing now, as the send routing reads it. */
+  const threadSendState = useCallback((): ChatThreadSendState => {
+    const steering = getTurnSteering?.() ?? CHAT_TURN_STEERING.notSteerable;
+    // A wait is read first: a card can show while the request that brought
+    // it still ends, and a steer then has to decline it to reach the turn.
+    const { localRunQuestion, messages: shown } = chat.getSnapshot();
+    if (
+      openMemberWaitKeys({
+        localRunQuestion,
+        messages: projectCanonicalChatUIMessages(shown),
+      }).length > 0
+    ) {
+      return { type: "waiting_on_member", steering };
+    }
+    return sendQueueRef.current.isGenerating
+      ? { type: "working", steering }
+      : { type: "idle" };
+  }, [chat, getTurnSteering]);
+
+  // Where a message goes is `chatSendIntent`'s call, by what the thread is
+  // doing and whether the member sent it plainly or queued it.
+  const routeMessage = useCallback(
+    async (
+      action: ChatMemberSendAction,
+      message: ChatUserMessageInput,
+      options?: ChatSendMessageOptions,
+    ) => {
       if (sendQueueRef.current.conversationId !== conversationId) {
-        applySendQueueEvent({ type: "conversation-switched", conversationId });
+        applySendQueueEvent({
+          type: "conversation-switched",
+          conversationId,
+          isGenerating: queueTurnRunningRef.current,
+        });
       }
 
       const requestOptions = withRequestSnapshots(options);
+      const state = threadSendState();
+      const intent = chatSendIntent(state, action);
+      switch (intent) {
+        case CHAT_SEND_INTENT.steer: {
+          const id = enqueueMessage(message, requestOptions);
+          if (state.type === "waiting_on_member") {
+            steerWaitingTurn(id);
+          } else {
+            handQueuedMessageToTurn(id, "steer");
+          }
+          return;
+        }
+        case CHAT_SEND_INTENT.queue:
+          enqueueMessage(message, requestOptions);
+          return;
+        case CHAT_SEND_INTENT.start:
+          break;
+        default:
+          intent satisfies never;
+          panic(`Unhandled send intent: ${String(intent)}`);
+      }
       if (!canSendWithoutQueueing(sendQueueRef.current)) {
         enqueueMessage(message, requestOptions);
         return;
@@ -853,40 +1056,42 @@ export const useChatSession = ({
       conversationId,
       dispatchQueuedMessage,
       enqueueMessage,
+      handQueuedMessageToTurn,
       sendChatMessage,
+      steerWaitingTurn,
+      threadSendState,
       withRequestSnapshots,
     ],
   );
+
+  const sendMessage = useCallback(
+    async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) =>
+      await routeMessage(CHAT_MEMBER_SEND_ACTION.send, message, options),
+    [routeMessage],
+  );
+
+  /** The member's queue action: the message waits for the turn's end
+   *  wherever a turn runs or waits; on an idle thread it is sent. */
+  const queueMessage = useCallback(
+    async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) =>
+      await routeMessage(CHAT_MEMBER_SEND_ACTION.queue, message, options),
+    [routeMessage],
+  );
+
+  // A turn paused on its budget runs its next step only on the user's word:
+  // Continue sends that word as their next message, which opens a new budget.
+  const continuePausedTurn = useCallback(async () => {
+    await sendMessage({
+      content: t("chat.turnPaused.continue"),
+      id: toSafeId<"chatMessage">(createUuid()),
+    });
+  }, [sendMessage, t]);
 
   const removeQueuedMessage = useCallback(
     (id: string) => {
       applySendQueueEvent({ type: "queued-message-removed", id });
     },
     [applySendQueueEvent],
-  );
-
-  // "Send now" on a queued message: it moves to the front of the queue.
-  // During a turn the turn is stopped, and the queue drain sends it once
-  // the stop settles; with the queue held after a failed turn it is sent
-  // at once, like a manual send.
-  const sendQueuedMessageNow = useCallback(
-    (id: string) => {
-      applySendQueueEvent({ type: "queued-message-promoted", id });
-      if (sendQueueRef.current.isGenerating) {
-        stop();
-        return;
-      }
-      const dispatched = applySendQueueEvent({
-        type: "oldest-dispatch-started",
-      });
-      if (dispatched) {
-        detached(
-          dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError),
-          "use-chat-session.send-queued-message-now",
-        );
-      }
-    },
-    [applySendQueueEvent, dispatchQueuedMessage, stop],
   );
 
   const resendLatestMessage = useCallback(
@@ -902,7 +1107,8 @@ export const useChatSession = ({
         return;
       }
 
-      await chat.reload(
+      await resendLatestChatMessage(
+        chat,
         sendMode === undefined ? undefined : { body: { sendMode } },
       );
     },
@@ -1312,23 +1518,25 @@ export const useChatSession = ({
    * save that finishes after the page moved to another thread is dropped.
    */
   const followPlaybookSave = useLatestCallback(
-    ({ playbookId, paneTabId }: FollowPlaybookSaveOptions) => {
+    ({ saved, paneTabId }: FollowPlaybookSaveOptions) => {
       if (paneTabId !== playbookPaneTabId) {
         return;
       }
+      const { playbookId } = saved;
       const inspector = useInspectorTabsStore.getState();
       const tab = inspector.tabs.find(({ id }) => id === playbookPaneTabId);
       const reaction = playbookPaneReaction({
         mode: playbookPane,
         isMobile,
         openedThisSession: openedPlaybookPaneIdsRef.current.has(paneTabId),
-        shownPlaybookId:
+        pane: playbookPaneState(
           tab?.type === "view" &&
-          tab.viewType === PLAYBOOK_DRAFT_VIEW &&
-          isPlaybookDraftViewPayload(tab.payload)
-            ? tab.payload.playbookId
+            tab.viewType === PLAYBOOK_DRAFT_VIEW &&
+            isPlaybookDraftViewPayload(tab.payload)
+            ? tab.payload
             : null,
-        savedPlaybookId: playbookId,
+        ),
+        saved,
       });
       switch (reaction) {
         case "none":
@@ -1374,7 +1582,7 @@ export const useChatSession = ({
       return;
     }
     const paneTabId = playbookPaneTabId;
-    if (reconciliation.playbookId !== null) {
+    if (reconciliation.target?.source === "live") {
       playbookSaveSequenceRef.current += 1;
     }
     const sequence = playbookSaveSequenceRef.current;
@@ -1385,7 +1593,7 @@ export const useChatSession = ({
         isCurrent: () =>
           seededChatRef.current === requestedChat &&
           playbookSaveSequenceRef.current === sequence,
-        follow: (playbookId) => followPlaybookSave({ playbookId, paneTabId }),
+        follow: (saved) => followPlaybookSave({ saved, paneTabId }),
       }),
       "use-chat-session.reconcile-playbook-save-tool-calls",
     );
@@ -1727,7 +1935,14 @@ export const useChatSession = ({
   // ended: TanStack can report a turn ready while it still loads, and a send
   // then would be refused as busy with no later turn end to retry it on.
   const queueTurnRunning = isGenerating || clientLoading;
+  // A turn paused on the member holds the queue until the wait is over.
+  const turnAwaitsMember =
+    openMemberWaitKeys({
+      localRunQuestion: snapshot.localRunQuestion,
+      messages,
+    }).length > 0;
   useExternalSyncEffect(() => {
+    queueTurnRunningRef.current = queueTurnRunning;
     applySendQueueEvent({
       type: "generation-status-synced",
       isGenerating: queueTurnRunning,
@@ -1780,7 +1995,12 @@ export const useChatSession = ({
   }, [stopState, t, exceptionHandlerId]);
 
   useExternalSyncEffect(() => {
-    applySendQueueEvent({ type: "conversation-switched", conversationId });
+    steerOnResumeRef.current = null;
+    applySendQueueEvent({
+      type: "conversation-switched",
+      conversationId,
+      isGenerating: queueTurnRunningRef.current,
+    });
   }, [applySendQueueEvent, conversationId]);
 
   // Drain the queue one message per turn. When the response
@@ -1801,6 +2021,7 @@ export const useChatSession = ({
       type: "turn-boundary-checked",
       isGenerating: queueTurnRunning,
       status,
+      awaitingMember: turnAwaitsMember,
     });
     if (!dispatched) {
       return;
@@ -1824,10 +2045,25 @@ export const useChatSession = ({
     // matching the original effect's re-run cadence 1:1.
     queuedMessages,
     status,
+    turnAwaitsMember,
   ]);
+
+  // The declined wait let the turn run again: hand it the message the
+  // member steered while it waited. After the queue's own status sync, so
+  // the send queue knows the turn runs.
+  useExternalSyncEffect(() => {
+    const id = steerOnResumeRef.current;
+    if (id === null || !queueTurnRunning) {
+      return;
+    }
+    steerOnResumeRef.current = null;
+    handQueuedMessageToTurn(id, "steer");
+  }, [handQueuedMessageToTurn, queueTurnRunning]);
 
   return {
     activitySession: chat,
+    approvalIdsAwaitedAtOpen: workAwaitedAtOpen.approvalIds,
+    workAwaitedAtOpen,
     clientStatus: status,
     reconnecting,
     refreshAnswers,
@@ -1839,14 +2075,22 @@ export const useChatSession = ({
     loadOlderError,
     resendLatestMessage,
     sendMessage,
+    queueMessage,
+    continuePausedTurn,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
+    /** The turn waits on the member: an approval or a question is open. */
+    turnAwaitsMember,
+    /** A stop was asked for and the turn has not ended yet. */
+    stopPending: stopState.status === "pending",
     turnAbandoned,
-    waitingForComputer,
+    computerWait,
+    turnSentAt,
+    turnsStarted,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,
@@ -1873,5 +2117,7 @@ export const useChatSession = ({
     addToolResult,
     streamdownComponents,
     approvalPendingMessageId,
+    localRunQuestion: snapshot.localRunQuestion,
+    answerLocalRunQuestion: chat.answerLocalRunQuestion,
   };
 };

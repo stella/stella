@@ -1,7 +1,9 @@
+// parser-output-unchanged: the printed-date reader moved verbatim to printed-date.ts.
 import { panic } from "better-result";
 
 import type { AppliedProvisionVersion } from "@stll/api-contract/provision-applied-version";
 
+import { printedDateOf, printedDatePattern } from "./printed-date";
 import {
   formatWorkIdentifier,
   type JurisdictionProfile,
@@ -29,16 +31,6 @@ export type ProvisionVersionParseResult =
       >[];
     };
 
-const validDate = (year: number, month: number, day: number): boolean => {
-  if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1) {
-    return false;
-  }
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  const maximum = days.at(month - 1);
-  return maximum !== undefined && day <= maximum;
-};
-
 /**
  * Reads one citation's context. Evidence offsets address this exact input in
  * UTF-16 code units. Callers associate the context with a provision; this
@@ -53,27 +45,20 @@ export const parseProvisionAppliedVersion = (
   const candidates: Exclude<AppliedProvisionVersion, { type: "not_stated" }>[] =
     [];
   const { versionGrammar } = profile;
-  const months = alternatives(Object.keys(versionGrammar.monthNames));
-  const datePattern = `(?<day>\\d{1,2})\\.\\s*(?:(?<month>\\d{1,2})\\.\\s*|(?<monthName>${months})\\s+)(?<year>\\d{4})(?![\\p{L}\\p{N}/]|\\.\\d)`;
+  const datePattern = printedDatePattern(versionGrammar.monthNames);
   for (const { prefix, relation } of versionGrammar.dateStatements) {
     const pattern = new RegExp(
       `(?<![\\p{L}\\p{N}])${phrasePattern(prefix)}\\s+${datePattern}`,
       "giu",
     );
     for (const match of text.matchAll(pattern)) {
-      const day = Number(match.groups?.["day"]);
-      const year = Number(match.groups?.["year"]);
-      const monthName = match.groups?.["monthName"];
-      const month =
-        monthName === undefined
-          ? Number(match.groups?.["month"])
-          : versionGrammar.monthNames[monthName.toLowerCase()];
-      if (month === undefined || !validDate(year, month, day)) {
+      const date = printedDateOf(match.groups, versionGrammar.monthNames);
+      if (date === undefined) {
         continue;
       }
       candidates.push({
         type: "stated_date",
-        date: `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+        date,
         relation,
         evidence: {
           kind: "stated_date",

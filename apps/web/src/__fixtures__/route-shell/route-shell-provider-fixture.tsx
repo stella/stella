@@ -281,8 +281,11 @@ const installFixtureNetwork = () => {
     matterNumberingEnabled: true,
     practiceJurisdictions: [],
     promptCachingEnabled: true,
+    aiInstructions: "",
+    aiInstructionsMaxLength: 3000,
     managedAIResidency: "eu",
     memoryExtractionEnabled: false,
+    localRunMaxApprovalMode: "full_auto",
     timeMinimumUnitMinutes: 1,
     timeEditWindowDays: 30,
     timeLockedThroughMonth: null,
@@ -380,6 +383,7 @@ const installFixtureNetwork = () => {
           return Response.json({
             activeSkill: null,
             activeTurnId: null,
+            newestLocalTurn: null,
             attachedFiles: { fileCount: 0, files: [] },
             context: {
               estimatedTokens: 0,
@@ -419,11 +423,24 @@ const installFixtureNetwork = () => {
           nextCursor: null,
         } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
       }
+      // The composer's where chip: this member runs no turns on a computer.
+      if (pathname === "/v1/chat/local-runners") {
+        return Response.json({ status: "hidden" });
+      }
       if (pathname === "/v1/chat/skill-availability") {
         return Response.json({
           unavailable: [],
           unavailableHere: [],
         } satisfies WebApiRoutes["chat"]["skill-availability"]["get"]["response"][200]);
+      }
+      if (pathname === "/v1/chat/runs/active") {
+        return Response.json({
+          items: [],
+          limit: 100,
+          nextCursor: null,
+        } satisfies NonNullable<
+          Awaited<ReturnType<typeof api.chat.runs.active.get>>["data"]
+        >);
       }
       if (pathname === "/v1/chat/threads") {
         return Response.json({

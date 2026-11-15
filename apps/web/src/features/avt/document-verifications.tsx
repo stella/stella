@@ -1,27 +1,46 @@
 /**
- * The matter's documents, each with its latest verification and a way to
- * start one against the view's list.
+ * The matter's documents, each with its latest verification, a way to start
+ * one against the view's list, and whether the list reads it as testimony.
  */
+
+import { useId, useState } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import type { VerificationScopeRefusal } from "@stll/api-contract/verification-scope";
 import { Button } from "@stll/ui/button";
-import { FileCheckIcon, PlayIcon } from "@stll/ui/icons";
+import { FileCheckIcon, InfoIcon, PlayIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { Switch } from "@stll/ui/switch";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
+import {
+  ParagraphRangeStart,
+  ScopeMark,
+  ScopeRefusalMessage,
+} from "@/features/avt/paragraph-scope";
 import {
   documentFileKey,
   latestVerificationsOptions,
 } from "@/features/avt/queries";
-import type { VerificationRunSummary } from "@/features/avt/types";
+import type { SourceKind, VerificationRunSummary } from "@/features/avt/types";
 import { RUN_STATUS_LABEL_KEYS, RUN_STATUS_TONES } from "@/features/avt/types";
+import {
+  sourceKindOf,
+  sourceKindsOptions,
+  usePendingSourceKinds,
+  useSetSourceKind,
+} from "@/features/avt/use-source-kinds";
 import type { VerificationTarget } from "@/features/avt/use-start-verification";
 import { useStartVerification } from "@/features/avt/use-start-verification";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import type { WorkspaceFile } from "@/lib/workspaces/queries/entities";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
@@ -60,6 +79,21 @@ export const DocumentVerifications = ({
     }),
   );
 
+  // A document can hold several files; its kind belongs to the document.
+  const documentIds = [...new Set(files.map((file) => file.entityId))];
+  const kindsQuery = useQuery(
+    sourceKindsOptions({ workspaceId, listId, documentIds }),
+  );
+  const kindsView = queryView(kindsQuery);
+  useQueryViewError(kindsView, "DocumentVerifications:source-kinds");
+  const kinds = kindsView.type === "items" ? kindsView.items : undefined;
+  const setKind = useSetSourceKind({ workspaceId, listId });
+  const pendingKinds = usePendingSourceKinds({ workspaceId, listId });
+  // While a change is in flight the switch shows where it is going.
+  const kindOf = (documentId: string): SourceKind | undefined =>
+    pendingKinds.get(documentId) ??
+    (kinds === undefined ? undefined : sourceKindOf(kinds, documentId));
+
   if (files.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
@@ -89,11 +123,34 @@ export const DocumentVerifications = ({
           </Button>
         </div>
       )}
+      {kindsView.type === "error" && (
+        <div className="text-muted-foreground mb-3 flex flex-wrap items-center gap-2 text-sm">
+          <span>{t("avt.documents.kindsLoadFailed")}</span>
+          <Button
+            loading={kindsQuery.isRefetching}
+            onClick={() => {
+              detached(kindsQuery.refetch(), "avt.refetch-source-kinds");
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      )}
       <ul className="divide-y rounded-xl border">
-        {files.map((file) => (
+        {files.map((file, index) => (
           <DocumentRow
             file={file}
             key={`${file.entityId}:${file.fieldId}`}
+            explainsTestimony={index === 0}
+            onSourceKindChange={(sourceKind) =>
+              setKind.mutate({ documentId: file.entityId, sourceKind })
+            }
+            sourceKind={kindOf(file.entityId)}
+            // One change per document at a time, so two clicks cannot race
+            // to the server and land out of order.
+            sourceKindPending={pendingKinds.has(file.entityId)}
             latest={
               latestByFile?.get(
                 documentFileKey({
@@ -108,6 +165,13 @@ export const DocumentVerifications = ({
             onVerify={(target) => {
               detached(verification.start(target), "avt.start-verification");
             }}
+            scopeRefusal={
+              verification.scopeRefusal?.target.entityId === file.entityId &&
+              verification.scopeRefusal.target.fileFieldId === file.fieldId
+                ? verification.scopeRefusal.code
+                : null
+            }
+            onRangeEdit={verification.clearScopeRefusal}
             starting={
               verification.startingFor?.entityId === file.entityId &&
               verification.startingFor.fileFieldId === file.fieldId
@@ -154,38 +218,98 @@ const latestLoadState = ({
 
 type DocumentRowProps = {
   latest: VerificationRunSummary | null;
+  /** The first row says once what marking a document as testimony means. */
+  explainsTestimony: boolean;
+  /** Undefined until the list's kinds have loaded; a failed read is
+   *  reported once and leaves the switches disabled. */
+  sourceKind: SourceKind | undefined;
+  sourceKindPending: boolean;
+  onSourceKindChange: (sourceKind: SourceKind) => void;
   statusLoad: StatusLoad;
   listId: string;
   file: WorkspaceFile;
   starting: boolean;
   onVerify: (target: VerificationTarget) => void;
+  /** Why the server refused this document's last paragraph range. */
+  scopeRefusal: VerificationScopeRefusal | null;
+  onRangeEdit: () => void;
   onOpenRun: (runId: string) => void;
 };
 
 const DocumentRow = ({
   latest,
+  explainsTestimony,
+  sourceKind,
+  sourceKindPending,
+  onSourceKindChange,
   statusLoad,
   listId,
   file,
   starting,
   onVerify,
+  scopeRefusal,
+  onRangeEdit,
   onOpenRun,
 }: DocumentRowProps) => {
   const t = useTranslations();
   const canVerify = usePermissions({ entity: ["update"] });
+  // Every row's switch is called Testimony; the document's name says which.
+  const nameId = useId();
+  const [rangeOpen, setRangeOpen] = useState(false);
   const active = latest?.status === "queued" || latest?.status === "running";
+  const verifyDisabled =
+    !canVerify || statusLoad !== "loaded" || active || starting;
+  const target = { entityId: file.entityId, fileFieldId: file.fieldId };
 
   return (
     <li className="flex flex-col gap-2 p-3 md:flex-row md:items-center">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium" dir="auto">
+        <TruncatedText
+          className="text-sm font-medium"
+          dir="auto"
+          id={nameId}
+          render={<p />}
+        >
           {file.name ?? file.fileName}
-        </p>
+        </TruncatedText>
         {statusLoad === "loaded" && (
           <LatestRunSummary latest={latest} listId={listId} />
         )}
+        {/* A refusal that arrives after the range field closed is said
+            here; while the field is open, it says so beside the input. */}
+        {scopeRefusal !== null && !rangeOpen && (
+          <ScopeRefusalMessage refusal={scopeRefusal} />
+        )}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {/* Before the switch, so every row's switch lines up. */}
+        {explainsTestimony && (
+          <Button
+            aria-label={t("avt.documents.testimonyAbout")}
+            size="icon-xs"
+            tooltip={t("avt.documents.testimonyLine")}
+            variant="ghost"
+          >
+            <InfoIcon />
+          </Button>
+        )}
+        <Label variant="choice">
+          {/* The switch is not a labelable element, so the label's text
+              does not name it on its own. */}
+          <Switch
+            aria-label={t("avt.documents.testimony")}
+            checked={sourceKind === "testimony"}
+            aria-describedby={nameId}
+            disabled={
+              !canVerify || sourceKind === undefined || sourceKindPending
+            }
+            onCheckedChange={(checked) =>
+              onSourceKindChange(checked ? "testimony" : "document")
+            }
+            size="sm"
+          />
+          {t("avt.documents.testimony")}
+        </Label>
         {latest !== null && (
           <Button
             onClick={() => onOpenRun(latest.id)}
@@ -196,20 +320,29 @@ const DocumentRow = ({
             {t("common.open")}
           </Button>
         )}
-        <Button
-          disabled={!canVerify || statusLoad !== "loaded" || active || starting}
-          loading={starting}
-          onClick={() =>
-            onVerify({ entityId: file.entityId, fileFieldId: file.fieldId })
-          }
-          size="sm"
-          variant="outline"
-        >
-          <PlayIcon />
-          {latest === null
-            ? t("common.verify")
-            : t("avt.documents.verifyAgain")}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            disabled={verifyDisabled}
+            loading={starting}
+            onClick={() => onVerify(target)}
+            size="sm"
+            variant="outline"
+          >
+            <PlayIcon />
+            {latest === null
+              ? t("common.verify")
+              : t("avt.documents.verifyAgain")}
+          </Button>
+          <ParagraphRangeStart
+            disabled={verifyDisabled}
+            onEdit={onRangeEdit}
+            onOpenChange={setRangeOpen}
+            onVerify={(paragraphs) => onVerify({ ...target, paragraphs })}
+            open={rangeOpen}
+            refusal={scopeRefusal}
+            starting={starting}
+          />
+        </div>
       </div>
     </li>
   );
@@ -237,6 +370,7 @@ const LatestRunSummary = ({
       <ReviewStatusBadge tone={RUN_STATUS_TONES[latest.status]}>
         {t(RUN_STATUS_LABEL_KEYS[latest.status])}
       </ReviewStatusBadge>
+      <ScopeMark scope={latest.scope} />
       {latest.status === "completed" && (
         <span className="tabular-nums">
           {t("avt.documents.claimSummary", {

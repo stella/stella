@@ -13,10 +13,9 @@
  * overrides, other interprocedural cwd forwarding and dynamically built argv
  * are outside this syntactic check.
  */
-import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
 
-import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
   type AstNode,
   filenameForContext,
@@ -463,151 +462,120 @@ const wrapperCheckout = ({
   return fn === null ? "checkout" : functionCheckout(context, fn);
 };
 
-export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
-  eslintCompatPlugin({
-    meta: { name: "no-live-test-base" },
-    rules: {
-      "no-live-test-base": {
-        meta: {
-          type: "problem",
-          messages: {
-            liveBase:
-              "Resolve the tree's pinned comparison base with treeBaseRevision from @stll/scripts/src/tree-base-revision instead of reading origin/main.",
-          },
-        },
-        createOnce(context) {
-          const enforces = (node: Ranged) => {
-            const start = context.sourceCode.getLocFromIndex(
-              node.range[0],
-            ).line;
-            const end = context.sourceCode.getLocFromIndex(
-              node.range[1] - 1,
-            ).line;
-            for (let line = start; line <= end; line++) {
-              if (
-                enforcesLine({
-                  guard: "test-base-revision",
-                  file: filenameForContext(context),
-                  line,
-                })
-              ) {
-                return true;
-              }
-            }
-            return false;
-          };
-          let enabled = false;
-          return {
-            before() {
-              const filename = filenameForContext(context);
-              enabled =
-                isTestFile(filename) ||
-                filename.endsWith("no-live-test-base.fixture.ts");
-            },
-            CallExpression(node) {
-              if (!enabled) {
-                return;
-              }
-              if (
-                node.arguments.some((arg) => overridesGitPath(context, arg))
-              ) {
-                return;
-              }
-              const argv = node.arguments.flatMap((arg) => parts(context, arg));
-              if (!argv.some((arg) => /^origin\/main(?:[:.^~]|$)/u.test(arg))) {
-                return;
-              }
-              const name = calleeName(node.callee);
-              const gitWrapper =
-                typeof name === "string" && /git$/iu.test(name);
-              if (
-                typeof name !== "string" ||
-                (!gitWrapper && !COMMAND_CALLS.has(name))
-              ) {
-                return;
-              }
-              const invocation = gitInvocation(context, node.arguments);
-              if (invocation.executable !== "git" && !gitWrapper) {
-                return;
-              }
-              // `git -C <dir>` chooses the repository whatever the cwd is.
-              const gitDirectory = invocation.directories.at(-1);
-              if (gitDirectory !== undefined) {
-                if (
-                  checkoutPath({ context, value: gitDirectory }) &&
-                  enforces(node)
-                ) {
-                  context.report({ node, messageId: "liveBase" });
-                }
-                return;
-              }
-              // A merge-base call is safe but still belongs to the shared owner:
-              // it must honor RATCHET_BASE_REF as well.
-              const cwd =
-                node.arguments
-                  .map((arg) => cwdSetting({ context, value: arg }))
-                  .find((setting) => setting.type !== "absent") ?? CWD_ABSENT;
-              switch (cwd.type) {
-                case "set": {
-                  if (!checkoutPath({ context, value: cwd.value })) {
-                    return;
-                  }
-                  break;
-                }
-                case "unresolved": {
-                  break;
-                }
-                case "absent": {
-                  // Literal words, argv arrays and options objects are not a
-                  // directory; with no other argument the call runs in the
-                  // checkout, for spawners and Git-named wrappers alike.
-                  const directories = node.arguments.filter((arg) => {
-                    const resolved = resolveStable(context, arg);
-                    return (
-                      isAstNode(arg) &&
-                      resolved?.type !== "ArrayExpression" &&
-                      resolved?.type !== "TemplateLiteral" &&
-                      resolved?.type !== "ObjectExpression" &&
-                      staticStringValue(resolved) === null
-                    );
-                  });
-                  if (
-                    directories.length > 0 &&
-                    !directories.some((arg) =>
-                      checkoutPath({ context, value: arg }),
-                    )
-                  ) {
-                    return;
-                  }
-                  // A wrapper may carry its own directory, such as a fixture
-                  // repository captured where it is defined.
-                  if (
-                    directories.length === 0 &&
-                    gitWrapper &&
-                    !COMMAND_CALLS.has(name) &&
-                    wrapperCheckout({
-                      context,
-                      callee: node.callee,
-                      seen: new Set(),
-                    }) === "fixture"
-                  ) {
-                    return;
-                  }
-                  break;
-                }
-                default: {
-                  cwd satisfies never;
-                  panic("Unhandled cwd setting");
-                }
-              }
-              if (enforces(node)) {
-                context.report({ node, messageId: "liveBase" });
-              }
-            },
-          };
+export default eslintCompatPlugin({
+  meta: { name: "no-live-test-base" },
+  rules: {
+    "no-live-test-base": {
+      meta: {
+        type: "problem",
+        messages: {
+          liveBase:
+            "Resolve the tree's pinned comparison base with treeBaseRevision from @stll/scripts/src/tree-base-revision instead of reading origin/main.",
         },
       },
+      createOnce(context) {
+        let enabled = false;
+        return {
+          before() {
+            const filename = filenameForContext(context);
+            enabled =
+              isTestFile(filename) ||
+              filename.endsWith("no-live-test-base.fixture.ts");
+          },
+          CallExpression(node) {
+            if (!enabled) {
+              return;
+            }
+            if (node.arguments.some((arg) => overridesGitPath(context, arg))) {
+              return;
+            }
+            const argv = node.arguments.flatMap((arg) => parts(context, arg));
+            if (!argv.some((arg) => /^origin\/main(?:[:.^~]|$)/u.test(arg))) {
+              return;
+            }
+            const name = calleeName(node.callee);
+            const gitWrapper = typeof name === "string" && /git$/iu.test(name);
+            if (
+              typeof name !== "string" ||
+              (!gitWrapper && !COMMAND_CALLS.has(name))
+            ) {
+              return;
+            }
+            const invocation = gitInvocation(context, node.arguments);
+            if (invocation.executable !== "git" && !gitWrapper) {
+              return;
+            }
+            // `git -C <dir>` chooses the repository whatever the cwd is.
+            const gitDirectory = invocation.directories.at(-1);
+            if (gitDirectory !== undefined) {
+              if (checkoutPath({ context, value: gitDirectory })) {
+                context.report({ node, messageId: "liveBase" });
+              }
+              return;
+            }
+            // A merge-base call is safe but still belongs to the shared owner:
+            // it must honor RATCHET_BASE_REF as well.
+            const cwd =
+              node.arguments
+                .map((arg) => cwdSetting({ context, value: arg }))
+                .find((setting) => setting.type !== "absent") ?? CWD_ABSENT;
+            switch (cwd.type) {
+              case "set": {
+                if (!checkoutPath({ context, value: cwd.value })) {
+                  return;
+                }
+                break;
+              }
+              case "unresolved": {
+                break;
+              }
+              case "absent": {
+                // Literal words, argv arrays and options objects are not a
+                // directory; with no other argument the call runs in the
+                // checkout, for spawners and Git-named wrappers alike.
+                const directories = node.arguments.filter((arg) => {
+                  const resolved = resolveStable(context, arg);
+                  return (
+                    isAstNode(arg) &&
+                    resolved?.type !== "ArrayExpression" &&
+                    resolved?.type !== "TemplateLiteral" &&
+                    resolved?.type !== "ObjectExpression" &&
+                    staticStringValue(resolved) === null
+                  );
+                });
+                if (
+                  directories.length > 0 &&
+                  !directories.some((arg) =>
+                    checkoutPath({ context, value: arg }),
+                  )
+                ) {
+                  return;
+                }
+                // A wrapper may carry its own directory, such as a fixture
+                // repository captured where it is defined.
+                if (
+                  directories.length === 0 &&
+                  gitWrapper &&
+                  !COMMAND_CALLS.has(name) &&
+                  wrapperCheckout({
+                    context,
+                    callee: node.callee,
+                    seen: new Set(),
+                  }) === "fixture"
+                ) {
+                  return;
+                }
+                break;
+              }
+              default: {
+                cwd satisfies never;
+                panic("Unhandled cwd setting");
+              }
+            }
+            context.report({ node, messageId: "liveBase" });
+          },
+        };
+      },
     },
-  });
-
-export default createTestBasePlugin();
+  },
+});

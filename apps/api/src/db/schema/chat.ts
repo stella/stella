@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
 import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
+import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 
 import { chatContentJsonb } from "@/api/db/columns";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -13,7 +14,7 @@ import {
   CHAT_TURN_INTERACTION_TYPES,
   CHAT_TURN_INTERRUPTION_REASONS,
 } from "@/api/handlers/chat/chat-turn-state";
-import type { StoredArtefactProvenance } from "@/api/lib/ai-generation/provenance";
+import type { StoredArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
 import type { ChatRunReferenceState } from "@/api/lib/chat/run-log-reference-state";
 import {
   CHAT_THREAD_NAME_KIND,
@@ -205,12 +206,18 @@ export const chatThreads = p.pgTable(
       enum: REASONING_EFFORTS,
     }),
     /**
-     * Where the thread's turns run, encoded as `"<harness>::<model>"`: a
-     * coding-agent harness on the member's computer. Null keeps stella's own
-     * model path. Checked when written and parsed again when a send reads it,
-     * so a value no harness accepts never moves a turn to the cloud.
+     * Superseded by `chat_local_run_target` and no longer read or written;
+     * dropped in a later release, once no running API task selects it.
      */
     chatRunTarget: p.varchar("chat_run_target", { length: 256 }),
+    /**
+     * Where the thread's turns run: the coding-agent harness on the member's
+     * computer, its model and permission mode, shaped and read back by the
+     * contract's `chatLocalRunTargetSchema`. Null keeps stella's own models.
+     */
+    chatLocalRunTarget: p
+      .jsonb("chat_local_run_target")
+      .$type<ChatLocalRunTarget>(),
     /**
      * Cached "where you left off" recap, shown as subtle grey text
      * below the last message when the user reopens this thread after
@@ -286,6 +293,24 @@ export const chatThreads = p.pgTable(
      * content would be accepted and its cursor advanced past the corrected row.
      */
     compactionEpoch: p.integer("compaction_epoch").notNull().default(0),
+    /**
+     * When the thread's reader last had it open. The chat reads unread while
+     * its latest answer settled after this instant; null means the reader
+     * marked it unread, so it reads unread until they open it again. New and
+     * pre-existing threads start at their insert (or the column's addition),
+     * so no answer older than that turns unread. Writes leave `updated_at`
+     * alone: reading a chat does not reorder the history.
+     */
+    lastReadAt: timestamptz("last_read_at").defaultNow(),
+    /** When the reader pinned the chat to the top of their list; null when it is not pinned. */
+    pinnedAt: timestamptz("pinned_at"),
+    /**
+     * The largest `chat_turns.ordinal` the thread has given out; null until
+     * it gives out its first. Written only by the insert trigger on
+     * `chat_turns` and the `chat-turn-ordinals` repair, never by a handler
+     * (`no-chat-turn-ordinal-write`).
+     */
+    lastTurnOrdinal: p.integer("last_turn_ordinal"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -293,6 +318,12 @@ export const chatThreads = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // The reader's pinned chats, newest activity first, without walking the
+    // rest of their history. Built online (indexes-chat-threads-org-user-pinned-idx).
+    p
+      .index("chat_threads_org_user_pinned_idx")
+      .on(table.organizationId, table.userId, table.updatedAt, table.id)
+      .where(isNotNull(table.pinnedAt)),
     // RESTRICT mirrors the single-column workspace reference: a global thread
     // (workspace_id NULL) is exempt under MATCH SIMPLE, and matter deletion
     // removes threads explicitly before it removes the workspace.
@@ -585,6 +616,17 @@ export const chatTurns = p.pgTable(
      * starts and kept once the turn settles. Unique in the organization.
      */
     runId: p.text("run_id"),
+    /**
+     * The turn's position in its thread by acceptance: unique in the thread,
+     * larger for a later turn, never given out twice. The database assigns it
+     * as the row is inserted (`assign_chat_turn_ordinal`), under the thread's
+     * lock. Application code never supplies one
+     * (`no-chat-turn-ordinal-write`); a row copied with its number, as a
+     * restore does, keeps it. Null only on a turn stored before the column,
+     * until the `chat-turn-ordinals` repair numbers it. Read turn order
+     * through `lib/chat/turn-order.ts`.
+     */
+    ordinal: p.integer("ordinal"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -737,6 +779,11 @@ export const chatTurns = p.pgTable(
       sql`${table.settledAt} IS NULL OR ${table.settledAt} >= ${table.createdAt}`,
     ),
     p.index("chat_turns_thread_id_idx").on(table.threadId),
+    // A thread's turns by position, newest first on a backward scan with
+    // unnumbered turns last. Built online (indexes-chat-turns-thread-ordinal-uidx).
+    p
+      .uniqueIndex("chat_turns_thread_ordinal_uidx")
+      .on(table.threadId, table.ordinal.asc().nullsFirst()),
     p
       .uniqueIndex("chat_turns_active_thread_uidx")
       .on(table.threadId)
@@ -750,6 +797,12 @@ export const chatTurns = p.pgTable(
         table.createdAt,
         table.id,
       ),
+    // A member's unfinished runs, without walking their settled history.
+    // Built online (indexes-chat-turns-org-user-active-idx).
+    p
+      .index("chat_turns_org_user_active_idx")
+      .on(table.organizationId, table.userId)
+      .where(sql`${table.status} IN ('accepted', 'running', 'awaiting-user')`),
     p
       .index("chat_turns_org_user_message_created_idx")
       .on(table.organizationId, table.userMessageId, table.createdAt, table.id),

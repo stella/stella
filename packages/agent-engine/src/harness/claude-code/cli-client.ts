@@ -1,12 +1,15 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import type { ProtocolLog } from "../../protocol-log";
 import {
   type HarnessProcessDeadlines,
   startHarnessProcess,
 } from "../harness-process";
+import type { HarnessSpawnError } from "../process-tree";
 import type { Detached, HarnessExit } from "../turn-lifecycle";
 import {
+  type ClaudeHostControlRequest,
   ClaudeOutputEnvelopeSchema,
   ControlCancelRequestSchema,
   ControlRequestSchema,
@@ -48,6 +51,7 @@ export type ClaudeCliLaunch = {
 
 type StartClaudeCliOptions = {
   launch: ClaudeCliLaunch;
+  protocolLog: ProtocolLog;
   args: readonly string[];
   detached: Detached;
   deadlines: HarnessProcessDeadlines;
@@ -56,10 +60,21 @@ type StartClaudeCliOptions = {
   handlers: ClaudeCliHandlers;
 };
 
+/**
+ * Startup requests, which wait on the startup deadline: initialize covers
+ * the CLI's first launch (an antivirus scan, a busy computer); registering
+ * stella's MCP server waits on the CLI's own connect, itself up to 30
+ * seconds a server.
+ */
+const STARTUP_REQUESTS: ReadonlySet<ClaudeHostControlRequest> = new Set([
+  "initialize",
+  "mcp_set_servers",
+]);
+
 export type ClaudeCliClient = {
   /** Sends a control request and settles with its response payload. */
   request: (
-    subtype: string,
+    subtype: ClaudeHostControlRequest,
     fields?: Record<string, unknown>,
   ) => Promise<Result<unknown, ClaudeCliRequestError>>;
   /** Writes a conversation message, such as the turn's user message. */
@@ -76,13 +91,14 @@ export type ClaudeCliClient = {
 
 export const startClaudeCli = ({
   launch,
+  protocolLog,
   args,
   detached,
   deadlines,
   cwd,
   env,
   handlers,
-}: StartClaudeCliOptions): ClaudeCliClient => {
+}: StartClaudeCliOptions): Result<ClaudeCliClient, HarnessSpawnError> => {
   const state = { nextId: 1 };
 
   const settleResponse = (raw: unknown) => {
@@ -145,29 +161,39 @@ export const startClaudeCli = ({
     }
   };
 
-  const cli = startHarnessProcess<string, ClaudeCliRequestError>({
+  const started = startHarnessProcess<string, ClaudeCliRequestError>({
     command: [launch.executable, ...launch.args, ...args],
     cwd,
     env,
     detached,
     deadlines,
     name: "claude-cli",
+    protocol: { channel: "claude-code", log: protocolLog },
     unanswered: (reason, message) =>
       new ClaudeCliRequestError({ reason, message }),
     message: dispatch,
     violation: handlers.violation,
     exit: handlers.exit,
   });
+  if (Result.isError(started)) {
+    return started;
+  }
+  const cli = started.value;
 
-  return {
+  return Result.ok({
     request: async (subtype, fields = {}) => {
       const requestId = `stella-${String(state.nextId)}`;
       state.nextId += 1;
-      return await cli.request(requestId, subtype, {
-        type: "control_request",
-        request_id: requestId,
-        request: { ...fields, subtype },
-      });
+      return await cli.request(
+        requestId,
+        subtype,
+        {
+          type: "control_request",
+          request_id: requestId,
+          request: { ...fields, subtype },
+        },
+        STARTUP_REQUESTS.has(subtype) ? deadlines.startupRequestMs : undefined,
+      );
     },
     send: cli.write,
     respond: (requestId, response) => {
@@ -185,5 +211,5 @@ export const startClaudeCli = ({
     exited: cli.exited,
     closeInput: cli.closeInput,
     kill: cli.kill,
-  };
+  });
 };

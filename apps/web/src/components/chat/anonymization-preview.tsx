@@ -167,7 +167,7 @@ type PersonalDataProps = {
 const PersonalData = ({ tag, value, rendering }: PersonalDataProps) => {
   const found = (
     <span
-      className="bg-warning/15 rounded px-0.5"
+      className="bg-warning/15 rounded-sm px-0.5"
       data-anonymization-preview="value"
     >
       {value}
@@ -175,7 +175,7 @@ const PersonalData = ({ tag, value, rendering }: PersonalDataProps) => {
   );
   const masked = (
     <span
-      className="bg-info/12 text-info rounded px-0.5"
+      className="bg-info/12 text-info rounded-sm px-0.5"
       data-anonymization-preview="placeholder"
     >
       <bdi>{PLACEHOLDERS[tag]}</bdi>
@@ -183,7 +183,7 @@ const PersonalData = ({ tag, value, rendering }: PersonalDataProps) => {
   );
   const restored = (
     <span
-      className="bg-info/12 text-info rounded px-0.5"
+      className="bg-info/12 text-info rounded-sm px-0.5"
       data-anonymization-preview="restored"
     >
       {value}

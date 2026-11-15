@@ -27,7 +27,11 @@ import {
 } from "@stll/legal-ast/citation-prefix";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import { hungarianCitationForm } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  CZ_US_REPORT_SOURCE,
+  CZECH_REPORTER_CITATION_SOURCE,
+  hungarianCitationForm,
+} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { CITATION_KIND, type CitationKind } from "./citation-kind-values";
@@ -252,10 +256,46 @@ const citationPrefixes = new RegExp(CITATION_PREFIX_SOURCE, "giu");
 const pointingCues = new RegExp(PRECEDENT_CUE.source, "giu");
 const maskPeriods = (text: string): string => text.replaceAll(".", "·");
 
+const FOLLOWING_REPORTER_ENTRY = new RegExp(
+  String.raw`^\s*[,(\[]?\s*(?:${CZ_US_REPORT_SOURCE}|${CZECH_REPORTER_CITATION_SOURCE})`,
+  "iu",
+);
+
+/**
+ * Whether any mention of the citation carries its reporter entry:
+ * `III. ÚS 359/05 (U 22/38 SbNU 579)`. A court reports its rulings to be
+ * relied on, and a sentence cue next to the entry may be about something else
+ * entirely, as `v napadeném rozhodnutí` is in a statement of general doctrine.
+ * Only the entry printed directly after the citation speaks for it.
+ */
+const printedWithReporterEntry = (
+  citationText: string,
+  context: string,
+): boolean => {
+  const text = normalizeUnicode(context, "NFC");
+  const bare = stripCitationPrefix(normalizeUnicode(citationText, "NFC"));
+  for (
+    let start = text.indexOf(bare);
+    start !== -1;
+    start = text.indexOf(bare, start + 1)
+  ) {
+    const startsCleanly = !/[\p{L}\p{N}]/u.test(text.charAt(start - 1));
+    if (
+      startsCleanly &&
+      FOLLOWING_REPORTER_ENTRY.test(text.slice(start + bare.length))
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
 /** Keep legal abbreviations and docket punctuation from becoming boundaries. */
 const citingSentence = (citationText: string, context: string): string => {
   const text = normalizeUnicode(context, "NFC");
-  const printed = normalizeUnicode(citationText, "NFC");
+  // Whitespace around the span is not the citation: read as part of it, it
+  // would reach into the sentence before and borrow that sentence's cues.
+  const printed = normalizeUnicode(citationText, "NFC").trim();
   const bare = stripCitationPrefix(printed);
   const exactStart = text.indexOf(printed);
   const start = exactStart === -1 ? text.indexOf(bare) : exactStart;
@@ -275,18 +315,22 @@ const citingSentence = (citationText: string, context: string): string => {
     .replace(/(?<![\d/])\d{1,2}\.(?=\s+\d)/gu, maskPeriods)
     .replace(/\b(?:např|odst|Sb|rozh|obč|r)\./giu, maskPeriods);
   // Masking preserves UTF-16 offsets; return the original wording for cues.
+  // A span the segmenter still splits (a line break or `!` inside it) reads as
+  // every sentence it overlaps.
+  let from: number | null = null;
+  let to = end;
   for (const sentence of sentenceSegmenter.segment(masked)) {
-    if (
-      sentence.index <= start &&
-      sentence.index + sentence.segment.length >= end
-    ) {
-      return text.slice(
-        sentence.index,
-        sentence.index + sentence.segment.length,
-      );
+    const sentenceEnd = sentence.index + sentence.segment.length;
+    if (sentenceEnd <= start) {
+      continue;
+    }
+    from ??= sentence.index;
+    to = sentenceEnd;
+    if (sentenceEnd >= end) {
+      break;
     }
   }
-  return panic("Located citation has no containing sentence");
+  return text.slice(from ?? start, to);
 };
 
 /**
@@ -352,6 +396,8 @@ export type ClassifyCitationInput = {
 export const CITATION_KIND_EVIDENCE = {
   /** The publisher named this judgment as the case's own history. */
   PUBLISHER: "publisher",
+  /** The citation is printed with its entry in a court's reporter. */
+  REPORTER: "reporter",
   /** The surrounding sentence carried exactly one of the two cue sets. */
   CONTEXT: "context",
   /** Neither spoke; the cited court's publication status decided. */
@@ -403,6 +449,13 @@ export const classifyCitationVerdict = ({
     return {
       kind: CITATION_KIND.PROCEDURAL,
       evidence: CITATION_KIND_EVIDENCE.PUBLISHER,
+    };
+  }
+
+  if (context !== null && printedWithReporterEntry(citationText, context)) {
+    return {
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.REPORTER,
     };
   }
 

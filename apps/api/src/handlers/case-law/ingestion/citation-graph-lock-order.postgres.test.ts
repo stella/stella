@@ -298,6 +298,7 @@ if (!databaseUrl || !enabled) {
             sourceId,
             result: observed.observed,
             persistedDecisionDate: observed.persistedDecisionDate,
+            storageIdentity: observed.storageIdentity,
             composedSupplements: [],
             observedAt: new Date("2026-01-02"),
             observationOrder: 2n,
@@ -332,7 +333,10 @@ if (!databaseUrl || !enabled) {
           transaction: scopedDb,
           execute: async <TRow extends Record<string, unknown>>(
             query: SQLWrapper | string,
-          ) => await scopedDb(async (tx) => await tx.execute<TRow>(query)),
+          ) =>
+            await scopedDb(
+              async (tx) => await tx.execute<TRow>(query, "objects"),
+            ),
         };
         return await run({
           scopedDb,

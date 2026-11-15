@@ -873,8 +873,8 @@ describe("a card shows the cited part and, on request, the whole provision", () 
     await activate(fold);
     await waitFor(() => {
       expect(
-        card.querySelectorAll('[data-slot="provision-card-wording"] p'),
-      ).toHaveLength(FULL_LINES.length);
+        card.querySelectorAll('[data-slot="provision-card-wording"] p').length,
+      ).toBe(FULL_LINES.length);
     });
     for (const name of READERS) {
       const { scroller } = readerParts(name);

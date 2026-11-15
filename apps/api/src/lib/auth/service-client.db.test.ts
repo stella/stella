@@ -43,12 +43,11 @@ import {
 } from "./service-client";
 
 const routeServer = serveRoutesForTest(meRoute);
+beforeAll(initAgentAuthTestDb);
 afterAll(async () => {
   await routeServer.stop();
+  await releaseAgentAuthTestDb();
 });
-
-beforeAll(initAgentAuthTestDb);
-afterAll(releaseAgentAuthTestDb);
 
 const tokenSchema = v.looseObject({
   access_token: v.string(),

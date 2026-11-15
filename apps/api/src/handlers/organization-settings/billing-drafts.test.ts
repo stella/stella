@@ -233,7 +233,11 @@ describe("billing draft configuration authorization", () => {
       expect(sql).toContain("app.user_id");
       expect(sql).toContain("m.role IN ('owner', 'admin')");
     }
-    for (const policy of getTableConfig(billingDraftUserSettings).policies) {
+    const requestPolicies = getTableConfig(
+      billingDraftUserSettings,
+    ).policies.filter((policy) => !policy.name.startsWith("account_erasure_"));
+    expect(requestPolicies.length).toBeGreaterThan(0);
+    for (const policy of requestPolicies) {
       const expression = policy.using ?? policy.withCheck;
       if (!expression) {
         panic("Personal settings policy requires an expression");

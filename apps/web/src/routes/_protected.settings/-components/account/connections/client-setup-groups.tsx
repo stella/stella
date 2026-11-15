@@ -33,8 +33,9 @@ import {
   ListItemMedia,
   ListItemTitle,
 } from "@stll/ui/list";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 
 const CLI_INSTALL_COMMAND = "npm i -g @stll/cli";
 
@@ -178,14 +179,13 @@ const SetupList = ({ rows }: { rows: readonly SetupRow[] }) => (
         <ListItemActions>
           {row.note !== undefined && (
             <code
-              className="bg-muted text-muted-foreground hidden max-w-64 truncate rounded-md px-2 py-1 font-mono text-xs md:block"
+              className="bg-muted text-muted-foreground hidden max-w-64 rounded-md px-2 py-1 font-mono text-xs md:block"
               dir="ltr"
-              title={row.value}
             >
-              {row.value}
+              <TruncatedText>{row.value}</TruncatedText>
             </code>
           )}
-          <CopyActionButton
+          <CopyControl
             iconClassName="size-4"
             iconOnly
             size="icon-sm"

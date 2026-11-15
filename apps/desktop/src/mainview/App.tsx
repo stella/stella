@@ -26,6 +26,7 @@ import { Separator } from "@stll/ui/separator";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ACTIVITY_CHANGED_EVENT } from "../activity/activity-types";
@@ -63,8 +64,11 @@ import type { DesktopAccountState } from "./account-presentation";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
 import { DictationSetting } from "./DictationSetting";
+import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
+import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
+import { SigningDriverSection } from "./SigningDriverSection";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
   documentReady: true,
@@ -441,6 +445,9 @@ const GeneralPane = ({
   const format = useFormatter();
   const t = useTranslations("settings");
   const tSubscriptions = useTranslations("agentSubscriptions");
+  const tLocalSkills = useTranslations("localSkills");
+  const tSigningDriver = useTranslations("signingDriver");
+  const tLinkedFolders = useTranslations("localLinkedFolders");
   const presentation = accountPresentation(accountState);
   const linkedAccount =
     accountState.status === "connected" ? accountState.account : null;
@@ -459,11 +466,11 @@ const GeneralPane = ({
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">
+            <TruncatedText className="text-sm font-medium" render={<p />}>
               {linkedAccount?.name?.trim() ||
                 linkedAccount?.email ||
                 t("stellaDesktop")}
-            </p>
+            </TruncatedText>
           </div>
           <span
             className={cn(
@@ -539,6 +546,21 @@ const GeneralPane = ({
       <AgentSubscriptionsSection
         renderGroup={(content) => (
           <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>
+        )}
+      />
+      <LocalSkillFoldersSection
+        renderGroup={(content) => (
+          <PanelGroup title={tLocalSkills("title")}>{content}</PanelGroup>
+        )}
+      />
+      <SigningDriverSection
+        renderGroup={(content) => (
+          <PanelGroup title={tSigningDriver("title")}>{content}</PanelGroup>
+        )}
+      />
+      <LocalLinkedFoldersSection
+        renderGroup={(content) => (
+          <PanelGroup title={tLinkedFolders("title")}>{content}</PanelGroup>
         )}
       />
       <PanelGroup title={t("permissions")}>

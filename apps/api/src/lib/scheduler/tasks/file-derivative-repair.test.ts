@@ -51,6 +51,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -270,12 +271,12 @@ describe("file derivative repair", () => {
         task: REPAIR_FILE_DERIVATIVES_TASK,
         schedule: { type: "interval", everyMs: 300_000 },
         nextRunAt: new Date(),
-        lockedBy: LEASE_TOKEN,
+        ...heldSchedulerLease(LEASE_TOKEN),
         payload: { cursor: null },
       })
       .onConflictDoUpdate({
         target: schedulerJobs.id,
-        set: { lockedBy: LEASE_TOKEN, payload: { cursor: null } },
+        set: { ...heldSchedulerLease(LEASE_TOKEN), payload: { cursor: null } },
       });
   });
 

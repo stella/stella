@@ -11,13 +11,14 @@ const { cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
+const { stateHue } = await import("@/features/avt/state-chip");
 const { ViewLayoutPreview } =
   await import("@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview");
 
 afterEach(cleanup);
 afterAll(unregisterDomEnvironment);
 
-const renderPreview = (kind: "kanban" | "table") =>
+const renderPreview = (kind: "avt" | "kanban" | "table") =>
   render(
     <QueryClientProvider client={new QueryClient()}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
@@ -69,4 +70,27 @@ test("a still layout preview carries no animation", () => {
     ),
   ).toBeNull();
   expect(view.container.textContent).toContain("Service agreement");
+});
+
+test("the AVT preview links each claim to its fact in turn, in the verdict's hue", () => {
+  const view = renderPreview("avt");
+  const frames = [
+    ...view.container.querySelectorAll<HTMLElement>(
+      '[data-slot="animated-preview"]',
+    ),
+  ];
+
+  expect(
+    frames.map((frame) => ({
+      stagger: frame.style.getPropertyValue("--animated-preview-stagger"),
+      mark: frame.querySelector("line")?.getAttribute("stroke"),
+      links: frame.querySelectorAll("path").length,
+    })),
+  ).toEqual([
+    { stagger: "0", mark: stateHue("supported"), links: 1 },
+    { stagger: "3", mark: stateHue("contradicted"), links: 1 },
+    { stagger: "6", mark: stateHue("tension"), links: 1 },
+    // No coverage: the claim keeps its mark and finds no fact.
+    { stagger: "9", mark: stateHue("nocover"), links: 0 },
+  ]);
 });

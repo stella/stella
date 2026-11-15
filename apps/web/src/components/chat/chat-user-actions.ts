@@ -49,6 +49,11 @@ export const CHAT_USER_ACTIONS = {
   },
   "allow-once": { handler: "handleApprove", via: "session" },
   "always-allow": { handler: "handleAlwaysAllow", via: "session" },
+  /** Answers, or dismisses, a question a run on the member's computer asks. */
+  "answer-local-question": {
+    handler: "answerLocalRunQuestion",
+    via: "session",
+  },
   "answer-question": { handler: "handleAskUserSubmit", via: "session" },
   "attach-files": { via: "page" },
   /** Reads whether a saved credential can answer a private input card. */
@@ -61,6 +66,9 @@ export const CHAT_USER_ACTIONS = {
     handler: "confirmStoredApprovalGrant",
     via: "session",
   },
+  /** Sends the message that runs the next step of a turn paused on its
+   *  budget. */
+  "continue-paused-turn": { handler: "continuePausedTurn", via: "session" },
   /** Resumes the chat with a committed private input receipt. */
   "continue-private-input": {
     handler: "continueRequestSecret",
@@ -97,6 +105,9 @@ export const CHAT_USER_ACTIONS = {
   /** Opens a sent message's editor; a running turn is stopped first. */
   "open-message-editor": { handler: "startUserMessageEdit", via: "session" },
   "open-playbook": { handler: "handleOpenPlaybook", via: "session" },
+  /** Holds a message until the turn ends, where a plain send would steer
+   *  it (Cmd/Ctrl+Enter, the queue button). */
+  queue: { handler: "queueMessage", via: "session" },
   /** Reloads the canonical answer after an accepted edit or revision conflict. */
   "refresh-edited-answer": { handler: "refreshAnswers", via: "session" },
   "remove-queued-message": { handler: "removeQueuedMessage", via: "session" },
@@ -118,7 +129,8 @@ export const CHAT_USER_ACTIONS = {
     via: "session",
   },
   "submit-private-input": { handler: "handleRequestSecret", via: "session" },
-  /** Moves a queued message to the front and stops the running turn. */
+  /** Hands a queued message to the running turn, which it stops when the
+   *  turn cannot take the message. */
   "send-queued-message-now": {
     handler: "sendQueuedMessageNow",
     via: "session",
@@ -256,3 +268,23 @@ export const canForkAssistantMessage = ({
   ...message
 }: AssistantMessageActionState): boolean =>
   !isGenerating || !isLatestAssistantMessage(message);
+
+/**
+ * Undoing a local turn's file changes is offered only while nothing runs and
+ * no prompt follows the answer: a send or a streaming turn leaves the turn
+ * behind the computer's newest one, which the server refuses to undo.
+ */
+export const canUndoLocalFilesOf = ({
+  isGenerating,
+  messageId,
+  messages,
+}: AssistantMessageActionState): boolean => {
+  if (isGenerating) {
+    return false;
+  }
+  const index = messages.findIndex(({ id }) => id === messageId);
+  return (
+    index !== -1 &&
+    messages.slice(index + 1).every(({ role }) => role !== "user")
+  );
+};

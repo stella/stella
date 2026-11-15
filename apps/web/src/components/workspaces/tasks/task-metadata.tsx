@@ -12,6 +12,7 @@ import {
   SelectPopup,
   SelectTrigger,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover as DatePickerPopoverBase } from "@/components/date-picker-popover";
@@ -34,6 +35,7 @@ import {
   TASK_STATUSES,
   WORK_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -94,7 +96,7 @@ export const StatusSelect = ({ value, onChange }: StatusSelectProps) => {
         size="sm"
       >
         <StatusIcon status={value} />
-        <span className="truncate">{t(`statusValues.${value}`)}</span>
+        <TruncatedText>{t(`statusValues.${value}`)}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {TASK_STATUSES.map((s) => (
@@ -127,7 +129,7 @@ export const PrioritySelect = ({ value, onChange }: PrioritySelectProps) => {
         size="sm"
       >
         <PriorityIcon priority={value} />
-        <span className="truncate">{t(`priorityValues.${value}`)}</span>
+        <TruncatedText>{t(`priorityValues.${value}`)}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {TASK_PRIORITIES.map((p) => (
@@ -160,7 +162,7 @@ export const WorkTypeSelect = ({ value, onChange }: WorkTypeSelectProps) => {
         className="h-7 min-h-7 min-w-0 gap-1 border-none bg-transparent px-1.5 shadow-none"
         size="sm"
       >
-        <span className="truncate">{t(`workTypeValues.${value}`)}</span>
+        <TruncatedText>{t(`workTypeValues.${value}`)}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {WORK_TYPES.map((type) => (
@@ -196,7 +198,7 @@ export const ItemTypeSelect = ({
         className="h-7 min-h-7 min-w-0 border-none bg-transparent px-1.5 shadow-none"
         size="sm"
       >
-        <span className="truncate">{t(ITEM_TYPE_TRANSLATION_KEYS[value])}</span>
+        <TruncatedText>{t(ITEM_TYPE_TRANSLATION_KEYS[value])}</TruncatedText>
       </SelectTrigger>
       <SelectPopup>
         {LIST_ITEM_TYPES.map((itemType) => (
@@ -331,6 +333,7 @@ export const AssigneePicker = ({
   const membersView = queryView(membersQuery);
   useQueryViewError(membersView, "AssigneePicker:query");
   const [addOpen, setAddOpen] = useState(false);
+  const canAssign = usePermissions({ entity: ["update"] });
 
   const assignedIds = new Set(assignees.map((a) => a.user.id));
 
@@ -358,23 +361,27 @@ export const AssigneePicker = ({
             nameClassName="text-sm font-normal"
           />
           {hasDeletedAccount(a.user.deletedAt) ? (
-            <span className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5">
+            <span className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5">
               {t("deletedAccount")}
             </span>
           ) : null}
-          <Button
-            aria-label={tCommon("remove")}
-            className="size-5 opacity-0 transition-opacity group-hover/assignee:opacity-100 pointer-coarse:opacity-100"
-            disabled={removeAssignee.isPending}
-            onClick={() => removeAssignee.mutate({ taskId, userId: a.user.id })}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <XIcon className="size-3" />
-          </Button>
+          {canAssign && (
+            <Button
+              aria-label={tCommon("remove")}
+              className="size-5 opacity-0 transition-opacity group-hover/assignee:opacity-100 pointer-coarse:opacity-100"
+              disabled={removeAssignee.isPending}
+              onClick={() =>
+                removeAssignee.mutate({ taskId, userId: a.user.id })
+              }
+              size="icon-xs"
+              variant="ghost"
+            >
+              <XIcon className="size-3" />
+            </Button>
+          )}
         </div>
       ))}
-      {unassignedMembers.length > 0 && (
+      {canAssign && unassignedMembers.length > 0 && (
         <Popover onOpenChange={setAddOpen} open={addOpen}>
           <PopoverTrigger render={<Button variant="plain" />}>
             <span className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm">
@@ -403,11 +410,12 @@ export const AssigneePicker = ({
           </PopoverPopup>
         </Popover>
       )}
-      {assignees.length === 0 && unassignedMembers.length === 0 && (
-        <span className="text-muted-foreground px-1.5 text-sm">
-          {t("noAssignees")}
-        </span>
-      )}
+      {assignees.length === 0 &&
+        (!canAssign || unassignedMembers.length === 0) && (
+          <span className="text-muted-foreground px-1.5 text-sm">
+            {t("noAssignees")}
+          </span>
+        )}
     </div>
   );
 };

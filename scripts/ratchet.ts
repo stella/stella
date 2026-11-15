@@ -97,6 +97,7 @@ import {
   statusWriteCalls,
   unmanagedTransitionTables,
 } from "./status-write-shapes";
+import { countTestDatabaseHandleCasts } from "./test-database-handle-casts";
 import { countUndeclaredApiClientWrites } from "./undeclared-api-client-writes";
 import {
   countUnsignalledSkips,
@@ -106,8 +107,6 @@ import {
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
-const INTERNAL_MODULE_MOCK_LEDGER_REL =
-  "scripts/internal-module-mock-ledger.json";
 const INSTRUCTION_ENFORCEMENT_LEDGER_REL =
   "scripts/instruction-enforcement-ledger.json";
 
@@ -1210,6 +1209,17 @@ const countRawUserAvatarPrimitive: FileCounter = (content, { file }) =>
     required: /@stll\/ui\/(?:components\/)?avatar/u,
   });
 
+// A tolerated browser error hides a console error a spec may or may not
+// emit. Each call carries its reason and what removes it; this keeps the
+// number of them from growing unseen.
+const countToleratedBrowserErrors: FileCounter = (content, { file }) =>
+  countCodeMatches({
+    content,
+    file,
+    pattern: /\bbrowserErrors\s*\.\s*tolerate\s*\(/gu,
+    required: /tolerate/u,
+  });
+
 const countShadowedUserNameHelpers: FileCounter = (content, { file }) =>
   countCodeMatches({
     content,
@@ -1249,6 +1259,16 @@ const countAdHocRelativeTimeFormatting: FileCounter = (content, { file }) => {
     )
   );
 };
+
+// Database tests of document review and workflows, the code that runs queued
+// work through the handles a run's actor holds.
+const TEST_DATABASE_HANDLE_CAST_GLOBS = [
+  "apps/api/src/handlers/document-reviews/**/*.test.ts",
+  "apps/api/src/handlers/workspaces/workflow/**/*.test.ts",
+  "apps/api/src/lib/document-review/**/*.test.ts",
+  "apps/api/src/lib/workflow/**/*.test.ts",
+  "apps/api/src/lib/workflow-*.test.ts",
+] as const;
 
 // Every hand-written API module, not only `src`: a script or eval that reaches
 // an owner-level handle is as much a use of it as a lib module.
@@ -1832,11 +1852,8 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
   );
 };
 
-// Capabilities carrying no authored `description` are tracked by exact id in
-// apps/api/capability-description-ledger.json, not by an aggregate count here:
-// see apps/api/scripts/capability-description-guard.ts. Any set of the same
-// size satisfies a count, so it could not name the gap an author had just
-// closed, nor force that entry to be deleted in the same change as the prose.
+// Capabilities carrying no authored `description` are rejected by
+// apps/api/scripts/capability-description-guard.ts, not counted here.
 
 // A capability suppressed from the generic transport by its `transport`
 // disposition: it returns bytes (`file-response`/`file-both`), or it REQUIRES a
@@ -2619,19 +2636,6 @@ const PER_RULE_SUPPRESSION_METRICS: readonly RatchetMetric[] =
         : isExcludedSource,
     count: countTrackedRuleSuppressions(rule),
   }));
-
-// Grandfathered `mock.module` targets: one ledger line per
-// "<test file>::<workspace module>" pair. The rule
-// (.oxlint-plugins/no-internal-module-mock.ts) reports an unlisted pair and a
-// listed pair whose mock is gone; this budget is what stops a new pair from
-// being listed instead of fixed.
-const countInternalModuleMockLedgerEntries: FileCounter = (content) => {
-  const parsed: unknown = JSON.parse(content);
-  if (!Array.isArray(parsed)) {
-    panic("internal-module-mock ledger must be a JSON array");
-  }
-  return parsed.length;
-};
 
 // The count scripts/check-instruction-enforcement.ts holds equal to the
 // `[review]` tags in the instruction sources; this metric keeps it falling.
@@ -3453,6 +3457,16 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "e2e-tolerated-browser-errors",
+    description:
+      "browserErrors.tolerate(...) calls in web browser specs: console errors a spec may emit without failing; gated per file, and a new one needs a justified allowance",
+    include: ["apps/web/e2e/**/*.{ts,tsx}"],
+    exclude: () => false,
+    perFile: true,
+    count: countToleratedBrowserErrors,
+  },
+  {
+    scope: "file",
     id: "raw-user-avatar-primitive",
     description:
       "imports of @stll/ui/avatar outside the shared owner and explicit non-user exceptions",
@@ -3566,6 +3580,18 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/landing/src/**/*.astro"],
     exclude: () => false,
     count: countInlineClipboardWrites,
+  },
+  {
+    scope: "file",
+    id: "test-database-handle-casts",
+    description:
+      "database handles that document-review and workflow database tests cast by hand (`asTestRaw<Transaction>(testDb)`, `asTestRaw<ScopedDb>(...)`, `value as SafeDb`) and give the code under test. The test database connects as the owner, which row security never refuses, so such a test passes where production, on the application role, would refuse the write. New tests take their handles from apps/api/src/tests/helpers/application-role-db.ts, which need no cast; a cast that mirrors an owner handle production itself passes needs a justified allowance. Each file's count can only shrink",
+    include: TEST_DATABASE_HANDLE_CAST_GLOBS,
+    exclude: isExcludedTestInclusiveSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: ((content, { file }) =>
+      countTestDatabaseHandleCasts(content, file)) satisfies FileCounter,
   },
   {
     scope: "file",
@@ -3745,15 +3771,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/api/src/db/schema/**/*.ts"],
     exclude: isExcludedSource,
     count: countWorkspaceOnlyRlsOnOrgTables,
-  },
-  {
-    scope: "file",
-    id: "internal-module-mock-ledger-entries",
-    description:
-      "grandfathered mock.module targets of workspace modules, one per <test file>::<module> pair in scripts/internal-module-mock-ledger.json (each replaces a real dependency with a fabrication the mocked module's contract changes cannot fail)",
-    include: [INTERNAL_MODULE_MOCK_LEDGER_REL],
-    exclude: () => false,
-    count: countInternalModuleMockLedgerEntries,
   },
   {
     scope: "file",
@@ -5130,6 +5147,17 @@ const SELF_TEST_UNDECLARED_API_CLIENT_WRITES = `${UNDECLARED_API_CLIENT_WRITE_FI
 // writes, reads and unrelated `delete` calls are excluded.
 const EXPECTED_UNDECLARED_API_CLIENT_WRITES = 3;
 const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
+const TOLERATED_BROWSER_ERROR_FIXTURE_LINES = [
+  'browserErrors.tolerate({ pattern: /a/u, reason: "r", removedBy: "x" });',
+  "browserErrors",
+  '  .tolerate({ pattern: /b/u, reason: "r", removedBy: "x" });',
+  "browserErrors.expectCaptured(/c/u);",
+  "// browserErrors.tolerate({ pattern: /d/u }) must not count.",
+];
+const SELF_TEST_TOLERATED_BROWSER_ERRORS = `${TOLERATED_BROWSER_ERROR_FIXTURE_LINES.join("\n")}\n`;
+// The plain call and the one split across lines; the required declaration
+// and the comment are excluded.
+const EXPECTED_TOLERATED_BROWSER_ERRORS = 2;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
 
@@ -5227,6 +5255,22 @@ const SELF_TEST_AUDIT_SKIP_DIRECTIVES = `${AUDIT_SKIP_FIXTURE_LINES.join("\n")}\
 // The final directive catches TSX parsing swallowing a .ts generic arrow.
 const EXPECTED_AUDIT_SKIP_DIRECTIVES = 4;
 const EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL = 2;
+
+// Counted: the owner database and an owner transaction cast to production
+// handle types, by call and by `as`. Not counted: the row-security database
+// the production factories wrap, a stub object, and a test-only type.
+const SELF_TEST_TEST_DATABASE_HANDLE_CASTS = [
+  'import { getRlsFixture } from "@/api/tests/security/rls-fixture";',
+  "const { testDb } = await getRlsFixture();",
+  "await finalize({ tx: asTestRaw<Transaction>(testDb) });",
+  "await testDb.transaction(async (tx) => await upsert(asTestRaw<Transaction>(tx)));",
+  "const scopedDb = testDb as unknown as ScopedDb;",
+  "const database = asTestRaw<RlsDatabase<Transaction>>(testDb);",
+  "const stub = asTestRaw<Transaction>({ select: () => [] });",
+  "const raw = asTestRaw<TestDatabase>(testDb);",
+  "",
+].join("\n");
+const EXPECTED_TEST_DATABASE_HANDLE_CASTS = 3;
 
 const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: error instanceof Error ? error.message : fallback });",
@@ -5682,18 +5726,6 @@ const RESULT_BOUNDARY_FILE_FIXTURE_LINES = [
 ];
 const SELF_TEST_RESULT_BOUNDARY_FILE = `${RESULT_BOUNDARY_FILE_FIXTURE_LINES.join("\n")}\n`;
 
-// Two pairs in one file and one in another: the count is the number of
-// ledger lines, not of files.
-const SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER = `${JSON.stringify(
-  [
-    "apps/api/src/handlers/alpha.test.ts::@/api/lib/s3",
-    "apps/api/src/handlers/alpha.test.ts::@/api/lib/s3-presign",
-    "packages/cli/src/login.test.ts::./browser-open.js",
-  ],
-  null,
-  2,
-)}\n`;
-const EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES = 3;
 const SELF_TEST_INSTRUCTION_ENFORCEMENT_LEDGER = `${JSON.stringify(
   { reviewOnlyRules: 4, excludedSources: [], excludedSections: [] },
   null,
@@ -6385,10 +6417,6 @@ const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
   const failures: string[] = [];
   for (const { id, expected } of [
     {
-      id: "internal-module-mock-ledger-entries",
-      expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
-    },
-    {
       id: "review-only-instruction-rules",
       expected: EXPECTED_REVIEW_ONLY_INSTRUCTION_RULES,
     },
@@ -6912,6 +6940,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/src/handlers/document-reviews/handle-casts.integration.test.ts",
+      SELF_TEST_TEST_DATABASE_HANDLE_CASTS,
+    );
+    writeFixture(
+      root,
       "apps/api/scripts/implicit-root-connection.ts",
       SELF_TEST_IMPLICIT_ROOT_CONNECTION,
     );
@@ -6927,6 +6960,11 @@ const runSelfTest = (): number => {
       root,
       "apps/web/src/shared-helper-shapes.tsx",
       SELF_TEST_SHARED_WEB_HELPERS,
+    );
+    writeFixture(
+      root,
+      "apps/web/e2e/specs/tolerated-browser-errors.spec.ts",
+      SELF_TEST_TOLERATED_BROWSER_ERRORS,
     );
     writeFixture(
       root,
@@ -7068,11 +7106,6 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/lib/case-law/public-subject.ts",
       SELF_TEST_AD_HOC_SUBJECT_GATE,
-    );
-    writeFixture(
-      root,
-      INTERNAL_MODULE_MOCK_LEDGER_REL,
-      SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
     );
     writeFixture(
       root,
@@ -7350,6 +7383,7 @@ const runSelfTest = (): number => {
           EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO,
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
+      ["e2e-tolerated-browser-errors", EXPECTED_TOLERATED_BROWSER_ERRORS],
       ["undeclared-api-client-writes", EXPECTED_UNDECLARED_API_CLIENT_WRITES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [
@@ -7363,6 +7397,7 @@ const runSelfTest = (): number => {
         EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES,
       ],
       ["inline-timestamp-cursor-sql", EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL],
+      ["test-database-handle-casts", EXPECTED_TEST_DATABASE_HANDLE_CASTS],
     ] as const;
     for (const [id, expected] of sharedHelperMetricExpectations) {
       const metric = requireSnapshot(snapshot, id);

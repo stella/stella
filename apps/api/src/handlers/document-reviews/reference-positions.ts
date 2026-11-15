@@ -22,12 +22,13 @@ import type { ModelMessage } from "@tanstack/ai";
  *
  * Two ways out, one prompt and one normalizer behind them
  * (`reference-position-normalizer.ts`): `proposeReferencePositions` answers
- * once with the whole plan, and `streamReferenceProposal` reports each piece
- * as the model closes it. A checklist of forty terms takes minutes to write;
+ * once with the whole plan, and `openReferenceProposalStream` reports each
+ * piece as the model closes it. A checklist of forty terms takes minutes to write;
  * the streaming path is what stops the reviewer watching a spinner for all of
  * them.
  */
 import { panic, Result } from "better-result";
+import type { InferOk } from "better-result";
 
 import {
   createPartialProposalReader,
@@ -46,6 +47,7 @@ import type {
 } from "@/api/handlers/document-reviews/reference-position-normalizer";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   type AIUsageMetering,
   createTanStackAIAnalyticsCallbacks,
@@ -56,8 +58,10 @@ import { perspectivePartyPhrase } from "@/api/lib/document-review/contract";
 import type { ReviewPerspective } from "@/api/lib/document-review/contract";
 import {
   buildReviewDocumentParts,
+  fitReviewDocuments,
   reviewDocumentsScopeKey,
 } from "@/api/lib/document-review/review-document-messages";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
@@ -66,6 +70,7 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
+import { requestBudgetBytesForTask } from "@/api/lib/workflow/request-budget";
 
 const MODEL_TASK = "pdf" as const;
 
@@ -147,6 +152,11 @@ type ProposalRequestArgs = {
   timeoutMs: number;
 };
 
+/** How either path answers a proposal that failed, classified from the cause
+ *  `WorkflowIntegrationError` carries. */
+export const proposalHandlerError = (cause: unknown): HandlerError =>
+  aiHandlerError(cause, { status: 502, message: "Position proposal failed" });
+
 /** Everything both paths send. One prompt, one schema, one cache scope: the
  *  streaming call and the batch call differ only in how the answer comes
  *  back. */
@@ -167,14 +177,6 @@ const buildProposalRequest = ({
   abortSignal,
   timeoutMs,
 }: ProposalRequestArgs) => {
-  const caching = resolveCaching({
-    promptCachingEnabled,
-    task: MODEL_TASK,
-    scopeKey: reviewDocumentsScopeKey(
-      targetEntityVersionId,
-      references.map((reference) => reference.entityVersionId),
-    ),
-  });
   const analytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "document-review.positions",
@@ -189,6 +191,28 @@ const buildProposalRequest = ({
     traceId: Bun.randomUUIDv7(),
     usageMetering,
   });
+  const fitted = fitReviewDocuments({
+    target,
+    references: references.map((reference) => reference.file),
+    budgetBytes: requestBudgetBytesForTask(MODEL_TASK, orgAIConfig, {
+      dataClass: "customer",
+      organizationId,
+      modelTier: admission.modelTier,
+    }),
+  });
+  if (Result.isError(fitted)) {
+    analytics.captureRefusal(fitted.error.cause);
+    return Result.err(fitted.error);
+  }
+
+  const caching = resolveCaching({
+    promptCachingEnabled,
+    task: MODEL_TASK,
+    scopeKey: reviewDocumentsScopeKey(
+      targetEntityVersionId,
+      references.map((reference) => reference.entityVersionId),
+    ),
+  });
   const seeded = seededPositions
     .map((position) => `- ${position.issue}`)
     .join("\n");
@@ -202,8 +226,8 @@ const buildProposalRequest = ({
       role: "user",
       content: [
         ...buildReviewDocumentParts({
-          target,
-          references: references.map((reference) => reference.file),
+          target: fitted.value.target,
+          references: fitted.value.references,
           caching,
         }),
         { type: "text", content: perspectiveLine(perspective) },
@@ -215,7 +239,7 @@ const buildProposalRequest = ({
     },
   ];
 
-  return {
+  return Result.ok({
     analytics,
     options: {
       userId: admission.userId,
@@ -235,7 +259,7 @@ const buildProposalRequest = ({
       deadlineMs: timeoutMs,
       outputSchema: proposedPositionsSchema,
     },
-  };
+  });
 };
 
 export type ProposeReferencePositionsArgs = Omit<
@@ -251,10 +275,14 @@ export const proposeReferencePositions = async ({
 }: ProposeReferencePositionsArgs): Promise<
   Result<ReviewPositionProposal, WorkflowIntegrationError>
 > => {
-  const { analytics, options } = buildProposalRequest({
+  const built = buildProposalRequest({
     ...request,
     timeoutMs: TIMEOUT_MS,
   });
+  if (Result.isError(built)) {
+    return Result.err(built.error);
+  }
+  const { analytics, options } = built.value;
 
   return await Result.tryPromise({
     try: async () =>
@@ -283,27 +311,30 @@ export type ReviewProposalStreamEvent =
   | ReviewProposalEvent
   | { type: "done"; positionCount: number; skippedCount: number };
 
-export type StreamReferenceProposalArgs = ProposeReferencePositionsArgs;
+type ProposalEventsArgs = Pick<
+  ProposeReferencePositionsArgs,
+  "positionsMax" | "references" | "seededPositions"
+> & {
+  built: InferOk<ReturnType<typeof buildProposalRequest>>;
+};
 
 /**
- * The same proposal, reported as the model writes it. Throws on a failed or
- * truncated stream, so the caller decides what the reviewer sees; every event
- * it did yield before that stays valid.
+ * The proposal as the model writes it. Throws on a failed or truncated stream,
+ * so the caller decides what the reviewer sees; every event it did yield
+ * before that stays valid.
  *
  * @yields the target's sides, then each verified position and each skipped
  * term as the model closes it, then one `done` carrying the totals.
  */
-export const streamReferenceProposal = async function* ({
+const proposalEvents = async function* ({
+  built: { analytics, options },
   positionsMax,
-  ...request
-}: StreamReferenceProposalArgs): AsyncGenerator<ReviewProposalStreamEvent> {
-  const { analytics, options } = buildProposalRequest({
-    ...request,
-    timeoutMs: STREAM_TIMEOUT_MS,
-  });
+  references,
+  seededPositions,
+}: ProposalEventsArgs): AsyncGenerator<ReviewProposalStreamEvent> {
   const normalizer = createProposalNormalizer({
-    seededPositions: request.seededPositions,
-    sources: request.references,
+    seededPositions,
+    sources: references,
     positionsMax,
     newSourceId: Bun.randomUUIDv7,
   });
@@ -361,4 +392,35 @@ export const streamReferenceProposal = async function* ({
     positionCount: counts.positions,
     skippedCount: counts.skipped,
   };
+};
+
+export type OpenReferenceProposalStreamArgs = ProposeReferencePositionsArgs;
+
+/**
+ * Builds the request now and returns the events to read later. Documents that
+ * cannot fit are refused here, so the caller can answer with a status code
+ * before any response has started. No model call happens until the first read.
+ */
+export const openReferenceProposalStream = ({
+  positionsMax,
+  ...request
+}: OpenReferenceProposalStreamArgs): Result<
+  AsyncGenerator<ReviewProposalStreamEvent>,
+  WorkflowIntegrationError
+> => {
+  const built = buildProposalRequest({
+    ...request,
+    timeoutMs: STREAM_TIMEOUT_MS,
+  });
+  if (Result.isError(built)) {
+    return Result.err(built.error);
+  }
+  return Result.ok(
+    proposalEvents({
+      built: built.value,
+      positionsMax,
+      references: request.references,
+      seededPositions: request.seededPositions,
+    }),
+  );
 };

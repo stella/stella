@@ -19,6 +19,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { mapWithConcurrency } from "@stll/concurrency";
 import {
   sanitizeErrorAttributesForOutput,
@@ -510,7 +511,7 @@ const readCurrentDocumentSource = async ({
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, organizationId),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
       ),
     )
     .innerJoin(
@@ -2133,7 +2134,7 @@ const recoverMissingNativeExtractionRuns = async (
       and(
         cursor === null ? undefined : gt(fields.id, cursor),
         lt(entityVersions.createdAt, settledBefore),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         sql`${fields.content}->>'type' = 'file'
           AND ${fields.content}->>'encrypted' = 'false'`,
         notExists(
@@ -2738,7 +2739,7 @@ const recoverFailedOcrSearchIndexes = async (
       and(
         eq(workspaces.id, documentProcessingRuns.workspaceId),
         eq(workspaces.organizationId, documentProcessingRuns.organizationId),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
       ),
     )
     .where(

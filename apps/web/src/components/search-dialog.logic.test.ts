@@ -6,7 +6,6 @@ import {
   resourceRef,
   toResourceName,
 } from "@stll/api-contract";
-import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { formatMimeTypeLabel } from "@/components/search-dialog.shared";
@@ -20,7 +19,6 @@ import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 import {
   canUseAskAIShortcut,
-  caseLawFacetCountMessage,
   createDialogCloseActionQueue,
   getCaseLawHitRoute,
   getChatHitRoute,
@@ -689,25 +687,6 @@ describe("Ask AI keyboard shortcut", () => {
         query: "indemnity",
       }),
     ).toBe(false);
-  });
-});
-
-describe("caseLawFacetCountMessage", () => {
-  test("counts matching decisions below the ceiling", () => {
-    expect(caseLawFacetCountMessage(651)).toEqual({
-      key: "search.caseLawMatchingDecisions",
-      count: 651,
-    });
-  });
-
-  test("shows a count at the ceiling as at least the ceiling", () => {
-    expect(caseLawFacetCountMessage(GLOBAL_SEARCH_RESULT_LIMIT)).toEqual({
-      key: "search.caseLawMatchingDecisionsAtLeast",
-      count: GLOBAL_SEARCH_RESULT_LIMIT,
-    });
-    expect(caseLawFacetCountMessage(GLOBAL_SEARCH_RESULT_LIMIT - 1).key).toBe(
-      "search.caseLawMatchingDecisions",
-    );
   });
 });
 

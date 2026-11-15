@@ -31,6 +31,10 @@ const extra = v.parse(
   v.object({
     liveActivities: v.optional(v.boolean(), false),
     pushNotifications: v.optional(v.boolean(), false),
+    shareInbox: v.optional(
+      v.nullable(v.object({ appGroup: v.string(), folder: v.string() })),
+      null,
+    ),
     variant: v.picklist(MOBILE_APP_VARIANTS),
   }),
   Constants.expoConfig?.extra,
@@ -49,3 +53,9 @@ export const LIVE_ACTIVITIES: boolean = extra.liveActivities;
  * release does once its profile carries the push capability.
  */
 export const PUSH_NOTIFICATIONS: boolean = extra.pushNotifications;
+
+/**
+ * Where the share extension hands over what was shared (`app.config.ts`): a
+ * folder of the App Group's container; null in a build without the extension.
+ */
+export const SHARE_INBOX = extra.shareInbox;

@@ -1,0 +1,5 @@
+{
+  "metric": "ai-analytics-callback-seams",
+  "delta": 1,
+  "reason": "The skill draft from a chat makes one model call and reports its failure through the same analytics callback as the draft generator it shares a prompt with."
+}

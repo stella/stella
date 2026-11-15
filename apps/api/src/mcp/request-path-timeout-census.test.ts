@@ -36,6 +36,7 @@ const REQUEST_PATH_ROOTS = [
   "apps/api/src/handlers/documents/compare.ts",
   "apps/api/src/lib/legal-search/corpus-index-client.ts",
   "apps/api/src/lib/legal-search/corpus-index-pagination.ts",
+  "apps/api/src/lib/legal-search/document-fetch-budget.ts",
   "apps/api/src/lib/public-law-read-db.ts",
 ] as const;
 
@@ -364,6 +365,14 @@ const CENSUS: readonly CensusEntry[] = [
     why: "Reads the stored courts a court filter is matched against; without them the filter runs as sent and the search reports filter_unread.",
   },
   {
+    site: "apps/api/src/handlers/case-law/decisions/search.ts#CASE_LAW_RELAXED_TOP_UP_BUDGET_MS",
+    path: "request",
+    tools: ["search", "search_case_law"],
+    bound: "own",
+    onExpiry: "degrades",
+    why: "Tops up a short strict page with partial matches; without it the strict page is answered alone.",
+  },
+  {
     site: "apps/api/src/mcp/case-law-court-catalog-tool.ts#LIST_CASE_LAW_COURTS_READ_BUDGET_MS",
     path: "request",
     tools: ["list_case_law_courts"],
@@ -456,6 +465,16 @@ const CENSUS: readonly CensusEntry[] = [
     why: "The generated CLI's client transport deadline; the server does not wait on it.",
   },
   {
+    site: "apps/api/src/mcp/public-read-continuation.ts#PUBLIC_READ_RUN_BUDGET_MS",
+    why: "Bounds a continued read, which runs detached from the call that started it; that call answers at its response deadline.",
+    path: "off-request",
+  },
+  {
+    site: "apps/api/src/mcp/public-read-continuation.ts#statementBudgetMs",
+    why: "The statement budget of a continued read, inside its detached run.",
+    path: "off-request",
+  },
+  {
     site: "apps/api/src/mcp/tool-freshness.ts#this.#reprojectionDeadlineMs",
     path: "off-request",
     why: "Bounds a live session's tool reprojection; registration and every publish run detached from the request that triggered them.",
@@ -474,11 +493,6 @@ const CENSUS: readonly CensusEntry[] = [
     site: "apps/api/src/handlers/case-law/decisions/document-on-demand-deps.ts#15_000",
     path: "off-request",
     why: "Records the fetch request inside the read's own READ_BUDGET_MS wait, which the read stops at; the recording finishes for the next reader.",
-  },
-  {
-    site: "apps/api/src/handlers/case-law/decisions/document-on-demand-deps.ts#DOCUMENT_FETCH_BUDGET_MS",
-    path: "off-request",
-    why: "The publisher download a read starts and stops waiting for at READ_BUDGET_MS; it keeps running for the next reader.",
   },
   {
     site: "apps/api/src/handlers/case-law/decisions/dev-reparse.ts#FETCH_TIMEOUT_MS",
@@ -634,6 +648,11 @@ const CENSUS: readonly CensusEntry[] = [
     bound: "request",
     onExpiry: "fails-fast",
     why: "Page highlighting shares one search deadline, itself clamped to the request.",
+  },
+  {
+    site: "apps/api/src/lib/legal-search/document-fetch-budget.ts#budgetMs",
+    path: "off-request",
+    why: "The publisher download a deferred-document fetch starts: a read stops waiting for it at READ_BUDGET_MS and it keeps running for the next reader; the background drain holds no request.",
   },
   {
     site: "apps/api/src/lib/public-law-read-db.ts#statement_timeout 30s",

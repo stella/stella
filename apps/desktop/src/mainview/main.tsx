@@ -23,6 +23,7 @@ import {
 import type { DesktopMessages } from "../i18n";
 import { installAccountActivity } from "../shared/account-activity";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { installNativeContextMenuPolicy } from "../shared/native-context-menu";
 import { useSystemTheme } from "../shared/use-system-theme";
 import {
   describeError,
@@ -196,6 +197,8 @@ const removeAccountActivity = installAccountActivity({
   },
 });
 
+// Every window renders from this entry: none shows the webview's browser menu.
+const removeNativeContextMenuPolicy = installNativeContextMenuPolicy(document);
 const removeClipsCopyRouting = installClipsCopyRouting({
   document,
   windowLabel: getCurrentWindow().label,
@@ -246,5 +249,6 @@ if (import.meta.hot) {
     removeAccountActivity();
     removeClipsCopyRouting();
     removeDesktopErrorTelemetry();
+    removeNativeContextMenuPolicy();
   });
 }

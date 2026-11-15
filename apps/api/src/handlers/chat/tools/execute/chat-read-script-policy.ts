@@ -58,6 +58,8 @@ export const CHAT_READ_SCRIPT_POLICY = {
   read_statute: "script",
   read_statute_provisions: "script",
   read_provision_history: "script",
+  search_guidance: "script",
+  read_guidance: "script",
   search_boe_legislation: "direct-only",
   lookup_business_registry: "direct-only",
 } as const satisfies ChatReadScriptPolicyMap;

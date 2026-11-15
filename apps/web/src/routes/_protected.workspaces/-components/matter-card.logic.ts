@@ -1,4 +1,9 @@
+import {
+  workspaceAcceptsWrites,
+  type WorkspaceStatus,
+} from "@stll/api-contract/workspace-status";
+
 export const matterCardPreviewEnabled = (
-  status: string,
+  status: WorkspaceStatus,
   previewRequested: boolean,
-) => status === "active" && previewRequested;
+) => workspaceAcceptsWrites(status) && previewRequested;

@@ -21,6 +21,10 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { Streamdown } = await import("streamdown");
 const { ChatTableChart } = await import("./chat-table-chart");
+const { getWorkspaceReconnectQueryActions } =
+  await import("@/lib/workspace-realtime");
+const { applyResourceQueryActions } =
+  await import("@/testing/resource-query-actions.test-fixtures");
 
 afterEach(async () => {
   await act(async () => cleanup());
@@ -51,7 +55,7 @@ const mount = (
   sourceMarkdown = markdown,
 ) => {
   const client = new QueryClient();
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <IntlProvider
         locale={locale}
@@ -77,6 +81,7 @@ const mount = (
       </IntlProvider>
     </QueryClientProvider>,
   );
+  return { ...view, client };
 };
 
 test("requests no decision until clicked, switches kind, returns to table and reuses the session decision", async () => {
@@ -112,6 +117,15 @@ test("requests no decision until clicked, switches kind, returns to table and re
     view.container.querySelectorAll('[data-slot="chart-slice"]').length,
   ).toBe(2);
   expect(view.queryByRole("button", { name: "Scatter" })).toBeNull();
+  await act(async () => {
+    await applyResourceQueryActions(
+      view.client,
+      getWorkspaceReconnectQueryActions({
+        queryClient: view.client,
+        workspaceId: "matter-a",
+      }),
+    );
+  });
   fireEvent.click(view.getByRole("button", { name: "Show table" }));
   expect(view.getByRole("table")).toBeDefined();
   fireEvent.click(view.getByRole("button", { name: "Show as chart" }));

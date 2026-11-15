@@ -1,22 +1,29 @@
+import type { SQLWrapper } from "drizzle-orm";
+
 import {
   CORPUS_FAMILIES,
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
 } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  CORPUS_INDEX_APPEND_DELIVERIES,
   CORPUS_INDEX_DESIRED_ACTIONS,
   CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES,
   CORPUS_INDEX_INTENT_STATUSES,
+  CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
   CORPUS_INDEX_PROJECTION_APPEND_MODES,
   CORPUS_INDEX_PROJECTION_FAILURE_KINDS,
   CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS,
   CORPUS_INDEX_PROJECTION_WORK_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
+  corpusIndexProjectionAppendIsUnblocked,
   corpusIndexProjectionErasureIsPending,
-  corpusIndexProjectionIntentIsOutstanding,
+  corpusIndexProjectionIsAbsent,
   corpusIndexProjectionIsBlocked,
   corpusIndexProjectionNeedsWork,
+  corpusIndexProjectionOutstandingIndexPredicate,
   corpusIndexProjectionProducesAppend,
+  corpusIndexProjectionRevisionDeleteIsUnproven,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 
 import {
@@ -58,6 +65,23 @@ export const corpusIndexProjectionIntents = p.pgTable(
     leaseToken: p.uuid("lease_token"),
     leaseExpiresAt: timestamptz("lease_expires_at"),
     appendStartedAt: timestamptz("append_started_at"),
+    /**
+     * How the started revision travels to the engine
+     * (`CORPUS_INDEX_APPEND_DELIVERIES`). Set with the start and immutable
+     * from then on; a reservation carries the default until it starts.
+     */
+    appendDelivery: p
+      .text("append_delivery", { enum: CORPUS_INDEX_APPEND_DELIVERIES })
+      .default("ingest_api")
+      .notNull(),
+    /**
+     * The request an offline revision travels in: one indexer file, started
+     * in one or more transactions. Null for an ingest request, whose
+     * transaction is its request. Set with the start and immutable from then
+     * on; the revisions carrying one identity are exactly the ones delivered
+     * together.
+     */
+    appendRequestId: p.uuid("append_request_id"),
     appendRequestRevisionCount: p.integer("append_request_revision_count"),
     appendCommittedAt: timestamptz("append_committed_at"),
     expectedDocumentCount: p.integer("expected_document_count"),
@@ -134,7 +158,7 @@ export const corpusIndexProjectionIntents = p.pgTable(
     p
       .index("corpus_index_projection_intents_outstanding_idx")
       .on(t.family, t.generation, t.entityId, t.epoch)
-      .where(corpusIndexProjectionIntentIsOutstanding(t.status)),
+      .where(corpusIndexProjectionOutstandingIndexPredicate(t.status)),
     p
       .index("corpus_index_projection_intents_expired_lease_idx")
       .on(t.family, t.generation, t.status, t.leaseExpiresAt)
@@ -178,6 +202,37 @@ export const corpusIndexProjectionIntents = p.pgTable(
       .index("corpus_index_projection_intents_settled_census_idx")
       .on(t.family, t.generation, t.indexId, t.id)
       .where(sql`${t.status} = 'settled'`),
+    // The revisions of one offline request, counted to learn how many were
+    // delivered together and when the request first started.
+    p
+      .index("corpus_index_projection_intents_append_request_idx")
+      .on(t.appendRequestId)
+      .where(sql`${t.appendRequestId} IS NOT NULL`),
+    // The absent census's other half: withdrawn revisions the engine must not
+    // hold either, read beside the settled ones by the same page.
+    p
+      .index("corpus_index_projection_intents_withdrawn_census_idx")
+      .on(t.family, t.generation, t.indexId, t.id)
+      .where(sql`${t.status} = 'withdrawn'`),
+    // The prover's claim: committed revisions of one index whose stored
+    // barrier has passed, oldest barrier first.
+    p
+      .index("corpus_index_projection_intents_proof_idx")
+      .on(t.family, t.generation, t.indexId, t.appendPublishBarrierAt)
+      .where(sql`${t.status} = 'append_committed'`),
+    // Revisions whose delete may have been issued and is not proven, oldest
+    // claim first: the at-risk side of the unserved gauge, joined to the
+    // states that still name them. Few rows at a time, however long the
+    // revision history grows.
+    p
+      .index("corpus_index_projection_intents_delete_unproven_idx")
+      .on(
+        t.family,
+        t.generation,
+        sql`coalesce(${t.cleanupStartedAt}, ${t.updatedAt})`,
+        t.id,
+      )
+      .where(corpusIndexProjectionRevisionDeleteIsUnproven(t)),
     p.check(
       "corpus_index_projection_intents_family_values",
       sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
@@ -185,6 +240,28 @@ export const corpusIndexProjectionIntents = p.pgTable(
     p.check(
       "corpus_index_projection_intents_status_values",
       sql`${t.status} IN (${sqlValues(CORPUS_INDEX_INTENT_STATUSES)})`,
+    ),
+    p.check(
+      "corpus_index_projection_intents_append_delivery_values",
+      sql`${t.appendDelivery} IN (${sqlValues(CORPUS_INDEX_APPEND_DELIVERIES)})`,
+    ),
+    // An offline delivery is chosen at the start, with the document count the
+    // indexer's file holds for the revision, so an expired start can be proven
+    // instead of cleaned up. It never holds its lease past the acceptance: its
+    // committed form always carries the barrier it is proven after.
+    p.check(
+      "corpus_index_projection_intents_append_delivery_shape",
+      sql`CASE ${t.appendDelivery}
+        WHEN 'ingest_api' THEN ${t.appendRequestId} IS NULL
+        WHEN 'offline_indexer' THEN
+          ${t.appendStartedAt} IS NOT NULL
+          AND ${t.appendRequestId} IS NOT NULL
+          AND ${t.appendRequestRevisionCount} IS NOT NULL
+          AND ${t.appendRequestRevisionCount} BETWEEN 1 AND ${sql.raw(String(CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS))}
+          AND ${t.expectedDocumentCount} IS NOT NULL
+          AND (${t.appendCommittedAt} IS NULL OR ${t.appendPublishBarrierAt} IS NOT NULL)
+        ELSE false
+      END`,
     ),
     p.check(
       "corpus_index_projection_intents_epoch_positive",
@@ -236,6 +313,9 @@ export const corpusIndexProjectionIntents = p.pgTable(
       "corpus_projection_intents_append_request_count_positive",
       sql`${t.appendRequestRevisionCount} IS NULL OR ${t.appendRequestRevisionCount} > 0`,
     ),
+    // An `append_committed` revision either holds its lease and no barrier,
+    // inside a writer that applies it in the same transaction, or is
+    // lease-free with the barrier its recorded acceptance stored.
     p.check(
       "corpus_index_projection_intents_status_shape",
       sql`CASE ${t.status}
@@ -262,11 +342,10 @@ export const corpusIndexProjectionIntents = p.pgTable(
           AND ${t.settledAt} IS NULL
           AND ${t.cancelledAt} IS NULL
         WHEN 'append_committed' THEN
-          ${t.leaseToken} IS NOT NULL
+          (${t.leaseToken} IS NULL) = (${t.appendPublishBarrierAt} IS NOT NULL)
           AND ${t.appendStartedAt} IS NOT NULL
           AND ${t.appendCommittedAt} IS NOT NULL
           AND ${t.appliedAt} IS NULL
-          AND ${t.appendPublishBarrierAt} IS NULL
           AND ${t.cleanupNotBefore} IS NULL
           AND ${t.cleanupStartedAt} IS NULL
           AND ${t.deleteOpstamp} IS NULL
@@ -277,7 +356,6 @@ export const corpusIndexProjectionIntents = p.pgTable(
           AND ${t.appendStartedAt} IS NOT NULL
           AND ${t.appendCommittedAt} IS NOT NULL
           AND ${t.appliedAt} IS NOT NULL
-          AND ${t.appendPublishBarrierAt} IS NULL
           AND ${t.cleanupNotBefore} IS NULL
           AND ${t.cleanupStartedAt} IS NULL
           AND ${t.deleteOpstamp} IS NULL
@@ -336,6 +414,19 @@ export const corpusIndexProjectionIntents = p.pgTable(
           AND ${t.deleteOpstamp} IS NULL
           AND ${t.settledAt} IS NULL
           AND ${t.cancelledAt} IS NOT NULL
+        WHEN 'withdrawn' THEN
+          ${t.leaseToken} IS NULL
+          AND ${t.appendDelivery} = 'offline_indexer'
+          AND ${t.appendStartedAt} IS NOT NULL
+          AND ${t.appendCommittedAt} IS NOT NULL
+          AND ${t.appendPublishBarrierAt} IS NOT NULL
+          AND ${t.expectedDocumentCount} IS NOT NULL
+          AND ${t.appliedAt} IS NULL
+          AND ${t.cleanupNotBefore} IS NULL
+          AND ${t.cleanupStartedAt} IS NULL
+          AND ${t.deleteOpstamp} IS NULL
+          AND ${t.settledAt} IS NULL
+          AND ${t.cancelledAt} IS NULL
         ELSE false
       END`,
     ),
@@ -359,6 +450,48 @@ export const corpusIndexProjectionIntents = p.pgTable(
 );
 
 /** PostgreSQL-authoritative desired and applied state for one generation. */
+const corpusIndexProjectionWorkShape = ({
+  workStatus,
+  retryNotBefore,
+  failureAttempts,
+  lastFailureKind,
+  lastFailureMessage,
+}: Record<
+  | "workStatus"
+  | "retryNotBefore"
+  | "failureAttempts"
+  | "lastFailureKind"
+  | "lastFailureMessage",
+  SQLWrapper
+>) => sql`CASE ${workStatus}
+        WHEN 'eligible' THEN
+          ${retryNotBefore} IS NULL
+          AND ${failureAttempts} = 0
+          AND ${lastFailureKind} IS NULL
+          AND ${lastFailureMessage} IS NULL
+        WHEN 'retry_scheduled' THEN
+          ${retryNotBefore} IS NOT NULL
+          AND (
+            (${failureAttempts} = 0
+              AND ${lastFailureKind} IN (${sqlValues(CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS)})
+              AND ${lastFailureMessage} IS NOT NULL)
+            OR (${failureAttempts} > 0
+              AND ${lastFailureKind} IS NOT NULL
+              AND ${lastFailureMessage} IS NOT NULL)
+          )
+        WHEN 'repair_scheduled' THEN
+          ${retryNotBefore} IS NULL
+          AND ${failureAttempts} = 0
+          AND ${lastFailureKind} IS NULL
+          AND ${lastFailureMessage} IS NULL
+        WHEN 'blocked' THEN
+          ${retryNotBefore} IS NULL
+          AND ${failureAttempts} > 0
+          AND ${lastFailureKind} IS NOT NULL
+          AND ${lastFailureMessage} IS NOT NULL
+        ELSE false
+      END`;
+
 export const corpusIndexProjectionStates = p.pgTable(
   "corpus_index_projection_states",
   {
@@ -371,7 +504,11 @@ export const corpusIndexProjectionStates = p.pgTable(
       .text("desired_action", { enum: CORPUS_INDEX_DESIRED_ACTIONS })
       .notNull(),
     desiredEpoch: p.bigint("desired_epoch", { mode: "bigint" }).notNull(),
-    /** When the current desired projection state was established. */
+    /**
+     * When the current desired projection state was established; once the
+     * named copy trails it by two changes with other content, when that
+     * happened (`corpusIndexProjectionNamedCopyTrailsTwoChanges`).
+     */
     desiredAt: timestamptz("desired_at").defaultNow(),
     desiredFingerprint: p.varchar("desired_fingerprint", { length: 64 }),
     desiredIndexId: p.varchar("desired_index_id", { length: 64 }),
@@ -398,6 +535,15 @@ export const corpusIndexProjectionStates = p.pgTable(
     appliedRevision: p
       .uuid("applied_revision")
       .$type<SafeId<"corpusIndexProjectionIntent">>(),
+    /**
+     * Whether the applied revision has settled, so the index no longer holds
+     * it and a replacement may be appended. Database triggers keep this equal
+     * to the revision's status, so no writer can leave it behind.
+     */
+    appliedRevisionSettled: p
+      .boolean("applied_revision_settled")
+      .default(false)
+      .notNull(),
     appliedFingerprint: p.varchar("applied_fingerprint", { length: 64 }),
     appliedIndexId: p.varchar("applied_index_id", { length: 64 }),
     appliedAt: timestamptz("applied_at"),
@@ -468,6 +614,20 @@ export const corpusIndexProjectionStates = p.pgTable(
         t.entityId,
       )
       .where(corpusIndexProjectionNeedsWork(t)),
+    // The append claim's walk. A replacement waiting on its old revision is
+    // left out, so the walk never crosses that backlog however long it grows.
+    p
+      .index("corpus_index_projection_states_append_route_idx")
+      .on(
+        t.family,
+        t.generation,
+        t.desiredIndexId,
+        sql`coalesce(${t.retryNotBefore}, ${t.updatedAt})`,
+        t.entityId,
+      )
+      .where(
+        sql`${corpusIndexProjectionNeedsWork(t)} AND ${corpusIndexProjectionAppendIsUnblocked(t)}`,
+      ),
     p
       .index("corpus_index_projection_states_replacement_route_idx")
       .on(t.family, t.generation, t.desiredIndexId, t.updatedAt, t.entityId)
@@ -486,6 +646,13 @@ export const corpusIndexProjectionStates = p.pgTable(
       .index("corpus_index_projection_states_erase_pending_idx")
       .on(t.family, t.generation, t.updatedAt, t.entityId)
       .where(corpusIndexProjectionErasureIsPending(t)),
+    // Entities that should be served and are not, because their named
+    // revision's delete settled or an erasure applied before an upsert came
+    // back. The state row alone answers it, so the gauge reads the index.
+    p
+      .index("corpus_index_projection_states_absent_idx")
+      .on(t.family, t.generation, t.entityId)
+      .where(corpusIndexProjectionIsAbsent(t)),
     p
       .index("corpus_index_projection_states_blocked_idx")
       .on(t.family, t.generation, t.entityId)
@@ -526,34 +693,7 @@ export const corpusIndexProjectionStates = p.pgTable(
     ),
     p.check(
       "corpus_index_projection_states_work_shape",
-      sql`CASE ${t.workStatus}
-        WHEN 'eligible' THEN
-          ${t.retryNotBefore} IS NULL
-          AND ${t.failureAttempts} = 0
-          AND ${t.lastFailureKind} IS NULL
-          AND ${t.lastFailureMessage} IS NULL
-        WHEN 'retry_scheduled' THEN
-          ${t.retryNotBefore} IS NOT NULL
-          AND (
-            (${t.failureAttempts} = 0
-              AND ${t.lastFailureKind} IN (${sqlValues(CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS)})
-              AND ${t.lastFailureMessage} IS NOT NULL)
-            OR (${t.failureAttempts} > 0
-              AND ${t.lastFailureKind} IS NOT NULL
-              AND ${t.lastFailureMessage} IS NOT NULL)
-          )
-        WHEN 'repair_scheduled' THEN
-          ${t.retryNotBefore} IS NULL
-          AND ${t.failureAttempts} = 0
-          AND ${t.lastFailureKind} IS NULL
-          AND ${t.lastFailureMessage} IS NULL
-        WHEN 'blocked' THEN
-          ${t.retryNotBefore} IS NULL
-          AND ${t.failureAttempts} > 0
-          AND ${t.lastFailureKind} IS NOT NULL
-          AND ${t.lastFailureMessage} IS NOT NULL
-        ELSE false
-      END`,
+      corpusIndexProjectionWorkShape(t),
     ),
     p.check(
       "corpus_index_projection_states_epoch_order",

@@ -391,6 +391,7 @@ const recordSqlQuery = (
     counter = counter.parent;
   }
   for (const store of updated) {
+    store.onStatement?.(query);
     store.onQuery?.(phase);
   }
 };

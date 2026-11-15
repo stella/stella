@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
 import { ZipArchive } from "@stll/docx-core/zip";
+import { createTestClock } from "@stll/test-kit";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -18,6 +19,7 @@ import {
   legalListVerificationRuns,
   legalReaderAnnotations,
   searchHistoryEntries,
+  searchHistoryOwners,
   workspaceMembers,
   workspaces,
   workspaceViewTemplates,
@@ -57,6 +59,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
       panic("DATABASE_URL required");
     }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const testClock = createTestClock();
       const { db } = openClient();
       const scopedDatabase = markRlsDatabase(db);
       const organizationId = mintAuthProviderId<"organization">();
@@ -108,11 +111,11 @@ describe.skipIf(!enabled)("account export personal data", () => {
           id: organizationId,
           name: "Claim comment organization",
           slug: organizationId,
-          createdAt: new Date(),
+          createdAt: new Date(testClock.now()),
         });
         await recordNewOrganizationAccessState(db, {
           organizationId,
-          now: new Date(),
+          now: new Date(testClock.now()),
         });
         await db.insert(member).values(
           users.map((userId, index) => ({
@@ -120,7 +123,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
             organizationId,
             userId,
             role: "member",
-            createdAt: new Date(),
+            createdAt: new Date(testClock.now()),
           })),
         );
         await db.insert(workspaces).values({
@@ -522,6 +525,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
       panic("DATABASE_URL required");
     }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const testClock = createTestClock();
       const { db } = openClient();
       const scopedDatabase = markRlsDatabase(db);
       const organizations = [
@@ -550,13 +554,13 @@ describe.skipIf(!enabled)("account export personal data", () => {
             id,
             name: "Export organization",
             slug: id,
-            createdAt: new Date(),
+            createdAt: new Date(testClock.now()),
           })),
         );
         for (const organizationId of organizations) {
           await recordNewOrganizationAccessState(db, {
             organizationId,
-            now: new Date(),
+            now: new Date(testClock.now()),
           });
         }
         await db.insert(member).values(
@@ -566,7 +570,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
               organizationId,
               userId: memberUserId,
               role: "member",
-              createdAt: new Date(),
+              createdAt: new Date(testClock.now()),
             })),
           ),
         );
@@ -591,11 +595,20 @@ describe.skipIf(!enabled)("account export personal data", () => {
               panic("Organization query fixture required");
             }
             return await prepareSearchHistoryRows({ organizationId, userId }, [
-              { entry: { kind: "search", query }, usedAt: new Date() },
+              {
+                entry: { kind: "search", query, country: "CZE" },
+                usedAt: new Date(testClock.now()),
+              },
             ]);
           }),
         );
         const historyRows = prepared.flat();
+        await db
+          .insert(searchHistoryOwners)
+          .values(
+            organizations.map((organizationId) => ({ organizationId, userId })),
+          )
+          .onConflictDoNothing();
         for (const row of historyRows) {
           expect(row.iv.every((byte) => byte === 0)).toBe(false);
           for (const query of queries) {

@@ -3,6 +3,7 @@ import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import type { QueryPerfProfileId } from "./profiles";
 
 const QUERY_PERF_PROFILE_DEADLINE_MS = 150_000;
+const QUERY_PERF_DEADLINE_LABEL = "query-perf-profile-deadline";
 
 type QueryPerfDeadlineOptions = {
   profileId: QueryPerfProfileId;
@@ -19,7 +20,7 @@ export const createQueryPerfDeadline = ({
   const expiresAt = now() + timeoutMs;
   return {
     run: async <T>(phase: string, operation: () => Promise<T>) => {
-      const label = `query perf ${profileId}: ${phase}`;
+      const messageLabel = `query perf ${profileId}: ${phase}`;
       const remainingMs = expiresAt - now();
       process.stdout.write(
         `${JSON.stringify({
@@ -33,14 +34,25 @@ export const createQueryPerfDeadline = ({
       try {
         if (remainingMs <= 0) {
           throw new TimeoutError({
-            message: `${label} exceeded profile deadline ${timeoutMs}ms`,
-            label,
+            message: `${messageLabel} exceeded profile deadline ${timeoutMs}ms`,
+            label: QUERY_PERF_DEADLINE_LABEL,
             timeoutMs,
           });
         }
         const value = await withTimeout(operation, {
-          label,
+          label: QUERY_PERF_DEADLINE_LABEL,
           timeoutMs: remainingMs,
+        }).catch((error: unknown) => {
+          // The label stays static; the message names the phase it cut.
+          throw error instanceof TimeoutError &&
+            error.label === QUERY_PERF_DEADLINE_LABEL
+            ? new TimeoutError({
+                message: `${messageLabel} exceeded ${String(remainingMs)}ms`,
+                label: QUERY_PERF_DEADLINE_LABEL,
+                timeoutMs: remainingMs,
+                cause: error,
+              })
+            : error;
         });
         process.stdout.write(
           `${JSON.stringify({

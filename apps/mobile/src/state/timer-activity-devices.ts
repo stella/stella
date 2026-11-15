@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import type { TimerActivityDeviceRegistration } from "@stll/api-contract/timer-activity";
+import type {
+  TimerActivityActionKey,
+  TimerActivityDeviceRegistration,
+} from "@stll/api-contract/timer-activity";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -14,10 +17,20 @@ const DEVICES_PATH = "/v1/me/timer-activity-devices";
 const devicePath = (deviceId: string) =>
   `${DEVICES_PATH}/${encodeURIComponent(deviceId)}`;
 
+const registrationResponseSchema = v.object({
+  actionKey: v.nullable(
+    v.object({
+      key: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+      expiresAt: v.pipe(v.string(), v.isoTimestamp()),
+    }),
+  ),
+});
+
 /**
  * Tells the server what this phone holds now: the tokens that start and
  * update its timer's activity, and whether updates may name the timer. The
  * whole state each time, so the latest registration is the one that counts.
+ * Answers the Lock Screen button key the registration asked for, if issued.
  */
 export const registerTimerActivityDevice = async ({
   deviceId,
@@ -29,19 +42,19 @@ export const registerTimerActivityDevice = async ({
   readonly fetch: Fetch;
   readonly registration: TimerActivityDeviceRegistration;
   readonly source: AccessTokenSource;
-}): Promise<Result<void, ApiError>> =>
+}): Promise<Result<TimerActivityActionKey | null, ApiError>> =>
   await Result.gen(async function* () {
-    yield* Result.await(
+    const answer = yield* Result.await(
       requestApi({
         body: registration,
         fetch,
         method: "PUT",
         path: devicePath(deviceId),
-        schema: v.unknown(),
+        schema: registrationResponseSchema,
         source,
       }),
     );
-    return Result.ok(undefined);
+    return Result.ok(answer.actionKey);
   });
 
 /** Stops the server updating this phone's timer, as the person signs out. */

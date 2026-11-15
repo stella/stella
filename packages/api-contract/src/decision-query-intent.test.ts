@@ -40,11 +40,31 @@ const canonicalDockets = [
   "RV/7500368/2026",
 ] as const;
 
+/** ECLIs as their courts publish them, mixed-case ordinals included. */
 const eclis = [
   "ECLI:CZ:NS:2014:22.CDO.2653.2012.1",
+  "ECLI:CZ:NSS:2010:3.AFS.41.2008.98",
+  "ECLI:CZ:US:2025:Pl.US.32.25.1",
+  "ECLI:CZ:US:2020:3.US.1255.18.2",
   "ECLI:EU:C:2014:317",
   "ECLI:SK:NSSR:2020:1234567.1",
+  "ECLI:SK:USSR:2019:PL.US.12.2018.1",
 ] as const;
+
+/** The same identifier with each letter's case chosen independently. */
+const recasedOf = (identifier: string) =>
+  fc
+    .array(fc.boolean(), {
+      minLength: identifier.length,
+      maxLength: identifier.length,
+    })
+    .map((upper) =>
+      Array.from(identifier, (character, index) =>
+        upper[index] === true
+          ? character.toUpperCase()
+          : character.toLowerCase(),
+      ).join(""),
+    );
 
 /** A publisher's or a typist's spelling of the same identifier. */
 const spellingOf = (identifier: string) =>
@@ -123,6 +143,20 @@ describe("reading a case-law box entry", () => {
       type: "identifier",
       kind: "ecli",
     });
+  });
+
+  test("digit-free slash prose stays text in every jurisdiction", () => {
+    const text = "contract and/or obligations";
+    for (const grammar of [
+      undefined,
+      null,
+      ...Object.values(DECISION_DOCKET_GRAMMARS),
+    ]) {
+      expect(parseDecisionQuery(text, { grammar })).toEqual({
+        type: "text",
+        text,
+      });
+    }
   });
 
   test("prose is text, verbatim", () => {
@@ -291,6 +325,27 @@ describe("the hits that are the named decision", () => {
     ).toHaveLength(1);
   });
 
+  test("an ECLI names its decision in any letter case", () => {
+    assertProperty(
+      "an ECLI names its decision in any letter case",
+      fc.property(
+        fc
+          .constantFrom(...eclis)
+          .chain((ecli) => fc.tuple(fc.constant(ecli), recasedOf(ecli))),
+        ([stored, typed]) => {
+          const named = hit("1 As 1/2000", stored);
+          expect(
+            exactDecisionMatches(identityOf(typed), [
+              named,
+              hit("2 As 2/2000", "ECLI:CZ:NSS:2000:2.AS.2.2000.1"),
+            ]),
+          ).toEqual([named]);
+        },
+      ),
+      {},
+    );
+  });
+
   test("structural separators keep otherwise similar dockets distinct", () => {
     expect(
       exactDecisionMatches(identityOf("G 1/2099"), [
@@ -329,6 +384,35 @@ describe("the hits that are the named decision", () => {
     expect(
       parseDecisionQuery("2079", { grammar: DECISION_DOCKET_GRAMMARS.USA }),
     ).toEqual({ type: "text", text: "2079" });
+  });
+
+  test("a CNJ number without a slash is read within prose", () => {
+    const text = "consulte 751-20.2099.5.08.0017 neste processo";
+    expect(
+      parseDecisionQuery(text, { grammar: DECISION_DOCKET_GRAMMARS.BRA }),
+    ).toEqual({
+      type: "identifier",
+      kind: "docket",
+      jurisdiction: "BRA",
+      value: "0000751-20.2099.5.08.0017",
+      family: "0000751-20.2099.5.08.0017",
+      selector: { kind: "none" },
+      embeddedIn: text,
+    });
+  });
+
+  test("a Brazilian citation as the citation formatter writes it reads as its docket", () => {
+    const brazil = { grammar: DECISION_DOCKET_GRAMMARS.BRA } as const;
+    for (const entry of [
+      "STF, RE 99234567 AgR, j. 03/02/2020",
+      "TST, RR - 751-20.2099.5.08.0017",
+    ]) {
+      expect(parseDecisionQuery(entry, brazil)).toMatchObject({
+        type: "identifier",
+        kind: "docket",
+        jurisdiction: "BRA",
+      });
+    }
   });
 
   test("unscoped, those forms read as text, as they did before any scope declared them", () => {

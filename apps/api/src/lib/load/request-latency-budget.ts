@@ -55,6 +55,29 @@ export const runWithinRequestLatencyBudget = <T>(
     fn,
   );
 
+/**
+ * Run `fn` under a deadline `reserveMs` before the request's, so everything
+ * it waits on gives up with time left to answer from what did finish. Its
+ * reads keep the request's place in shared queues. Outside a scope, `fn` runs
+ * as it is.
+ */
+export const runBeforeRequestDeadline = <T>(
+  { label, reserveMs }: { label: string; reserveMs: number },
+  fn: () => T,
+): T => {
+  const scope = requestLatencyScope.getStore();
+  return scope === undefined
+    ? fn()
+    : requestLatencyScope.run(
+        {
+          label,
+          budgetMs: scope.budgetMs - reserveMs,
+          deadlineAtMs: scope.deadlineAtMs - reserveMs,
+        },
+        fn,
+      );
+};
+
 /** What is left of the current request's budget; undefined outside a scope. */
 export const remainingRequestBudgetMs = (): number | undefined => {
   const scope = requestLatencyScope.getStore();
@@ -206,6 +229,15 @@ export type BoundedRequestStep<T> =
     }
   | { readonly status: "failed"; readonly error: unknown };
 
+/** The optional request steps a sub-budget names, each its own telemetry
+ *  label. */
+const REQUEST_STEP_TIMEOUT_LABEL = {
+  "case-law-admitted-courts": "case-law-admitted-courts",
+  "case-law-court-filter-vocabulary": "case-law-court-filter-vocabulary",
+  "case-law-relaxed-top-up": "case-law-relaxed-top-up",
+} as const;
+export type RequestStepLabel = keyof typeof REQUEST_STEP_TIMEOUT_LABEL;
+
 /**
  * Run an optional step under a named sub-budget of the request's budget.
  *
@@ -215,11 +247,15 @@ export type BoundedRequestStep<T> =
  */
 export const runBoundedRequestStep = async <T>(
   operation: (signal: AbortSignal) => Promise<T>,
-  { label, budgetMs }: { label: string; budgetMs: number },
+  { label, budgetMs }: { label: RequestStepLabel; budgetMs: number },
 ): Promise<BoundedRequestStep<T>> => {
   const timeoutMs = requestBoundedTimeoutMs(budgetMs);
   const outcome = await Result.tryPromise({
-    try: async () => await withTimeout(operation, { label, timeoutMs }),
+    try: async () =>
+      await withTimeout(operation, {
+        label: REQUEST_STEP_TIMEOUT_LABEL[label],
+        timeoutMs,
+      }),
     catch: (cause) => cause,
   });
   if (Result.isOk(outcome)) {

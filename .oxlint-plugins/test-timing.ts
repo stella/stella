@@ -308,6 +308,11 @@ type Wait = { pattern: string; fakeable: boolean };
 
 // Imported functions that resolve after a real delay, by module. `true` marks
 // those built on the global `setTimeout`, which fake timers replace.
+const TIMER_PROMISE_MODULES = new Set([
+  "node:timers/promises",
+  "timers/promises",
+]);
+
 const SLEEP_EXPORTS: ReadonlyMap<
   string,
   ReadonlyMap<string, boolean>
@@ -399,6 +404,18 @@ const realTimeWait = (context: ScopeContext, node: unknown): Wait | null => {
     ) {
       return { pattern: `Bun.${property}`, fakeable: false };
     }
+    if (property === "wait") {
+      const owner = resolveImportedExpressionForEnforcement(
+        context,
+        callee.object,
+      );
+      if (
+        owner?.imported === "scheduler" &&
+        TIMER_PROMISE_MODULES.has(owner.source)
+      ) {
+        return { pattern: `${owner.source}#scheduler.wait`, fakeable: false };
+      }
+    }
   }
   const binding = resolveImportedExpressionForEnforcement(context, callee);
   const fakeable =
@@ -437,7 +454,7 @@ const installsFakeTimers = (context: ScopeContext, node: unknown): boolean => {
   );
 };
 
-const WAIT_HINT = /sleep|setTimeout|setInterval|waitForTimeout/u;
+const WAIT_HINT = /sleep|scheduler|setTimeout|setInterval|waitForTimeout/u;
 
 // --- Polling loops -----------------------------------------------------------
 

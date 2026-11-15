@@ -988,26 +988,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::<module>::domain:[\"en\",\"ar\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::<module>::domain:[\"incoming\",\"outgoing\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::numerals::domain:[\"0\",\"2,048\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::numerals::domain:[\"٠\",\"٢٬٠٤٨\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx::LeadingCitations::domain:[\"incoming\",\"outgoing\"]::1",
-    "reason": "Existing LeadingCitations domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/features/case-law/decision-columns.logic.ts::DECISION_COLUMN_IDS::domain:[\"caseNumber\",\"summary\",\"court\",\"country\",\"date\",\"type\",\"headnote\",\"citedBy\",\"language\"]::1",
     "reason": "Existing DECISION_COLUMN_IDS domain; contract ownership pending migration."
   },
@@ -1168,42 +1148,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::<module>::maxLength:12::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::max:999::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::maxLength:3::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::maxLength:3::2",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::minLength:1::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blocksArbitrary::max:4::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::inlineArbitrary::maxLength:5::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::segmentText::maxLength:8::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::sideDiff::maxLength:6::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::FontField::maxLength:128::1",
     "reason": "Existing FontField UI validation or presentation bound; contract migration pending."
   },
@@ -1298,10 +1242,6 @@
   {
     "id": "apps/web/src/lib/consts.ts::MARKDOWN_EXTENSIONS::domain:[\".md\",\".markdown\"]::1",
     "reason": "Existing MARKDOWN_EXTENSIONS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/lib/desktop-bridge.test.ts::<module>::domain:[\"pending\",\"connected\",\"failed\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
     "id": "apps/web/src/lib/dynamic-validation.test.ts::nameSchema::minLength:1::1",

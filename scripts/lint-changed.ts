@@ -13,6 +13,7 @@ import { $ } from "bun";
 import { existsSync } from "node:fs";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { lintCommand } from "./lint-command";
 import { isChangedLintPath } from "./lint-paths";
 
 const mergeBase = (
@@ -53,7 +54,6 @@ if (generated.exitCode !== 0) {
   process.exit(childExitStatus(generated));
 }
 
-const result =
-  await $`bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware ${files}`.nothrow();
+const result = await $`${lintCommand({ typeCheck: false }, files)}`.nothrow();
 
 process.exit(childExitStatus(result));

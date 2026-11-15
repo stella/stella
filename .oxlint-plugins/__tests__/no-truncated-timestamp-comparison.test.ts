@@ -45,6 +45,59 @@ function before(cutoff:Date) {return gt(rows.createdAt,cutoff);}`,
   ).toEqual([3]);
 });
 
+test("allows test-kit clock cutoffs but rejects dates rebuilt from stored values", async () => {
+  expect(
+    await lintSingleRule(
+      "no-truncated-timestamp-comparison",
+      `import {lt} from "drizzle-orm";
+import {createTestClock} from "@stll/test-kit";
+const testClock = createTestClock();
+lt(rows.createdAt,new Date(testClock.now() - 60_000));
+lt(rows.createdAt,new Date(cursor.createdAt));
+const clockLookalike = {now: () => 0};
+lt(rows.createdAt,new Date(clockLookalike.now()));`,
+    ),
+  ).toEqual([5, 7]);
+});
+
+test("keeps stored timestamp identifiers out of fresh clock arithmetic", async () => {
+  expect(
+    await lintSingleRule(
+      "no-truncated-timestamp-comparison",
+      [
+        'import {lt} from "drizzle-orm";',
+        'import {createTestClock} from "@stll/test-kit";',
+        "const testClock = createTestClock();",
+        "lt(rows.createdAt,new Date(testClock.now() * 0 + cursorMillis));",
+        "lt(rows.createdAt,new Date(Date.now() + storedMillis));",
+        "lt(rows.createdAt,new Date(testClock.now() - 60_000));",
+      ].join("\n"),
+    ),
+  ).toEqual([4, 5]);
+});
+
+test("shifts a fresh clock read by named durations but not by stored values", async () => {
+  expect(
+    await lintSingleRule(
+      "no-truncated-timestamp-comparison",
+      [
+        'import {lt} from "drizzle-orm";',
+        'import {DAY_IN_MS, Temporal} from "@stll/time";',
+        "const STALE_MS = 5 * 60 * 1000;",
+        "const QUEUED_MS = DAY_IN_MS;",
+        "const storedMillis = cursor.createdAt.getTime();",
+        "lt(rows.createdAt,new Date(Date.now() - STALE_MS));",
+        "lt(rows.createdAt,new Date(Temporal.Now.instant().epochMilliseconds - QUEUED_MS));",
+        "const cutoff = new Date(Date.now() - 2 * STALE_MS);",
+        "lt(rows.createdAt,cutoff);",
+        "lt(rows.createdAt,new Date(Date.now() - storedMillis));",
+        "let leaseMs = 1000;",
+        "lt(rows.createdAt,new Date(Date.now() - leaseMs));",
+      ].join("\n"),
+    ),
+  ).toEqual([10, 12]);
+});
+
 test("rejects timestamp text comparisons and allows the CAS helper", async () => {
   expect(
     await lintSingleRule(
@@ -107,4 +160,85 @@ sql\`\${rows[key]}::text = \${token}\`;
 sql.raw("WHERE id::text = '2026'");`,
     ),
   ).toEqual([3, 5, 6, 7, 8, 9, 11, 12, 13]);
+});
+
+test("accepts a fixed duration built with exponentiation", async () => {
+  expect(
+    await lintSingleRule(
+      "no-truncated-timestamp-comparison",
+      `import {lt} from "drizzle-orm";
+const STALE_MS = 2 ** 10;
+lt(rows.createdAt,new Date(Date.now() - STALE_MS));`,
+    ),
+  ).toEqual([]);
+});
+
+const lintDateUnderCast = async (source: string) =>
+  await lintSingleRule("no-date-under-timestamp-cast", source, {
+    plugin: "no-truncated-timestamp-comparison",
+  });
+
+test("rejects a stored timestamp read under an explicit cast", async () => {
+  expect(
+    await lintDateUnderCast(
+      `import {sql,gt} from "drizzle-orm";
+import {chatTurns} from "./schema";
+function newer(turn: {id: string; createdAt: Date}) {
+  return sql\`(\${chatTurns.createdAt}, \${chatTurns.id}) > (\${turn.createdAt}::timestamptz, \${turn.id}::uuid)\`;
+}
+sql\`\${chatTurns.updatedAt} IS NOT DISTINCT FROM \${row.updatedAt}::timestamptz\`;
+sql\`created_at > \${row.createdAt.toISOString()}::timestamptz\`;
+sql\`\${chatTurns.createdAt} > \${new Date(row.createdAt)}::timestamptz\`;
+gt(chatTurns.createdAt, sql\`\${cursor.createdAt}::timestamptz\`);
+const boundary = row.createdAt;
+sql\`\${chatTurns.createdAt} <= (\${boundary}::timestamp AT TIME ZONE 'UTC')\`;`,
+    ),
+  ).toEqual([4, 6, 7, 8, 9, 11]);
+});
+
+test("rejects any Date rendering in a keyset tuple under an explicit cast", async () => {
+  expect(
+    await lintDateUnderCast(
+      `import {sql} from "drizzle-orm";
+import {events} from "./schema";
+sql\`(\${events.createdAt}, \${events.id}) > (\${afterTime.toISOString()}::timestamptz, \${afterId}::uuid)\`;
+sql\`(\${events.createdAt}, \${events.id}) < (\${new Date(after)}::timestamptz, \${afterId}::uuid)\`;
+const rendered = afterTime.toISOString();
+sql\`(\${events.createdAt}, \${events.id}) > (\${rendered}::timestamptz, \${afterId}::uuid)\`;`,
+    ),
+  ).toEqual([3, 4, 6]);
+});
+
+test("rejects a row's Date grouped with a column under one local owner", async () => {
+  expect(
+    await lintDateUnderCast(
+      `import {sql} from "drizzle-orm";
+import {events} from "./schema";
+const operands = {storedAt: events.createdAt, cursorAt: cursor.createdAt};
+sql\`\${operands.storedAt} > \${operands.cursorAt}::timestamptz\`;`,
+    ),
+  ).toEqual([4]);
+});
+
+test("allows in-database boundaries, text tokens, cutoffs and columns under a cast", async () => {
+  expect(
+    await lintDateUnderCast(
+      `import {sql,gt} from "drizzle-orm";
+import {chatTurns} from "./schema";
+const local = pgTable("local", {});
+sql\`(\${chatTurns.createdAt}, \${chatTurns.id}) > (select t.created_at, t.id from chat_turns t where t.id = \${turnId})\`;
+sql\`(\${chatTurns.createdAt}, \${chatTurns.id}) < (\${pgTimestampCursorBoundary(cursor)}, \${id})\`;
+sql\`(\${chatTurns.createdAt}, \${chatTurns.id}) < (\${token}::timestamptz, \${id}::uuid)\`;
+sql\`\${chatTurns.createdAt} > \${thread.updatedAtToken}::timestamptz\`;
+sql\`\${chatTurns.createdAt} <= \${cutoff.toISOString()}::timestamptz\`;
+sql\`\${chatTurns.settledAt} >= \${chatTurns.createdAt}::timestamptz\`;
+sql\`\${local.settledAt} >= \${local.createdAt}::timestamptz\`;
+const live = (table = session) => sql\`\${table.expiresAt} > \${table.lastSeenAt}::timestamptz\`;
+const liveCall = (table = session) => gt(table.expiresAt, sql\`\${table.lastSeenAt}::timestamptz\`);
+sql\`\${chatTurns.createdAt} > \${cursor.createdAt && cursor.createdAtToken}::timestamptz\`;
+sql\`UPDATE chat_turns SET settled_at = \${row.settledAt}::timestamptz\`;
+gt(chatTurns.createdAt, sql\`\${cutoff}::timestamptz\`);
+sql\`\${chatTurns.createdAt} > \${row.createdAt}\`;`,
+    ),
+  ).toEqual([]);
 });

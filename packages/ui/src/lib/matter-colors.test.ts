@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import * as fc from "fast-check";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
+import { assertProperty } from "@stll/property-testing";
+
+import {
+  getTopicColor,
+  getTopicSwatch,
+  TOPIC_SWATCHES,
+} from "../calendar/topic-colors";
 import {
   getMatterColor,
   getMatterPickerColor,
@@ -86,5 +96,97 @@ describe("resolveMatterColor — round-trip with toStoredMatterColor", () => {
   test("falls back to id-hash color when color is null", () => {
     const id = "fallback-id";
     expect(resolveMatterColor(id, null)).toBe(getMatterColor(id));
+  });
+});
+
+const THEME = readFileSync(
+  path.join(import.meta.dir, "../styles/theme.css"),
+  "utf-8",
+);
+
+/** Every `--name: value;` a top-level rule of theme.css sets, by selector. */
+const themeDeclarations = (prefix: string) =>
+  [...THEME.matchAll(/^([^\s{}@/][^{}]*)\{([^{}]*)\}/gmu)].flatMap(
+    ([, selector = "", body = ""]) =>
+      [...body.matchAll(/(--[\w-]+):\s*([^;]+);/gu)]
+        .filter(([, name = ""]) => name.startsWith(prefix))
+        .map(([, name = "", value = ""]) => ({
+          name,
+          selector: selector.trim(),
+          value: value.trim(),
+        })),
+  );
+
+/** The colour names a stored matter colour can take: every option swatch. */
+const OPTION_NAMES = [
+  ...new Set(
+    themeDeclarations("--option-")
+      .map(({ name }) => name.slice("--option-".length))
+      .filter((name) => !name.endsWith("-bg") && !name.endsWith("-fg")),
+  ),
+];
+
+/** Topics stay well under the chroma of any colour a matter can be. */
+const TOPIC_MAX_CHROMA = 0.05;
+
+describe("topic swatches", () => {
+  test("one topic key always picks the same swatch from the topic set", () => {
+    for (const key of ["title:lease.docx", "app:com.example.mail", "x"]) {
+      expect(getTopicSwatch(key)).toBe(getTopicSwatch(key));
+      expect(TOPIC_SWATCHES).toContain(getTopicSwatch(key));
+      expect(getTopicColor(key)).toBe(`var(${getTopicSwatch(key)})`);
+    }
+    const spread = new Set(
+      Array.from({ length: 40 }, (_, index) => getTopicSwatch(`t${index}`)),
+    );
+    expect(spread.size).toBe(TOPIC_SWATCHES.length);
+  });
+
+  test("topic tones never equal a matter tone", () => {
+    expect(OPTION_NAMES.length).toBeGreaterThan(MATTER_SWATCHES.length);
+    const storedColor = fc.oneof(
+      fc.constant(null),
+      fc.constantFrom(...OPTION_NAMES),
+      fc.constantFrom(...OPTION_NAMES.map((name) => `--option-${name}`)),
+      fc
+        .integer({ min: 0, max: 0xff_ff_ff })
+        .map((value) => `#${value.toString(16).padStart(6, "0")}`),
+    );
+    assertProperty(
+      "topic tones never equal a matter tone",
+      fc.property(
+        fc.string(),
+        fc.string(),
+        storedColor,
+        (topicKey, matterId, color) => {
+          expect(getTopicColor(topicKey)).not.toBe(
+            resolveMatterColor(matterId, color),
+          );
+        },
+      ),
+    );
+  });
+
+  test("every topic token is set for light and dark, in low chroma, and differs from every matter swatch", () => {
+    const topics = themeDeclarations("--topic-");
+    const optionValues = new Set(
+      themeDeclarations("--option-").map(({ value }) => value),
+    );
+    for (const selector of [":root", ".dark"]) {
+      expect(
+        topics
+          .filter((topic) => topic.selector === selector)
+          .map(({ name }) => name)
+          .toSorted(),
+      ).toEqual([...TOPIC_SWATCHES].toSorted());
+    }
+    for (const { value } of topics) {
+      // A token that is not a plain oklch() reads as NaN and fails.
+      const chroma = Number(
+        /^oklch\(\s*[\d.]+\s+([\d.]+)\s+[\d.]+\s*\)$/u.exec(value)?.[1],
+      );
+      expect(chroma).toBeLessThanOrEqual(TOPIC_MAX_CHROMA);
+      expect(optionValues.has(value)).toBe(false);
+    }
   });
 });

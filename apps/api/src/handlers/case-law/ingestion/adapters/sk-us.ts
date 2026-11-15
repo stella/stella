@@ -1,3 +1,6 @@
+// parser-output-unchanged: [sk-us] locating a stored row in its month's listing changes no parsed decision.
+// parser-output-unchanged: source-fields-sk: Inventory targets describe already retained source values without changing parsed decisions.
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Stored-object replay reuses the ingestion XHTML parser; PDF bytes are retained and verified without adding a PDF parser.
@@ -52,7 +55,6 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
-import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -105,7 +107,6 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
   PUBLISHER_REQUEST,
@@ -673,8 +674,8 @@ const fetchCourtFile = async (
 
 /** The vocabularies the coded fields resolve against, whole. */
 type SkUsCodelist = {
-  /** Digest of the response the values below were read out of. */
-  sha256: string;
+  /** Verbatim vocabulary response, retained before resolving any judge names. */
+  raw: string;
   values: Readonly<Record<(typeof JUDGE_CODELISTS)[number], readonly string[]>>;
 };
 
@@ -694,40 +695,13 @@ const parseCodelist = (body: string): SkUsCodelist | undefined => {
       : [];
   };
   return {
-    sha256: hashContent(body),
+    raw: body,
     values: {
       mkJudgeReporter: roster("mkJudgeReporter"),
       mkDifferentViewJudges: roster("mkDifferentViewJudges"),
     },
   };
 };
-
-/**
- * What one decision's envelope keeps of the vocabularies.
- *
- * The response is corpus-level and two hundred kilobytes; a row per
- * decision holding all of it would store the same list fifty thousand
- * times. So the envelope keeps the digest of the response that was read and
- * the entries this decision's own judge fields matched in it, which is what
- * a later reader needs to ask whether a name was in the roster at the time.
- */
-type SkUsCodelistPart = {
-  sha256: string;
-  used: Record<string, readonly string[]>;
-};
-
-const codelistPart = (
-  codelist: SkUsCodelist,
-  named: Readonly<Record<(typeof JUDGE_CODELISTS)[number], readonly string[]>>,
-): SkUsCodelistPart => ({
-  sha256: codelist.sha256,
-  used: Object.fromEntries(
-    JUDGE_CODELISTS.map((name) => [
-      name,
-      named[name].filter((value) => codelist.values[name].includes(value)),
-    ]),
-  ),
-});
 
 /**
  * The responses a page of decisions shares, fetched once for the page.
@@ -1666,12 +1640,7 @@ const assembleSkUsDecision = ({
     ...(codelist === undefined
       ? {}
       : {
-          codelists: JSON.stringify(
-            codelistPart(codelist, {
-              mkJudgeReporter: rapporteurs,
-              mkDifferentViewJudges: dissenters,
-            }),
-          ),
+          codelists: codelist.raw,
         }),
     // The service's answer to the part it withheld. Kept so the fingerprint
     // tells a refused part from one stated absent, which otherwise store the
@@ -2425,6 +2394,7 @@ const SK_US_SOURCE_FIELDS_LIST = [
   "mkWordRegister",
   "mkMaterialRegister",
   "mkComplainedLegalRegulation",
+  "mkComplainedLegalRegulationAct",
   "mkClarificationOfLegalRegulation",
   "mkFileReference",
   "mkReferences",
@@ -2448,25 +2418,67 @@ const SK_US_SOURCE_FIELDS_LIST = [
 
 type SkUsSourceField = (typeof SK_US_SOURCE_FIELDS_LIST)[number];
 
+type SkUsPublisherRecord = Readonly<
+  Record<SkUsSourceField | keyof SearchDocumentFields, unknown>
+>;
+
 const SK_US_SOURCE_FIELDS = {
+  mkComplainedLegalRegulationAct: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "codelists",
+      path: ["codelist", "mkComplainedLegalRegulationAct"],
+      reason:
+        "The publisher's act vocabulary is retained verbatim alongside the decision's challenged legislation.",
+    },
+  },
   documentId: { disposition: "stored", target: { type: "identity" } },
   docType: {
     disposition: "stored",
     target: { type: "metadata", key: "docType" },
   },
   title: { disposition: "stored", target: { type: "metadata", key: "title" } },
-  content: excludedSourceField(
-    "always empty in a search row; the document body is served by an endpoint of its own and kept as the document part",
-  ),
-  index: excludedSourceField(
-    "the row's offset inside the page it arrived on, which changes with the page and states nothing about the document",
-  ),
-  extension: excludedSourceField(
-    "empty on every record of every corpus this endpoint serves",
-  ),
-  size: excludedSourceField(
-    "empty on every record of every corpus this endpoint serves",
-  ),
+  content: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["content"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
+  index: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["index"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
+  extension: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["extension"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
+  size: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["size"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
   contentType: {
     disposition: "stored",
     target: { type: "metadata", key: "contentType" },
@@ -2516,9 +2528,16 @@ const SK_US_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "legalBasis" },
   },
-  mkDecisionInTermsOfForSort: excludedSourceField(
-    "a sort projection of the basis field: the same values flattened into one string",
-  ),
+  mkDecisionInTermsOfForSort: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["mkDecisionInTermsOfForSort"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
   mkResultOfNegotiation: {
     disposition: "stored",
     target: { type: "metadata", key: "result" },
@@ -2647,7 +2666,7 @@ const SK_US_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "defendantProceedingFileNumber" },
   },
-} as const satisfies Record<SkUsSourceField, SourceFieldDisposition>;
+} as const satisfies Record<keyof SkUsPublisherRecord, SourceFieldDisposition>;
 
 /**
  * Read back the field names the stored envelope states.
@@ -2691,14 +2710,19 @@ const listSkUsSourceFields = (parts: SourceRawParts): readonly string[] => {
     }
   }
 
-  // The vocabularies resolve two of the names above; the part states which
-  // ones were read, and a vocabulary nothing was read from states nothing.
+  // Older envelopes kept only matched vocabulary entries under `used`.
+  // New captures retain the complete publisher response under `codelist`.
   const codelists: unknown = Result.try({
     try: (): unknown => JSON.parse(parts["codelists"] ?? "null"),
     catch: () => null,
   }).unwrapOr(null);
+  const dictionaries = isRecord(codelists) ? codelists["codelist"] : undefined;
   const used = isRecord(codelists) ? codelists["used"] : undefined;
-  if (isRecord(used)) {
+  if (isRecord(dictionaries)) {
+    for (const name of Object.keys(dictionaries)) {
+      names.add(name);
+    }
+  } else if (isRecord(used)) {
     for (const [name, values] of Object.entries(used)) {
       if (Array.isArray(values) && values.length > 0) {
         names.add(name);
@@ -2850,6 +2874,55 @@ const reparseStoredRaw = async (
       }),
     },
   };
+};
+
+// ── Locating a stored row in the listing ─────────────────
+
+const DECISION_MONTH = /^(\d{4}-\d{2})-\d{2}$/u;
+
+/**
+ * The month the search lists a stored row under: the listing is ranged by the
+ * decision date, which every row this adapter wrote states.
+ */
+const skUsLookupOf = (stored: StoredRawReparseInput): string | null =>
+  stored.decisionDate === null
+    ? null
+    : (DECISION_MONTH.exec(stored.decisionDate)?.[1] ?? null);
+
+/**
+ * The publisher's document id a stored row is keyed by: the id it holds, or
+ * for a row written before it held one, the id its `docDownload/{id}` URL
+ * names (the same rule `legacySourceUrls` re-keys such rows by). A row whose
+ * ids disagree names no single document, so it is keyed by none.
+ */
+const storedSkUsDocumentId = (
+  stored: StoredRawReparseInput,
+): string | undefined => {
+  const prefix = `${DOC_DOWNLOAD_URL}/`;
+  const named = [stored.documentUrl, stored.sourceUrl]
+    .filter((candidate) => candidate?.startsWith(prefix) === true)
+    .map((url) => url?.slice(prefix.length) ?? "")
+    .filter((id) => id.length > 0 && !id.includes("/"));
+  const ids = new Set(
+    stored.sourceDocumentId === null
+      ? named
+      : [stored.sourceDocumentId, ...named],
+  );
+  const [only] = ids;
+  return ids.size === 1 ? only : undefined;
+};
+
+/** A listed item is the stored row when it states the row's document id. */
+const skUsMatchesStored = (
+  { identity }: ReconciliationListingItem,
+  stored: StoredRawReparseInput,
+): boolean => {
+  const held = storedSkUsDocumentId(stored);
+  return (
+    held !== undefined &&
+    identity.type === "document" &&
+    identity.sourceDocumentId === held
+  );
 };
 
 // ── Adapter ──────────────────────────────────────────────
@@ -3049,6 +3122,14 @@ export const skUsAdapter = defineSourceAdapter({
     recheckHeld: {
       metadataKey: SK_US_PART_READ_METADATA_KEY,
       values: [SK_US_PART_READ_STATE.WITHHELD],
+    },
+    // A row stored as the document file alone holds no search row and no
+    // rendition this adapter reads text from, so it is located in its month
+    // and re-observed rather than upgraded from the bytes it holds.
+    recapture: {
+      lookupOf: skUsLookupOf,
+      listLookup: listSkUsSlicePage,
+      matchesStored: skUsMatchesStored,
     },
     listSlicePage: listSkUsSlicePage,
     buildDecision: buildSkUsFromPayload,

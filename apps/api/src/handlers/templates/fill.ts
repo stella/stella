@@ -32,7 +32,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 const fillBodySchema = v.object({
-  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
   values: v.pipe(v.string(), v.description("Map of field path to value.")),
 });
 

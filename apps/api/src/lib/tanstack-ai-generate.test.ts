@@ -21,6 +21,7 @@ import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/chat/organization-ai-instructions";
 import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   managedProviderUnavailable,
@@ -121,6 +122,7 @@ type ProviderRun =
 type ProviderRequestMethod = "chatStream" | "structuredOutput";
 
 type CapturedProviderRequest = {
+  threadId: string | undefined;
   messages: unknown;
   method: ProviderRequestMethod;
   modelOptions: unknown;
@@ -281,8 +283,9 @@ const providerAdapter: AnyTextAdapter = {
     toolCallMetadata: {},
     systemPromptMetadata: undefined,
   },
-  async *chatStream({ messages, modelOptions, systemPrompts }) {
+  async *chatStream({ messages, modelOptions, systemPrompts, threadId }) {
     providerRequests.push({
+      threadId,
       messages,
       method: "chatStream",
       modelOptions,
@@ -340,6 +343,7 @@ const providerAdapter: AnyTextAdapter = {
   },
   structuredOutput: async ({ chatOptions, outputSchema }) => {
     providerRequests.push({
+      threadId: chatOptions.threadId,
       messages: chatOptions.messages,
       method: "structuredOutput",
       modelOptions: chatOptions.modelOptions,
@@ -524,7 +528,7 @@ describe("TanStack AI structured output generation", () => {
             return;
           default:
             path satisfies never;
-            return;
+            break;
         }
       })().then(
         () => undefined,
@@ -1208,6 +1212,8 @@ describe("TanStack AI structured output generation", () => {
 
     expect(result).toEqual({ answer: "ok" });
     expect(providerRequests).toHaveLength(2);
+    expect(providerRequests[0]?.threadId).toEqual(expect.any(String));
+    expect(providerRequests[1]?.threadId).toBe(providerRequests[0]?.threadId);
     expect(providerRequests[0]?.modelOptions).toMatchObject({
       service_tier: "flex",
     });
@@ -1481,6 +1487,8 @@ describe("TanStack AI structured output generation", () => {
       },
     ]);
     expect(providerRequests).toHaveLength(2);
+    expect(providerRequests[0]?.threadId).toEqual(expect.any(String));
+    expect(providerRequests[1]?.threadId).toBe(providerRequests[0]?.threadId);
     expect(providerRequests[0]?.modelOptions).toMatchObject({
       service_tier: "flex",
     });
@@ -2202,6 +2210,29 @@ describe("prompt caching at the layer boundaries", () => {
     modelOf("mistral", "mistral-medium-latest"),
   ];
 
+  test("organization instructions preserve enabled and disabled caching decisions", () => {
+    const system = {
+      ...layered,
+      turn: `\n\n${buildOrganizationAIInstructionsPrompt("Use numbered paragraphs.")}${layered.turn}`,
+    };
+    for (const model of markerModels) {
+      expect(systemPromptsPatch({ caching, model, system })).toEqual({
+        systemPrompts: [
+          { content: layered.static, metadata: marker },
+          { content: layered.organization, metadata: marker },
+          system.turn,
+        ],
+      });
+      expect(systemPromptsPatch({ caching: noCaching, model, system })).toEqual(
+        {
+          systemPrompts: [
+            `${system.static}${system.organization}${system.turn}`,
+          ],
+        },
+      );
+    }
+  });
+
   test("marks the static and organization layers where the provider caches at markers", () => {
     for (const model of markerModels) {
       expect(systemPromptsPatch({ caching, model, system: layered })).toEqual({
@@ -2805,6 +2836,7 @@ describe("a chat run a caller consumes itself", () => {
     const chunks: unknown[] = [];
     const caught = await (async () => {
       for await (const chunk of streamTanStackChatRun({
+        threadId: "test-thread",
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         userId: null,
         model: testModel,

@@ -5,6 +5,8 @@ import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { referenceFromHref } from "@stll/api-contract/chat-reference-href";
+import type { ChatReference } from "@stll/api-contract/chat-reference-href";
 import {
   Building2Icon,
   LandmarkIcon,
@@ -23,12 +25,10 @@ import { CHIP_ICON_CLASS } from "@/components/chip-scale";
 import { InlinePill } from "@/components/inline-pill";
 import { referenceHintOptions } from "@/components/references/reference-hints";
 import {
-  referenceFromHref,
   referenceMatterId,
   resolveReferenceVisual,
 } from "@/components/references/reference.logic";
 import type {
-  ChatReference,
   LiveFact,
   ReferenceGlyph,
   ReferenceLiveFacts,

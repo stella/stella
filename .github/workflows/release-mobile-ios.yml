@@ -156,6 +156,37 @@ jobs:
           cp "$profile" "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
           echo "MOBILE_WIDGETS_PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
 
+      # The share extension is another target with its own profile. Without
+      # one the app config leaves the extension out; the config signs it only
+      # beside the widget extension, so a share profile alone fails here.
+      - name: Install the share extension's App Store profile
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROFILE_BASE64: ${{ inputs.variant == 'production' && secrets.MOBILE_SHARE_PROFILE_PRODUCTION || secrets.MOBILE_SHARE_PROFILE_PREVIEW }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PROFILE_BASE64" ]; then
+            echo "No share profile: this build leaves the share extension out." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ -z "${MOBILE_WIDGETS_PROFILE_UUID:-}" ]; then
+            echo "the share extension signs only beside the widget extension; add its profile first" >&2
+            exit 1
+          fi
+          expected="$MOBILE_BUNDLE_IDENTIFIER.share"
+          profile="$RUNNER_TEMP/share.mobileprovision"
+          printf '%s' "$PROFILE_BASE64" | base64 -d > "$profile"
+          decoded="$RUNNER_TEMP/share-profile.plist"
+          security cms -D -i "$profile" > "$decoded"
+          identifier="$(plutil -extract Entitlements.application-identifier raw -o - "$decoded")"
+          if [ "$identifier" != "$APPLE_TEAM_ID.$expected" ]; then
+            echo "the share profile signs $identifier, not $APPLE_TEAM_ID.$expected" >&2
+            exit 1
+          fi
+          uuid="$(plutil -extract UUID raw -o - "$decoded")"
+          cp "$profile" "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
+          echo "MOBILE_SHARE_PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
+
       - name: Generate the native iOS project
         working-directory: apps/mobile
         env:
@@ -238,6 +269,9 @@ jobs:
           profiles="{\"$MOBILE_BUNDLE_IDENTIFIER\":\"$MOBILE_PROFILE_UUID\""
           if [ -n "${MOBILE_WIDGETS_PROFILE_UUID:-}" ]; then
             profiles="$profiles,\"$MOBILE_BUNDLE_IDENTIFIER.widgets\":\"$MOBILE_WIDGETS_PROFILE_UUID\""
+          fi
+          if [ -n "${MOBILE_SHARE_PROFILE_UUID:-}" ]; then
+            profiles="$profiles,\"$MOBILE_BUNDLE_IDENTIFIER.share\":\"$MOBILE_SHARE_PROFILE_UUID\""
           fi
           plutil -insert provisioningProfiles -json "$profiles}" "$export_options"
           plutil -insert manageAppVersionAndBuildNumber -bool NO "$export_options"

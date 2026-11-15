@@ -8,7 +8,14 @@
  */
 
 import { panic, Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  describe,
+  expect,
+  mock,
+  setSystemTime,
+  test,
+} from "bun:test";
 
 import {
   DECISION_DOCUMENT_ROLE,
@@ -49,11 +56,14 @@ import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/p
 import { projectPlNcourtSourceRaw } from "@/api/handlers/case-law/ingestion/retention/sources/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   decodeSourceRawEnvelope,
   PUBLISHER_REQUEST,
 } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   AST_BOUNDARY_WHITESPACE,
   AST_CONTENT_LOST,
@@ -74,6 +84,16 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 const testFetchState = createTestFetch();
+
+const replayStoredRaw = async (stored: StoredRawReparseInput) => {
+  const publisherFetch = mock(async (): Promise<Response> =>
+    panic("Stored PL replay must not fetch publisher responses"),
+  );
+  testFetchState.set(asFetchMock(publisherFetch));
+  const outcome = await plNcourtAdapter.reparseStoredRaw?.(stored);
+  expect(publisherFetch).not.toHaveBeenCalled();
+  return outcome;
+};
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -163,6 +183,7 @@ const xml = (body: string, status = 200): Response =>
 
 afterEach(() => {
   testFetchState.restore();
+  setSystemTime();
 });
 
 /** A record for any id, in the API's own shape, as the stubbed walks need. */
@@ -242,7 +263,7 @@ describe("identity", () => {
 
   test("a stored row replays to the same identity and the same decision", async () => {
     const decision = await pairDecision();
-    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await replayStoredRaw({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
       contentType: decision.sourceRawContentType ?? null,
       caseNumber: decision.caseNumber,
@@ -388,7 +409,7 @@ describe("building a judgment", () => {
     expect(reconciled.type).toBe("built-supplement");
 
     // A replay of its stored payload is the supplement again.
-    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await replayStoredRaw({
       raw: new TextEncoder().encode(supplement.document.sourceRaw ?? ""),
       contentType: supplement.document.sourceRawContentType ?? null,
       caseNumber: supplement.document.caseNumber,
@@ -621,7 +642,7 @@ describe("building a judgment", () => {
     expect(decision.metadata["documentStatus"] === "publisher-404").toBe(true);
 
     // The status is kept in the envelope, so a replay states it too.
-    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await replayStoredRaw({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
       contentType: decision.sourceRawContentType ?? null,
       caseNumber: decision.caseNumber,
@@ -789,7 +810,7 @@ describe("decision types", () => {
         ),
       ).toBe(true);
       for (const metadata of [{}, { documentRole: role }]) {
-        const replayed = await plNcourtAdapter.reparseStoredRaw?.({
+        const replayed = await replayStoredRaw({
           raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
           contentType: decision.sourceRawContentType ?? null,
           caseNumber: decision.caseNumber,
@@ -1921,7 +1942,7 @@ describe("the walk", () => {
     );
 
     // The audit row replays to itself.
-    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await replayStoredRaw({
       raw: new TextEncoder().encode(quarantine.sourceRaw ?? ""),
       contentType: quarantine.sourceRawContentType ?? null,
       caseNumber: quarantine.caseNumber,
@@ -2183,15 +2204,19 @@ describe("the tip", () => {
     );
 
   test("a lap lists closed days only, from where the walk stopped to today", async () => {
+    setSystemTime(new Date("2026-09-25T12:00:00.000Z"));
+    const lapStartedOn = new Date().toISOString().slice(0, 10);
     const body = await tipPage();
     const requests: URL[] = [];
     testFetchState.set(
       asFetchMock(async (input: string | URL | Request) => {
         requests.push(urlOf(input));
+        // The request URL was built before the fetch crossed UTC midnight.
+        setSystemTime(new Date("2026-09-26T00:00:00.000Z"));
         return await Promise.resolve(
           urlOf(input).pathname.endsWith("/judgements")
             ? xml(body)
-            : new Response("", { status: 503 }),
+            : new Response("", { status: 404 }),
         );
       }),
     );
@@ -2208,9 +2233,7 @@ describe("the tip", () => {
     );
     const listing = requests[0] ?? panic("no request");
     expect(listing.searchParams.get("publicationDateFrom")).toBe("2026-09-20");
-    expect(listing.searchParams.get("publicationDateTo")).toBe(
-      new Date().toISOString().slice(0, 10),
-    );
+    expect(listing.searchParams.get("publicationDateTo")).toBe(lapStartedOn);
   });
 
   test("the walk hands over at the day it began, and waits for it to close", async () => {

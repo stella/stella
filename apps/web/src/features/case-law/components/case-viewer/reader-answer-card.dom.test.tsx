@@ -25,7 +25,7 @@ const { WebReaderPresentationProvider } =
 const { ReaderAnswerCard } = await import("./reader-answer-card");
 // Load the real lazy renderer before assertions use its parsed Markdown.
 await import("@/components/ai-elements/message-response");
-const { CopyActionButton } = await import("@/components/copy-action-button");
+const { CopyControl } = await import("@/components/copy-control");
 const { resolveReaderAnswerCitation } =
   await import("./reader-answer-citation.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
@@ -601,7 +601,7 @@ test("copy uses the quiet card action variant and size", () => {
     if (!isValidElement(node)) {
       return;
     }
-    if (node.type === CopyActionButton) {
+    if (node.type === CopyControl) {
       copies.push(node.props);
     }
     if (
@@ -637,7 +637,7 @@ test("skeleton lines give way to identical streamed and reloaded markdown withou
     view.tree({ ...view.props, answer: withContent("streaming", content) }),
   );
   await waitFor(() =>
-    expect(view.container.querySelectorAll("li")).toHaveLength(2),
+    expect(view.container.querySelectorAll("li").length).toBe(2),
   );
   expect(view.queryByRole("status")).toBeNull();
   await waitFor(() =>
@@ -660,7 +660,7 @@ test("skeleton lines give way to identical streamed and reloaded markdown withou
   view.unmount();
   const reloaded = mount({ answer: withContent("complete", content) });
   await waitFor(() =>
-    expect(reloaded.container.querySelectorAll("li")).toHaveLength(2),
+    expect(reloaded.container.querySelectorAll("li").length).toBe(2),
   );
   expect(reloaded.container.querySelector("ul")?.outerHTML).toBe(streamed);
   expect(reloaded.container.querySelector("h2")?.parentElement?.innerHTML).toBe(

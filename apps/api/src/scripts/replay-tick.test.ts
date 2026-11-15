@@ -11,6 +11,7 @@ import { ebsBalance } from "@stll/db-load-gate/indicators";
 import { readReplayTickEnvironment } from "@/api/env-replay";
 import type { BackgroundReplayTickReport } from "@/api/handlers/case-law/ingestion/background-replay";
 import {
+  BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
   replayHealthConfig,
 } from "@/api/handlers/case-law/ingestion/replay-enrolment";
@@ -138,16 +139,16 @@ describe("scheduled replay entrypoint", () => {
   // stays a reviewed step of its own. The committed map's type already admits
   // no enrolled source, so this checks the preview budget.
   test("committed enrolment only previews, within the preview budget, and enrols nothing", () => {
-    const previews = Object.values(REPLAY_ENROLMENT).filter(
-      ({ mode }) => mode !== "off",
-    );
-    for (const preview of previews) {
-      expect(preview).toEqual({ mode: "dry-run", dailyBudget: 10_000 });
+    for (const policy of Object.values(REPLAY_ENROLMENT)) {
+      if (policy.mode === "off") {
+        continue;
+      }
+      expect(policy.mode).toBe("dry-run");
+      expect(policy.dailyBudget).toBeLessThanOrEqual(
+        BACKGROUND_REPLAY_LIMITS.maxDailyBudget,
+      );
     }
-    expect(REPLAY_ENROLMENT[ADAPTER_KEYS.CZ_US]).toEqual({
-      mode: "dry-run",
-      dailyBudget: 10_000,
-    });
+    expect(REPLAY_ENROLMENT[ADAPTER_KEYS.CZ_US].mode).toBe("dry-run");
   });
 
   test("default-off environment, global kill and unenrolled sources perform no setup", async () => {

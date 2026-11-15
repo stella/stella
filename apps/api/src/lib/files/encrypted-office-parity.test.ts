@@ -7,7 +7,10 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
-import { ENCRYPTED_CONTENT_ERROR_CODE } from "@stll/api-contract";
+import {
+  CHAT_INPUT_REFUSAL_CODE,
+  ENCRYPTED_CONTENT_ERROR_CODE,
+} from "@stll/api-contract";
 
 import { uploadUserFile } from "@/api/handlers/chat/upload-files";
 import { checkStampHandler } from "@/api/handlers/entities/stamps/check";
@@ -156,8 +159,10 @@ describe("encrypted files on raw-byte paths", () => {
       for (const entry of CASES) {
         const result = await uploadUserFile({
           dependencies: {
-            reserveChatObjectCleanupIntent: async () =>
-              await Promise.resolve(Result.ok([])),
+            reserveChatObjectCleanupIntents: async ({ objectKeys }) =>
+              await Promise.resolve(
+                Result.ok(new Map(objectKeys.map((key) => [key, []]))),
+              ),
           },
           file: {
             bytes: await entry.bytes(),
@@ -199,7 +204,11 @@ describe("encrypted files on raw-byte paths", () => {
         docx: refused,
         xlsx: refused,
         // Chat never takes presentations, encrypted or not.
-        pptx: { status: 422, message: "Unsupported file type" },
+        pptx: {
+          status: 422,
+          code: CHAT_INPUT_REFUSAL_CODE.attachmentUnsupported,
+          message: "Unsupported file type",
+        },
       });
       expect(fake.requests).toEqual([]);
     } finally {

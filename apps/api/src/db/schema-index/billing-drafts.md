@@ -4,20 +4,20 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## billing_draft_user_settings · `billingDraftUserSettings` · billing-drafts.ts:16 · rls
+## billing_draft_user_settings · `billingDraftUserSettings` · billing-drafts.ts:17 · rls
 
 ```text
-billing_draft_user_settings.organization_id  safeOrganizationId  fk,not null       billing-drafts.ts:19
-billing_draft_user_settings.user_id          text                fk,not null       billing-drafts.ts:22
-billing_draft_user_settings.consent_at       timestamptz         null              billing-drafts.ts:26
-billing_draft_user_settings.preference       varchar             null              billing-drafts.ts:27
-billing_draft_user_settings.updated_at       timestamptz         default,not null  billing-drafts.ts:28
+billing_draft_user_settings.organization_id  safeOrganizationId  fk,not null       billing-drafts.ts:20
+billing_draft_user_settings.user_id          text                fk,not null       billing-drafts.ts:23
+billing_draft_user_settings.consent_at       timestamptz         null              billing-drafts.ts:27
+billing_draft_user_settings.preference       varchar             null              billing-drafts.ts:28
+billing_draft_user_settings.updated_at       timestamptz         default,not null  billing-drafts.ts:29
 ```
 
-## billing_guideline_files · `billingGuidelineFiles` · billing-drafts.ts:36 · rls
+## billing_guideline_files · `billingGuidelineFiles` · billing-drafts.ts:38 · rls
 
 ```text
-billing_guideline_files.organization_id  safeOrganizationId  fk,not null  billing-drafts.ts:39
-billing_guideline_files.resource_id      safeUuid            fk,not null  billing-drafts.ts:42
-billing_guideline_files.client_id        safeUuid            fk,null      billing-drafts.ts:45
+billing_guideline_files.organization_id  safeOrganizationId  fk,not null  billing-drafts.ts:41
+billing_guideline_files.resource_id      safeUuid            fk,not null  billing-drafts.ts:44
+billing_guideline_files.client_id        safeUuid            fk,null      billing-drafts.ts:47
 ```

@@ -12,6 +12,7 @@ const ALLOWED_NON_TURN_LOADERS = {
   "components/chat/chat-message-actions-menu.tsx": "export action",
   "components/chat/chat-prompt-improve-button.tsx": "prompt rewrite action",
   "components/chat/connect-connector-card.tsx": "connector authorization",
+  "components/chat/local-run-question-card.tsx": "submitting a user answer",
   "components/chat/message-export-menu.tsx": "message export action",
   "components/chat/needs-matter-card.tsx": "matter creation action",
   "components/chat/request-secret-card.tsx": "secret submission action",
@@ -86,7 +87,7 @@ test("detects literal, computed, aliased, and spread running marks", () => {
   }
 });
 
-test("the turn status owner is the only turn loader or elapsed ticker", () => {
+test("the turn status owner is the only turn loader", () => {
   const files = sourceFileIndex(SOURCE_ROOT).filter(({ relativePath }) =>
     CHAT_SOURCE_PATH.test(relativePath),
   );
@@ -99,7 +100,6 @@ test("the turn status owner is the only turn loader or elapsed ticker", () => {
     }
     const ownsLiveIndicator =
       sourceText.includes("@stll/ui/loader") ||
-      sourceText.includes("use-live-elapsed") ||
       hasPotentialRunningMark(sourceText) ||
       sourceText.includes("animate-spin");
     if (

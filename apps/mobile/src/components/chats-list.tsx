@@ -5,49 +5,55 @@ import { ActivityIndicator } from "react-native";
 
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 
+import { useActiveChatRuns } from "@/components/active-chat-runs";
+import { useRevisedLoad } from "@/components/changes";
 import { useHeaderSearch } from "@/components/header-search";
 import { LoadedChats } from "@/components/loaded-chats";
+import type { ChatsLoad } from "@/components/loaded-chats";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
-import type { Load } from "@/state/api-request";
-import { listChatThreads } from "@/state/chat-threads";
-import type { ChatThreadsPage } from "@/state/chat-threads";
+import { listChats } from "@/state/chat-threads";
 import { useAppColors } from "@/theme";
 
 /**
- * Loads the signed-in person's recent threads once, again on every pull to
- * refresh, and again once typing pauses in the header's search field. A new
- * conversation starts from the header's button, as t3code's does.
+ * Loads the signed-in person's pinned and recent threads once, again on
+ * every pull to refresh, once typing pauses in the header's search field,
+ * and in place whenever a chat is marked here or on another device, with
+ * their unfinished runs beside them, so chats waiting on the person and
+ * chats working head the list. A new conversation starts from the header's
+ * button, as t3code's does.
  */
 export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
   const colors = useAppColors();
   const { settledQuery } = useHeaderSearch();
   const searched = settledQuery.slice(0, SEARCH_QUERY_MAX_LENGTH);
   const { end } = useSession();
-  const loadThreads = async (
-    search: string,
-  ): Promise<Load<ChatThreadsPage>> => {
-    const result = await listChatThreads({ fetch, search, source });
+  const activeRuns = useActiveChatRuns();
+  const loadThreads = async (search: string): Promise<ChatsLoad> => {
+    const result = await listChats({ fetch, search, source });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
       end(source);
     }
-    return { loadedAt: epochMilliseconds(), result };
+    // The text a load asked for travels with it, so an empty result names it.
+    return { loadedAt: epochMilliseconds(), result, search };
   };
-  // The text a load asked for travels with it, so an empty result names it.
-  const [request, setRequest] = useState(() => ({
-    load: loadThreads(""),
-    search: "",
-  }));
+  const [load, setLoad] = useRevisedLoad(
+    async () => await loadThreads(searched),
+    ["chats"],
+  );
+  const [asked, setAsked] = useState(searched);
   const [refreshing, startRefresh] = useTransition();
   // A settled search the showing load did not ask for starts the next one.
-  if (searched !== request.search) {
-    setRequest({ load: loadThreads(searched), search: searched });
+  if (searched !== asked) {
+    setAsked(searched);
+    setLoad(loadThreads(searched));
   }
 
   const reload = () => {
+    activeRuns.reread();
     startRefresh(() => {
-      setRequest({ load: loadThreads(searched), search: searched });
+      setLoad(loadThreads(searched));
     });
   };
 
@@ -56,10 +62,11 @@ export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
       fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
     >
       <LoadedChats
-        load={request.load}
+        load={load}
         onReload={reload}
+        onRetryRuns={activeRuns.reread}
         refreshing={refreshing}
-        search={request.search}
+        runs={activeRuns.runs}
         source={source}
       />
     </Suspense>

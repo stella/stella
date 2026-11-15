@@ -286,17 +286,19 @@
   --chart-7: color-mix(in oklch, var(--option-lime) 70%, var(--foreground));
   --chart-8: color-mix(in oklch, var(--option-fuchsia) 70%, var(--foreground));
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --radius: 0.625rem;
+  /* The corner radius generated visuals receive (`VISUAL_THEME_VARIABLES`);
+     app markup uses the `rounded-*` scale. Equal to `--radius-lg`. */
+  --radius: 0.5rem;
   --background: var(--color-white);
-  --foreground: var(--color-neutral-800);
+  --foreground: var(--color-neutral-900);
   --card: var(--color-white);
-  --card-foreground: var(--color-neutral-800);
+  --card-foreground: var(--color-neutral-900);
   --popover: var(--color-white);
-  --popover-foreground: var(--color-neutral-800);
+  --popover-foreground: var(--color-neutral-900);
   --primary: var(--color-neutral-800);
   --primary-foreground: var(--color-neutral-50);
   --secondary: --alpha(var(--color-black) / 4%);
-  --secondary-foreground: var(--color-neutral-800);
+  --secondary-foreground: var(--color-neutral-900);
   --muted: --alpha(var(--color-black) / 4%);
   --muted-foreground: color-mix(
     in srgb,
@@ -319,7 +321,7 @@
     transparent
   );
   --accent: --alpha(var(--color-black) / 4%);
-  --accent-foreground: var(--color-neutral-800);
+  --accent-foreground: var(--color-neutral-900);
   --destructive: var(--color-red-500);
   --destructive-foreground: var(--color-red-700);
   --info: var(--color-blue-500);
@@ -329,20 +331,22 @@
   --warning: var(--color-amber-500);
   --warning-foreground: var(--color-amber-700);
   --highlight: --alpha(var(--color-yellow-300) / 50%);
-  --highlight-foreground: var(--color-neutral-800);
+  --highlight-foreground: var(--color-neutral-900);
   --border: --alpha(var(--color-black) / 10%);
   --input: --alpha(var(--color-black) / 12%);
   --ring: var(--color-neutral-400);
   --sidebar: var(--color-neutral-50);
+  /* Light 80% and dark 72% land at the same contrast (about 9.2:1) on their
+     sidebars; dark needs less of the mix to read as strongly. */
   --sidebar-foreground: color-mix(
     in srgb,
-    var(--color-neutral-800) 64%,
+    var(--color-neutral-900) 80%,
     var(--sidebar)
   );
   --sidebar-primary: var(--color-neutral-800);
   --sidebar-primary-foreground: var(--color-neutral-50);
   --sidebar-accent: --alpha(var(--color-black) / 4%);
-  --sidebar-accent-foreground: var(--color-neutral-800);
+  --sidebar-accent-foreground: var(--color-neutral-900);
   --sidebar-border: --alpha(var(--color-black) / 8%);
   --sidebar-ring: var(--color-neutral-400);
 }
@@ -363,11 +367,7 @@
   --secondary: --alpha(var(--color-white) / 4%);
   --secondary-foreground: var(--color-neutral-100);
   --muted: --alpha(var(--color-white) / 4%);
-  --muted-foreground: color-mix(
-    in srgb,
-    var(--color-neutral-500) 90%,
-    var(--color-white)
-  );
+  --muted-foreground: var(--color-neutral-400);
   --accent: --alpha(var(--color-white) / 4%);
   --accent-foreground: var(--color-neutral-100);
   --destructive: color-mix(
@@ -394,7 +394,7 @@
   );
   --sidebar-foreground: color-mix(
     in srgb,
-    var(--color-neutral-100) 64%,
+    var(--color-neutral-100) 72%,
     var(--sidebar)
   );
   --sidebar-primary: var(--color-neutral-100);
@@ -657,6 +657,30 @@
   --option-fuchsia: color-mix(in oklch, #b48ead, #bf616a);
   --option-gray: color-mix(in oklch, #4c566a, #d8dee9);
   --option-empty: color-mix(in oklch, #4c566a 60%, #d8dee9);
+}
+
+/* ---- Topic swatches ----
+ * Time no matter claimed yet, grouped by what it was spent on (a document, a
+ * window, an app). A fixed low chroma, a fraction of the default matter
+ * swatches', and no matter edge where they are drawn, so a topic never reads
+ * as a matter; the hues only tell neighbouring topics apart. Lightness is set
+ * per colour scheme so the tint mixed from it stays readable under text. */
+:root {
+  --topic-sand: oklch(0.68 0.05 80);
+  --topic-sage: oklch(0.68 0.05 150);
+  --topic-mist: oklch(0.68 0.05 220);
+  --topic-heather: oklch(0.68 0.05 320);
+  --topic-clay: oklch(0.68 0.05 40);
+  --topic-slate: oklch(0.68 0.05 265);
+}
+
+.dark {
+  --topic-sand: oklch(0.7 0.05 80);
+  --topic-sage: oklch(0.7 0.05 150);
+  --topic-mist: oklch(0.7 0.05 220);
+  --topic-heather: oklch(0.7 0.05 320);
+  --topic-clay: oklch(0.7 0.05 40);
+  --topic-slate: oklch(0.7 0.05 265);
 }
 
 /* ---- Derived backgrounds and foregrounds: light ---- */
@@ -998,19 +1022,19 @@
   .palette-flexoki.dark,
   .palette-nord.dark {
     --background: var(--color-white);
-    --foreground: var(--color-neutral-800);
+    --foreground: var(--color-neutral-900);
     --card: var(--color-white);
-    --card-foreground: var(--color-neutral-800);
+    --card-foreground: var(--color-neutral-900);
     --popover: var(--color-white);
-    --popover-foreground: var(--color-neutral-800);
+    --popover-foreground: var(--color-neutral-900);
     --primary: var(--color-neutral-800);
     --primary-foreground: var(--color-neutral-50);
     --secondary: --alpha(var(--color-black) / 4%);
-    --secondary-foreground: var(--color-neutral-800);
+    --secondary-foreground: var(--color-neutral-900);
     --muted: --alpha(var(--color-black) / 4%);
     --muted-foreground: var(--color-neutral-500);
     --accent: --alpha(var(--color-black) / 4%);
-    --accent-foreground: var(--color-neutral-800);
+    --accent-foreground: var(--color-neutral-900);
     --destructive: var(--color-red-500);
     --destructive-foreground: var(--color-red-700);
     --info: var(--color-blue-500);
@@ -1020,16 +1044,16 @@
     --warning: var(--color-amber-500);
     --warning-foreground: var(--color-amber-700);
     --highlight: --alpha(var(--color-yellow-300) / 50%);
-    --highlight-foreground: var(--color-neutral-800);
+    --highlight-foreground: var(--color-neutral-900);
     --border: --alpha(var(--color-black) / 10%);
     --input: --alpha(var(--color-black) / 12%);
     --ring: var(--color-neutral-400);
     --sidebar: var(--color-neutral-50);
-    --sidebar-foreground: var(--color-neutral-800);
+    --sidebar-foreground: var(--color-neutral-900);
     --sidebar-primary: var(--color-neutral-800);
     --sidebar-primary-foreground: var(--color-neutral-50);
     --sidebar-accent: --alpha(var(--color-black) / 4%);
-    --sidebar-accent-foreground: var(--color-neutral-800);
+    --sidebar-accent-foreground: var(--color-neutral-900);
     --sidebar-border: --alpha(var(--color-black) / 8%);
     --sidebar-ring: var(--color-neutral-400);
 

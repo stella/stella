@@ -8,6 +8,7 @@ import { IntlProvider, useFormatter, useTranslations } from "use-intl";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -54,7 +55,9 @@ const CitationGraphNodeButton = ({
     variant="plain"
   >
     <span className="bg-background flex h-full w-full min-w-0 items-center justify-center rounded-md px-2 text-xs">
-      <bdi className="min-w-0 truncate">{label}</bdi>
+      <TruncatedText hint={false} render={<bdi />}>
+        {label}
+      </TruncatedText>
     </span>
   </Button>
 );
@@ -252,9 +255,9 @@ const CitationList = ({
                     ),
                   )}
                 >
-                  <BidiText className="min-w-0 truncate">
+                  <TruncatedText render={<BidiText />}>
                     {decision.caseNumber}
-                  </BidiText>
+                  </TruncatedText>
                 </Button>
               ) : (
                 <p className="min-w-0 font-medium break-words">

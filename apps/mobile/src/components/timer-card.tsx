@@ -97,7 +97,7 @@ export const TimerCard = ({
           }}
           variant="outline"
         >
-          {t(running ? "pause" : "resume")}
+          {words(running ? "pause" : "resume")}
         </Button>
         <Button
           className="flex-1"

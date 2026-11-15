@@ -12,6 +12,8 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+
 import { documentReviewRuns, entities } from "@/api/db/schema";
 import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -118,7 +120,7 @@ const createPlaybookFromRun = createSafeRootHandler(
       status: 404,
       message: "Review run not found",
     });
-    if (!workspace || workspace.status !== "active") {
+    if (!workspaceAcceptsWrites(workspace?.status)) {
       return Result.err(notFound);
     }
 

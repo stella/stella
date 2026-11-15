@@ -2,6 +2,10 @@
   dead_code,
   reason = "compile-fail probes are checked without running them"
 )]
+#![expect(
+  clippy::let_underscore_must_use,
+  reason = "each probe discards its writer's result; only the disallowed call is under test"
+)]
 
 fn main() {}
 
