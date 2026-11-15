@@ -24,6 +24,14 @@ import getMessageRevisions from "@/api/handlers/chat/messages/revisions/list";
 import revertMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
 import proposeMessageSpanEdit from "@/api/handlers/chat/messages/revisions/span-edit";
 import getOlderMessages from "@/api/handlers/chat/older-messages/list";
+import cancelQueuedChatMessage from "@/api/handlers/chat/queue/cancel";
+import enqueueChatMessage from "@/api/handlers/chat/queue/enqueue";
+import moveQueuedChatMessage from "@/api/handlers/chat/queue/move";
+import pauseChatQueue from "@/api/handlers/chat/queue/pause";
+import readChatQueue from "@/api/handlers/chat/queue/read";
+import replaceQueuedChatMessage from "@/api/handlers/chat/queue/replace";
+import resumeChatQueue from "@/api/handlers/chat/queue/resume";
+import sendQueuedChatMessageNow from "@/api/handlers/chat/queue/send-now";
 import readFileThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
@@ -128,6 +136,24 @@ export const chatRoute = routes(
       POST: undoLocalFiles,
     },
     "/threads/:threadId/background-tasks": { GET: readBackgroundTasks },
+    "/threads/:threadId/queue": {
+      GET: readChatQueue,
+      POST: enqueueChatMessage,
+    },
+    "/threads/:threadId/queue/hold": {
+      PUT: pauseChatQueue,
+      DELETE: resumeChatQueue,
+    },
+    "/threads/:threadId/queue/:messageId": {
+      PUT: replaceQueuedChatMessage,
+      DELETE: cancelQueuedChatMessage,
+    },
+    "/threads/:threadId/queue/:messageId/move": {
+      POST: moveQueuedChatMessage,
+    },
+    "/threads/:threadId/queue/:messageId/send-now": {
+      POST: sendQueuedChatMessageNow,
+    },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },
   },

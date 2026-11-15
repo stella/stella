@@ -287,6 +287,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api-contract": "workspace:*",
+        "@stll/browser-page": "workspace:*",
         "@stll/concurrency": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
@@ -736,6 +737,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api-contract": "workspace:*",
+        "@stll/browser-page": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/fetch": "workspace:*",
         "@stll/portable-path": "workspace:*",
@@ -889,6 +891,19 @@
       "version": "0.0.0",
       "dependencies": {
         "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
+    "packages/browser-page": {
+      "name": "@stll/browser-page",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/api-contract": "workspace:*",
+        "better-result": "catalog:",
+        "valibot": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -3407,6 +3422,8 @@
     "@stll/boe": ["@stll/boe@workspace:packages/boe"],
 
     "@stll/brand": ["@stll/brand@workspace:packages/brand"],
+
+    "@stll/browser-page": ["@stll/browser-page@workspace:packages/browser-page"],
 
     "@stll/business-registries": ["@stll/business-registries@workspace:packages/business-registries"],
 

@@ -1652,6 +1652,7 @@
   "chat.promptImprovementStrategies.verify.label": "Add verification criteria",
   "chat.prompts.noResults": "No matching skills",
   "chat.prompts.tryOne": "Try one of these to start",
+  "chat.queuePrompt": "Send when the agent finishes",
   "chat.queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
   "chat.queuedNotice": "Queued: sends when the current response finishes",
   "chat.reasoning": "Reasoning trace",

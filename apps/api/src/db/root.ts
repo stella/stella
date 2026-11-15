@@ -38,6 +38,11 @@ import {
 } from "@/api/lib/db/audit-recording";
 import type { AuditRecorder } from "@/api/lib/db/audit-recording";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import {
+  holdQueueOfUnavailableMemberOnTx,
+  readDueQueueHeadOnTx,
+  sweepThreadsWithDueQueueOnTx,
+} from "@/api/lib/db/chat-queue-system";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
 import { meterSqlClient } from "@/api/lib/db/meter-client";
@@ -239,6 +244,30 @@ export type Transaction = TransactionOf<RootDatabase>;
 export const readOperatorActivitySummary = async (now: number) =>
   await withAggregateTransaction(rootDb, async (tx) =>
     readAuditedActivitySummary(tx, now),
+  );
+
+/**
+ * The chat queue's sender reads across organizations which queues have a
+ * message due and who queued it, before that member is proved again, and
+ * holds a queue whose member can no longer be proved. Ids and owners only;
+ * the send itself runs on the member's own connection.
+ */
+export const readDueChatQueueHead = async (threadId: SafeId<"chatThread">) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await readDueQueueHeadOnTx({ threadId, tx }),
+  );
+export const sweepThreadsWithDueChatQueue = async (limit: number) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await sweepThreadsWithDueQueueOnTx({ limit, tx }),
+  );
+export const holdChatQueueOfUnavailableMember = async (
+  options: Omit<Parameters<typeof holdQueueOfUnavailableMemberOnTx>[0], "tx">,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await holdQueueOfUnavailableMemberOnTx({ ...options, tx }),
   );
 
 /** Organization-bound OAuth operations never expose the owner connection. */

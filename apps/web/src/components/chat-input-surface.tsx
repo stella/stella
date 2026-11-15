@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { CHAT_MEMBER_SEND_ACTION } from "@stll/api-contract/chat-send-intent";
 import {
   COMPOSER_BOX_ANONYMIZED_CLASS,
   COMPOSER_BOX_CLASS,
@@ -24,6 +25,7 @@ import type {
   ChatSend,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
+import { ChatComposerQueueButton } from "@/components/chat/chat-composer-queue-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
@@ -70,6 +72,14 @@ type ChatInputSurfaceProps = {
    */
   isGenerating?: boolean;
   onStop?: () => void;
+  /**
+   * The member's queue action (Cmd/Ctrl+Enter, and a button beside the
+   * primary one while `queueOffered`): it holds the draft until the turn
+   * ends. Omit on surfaces whose plain send always queues behind a turn.
+   */
+  onQueue?: ChatSend | undefined;
+  /** A plain send would steer the turn, so the queue button is shown. */
+  queueOffered?: boolean | undefined;
   /** See `ChatComposerActionButton`'s `stopping`. */
   stopping?: boolean;
   /**
@@ -140,6 +150,8 @@ export const ChatInputSurface = ({
   onFocusChange,
   isGenerating = false,
   onStop,
+  onQueue,
+  queueOffered,
   stopping = false,
   anonymized = false,
   dock,
@@ -172,6 +184,7 @@ export const ChatInputSurface = ({
   // during a turn is queued by `useChatSession` and dispatched once
   // the response finishes, so overlapping requests can't happen.
   const submitDisabled = Boolean(disabled || sendDisabled);
+  const canSend = !submitDisabled && canSubmit;
 
   // A failed send has already restored the draft (see `submit` in
   // chat-editor-provider), so the only thing missing is a user-visible
@@ -192,6 +205,7 @@ export const ChatInputSurface = ({
     controller,
     inputDisabled,
     onSubmit,
+    onQueue,
     onSubmitError: handleSubmitError,
     submitDisabled,
   });
@@ -362,12 +376,20 @@ export const ChatInputSurface = ({
                 {/* The single primary affordance morphs in place: the button
                   itself resolves send vs. stop from the state it is fed, so
                   this surface cannot render a second, parallel control. */}
+                <ChatComposerQueueButton
+                  canSend={canSend}
+                  offered={queueOffered}
+                  submitDraft={submitDraft}
+                />
                 <ChatComposerActionButton
-                  canSend={!submitDisabled && canSubmit}
+                  canSend={canSend}
                   guideAnchorsEnabled={guideAnchorsEnabled}
                   isGenerating={isGenerating}
                   onSend={() => {
-                    detached(submitDraft(), "chat-input-surface.submit-draft");
+                    detached(
+                      submitDraft(CHAT_MEMBER_SEND_ACTION.send),
+                      "chat-input-surface.submit-draft",
+                    );
                   }}
                   onStop={onStop}
                   stopping={stopping}

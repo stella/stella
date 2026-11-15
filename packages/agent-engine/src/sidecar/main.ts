@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { runNativeHost } from "./browser/native-host";
@@ -9,6 +10,8 @@ import {
   homeFolder,
   protocolLogSetting,
   sidecarVersion,
+  stellaBrowserDevHost,
+  stellaBrowserTestHooks,
 } from "./env";
 import {
   HOLDER_HELLO_TIMEOUT_MS,
@@ -107,6 +110,18 @@ const started = await startHolderServer({
     extraExtensionIds: extraBrowserExtensionIds(),
     home: homeFolder(),
     platform: process.platform,
+    // The version folder is `<app data>/agent-holder/<version>`; the stella
+    // browser's profiles live beside `agent-holder`, which the desktop prunes.
+    stellaBrowser: stellaBrowserDevHost()
+      ? {
+          environment: harnessEnvironment(),
+          profileRoot: path.join(
+            path.dirname(path.dirname(values.dir)),
+            "browser",
+          ),
+          testHooks: stellaBrowserTestHooks(),
+        }
+      : null,
   },
 });
 if (Result.isError(started)) {

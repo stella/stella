@@ -2093,6 +2093,7 @@
       "noResults": "Sobivaid oskusi pole",
       "tryOne": "Alusta ühe nendest"
     },
+    "queuePrompt": "Saada, kui agent on lõpetanud",
     "queuedAttachmentCount": "{count, plural, one {# manus} other {# manust}}",
     "queuedNotice": "Järjekorras: saadetakse, kui praegune vastus on valmis",
     "reasoning": "Arutlus",

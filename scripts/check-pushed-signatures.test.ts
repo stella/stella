@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +24,15 @@ const run = (cwd: string, command: string[]): string => {
 
 const key = path.join(root, "signing-key");
 run(root, ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key]);
+// A key that signs but is not on the account the push is checked against.
+const stranger = path.join(root, "stranger-key");
+run(root, ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", stranger]);
+
+// The account's registered keys: only `key`.
+const registered = path.join(root, "registered");
+run(root, ["mkdir", registered]);
+writeFileSync(path.join(registered, "ssh"), readFileSync(`${key}.pub`));
+writeFileSync(path.join(registered, "gpg"), "");
 
 const remote = path.join(root, "remote.git");
 const repository = path.join(root, "work");
@@ -36,13 +45,22 @@ git("config", "commit.gpgsign", "false");
 git("remote", "add", "origin", remote);
 
 let counter = 0;
-const commit = (options: { signed: boolean; message?: string }): string => {
+const commit = (options: {
+  signed: boolean;
+  message?: string;
+  signingKey?: string;
+}): string => {
   counter += 1;
   writeFileSync(path.join(repository, `file-${String(counter)}.txt`), "x");
   git("add", ".");
   git(
     ...(options.signed
-      ? ["-c", "gpg.format=ssh", "-c", `user.signingkey=${key}`]
+      ? [
+          "-c",
+          "gpg.format=ssh",
+          "-c",
+          `user.signingkey=${options.signingKey ?? key}`,
+        ]
       : []),
     "commit",
     "--quiet",
@@ -61,6 +79,7 @@ const push = (localOid: string, remoteOid = ZERO_OID) => {
       `refs/heads/topic ${localOid} refs/heads/topic ${remoteOid}\n`,
     ),
     stderr: "pipe",
+    env: { ...process.env, SIGNING_KEYS_DIR: registered },
   });
   return { exitCode: result.exitCode, stderr: result.stderr.toString() };
 };
@@ -85,6 +104,19 @@ test("signed commits pass, and published commits are not the push's to sign", ()
   expect(push(second)).toMatchObject({ exitCode: 0 });
   // Only the commits after the remote tip are checked.
   expect(push(second, first)).toMatchObject({ exitCode: 0 });
+});
+
+test("a commit signed by a key the account does not list is refused by name", () => {
+  git("switch", "--quiet", "-c", "stranger", published);
+  const signed = commit({
+    signed: true,
+    signingKey: stranger,
+    message: "signed elsewhere",
+  });
+  const outcome = push(signed);
+  expect(outcome.exitCode).toBe(1);
+  expect(outcome.stderr).toContain("does not list");
+  expect(outcome.stderr).toContain("signed elsewhere");
 });
 
 test("a message cannot stand in for the signature header", () => {

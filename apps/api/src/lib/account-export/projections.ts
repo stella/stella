@@ -6,6 +6,7 @@ import type {
   billingDraftUserSettings,
   chatMessageRevisions,
   chatMessages,
+  chatQueuedMessages,
   chatThreads,
   legalReaderAnnotations,
   legalReaderAnswerMessages,
@@ -47,6 +48,9 @@ type AccountExportProjectionSignatures = {
   chat_message_revisions: (
     row: typeof chatMessageRevisions.$inferSelect,
     role: (typeof chatMessages.$inferSelect)["role"],
+  ) => unknown;
+  chat_queued_messages: (
+    row: typeof chatQueuedMessages.$inferSelect,
   ) => unknown;
   ai_memories: (row: typeof aiMemories.$inferSelect) => unknown;
   agent_skills: (

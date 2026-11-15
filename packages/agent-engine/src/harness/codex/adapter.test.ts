@@ -968,6 +968,31 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
+  test("a steer sent with a declined approval joins the turn that asked", async () => {
+    const inputId = crypto.randomUUID();
+    const { events, received } = await run("steered_over_approval", {
+      onEvent: async (event, turn) => {
+        if (event.type !== "approval.requested") {
+          return;
+        }
+        const declined = await turn.respond({
+          type: "approval",
+          requestId: event.request.requestId,
+          decision: "deny",
+        });
+        expect(Result.isOk(declined)).toBe(true);
+        expect(
+          await turn.steer({ inputId, text: "Also check the annex." }),
+        ).toEqual(Result.ok());
+      },
+    });
+    expect(received().map(({ method }) => method)).toContain("turn/steer");
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId, status: "accepted" },
+    ]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
   test("a steer the server refuses settles rejected and the turn goes on", async () => {
     const inputId = crypto.randomUUID();
     const { events } = await run("steer_refused", {
