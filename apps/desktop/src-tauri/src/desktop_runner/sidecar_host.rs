@@ -553,13 +553,19 @@ async fn pump(
         Err(_empty) => break,
       }
     }
-    let batch = batch(
+    let mut batch = batch(
       deliveries,
       limited,
       &run_id,
       model.as_deref(),
       thread_id.as_deref(),
     );
+    // The end goes in a write of its own, after the rest of its batch: the
+    // journal takes an end past the storage limit, so a limit the rest of
+    // the batch reached must still make it `failed`.
+    let end = batch
+      .outputs
+      .pop_if(|(output, _)| matches!(output, RunOutput::Finished { .. }));
     let recorded = journal(&sink, batch.outputs).await;
     if recorded.contains(&Err(EmitError::Full)) && !limited {
       tracing::warn!(target: LOG_TARGET, "a run reached the per-run storage limit; cancelling it");
@@ -567,6 +573,13 @@ async fn pump(
       if sidecar.cancel(&run_id).is_err() {
         tracing::warn!(target: LOG_TARGET, "a run past its storage limit was not cancelled");
       }
+    }
+    if let Some((output, holder_seq)) = end {
+      let output = if limited { cut_short(output) } else { output };
+      if let RunOutput::Finished { outcome, .. } = &output {
+        batch.outcome = Some(*outcome);
+      }
+      let _recorded = journal(&sink, vec![(output, holder_seq)]).await;
     }
     // Journaled, past the limit, or given up by the runner: either way the
     // holder need not keep any of it longer.
@@ -603,22 +616,12 @@ fn batch(
     outcome: None,
   };
   for delivery in deliveries {
-    let output = match delivery.output {
-      SidecarRunOutput::Finished {
-        harness_session_id, ..
-      } if limited => SidecarRunOutput::Finished {
-        outcome: RunOutcome::Failed,
-        harness_session_id,
-        // A run the desktop could not keep whole is never a point a later
-        // run continues from.
-        harness_boundary: None,
-      },
-      output => output,
-    };
-    if let SidecarRunOutput::Finished { outcome, .. } = &output {
+    let output = sidecar_output(delivery.output);
+    let output = if limited { cut_short(output) } else { output };
+    if let RunOutput::Finished { outcome, .. } = &output {
       batch.outcome = Some(*outcome);
     }
-    let output = match sidecar_output(output) {
+    let output = match output {
       RunOutput::Event(chunk) if !fits_a_frame(&chunk) => {
         tracing::warn!(target: LOG_TARGET, "a run output exceeded the frame limit; sent an error instead");
         run_error(
@@ -635,6 +638,21 @@ fn batch(
     batch.outputs.push((output, delivery.holder_seq));
   }
   batch
+}
+
+/// A run's end as a run the desktop could not keep whole ends: `failed`,
+/// and never a point a later run continues from. Any other output is kept.
+fn cut_short(output: RunOutput) -> RunOutput {
+  match output {
+    RunOutput::Finished {
+      harness_session_id, ..
+    } => RunOutput::Finished {
+      outcome: RunOutcome::Failed,
+      harness_session_id,
+      harness_boundary: None,
+    },
+    output => output,
+  }
 }
 
 /// Whether a chunk leaves room in a frame for the message around it.
