@@ -118,7 +118,7 @@ describe("the one-off pass over copies the previous release left served", () => 
     return Temporal.Instant.from(now ?? panic("No clock"));
   };
 
-  const pass = async (
+  const passResult = async (
     instant: Temporal.Instant,
     after: LegacyServedCopyRetireCursor | null,
     limit: number,
@@ -135,6 +135,13 @@ describe("the one-off pass over copies the previous release left served", () => 
           mode,
         }),
     );
+
+  const pass = async (
+    instant: Temporal.Instant,
+    after: LegacyServedCopyRetireCursor | null,
+    limit: number,
+    mode: "retire" | "count" = "retire",
+  ) => (await passResult(instant, after, limit, mode)).unwrap();
 
   const desiredAtOf = async (entityId: string) =>
     (
@@ -305,11 +312,8 @@ describe("the one-off pass over copies the previous release left served", () => 
     ]) {
       for (const mode of ["count", "retire"] as const) {
         // db-await-in-loop: one refusal per instant and mode
-        const refusal = await pass(other, cursor, 1, mode).then(
-          () => null,
-          (error: unknown) => error,
-        );
-        expect(refusal).toBeInstanceOf(
+        const refusal = await passResult(other, cursor, 1, mode);
+        expect(refusal.isErr() ? refusal.error : null).toBeInstanceOf(
           LegacyServedCopyRetireCutoverMismatchError,
         );
       }

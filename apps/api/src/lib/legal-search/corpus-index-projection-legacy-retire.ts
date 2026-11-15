@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { type SQL, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -207,7 +207,9 @@ export const retireLegacyUnprovenServedCopiesTx = async (
     limit,
     mode,
   }: RetireLegacyServedCopiesOptions,
-): Promise<LegacyServedCopyRetirePage> => {
+): Promise<
+  Result<LegacyServedCopyRetirePage, LegacyServedCopyRetireCutoverMismatchError>
+> => {
   if (!Number.isInteger(limit) || limit < 1 || limit > LEGACY_RETIRE_MAX_PAGE) {
     return panic("Legacy served-copy retire page size is invalid");
   }
@@ -215,12 +217,14 @@ export const retireLegacyUnprovenServedCopiesTx = async (
     after !== null &&
     !Temporal.Instant.from(after.cutoverAt).equals(cutoverAt)
   ) {
-    throw new LegacyServedCopyRetireCutoverMismatchError({
-      message:
-        "Legacy served-copy retire resumed under another cutover than its cursor",
-      cursorCutoverAt: after.cutoverAt,
-      cutoverAt: cutoverAt.toString(),
-    });
+    return Result.err(
+      new LegacyServedCopyRetireCutoverMismatchError({
+        message:
+          "Legacy served-copy retire resumed under another cutover than its cursor",
+        cursorCutoverAt: after.cutoverAt,
+        cutoverAt: cutoverAt.toString(),
+      }),
+    );
   }
   const cutover = sql`${cutoverAt.toString()}::timestamptz`;
   const [clock] = executedRows(
@@ -248,12 +252,12 @@ export const retireLegacyUnprovenServedCopiesTx = async (
   }));
   const last = page.at(-1);
   if (last === undefined) {
-    return {
+    return Result.ok({
       scanned: 0,
       outcomes: countOutcomes([], 0),
       skipped: [],
       next: null,
-    };
+    });
   }
   const entityIds = page.map(({ entityId }) => entityId);
   if (mode === "retire") {
@@ -321,7 +325,7 @@ export const retireLegacyUnprovenServedCopiesTx = async (
       SERVED_COPY_RETIREMENT_REASONS.legacyUnproven,
     );
   }
-  return {
+  return Result.ok({
     scanned: page.length,
     outcomes: countOutcomes(
       decided.map(({ outcome }) => outcome),
@@ -341,5 +345,5 @@ export const retireLegacyUnprovenServedCopiesTx = async (
             updatedAt: last.updatedAt,
             entityId: last.entityId,
           },
-  };
+  });
 };
