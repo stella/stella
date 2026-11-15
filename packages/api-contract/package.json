@@ -213,6 +213,7 @@
     "./chat-local-files-undo": "./src/chat-local-files-undo.ts",
     "./chat-background-tasks": "./src/chat-background-tasks.ts",
     "./chat-run-target": "./src/chat-run-target.ts",
+    "./chat-send-intent": "./src/chat-send-intent.ts",
     "./chat-local-run-question": "./src/chat-local-run-question.ts",
     "./ai-errors": "./src/ai-errors.ts",
     "./chat-local-run-tool": "./src/chat-local-run-tool.ts",
