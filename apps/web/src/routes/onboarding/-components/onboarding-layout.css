@@ -1,0 +1,44 @@
+:root {
+  --onboarding-step-offset: 8px;
+}
+
+:root:dir(rtl) {
+  --onboarding-step-offset: -8px;
+}
+
+/* Keep step changes to opacity and translation, without interpolating layout. */
+::view-transition-group(.onboarding-step-forward),
+::view-transition-group(.onboarding-step-backward) {
+  animation: none;
+}
+
+::view-transition-new(.onboarding-step-forward),
+::view-transition-old(.onboarding-step-backward) {
+  --onboarding-step-translation: var(--onboarding-step-offset);
+}
+
+::view-transition-new(.onboarding-step-backward),
+::view-transition-old(.onboarding-step-forward) {
+  --onboarding-step-translation: calc(-1 * var(--onboarding-step-offset));
+}
+
+::view-transition-new(.onboarding-step-forward),
+::view-transition-new(.onboarding-step-backward) {
+  animation: onboarding-step-enter 180ms ease-out both;
+}
+
+::view-transition-old(.onboarding-step-forward),
+::view-transition-old(.onboarding-step-backward) {
+  animation: onboarding-step-enter 120ms ease-in reverse both;
+}
+
+@keyframes onboarding-step-enter {
+  from {
+    opacity: 0;
+    transform: translateX(var(--onboarding-step-translation));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
