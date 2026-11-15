@@ -240,6 +240,7 @@ describe("a request that got no response is retried by the generation layer", ()
             logger: resolveDebugOption(false),
             messages: [{ role: "user", content: "Fixture" }],
             model,
+            threadId: "fixture-thread",
           },
           outputSchema: { type: "object", properties: {} },
         }),
@@ -351,6 +352,7 @@ const fixtureChatOptions = (model: string) => ({
   logger: resolveDebugOption(false),
   messages: [{ role: "user" as const, content: "Fixture" }],
   model,
+  threadId: "fixture-thread",
 });
 
 const drain = async (stream: AsyncIterable<unknown> | undefined) => {

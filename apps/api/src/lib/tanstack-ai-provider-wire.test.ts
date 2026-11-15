@@ -2,10 +2,11 @@ import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -75,8 +76,7 @@ const {
 } = CHAT_ORACLE;
 
 let replay: ProviderWireReplay;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+const state = createTestState({ file: import.meta.path, config: env });
 
 registerProviderWireReplay({
   onInstall: (active) => {
@@ -85,24 +85,15 @@ registerProviderWireReplay({
   options: () => ({ retryAfterMs: 1 }),
 });
 
-beforeAll(() => {
+state.beforeAll(() => {
   // Real adapters, not the local mock model.
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
+  state.setConfig("USE_MOCK_AI", false);
   // Were a Bedrock request ever to bypass `fetch`, it would go to a host
   // that does not resolve rather than to AWS.
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-});
-
-afterAll(() => {
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
-  }
+  state.setEnv(
+    "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+  );
 });
 
 const expectContract = (
@@ -564,6 +555,7 @@ describe("the stream contract holds where an adapter does not", () => {
     });
     const chunks: StreamChunk[] = [];
     for await (const chunk of withProviderStreamContract(released).chatStream({
+      threadId: "tanstack-ai-provider-wire-thread",
       logger: resolveDebugOption(false),
       messages: [],
       model: cassette.model,
@@ -603,6 +595,7 @@ test("a cancelled structured Bedrock request never reaches the provider", async 
   const outcome = await adapter
     .structuredOutput({
       chatOptions: {
+        threadId: "tanstack-ai-provider-wire-thread",
         logger: resolveDebugOption(false),
         messages: [{ content: "Reply with OK.", role: "user" }],
         model,
@@ -648,6 +641,7 @@ test("Gemini structured output preserves its provider HTTP status", async () => 
   const result = await Result.tryPromise(async () =>
     adapter.structuredOutput({
       chatOptions: {
+        threadId: "tanstack-ai-provider-wire-thread",
         logger: resolveDebugOption(false),
         messages: [{ content: "Reply with OK.", role: "user" }],
         model,

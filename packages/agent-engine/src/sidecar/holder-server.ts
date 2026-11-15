@@ -319,9 +319,6 @@ export const startHolderServer = async (
     return owned;
   }
   const secret = randomBytes(SECRET_BYTES).toString("hex");
-  // The secret last: once it exists, so does the endpoint record.
-  writePrivate(dir, HOLDER_ENDPOINT_FILE, endpoint);
-  writePrivate(dir, HOLDER_SECRET_FILE, secret);
   const { promise: exited, resolve } = Promise.withResolvers<null>();
   const sockets = new Set<net.Socket>();
   /** Flush what was written, then drop the connection. */
@@ -356,18 +353,27 @@ export const startHolderServer = async (
       for (const socket of sockets) {
         end(socket);
       }
-      browser?.stop().catch((error: unknown) => {
-        log(
-          `the browser bridge did not stop cleanly: ${error instanceof Error ? error.name : "unknown"}`,
+      // The holder exits once its browser has: a stella browser it started
+      // is closed, not left running.
+      const browserStopped = (async () => {
+        if (browser === null) {
+          return null;
+        }
+        const stopped = await Result.tryPromise(
+          async () => await browser.stop(),
         );
-      });
+        if (Result.isError(stopped)) {
+          log(`the browser bridge did not stop cleanly: ${stopped.error.name}`);
+        }
+        return null;
+      })();
       server.close(() => {
         rmSync(path.join(dir, HOLDER_SECRET_FILE), { force: true });
         rmSync(path.join(dir, HOLDER_ENDPOINT_FILE), { force: true });
         if (!IS_WINDOWS) {
           rmSync(endpoint, { force: true });
         }
-        resolve(null);
+        resolve(browserStopped);
       });
     },
   });
@@ -403,6 +409,11 @@ export const startHolderServer = async (
       peer.closed();
     });
   });
+  // Published only once a connection is answered: a desktop that finds the
+  // secret connects at once. The secret last: once it exists, so does the
+  // endpoint record.
+  writePrivate(dir, HOLDER_ENDPOINT_FILE, endpoint);
+  writePrivate(dir, HOLDER_SECRET_FILE, secret);
   log(`listening as ${holderOptions.sidecarVersion}`);
   return Result.ok({ holder, exited });
 };

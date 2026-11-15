@@ -56,7 +56,8 @@ export type AuditExecutionContext = {
     | {
         type: "user_dispatch";
         userId: SafeId<"user">;
-        source: "chat" | "action" | "api";
+        /** `chat_queue`: the server sent a message the user queued, as the user. */
+        source: "chat" | "chat_queue" | "action" | "api";
         sourceId?: string;
       }
     | {
@@ -287,6 +288,7 @@ type AuditActivityCategoryResolver =
   AuditActivityCategory | ((event: AuditEvent) => AuditActivityCategory);
 
 const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
+  legal_hold: "matter",
   service_oauth_client: "team",
   legal_resolve: "court",
   entity: entityActivityCategory,

@@ -5,6 +5,8 @@ export type CorpusIndexDesiredAction =
 export const CORPUS_INDEX_INTENT_STATUSES = [
   "reserved",
   "append_started",
+  // Accepted by the engine; publication is proven separately, and only an
+  // exact presence proof moves the revision to `applied`.
   "append_committed",
   "applied",
   "cleanup_pending",
@@ -13,9 +15,42 @@ export const CORPUS_INDEX_INTENT_STATUSES = [
   "cleanup_stalled",
   "settled",
   "cancelled",
+  // An offline-delivered revision that an exact census, taken after its
+  // indexer had certainly ended, found with no documents. Nothing reached the
+  // index, so no delete is owed.
+  "withdrawn",
 ] as const;
 export type CorpusIndexIntentStatus =
   (typeof CORPUS_INDEX_INTENT_STATUSES)[number];
+
+/**
+ * How a started revision travels to the engine, recorded at its start.
+ *
+ * - `ingest_api`: one REST ingest request. Its outcome is unknown until the
+ *   request answers, so an expired start goes to cleanup.
+ * - `offline_indexer`: a local indexer run over a file, killed no later than
+ *   `corpusProjectionOfflineIndexerKillDeadline` after the start. Its document
+ *   count is stored at the start, so once that deadline has passed one exact
+ *   census decides the revision: exact applies it, zero withdraws it, anything
+ *   else goes to cleanup.
+ */
+export const CORPUS_INDEX_APPEND_DELIVERIES = [
+  "ingest_api",
+  "offline_indexer",
+] as const;
+
+/**
+ * The most revisions one offline request, one indexer file, may hold. A run
+ * pays a process start, a commit and the merges at its exit whatever it
+ * carries, so a request should be as large as its bytes allow (the batch
+ * sizes by bytes below this); a request of one ingest-sized batch (512) would
+ * multiply runs and splits per corpus by sixteen. Sixteen start transactions
+ * of at most 512 rows each (`CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE`, the
+ * bound on one transaction's row locks, parameters and guard work) cover it
+ * inside the offline start window, and a revision that keeps its run from
+ * publishing is alone after at most log2(8192) = 13 halvings.
+ */
+export const CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS = 8192;
 
 /**
  * What a generation-level launch probe must do with each intent state.
@@ -33,6 +68,7 @@ export const CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION = {
   cleanup_stalled: "blocking",
   settled: "terminal",
   cancelled: "terminal",
+  withdrawn: "terminal",
 } as const satisfies Record<
   CorpusIndexIntentStatus,
   "blocking" | "census_required" | "terminal"
@@ -56,6 +92,52 @@ export const CORPUS_INDEX_APPEND_CANCEL_REASON = {
   desiredStateChanged: "projection desired state changed before append",
   groupNotAttested: "projection index group was not attested at append start",
 } as const;
+
+/**
+ * What the index still holds of a revision a projection state names, by the
+ * revision's status. Readers address the named revision whatever its status,
+ * so this decides whether the entity is served.
+ *
+ * `intact_until_claimed` is `cleanup_pending`, which holds two cases: a
+ * revision preparation or an erasure queued is whole, while one sent back
+ * after a cleanup claim (a lost lease, a reissue, a reopened settlement) may
+ * already be deleted. Only the cleanup claim increments `cleanup_attempts`,
+ * before it can issue a delete, and nothing resets it, so the counter tells
+ * the two apart. `never_named`: a state names only an applied revision, and
+ * these statuses come before it or instead of it. `withdrawn` is reached only
+ * from `append_committed`, which no state names, and the state guard admits
+ * naming only an applied revision's history, so it is never named either.
+ */
+const CORPUS_INDEX_NAMED_REVISION_COPY = {
+  reserved: "never_named",
+  append_started: "never_named",
+  append_committed: "never_named",
+  applied: "intact",
+  cleanup_pending: "intact_until_claimed",
+  cleanup_started: "delete_unproven",
+  cleanup_committed: "delete_unproven",
+  cleanup_stalled: "delete_unproven",
+  settled: "deleted",
+  cancelled: "never_named",
+  withdrawn: "never_named",
+} as const satisfies Record<
+  CorpusIndexIntentStatus,
+  | "never_named"
+  | "intact"
+  | "intact_until_claimed"
+  | "delete_unproven"
+  | "deleted"
+>;
+
+type CorpusIndexNamedRevisionCopy =
+  (typeof CORPUS_INDEX_NAMED_REVISION_COPY)[CorpusIndexIntentStatus];
+
+export const corpusIndexIntentStatusesWithCopy = (
+  copy: CorpusIndexNamedRevisionCopy,
+): CorpusIndexIntentStatus[] =>
+  CORPUS_INDEX_INTENT_STATUSES.filter(
+    (status) => CORPUS_INDEX_NAMED_REVISION_COPY[status] === copy,
+  );
 
 /** Phases that can create or expose one exact append revision. */
 export const CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES = [
@@ -105,7 +187,22 @@ export const CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS = [
 export const CORPUS_INDEX_QUIESCENT_INTENT_STATUSES = [
   "settled",
   "cancelled",
+  "withdrawn",
 ] as const satisfies readonly CorpusIndexIntentStatus[];
+
+/**
+ * The quiescent statuses the outstanding-intent partial index was built to
+ * leave out, frozen at that build. A status that became quiescent later
+ * (`withdrawn`) stays in the index: the query predicate excludes it, and
+ * because every value left out here is also left out there, PostgreSQL still
+ * proves the query predicate implies the index's. Rebuilding the index to
+ * match would leave a release that asks the older question without its index
+ * for the length of the build.
+ */
+export const CORPUS_INDEX_OUTSTANDING_INDEX_QUIESCENT_STATUSES = [
+  "settled",
+  "cancelled",
+] as const satisfies readonly (typeof CORPUS_INDEX_QUIESCENT_INTENT_STATUSES)[number][];
 
 /**
  * Legal intent transitions. A response lost after an append never returns to
@@ -115,9 +212,14 @@ export const CORPUS_INDEX_QUIESCENT_INTENT_STATUSES = [
 export const CORPUS_INDEX_INTENT_TRANSITIONS = {
   reserved: ["append_started", "cancelled"],
   append_started: ["append_committed", "cleanup_pending"],
-  append_committed: ["applied", "cleanup_pending"],
+  // `withdrawn`: offline delivery only (the status shape requires it), after
+  // a census taken once the indexer had certainly ended counted nothing.
+  append_committed: ["applied", "cleanup_pending", "withdrawn"],
   applied: ["cleanup_pending"],
-  cleanup_pending: ["cleanup_started"],
+  // `applied` is the cleanup claim's restore of a revision queued while its
+  // state still served it and before any delete reached it
+  // (`corpusIndexProjectionRevisionIsRestorable`).
+  cleanup_pending: ["cleanup_started", "applied"],
   cleanup_started: ["cleanup_pending", "cleanup_committed"],
   // A delete settles unless revisions it targeted were written after it, which
   // no delete can reach: those go back to cleanup for a new delete, a bounded
@@ -130,6 +232,9 @@ export const CORPUS_INDEX_INTENT_TRANSITIONS = {
   // engine edge self-healing.
   settled: ["cleanup_pending"],
   cancelled: [],
+  // A later census that finds documents of a withdrawn revision disproves the
+  // withdrawal the way it disproves a settlement, and reopens it the same way.
+  withdrawn: ["cleanup_pending"],
 } as const satisfies Record<
   CorpusIndexIntentStatus,
   readonly CorpusIndexIntentStatus[]

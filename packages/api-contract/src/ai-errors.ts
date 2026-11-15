@@ -22,6 +22,12 @@ export const AI_ERROR_KINDS = [
   "local_runner_relinked",
   "local_runner_restoring",
   "local_runner_folder_unavailable",
+  "local_runner_no_computer",
+  "local_runner_harness_unavailable",
+  "local_runner_model_unavailable",
+  "local_runner_reasoning_effort_unavailable",
+  "local_runner_approvals_unavailable",
+  "local_runner_folder_not_approved",
   "unknown",
 ] as const;
 
@@ -50,6 +56,13 @@ export const AI_FAILURE_CODES = {
   local_runner_relinked: "ai_local_runner_relinked",
   local_runner_restoring: "ai_local_runner_restoring",
   local_runner_folder_unavailable: "ai_local_runner_folder_unavailable",
+  local_runner_no_computer: "ai_local_runner_no_computer",
+  local_runner_harness_unavailable: "ai_local_runner_harness_unavailable",
+  local_runner_model_unavailable: "ai_local_runner_model_unavailable",
+  local_runner_reasoning_effort_unavailable:
+    "ai_local_runner_reasoning_effort_unavailable",
+  local_runner_approvals_unavailable: "ai_local_runner_approvals_unavailable",
+  local_runner_folder_not_approved: "ai_local_runner_folder_not_approved",
   unknown: "ai_unknown",
   role_not_configured: "ai_role_not_configured",
   own_key_required: "ai_own_key_required",

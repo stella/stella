@@ -7,12 +7,13 @@ import {
   type BrowserControlResult,
   type BrowserDesktopRequest,
   type BrowserDesktopResponse,
+  type BrowserDownload,
   parseBrowserDesktopRequest,
   STELLA_DESKTOP_NATIVE_HOST,
 } from "@stll/api-contract/browser-control";
+import { browserControlError } from "@stll/browser-page/browser-control-result";
 
 import { hasDesktopLinkAccess } from "./access";
-import { browserControlError } from "./browser-control-result";
 import { BROWSER_DESKTOP_LINK_STORAGE_KEY } from "./storage-keys";
 
 /**
@@ -64,8 +65,16 @@ const writeDesktopLinkState = async (state: DesktopLinkState) => {
  * a web connection's (a random UUID) and never reaches that connection's
  * controlled tab, receipts or budget.
  */
+const DESKTOP_CONTROLLER_PREFIX = "desktop:";
+
 export const desktopControllerId = (controllerId: string) =>
-  `desktop:${controllerId}`;
+  `${DESKTOP_CONTROLLER_PREFIX}${controllerId}`;
+
+/** The chat id stella desktop sent, from the id its commands run under. */
+export const desktopChatId = (controllerId: string): string | null =>
+  controllerId.startsWith(DESKTOP_CONTROLLER_PREFIX)
+    ? controllerId.slice(DESKTOP_CONTROLLER_PREFIX.length)
+    : null;
 
 export type DesktopCommand = Extract<
   BrowserDesktopRequest,
@@ -239,6 +248,54 @@ export const createDesktopLink = ({
   };
 
   return {
+    /**
+     * Tells stella desktop about a download a chat takes, unasked: when it
+     * starts and once it settles. Dropped while stella desktop is not
+     * connected.
+     */
+    downloadReporter: {
+      settled: ({
+        chatId,
+        deliveryId,
+        download,
+        shownDocument,
+      }: {
+        chatId: string;
+        deliveryId: string;
+        download: BrowserDownload;
+        shownDocument: string | null;
+      }) => {
+        if (current === null) {
+          return;
+        }
+        send(current, {
+          controllerId: chatId,
+          deliveryId,
+          download,
+          shownDocument,
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "download",
+        });
+      },
+      started: (
+        chatId: string,
+        deliveryId: string,
+        shownDocument: string | null,
+      ) => {
+        if (current === null) {
+          return;
+        }
+        send(current, {
+          controllerId: chatId,
+          deliveryId,
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          shownDocument,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "download-started",
+        });
+      },
+    },
     /** Connects unless connected; safe to call on every worker start. */
     connect,
     /** Drops the connection, as when the member takes the permission back. */

@@ -294,6 +294,21 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "not-per-user",
     reason: DOWNLOAD,
   },
+  "lists/graph/nodes/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
+  "lists/graph/neighbours/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
+  "lists/graph/paths/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
   "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
     kind: "keyed",
@@ -322,6 +337,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       "An uncached rewrite proposal; its thread lookup is owner-filtered.",
   },
   "chat/older-messages/list.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/queue/read.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/read-file-thread.ts": {
     kind: "keyed",
     calls: ['api.chat.workspaces()["file-thread"].get'],

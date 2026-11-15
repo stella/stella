@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
+  countDictationCodePoints,
+  DESKTOP_DICTATION_APP_KINDS,
   DESKTOP_DICTATION_CLEANUP_LIMITS,
   DESKTOP_DICTATION_CLEANUP_PATH,
   DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY,
@@ -18,6 +20,10 @@ test("the native contract file matches the typed cleanup contract", () => {
     maxLocaleLength: DESKTOP_DICTATION_CLEANUP_LIMITS.localeLength,
     maxLanguages: DESKTOP_DICTATION_CLEANUP_LIMITS.languages,
     maxSegments: DESKTOP_DICTATION_CLEANUP_LIMITS.segments,
+    maxWindowTitleLength: DESKTOP_DICTATION_CLEANUP_LIMITS.windowTitleLength,
+    maxTextBeforeCursorLength:
+      DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength,
+    appKinds: [...DESKTOP_DICTATION_APP_KINDS],
     ...DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY,
   });
   expect(DESKTOP_DICTATION_CLEANUP_PATH.startsWith("/v1/desktop/")).toBe(true);
@@ -105,6 +111,52 @@ test("a cleanup request is bounded and admits only language tags as locale and l
   ]) {
     expect(
       v.safeParse(desktopDictationCleanupRequestSchema, body).success,
+    ).toBe(false);
+  }
+});
+
+test("a cleanup request may say where the text goes, bounded by code point", () => {
+  const { windowTitleLength, textBeforeCursorLength } =
+    DESKTOP_DICTATION_CLEANUP_LIMITS;
+  // An astral character is two UTF-16 units but one code point, the unit the
+  // desktop counts in.
+  const title = "📄".repeat(windowTitleLength);
+  expect(title.length).toBe(windowTitleLength * 2);
+  expect(countDictationCodePoints(title)).toBe(windowTitleLength);
+  const lines = "Článek 1\n\tSmluvní strany ";
+  const textBeforeCursor = `${lines}${"x".repeat(
+    textBeforeCursorLength - countDictationCodePoints(lines),
+  )}`;
+  for (const appKind of DESKTOP_DICTATION_APP_KINDS) {
+    expect(
+      v.safeParse(desktopDictationCleanupRequestSchema, {
+        transcript: "ok",
+        context: { appKind },
+      }).success,
+    ).toBe(true);
+  }
+  expect(
+    v.safeParse(desktopDictationCleanupRequestSchema, {
+      transcript: "ok",
+      context: { appKind: "document", windowTitle: title, textBeforeCursor },
+    }).success,
+  ).toBe(true);
+  for (const context of [
+    { appKind: "word processor" },
+    { windowTitle: "Smlouva.docx" },
+    { appKind: "email", windowTitle: `${title}x` },
+    { appKind: "email", windowTitle: "" },
+    { appKind: "email", windowTitle: "Smlouva\n.docx" },
+    { appKind: "chat", textBeforeCursor: `${textBeforeCursor}x` },
+    { appKind: "chat", textBeforeCursor: "enter\r" },
+    { appKind: "chat", textBeforeCursor: "" },
+    { appKind: "chat", selection: "everything" },
+  ]) {
+    expect(
+      v.safeParse(desktopDictationCleanupRequestSchema, {
+        transcript: "ok",
+        context,
+      }).success,
     ).toBe(false);
   }
 });

@@ -27,6 +27,9 @@ if (mode === "prompts") {
           transcript: scenario.transcript,
           locale: scenario.locale,
           languages: [scenario.locale],
+          ...(scenario.context === undefined
+            ? {}
+            : { context: scenario.context }),
         }),
         outputSchema,
         instruction:

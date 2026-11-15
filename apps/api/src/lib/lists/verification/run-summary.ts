@@ -45,7 +45,7 @@ const stateFilterCount = (state: ClaimState): SQL<number> =>
 /** Total over the claim states, so a new state cannot go uncounted. These
  *  count each claim by the state its run wrote; `countAsReviewed` then moves
  *  the claims whose reviewers changed what that state reads as. */
-export const CLAIM_COUNT_COLUMNS = {
+const CLAIM_COUNT_COLUMNS = {
   supported: stateFilterCount(CLAIM_STATE.SUPPORTED),
   tension: stateFilterCount(CLAIM_STATE.TENSION),
   contradicted: stateFilterCount(CLAIM_STATE.CONTRADICTED),
@@ -55,7 +55,7 @@ export const CLAIM_COUNT_COLUMNS = {
 } as const satisfies Record<ClaimState, SQL<number>>;
 
 /** The run columns a summary reads, beside the claim counts. */
-export const RUN_SUMMARY_COLUMNS = {
+const RUN_SUMMARY_COLUMNS = {
   id: legalListVerificationRuns.id,
   entityId: legalListVerificationRuns.entityId,
   fileFieldId: legalListVerificationRuns.fileFieldId,
@@ -220,6 +220,9 @@ export const UNPROJECTED_RUN_SUMMARY_COLUMNS = [
   "pipelineVersion",
   "modelRef",
   "startedAt",
+  // Text the run could not read, said and offered again where the run is
+  // opened (lists.verifications.get).
+  "unreadParts",
 ] as const satisfies readonly (keyof RunRow)[];
 
 const runCursor = createTimestampIdCursorCodec({

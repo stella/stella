@@ -63,6 +63,32 @@ const proofMatchesRequest = (
   proof.organizationId === deps.organizationId &&
   proof.userId === deps.usageMetering.userId;
 
+/**
+ * Whether a verification pass may send customer text to a model now: the
+ * requester still holds access and the run's budget has room. Every model
+ * call of a pass, generative or decision, asks first.
+ */
+export const admitVerificationDispatch = async (
+  deps: VerificationModelDeps,
+): Promise<
+  Result<void, ListVerificationAccessRevokedError | ModelRunCapError>
+> => {
+  const proof = await deps.refreshAccessProof();
+  if (
+    !isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") ||
+    proof === null ||
+    !proofMatchesRequest(proof, deps) ||
+    !proofMatchesRequest(deps.accessProof, deps)
+  ) {
+    return Result.err(
+      new ListVerificationAccessRevokedError({
+        message: "List verification access is unavailable",
+      }),
+    );
+  }
+  return await deps.checkRunBudget();
+};
+
 /** Blocks as `[id] text` lines: the ids are what the model cites. */
 export const blocksText = (blocks: readonly VerificationBlock[]): string =>
   blocks.map((block) => `[${block.id}] ${block.text}`).join("\n");
@@ -132,22 +158,9 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
       content: [...sharedParts, { type: "text", content: task }],
     }),
     generate: async (messages) => {
-      const proof = await deps.refreshAccessProof();
-      if (
-        !isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") ||
-        proof === null ||
-        !proofMatchesRequest(proof, deps) ||
-        !proofMatchesRequest(deps.accessProof, deps)
-      ) {
-        return Result.err(
-          new ListVerificationAccessRevokedError({
-            message: "List verification access is unavailable",
-          }),
-        );
-      }
-      const budget = await deps.checkRunBudget();
-      if (Result.isError(budget)) {
-        return budget;
+      const admitted = await admitVerificationDispatch(deps);
+      if (Result.isError(admitted)) {
+        return admitted;
       }
       return Result.ok(
         await generate({

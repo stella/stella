@@ -155,7 +155,7 @@ const colourExemptions = [
       // An awareness placeholder the collaboration server replaces; never drawn.
       "apps/web/src/components/docx/use-folio-collaboration-room.ts",
       // A third-party page's computed colours, compared to find hidden text.
-      "apps/extension/src/lib/tab-executor.ts",
+      "packages/browser-page/src/page-script.ts",
     ],
   },
   {
@@ -441,6 +441,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("request-lifetime.fixture.ts", [
     "request-lifetime/confine-request-reads",
   ]),
+  fixtureRuleOverride("no-literal-document-byte-limit.fixture.ts", [
+    "no-literal-document-byte-limit/no-literal-document-byte-limit",
+  ]),
   fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
     "no-ambient-nondeterminism/no-ambient-nondeterminism",
   ]),
@@ -606,6 +609,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-banned-glyph.fixture.tsx", [
     "no-banned-glyph/no-banned-glyph",
   ]),
+  fixtureRuleOverride("no-hand-built-document-run-queue.fixture.ts", [
+    "no-hand-built-document-run-queue/no-hand-built-document-run-queue",
+  ]),
   fixtureRuleOverride("no-hand-built-step-marker.fixture.tsx", [
     "no-hand-built-step-marker/no-hand-built-step-marker",
   ]),
@@ -710,6 +716,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-chat-table-write.fixture.ts", [
     "no-chat-table-write/no-chat-table-write",
   ]),
+  fixtureRuleOverride("no-chat-turn-time-order.fixture.ts", [
+    "no-chat-turn-time-order/no-chat-turn-time-order",
+  ]),
+  fixtureRuleOverride("no-chat-turn-ordinal-write.fixture.ts", [
+    "no-chat-turn-ordinal-write/no-chat-turn-ordinal-write",
+  ]),
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
   ]),
@@ -784,6 +796,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-billing-cap-crossings.fixture.ts", [
     "require-billing-cap-crossings/require-billing-cap-crossings",
+  ]),
+  fixtureRuleOverride("require-locked-rows-write.fixture.ts", [
+    "require-locked-rows-write/require-locked-rows-write",
   ]),
   fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
     "require-running-entry-guard/require-running-entry-guard",
@@ -1540,6 +1555,7 @@ const config = defineConfig({
   rules: {
     "confine-aggregate-lock/confine-aggregate-lock": "error",
     "count-gated-completion/count-gated-completion": "error",
+    "require-static-timeout-label/require-static-timeout-label": "error",
     "no-raw-sha256/no-raw-sha256": "error",
     // Every base rule is decided here or in the vendored presets, never by a
     // spread: a spread replaces preset severities without naming the rules,
@@ -1781,6 +1797,7 @@ const config = defineConfig({
     "no-direct-property-table-write/no-direct-property-table-write": "error",
     "no-direct-entity-insert/no-direct-entity-insert": "error",
     "no-direct-field-write/no-direct-field-write": "error",
+    "no-independent-fallback-state/no-independent-fallback-state": "error",
     "no-direct-folio-snapshot-retirement/no-direct-folio-snapshot-retirement":
       "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
@@ -1824,6 +1841,14 @@ const config = defineConfig({
     // Date is still truncated there. Changed lines only until its rollout
     // in scripts/guard-rollouts ends.
     "no-truncated-timestamp-comparison/no-date-under-timestamp-cast": "error",
+    // A chat turn's start time does not order turns; `lib/chat/turn-order.ts`
+    // states the order from the turn's ordinal. Changed lines only until its
+    // rollout in scripts/guard-rollouts ends.
+    "no-chat-turn-time-order/no-chat-turn-time-order": "error",
+    // The database assigns a chat turn's position and the thread's counter;
+    // no product code writes either column. Changed lines only until its
+    // rollout in scripts/guard-rollouts ends.
+    "no-chat-turn-ordinal-write/no-chat-turn-ordinal-write": "error",
     "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
     "no-facade-imports/no-facade-imports": "error",
     "docs-source-policy/docs-source-policy": "error",
@@ -2066,6 +2091,7 @@ const config = defineConfig({
   jsPlugins: [
     { name: "gdp-ts", specifier: "./scripts/oxlint-presets/gdp-plugin.mjs" },
     "./.oxlint-plugins/require-contract-domains.ts",
+    "./.oxlint-plugins/require-static-timeout-label.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     // The package's plugins load through local re-exports; the modules say why.
     "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
@@ -2091,6 +2117,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-in-flow-viewport-popup.ts",
     "./.oxlint-plugins/no-unformatted-number.ts",
     "./.oxlint-plugins/no-literal-minor-unit-scale.ts",
+    "./.oxlint-plugins/no-literal-document-byte-limit.ts",
     "./.oxlint-plugins/no-canonical-money-form-parse.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
@@ -2138,6 +2165,7 @@ const config = defineConfig({
     "./.oxlint-plugins/retention-source-independence.ts",
     "./.oxlint-plugins/retention-oracle-owner.ts",
     "./.oxlint-plugins/no-banned-glyph.ts",
+    "./.oxlint-plugins/no-hand-built-document-run-queue.ts",
     "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
@@ -2245,6 +2273,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-worker-database-login-posture.ts",
     "./.oxlint-plugins/require-billing-cap-crossings.ts",
+    "./.oxlint-plugins/require-locked-rows-write.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/no-direct-clause-variant-insert.ts",
@@ -2255,6 +2284,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-field-write.ts",
     "./.oxlint-plugins/no-chat-table-write.ts",
     "./.oxlint-plugins/fill-diagnostics.ts",
+    "./.oxlint-plugins/no-independent-fallback-state.ts",
     "./.oxlint-plugins/no-direct-folio-snapshot-retirement.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-direct-decision-identifier-column-write.ts",
@@ -2295,6 +2325,8 @@ const config = defineConfig({
     "./.oxlint-plugins/exhaustive-union-map.ts",
     "./.oxlint-plugins/no-dynamic-key-in-operator.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
+    "./.oxlint-plugins/no-chat-turn-time-order.ts",
+    "./.oxlint-plugins/no-chat-turn-ordinal-write.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
     "./.oxlint-plugins/require-query-options-key.ts",
@@ -2546,6 +2578,9 @@ const config = defineConfig({
       ],
       rules: { "no-test-support-import/no-test-support-import": "error" },
     },
+    fixtureRuleOverride("require-static-timeout-label.fixture.ts", [
+      "require-static-timeout-label/require-static-timeout-label",
+    ]),
     {
       files: [
         "apps/api/src/handlers/case-law/ingestion/retention/sources/**/*.ts",
@@ -4796,6 +4831,16 @@ const config = defineConfig({
       },
     },
     {
+      // The document limit is declared once in the API contract. A byte count
+      // equal to it anywhere else is a hand copy that stops agreeing when the
+      // limit moves; every app and package imports the constant instead.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-literal-document-byte-limit/no-literal-document-byte-limit":
+          "error",
+      },
+    },
+    {
       files: ["packages/ui/src/**/*.{ts,tsx}"],
       rules: {
         "no-restricted-imports": [
@@ -5986,6 +6031,7 @@ const config = defineConfig({
       files: [
         "apps/extension/src/lib/desktop-link.ts",
         "packages/agent-engine/src/sidecar/browser/**/*.ts",
+        "packages/browser-page/src/**/*.ts",
       ],
       excludeFiles: ["**/*.test.ts"],
       rules: {
@@ -6136,6 +6182,15 @@ const config = defineConfig({
       },
     },
     {
+      // A row lock decides on the rows it returned; a later write to the same
+      // table must name those rows, not repeat the lock's filter.
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-locked-rows-write/require-locked-rows-write": "error",
+      },
+    },
+    {
       // Returning a failure value from a transaction callback commits the
       // partial write it was meant to reject. Scoped to the API source, where
       // `safeDb` / `.transaction(...)` open real transactions; the two session
@@ -6176,6 +6231,17 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.{ts,tsx,mts,cts}"],
       rules: {
         "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write":
+          "error",
+      },
+    },
+    {
+      // A document run queue has one owner,
+      // apps/api/src/lib/queue/document-run-queue.ts; a module that reads a
+      // document run table does not build its own BullMQ queue or worker.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "no-hand-built-document-run-queue/no-hand-built-document-run-queue":
           "error",
       },
     },

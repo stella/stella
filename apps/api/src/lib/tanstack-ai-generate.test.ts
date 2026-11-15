@@ -123,6 +123,7 @@ type ProviderRun =
 type ProviderRequestMethod = "chatStream" | "structuredOutput";
 
 type CapturedProviderRequest = {
+  threadId: string | undefined;
   messages: unknown;
   method: ProviderRequestMethod;
   modelOptions: unknown;
@@ -290,8 +291,9 @@ const providerAdapter: AnyTextAdapter = {
     toolCallMetadata: {},
     systemPromptMetadata: undefined,
   },
-  async *chatStream({ messages, modelOptions, systemPrompts }) {
+  async *chatStream({ messages, modelOptions, systemPrompts, threadId }) {
     providerRequests.push({
+      threadId,
       messages,
       method: "chatStream",
       modelOptions,
@@ -349,6 +351,7 @@ const providerAdapter: AnyTextAdapter = {
   },
   structuredOutput: async ({ chatOptions, outputSchema }) => {
     providerRequests.push({
+      threadId: chatOptions.threadId,
       messages: chatOptions.messages,
       method: "structuredOutput",
       modelOptions: chatOptions.modelOptions,
@@ -533,7 +536,7 @@ describe("TanStack AI structured output generation", () => {
             return;
           default:
             path satisfies never;
-            return;
+            break;
         }
       })().then(
         () => undefined,
@@ -1217,6 +1220,8 @@ describe("TanStack AI structured output generation", () => {
 
     expect(result).toEqual({ answer: "ok" });
     expect(providerRequests).toHaveLength(2);
+    expect(providerRequests[0]?.threadId).toEqual(expect.any(String));
+    expect(providerRequests[1]?.threadId).toBe(providerRequests[0]?.threadId);
     expect(providerRequests[0]?.modelOptions).toMatchObject({
       service_tier: "flex",
     });
@@ -1502,6 +1507,8 @@ describe("TanStack AI structured output generation", () => {
       },
     ]);
     expect(providerRequests).toHaveLength(2);
+    expect(providerRequests[0]?.threadId).toEqual(expect.any(String));
+    expect(providerRequests[1]?.threadId).toBe(providerRequests[0]?.threadId);
     expect(providerRequests[0]?.modelOptions).toMatchObject({
       service_tier: "flex",
     });
@@ -2849,6 +2856,7 @@ describe("a chat run a caller consumes itself", () => {
     const chunks: unknown[] = [];
     const caught = await (async () => {
       for await (const chunk of streamTanStackChatRun({
+        threadId: "test-thread",
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         userId: null,
         model: testModel,

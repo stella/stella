@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Podpis",
     "pdfSignCertificate": "Certyfikat podpisu",
     "pdfSignDocument": "Dokument",
+    "pdfSignDownloadDriver": "Pobierz sterownik",
+    "pdfSignDriverMissing": "Karta w czytniku wymaga sterownika {vendor}, który nie jest zainstalowany. Zainstaluj go, aby podpisywać tą kartą.",
+    "pdfSignDriverNeedsUpdate": "Zainstalowany sterownik {vendor} nie działa na procesorze tego Maca. Zainstaluj jego aktualną wersję, aby podpisywać tą kartą.",
     "pdfSignErrorCode": "Kod błędu: {code}",
     "pdfSignErrors": {
       "authenticationRequired": "Pęk kluczy wymaga Twojej zgody na dostęp do tego certyfikatu. Spróbuj ponownie i zezwól na dostęp.",
@@ -118,6 +121,9 @@
       "startAgain": "Podpisywanie nie mogło być kontynuowane. Rozpocznij podpisywanie ponownie w stelli.",
       "temporarilyUnavailable": "stella nie mogła teraz dokończyć podpisywania. Spróbuj ponownie.",
       "tokenNotPresent": "Karta inteligentna lub token nie jest podłączony. Podłącz go i spróbuj ponownie.",
+      "tokenSigningFailed": "Karta inteligentna lub token nie podpisał dokumentu.",
+      "tokenTimeout": "Karta inteligentna lub token nie odpowiedział na czas. Spróbuj ponownie.",
+      "tokenUnreadable": "Nie udało się odczytać karty inteligentnej lub tokena. Spróbuj ponownie.",
       "unsupportedAlgorithm": "Kluczem tego certyfikatu nie można złożyć podpisu wymaganego przez ten dokument. Wybierz inny certyfikat.",
       "wouldBreakSignatures": "Podpisanie tego PDF unieważniłoby podpisy, które już zawiera."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Sprawa",
     "pdfSignNoIdentities": "W pęku kluczy nie ma dostępnego certyfikatu podpisu.",
     "pdfSignNoIdentitiesCertificateStore": "W magazynie certyfikatów nie ma dostępnego certyfikatu podpisu.",
+    "pdfSignOnToken": "Zapisano na: {tokenLabel}",
+    "pdfSignPin": "PIN",
+    "pdfSignPinFinalTry": "Kolejny błędny PIN zablokuje kartę lub token.",
+    "pdfSignPinLow": "Wcześniej wpisano błędny PIN. Sprawdź PIN uważnie.",
+    "pdfSignPinPad": "Wpisz PIN na czytniku kart, aby podpisać {documentName}.",
+    "pdfSignPinPrompt": "Wpisz PIN karty lub tokenu, aby podpisać {documentName}.",
+    "pdfSignRescanCards": "Wyszukaj karty ponownie",
     "pdfSignRetry": "Spróbuj ponownie",
     "pdfSignServer": "Żąda",
     "pdfSignSign": "Podpisz",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Widoczna pieczątka na stronie {pageNumber}",
     "pdfSignSubtitle": "Klucz prywatny pozostaje w pęku kluczy; ten komputer opuszcza tylko podpis.",
     "pdfSignSubtitleCertificateStore": "Klucz prywatny pozostaje w magazynie certyfikatów; ten komputer opuszcza tylko podpis.",
+    "pdfSignSubtitleToken": "Klucz prywatny pozostaje na karcie inteligentnej lub tokenie; ten komputer opuszcza tylko podpis.",
     "pdfSignTitle": "Podpisać ten plik PDF?",
     "pdfSignUnsupported": "Podpisywanie wymaga systemu macOS lub Windows. Otwórz dokument na Macu lub komputerze z Windows, aby go podpisać.",
     "pdfSignVersion": "Wersja",
@@ -232,6 +246,8 @@
     "permissionNotificationsDescription": "Powiadamia, gdy dokument jest gotowy lub synchronizacja wymaga uwagi.",
     "permissionAccessibility": "Dostępność",
     "permissionAccessibilityDescription": "Pozwala osi czasu aktywności zapisywać tytuły okien.",
+    "permissionMicrophone": "Mikrofon",
+    "permissionMicrophoneDescription": "Pozwala dyktowaniu słyszeć Cię, gdy trzymasz jego skrót.",
     "permissionAllowed": "Dozwolone",
     "permissionAllow": "Zezwól",
     "permissionOpenSettings": "Otwórz ustawienia",
@@ -294,6 +310,7 @@
     "errorReadHistory": "Nie udało się wczytać historii schowka.",
     "errorUpdateHistory": "Nie udało się zaktualizować historii schowka.",
     "formattedText": "Tekst sformatowany",
+    "dictation": "Dyktowanie",
     "image": "Obraz",
     "imageCleanupPending": "Nie udało się usunąć części danych skasowanych obrazów. Czyszczenie zostanie automatycznie ponowione.",
     "imageDimensions": "{width} × {height} pikseli",
@@ -582,9 +599,32 @@
   "dictation": {
     "title": "Dyktowanie",
     "description": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowa jest przetwarzana na tym komputerze i nie jest zapisywana. Po włączeniu poprawiania przez AI przetworzony tekst (nie dźwięk) jest wysyłany za pośrednictwem stelli do dostawcy AI Twojej organizacji w celu poprawienia błędów i formatowania; stella go nie zapisuje.",
+    "descriptionCloud": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowę przetwarza stella AI, a stella jej nie przechowuje.",
     "cleanup": {
       "title": "Popraw za pomocą AI",
-      "description": "Mowa nadal jest przetwarzana na tym komputerze, a dźwięk nigdy go nie opuszcza. Po włączeniu poprawiania przetworzony tekst jest wysyłany za pośrednictwem stelli do dostawcy AI Twojej organizacji, który poprawia błędy rozpoznawania i stosuje podyktowaną interpunkcję oraz formatowanie, na przykład „nowa linia” lub „pogrubienie”. stella go nie zapisuje."
+      "description": "Mowa nadal jest przetwarzana na tym komputerze, a dźwięk nigdy go nie opuszcza. Po włączeniu poprawiania przetworzony tekst jest wysyłany za pośrednictwem stelli do dostawcy AI Twojej organizacji, który poprawia błędy rozpoznawania i stosuje podyktowaną interpunkcję oraz formatowanie, na przykład „nowa linia” lub „pogrubienie”. stella go nie zapisuje. Poprawianie otrzymuje też rodzaj aplikacji, w której dyktujesz, na przykład poczta e-mail lub czat, aby tekst do niej pasował.",
+      "descriptionCloud": "Po włączeniu poprawiania stella AI poprawia też błędy rozpoznawania w przetworzonym tekście i stosuje podyktowaną interpunkcję oraz formatowanie, na przykład „nowa linia” lub „pogrubienie”. Poprawianie otrzymuje też rodzaj aplikacji, w której dyktujesz, na przykład poczta e-mail lub czat, aby tekst do niej pasował."
+    },
+    "context": {
+      "windowTitle": {
+        "title": "Udostępniaj tytuł okna poprawianiu przez AI",
+        "description": "Poprawianie otrzymuje też tytuł okna, w którym dyktujesz, aby odróżnić na przykład umowę od notatki służbowej. Tytuły okien mogą zawierać nazwiska klientów lub nazwy spraw. Tytuł jest wysyłany za pośrednictwem stelli do dostawcy AI Twojej organizacji, a stella go nie zapisuje."
+      },
+      "textBeforeCursor": {
+        "title": "Udostępniaj tekst przed kursorem poprawianiu przez AI",
+        "description": "Poprawianie otrzymuje też do {limit, number} znaków przed kursorem, aby dyktowany tekst nawiązywał do tego, co piszesz. W ten sposób część dokumentu, w którym jesteś, jest wysyłana za pośrednictwem stelli do dostawcy AI Twojej organizacji, a stella jej nie zapisuje."
+      }
+    },
+    "keptInHistory": "Każde dyktowanie jest też zapisywane w historii schowka na tym komputerze.",
+    "destination": {
+      "title": "Przetwarzaj za pomocą",
+      "local": "Ten komputer",
+      "cloud": "stella AI",
+      "cloudDescription": "Dźwięk opuszcza ten komputer: w celu przetworzenia jest wysyłany do stelli, a za pośrednictwem dostawcy AI stelli do dostawcy wybranego modelu. stella go nie przechowuje.",
+      "unavailableRegion": "stella AI nie oferuje jeszcze przetwarzania mowy w regionie Twojej organizacji.",
+      "unavailableProvider": "Dostawca AI Twojej organizacji nie oferuje przetwarzania mowy.",
+      "unavailable": "Przetwarzanie przez stella AI jest teraz niedostępne.",
+      "model": "Model przetwarzania"
     },
     "language": {
       "title": "Język dyktowania",
@@ -606,8 +646,10 @@
       "transcription": "Transkrypcja nie powiodła się. Spróbuj ponownie.",
       "focusChanged": "Przełączono na inną aplikację, zanim tekst był gotowy, więc nic nie zostało wpisane. Spróbuj ponownie.",
       "focusUnconfirmed": "stella nie mogła potwierdzić, która aplikacja jest aktywna, więc nic nie zostało wpisane. Spróbuj ponownie.",
-      "shortcutHeld": "Puść klawisze skrótu, aby można było wpisać tekst. Nic nie zostało wpisane; spróbuj ponownie."
-    }
+      "shortcutHeld": "Puść klawisze skrótu, aby można było wpisać tekst. Nic nie zostało wpisane; spróbuj ponownie.",
+      "cloudTranscription": "stella AI nie przetworzyła tego dyktowania, a modelu mowy nie ma na tym komputerze. Spróbuj ponownie albo w „Przetwarzaj za pomocą” wybierz „Ten komputer” i pobierz model."
+    },
+    "failureKeptInHistory": "Tekst jest w historii schowka."
   },
   "shortcut": {
     "title": "Skrót schowka",
@@ -724,6 +766,18 @@
     "introduceActivityTitle": "Nowość: oś czasu aktywności",
     "introduceActivityBody": "Aktywność jest teraz dostępna dla Twojego konta. Nic nie jest zapisywane, dopóki nie uruchomisz jej w oknie aktywności.",
     "openActivity": "Otwórz aktywność",
+    "dictationModel": "Model mowy ({size} MB) jest pobierany raz i działa na tym komputerze.",
+    "dictationTurnOn": "Włącz i pobierz",
+    "dictationDownloadContinues": "Możesz kontynuować. Pobieranie trwa w tle.",
+    "dictationReady": "Dyktowanie jest włączone i gotowe.",
+    "dictationTryLabel": "Dyktuj tutaj",
+    "dictationTryPlaceholder": "Kliknij tutaj, przytrzymaj {shortcut} i powiedz zdanie.",
+    "dictationListening": "Słucham…",
+    "dictationTranscribing": "Zapisuję, co mówisz…",
+    "dictationMicrophone": "Dzięki temu stella słyszy Cię, gdy trzymasz skrót.",
+    "dictationAccessibility": "Dzięki temu stella wpisze to, co mówisz, w aplikacji, której używasz.",
+    "dictationFailed": "stella desktop nie mógł włączyć dyktowania. Spróbuj ponownie.",
+    "introduceDictationTitle": "Nowość: dyktowanie",
     "guideWaiting": "Włącz stella desktop na liście powyżej, aby zezwolić na Dostępność.",
     "guideAllowed": "stella desktop ma uprawnienie",
     "never": {
@@ -830,6 +884,18 @@
       "runs_can_write": "Lokalne uruchomienia mogą zapisywać w tym folderze, więc nie może on zawierać umiejętności.",
       "network_folder": "Ten folder znajduje się w udziale sieciowym. Umiejętności muszą być na dysku tego komputera.",
       "path_changed": "Zmienił się folder nadrzędny. Usuń ten folder i dodaj go ponownie."
+    }
+  },
+  "signingDriver": {
+    "title": "Sterownik karty inteligentnej",
+    "description": "Jeśli stella desktop nie znajdzie sama sterownika Twojej karty inteligentnej lub tokenu, wybierz jego moduł PKCS #11. Jest on wczytywany tylko do podpisywania plików PDF, w osobnym procesie.",
+    "choose": "Wybierz moduł",
+    "remove": "Usuń",
+    "notice": {
+      "action_failed": "Nie udało się. Spróbuj ponownie.",
+      "missing": "Ten plik już nie istnieje.",
+      "needs_update": "Ten moduł nie działa na procesorze tego Maca. Zainstaluj aktualną wersję sterownika.",
+      "not_a_library": "Ten plik nie jest modułem PKCS #11."
     }
   },
   "localLinkedFolders": {

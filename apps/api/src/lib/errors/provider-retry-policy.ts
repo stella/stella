@@ -102,6 +102,21 @@ export const isTransientProviderFailure = (error: unknown): boolean => {
     case "deadline_exceeded":
     case "loop_detected":
     case "empty_completion":
+    case "turn_too_large":
+    case "local_runner_needs_login":
+    case "local_runner_limit_reached":
+    case "local_runner_unavailable":
+    case "local_runner_turn_too_large":
+    case "local_runner_not_reached":
+    case "local_runner_relinked":
+    case "local_runner_restoring":
+    case "local_runner_folder_unavailable":
+    case "local_runner_no_computer":
+    case "local_runner_harness_unavailable":
+    case "local_runner_model_unavailable":
+    case "local_runner_reasoning_effort_unavailable":
+    case "local_runner_approvals_unavailable":
+    case "local_runner_folder_not_approved":
       return false;
     case "unknown": {
       const status = statusOf(error);

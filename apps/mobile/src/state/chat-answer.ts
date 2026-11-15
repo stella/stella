@@ -68,11 +68,11 @@ export type AnswerStep =
       readonly subtitle: LocalRunToolSubtitle | null;
       readonly status: StepStatus;
       /**
-       * The step viewed an image, which stays on the computer that ran it:
-       * stella desktop serves it there to a page on that computer only, so
-       * the phone says where it opens instead of opening it.
+       * The call whose stored content (a command's output, a diff, an image
+       * it viewed) the step opens onto; null for a step still running, and
+       * for one that produced nothing to open.
        */
-      readonly opensOnComputer: boolean;
+      readonly contentCallId: string | null;
     }
   | { readonly type: "reasoning"; readonly text: string };
 
@@ -102,10 +102,10 @@ export type AnswerBlock =
       readonly agentType: string | null;
       readonly status: LocalRunSubagentStatus;
       /**
-       * The subagent ended with a result, so what it was told, wrote and
-       * reported is kept on the computer that ran it, which alone opens it.
+       * The call its own conversation (what it was told, wrote and reported)
+       * is read by, once it ended with a result; null while it works.
        */
-      readonly opensOnComputer: boolean;
+      readonly conversationCallId: string | null;
       /** Every step it took, one that waits on an approval included. */
       readonly stepCount: number;
       /**
@@ -138,11 +138,23 @@ const toStep = (part: AnswerPart): AnswerStep => {
         label,
         status,
         ...local,
-        opensOnComputer:
-          status !== "running" &&
-          localRunStepOutputKind({ name, input: part.input }) === "image",
+        contentCallId: contentCallId(part),
       };
 };
+
+/**
+ * The call a step's stored content is read by: only a call that ended with
+ * a result, as the web offers it, of a kind a coding agent's step stores.
+ */
+const contentCallId = (part: AnswerPart): string | null =>
+  typeof part.id === "string" &&
+  part.output !== undefined &&
+  localRunStepOutputKind({
+    name: typeof part.name === "string" ? part.name : "",
+    input: part.input,
+  }) !== null
+    ? part.id
+    : null;
 
 /** A call runs until it completes; it failed when it errored or said so. */
 const stepStatus = (part: AnswerPart): StepStatus => {
@@ -260,9 +272,7 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
         own: ownStanding,
         steps: taken.map(({ part }) => stepStanding(part)),
       }),
-      opensOnComputer:
-        own.output !== undefined &&
-        (ownStanding === "done" || ownStanding === "failed"),
+      conversationCallId: contentCallId(own),
       stepCount: taken.length,
       steps: taken
         .filter((step) => groups.rowIn.has(step.id))

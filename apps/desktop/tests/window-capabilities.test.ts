@@ -45,6 +45,7 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/mainview/LocalSkillFoldersSection.tsx",
     "src/mainview/PermissionsSection.tsx",
     "src/mainview/ShortcutSetting.tsx",
+    "src/mainview/SigningDriverSection.tsx",
     "src/shared/ShortcutRecorder.tsx",
     "src/shared/use-clipboard-shortcut.ts",
   ],
@@ -54,6 +55,7 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/onboarding.json": [
     "src/onboarding/OnboardingApp.tsx",
     "src/onboarding/ConnectStep.tsx",
+    "src/onboarding/use-dictation.ts",
     "src/onboarding/HowItWorksStep.tsx",
     "src/onboarding/PermissionsStep.tsx",
     "src/onboarding/TryItStep.tsx",

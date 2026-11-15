@@ -42,6 +42,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
         // db-await-in-loop: finish the bounded public seed before the production readiness assertion admits this isolated fixture.
         const batch = await db.execute(
           sql`SELECT * FROM public.seed_case_law_population_counts(2048)`,
+          "objects",
         );
         seeded = batch.at(0)?.["done"] === true;
       }
@@ -93,7 +94,9 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
             unredactedCaseLawDecisions,
           ]) {
             const config = getViewConfig(view);
-            const rendered = dialect.sqlToQuery(config.query);
+            const rendered = dialect.sqlToQuery(
+              config.query ?? panic("Declared view must include a query"),
+            );
             // db-await-in-loop: bind each production view to the isolated corpus.
             await tx.execute(sql`CREATE VIEW ${schema}.${sql.identifier(config.name)}
               AS (${sql.raw(rendered.sql)})`);

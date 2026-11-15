@@ -36,18 +36,22 @@ export type AppOnlyWriteId =
   | "chat.threads.limit-reminder.cancel"
   | "chat.threads.limit-reminder.set"
   | "chat.threads.model.update"
+  | "chat.turns.steer"
   | "files.document-properties.update"
   | "files.email-attachment.save"
   | "folio-collaboration.join"
   | "folio-collaboration.refresh-token"
   | "folio-collaboration.seed.acknowledge"
   | "organization-settings.local-runs.update"
+  | "organization-settings.verification-decision-model.update"
   | "organizations.audit-export.create"
   | "search.case-law-section.list"
   | "sharepoint.connect"
   | "sharepoint.connection.delete"
   | "sharepoint.enablement.update"
-  | "sharepoint.imports.create";
+  | "sharepoint.imports.create"
+  | "skills.from-chat.read"
+  | "skills.save-draft.create";
 
 /** Declares an app-only write that deliberately has no automation capability. */
 export const invokeAppOnlyWrite = async <TResult>(

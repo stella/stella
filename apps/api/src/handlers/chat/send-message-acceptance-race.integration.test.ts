@@ -284,6 +284,7 @@ describe("a regeneration of the latest user turn", () => {
       safeDb,
       threadId,
       turnAcceptance: createChatTurnAcceptance({
+        source: { type: "member" },
         organizationId: ids.orgA,
         threadId,
         userId: ids.userA1,

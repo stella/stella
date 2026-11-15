@@ -1,4 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type {
+  BetaOutputConfig,
+  BetaThinkingConfigParam,
+} from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import type { ThinkingConfig } from "@google/genai";
 import { HarmBlockThreshold, HarmCategory } from "@google/genai";
 import { FetchHttpHandler } from "@smithy/fetch-http-handler";
 import { createModel, EventType, extendAdapter } from "@tanstack/ai";
@@ -165,20 +170,14 @@ type MissingInstanceProvider = Exclude<
 
 true satisfies MissingInstanceProvider extends never ? true : never;
 
-type AnthropicAdaptiveThinking = {
-  type: "adaptive";
-  display?: "omitted" | "summarized" | undefined;
-};
+// The provider-native settings preserve reviewed defaults that the unified
+// reasoning level cannot express (adaptive thinking without a chosen effort).
+// The adapter patch rejects mixing these with top-level reasoning.
+type StellaAnthropicThinking = BetaThinkingConfigParam;
 
-type StellaAnthropicThinking =
-  | NonNullable<AnthropicTextProviderOptions["thinking"]>
-  | AnthropicAdaptiveThinking;
-
-type StellaAnthropicTextProviderOptions = Omit<
-  AnthropicTextProviderOptions,
-  "thinking"
-> & {
+type StellaAnthropicTextProviderOptions = AnthropicTextProviderOptions & {
   thinking?: StellaAnthropicThinking | undefined;
+  output_config?: BetaOutputConfig | undefined;
 };
 
 type AnthropicReasoningEffort = NonNullable<
@@ -209,10 +208,7 @@ type ResolvedGoogleThinkingLevel = v.InferOutput<
   typeof resolvedGoogleThinkingLevelSchema
 >;
 
-type StellaGeminiThinkingConfig = Omit<
-  NonNullable<GeminiTextProviderOptions["thinkingConfig"]>,
-  "thinkingLevel"
-> & {
+type StellaGeminiThinkingConfig = Omit<ThinkingConfig, "thinkingLevel"> & {
   thinkingLevel: ResolvedGoogleThinkingLevel;
 };
 

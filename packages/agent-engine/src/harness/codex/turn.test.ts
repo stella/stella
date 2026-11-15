@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
-import type { HarnessEvent } from "../events";
+import { harnessBoundary, type HarnessEvent } from "../events";
 import { HARNESS_TOOL_NAMES } from "../tool-parts";
 import { CodexItemSchema, isCodexItemType } from "./protocol";
 import { CodexTurnSession } from "./turn";
@@ -190,7 +190,11 @@ describe("Codex items that only add to what chat shows", () => {
           }
         });
         expect(events.map(({ type }) => type)).not.toContain("turn.failed");
-        expect(events.at(-1)).toEqual({ type: "turn.completed", usage: null });
+        expect(events.at(-1)).toEqual({
+          type: "turn.completed",
+          usage: null,
+          boundary: harnessBoundary(MAIN_TURN),
+        });
         // Exactly the completed items the adapter cannot read are shown as
         // unsupported, by their kind; none is dropped and none read twice.
         expect(unsupportedSteps(events)).toEqual(
@@ -232,7 +236,11 @@ describe("Codex items that only add to what chat shows", () => {
           }
         });
         expect(events.map(({ type }) => type)).not.toContain("turn.failed");
-        expect(events.at(-1)).toEqual({ type: "turn.completed", usage: null });
+        expect(events.at(-1)).toEqual({
+          type: "turn.completed",
+          usage: null,
+          boundary: harnessBoundary(MAIN_TURN),
+        });
         expect(unsupportedSteps(events)).toEqual(
           sent
             .filter(
@@ -264,5 +272,30 @@ describe("Codex items that only add to what chat shows", () => {
       type: "turn.failed",
       failure: { type: "protocol_violation" },
     });
+  });
+});
+
+describe("the model a Codex turn ran on", () => {
+  test("a reroute of this turn names the model it moved to; one of another turn is not this turn's", async () => {
+    const events = await eventsOf((notify) => {
+      notify("model/rerouted", {
+        threadId: MAIN_THREAD,
+        turnId: "turn-earlier",
+        fromModel: "gpt-asked",
+        toModel: "gpt-other-turn",
+        reason: "highRiskCyberActivity",
+      });
+      notify("model/rerouted", {
+        threadId: MAIN_THREAD,
+        turnId: MAIN_TURN,
+        fromModel: "gpt-asked",
+        toModel: "gpt-rerouted",
+        reason: "highRiskCyberActivity",
+      });
+    });
+    expect(events.filter(({ type }) => type === "model.rerouted")).toEqual([
+      { type: "model.rerouted", model: "gpt-rerouted" },
+    ]);
+    expect(events.at(-1)?.type).toBe("turn.completed");
   });
 });

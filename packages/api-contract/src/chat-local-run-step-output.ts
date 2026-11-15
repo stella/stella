@@ -4,18 +4,10 @@ import * as v from "valibot";
 /**
  * What a coding agent's step produced on the member's computer (a command's
  * output, a change's diff, a subagent's own conversation, an image it
- * viewed) stays on that computer. The chat keeps only the step's call id,
- * which names its run; a page on the same computer reads the output from
- * the desktop app's loopback bridge, never through the API.
- *
- * The API's part is a grant: for the member who owns the run, a short-lived
- * key derived from the run's output key, a random key of that run alone,
- * which the API keeps with the run, handed the desktop in `run.start`, and
- * the desktop keeps beside the run's outputs. The desktop
- * derives the same key from its own linked account, so a grant made for
- * another member, another organization or another run never verifies, and
- * each request is signed with it the way the bridge's other requests are
- * (`timestamp\nGET\npath`). Both ends follow `chat-local-run-step-output.fixtures.json`.
+ * viewed), as the computer cuts and names it: the step's chat call id, which
+ * names its run, the caps a step's content is kept under, which bytes make an
+ * image, and how a subagent's conversation is written. The computer sends it
+ * to stella, which stores it beside the call (`chat-local-run-step-content`).
  */
 
 /**
@@ -65,9 +57,6 @@ export const chatLocalRunOfCall = (callId: string): string | null => {
  * subagent's conversation) is left out and the step says how much there
  * was; an image past it is not kept at all, since part of one shows
  * nothing, and its cap is the larger so that an ordinary screenshot is kept.
- * A kept file does not say which kind it holds, so the desktop bounds every
- * answer by the largest of these; each kind's own cap is held where a step is
- * written and where a page reads it.
  */
 export const CHAT_LOCAL_RUN_STEP_MAX_BYTES = {
   text: 1024 * 1024,
@@ -171,55 +160,3 @@ export const parseChatLocalRunConversation = (
     );
     return entry.success ? [entry.output] : [];
   });
-
-/** How long a grant to read a run's step outputs lasts, in seconds. */
-export const CHAT_LOCAL_RUN_STEP_OUTPUT_GRANT_SECONDS = 300;
-
-const hexKeySchema = v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u));
-
-/** A run's output key, as `run.start` carries it. */
-export const chatLocalRunOutputKeySchema = hexKeySchema;
-
-/** What the API answers for a grant: the key and when it expires (Unix seconds). */
-const chatLocalRunStepOutputGrantSchema = v.strictObject({
-  key: hexKeySchema,
-  expiresAt: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
-});
-export type ChatLocalRunStepOutputGrant = v.InferOutput<
-  typeof chatLocalRunStepOutputGrantSchema
->;
-
-type GrantMessageOptions = {
-  runId: string;
-  userId: string;
-  organizationId: string;
-  expiresAt: number;
-};
-
-/** What a grant key signs, with the run's output key as the HMAC key. */
-export const chatLocalRunStepOutputGrantMessage = ({
-  runId,
-  userId,
-  organizationId,
-  expiresAt,
-}: GrantMessageOptions): string =>
-  `stella.step-output-grant.v1\n${runId}\n${userId}\n${organizationId}\n${String(expiresAt)}`;
-
-/**
- * The bridge path of one step's output. `stepKey` is the SHA-256 hex of the
- * step's chat call id, so a path names no harness id and is safe as a file
- * name on the computer.
- */
-export const chatLocalRunStepOutputBridgePath = (
-  runId: string,
-  stepKey: string,
-): string =>
-  `/v1/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepKey)}/output`;
-
-/** Headers a step output request and its answer carry beside the bridge proof. */
-export const CHAT_LOCAL_RUN_STEP_OUTPUT_HEADERS = {
-  /** The grant's expiry, which the desktop signs into its key again. */
-  grantExpiresAt: "x-stella-bridge-grant",
-  /** How many bytes the step produced, kept or not. */
-  totalBytes: "x-stella-output-bytes",
-} as const;

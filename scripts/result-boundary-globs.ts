@@ -136,6 +136,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
+  "apps/api/src/lib/queue/**/*.ts",
   "apps/api/src/lib/imports/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/email/correspondence/**/*.ts",
@@ -143,6 +144,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/extraction-runs/**/*.ts",
   "apps/api/src/lib/feature-access/**/*.ts",
   "apps/api/src/lib/kill-switches/**/*.ts",
+  "apps/api/src/lib/workspaces/legal-holds/**/*.ts",
   "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/github/**/*.ts",
@@ -272,6 +274,10 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // The page script runs serialised inside a web page and may reference
+  // nothing outside itself, so it cannot import better-result; its catches
+  // turn a DOM parse that throws into a fallback value.
+  "packages/browser-page/src/page-script.ts",
   // Adapter definitions return typed stored-read failures; the existing replay
   // callback protocol consumes those failures through Promise rejection.
   "apps/api/src/lib/legal-search/stored-raw-reparse-boundary.ts",
@@ -304,6 +310,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth invokes these hooks and consumes rejected APIError values.
   // Better Auth organization hooks reject invalid slug operations through APIError.
   "apps/api/src/lib/auth/organization-slug-hooks.ts",
+  "apps/api/src/lib/auth/organization-logo-hooks.ts",
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
   "apps/api/src/lib/auth/request-budget-hooks.ts",
@@ -543,6 +550,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   },
   {
     reason:
+      "Chrome extension offscreen document: its chrome.runtime message listener is the runtime boundary, answering the worker with typed reads. Enrol together with apps/extension/src/entrypoints.",
+    unit: "apps/extension/src/entrypoints/offscreen",
+  },
+  {
+    reason:
       "Chrome extension popup: DOM lookups and chrome.* calls are the runtime boundary. Enrol together with apps/extension/src/entrypoints.",
     unit: "apps/extension/src/entrypoints/popup",
   },
@@ -550,6 +562,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
     reason:
       "Chrome extension library: tab-executor is the boundary that maps chrome.* rejections to protocol error codes. Enrol once chrome.* calls sit behind Result.tryPromise.",
     unit: "apps/extension/src/lib",
+  },
+  {
+    reason:
+      "Shared page code of the browser hosts, moved here from the extension library unchanged. Enrol it with that library; the page script itself is a boundary module.",
+    unit: "packages/browser-page/src",
   },
   { reason: "unreviewed", unit: "apps/landing/src" },
   { reason: "unreviewed", unit: "apps/landing/src/components" },

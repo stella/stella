@@ -12,18 +12,22 @@ import {
   type BrowserExtensionResponse,
   parseBrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
+import { browserControlError } from "@stll/browser-page/browser-control-result";
+import {
+  SIGN_IN_POLICY,
+  type SignInPolicy,
+} from "@stll/browser-page/sign-in-policy";
 
 import {
   hasAllSiteAccess,
   hasDesktopLinkAccess,
   removeAllSiteAccess,
 } from "../lib/access";
-import { browserControlError } from "../lib/browser-control-result";
 import { storedCommandBudget } from "../lib/command-budget";
+import { CONTROL_TRANSPORT } from "../lib/control-holder";
 import {
   admitControl,
   CONTROL_ADMISSION,
-  CONTROL_TRANSPORT,
   takeOverControl,
 } from "../lib/control-owner";
 import { createControlSession } from "../lib/control-session";
@@ -35,6 +39,7 @@ import {
   pairStellaTab,
   readBrowserController,
 } from "../lib/controller";
+import { desktopCommandRefusal } from "../lib/desktop-commands";
 import {
   createDesktopLink,
   DESKTOP_LINK_ALARM,
@@ -48,7 +53,12 @@ import {
   judgeDownload,
   loadDownloadScope,
   noteNavigation,
+  reportDeliveredDownload,
+  saveShownPdf,
+  setDownloadReporter,
   setDownloadScope,
+  setShownPdfReader,
+  type SuggestFilename,
   takeDownloadNotices,
 } from "../lib/download-guard";
 import { executeAtMostOnce } from "../lib/execution-ledger";
@@ -64,7 +74,7 @@ import {
   POPUP_PORT_NAME,
   type PopupResponse,
 } from "../lib/popup-request";
-import { SIGN_IN_POLICY, type SignInPolicy } from "../lib/sign-in-policy";
+import { createOffscreenShownPdfReader } from "../lib/shown-pdf-reader";
 import {
   forgetStellaTab,
   rememberStellaTab,
@@ -163,7 +173,7 @@ type FilenameEvents = {
   addListener: (
     listener: (
       download: chrome.downloads.DownloadItem,
-      suggest: () => void,
+      suggest: SuggestFilename,
     ) => boolean,
   ) => void;
 };
@@ -191,6 +201,7 @@ const registerOptionalListeners = (): void => {
     });
     chrome.downloads.onChanged.addListener((delta) => {
       enforceStoppedDownload(delta).catch(() => undefined);
+      reportDeliveredDownload(delta).catch(() => undefined);
     });
   }
   if (!navigationTargetsRegistered && Reflect.has(chrome, "webNavigation")) {
@@ -273,6 +284,13 @@ const runControlledCommand = async ({
           await executeBrowserCommand(controllerId, command, {
             budget: storedCommandBudget({ command, controllerId, turnId }),
             observedTab,
+            // Only a desktop chat holding the browser has it saved; the
+            // read stands whatever the save does.
+            onPdfShown: async (shown) => {
+              await saveShownPdf({ ...shown, controllerId, turnId }).catch(
+                () => undefined,
+              );
+            },
             signal,
             signIn,
             takeOver: admission.takeOver,
@@ -325,18 +343,6 @@ const runCommand = async (
   });
 
 /**
- * What a coding agent on this computer may ask for: its tools open, read,
- * click and type. Switching to another chat's tab, going back, keys and
- * selects are refused.
- */
-const DESKTOP_ACTIONS: ReadonlySet<string> = new Set([
-  BROWSER_CONTROL_ACTION.click,
-  BROWSER_CONTROL_ACTION.fill,
-  BROWSER_CONTROL_ACTION.open,
-  BROWSER_CONTROL_ACTION.snapshot,
-]);
-
-/**
  * A command from a coding agent on this computer. Chrome only starts the
  * host for this extension and the member allowed it, so there is no pairing
  * to check. A desktop chat that does not hold the browser may only open a
@@ -348,10 +354,11 @@ const runDesktopCommand = async (
 ): Promise<BrowserControlResult> => {
   const controllerId = desktopControllerId(message.controllerId);
   const { command } = message;
-  if (!DESKTOP_ACTIONS.has(command.action)) {
+  const refusal = desktopCommandRefusal(command);
+  if (refusal !== null) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.invalidCommand,
-      "stella desktop opens, reads, clicks and types only.",
+      refusal,
     );
   }
   const result = await runControlledCommand({
@@ -555,6 +562,8 @@ const handlePopupRequest = async (
 
 export default defineBackground(() => {
   onContainedTabsChanged(setDownloadScope);
+  setDownloadReporter(desktopLink.downloadReporter);
+  setShownPdfReader(createOffscreenShownPdfReader());
   loadDownloadScope().catch(() => undefined);
   registerOptionalListeners();
   chrome.permissions.onAdded.addListener(registerOptionalListeners);

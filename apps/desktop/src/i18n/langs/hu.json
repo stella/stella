@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Aláírás",
     "pdfSignCertificate": "Aláírási tanúsítvány",
     "pdfSignDocument": "Dokumentum",
+    "pdfSignDownloadDriver": "Illesztőprogram letöltése",
+    "pdfSignDriverMissing": "Az olvasóban lévő kártyához {vendor}-illesztőprogram kell, de nincs telepítve. Az ezzel a kártyával való aláíráshoz telepítse.",
+    "pdfSignDriverNeedsUpdate": "A telepített {vendor}-illesztőprogram nem fut ennek a Macnek a processzorán. Az ezzel a kártyával való aláíráshoz telepítse az aktuális verzióját.",
     "pdfSignErrorCode": "Hibakód: {code}",
     "pdfSignErrors": {
       "authenticationRequired": "A kulcskarika engedélyt kér a tanúsítvány használatához. Próbálja újra, és engedélyezze a hozzáférést.",
@@ -118,6 +121,9 @@
       "startAgain": "Az aláírás nem folytatható. Indítsa újra az aláírást a stellában.",
       "temporarilyUnavailable": "A stella most nem tudta befejezni az aláírást. Próbálja újra.",
       "tokenNotPresent": "Az intelligens kártya vagy a token nincs csatlakoztatva. Csatlakoztassa, majd próbálja újra.",
+      "tokenSigningFailed": "Az intelligens kártya vagy a token nem írta alá a dokumentumot.",
+      "tokenTimeout": "Az intelligens kártya vagy a token nem válaszolt időben. Próbálja újra.",
+      "tokenUnreadable": "Az intelligens kártyát vagy a tokent nem sikerült beolvasni. Próbálja újra.",
       "unsupportedAlgorithm": "Ennek a tanúsítványnak a kulcsával nem hozható létre a dokumentumhoz szükséges aláírás. Válasszon másik tanúsítványt.",
       "wouldBreakSignatures": "Az aláírás érvénytelenítené a PDF-ben már meglévő aláírásokat."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Ügy",
     "pdfSignNoIdentities": "A kulcskarikán nincs elérhető aláírási tanúsítvány.",
     "pdfSignNoIdentitiesCertificateStore": "A tanúsítványtárolóban nincs elérhető aláírási tanúsítvány.",
+    "pdfSignOnToken": "Tárolás helye: {tokenLabel}",
+    "pdfSignPin": "PIN-kód",
+    "pdfSignPinFinalTry": "Még egy hibás PIN-kód letiltja a kártyát vagy a tokent.",
+    "pdfSignPinLow": "Korábban már hibás PIN-kódot adtak meg. Gondosan ellenőrizze a PIN-kódot.",
+    "pdfSignPinPad": "A dokumentum ({documentName}) aláírásához adja meg a PIN-kódot a kártyaolvasón.",
+    "pdfSignPinPrompt": "A dokumentum ({documentName}) aláírásához adja meg a kártya vagy a token PIN-kódját.",
+    "pdfSignRescanCards": "Kártyák újrakeresése",
     "pdfSignRetry": "Újra",
     "pdfSignServer": "Kérelmező",
     "pdfSignSign": "Aláírás",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Látható bélyegző a(z) {pageNumber}. oldalon",
     "pdfSignSubtitle": "A titkos kulcs a kulcskarikán marad; ezt a számítógépet csak az aláírás hagyja el.",
     "pdfSignSubtitleCertificateStore": "A titkos kulcs a tanúsítványtárolóban marad; ezt a számítógépet csak az aláírás hagyja el.",
+    "pdfSignSubtitleToken": "A titkos kulcs az intelligens kártyán vagy a tokenen marad; ezt a számítógépet csak az aláírás hagyja el.",
     "pdfSignTitle": "Aláírja ezt a PDF-et?",
     "pdfSignUnsupported": "Az aláíráshoz macOS vagy Windows szükséges. Nyissa meg a dokumentumot Macen vagy windowsos számítógépen az aláíráshoz.",
     "pdfSignVersion": "Verzió",
@@ -232,6 +246,8 @@
     "permissionNotificationsDescription": "Értesít, ha egy dokumentum elkészült, vagy egy szinkronizálás figyelmet igényel.",
     "permissionAccessibility": "Kisegítő lehetőségek",
     "permissionAccessibilityDescription": "Lehetővé teszi, hogy a tevékenységi idővonal ablakcímeket rögzítsen.",
+    "permissionMicrophone": "Mikrofon",
+    "permissionMicrophoneDescription": "Így a diktálás hallja Önt, amíg nyomva tartja a billentyűparancsát.",
     "permissionAllowed": "Engedélyezve",
     "permissionAllow": "Engedélyezés",
     "permissionOpenSettings": "Beállítások megnyitása",
@@ -294,6 +310,7 @@
     "errorReadHistory": "A vágólap előzményeit nem sikerült betölteni.",
     "errorUpdateHistory": "A vágólap előzményeit nem sikerült frissíteni.",
     "formattedText": "Formázott szöveg",
+    "dictation": "Diktált szöveg",
     "image": "Kép",
     "imageCleanupPending": "Néhány törölt képadatot nem sikerült eltávolítani. A tisztítás automatikusan újrapróbálkozik.",
     "imageDimensions": "{width} × {height} képpont",
@@ -582,9 +599,32 @@
   "dictation": {
     "title": "Diktálás",
     "description": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg a használt alkalmazásban jelenik meg. A beszéd átírása ezen a számítógépen történik, és nem kerül tárolásra. Ha az AI-javítás be van kapcsolva, az átírt szöveg – nem a hang – a stellán keresztül a szervezete AI-szolgáltatójához kerül a hibák és a formázás javítására; a stella nem tárolja.",
+    "descriptionCloud": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg abban az alkalmazásban jelenik meg, amelyet éppen használ. A beszédet a stella AI írja át, és a stella nem tárolja.",
     "cleanup": {
       "title": "Javítás AI-jal",
-      "description": "A beszéd átírása továbbra is ezen a számítógépen történik, a hang soha nem hagyja el. Ha a javítás be van kapcsolva, az átírt szöveg a stellán keresztül a szervezete AI-szolgáltatójához kerül, amely kijavítja a felismerési hibákat, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”. A stella nem tárolja."
+      "description": "A beszéd átírása továbbra is ezen a számítógépen történik, a hang soha nem hagyja el. Ha a javítás be van kapcsolva, az átírt szöveg a stellán keresztül a szervezete AI-szolgáltatójához kerül, amely kijavítja a felismerési hibákat, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”. A stella nem tárolja. A javítás azt is megkapja, milyen típusú alkalmazásba diktál, például e-mailbe vagy csevegésbe, hogy a szöveg illeszkedjen hozzá.",
+      "descriptionCloud": "Ha a javítás be van kapcsolva, a stella AI az átírt szöveg felismerési hibáit is kijavítja, és alkalmazza a kimondott írásjeleket és formázást, például „új sor” vagy „félkövér”. A javítás azt is megkapja, milyen típusú alkalmazásba diktál, például e-mailbe vagy csevegésbe, hogy a szöveg illeszkedjen hozzá."
+    },
+    "context": {
+      "windowTitle": {
+        "title": "Az ablak címének megosztása az AI-javítással",
+        "description": "A javítás annak az ablaknak a címét is megkapja, amelybe diktál, hogy meg tudja különböztetni például a szerződést a belső feljegyzéstől. Az ablakok címe ügyfelek nevét vagy ügyek megnevezését is tartalmazhatja. A cím a stellán keresztül a szervezete AI-szolgáltatójához kerül, és a stella nem tárolja."
+      },
+      "textBeforeCursor": {
+        "title": "A kurzor előtti szöveg megosztása az AI-javítással",
+        "description": "A javítás a kurzor előtti legfeljebb {limit, number} karaktert is megkapja, hogy a diktátum folytassa az éppen írt szöveget. Így annak a dokumentumnak egy része, amelyben éppen dolgozik, a stellán keresztül a szervezete AI-szolgáltatójához kerül, és a stella nem tárolja."
+      }
+    },
+    "keptInHistory": "Minden diktátum ezen a számítógépen a vágólap előzményeibe is bekerül.",
+    "destination": {
+      "title": "Átírás ezzel",
+      "local": "Ez a számítógép",
+      "cloud": "stella AI",
+      "cloudDescription": "A hang elhagyja ezt a számítógépet: átírásra a stellához, majd a stella AI-szolgáltatóján keresztül a kiválasztott modell szolgáltatójához kerül. A stella nem tárolja.",
+      "unavailableRegion": "A stella AI a szervezete régiójában még nem kínál átírást.",
+      "unavailableProvider": "A szervezete AI-szolgáltatója nem kínál átírást.",
+      "unavailable": "A stella AI átírás most nem érhető el.",
+      "model": "Átírási modell"
     },
     "language": {
       "title": "Diktálás nyelve",
@@ -606,8 +646,10 @@
       "transcription": "Az átírás nem sikerült. Próbálja újra.",
       "focusChanged": "Másik alkalmazásra váltott, mielőtt a szöveg elkészült, ezért semmi sem lett beírva. Próbálja újra.",
       "focusUnconfirmed": "A stella nem tudta megállapítani, melyik alkalmazás aktív, ezért semmi sem lett beírva. Próbálja újra.",
-      "shortcutHeld": "Engedje fel a billentyűparancs gombjait a gépeléshez. Semmi sem lett beírva; próbálja újra."
-    }
+      "shortcutHeld": "Engedje fel a billentyűparancs gombjait a gépeléshez. Semmi sem lett beírva; próbálja újra.",
+      "cloudTranscription": "A stella AI nem tudta átírni ezt a diktálást, és a beszédmodell nincs ezen a számítógépen. Próbálja újra, vagy az „Átírás ezzel” beállításnál válassza az „Ez a számítógép” lehetőséget, és töltse le a modellt."
+    },
+    "failureKeptInHistory": "A szöveg megtalálható a vágólap előzményeiben."
   },
   "shortcut": {
     "title": "Vágólap-billentyűparancs",
@@ -724,6 +766,18 @@
     "introduceActivityTitle": "Újdonság: tevékenységi idővonal",
     "introduceActivityBody": "A tevékenység mostantól elérhető a fiókjában. Semmit nem rögzít, amíg el nem indítja a tevékenységablakban.",
     "openActivity": "Tevékenység megnyitása",
+    "dictationModel": "A beszédmodell ({size} MB) egyszer töltődik le, és ezen a számítógépen fut.",
+    "dictationTurnOn": "Bekapcsolás és letöltés",
+    "dictationDownloadContinues": "Továbbléphet. A letöltés a háttérben folytatódik.",
+    "dictationReady": "A diktálás be van kapcsolva és kész.",
+    "dictationTryLabel": "Diktáljon ide",
+    "dictationTryPlaceholder": "Kattintson ide, tartsa lenyomva a(z) {shortcut} billentyűt, és mondjon egy mondatot.",
+    "dictationListening": "Figyelek…",
+    "dictationTranscribing": "Leírom, amit mondott…",
+    "dictationMicrophone": "Így a stella hallja Önt, amíg nyomva tartja a billentyűparancsot.",
+    "dictationAccessibility": "Így a stella beírja, amit mondott, abba az alkalmazásba, amelyet használ.",
+    "dictationFailed": "A stella desktop nem tudta bekapcsolni a diktálást. Próbálja újra.",
+    "introduceDictationTitle": "Újdonság: diktálás",
     "guideWaiting": "Kapcsolja be a stella desktopot a fenti listában a Kisegítő lehetőségek engedélyezéséhez.",
     "guideAllowed": "A stella desktop engedélyt kapott",
     "never": {
@@ -830,6 +884,18 @@
       "runs_can_write": "A helyi futtatások írhatnak ebbe a mappába, ezért nem tartalmazhat készséget.",
       "network_folder": "Ez a mappa hálózati megosztáson van. A készségeknek a számítógép saját lemezén kell lenniük.",
       "path_changed": "Egy szülőmappa megváltozott. Távolítsa el ezt a mappát, majd adja hozzá újra."
+    }
+  },
+  "signingDriver": {
+    "title": "Intelligenskártya-illesztőprogram",
+    "description": "Ha a stella desktop nem találja meg magától az intelligens kártya vagy a token illesztőprogramját, válassza ki a PKCS #11-modulját. Csak PDF-ek aláírásához töltődik be, külön folyamatban.",
+    "choose": "Modul kiválasztása",
+    "remove": "Eltávolítás",
+    "notice": {
+      "action_failed": "Ez nem sikerült. Próbálja újra.",
+      "missing": "Ez a fájl már nem létezik.",
+      "needs_update": "Ez a modul nem fut ennek a Macnek a processzorán. Telepítse az illesztőprogram aktuális verzióját.",
+      "not_a_library": "Ez a fájl nem PKCS #11-modul."
     }
   },
   "localLinkedFolders": {

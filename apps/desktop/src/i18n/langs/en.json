@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Signature",
     "pdfSignCertificate": "Signing certificate",
     "pdfSignDocument": "Document",
+    "pdfSignDownloadDriver": "Download driver",
+    "pdfSignDriverMissing": "A card in a reader needs the {vendor} driver, which is not installed. Install it to sign with that card.",
+    "pdfSignDriverNeedsUpdate": "The installed {vendor} driver does not run on this Mac's processor. Install its current version to sign with that card.",
     "pdfSignErrorCode": "Error code: {code}",
     "pdfSignErrors": {
       "authenticationRequired": "Your keychain needs you to allow access to this certificate. Try again and allow access when asked.",
@@ -118,6 +121,9 @@
       "startAgain": "Signing could not continue. Start signing again in stella.",
       "temporarilyUnavailable": "stella could not finish signing just now. Try again.",
       "tokenNotPresent": "The smart card or token is not connected. Connect it and try again.",
+      "tokenSigningFailed": "The smart card or token did not sign the document.",
+      "tokenTimeout": "The smart card or token did not respond in time. Try again.",
+      "tokenUnreadable": "The smart card or token could not be read. Try again.",
       "unsupportedAlgorithm": "This certificate's key cannot make the signature this document needs. Choose another certificate.",
       "wouldBreakSignatures": "Signing this PDF would invalidate the signatures it already carries."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Matter",
     "pdfSignNoIdentities": "No signing certificate is available in your keychain.",
     "pdfSignNoIdentitiesCertificateStore": "No signing certificate is available in your certificate store.",
+    "pdfSignOnToken": "Stored on {tokenLabel}",
+    "pdfSignPin": "PIN",
+    "pdfSignPinFinalTry": "One more wrong PIN will block the card or token.",
+    "pdfSignPinLow": "A wrong PIN was entered before. Check the PIN carefully.",
+    "pdfSignPinPad": "Enter the PIN on the card reader to sign {documentName}.",
+    "pdfSignPinPrompt": "Enter the PIN of your card or token to sign {documentName}.",
+    "pdfSignRescanCards": "Rescan cards",
     "pdfSignRetry": "Try again",
     "pdfSignServer": "Requested by",
     "pdfSignSign": "Sign",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Visible stamp on page {pageNumber}",
     "pdfSignSubtitle": "The private key stays in your keychain; only the signature leaves this computer.",
     "pdfSignSubtitleCertificateStore": "The private key stays in your certificate store; only the signature leaves this computer.",
+    "pdfSignSubtitleToken": "The private key stays on your smart card or token; only the signature leaves this computer.",
     "pdfSignTitle": "Sign this PDF?",
     "pdfSignUnsupported": "Signing needs macOS or Windows. Open this document on a Mac or a Windows computer to sign it.",
     "pdfSignVersion": "Version",
@@ -232,6 +246,8 @@
     "permissionNotificationsDescription": "Tells you when a document is ready or a sync needs attention.",
     "permissionAccessibility": "Accessibility",
     "permissionAccessibilityDescription": "Lets the activity timeline record window titles.",
+    "permissionMicrophone": "Microphone",
+    "permissionMicrophoneDescription": "Lets dictation hear you while you hold its shortcut.",
     "permissionAllowed": "Allowed",
     "permissionAllow": "Allow",
     "permissionOpenSettings": "Open settings",
@@ -294,6 +310,7 @@
     "errorReadHistory": "Clipboard history could not be loaded.",
     "errorUpdateHistory": "Clipboard history could not be updated.",
     "formattedText": "Formatted text",
+    "dictation": "Dictation",
     "image": "Image",
     "imageCleanupPending": "Some deleted image data could not be removed. Cleanup will retry automatically.",
     "imageDimensions": "{width} × {height} px",
@@ -582,9 +599,32 @@
   "dictation": {
     "title": "Dictation",
     "description": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed on this computer and is not stored. With AI cleanup on, the transcribed text, not the audio, is sent through stella to your organization’s AI provider to fix mistakes and formatting, and stella does not store it.",
+    "descriptionCloud": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed by stella AI and is not stored by stella.",
     "cleanup": {
       "title": "Clean up with AI",
-      "description": "Speech is still transcribed on this computer, and audio never leaves it. With cleanup on, the transcribed text is sent through stella to your organization’s AI provider to fix recognition mistakes and apply spoken punctuation and formatting, such as “new line” or “bold”. stella does not store it."
+      "description": "Speech is still transcribed on this computer, and audio never leaves it. With cleanup on, the transcribed text is sent through stella to your organization’s AI provider to fix recognition mistakes and apply spoken punctuation and formatting, such as “new line” or “bold”. stella does not store it. Cleanup is also told what kind of app you dictate into, such as email or chat, so the text suits it.",
+      "descriptionCloud": "With cleanup on, stella AI also fixes recognition mistakes in the transcribed text and applies spoken punctuation and formatting, such as “new line” or “bold”. Cleanup is also told what kind of app you dictate into, such as email or chat, so the text suits it."
+    },
+    "context": {
+      "windowTitle": {
+        "title": "Share the window title with AI cleanup",
+        "description": "Cleanup also gets the title of the window you dictate into, so it can tell a contract from an internal memo. Window titles can contain client or matter names. The title is sent through stella to your organization’s AI provider, and stella does not store it."
+      },
+      "textBeforeCursor": {
+        "title": "Share text before the cursor with AI cleanup",
+        "description": "Cleanup also gets up to {limit, number} characters before the cursor, so the dictation fits the text you are writing. This sends part of the document you are in through stella to your organization’s AI provider, and stella does not store it."
+      }
+    },
+    "keptInHistory": "Each dictation is also kept in clipboard history on this computer.",
+    "destination": {
+      "title": "Transcribe with",
+      "local": "This computer",
+      "cloud": "stella AI",
+      "cloudDescription": "Audio leaves this computer: it is sent to stella and, through stella’s AI provider, to the provider of the selected model for transcription. stella does not store it.",
+      "unavailableRegion": "stella AI does not offer transcription in your organization’s region yet.",
+      "unavailableProvider": "Your organization’s AI provider does not offer transcription.",
+      "unavailable": "stella AI transcription is unavailable right now.",
+      "model": "Transcription model"
     },
     "language": {
       "title": "Dictation language",
@@ -606,8 +646,10 @@
       "transcription": "Transcription failed. Try again.",
       "focusChanged": "You switched to another app before the text was ready, so nothing was typed. Try again.",
       "focusUnconfirmed": "stella could not confirm which app has focus, so nothing was typed. Try again.",
-      "shortcutHeld": "Release the shortcut keys to type. Nothing was typed; try again."
-    }
+      "shortcutHeld": "Release the shortcut keys to type. Nothing was typed; try again.",
+      "cloudTranscription": "stella AI could not transcribe this dictation, and the speech model is not on this computer. Try again, or set “Transcribe with” to “This computer” and download the model."
+    },
+    "failureKeptInHistory": "The text is in clipboard history."
   },
   "shortcut": {
     "title": "Clipboard shortcut",
@@ -724,6 +766,18 @@
     "introduceActivityTitle": "New: activity timeline",
     "introduceActivityBody": "Activity is now available for your account. Nothing is recorded until you start it in the activity window.",
     "openActivity": "Open activity",
+    "dictationModel": "The speech model ({size} MB) is downloaded once and runs on this computer.",
+    "dictationTurnOn": "Turn on and download",
+    "dictationDownloadContinues": "You can continue. The download goes on in the background.",
+    "dictationReady": "Dictation is on and ready.",
+    "dictationTryLabel": "Dictate here",
+    "dictationTryPlaceholder": "Click here, hold {shortcut} and say a sentence.",
+    "dictationListening": "Listening…",
+    "dictationTranscribing": "Writing down what you said…",
+    "dictationMicrophone": "Lets stella hear you while you hold the shortcut.",
+    "dictationAccessibility": "Lets stella type what you said into the app you are using.",
+    "dictationFailed": "stella desktop could not turn on dictation. Try again.",
+    "introduceDictationTitle": "New: dictation",
     "guideWaiting": "Turn on stella desktop in the list above to allow Accessibility.",
     "guideAllowed": "stella desktop is allowed",
     "never": {
@@ -830,6 +884,18 @@
       "runs_can_write": "Local runs can write to this folder, so it cannot hold a skill.",
       "network_folder": "This folder is on a network share. Skills must be on this computer's own disk.",
       "path_changed": "A folder on the way to this one has changed. Remove it and add it again."
+    }
+  },
+  "signingDriver": {
+    "title": "Smart card driver",
+    "description": "If stella desktop does not find your smart card or token's driver on its own, choose its PKCS #11 module. It is loaded only to sign PDFs, in a separate process.",
+    "choose": "Choose module",
+    "remove": "Remove",
+    "notice": {
+      "action_failed": "That did not work. Try again.",
+      "missing": "This file is gone.",
+      "needs_update": "This module does not run on this Mac's processor. Install the driver's current version.",
+      "not_a_library": "This file is not a PKCS #11 module."
     }
   },
   "localLinkedFolders": {
