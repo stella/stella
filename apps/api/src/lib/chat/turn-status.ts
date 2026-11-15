@@ -9,6 +9,13 @@ export const CHAT_TURN_STATUSES = [
 ] as const;
 export type ChatTurnStatus = (typeof CHAT_TURN_STATUSES)[number];
 
+/** The statuses of a turn not yet settled; a thread holds at most one. */
+export const ACTIVE_CHAT_TURN_STATUSES = [
+  "accepted",
+  "running",
+  "awaiting-user",
+] as const satisfies readonly ChatTurnStatus[];
+
 export const CHAT_TURN_TIMING_DISPOSITION = {
   accepted: "hidden",
   running: "running",

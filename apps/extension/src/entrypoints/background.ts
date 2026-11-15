@@ -12,13 +12,17 @@ import {
   type BrowserExtensionResponse,
   parseBrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
+import { browserControlError } from "@stll/browser-page/browser-control-result";
+import {
+  SIGN_IN_POLICY,
+  type SignInPolicy,
+} from "@stll/browser-page/sign-in-policy";
 
 import {
   hasAllSiteAccess,
   hasDesktopLinkAccess,
   removeAllSiteAccess,
 } from "../lib/access";
-import { browserControlError } from "../lib/browser-control-result";
 import { storedCommandBudget } from "../lib/command-budget";
 import { CONTROL_TRANSPORT } from "../lib/control-holder";
 import {
@@ -71,7 +75,6 @@ import {
   type PopupResponse,
 } from "../lib/popup-request";
 import { createOffscreenShownPdfReader } from "../lib/shown-pdf-reader";
-import { SIGN_IN_POLICY, type SignInPolicy } from "../lib/sign-in-policy";
 import {
   forgetStellaTab,
   rememberStellaTab,

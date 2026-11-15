@@ -590,6 +590,7 @@ describe("a turn's settlement count", () => {
         workspaceId: ids.wsA1,
       });
       const acceptance = createChatTurnAcceptance({
+        source: { type: "member" },
         organizationId: ids.orgA,
         threadId,
         userId: ids.userA1,

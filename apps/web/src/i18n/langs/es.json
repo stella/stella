@@ -2093,6 +2093,7 @@
       "noResults": "Sin habilidades coincidentes",
       "tryOne": "Prueba uno de estos para empezar"
     },
+    "queuePrompt": "Enviar cuando el agente termine",
     "queuedAttachmentCount": "{count, plural, one {# adjunto} many {# adjuntos} other {# adjuntos}}",
     "queuedNotice": "En cola: se enviará cuando termine la respuesta actual",
     "reasoning": "Razonamiento",

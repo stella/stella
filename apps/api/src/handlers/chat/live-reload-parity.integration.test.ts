@@ -1247,6 +1247,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
     "Opening the editor only stops a running turn, through the same stop the harness models as its own command.",
   ),
   "open-playbook": READS_ONLY,
+  queue: notModelled(
+    "The send queue lives in the session hook, which the harness does not render.",
+  ),
   "refresh-edited-answer": READS_ONLY,
   "remove-queued-message": notModelled(
     "The send queue lives in the session hook, which the harness does not render.",

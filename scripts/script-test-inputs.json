@@ -163,6 +163,7 @@
     "scripts/global-rule-inputs.test.ts": ["**"],
     "scripts/hook-dependencies.test.ts": ["**"],
     "scripts/hooks-no-type-aware.test.ts": ["**"],
+    "scripts/hosted-buildx-cleanup.test.ts": ["**"],
     "scripts/install-packed-cli.test.ts": ["**"],
     "scripts/ledger-membership.test.ts": ["**"],
     "scripts/legal-atlas-image-scope.test.ts": ["**"],
