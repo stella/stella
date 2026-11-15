@@ -192,7 +192,8 @@ export type BrowserProcesses = {
   alive: (pid: number) => boolean;
   /** The process's command line, or null when it cannot be read. */
   commandLine: (pid: number) => string | null;
-  signal: (pid: number, signal: "SIGKILL" | "SIGTERM") => void;
+  /** Sends `signal`; false when the process is gone already. */
+  signal: (pid: number, signal: "SIGKILL" | "SIGTERM") => boolean;
 };
 
 export const realBrowserProcesses: BrowserProcesses = {
@@ -206,9 +207,8 @@ export const realBrowserProcesses: BrowserProcesses = {
     });
     return read.status === 0 ? read.stdout.trim() : null;
   },
-  signal: (pid, signal) => {
-    Result.try(() => process.kill(pid, signal));
-  },
+  signal: (pid, signal) =>
+    Result.isOk(Result.try(() => process.kill(pid, signal))),
 };
 
 /**

@@ -221,9 +221,11 @@ const fakeProcesses = (
     signal: (pid, signal) => {
       signals.push({ pid, signal });
       const exitsOn = table[pid]?.exitsOn ?? "SIGTERM";
+      const wasAlive = alive.has(pid);
       if (signal === "SIGKILL" || exitsOn === signal) {
         alive.delete(pid);
       }
+      return wasAlive;
     },
   };
   return { processes, signals };
