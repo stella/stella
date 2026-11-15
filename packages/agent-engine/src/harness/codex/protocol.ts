@@ -480,6 +480,7 @@ export type CodexClientRequestMethod =
   | "skills/list"
   | "thread/start"
   | "thread/resume"
+  | "thread/fork"
   | "thread/unarchive"
   | "turn/start"
   | "turn/steer"

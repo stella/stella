@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -17,6 +19,7 @@ const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
 const definitionId = createSafeId<"flowDefinition">();
+const state = createTestState({ file: import.meta.path, config: env });
 const definition = {
   id: definitionId,
   name: "Review document",
@@ -35,13 +38,8 @@ const definition = {
 >;
 
 const withAdmission = async (run: () => Promise<void>) => {
-  const previous = env.FEATURE_ACTION_ADMISSION;
-  env.FEATURE_ACTION_ADMISSION = true;
-  try {
-    await run();
-  } finally {
-    env.FEATURE_ACTION_ADMISSION = previous;
-  }
+  state.setConfig("FEATURE_ACTION_ADMISSION", true);
+  await run();
 };
 
 describe("flow kickoff acceptance", () => {

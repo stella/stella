@@ -72,6 +72,8 @@ export const FAKE_CLAUDE_VERSION = "2.1.309";
 /** The server name the holder registers the browser tools under. */
 const FAKE_BROWSER_SERVER = "stella_browser";
 export const FAKE_RESUMED_SESSION_ID = "4f1d2c3b-5a6e-4b7c-8d9e-0f1a2b3c4d5e";
+/** A transcript entry of the resumed session a fork keeps through. */
+export const FAKE_FORK_BOUNDARY = "7c2e9a41-3b5d-4f6e-8a1c-2d3e4f5a6b7c";
 
 const SUBSCRIPTION = {
   email: "user@example.test",
@@ -1156,6 +1158,25 @@ export const FAKE_SCENARIOS = {
     fresh: [...freshTurn(), result()],
   },
   resume_ok: [...freshTurn(), result()],
+  /** The resumed session holds no entry with the boundary's uuid. */
+  fork_missing: {
+    resume: [
+      {
+        emit: {
+          type: "result",
+          subtype: "error_during_execution",
+          is_error: true,
+          num_turns: 0,
+          session_id: FAKE_RESUMED_SESSION_ID,
+          errors: [
+            `No message found with message.uuid of: ${FAKE_FORK_BOUNDARY}`,
+          ],
+        },
+      },
+      { exit: 1 },
+    ],
+    fresh: [...freshTurn(), result()],
+  },
   signed_out: [initialize({ tokenSource: "none", apiProvider: "firstParty" })],
   /** A key from a Console sign-in would bill the API, not the plan. */
   api_key: [
@@ -1356,6 +1377,25 @@ export type FakeScenarioName = keyof typeof FAKE_SCENARIOS;
 
 const isScenario = (name: string): name is FakeScenarioName =>
   Object.hasOwn(FAKE_SCENARIOS, name);
+
+/**
+ * The CLI's own refusals of its session flags, as the pinned version words
+ * them: it writes the error and exits before any protocol message.
+ */
+const refusedSessionArgs = (args: readonly string[]): string | null => {
+  const resumes = args.includes("--resume");
+  if (args.includes("--resume-session-at") && !resumes) {
+    return "Error: --resume-session-at requires --resume";
+  }
+  if (
+    args.includes("--session-id") &&
+    resumes &&
+    !args.includes("--fork-session")
+  ) {
+    return "Error: --session-id can only be used with --continue or --resume if --fork-session is also specified.";
+  }
+  return null;
+};
 
 export const stepsFor = (
   scenario: FakeScenario,
@@ -1660,6 +1700,12 @@ if (import.meta.main) {
   if (!isScenario(scenario)) {
     log({ unknownScenario: scenario });
     process.exit(98);
+  }
+  const refused = refusedSessionArgs(args);
+  if (refused !== null) {
+    log({ refused });
+    process.stderr.write(`${refused}\n`);
+    process.exit(1);
   }
   await run(stepsFor(FAKE_SCENARIOS[scenario], args), log);
   process.exit(0);

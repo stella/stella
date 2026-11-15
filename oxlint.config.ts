@@ -796,6 +796,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-billing-cap-crossings.fixture.ts", [
     "require-billing-cap-crossings/require-billing-cap-crossings",
   ]),
+  fixtureRuleOverride("require-locked-rows-write.fixture.ts", [
+    "require-locked-rows-write/require-locked-rows-write",
+  ]),
   fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
     "require-running-entry-guard/require-running-entry-guard",
   ]),
@@ -2282,6 +2285,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-worker-database-login-posture.ts",
     "./.oxlint-plugins/require-billing-cap-crossings.ts",
+    "./.oxlint-plugins/require-locked-rows-write.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/no-direct-clause-variant-insert.ts",
@@ -6185,6 +6189,15 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "require-billing-cap-crossings/require-billing-cap-crossings": "error",
+      },
+    },
+    {
+      // A row lock decides on the rows it returned; a later write to the same
+      // table must name those rows, not repeat the lock's filter.
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-locked-rows-write/require-locked-rows-write": "error",
       },
     },
     {
