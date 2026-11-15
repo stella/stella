@@ -18,10 +18,7 @@ import {
   retireLegacyUnprovenServedCopiesTx,
 } from "@/api/lib/legal-search/corpus-index-projection-legacy-retire";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
-import {
-  corpusProjectionLegacyFixture,
-  GENERATION,
-} from "@/api/tests/helpers/corpus-projection-legacy-fixture";
+import { corpusProjectionLegacyFixture } from "@/api/tests/helpers/corpus-projection-legacy-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -29,12 +26,15 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
  * The one-off pass over served copies an earlier release left two or more
  * desired changes behind, against the production guards installed from the
  * migrations, with that release's writes replayed in its statement shapes and
- * this release's writes made through its own desired writer.
+ * this release's writes made through its own desired writer. Case law is the
+ * family that records withdrawals; legislation is checked to be kept.
  */
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
+const caseLaw = corpusProjectionLegacyFixture(() => db, "case_law");
+const legislation = corpusProjectionLegacyFixture(() => db, "legislation");
 const {
   fingerprint,
   installProjectionDdl,
@@ -44,16 +44,18 @@ const {
   thisReleaseChanges,
   namesFreshCopy,
   previousPrepare,
-  seedGeneration,
+  recordWithdrawal,
+  subjectOf,
   claim,
   intentOf,
   stateOf,
-} = corpusProjectionLegacyFixture(() => db);
+} = caseLaw;
 
 beforeEach(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  await seedGeneration();
+  await caseLaw.seedGeneration();
+  await legislation.seedGeneration();
 });
 
 afterEach(async () => {
@@ -65,9 +67,13 @@ describe("the one-off pass over copies the previous release left served", () => 
     await installProjectionDdl(true);
   });
 
-  /** A served copy the previous release kept through an erasure and its undo. */
+  /**
+   * A served copy the previous release kept through a recorded withdrawal and
+   * its undo.
+   */
   const erasedThenUndone = async (finalFingerprint: string) => {
     const served = await servedEntity();
+    await recordWithdrawal(served.entityId);
     await changeDesired(served.entityId, 2, { action: "erase" });
     await changeDesired(served.entityId, 3, {
       action: "upsert",
@@ -82,10 +88,7 @@ describe("the one-off pass over copies the previous release left served", () => 
       async (tx) =>
         await reconcileCorpusProjectionDesiredStateTx(
           asTestRaw<Transaction>(tx),
-          {
-            family: "legislation",
-            entityId: toSafeId<"legislationDocument">(entityId),
-          },
+          subjectOf(entityId),
         ),
     );
   };
@@ -100,10 +103,7 @@ describe("the one-off pass over copies the previous release left served", () => 
       async (tx) =>
         await advanceCorpusProjectionDesiredStateTx(
           asTestRaw<Transaction>(tx),
-          {
-            family: "legislation",
-            entityId: toSafeId<"legislationDocument">(entityId),
-          },
+          subjectOf(entityId),
         ),
     );
   };
@@ -123,12 +123,13 @@ describe("the one-off pass over copies the previous release left served", () => 
     after: LegacyServedCopyRetireCursor | null,
     limit: number,
     mode: "retire" | "count" = "retire",
+    fixture: typeof caseLaw = caseLaw,
   ) =>
     await db.transaction(
       async (tx) =>
         await retireLegacyUnprovenServedCopiesTx(asTestRaw<Transaction>(tx), {
-          family: "legislation",
-          generation: GENERATION,
+          family: fixture.family,
+          generation: fixture.generation,
           cutoverAt: instant,
           after,
           limit,
@@ -141,7 +142,8 @@ describe("the one-off pass over copies the previous release left served", () => 
     after: LegacyServedCopyRetireCursor | null,
     limit: number,
     mode: "retire" | "count" = "retire",
-  ) => (await passResult(instant, after, limit, mode)).unwrap();
+    fixture: typeof caseLaw = caseLaw,
+  ) => (await passResult(instant, after, limit, mode, fixture)).unwrap();
 
   const desiredAtOf = async (entityId: string) =>
     (
@@ -151,6 +153,20 @@ describe("the one-off pass over copies the previous release left served", () => 
         .where(eq(corpusIndexProjectionStates.entityId, entityId))
     ).at(0)?.desiredAt ?? panic("No desired instant");
 
+  /** Whether the state still serves its copy, and the copy is still applied. */
+  const stillServed = async ({
+    entityId,
+    revision,
+  }: {
+    entityId: string;
+    revision: string;
+  }) => {
+    expect(await stateOf(entityId)).toMatchObject({
+      appliedRevision: toSafeId<"corpusIndexProjectionIntent">(revision),
+    });
+    expect(await intentOf(revision)).toMatchObject({ status: "applied" });
+  };
+
   test("retires a copy with other content and keeps one holding the desired content", async () => {
     const other = await erasedThenUndone(fingerprint(1));
     const same = await erasedThenUndone(fingerprint(0));
@@ -159,6 +175,7 @@ describe("the one-off pass over copies the previous release left served", () => 
       retired: 1,
       kept_same_content: 1,
     });
+    expect(result.keptUnproven).toBe(0);
     expect(result.next).toBeNull();
     expect(await stateOf(other.entityId)).toEqual({
       desiredAction: "upsert",
@@ -174,6 +191,85 @@ describe("the one-off pass over copies the previous release left served", () => 
     });
     // A first append from here: the retired copy is ordinary cleanup.
     expect((await claim()).claimed.unserved).toBe(1);
+  });
+
+  test("keeps a copy two plain content changes behind, with no recorded erasure, served and counted as unproven", async () => {
+    const changed = await servedEntity();
+    await changeDesired(changed.entityId, 2, {
+      action: "upsert",
+      fingerprint: fingerprint(1),
+    });
+    await changeDesired(changed.entityId, 3, {
+      action: "upsert",
+      fingerprint: fingerprint(2),
+    });
+    const instant = await cutoverAt();
+    for (const mode of ["count", "retire"] as const) {
+      // db-await-in-loop: one run per mode, the same decision in both
+      const result = await pass(instant, null, 16, mode);
+      expect(result.outcomes).toMatchObject({ retired: 0 });
+      expect(result.keptUnproven).toBe(1);
+      expect(result.scanned).toBe(1);
+    }
+    await stillServed(changed);
+    expect((await claim()).claimed.unserved).toBe(0);
+  });
+
+  test("a withdrawal recorded outside the copy's window is no evidence", async () => {
+    // Recorded before the copy was reserved: the copy holds content desired
+    // after it.
+    const earlier = await servedEntity({ beforeReservation: recordWithdrawal });
+    // Recorded after the cutover: this release's write.
+    const later = await servedEntity();
+    for (const { entityId } of [earlier, later]) {
+      // db-await-in-loop: two desired changes per entity, in order
+      await changeDesired(entityId, 2, { action: "erase" });
+      // db-await-in-loop: two desired changes per entity, in order
+      await changeDesired(entityId, 3, {
+        action: "upsert",
+        fingerprint: fingerprint(1),
+      });
+    }
+    const instant = await cutoverAt();
+    await recordWithdrawal(later.entityId);
+
+    const result = await pass(instant, null, 16);
+    expect(result.outcomes).toMatchObject({ retired: 0 });
+    expect(result.keptUnproven).toBe(2);
+    await stillServed(earlier);
+    await stillServed(later);
+  });
+
+  test("never retires a legislation copy, which records no withdrawal", async () => {
+    const served = await legislation.servedEntity();
+    await legislation.changeDesired(served.entityId, 2, { action: "erase" });
+    await legislation.changeDesired(served.entityId, 3, {
+      action: "upsert",
+      fingerprint: fingerprint(1),
+    });
+    // Even a withdrawal row in the legislation trail, which no production
+    // writer produces, is not read.
+    await legislation.run(sql`
+      INSERT INTO legislation_index_jobs (
+        id, document_id, generation, operation, status
+      ) VALUES (
+        ${legislation.uuid()}, ${served.entityId}, ${legislation.generation},
+        'withdraw', 'succeeded'
+      )
+    `);
+    const instant = await cutoverAt();
+    for (const mode of ["count", "retire"] as const) {
+      // db-await-in-loop: one run per mode
+      const result = await pass(instant, null, 16, mode, legislation);
+      expect(result.outcomes).toMatchObject({ retired: 0 });
+      expect(result.keptUnproven).toBe(1);
+    }
+    expect(await legislation.stateOf(served.entityId)).toMatchObject({
+      appliedRevision: toSafeId<"corpusIndexProjectionIntent">(served.revision),
+    });
+    expect(await legislation.intentOf(served.revision)).toMatchObject({
+      status: "applied",
+    });
   });
 
   test("retires a copy the previous release kept through an erasure and its undo, after this release rewrote the state", async () => {
@@ -339,7 +435,7 @@ describe("the one-off pass over copies the previous release left served", () => 
     // This release erases the state while it is two changes behind its copy:
     // the erasure is pending from its own write, not from the undo before it.
     await run(sql`
-      UPDATE legislation_documents
+      UPDATE case_law_decisions
       SET content_hash = ${EMPTY_CORPUS_CONTENT_HASHES[0] ?? panic("No empty hash")}
       WHERE id = ${legacy.entityId}
     `);
@@ -411,7 +507,7 @@ describe("the one-off pass over copies the previous release left served", () => 
     // for a generation that only takes erasures: the guard refuses every
     // write of that state.
     await run(sql`
-      UPDATE legislation_documents SET projection_epoch = 9
+      UPDATE case_law_decisions SET projection_epoch = 9
       WHERE id = ${trailing.entityId}
     `);
     const instant = await cutoverAt();

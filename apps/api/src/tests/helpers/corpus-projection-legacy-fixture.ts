@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { eq, sql } from "drizzle-orm";
+import { eq, type SQL, sql } from "drizzle-orm";
 import type { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
@@ -8,15 +8,22 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import { recordCorpusWithdrawalAuditEvent } from "@/api/lib/legal-search/corpus-index-job-audit";
 import {
   CORPUS_INDEX_MANIFESTS,
+  corpusIndexIdFromManifest,
+  type CorpusIndexManifest,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   claimCorpusProjectionCleanupTx,
   type CorpusProjectionCleanupClaim,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
-import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
+  advanceCorpusProjectionDesiredStateTx,
+  type CorpusIndexProjectionSubject,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { corpusIndexAppendPublishDelayMs } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -28,33 +35,68 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
  * guards before and after this release's migration.
  */
 
-/** The earlier release's publish fence: acceptance plus the generation's delay. */
-const PUBLISH_DELAY = sql.raw(
-  `(${corpusIndexAppendPublishDelayMs(CORPUS_INDEX_MANIFESTS.legislation_v2)} * interval '1 millisecond')`,
-);
-export const GENERATION = "legislation_v2";
-const INDEX_ID = "legislation_v2_cze";
+/** The generation the fixture projects into, per family. */
+const FAMILY_FIXTURE = {
+  legislation: {
+    generation: "legislation_v2",
+    manifest: CORPUS_INDEX_MANIFESTS.legislation_v2,
+    canonicalTable: sql.raw("legislation_documents"),
+    /** Keeps each family's ids apart when both run on one database. */
+    idPrefix: "0198e331-e578-7000-8000-",
+  },
+  case_law: {
+    generation: "case_law_v5",
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v5,
+    canonicalTable: sql.raw("case_law_decisions"),
+    idPrefix: "0198e331-e578-7000-8001-",
+  },
+} as const satisfies Record<
+  CorpusFamily,
+  {
+    generation: string;
+    manifest: CorpusIndexManifest;
+    canonicalTable: SQL;
+    idPrefix: string;
+  }
+>;
+
+export const GENERATION = FAMILY_FIXTURE.legislation.generation;
 const SERVED_COPY_MIGRATION =
   "20261115120000_corpus_projection_served_copy_guard";
 const DRIZZLE_DIR = new URL("../../../drizzle/", import.meta.url);
-const SOURCE_ID = "0198e331-e578-7000-8000-000000000af1";
 const FINGERPRINTS = ["a", "b", "c", "d", "e"].map((digit) => digit.repeat(64));
 
 /**
  * The legacy projection fixture over one test database, which the caller
  * opens before each test (`database` reads the current one) and seeds with
- * `seedGeneration`.
+ * `seedGeneration`. It projects one family's canonical rows (legislation by
+ * default) into that family's test generation.
  */
 export const corpusProjectionLegacyFixture = (
   database: () => ReturnType<typeof drizzle>,
+  family: CorpusFamily = "legislation",
 ) => {
+  const { generation, manifest, canonicalTable, idPrefix } =
+    FAMILY_FIXTURE[family];
+  const INDEX_ID = corpusIndexIdFromManifest(manifest, "CZE");
+  const SOURCE_ID = `${idPrefix}000000000af1`;
+  /** The earlier release's publish fence: acceptance plus the generation's delay. */
+  const PUBLISH_DELAY = sql.raw(
+    `(${corpusIndexAppendPublishDelayMs(manifest)} * interval '1 millisecond')`,
+  );
   let nextId = 1;
 
   const uuid = () => {
     const value = nextId;
     nextId += 1;
-    return `0198e331-e578-7000-8000-${value.toString(16).padStart(12, "0")}`;
+    return `${idPrefix}${value.toString(16).padStart(12, "0")}`;
   };
+
+  /** This release's desired writer, for one entity of the fixture's family. */
+  const subjectOf = (entityId: string): CorpusIndexProjectionSubject =>
+    family === "case_law"
+      ? { family, entityId: toSafeId<"caseLawDecision">(entityId) }
+      : { family, entityId: toSafeId<"legislationDocument">(entityId) };
 
   const fingerprint = (index: number) =>
     FINGERPRINTS.at(index) ?? panic("No such test fingerprint");
@@ -111,33 +153,58 @@ export const corpusProjectionLegacyFixture = (
     await database().execute(statement);
   };
 
+  /** One canonical row of the fixture's family, at projection epoch 1. */
+  const insertCanonical = async (entityId: string) => {
+    await run(
+      family === "case_law"
+        ? sql`
+          INSERT INTO case_law_decisions (
+            id, source_id, case_number, court, country, language, content_hash,
+            projection_epoch
+          ) VALUES (
+            ${entityId}, ${SOURCE_ID}, ${`1 As ${nextId}/2020`},
+            'Nejvyšší správní soud', 'CZE', 'cs', ${fingerprint(4)}, 1
+          )
+        `
+        : sql`
+          INSERT INTO legislation_documents (
+            id, source_id, eli, title, country, language, document_type, status,
+            content_hash, projection_epoch
+          ) VALUES (
+            ${entityId}, ${SOURCE_ID}, ${`eli/cz/test/${entityId}`}, 'Act', 'CZE',
+            'cs', 'act', 'current', ${fingerprint(4)}, 1
+          )
+        `,
+    );
+  };
+
   /**
-   * A legislation document projected once: its state names one applied revision.
+   * A canonical row projected once: its state names one applied revision.
    * `desiredAtRecorded: false` writes the state the way writers did before
-   * `desired_at` existed.
+   * `desired_at` existed. `beforeReservation` runs once the canonical row
+   * exists and before the revision is reserved.
    */
-  const servedEntity = async ({ desiredAtRecorded = true } = {}) => {
+  const servedEntity = async ({
+    desiredAtRecorded = true,
+    beforeReservation,
+  }: {
+    desiredAtRecorded?: boolean;
+    beforeReservation?: (entityId: string) => Promise<void>;
+  } = {}) => {
     const entityId = uuid();
     const revision = uuid();
-    await run(sql`
-      INSERT INTO legislation_documents (
-        id, source_id, eli, title, country, language, document_type, status,
-        content_hash, projection_epoch
-      ) VALUES (
-        ${entityId}, ${SOURCE_ID}, ${`eli/cz/test/${entityId}`}, 'Act', 'CZE',
-        'cs', 'act', 'current', ${fingerprint(4)}, 1
-      )
-    `);
+    await insertCanonical(entityId);
     await run(sql`
       INSERT INTO corpus_index_projection_states (
         family, generation, entity_id, desired_action, desired_epoch,
         desired_fingerprint, desired_index_id, desired_at
       ) VALUES (
-        'legislation', ${GENERATION}, ${entityId}, 'upsert', 1,
+        ${family}, ${generation}, ${entityId}, 'upsert', 1,
         ${fingerprint(0)}, ${INDEX_ID},
         ${desiredAtRecorded ? sql`statement_timestamp()` : sql`NULL`}
       )
     `);
+    await beforeReservation?.(entityId);
     // Reserve, start, then the earlier release's leased commit and apply,
     // long enough ago that its publish fence has passed.
     await run(sql`
@@ -145,7 +212,7 @@ export const corpusProjectionLegacyFixture = (
         id, family, generation, entity_id, epoch, fingerprint, index_id, status,
         lease_token, lease_expires_at
       ) VALUES (
-        ${revision}, 'legislation', ${GENERATION}, ${entityId}, 1,
+        ${revision}, ${family}, ${generation}, ${entityId}, 1,
         ${fingerprint(0)}, ${INDEX_ID}, 'reserved', ${uuid()},
         clock_timestamp() + interval '5 minutes'
       )
@@ -192,7 +259,7 @@ export const corpusProjectionLegacyFixture = (
     { desiredAtRecorded = true } = {},
   ) => {
     await run(sql`
-      UPDATE legislation_documents SET projection_epoch = ${epoch}
+      UPDATE ${canonicalTable} SET projection_epoch = ${epoch}
       WHERE id = ${entityId}
     `);
     const fingerprintValue = next.action === "upsert" ? next.fingerprint : null;
@@ -214,19 +281,32 @@ export const corpusProjectionLegacyFixture = (
   /** A canonical content change written through this release's desired writer. */
   const thisReleaseChanges = async (entityId: string, contentHash: string) => {
     await run(sql`
-      UPDATE legislation_documents SET content_hash = ${contentHash}
+      UPDATE ${canonicalTable} SET content_hash = ${contentHash}
       WHERE id = ${entityId}
     `);
     await database().transaction(
       async (tx) =>
         await advanceCorpusProjectionDesiredStateTx(
           asTestRaw<Transaction>(tx),
-          {
-            family: "legislation",
-            entityId: toSafeId<"legislationDocument">(entityId),
-          },
+          subjectOf(entityId),
         ),
     );
+  };
+
+  /** A case-law withdrawal recorded by the production audit writer. */
+  const recordWithdrawal = async (entityId: string) => {
+    if (family !== "case_law") {
+      return panic("Only case-law withdrawals are recorded");
+    }
+    await database().execute(sql`SELECT pg_sleep(0.002)`);
+    await database().transaction(
+      async (tx) =>
+        await recordCorpusWithdrawalAuditEvent(asTestRaw<Transaction>(tx), {
+          decisionId: toSafeId<"caseLawDecision">(entityId),
+          reason: "Stored payload no longer parses as a document",
+        }),
+    );
+    await database().execute(sql`SELECT pg_sleep(0.002)`);
   };
 
   /**
@@ -447,7 +527,7 @@ export const corpusProjectionLegacyFixture = (
         id, family, generation, entity_id, epoch, fingerprint, index_id, status,
         lease_token, lease_expires_at
       ) VALUES (
-        ${attempt}, 'legislation', ${GENERATION}, ${abandoned.entityId}, 2,
+        ${attempt}, ${family}, ${generation}, ${abandoned.entityId}, 2,
         ${fingerprint(1)}, ${INDEX_ID}, 'reserved', ${uuid()},
         clock_timestamp() + interval '5 minutes'
       )
@@ -481,23 +561,30 @@ export const corpusProjectionLegacyFixture = (
       INSERT INTO corpus_index_generations (
         family, generation, cluster, manifest_digest, status
       ) VALUES (
-        'legislation', ${GENERATION}, 'q09',
-        ${corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v2)},
+        ${family}, ${generation}, 'q09',
+        ${corpusIndexManifestDigest(manifest)},
         'building'
       )
     `);
-    await run(sql`
-      INSERT INTO legislation_sources (id, adapter_key, name)
-      VALUES (${SOURCE_ID}, 'projection-legacy-test', 'Projection legacy test')
-    `);
+    await run(
+      family === "case_law"
+        ? sql`
+          INSERT INTO case_law_sources (id, adapter_key, name)
+          VALUES (${SOURCE_ID}, 'projection-legacy-test', 'Projection legacy test')
+        `
+        : sql`
+          INSERT INTO legislation_sources (id, adapter_key, name)
+          VALUES (${SOURCE_ID}, 'projection-legacy-test', 'Projection legacy test')
+        `,
+    );
   };
 
   const claim = async (): Promise<CorpusProjectionCleanupClaim> =>
     await database().transaction(
       async (tx) =>
         await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-          family: "legislation",
-          generation: GENERATION,
+          family,
+          generation,
           indexId: INDEX_ID,
           limit: 16,
           leaseMs: 60_000,
@@ -535,6 +622,10 @@ export const corpusProjectionLegacyFixture = (
     ).at(0) ?? panic("No such state");
 
   return {
+    family,
+    generation,
+    subjectOf,
+    recordWithdrawal,
     uuid,
     fingerprint,
     installProjectionDdl,

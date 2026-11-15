@@ -181,8 +181,9 @@ type CorpusProjectionNamedCopyColumns = {
  * far behind and no later upsert write (an epoch-only reconciliation, a
  * ranking-signal re-projection, another content change) moves it past the
  * one-off pass's cutover. The pass (`retireLegacyUnprovenServedCopiesTx`)
- * retires such a copy when that instant precedes the cutover. Both go
- * together once the pass has run.
+ * considers such a copy only when that instant precedes the cutover, and
+ * retires it only with a recorded erasure. Both go together once the pass has
+ * run.
  */
 export const corpusIndexProjectionNamedCopyTrailsTwoChanges = ({
   desiredAction,
