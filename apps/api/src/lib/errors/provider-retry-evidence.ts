@@ -1,4 +1,5 @@
 import type { TextOptions } from "@tanstack/ai";
+import { Result } from "better-result";
 
 import { NETWORK_ERROR_CODE_REASON } from "@/api/lib/observability/failure";
 import { isRecord } from "@/api/lib/type-guards";
@@ -69,7 +70,7 @@ const isAbortShaped = (error: unknown): boolean =>
  * the retry hints of a failed response, or the socket code of a request that
  * got no response. Neither carries request content.
  */
-export type ProviderSendEvidence = RetryHintEvidence & { code?: string };
+type ProviderSendEvidence = RetryHintEvidence & { code?: string };
 
 /** Filled by {@link recordProviderSends} while one adapter call runs. */
 export type ProviderSendRecord = { evidence: ProviderSendEvidence | undefined };
@@ -99,14 +100,11 @@ export const recordProviderSends =
     const recording: typeof fetch = Object.assign(
       async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
         record.evidence = undefined;
-        try {
-          const response = await send(input, init);
-          if (!response.ok) {
-            const hints = retryHintEvidence(response.headers);
-            record.evidence = hints.headers === undefined ? undefined : hints;
-          }
-          return response;
-        } catch (error) {
+        const sent = await Result.tryPromise(
+          async () => await send(input, init),
+        );
+        if (Result.isError(sent)) {
+          const error = sent.error.cause;
           const code =
             providerTransportCode(error) ??
             (isAbortShaped(error) && signal?.aborted !== true
@@ -115,6 +113,12 @@ export const recordProviderSends =
           record.evidence = code === undefined ? undefined : { code };
           throw error;
         }
+        const response = sent.value;
+        if (!response.ok) {
+          const hints = retryHintEvidence(response.headers);
+          record.evidence = hints.headers === undefined ? undefined : hints;
+        }
+        return response;
       },
       { preconnect: send.preconnect },
     );

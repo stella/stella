@@ -902,7 +902,10 @@ const retriedChatRunChunks = (
       const options = admittedChatRunOptions(admitted);
       return streamChatChunks({
         ...options,
-        middleware: [...(options.middleware ?? []), retryGuard],
+        middleware:
+          options.middleware === undefined
+            ? [retryGuard]
+            : [...options.middleware, retryGuard],
       });
     },
   });

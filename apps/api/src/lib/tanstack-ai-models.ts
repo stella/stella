@@ -780,8 +780,25 @@ const withProviderFailureOrigin = (adapter: AnyTextAdapter): AnyTextAdapter => {
     record: ProviderSendRecord,
     stream: AsyncIterable<AdapterYieldChunk>,
   ): AsyncIterable<AdapterYieldChunk> {
+    const iterator = stream[Symbol.asyncIterator]();
+    // Set once the adapter's stream has finished on its own, by ending or by
+    // throwing; any other exit (the reader stopped early) closes it here.
+    let settled = false;
     try {
-      for await (const chunk of stream) {
+      for (;;) {
+        const step = await Result.tryPromise(async () => await iterator.next());
+        if (Result.isError(step)) {
+          settled = true;
+          // Both mark the adapter's own error in place; it is rethrown as is.
+          const failure = step.error.cause;
+          markProviderAdapterError(withSendEvidence(failure, record));
+          throw failure;
+        }
+        if (step.value.done === true) {
+          settled = true;
+          return;
+        }
+        const chunk = step.value.value;
         if (chunk.type !== EventType.RUN_ERROR) {
           yield chunk;
           continue;
@@ -791,8 +808,15 @@ const withProviderFailureOrigin = (adapter: AnyTextAdapter): AnyTextAdapter => {
           ? chunk
           : { ...chunk, rawEvent: providerAdapterEvidence(evidence) };
       }
-    } catch (error) {
-      throw markProviderAdapterError(withSendEvidence(error, record));
+    } finally {
+      if (!settled) {
+        const closed = await Result.tryPromise(
+          async () => await iterator.return?.(),
+        );
+        // Best effort: the reader already stopped, so a close that fails has
+        // no one left to tell.
+        closed.match({ err: () => undefined, ok: () => undefined });
+      }
     }
   };
   const chatStream: AnyTextAdapter["chatStream"] = (options) => {
@@ -803,14 +827,20 @@ const withProviderFailureOrigin = (adapter: AnyTextAdapter): AnyTextAdapter => {
     options,
   ) => {
     const record: ProviderSendRecord = { evidence: undefined };
-    try {
-      return await adapter.structuredOutput({
-        ...options,
-        chatOptions: recordedOptions(options.chatOptions, record),
-      });
-    } catch (error) {
-      throw markProviderAdapterError(withSendEvidence(error, record));
+    const output = await Result.tryPromise(
+      async () =>
+        await adapter.structuredOutput({
+          ...options,
+          chatOptions: recordedOptions(options.chatOptions, record),
+        }),
+    );
+    if (Result.isError(output)) {
+      // Both mark the adapter's own error in place; it is rethrown as is.
+      const failure = output.error.cause;
+      markProviderAdapterError(withSendEvidence(failure, record));
+      throw failure;
     }
+    return output.value;
   };
   const originalStream = adapter.structuredOutputStream;
   const structuredOutputStream: AnyTextAdapter["structuredOutputStream"] =
