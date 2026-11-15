@@ -1376,7 +1376,6 @@
         "generate:capability-runtime"
       ],
       "inputs": [
-        "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
         "$TURBO_ROOT$/packages/analytics-config/**",
@@ -1469,6 +1468,7 @@
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
         "$TURBO_ROOT$/packages/cli/**",
+        "$TURBO_ROOT$/packages/collation/**",
         "$TURBO_ROOT$/packages/concurrency/**",
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
@@ -1614,7 +1614,6 @@
         "generate:capability-runtime"
       ],
       "inputs": [
-        "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
         "$TURBO_ROOT$/packages/analytics-config/**",
@@ -1650,7 +1649,6 @@
         "$TURBO_ROOT$/packages/money/**",
         "$TURBO_ROOT$/packages/parameter-store/**",
         "$TURBO_ROOT$/packages/permissions/**",
-        "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/redis-config/**",
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/sanctions/**",
