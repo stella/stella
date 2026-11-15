@@ -1376,7 +1376,6 @@
         "generate:capability-runtime"
       ],
       "inputs": [
-        "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
         "$TURBO_ROOT$/packages/analytics-config/**",
@@ -1492,8 +1491,10 @@
         "$TURBO_ROOT$/packages/stable-stringify/**",
         "$TURBO_ROOT$/packages/template-conditions/**",
         "$TURBO_ROOT$/packages/template-packs/**",
+        "$TURBO_ROOT$/packages/test-state/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
+        "$TURBO_ROOT$/scripts/**",
         "$TURBO_ROOT$/types/**",
         "**",
         "$TURBO_ROOT$/.npmrc",
@@ -1614,7 +1615,6 @@
         "generate:capability-runtime"
       ],
       "inputs": [
-        "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
         "$TURBO_ROOT$/packages/analytics-config/**",
@@ -1650,7 +1650,6 @@
         "$TURBO_ROOT$/packages/money/**",
         "$TURBO_ROOT$/packages/parameter-store/**",
         "$TURBO_ROOT$/packages/permissions/**",
-        "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/redis-config/**",
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/sanctions/**",
@@ -1857,6 +1856,7 @@
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
         "$TURBO_ROOT$/apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/en.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/docs/data-export/**",
@@ -1894,6 +1894,8 @@
         // The phone draws the web's recorded chats and its step titles.
         "$TURBO_ROOT$/apps/web/src/components/chat/__fixtures__/recorded-conversations/**",
         "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
+        // And gives each failed turn the reason the web's map names.
+        "$TURBO_ROOT$/apps/web/src/lib/errors/ai-failure.ts",
         "$TURBO_ROOT$/packages/ui/src/**"
       ]
     },
@@ -1954,7 +1956,7 @@
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-request.fixture.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-runner.fixtures.json",
-        "$TURBO_ROOT$/packages/api-contract/src/chat-local-run-step-output.fixtures.json",
+        "$TURBO_ROOT$/packages/api-contract/src/chat-local-run-step-content.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-edit-file-types.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-registry.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts"

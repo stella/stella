@@ -13,6 +13,7 @@ import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
   DESKTOP_RUNNER_FS_POLICIES,
+  DESKTOP_RUNNER_INPUT_EVENT,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DESKTOP_RUNNER_OUTPUT_EVENT,
   DESKTOP_RUNNER_REASONING_EFFORTS,
@@ -44,6 +45,7 @@ import {
   SIDECAR_PROBE_FAILURES,
   SIDECAR_REJECTIONS,
   SIDECAR_RESTORE_OUTCOMES,
+  SIDECAR_RUN_SESSION,
   type SidecarHostMessage,
   type SidecarMessage,
   type SidecarProbeOutcome,
@@ -335,8 +337,20 @@ const CLAUDE_SYSTEM_FIELDS: Readonly<Record<ClaudeSystemSubtype, Fields>> = {
     }),
   },
   control_request_progress: { request_id: IDENTIFIER },
-  model_refusal_fallback: { model: OPAQUE },
-  model_refusal_no_fallback: { model: OPAQUE },
+  model_refusal_fallback: {
+    trigger: vocabulary(["refusal"]),
+    direction: vocabulary(["retry", "revert", "sticky"]),
+    scope: vocabulary(["session", "local"]),
+    original_model: OPAQUE,
+    fallback_model: OPAQUE,
+    request_id: IDENTIFIER,
+    api_refusal_category: OPAQUE,
+  },
+  model_refusal_no_fallback: {
+    original_model: OPAQUE,
+    request_id: IDENTIFIER,
+    api_refusal_category: OPAQUE,
+  },
   local_command_output: { content: SIZE },
   hook_started: CLAUDE_HOOK_FIELDS,
   hook_progress: CLAUDE_HOOK_FIELDS,
@@ -504,6 +518,7 @@ const CLAUDE_LINE_FIELDS: Readonly<Record<ClaudeLineType, MessageShape>> = {
       usage: CLAUDE_USAGE,
     }),
     error: CLAUDE_ASSISTANT_ERRORS,
+    uuid: IDENTIFIER,
   }),
   // `content` is a list of blocks or, written by Stella, one string.
   user: shape({ message: object({ content: list(CLAUDE_CONTENT_BLOCK) }) }),
@@ -752,6 +767,12 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
     threadId: IDENTIFIER,
     excludeTurns: BOOLEAN,
   },
+  "thread/fork": {
+    ...CODEX_THREAD_PARAMS,
+    threadId: IDENTIFIER,
+    lastTurnId: IDENTIFIER,
+    excludeTurns: BOOLEAN,
+  },
   "thread/unarchive": { threadId: IDENTIFIER },
   "thread/backgroundTerminals/list": {
     threadId: IDENTIFIER,
@@ -771,6 +792,12 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
       path: SIZE,
     }),
   },
+  // A steer's text is the member's words: logged as its size only.
+  "turn/steer": {
+    threadId: IDENTIFIER,
+    expectedTurnId: IDENTIFIER,
+    input: list({ type: vocabulary(["text"]), text: SIZE }),
+  },
   "turn/interrupt": CODEX_IN_TURN,
   "turn/started": { threadId: IDENTIFIER, turn: CODEX_TURN },
   "turn/completed": { threadId: IDENTIFIER, turn: CODEX_TURN },
@@ -787,6 +814,12 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
     }),
   },
   "turn/plan/updated": { ...CODEX_IN_TURN, explanation: SIZE, plan: SIZE },
+  "model/rerouted": {
+    ...CODEX_IN_TURN,
+    fromModel: OPAQUE,
+    toModel: OPAQUE,
+    reason: vocabulary(["highRiskCyberActivity"]),
+  },
   "serverRequest/resolved": { threadId: IDENTIFIER, requestId: IDENTIFIER },
   "account/rateLimits/updated": { rateLimits: CODEX_RATE_LIMITS },
   "item/commandExecution/requestApproval": {
@@ -921,7 +954,11 @@ const SIDECAR_HOST_FIELDS: Readonly<
   "run.start": {
     runId: IDENTIFIER,
     threadId: IDENTIFIER,
-    harnessSessionId: IDENTIFIER,
+    session: object({
+      type: vocabulary(Object.values(SIDECAR_RUN_SESSION)),
+      sessionId: IDENTIFIER,
+      boundary: IDENTIFIER,
+    }),
     ...SIDECAR_LAUNCH,
     model: OPAQUE,
     reasoningEffort: vocabulary(DESKTOP_RUNNER_REASONING_EFFORTS),
@@ -947,6 +984,12 @@ const SIDECAR_HOST_FIELDS: Readonly<
     decision: vocabulary(DESKTOP_RUNNER_APPROVAL_DECISIONS),
   },
   "run.answer": { runId: IDENTIFIER, requestId: IDENTIFIER, answers: SIZE },
+  // A steer's text is the member's words: logged as its size only.
+  "run.input": {
+    runId: IDENTIFIER,
+    inputId: IDENTIFIER,
+    message: object({ role: vocabulary(["user"]), content: SIZE }),
+  },
   "run.interrupt": { runId: IDENTIFIER },
   "run.cancel": { runId: IDENTIFIER },
   "run.token": { runId: IDENTIFIER, expiresAt: INSTANT },
@@ -987,6 +1030,7 @@ const SIDECAR_CHUNK = object({
   name: vocabulary([
     DESKTOP_RUNNER_CHECKPOINT_EVENT,
     DESKTOP_RUNNER_OUTPUT_EVENT,
+    DESKTOP_RUNNER_INPUT_EVENT,
     HARNESS_CONTINUATION_EVENT,
     ...AGENT_HARNESSES.map(harnessSessionIdEvent),
   ]),
@@ -1045,6 +1089,7 @@ const SIDECAR_FIELDS: Readonly<Record<SidecarMessage["type"], Fields>> = {
     seq: NUMBER,
     outcome: vocabulary(DESKTOP_RUNNER_RUN_OUTCOMES),
     harnessSessionId: IDENTIFIER,
+    harnessBoundary: IDENTIFIER,
   },
   "folder.restored": {
     requestId: IDENTIFIER,

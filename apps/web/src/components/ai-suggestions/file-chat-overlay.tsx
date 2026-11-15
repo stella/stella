@@ -142,6 +142,7 @@ import type {
   RegisteredFolioAgentToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
 import {
   type CreateDocumentDraftPersistence,
   getCreateDocumentDraftPersistence,
@@ -1537,6 +1538,9 @@ const FileChatOverlayInner = ({
     isLoadingOlder,
     loadOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
+    workAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -1590,6 +1594,14 @@ const FileChatOverlayInner = ({
     activeDraft !== undefined &&
     getCreateDocumentDraftPersistence(activeDraft.toolCallId).status ===
       "saving";
+  const handleContinuePausedTurn = useLatestCallback(async () => {
+    await continuePausedTurnWhenReady({
+      draftSaving: isDraftChatFrozen(),
+      ensureAIAvailable,
+      awaitPendingSelection: composer.awaitPendingSelection,
+      continueTurn: continuePausedTurn,
+    });
+  });
   const handlePromptSubmit = useLatestCallback(
     async ({
       prompt,
@@ -2054,6 +2066,7 @@ const FileChatOverlayInner = ({
     }
 
     const partsToRun = selectIdleFolioAgentDocToolCallParts({
+      awaitedAtOpen: workAwaitedAtOpen,
       clientStatus,
       executedIds,
       messageParts: message.parts,
@@ -2065,7 +2078,13 @@ const FileChatOverlayInner = ({
         "file-chat-overlay.run-folio-agent-doc-tool-call",
       );
     }
-  }, [clientStatus, messages, runFolioAgentDocToolCall]);
+  }, [
+    chat,
+    clientStatus,
+    messages,
+    runFolioAgentDocToolCall,
+    workAwaitedAtOpen,
+  ]);
 
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
@@ -2614,6 +2633,7 @@ const FileChatOverlayInner = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,
@@ -2669,6 +2689,7 @@ const FileChatOverlayInner = ({
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
               onOpenPlaybook={handleOpenPlaybook}
+              onContinuePausedTurn={handleContinuePausedTurn}
               onResend={resendLatestMessage}
               queuedMessageActions={{
                 remove: removeQueuedMessage,

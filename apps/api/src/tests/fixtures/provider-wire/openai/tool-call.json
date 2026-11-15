@@ -17,9 +17,14 @@
             "content-type": "application/json"
           },
           "body": {
-            "include": ["reasoning.encrypted_content"],
+            "include": [
+              "reasoning.encrypted_content"
+            ],
             "store": false,
             "max_output_tokens": 128000,
+            "prompt_cache_options": {
+              "mode": "explicit"
+            },
             "service_tier": "default",
             "model": "gpt-6-luna",
             "input": [
@@ -46,11 +51,17 @@
                       "type": "string"
                     },
                     "note": {
-                      "type": ["string", "null"],
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "minLength": 1
                     }
                   },
-                  "required": ["name", "note"],
+                  "required": [
+                    "name",
+                    "note"
+                  ],
                   "additionalProperties": false
                 },
                 "strict": true

@@ -715,6 +715,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-chat-table-write.fixture.ts", [
     "no-chat-table-write/no-chat-table-write",
   ]),
+  fixtureRuleOverride("no-chat-turn-time-order.fixture.ts", [
+    "no-chat-turn-time-order/no-chat-turn-time-order",
+  ]),
+  fixtureRuleOverride("no-chat-turn-ordinal-write.fixture.ts", [
+    "no-chat-turn-ordinal-write/no-chat-turn-ordinal-write",
+  ]),
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
   ]),
@@ -789,6 +795,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-billing-cap-crossings.fixture.ts", [
     "require-billing-cap-crossings/require-billing-cap-crossings",
+  ]),
+  fixtureRuleOverride("require-locked-rows-write.fixture.ts", [
+    "require-locked-rows-write/require-locked-rows-write",
   ]),
   fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
     "require-running-entry-guard/require-running-entry-guard",
@@ -1559,6 +1568,7 @@ const config = defineConfig({
   rules: {
     "confine-aggregate-lock/confine-aggregate-lock": "error",
     "count-gated-completion/count-gated-completion": "error",
+    "require-static-timeout-label/require-static-timeout-label": "error",
     "no-raw-sha256/no-raw-sha256": "error",
     // Every base rule is decided here or in the vendored presets, never by a
     // spread: a spread replaces preset severities without naming the rules,
@@ -1844,6 +1854,14 @@ const config = defineConfig({
     // Date is still truncated there. Changed lines only until its rollout
     // in scripts/guard-rollouts ends.
     "no-truncated-timestamp-comparison/no-date-under-timestamp-cast": "error",
+    // A chat turn's start time does not order turns; `lib/chat/turn-order.ts`
+    // states the order from the turn's ordinal. Changed lines only until its
+    // rollout in scripts/guard-rollouts ends.
+    "no-chat-turn-time-order/no-chat-turn-time-order": "error",
+    // The database assigns a chat turn's position and the thread's counter;
+    // no product code writes either column. Changed lines only until its
+    // rollout in scripts/guard-rollouts ends.
+    "no-chat-turn-ordinal-write/no-chat-turn-ordinal-write": "error",
     "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
     "no-facade-imports/no-facade-imports": "error",
     "docs-source-policy/docs-source-policy": "error",
@@ -2086,6 +2104,7 @@ const config = defineConfig({
   jsPlugins: [
     { name: "gdp-ts", specifier: "./scripts/oxlint-presets/gdp-plugin.mjs" },
     "./.oxlint-plugins/require-contract-domains.ts",
+    "./.oxlint-plugins/require-static-timeout-label.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     // The package's plugins load through local re-exports; the modules say why.
     "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
@@ -2267,6 +2286,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-worker-database-login-posture.ts",
     "./.oxlint-plugins/require-billing-cap-crossings.ts",
+    "./.oxlint-plugins/require-locked-rows-write.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/no-direct-clause-variant-insert.ts",
@@ -2318,6 +2338,8 @@ const config = defineConfig({
     "./.oxlint-plugins/exhaustive-union-map.ts",
     "./.oxlint-plugins/no-dynamic-key-in-operator.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
+    "./.oxlint-plugins/no-chat-turn-time-order.ts",
+    "./.oxlint-plugins/no-chat-turn-ordinal-write.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
     "./.oxlint-plugins/require-query-options-key.ts",
@@ -2569,6 +2591,9 @@ const config = defineConfig({
       ],
       rules: { "no-test-support-import/no-test-support-import": "error" },
     },
+    fixtureRuleOverride("require-static-timeout-label.fixture.ts", [
+      "require-static-timeout-label/require-static-timeout-label",
+    ]),
     {
       files: [
         "apps/api/src/handlers/case-law/ingestion/retention/sources/**/*.ts",
@@ -6166,6 +6191,15 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "require-billing-cap-crossings/require-billing-cap-crossings": "error",
+      },
+    },
+    {
+      // A row lock decides on the rows it returned; a later write to the same
+      // table must name those rows, not repeat the lock's filter.
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-locked-rows-write/require-locked-rows-write": "error",
       },
     },
     {

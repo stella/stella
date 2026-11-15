@@ -22,6 +22,7 @@ import {
   type LocalRunQuestionPause,
   localRunQuestionPauseOf,
 } from "@stll/api-contract/chat-local-run-question";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import {
   REQUEST_SECRET_TOOL_NAME,
   requiresPerCallChatApproval,
@@ -68,6 +69,14 @@ const localRunTargetSchema = v.object({
 });
 
 export type LocalRunTarget = v.InferOutput<typeof localRunTargetSchema>;
+
+/** The thread's run target when its turns run on the person's computer. */
+export const localRunTargetOf = (
+  runTarget: unknown,
+): LocalRunTarget | undefined => {
+  const target = v.safeParse(localRunTargetSchema, runTarget);
+  return target.success ? target.output : undefined;
+};
 
 /** One interrupt a paused turn waits on, as its resume snapshot stores it. */
 const pendingInterruptSchema = v.looseObject({
@@ -260,19 +269,19 @@ export const pendingInputOf = ({
     }
   }
 
-  // Every call waiting for approval must be among the answers: the server
-  // takes an answer to all of them at once.
-  const unanswered = calls.some(
-    ({ id, state }) =>
-      state === "approval-requested" &&
-      !approvals.some(({ call }) => call.id === id),
-  );
   const answered = [
     ...approvals.map(({ call }) => call),
     ...asks.map(({ call }) => call),
     ...documents.map(({ call }) => call),
     ...questions.map(({ call }) => call),
   ];
+  // Every call the turn waits on must be among the answers: the server takes
+  // an answer to all of them at once. What waits is the definition the server
+  // stored the turn by (`memberWaitsOf`).
+  const answeredIds = new Set(answered.map(({ id }) => id));
+  const unanswered = memberWaitsOf(message).some(
+    ({ toolCallId }) => !answeredIds.has(toolCallId),
+  );
   const owner = ownerOf(answered, runTarget);
   const [question, ...moreQuestions] = questions;
   if (unanswered || owner === undefined || moreQuestions.length > 0) {
@@ -366,10 +375,10 @@ function ownerOf(
   if (harness.length !== calls.length) {
     return undefined;
   }
-  const target = v.safeParse(localRunTargetSchema, runTarget);
-  return target.success
-    ? { type: "harness", runTarget: target.output }
-    : undefined;
+  const target = localRunTargetOf(runTarget);
+  return target === undefined
+    ? undefined
+    : { type: "harness", runTarget: target };
 }
 
 /**

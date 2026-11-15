@@ -1,36 +1,31 @@
 import { describe, expect, test } from "bun:test";
 
 /**
- * Canary tests binding PROVIDER_CACHE_ACCOUNTING (unit-model.ts) to the
- * REAL adapter usage builders, not to hand-written fixtures that restate the
- * map's own assumptions. Each test feeds a production-shaped provider usage
- * payload through the adapter code that ships to production and asserts the
- * relationship between `promptTokens` and `promptTokensDetails.cachedTokens`
- * that the accounting map encodes for that provider.
+ * Bind canonical total-input accounting to the real adapter usage builders.
+ * Provider-native counts pass through the shipped adapter before the ledger
+ * splits uncached input, cache reads and cache writes.
  *
  * The usage builders are internal modules, deliberately imported by dist file
  * path because the packages' exports maps do not expose them. That fragility
  * is the point of a canary: an adapter upgrade that moves or reshapes the
- * builder fails these imports loudly, forcing the accounting map to be
+ * builder fails these imports loudly, forcing the accounting boundary to be
  * re-verified against the new adapter behavior instead of drifting silently.
  *
- * Providers not exercised here: the bedrock and openai adapters currently
- * emit no `cachedTokens` at all (verified against their dist output), so
- * their map entries cannot mis-meter today; if an upgrade adds cache fields,
- * the anomaly telemetry (`cache-tokens-exceed-included-prompt`) is the runtime
- * backstop until a canary is added for them.
  */
 import { buildAnthropicUsage } from "../../../../../node_modules/@tanstack/ai-anthropic/dist/esm/usage.js";
 import { buildGeminiUsage } from "../../../../../node_modules/@tanstack/ai-gemini/dist/esm/usage.js";
+import { normalizeProviderPromptTokens } from "./unit-model";
 
 describe("provider cache accounting canaries", () => {
-  test("anthropic adapter reports cache reads SEPARATE from input_tokens", () => {
+  test("anthropic adapter includes cache reads in canonical prompt tokens", () => {
     // Production-shaped Anthropic usage on a warm cache: input_tokens
     // excludes cache reads, so the cached count legitimately dwarfs it.
     const usage = buildAnthropicUsage({
       cache_creation: null,
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 18_874,
+      fallback_credit: null,
+      output_tokens_details: null,
       inference_geo: null,
       input_tokens: 5,
       iterations: null,
@@ -42,17 +37,30 @@ describe("provider cache accounting canaries", () => {
     if (usage === undefined) {
       throw new Error("adapter returned no usage for a present usage object");
     }
-    // separate-from-input: promptTokens stays the uncached count and the
-    // cache reads ride promptTokensDetails without being folded in.
-    expect(usage.promptTokens).toBe(5);
+    expect(usage.promptTokens).toBe(18_879);
     expect(usage.promptTokensDetails?.cachedTokens).toBe(18_874);
+    expect(
+      normalizeProviderPromptTokens({
+        provider: "anthropic",
+        modelId: "cache-accounting-canary",
+        promptTokens: usage.promptTokens,
+        cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+        cacheWriteTokens: usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+      }),
+    ).toEqual({
+      uncachedInputTokens: 5,
+      cacheReadTokens: 18_874,
+      cacheWriteTokens: 0,
+    });
   });
 
-  test("anthropic adapter keeps cache writes out of promptTokens too", () => {
+  test("anthropic adapter includes cache writes without billing them twice", () => {
     const usage = buildAnthropicUsage({
       cache_creation: null,
       cache_creation_input_tokens: 9502,
       cache_read_input_tokens: 0,
+      fallback_credit: null,
+      output_tokens_details: null,
       inference_geo: null,
       input_tokens: 12,
       iterations: null,
@@ -64,8 +72,21 @@ describe("provider cache accounting canaries", () => {
     if (usage === undefined) {
       throw new Error("adapter returned no usage for a present usage object");
     }
-    expect(usage.promptTokens).toBe(12);
+    expect(usage.promptTokens).toBe(9514);
     expect(usage.promptTokensDetails?.cacheWriteTokens).toBe(9502);
+    expect(
+      normalizeProviderPromptTokens({
+        provider: "anthropic",
+        modelId: "cache-accounting-canary",
+        promptTokens: usage.promptTokens,
+        cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+        cacheWriteTokens: usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+      }),
+    ).toEqual({
+      uncachedInputTokens: 12,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 9502,
+    });
   });
 
   test("gemini adapter reports cache reads INCLUDED in promptTokenCount", () => {

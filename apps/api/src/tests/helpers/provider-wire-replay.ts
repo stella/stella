@@ -6,7 +6,10 @@ import {
   providerWireFormatOf,
   signedGeminiCallsOf,
 } from "@/api/tests/helpers/provider-request-transcript";
-import type { ProviderRequest } from "@/api/tests/helpers/provider-request-transcript";
+import type {
+  ProviderRequest,
+  SignedGeminiCall,
+} from "@/api/tests/helpers/provider-request-transcript";
 import type {
   AwsEventStreamMessage,
   ProviderWireCassette,
@@ -432,8 +435,9 @@ export const installProviderWireReplay = ({
   let unexpected: string[] = [];
   let requests: ReplayedRequest[] = [];
   const transcripts: ProviderRequest[] = [];
-  // The signed calls the conversation's served answers made so far.
-  const signedCalls = new Map<string, string>();
+  // The signed calls the conversation's served answers made so far, with
+  // the model each answer came from.
+  const signedCalls = new Map<string, SignedGeminiCall>();
 
   const replayFetch = async (
     input: string | URL | Request,
@@ -464,7 +468,12 @@ export const installProviderWireReplay = ({
         }
         transcripts.push(
           format === "gemini"
-            ? { body, format, signedCalls: new Map(signedCalls) }
+            ? {
+                body,
+                format,
+                model: requestModel,
+                signedCalls: new Map(signedCalls),
+              }
             : { body, format },
         );
       }
@@ -558,7 +567,7 @@ export const installProviderWireReplay = ({
       const { body: answer } = current.entry.exchange.response;
       if (format === "gemini" && answer.encoding === "text") {
         for (const [id, signature] of signedGeminiCallsOf(answer.text)) {
-          signedCalls.set(id, signature);
+          signedCalls.set(id, { signature, model: requestModel });
         }
       }
       requests.push({

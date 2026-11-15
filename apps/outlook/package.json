@@ -33,8 +33,8 @@
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
-    "@tailwindcss/cli": "4.3.3",
-    "@types/office-js": "^1.0.604",
+    "@tailwindcss/cli": "4.3.5",
+    "@types/office-js": "^1.0.617",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",

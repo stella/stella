@@ -1,6 +1,6 @@
 // parser-output-unchanged: fallback storage identity is derived after parsing; adapter output is unchanged.
 import { panic, Result } from "better-result";
-import { not } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -849,7 +849,7 @@ export const decisionStorageEnrichmentMatch = (
       ...scope,
       fallbackIdentityKey: ABSENT_FIELD,
       RAW: (table: Parameters<typeof rowHoldsDocumentFor>[0]) =>
-        not(rowHoldsDocumentFor(table)),
+        sql<boolean>`not ${rowHoldsDocumentFor(table)}`,
     };
     if (storage.publishedContentHash === null) {
       return textless;

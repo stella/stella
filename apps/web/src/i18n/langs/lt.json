@@ -294,6 +294,8 @@
       "reopened": "Atverta iš naujo, laukiama patikros",
       "reopenedTooltip": "Tikrintojas perklasifikavo tai kaip patikrinamą faktą; tiesioginė patikra pagal registrą dar neatlikta.",
       "sourceCount": "{count, plural, one {# šaltinis} few {# šaltiniai} many {# šaltinių} other {# šaltinio}}",
+      "verdictBy": "Išvadą pateikė {model}",
+      "verdictByGenerativeModel": "Išvadą pateikė generatyvusis modelis; sprendimų modelis jos nenustatė",
       "whyVerdict": "Išvados pagrindimas: atraminiai faktai"
     },
     "claimTypes": {
@@ -2332,9 +2334,14 @@
       "update_reader_annotation": "Redaguoti paryškinimą ar komentarą",
       "use-browser": "Jūsų naršyklės naudojimas",
       "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
+      "user_message": "Išsiųsta agentui dirbant",
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
+      "browserClick": "Spustelėti „{target}“ puslapyje {url}",
+      "browserPressKey": "Paspausti klavišą {key} elemente „{target}“ puslapyje {url}",
+      "browserSelect": "Pasirinkti „{option}“ elemente „{target}“ puslapyje {url}",
+      "browserType": "Įvesti tekstą į „{target}“ puslapyje {url}",
       "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
       "commandExited": "{command} (išėjimo kodas {code})",
       "consoleLogs": "Konsolės išvestis",
@@ -2344,17 +2351,17 @@
       "input": "Įvestis",
       "interrupted": "Nutraukta nebaigus",
       "localOutput": {
+        "arriving": "Vis dar gaunama iš kompiuterio, kuriame buvo vykdomas šis žingsnis",
         "conversation": "Subagento pokalbis",
         "conversationPrompt": "Užduotis",
         "conversationReport": "Ataskaita",
         "cut": "Rodomi pirmieji {kept} iš {total}",
         "diff": "Failų pakeitimai",
-        "elsewhere": "Atidarykite kompiuteryje, kuriame tai buvo vykdoma",
         "empty": "Išvesties nėra",
-        "failed": "stella darbalaukio programa šiame kompiuteryje negalėjo to parodyti.",
-        "imageTooLarge": "Šio paveikslėlio dydis – {total}. Didesni nei {kept} paveikslėliai šiame kompiuteryje nesaugomi, todėl čia jo parodyti negalima.",
-        "notKept": "Iš šio žingsnio šiame kompiuteryje nieko neišsaugota",
-        "reading": "Skaitoma iš šio kompiuterio"
+        "imageTooLargeToStore": "Šio paveikslėlio dydis – {total}. Didesni nei {kept} paveikslėliai nesaugomi, todėl jo parodyti negalima.",
+        "notCopied": "Į šį pokalbį dar nenukopijuota",
+        "notStored": "Iš šio žingsnio nieko neišsaugota",
+        "runBudgetReached": "Neišsaugota: šis vykdymas jau išsaugojo tiek, kiek leidžiama vienam vykdymui"
       },
       "output": "Išvestis",
       "patternInPath": "{pattern} ({path})",
@@ -2377,6 +2384,10 @@
       "needsInputTitle": "stellai reikia jūsų",
       "replyReadyBody": "stella baigė atsakyti jūsų pokalbyje.",
       "replyReadyTitle": "Atsakymas paruoštas"
+    },
+    "turnPaused": {
+      "continue": "Tęsti",
+      "status": "Pristabdyta po {count, plural, one {# įrankio iškvietimo} few {# įrankio iškvietimų} many {# įrankio iškvietimo} other {# įrankio iškvietimų}}"
     },
     "turnStatus": {
       "answerFailed": "Atsakymo nepavyko užbaigti",
@@ -3409,6 +3420,7 @@
       "invitationRoleNotAllowed": "Negalite pakviesti asmens su šia role. Pasirinkite kitą rolę.",
       "invoiceNumberSeriesMissing": "Nustatykite numatytąją sąskaitų numerių seriją organizacijos nustatymų skiltyje Numerių serijos, tada išrašykite sąskaitą.",
       "invoiceSellerProfileMissing": "Pridėkite pardavėjo profilį organizacijos nustatymų skiltyje Atsiskaitymo profiliai, tada išrašykite sąskaitą.",
+      "legalHoldActive": "Ištrynimas užblokuotas, nes šie įrašai turi būti išsaugoti.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
       "matterContactCapacityExceeded": "Šioje byloje yra daugiau kontaktų, nei galima parodyti. Pašalinkite matomus kontaktų susiejimus, kad būtų parodyti likę kontaktai.",
@@ -5889,6 +5901,8 @@
       "auditLogsSentenceDownload": "{resource} atsisiųstas.",
       "auditLogsSentenceExecute": "{resource} paleistas.",
       "auditLogsSentenceIssued": "{resource} išduotas.",
+      "auditLogsSentenceLegalHoldPlaced": "{resource} nustatyta.",
+      "auditLogsSentenceLegalHoldReleased": "{resource} panaikinta.",
       "auditLogsSentenceRedeemed": "{resource} panaudotas.",
       "auditLogsSentenceRefused": "{resource} atmestas.",
       "auditLogsSentenceReview": "{resource} peržiūrėtas.",
@@ -5940,6 +5954,7 @@
         "flow_run": "darbo eigos vykdymas",
         "folio_collab_room": "Folio bendradarbiavimo kambarys",
         "invoice": "sąskaita faktūra",
+        "legal_hold": "teisinio saugojimo prievolė",
         "legal_list": "teisinis sąrašas",
         "legal_list_generation": "teisinio sąrašo kūrimas",
         "legal_list_item": "teisinio sąrašo įrašas",
@@ -6099,7 +6114,13 @@
       "usageStatusTrialing": "Bandomasis laikotarpis",
       "usageUnitCount": "{count, plural, one {# vienetas} few {# vienetai} many {# vienetų} other {# vieneto}}",
       "usageUnitsBalanceTemplate": "Pasiekiama {remaining} vienetų",
-      "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai"
+      "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai",
+      "verificationDecisionModel": {
+        "description": "Tikrinant dokumentą pagal sąrašo faktus, sprendimų modelis parenka kiekvieno teiginio išvadą. Generatyvusis modelis ir toliau randa bei cituoja faktus. Jei sprendimų modelis nėra pakankamai tikras, galioja generatyviojo modelio išvada.",
+        "title": "Dokumentų tikrinimo išvados",
+        "unavailable": "Šiai organizacijai nėra prieinamo sprendimų modelio.",
+        "updated": "Tikrinimo nustatymas atnaujintas"
+      }
     }
   },
   "sharepoint": {
@@ -6340,6 +6361,7 @@
       "previewBody5": "Prieš konvertavimą pardavimas arba įtraukimas į prekybą suteikia Investuotojui teisę į didesnę iš pirkimo kainos arba pajamų, mokėtinų konvertavimo pagrindu, sumą.",
       "previewBody6": "Bendrovė yra tinkamai įsteigta, turi teisę sudaryti šią sutartį ir gaus visus jos vykdymui reikalingus patvirtinimus.",
       "previewBody7": "Ši sutartis apima visą šalių susitarimą ir gali būti keičiama tik raštu, gavus reikiamą sutikimą.",
+      "previewDocument": "Stilių rinkinio peržiūra",
       "previewFailed": "Nepavyko sugeneruoti peržiūros.",
       "previewIntroduction": "Ši sutartis sudaroma tarp „Example Labs Ltd.“ (toliau – Bendrovė) ir parašų puslapyje nurodyto investuotojo (toliau – Investuotojas).",
       "previewLevel1": "Investicija",

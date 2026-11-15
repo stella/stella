@@ -23,7 +23,6 @@
               "role": "user"
             }
           ],
-          "serviceTier": "standard",
           "systemInstruction": {
             "parts": [
               {
@@ -102,11 +101,12 @@
               ]
             }
           ],
+          "serviceTier": "standard",
           "generationConfig": {
             "maxOutputTokens": 65536,
             "thinkingConfig": {
-              "includeThoughts": false,
-              "thinkingLevel": "LOW"
+              "thinkingLevel": "LOW",
+              "includeThoughts": false
             }
           }
         }
@@ -158,7 +158,6 @@
               "role": "user"
             }
           ],
-          "serviceTier": "standard",
           "systemInstruction": {
             "parts": [
               {
@@ -237,11 +236,12 @@
               ]
             }
           ],
+          "serviceTier": "standard",
           "generationConfig": {
             "maxOutputTokens": 65536,
             "thinkingConfig": {
-              "includeThoughts": false,
-              "thinkingLevel": "LOW"
+              "thinkingLevel": "LOW",
+              "includeThoughts": false
             }
           }
         }

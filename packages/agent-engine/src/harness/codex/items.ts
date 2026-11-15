@@ -175,7 +175,7 @@ export const toolCallForItem = (
         input: { query: item.query },
       });
     case "imageView":
-      // The file's name; the image itself stays here.
+      // The file's name; the image itself is the step's content.
       return nativeToolCall(item.id, {
         name: HARNESS_TOOL_NAMES.nativeTool,
         input: {
@@ -195,7 +195,8 @@ const IMAGE_VIEW_TOOL = "view_image";
 /**
  * The step of a subagent a spawn call started. Codex reports the prompt and
  * the model it asked for, and neither a description nor a kind of agent, so
- * the step names nothing beyond being a subagent; the prompt stays here.
+ * the step names nothing beyond being a subagent; the prompt is part of
+ * the step's content.
  */
 export const subagentCall = (
   item: Extract<CodexItem, { type: "collabAgentToolCall" }>,
@@ -205,7 +206,7 @@ export const subagentCall = (
     input: { tool: item.tool, detail: { kind: "subagent", description: "" } },
   });
 
-/** How a subagent's step ended; what the subagent reported stays here. */
+/** How a subagent's step ended; what the subagent reported is the step's content. */
 export const subagentResult = (
   outcome: CodexAgentOutcome,
 ): HarnessToolResult => ({
@@ -281,7 +282,8 @@ const mcpResult = (
 export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
   switch (item.type) {
     case "commandExecution":
-      // The exit code and status only; the command's output stays here.
+      // The exit code and status only; the command's output is the step's
+      // content.
       return {
         content: chatLocalRunToolResultContent({
           name: HARNESS_TOOL_NAMES.commandExecution,

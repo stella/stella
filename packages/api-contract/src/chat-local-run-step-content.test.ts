@@ -5,15 +5,26 @@ import * as v from "valibot";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  CHAT_LOCAL_RUN_AWAITED_STEP_REFUSAL,
+  CHAT_LOCAL_RUN_STEP_AWAITED_MS,
+  CHAT_LOCAL_RUN_STEP_CONTENT_CONFLICT_CODE,
+  CHAT_LOCAL_RUN_STEP_CONTENT_INVALID_CODE,
   CHAT_LOCAL_RUN_STEP_CONTENT_KINDS,
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE,
+  CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES,
   CHAT_LOCAL_RUN_STEP_CONTENT_WINDOW,
+  CHAT_LOCAL_RUN_STEPS_AWAITED_MAX,
+  chatLocalRunAwaitedStepContentPath,
   chatLocalRunStepContentCap,
   chatLocalRunStepContentSchema,
+  chatLocalRunStepContentUploadedSchema,
   chatLocalRunStepContentUploadPath,
   chatLocalRunStepContentWindow,
+  chatLocalRunStepsAwaitedSchema,
 } from "./chat-local-run-step-content";
+import fixtures from "./chat-local-run-step-content.fixtures.json";
 import { CHAT_LOCAL_RUN_STEP_MAX_BYTES } from "./chat-local-run-step-output";
+import { DESKTOP_RUNNER_LIMITS } from "./desktop-runner";
 
 const encode = (text: string) => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array) =>
@@ -30,6 +41,70 @@ const windowsOf = (bytes: Uint8Array, limit: number) => {
   }
   return windows;
 };
+
+describe("steps a run still has to send at its end", () => {
+  test("an awaited step may arrive for as long as a run waits for its computer", () => {
+    expect(CHAT_LOCAL_RUN_STEP_AWAITED_MS).toBe(
+      DESKTOP_RUNNER_LIMITS.abandonedRunMs,
+    );
+  });
+
+  test("the announcement carries step keys and a count, and nothing else", () => {
+    const key = "ab".repeat(32);
+    expect(
+      v.parse(chatLocalRunStepsAwaitedSchema, { stepKeys: [key], more: 3 }),
+    ).toEqual({ stepKeys: [key], more: 3 });
+    for (const extra of [
+      { stepKeys: [key], more: 0, text: "output" },
+      { stepKeys: ["call-1"], more: 0 },
+      {
+        stepKeys: Array.from(
+          { length: CHAT_LOCAL_RUN_STEPS_AWAITED_MAX + 1 },
+          () => key,
+        ),
+        more: 0,
+      },
+    ]) {
+      expect(v.safeParse(chatLocalRunStepsAwaitedSchema, extra).success).toBe(
+        false,
+      );
+    }
+  });
+
+  test("the desktop sends an awaited step as the fixture it reads says", () => {
+    const { late } = fixtures;
+    expect(fixtures.kinds).toEqual([...CHAT_LOCAL_RUN_STEP_CONTENT_KINDS]);
+    // The one kind kept whole or not at all is the one held to the image cap.
+    expect([fixtures.imageKind]).toEqual(
+      CHAT_LOCAL_RUN_STEP_CONTENT_KINDS.filter(
+        (kind) =>
+          chatLocalRunStepContentCap(kind) ===
+          CHAT_LOCAL_RUN_STEP_MAX_BYTES.image,
+      ),
+    );
+    expect(fixtures.maxBytes).toEqual(CHAT_LOCAL_RUN_STEP_MAX_BYTES);
+    expect(fixtures.awaitedMax).toBe(CHAT_LOCAL_RUN_STEPS_AWAITED_MAX);
+    expect(fixtures.awaitedMs).toBe(CHAT_LOCAL_RUN_STEP_AWAITED_MS);
+    expect(late.path).toBe(
+      chatLocalRunAwaitedStepContentPath(late.runId, late.stepKey),
+    );
+    expect(late.stored.map(({ body }) => body.state)).toEqual([
+      ...CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES,
+    ]);
+    for (const { body } of late.stored) {
+      expect(body).toEqual(
+        v.parse(chatLocalRunStepContentUploadedSchema, body),
+      );
+    }
+    expect(late.refused.map(({ code }) => code)).toEqual(
+      expect.arrayContaining([
+        ...Object.values(CHAT_LOCAL_RUN_AWAITED_STEP_REFUSAL),
+        CHAT_LOCAL_RUN_STEP_CONTENT_CONFLICT_CODE,
+        CHAT_LOCAL_RUN_STEP_CONTENT_INVALID_CODE,
+      ]),
+    );
+  });
+});
 
 describe("a stored step's content", () => {
   test("windows read in order are whole characters that rejoin to the text", () => {
@@ -128,6 +203,7 @@ describe("a stored step's content", () => {
         totalBytes: 12,
       },
       { state: CHAT_LOCAL_RUN_STEP_CONTENT_STATE.arriving },
+      { state: CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notCopied },
       { state: CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notStored },
     ];
     for (const answer of answers) {

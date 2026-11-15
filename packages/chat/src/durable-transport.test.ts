@@ -636,6 +636,7 @@ describe("durable chat transport", () => {
     for (const contentType of ["application/json", "text/plain"]) {
       test(`a ${status} ${contentType} join refusal stops reconnection immediately`, async () => {
         const errors: ChatReconnectError[] = [];
+        const reconnecting: boolean[] = [];
         let joins = 0;
         let waits = 0;
         let elapsed = 0;
@@ -660,7 +661,9 @@ describe("durable chat transport", () => {
             turnId: "turn-rejoin",
             runId: RUN_ID,
           }),
-          onReconnectChange: () => undefined,
+          onReconnectChange: (value) => {
+            reconnecting.push(value);
+          },
           onTranscript: () => undefined,
           onError: (error) => {
             errors.push(error);
@@ -674,7 +677,7 @@ describe("durable chat transport", () => {
         });
         expect(
           await rejectionOf(collect(transport.connection.joinRun(RUN_ID))),
-        ).toMatchObject({ message: expect.stringContaining("502") });
+        ).toMatchObject({ message: expect.stringContaining("400") });
         expect(errors).toHaveLength(1);
         expect(errors.at(0)).toBeInstanceOf(ChatReconnectError);
         expect(errors.at(0)).toMatchObject({
@@ -683,6 +686,7 @@ describe("durable chat transport", () => {
         });
         expect(joins).toBe(1);
         expect(waits).toBe(0);
+        expect(reconnecting).toEqual([true, false]);
       });
     }
   }
@@ -716,7 +720,7 @@ describe("durable chat transport", () => {
     expect(
       await rejectionOf(collect(transport.connection.joinRun(RUN_ID))),
     ).toMatchObject({
-      message: expect.stringContaining("502"),
+      message: expect.stringContaining("400"),
     });
     expect(errors.at(0)?.message).toBe("Invalid chat rejoin response.");
     expect(reloads).toBe(0);

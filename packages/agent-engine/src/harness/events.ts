@@ -5,14 +5,17 @@
  * so a Codex and a Claude turn persist through the same message parts.
  */
 
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { chatLocalRunApprovalMessage } from "@stll/api-contract/chat-local-run-tool";
 import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
-import type {
-  DESKTOP_RUNNER_APPROVAL_DECISIONS,
-  DESKTOP_RUNNER_APPROVAL_KINDS,
-  DESKTOP_RUNNER_RUN_OUTCOMES,
+import {
+  type DESKTOP_RUNNER_APPROVAL_DECISIONS,
+  type DESKTOP_RUNNER_APPROVAL_KINDS,
+  type DESKTOP_RUNNER_RUN_OUTCOMES,
+  type DesktopRunnerInputEvent,
+  harnessBoundarySchema,
 } from "@stll/api-contract/desktop-runner";
 
 import type { HarnessStepOutput } from "./step-output";
@@ -38,6 +41,27 @@ export type HarnessSessionId = v.InferOutput<typeof HarnessSessionIdSchema>;
 export const harnessSessionId = (nativeId: string): HarnessSessionId =>
   v.parse(HarnessSessionIdSchema, nativeId);
 
+const HarnessBoundarySchema = v.pipe(
+  harnessBoundarySchema,
+  v.brand("HarnessBoundary"),
+);
+
+/**
+ * Where a completed turn ended in its native session: the Codex turn id, or
+ * the uuid of the Claude Code session's last assistant message. A later turn
+ * may continue the session from there as a new one (`fork`).
+ */
+export type HarnessBoundary = v.InferOutput<typeof HarnessBoundarySchema>;
+
+/**
+ * The boundary `nativeId` names, or `null` when the runner protocol cannot
+ * carry it: such a turn is never a fork point, and its run still finishes.
+ */
+export const harnessBoundary = (nativeId: string): HarnessBoundary | null => {
+  const parsed = v.safeParse(HarnessBoundarySchema, nativeId);
+  return parsed.success ? parsed.output : null;
+};
+
 /**
  * How the turn's conversation context was established. `resume_unavailable`
  * is the visible fallback: the requested native session could not be resumed,
@@ -46,11 +70,33 @@ export const harnessSessionId = (nativeId: string): HarnessSessionId =>
 export type HarnessContinuation =
   | { type: "fresh" }
   | { type: "resumed" }
+  /** A new session holding the requested one through its boundary. */
+  | { type: "forked" }
   | {
       type: "resume_unavailable";
       reason: "session_not_found" | "resume_rejected";
       message: string;
     };
+
+/**
+ * Whether the session a turn runs in already holds the chat's earlier turns,
+ * so the turn's prompt is the new message alone.
+ */
+export const sessionHoldsHistory = (
+  continuation: HarnessContinuation,
+): boolean => {
+  switch (continuation.type) {
+    case "resumed":
+    case "forked":
+      return true;
+    case "fresh":
+    case "resume_unavailable":
+      return false;
+    default:
+      continuation satisfies never;
+      return panic("Unknown harness continuation");
+  }
+};
 
 /**
  * A tool the harness ran itself. `name` is the name a cloud chat turn gives
@@ -82,8 +128,8 @@ export type HarnessToolResult = {
   status: "succeeded" | "failed" | "cancelled";
   /**
    * What a native step produced (a command's output, a change's diff). It
-   * stays on this computer: the sidecar keeps it for the member to open
-   * here, and it is not part of what a turn reports.
+   * is the step's content: the sidecar keeps it and sends it to stella beside
+   * the turn's events, and it is not part of what a turn reports.
    */
   localOutput?: HarnessStepOutput;
 };
@@ -111,7 +157,7 @@ export type HarnessApprovalRequest = {
  * What an approval asks the user to allow, from what chat keeps of the call
  * (`chatLocalRunApprovalMessage`): a command's shown command line, else the
  * harness's shown reason, or the tool's name. Never more of a step than its
- * call shows, so a heredoc's text stays here.
+ * call shows, so a heredoc's text is never in it.
  */
 export const approvalMessage = (request: HarnessApprovalRequest): string =>
   chatLocalRunApprovalMessage({
@@ -226,7 +272,27 @@ export type HarnessEvent =
   | { type: "interaction.resolved"; requestId: string }
   /** A transient provider error the harness is retrying on its own. */
   | { type: "retrying"; message: string }
-  | { type: "turn.completed"; usage: HarnessUsage | null }
+  /**
+   * What became of a message the turn was steered with (`HarnessTurn.steer`),
+   * at the point where the harness took it or refused it.
+   */
+  | {
+      type: "input.settled";
+      inputId: string;
+      status: DesktopRunnerInputEvent["status"];
+    }
+  /**
+   * The provider runs the turn on another model than the one asked for:
+   * Codex rerouted it, or Claude Code retried it on its fallback model after
+   * a refusal. What the turn reports from here on names this model.
+   */
+  | { type: "model.rerouted"; model: string }
+  | {
+      type: "turn.completed";
+      usage: HarnessUsage | null;
+      /** Where the turn ended in its session; `null` if the harness named none. */
+      boundary: HarnessBoundary | null;
+    }
   | { type: "turn.interrupted" }
   | { type: "turn.failed"; failure: HarnessFailure };
 

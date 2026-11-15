@@ -48,7 +48,7 @@ describe.skipIf(!enabled)("fallback decision identity (postgres)", () => {
         );
         const migration = await Bun.file(
           new URL(
-            "../../../drizzle/20261114200000_case_law_fallback_identity/migration.sql",
+            "../../../drizzle/20261115150000_case_law_fallback_identity/migration.sql",
             import.meta.url,
           ),
         ).text();

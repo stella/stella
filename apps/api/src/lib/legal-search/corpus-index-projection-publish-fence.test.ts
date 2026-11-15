@@ -15,6 +15,8 @@ import { corpusProjectionAppendIngestBudgetMs } from "@/api/lib/legal-search/cor
 import {
   corpusProjectionAcceptedAppendCleanupFence,
   corpusProjectionAppendPublishBarrier,
+  corpusProjectionOfflineIndexerEndedAt,
+  corpusProjectionOfflineIndexerKillDeadline,
   corpusProjectionUnrecordedAppendCleanupFence,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 
@@ -59,6 +61,52 @@ test("an unknown append's barrier is unchanged for every generation", () => {
   );
 });
 
+test("an offline run has certainly ended five seconds after its kill deadline, before any unknown append's barrier", () => {
+  assertProperty(
+    "an offline run has certainly ended five seconds after its kill deadline, before any unknown append's barrier",
+    fc.property(
+      fc.constantFrom(...MANIFESTS),
+      fc.date({
+        min: new Date("2000-01-01T00:00:00.000Z"),
+        max: new Date("2100-01-01T00:00:00.000Z"),
+        noInvalidDate: true,
+      }),
+      (manifest, appendStartedAt) => {
+        const kill = corpusProjectionOfflineIndexerKillDeadline(
+          appendStartedAt,
+          manifest,
+        );
+        // The run gets the generation's whole request budget, no more.
+        expect(kill.getTime()).toBe(
+          appendStartedAt.getTime() + commitWindowMs(manifest) + 60_000,
+        );
+        const unended = corpusProjectionAppendPublishBarrier(
+          { type: "offline_unended", appendStartedAt },
+          manifest,
+        );
+        expect(unended).toEqual(
+          corpusProjectionOfflineIndexerEndedAt(appendStartedAt, manifest),
+        );
+        expect(unended.getTime()).toBe(kill.getTime() + 5000);
+        // It owes no commit window, so it never waits longer than an ingest
+        // request whose outcome is unknown.
+        expect(unended.getTime()).toBeLessThan(
+          corpusProjectionAppendPublishBarrier(
+            { type: "unknown", appendStartedAt },
+            manifest,
+          ).getTime(),
+        );
+        expect(
+          corpusProjectionAppendPublishBarrier(
+            { type: "offline_exited", exitedBy: appendStartedAt },
+            manifest,
+          ),
+        ).toEqual(appendStartedAt);
+      },
+    ),
+  );
+});
+
 test("the append ingest budget is the wait_for client timeout", () => {
   for (const manifest of MANIFESTS) {
     const commitTimeoutSecs =
@@ -90,6 +138,8 @@ test("an accepted append's barrier renders the same SQL for every generation", (
         dialect.sqlToQuery(acceptedBarrierBefore(acceptedAt, manifest)),
       );
     }
+    // The barrier an accepted revision stored wins: an ingest request stores
+    // exactly the count below, an offline delivery stores its own.
     expect(
       dialect.sqlToQuery(
         corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt)
@@ -97,10 +147,10 @@ test("an accepted append's barrier renders the same SQL for every generation", (
       ),
     ).toEqual(
       dialect.sqlToQuery(
-        acceptedBarrierBefore(
+        sql`coalesce(${corpusIndexProjectionIntents.appendPublishBarrierAt}, ${acceptedBarrierBefore(
           sql`${corpusIndexProjectionIntents.appendCommittedAt}`,
           manifest,
-        ),
+        )})`,
       ),
     );
     expect(

@@ -340,8 +340,12 @@ export const createDurableChatTransport = <TMessages extends UIMessage[]>({
           result.error.cause instanceof ChatReconnectError &&
           result.error.cause.code !== undefined
         ) {
+          onReconnectChange(false);
           onError(result.error.cause);
-          return new Response(null, { status: 502 });
+          // The typed error above owns the user-facing cause. This synthetic
+          // response only stops the SDK: 5xx responses and fetch rejections
+          // are retryable after a durable stream has made progress.
+          return new Response(null, { status: 400 });
         }
         if (init?.signal?.aborted) {
           throw init.signal.reason;
@@ -368,7 +372,7 @@ export const createDurableChatTransport = <TMessages extends UIMessage[]>({
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     fetchClient: resumableFetch,
-    reconnect: { delayMs: 0, maxAttempts: 100 },
+    reconnect: { initialDelayMs: 0, maxAttempts: 100 },
   });
   const progress = () => {
     reconnectStartedAt = undefined;

@@ -53,7 +53,7 @@ const REFUSED_ID = "00000000-0000-7000-8000-0000000000c3";
 const ANSWER_ID = "00000000-0000-7000-8000-0000000000c4";
 const REFUSED_TEXT = "Which leases end this year?";
 const ANSWER = "Two of them.";
-const NO_COMPUTER = messages.chat.localRun.refusalNoComputer;
+const NOT_ALLOWED = messages.chat.localRun.refusalPermissionAboveLimit;
 
 type StoredMessage = {
   createdAt: string;
@@ -80,14 +80,15 @@ const stored = (
 });
 
 /**
- * The API as a chat on the member's computer meets it. While no computer is
- * connected a send is refused before anything of it is stored, though the
- * request has touched the thread's row by then (the first send of an empty
- * thread titles it), so the next read carries a new revision. A regeneration
- * is taken only for a message the thread stores.
+ * The API as a chat on the member's computer meets it. While the
+ * organization does not allow the chosen permissions (`allowed` is false) a
+ * send is refused before anything of it is stored, though the request has
+ * touched the thread's row by then (the first send of an empty thread titles
+ * it), so the next read carries a new revision. A regeneration is taken only
+ * for a message the thread stores.
  */
 type Server = {
-  connected: boolean;
+  allowed: boolean;
   stored: StoredMessage[];
   revision: number;
   posted: Record<string, unknown>[];
@@ -96,7 +97,7 @@ type Server = {
 
 const serve = (history: StoredMessage[]) => {
   const state: Server = {
-    connected: false,
+    allowed: false,
     stored: history,
     revision: history.length === 0 ? 0 : 1,
     posted: [],
@@ -142,13 +143,13 @@ const serve = (history: StoredMessage[]) => {
       const posted = Object.fromEntries(Object.entries(body));
       state.posted.push(posted);
       state.revision += 1;
-      if (!state.connected) {
+      if (!state.allowed) {
         return Response.json(
           {
-            code: CHAT_LOCAL_RUN_REFUSAL.noComputer,
-            message: "None of your computers is connected.",
+            code: CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
+            message: "The organization does not allow these permissions.",
           },
-          { status: 409 },
+          { status: 403 },
         );
       }
       const holdsMessage = state.stored.some(({ id }) => id === REFUSED_ID);
@@ -237,7 +238,7 @@ const revisionRead = ({ queryClient }: Page): unknown =>
 const refusalShown = async (server: Server, page: Page) => {
   const { container } = page.view;
   await waitFor(() => {
-    if (within(container).queryByText(NO_COMPUTER) === null) {
+    if (within(container).queryByText(NOT_ALLOWED) === null) {
       panic("The refusal is not shown yet");
     }
   });
@@ -259,18 +260,13 @@ const refusalShown = async (server: Server, page: Page) => {
 const expectMessageAndRefusal = (container: HTMLElement) => {
   const page = within(container);
   expect(page.getByText(REFUSED_TEXT)).toBeDefined();
-  expect(page.getByText(NO_COMPUTER)).toBeDefined();
-  expect(
-    page.getByRole("button", {
-      name: messages.settings.account.desktopOpenApp,
-    }),
-  ).toBeDefined();
+  expect(page.getByText(NOT_ALLOWED)).toBeDefined();
   expect(
     page.getByRole("button", { name: messages.chat.resend }),
   ).toBeDefined();
 };
 
-test("the first send of a new chat, refused because no computer is connected, keeps the message and the reason", async () => {
+test("the first send of a new chat, refused before it is stored, keeps the message and the reason", async () => {
   const server = serve([]);
   const page = await openChatThreadDomPage({
     organizationId: ORGANIZATION_ID,
@@ -287,7 +283,7 @@ test("the first send of a new chat, refused because no computer is connected, ke
   expect(server.unexpected).toEqual([]);
 });
 
-test("Resend on a send refused because no computer is connected sends the message again, and it is answered", async () => {
+test("Resend on a send refused before it is stored sends the message again, and it is answered", async () => {
   const server = serve([
     stored(FIRST_ID, "user", "First question"),
     stored(FIRST_ANSWER_ID, "assistant", "First answer."),
@@ -306,7 +302,7 @@ test("Resend on a send refused because no computer is connected sends the messag
   await refusalShown(server, live);
   expectMessageAndRefusal(container);
 
-  server.connected = true;
+  server.allowed = true;
   await act(async () => {
     fireEvent.click(
       within(container).getByRole("button", { name: messages.chat.resend }),
@@ -322,7 +318,7 @@ test("Resend on a send refused because no computer is connected sends the messag
   expect(server.posted.map(messageIdOf)).toEqual([REFUSED_ID, REFUSED_ID]);
   expect(server.posted.map(intentOf)).toEqual([undefined, undefined]);
   const page = within(container);
-  expect(page.queryByText(NO_COMPUTER)).toBeNull();
+  expect(page.queryByText(NOT_ALLOWED)).toBeNull();
   expect(page.queryByText(messages.errors.api.validation)).toBeNull();
   expect(page.getAllByText(REFUSED_TEXT)).toHaveLength(1);
   expect(page.getByText("First answer.")).toBeDefined();

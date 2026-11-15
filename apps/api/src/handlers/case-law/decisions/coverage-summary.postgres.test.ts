@@ -89,6 +89,7 @@ describe.skipIf(!runPostgresTests)(
         read: async (tx) => {
           const rows = await tx.execute(
             sql`SELECT public.stella_case_law_coverage_summary_v2() AS summary`,
+            "objects",
           );
           expect(rows).toHaveLength(1);
           expect(rows.at(0)?.["summary"]).toEqual({
@@ -98,6 +99,7 @@ describe.skipIf(!runPostgresTests)(
           // The reader of releases before the versioned function, unchanged.
           const previous = await tx.execute(
             sql`SELECT public.stella_case_law_coverage_summary() AS answer`,
+            "objects",
           );
           expect(previous.at(0)?.["answer"]).toEqual(
             CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
@@ -112,6 +114,7 @@ describe.skipIf(!runPostgresTests)(
         (
           await tx.execute(
             sql`SELECT public.stella_case_law_coverage_summary_v2() AS summary`,
+            "objects",
           )
         ).at(0)?.["summary"];
       const generatedAt = new Date(
@@ -186,6 +189,7 @@ describe.skipIf(!runPostgresTests)(
           `);
           const current = await tx.execute(
             sql`SELECT public.stella_case_law_coverage_summary_v2() AS summary`,
+            "objects",
           );
           expect(current.at(0)?.["summary"]).toEqual({
             answer: CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
@@ -193,6 +197,7 @@ describe.skipIf(!runPostgresTests)(
           });
           const previous = await tx.execute(
             sql`SELECT public.stella_case_law_coverage_summary() AS answer`,
+            "objects",
           );
           expect(previous.at(0)?.["answer"]).toEqual(
             CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
@@ -206,6 +211,7 @@ describe.skipIf(!runPostgresTests)(
           ]) {
             const rows = await tx.execute(
               sql`SELECT proconfig AS config FROM pg_proc WHERE oid = ${reader}::regprocedure`,
+              "objects",
             );
             expect(rows.at(0)?.["config"]).toEqual([
               "search_path=pg_catalog, pg_temp",
