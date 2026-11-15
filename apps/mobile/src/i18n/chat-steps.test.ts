@@ -98,6 +98,7 @@ const WEB_LOCAL_RUN_KEYS = {
     loadFailed: ["common", "loadFailed"],
     showMore: ["common", "showMore"],
   },
+  sessionNotResumed: ["chat", "localRun", "sessionNotResumed"],
 } as const satisfies WebKeysOf<MobileMessages["chat"]["localRun"]>;
 
 /** A catalogue node with a web key path in place of each message. */
@@ -136,6 +137,7 @@ describe("an answer's steps", () => {
     expect(at(web, ["chat", "processSummary"])).toEqual(chat.processSummary);
     expect(at(web, ["common", "stepCount"])).toBe(chat.stepCount);
     expect(at(web, ["chat", "reasoning"])).toBe(chat.reasoning);
+    expect(at(web, ["chat", "historyTrimmed"])).toBe(chat.historyTrimmed);
     expect(webMessages(web, WEB_LOCAL_RUN_KEYS)).toEqual(chat.localRun);
   });
 });

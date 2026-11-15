@@ -14,6 +14,7 @@ import type {
 } from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import type { ChatLocalFilesUndone } from "@stll/api-contract/chat-local-files-undo";
 import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -43,7 +44,6 @@ import type {
   ChatClientToolsFor,
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
-import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import type {
   persistedChatMessageContentV3Proof,
   PersistedJsonObject,

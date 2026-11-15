@@ -244,7 +244,8 @@
         "imageTooLargeToStore": "Šī attēla izmērs ir {total}. Attēli, kas lielāki par {kept}, netiek saglabāti, tāpēc to nevar parādīt.",
         "loadFailed": "Neizdevās ielādēt.",
         "showMore": "Rādīt vairāk"
-      }
+      },
+      "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, zero {# pārbaudītu avotu} one {# pārbaudīts avots} other {# pārbaudīti avoti}}",
@@ -253,7 +254,8 @@
       "analyses": "{count, plural, zero {# analīžu} one {# analīze} other {# analīzes}}"
     },
     "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
-    "reasoning": "Argumentācija"
+    "reasoning": "Argumentācija",
+    "historyTrimmed": "Agrākās ziņas neizdevās apkopot, tāpēc šajā atbildē ņemta vērā tikai jaunākā sarunas daļa."
   },
   "tasks": {
     "emptyTitle": "Nav atvērtu uzdevumu",
