@@ -1,5 +1,11 @@
 # @stll/auth-model
 
+## 0.8.1
+
+### Patch Changes
+
+- [#8564](https://github.com/stella/stella/pull/8564) [`383c1db`](https://github.com/stella/stella/commit/383c1db86a75f2b3114fdfeda0dff9df7b6bb975) Thanks [@NavpreetSSidhu](https://github.com/NavpreetSSidhu)! - Add `ORGANIZATION_LOGO_RULES`, the format and size rules for an organization logo.
+
 ## 0.8.0
 
 ### Minor Changes
