@@ -314,11 +314,6 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/document-processing-readiness.test.ts": {
-    "count": 4,
-    "owner": "guards",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/docx/ai-field-generator.test.ts": {
     "count": 10,
     "owner": "ai",
@@ -589,11 +584,6 @@
     "owner": "ai",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/components/chat/chat-query-state.test.tsx": {
-    "count": 1,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/web/src/components/chat/chat-rich-message-part.test.ts": {
     "count": 1,
     "owner": "ai",
@@ -624,27 +614,12 @@
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/lib/organization/ai-config-queries.test.ts": {
-    "count": 1,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/web/src/lib/search.test.ts": {
     "count": 1,
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/lib/workspaces/mutations.test.ts": {
-    "count": 3,
-    "owner": "web",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/web/src/lib/workspaces/mutations/views.logic.test.ts": {
-    "count": 1,
-    "owner": "web",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.test.ts": {
     "count": 1,
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
