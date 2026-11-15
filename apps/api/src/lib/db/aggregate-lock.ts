@@ -3496,7 +3496,8 @@ type LockRowsForWriteOptions<Table extends IdentifiedTable, Row> = {
  * The caller spells the statement in its own function so the lifecycle-write
  * census, the audit, running-entry and cap-crossing rules, and the WHERE rules
  * keep seeing it there. `require-locked-rows-write` reports a later write to
- * `t` in that function whose WHERE is anything but `locked.where(...)`.
+ * `t` in that function that repeats the query's filter without naming the
+ * locked rows (`locked.where(...)` or a pin on `locked.ids`).
  *
  * Only the target table's rows are locked (`FOR UPDATE OF table`), so the
  * query may join other tables for the decision without locking them; its

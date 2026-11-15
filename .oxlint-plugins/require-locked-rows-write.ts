@@ -14,12 +14,18 @@ import {
  * the rows it returned. A later `update(table)` / `delete(table)` in the same
  * function whose WHERE re-applies the lock's predicate instead of naming those
  * rows also writes every row that started to match after the lock was taken,
- * and that row was never checked. The write must be derived from the locked
- * rows: lock through `lockRowsForWrite` (apps/api/src/lib/db/aggregate-lock.ts)
- * and write with `.where(locked.where(...))`, which names the locked ids. A
- * `const locked = await lockRowsForWrite({ table: t })` (or another helper in
- * LOCKED_ROWS_HELPERS) is a lock on `t` here too: a later write to `t` in the
- * function must use `locked.where(...)` as its whole WHERE.
+ * and that row was never checked. Only such a write is reported: one whose
+ * WHERE contains every top-level conjunct of the lock's WHERE (handles of the
+ * table resolved, local constants expanded). A write with a WHERE of its own
+ * (a sweep of a parent, a key chosen elsewhere, no WHERE at all) is not.
+ *
+ * The write must be derived from the locked rows: lock through
+ * `lockRowsForWrite` (apps/api/src/lib/db/aggregate-lock.ts) and write with
+ * `.where(locked.where(...))`, which names the locked ids. A
+ * `const locked = await lockRowsForWrite({ table: t, query })` (or another
+ * helper in LOCKED_ROWS_HELPERS) is a lock on `t` with the query's filter: a
+ * later write to `t` in the function that repeats it must use
+ * `locked.where(...)` or pin `locked.ids`.
  *
  * After a plain `.for(...)` lock, the write's WHERE must have a top-level AND
  * conjunct that pins `table.id` (`eq` / `inArray`) and one of:
@@ -40,9 +46,9 @@ import {
  * parent lock governs; this rule is about rows whose state changes into a
  * lock's filter after the lock.
  *
- * A write that deliberately covers rows the lock did not return (the lock is a
- * serialization fence, or the write sweeps a whole parent) says so with a
- * reasoned `oxlint-disable-next-line` on the write.
+ * A lock that is a serialization fence should lock by key (every row of the
+ * parent, whatever its state), so a write that keeps the key and narrows by
+ * state passes.
  *
  * Flagged:
  *   const rows = await tx.select().from(t).where(open).for("update");
