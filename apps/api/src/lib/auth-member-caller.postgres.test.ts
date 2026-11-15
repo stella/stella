@@ -6,11 +6,13 @@ import { createTestClock } from "@stll/test-kit";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import { PROFESSIONAL_USE_ACCEPTANCE_SOURCE } from "@/api/db/schema";
 import {
   createMemberAuthenticator,
   resolveMemberAuthorization,
   resolveValidateAuth,
 } from "@/api/lib/auth";
+import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
@@ -62,6 +64,12 @@ if (!databaseUrl || !enabled) {
           email: `${userId}@example.test`,
           emailVerified: true,
         });
+        // The professional-use gate admits only an account that accepted.
+        const accepted = await recordAccountProfessionalUse({
+          userId,
+          source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+        });
+        expect(accepted.isOk()).toBe(true);
         await db.insert(member).values({
           id: mintAuthProviderIdValue(),
           organizationId,
