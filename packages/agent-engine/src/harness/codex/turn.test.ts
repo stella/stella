@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
-import type { HarnessEvent } from "../events";
+import { harnessBoundary, type HarnessEvent } from "../events";
 import { HARNESS_TOOL_NAMES } from "../tool-parts";
 import { CodexItemSchema, isCodexItemType } from "./protocol";
 import { CodexTurnSession } from "./turn";
@@ -190,7 +190,11 @@ describe("Codex items that only add to what chat shows", () => {
           }
         });
         expect(events.map(({ type }) => type)).not.toContain("turn.failed");
-        expect(events.at(-1)).toEqual({ type: "turn.completed", usage: null });
+        expect(events.at(-1)).toEqual({
+          type: "turn.completed",
+          usage: null,
+          boundary: harnessBoundary(MAIN_TURN),
+        });
         // Exactly the completed items the adapter cannot read are shown as
         // unsupported, by their kind; none is dropped and none read twice.
         expect(unsupportedSteps(events)).toEqual(
@@ -232,7 +236,11 @@ describe("Codex items that only add to what chat shows", () => {
           }
         });
         expect(events.map(({ type }) => type)).not.toContain("turn.failed");
-        expect(events.at(-1)).toEqual({ type: "turn.completed", usage: null });
+        expect(events.at(-1)).toEqual({
+          type: "turn.completed",
+          usage: null,
+          boundary: harnessBoundary(MAIN_TURN),
+        });
         expect(unsupportedSteps(events)).toEqual(
           sent
             .filter(

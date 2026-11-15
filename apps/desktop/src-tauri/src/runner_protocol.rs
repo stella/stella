@@ -144,6 +144,7 @@ wire_values!(HarnessCapability {
   Resume => "resume",
   ImageInput => "image_input",
   Steer => "steer",
+  Fork => "fork",
 });
 
 wire_values!(RejectReason {
@@ -442,6 +443,9 @@ pub(crate) struct RunFinished {
   pub(crate) seq: NonZeroU32,
   pub(crate) outcome: RunOutcome,
   pub(crate) harness_session_id: Option<String>,
+  /// Where a completed turn ended in that session; `None` otherwise.
+  #[serde(default)]
+  pub(crate) harness_boundary: Option<String>,
 }
 
 /// How many tasks the harness process a finished run left behind keeps
@@ -532,6 +536,10 @@ pub(crate) struct RunStart {
   /// An effort the desktop reported for the model; `None` leaves it to the harness.
   pub(crate) reasoning_effort: Option<ReasoningEffort>,
   pub(crate) harness_session_id: Option<String>,
+  /// Set only with `harness_session_id`: the run continues that session as
+  /// a new one holding what it held through this boundary.
+  #[serde(default)]
+  pub(crate) harness_fork_boundary: Option<String>,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
   /// Files the sidecar copies into the run's folder before the harness starts.

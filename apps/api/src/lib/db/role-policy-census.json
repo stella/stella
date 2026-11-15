@@ -1541,6 +1541,16 @@
   },
   {
     "schema": "public",
+    "table": "case_law_decision_fallback_identities",
+    "policy": "case_law_ingestion_access",
+    "command": "ALL",
+    "roles": ["stella_ingestion"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
     "table": "case_law_decision_identifier_backfills",
     "policy": "case_law_global_access",
     "command": "SELECT",

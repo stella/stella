@@ -54,6 +54,7 @@ import {
   DESKTOP_RUNNER_PATH,
   DESKTOP_RUNNER_PROTOCOL,
   type DesktopRunnerApprovalMode,
+  desktopRunnerHarnessReportSchema,
   type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
@@ -160,6 +161,7 @@ import type {
   RunnerTimers,
 } from "@/api/lib/desktop-runner/session";
 import {
+  type ChatRunSession,
   type DesktopRunnerDb,
   readNewestQueuedCommands,
   recordBackgroundTasks,
@@ -664,7 +666,7 @@ const startInput = (
   model: MODEL,
   reasoningEffort: null,
   approvals,
-  harnessSessionId: null,
+  session: { type: "fresh" } as const satisfies ChatRunSession,
   instructions: "Summarize the matter.",
   messages: [{ role: "user" as const, content: "Summarize the matter." }],
   attachments: [],
@@ -2895,11 +2897,14 @@ describe("chat turns on a computer", () => {
       finish: async (
         outcome: "completed" | "interrupted" | "limit_reached" | "needs_login",
         sessionId: string | null,
+        /** Where a completed turn ended in the session. */
+        boundary: string | null = null,
       ) => {
         await sendAcked({
           type: "run.finished",
           outcome,
           harnessSessionId: sessionId,
+          harnessBoundary: boundary,
         });
       },
     };
@@ -3023,6 +3028,7 @@ describe("chat turns on a computer", () => {
         reasoningOutputTokens: 0,
         context: { usedTokens: 15, windowTokens: 200_000 },
       },
+      boundary: null,
     },
   ];
 
@@ -3464,12 +3470,16 @@ describe("chat turns on a computer", () => {
           .where(eq(chatTurns.id, turnId))
       ).at(0)?.userMessageId ?? panic("the turn is not stored");
 
+    /** Where the harness says turn `turnId` ended in its session. */
+    const boundaryOf = (turnId: SafeId<"chatTurn">) => `turn-${turnId}`;
+
     /**
      * Run turn `turnId` on the shared computer to its end, with the harness
-     * leaving session `sessionId`, and store its answer as the send does.
-     * Returns the session the run was started to resume.
+     * leaving session `sessionId` at the turn's boundary, and store its
+     * answer as the send does. Returns the session the run was started to
+     * continue, and the boundary it forks at.
      */
-    const runTurn = async (
+    const runTurnStart = async (
       chatThreadId: SafeId<"chatThread">,
       turnId: SafeId<"chatTurn">,
       sessionId: string,
@@ -3495,10 +3505,49 @@ describe("chat turns on a computer", () => {
       desktop.send({ type: "run.accepted", runId });
       const run = desktopRun(desktop, runId);
       await run.events(await harnessChunks(runId, completedTurn.slice(3)));
-      await run.finish("completed", sessionId);
+      await run.finish("completed", sessionId, boundaryOf(turnId));
       expect((await turn.done).at(-1)?.type).toBe(EventType.RUN_FINISHED);
       await answerTurn(chatThreadId, turnId, answerText);
-      return start.harnessSessionId;
+      return {
+        sessionId: start.harnessSessionId,
+        forkBoundary: start.harnessForkBoundary,
+      };
+    };
+
+    /** As `runTurnStart`; returns the session the run was started with. */
+    const runTurn = async (
+      chatThreadId: SafeId<"chatThread">,
+      turnId: SafeId<"chatTurn">,
+      sessionId: string,
+    ) => (await runTurnStart(chatThreadId, turnId, sessionId)).sessionId;
+
+    /**
+     * Run `body` while the shared computer's Codex reports `fork`, as a
+     * desktop with this protocol does; the report it had comes back after.
+     */
+    const whileForking = async (body: () => Promise<void>) => {
+      const where = eq(desktopRunners.desktopId, shared().desktopId);
+      const [row] = await db
+        .select({ harnesses: desktopRunners.harnesses })
+        .from(desktopRunners)
+        .where(where);
+      const reported = row?.harnesses ?? panic("the computer reported nothing");
+      const forking = v
+        .parse(v.array(desktopRunnerHarnessReportSchema), reported)
+        .map((report) =>
+          report.state === "ready"
+            ? { ...report, capabilities: [...report.capabilities, "fork"] }
+            : report,
+        );
+      await db.update(desktopRunners).set({ harnesses: forking }).where(where);
+      try {
+        await body();
+      } finally {
+        await db
+          .update(desktopRunners)
+          .set({ harnesses: reported })
+          .where(where);
+      }
     };
 
     /**
@@ -3566,7 +3615,7 @@ describe("chat turns on a computer", () => {
       ).toBe("codex-session-plain");
     });
 
-    test("an edited earlier message starts a fresh session", async () => {
+    test("an edited earlier message starts a fresh session on a harness that cannot fork", async () => {
       const { chatThreadId, firstTurnId } = await answeredThread(
         "codex-session-edited",
       );
@@ -3608,7 +3657,7 @@ describe("chat turns on a computer", () => {
       ).toBeNull();
     });
 
-    test("a regenerated answer starts a fresh session", async () => {
+    test("a regenerated answer starts a fresh session on a harness that cannot fork", async () => {
       const { chatThreadId } = await answeredThread("codex-session-regen");
       const secondTurnId = await startTurn(chatThreadId);
       await runTurn(chatThreadId, secondTurnId, "codex-session-regen");
@@ -3621,6 +3670,241 @@ describe("chat turns on a computer", () => {
       expect(
         await runTurn(chatThreadId, regenerated, "codex-session-regen-new"),
       ).toBeNull();
+    });
+
+    /**
+     * Accept an edit of turn `turnId`'s answer as the revisions handler
+     * does: the revision keeps the replaced text.
+     */
+    const reviseAnswerOf = async (
+      chatThreadId: SafeId<"chatThread">,
+      turnId: SafeId<"chatTurn">,
+    ) => {
+      const [answered] = await db
+        .select({ id: chatMessages.id, content: chatMessages.content })
+        .from(chatMessages)
+        .innerJoin(chatTurns, eq(chatTurns.assistantMessageId, chatMessages.id))
+        .where(eq(chatTurns.id, turnId));
+      const answer = answered ?? panic("the turn stored no answer");
+      await db.insert(chatMessageRevisions).values({
+        messageId: answer.id,
+        threadId: chatThreadId,
+        revision: 0,
+        content: answer.content,
+        edit: {
+          type: "ai_span",
+          start: 17,
+          end: 27,
+          instruction: "Say it holds none",
+          model: CHAT_MODEL,
+          keySource: "instance",
+        },
+        createdBy: ids.userA1,
+      });
+    };
+
+    test("a revision of an answer the edit replaces does not stop the fork", async () => {
+      await whileForking(async () => {
+        const { chatThreadId, firstTurnId } = await answeredThread(
+          "codex-session-fork-later-revised",
+        );
+        const secondTurnId = await startTurn(chatThreadId);
+        await runTurn(
+          chatThreadId,
+          secondTurnId,
+          "codex-session-fork-later-revised",
+        );
+        // The second answer was revised; the edit of the message it
+        // answered replaces it, so the fork never holds it.
+        await reviseAnswerOf(chatThreadId, secondTurnId);
+        const edited = await replayFrom(
+          chatThreadId,
+          await askedBy(secondTurnId),
+          "Work on the other matter",
+        );
+        expect(
+          await runTurnStart(chatThreadId, edited, "codex-session-new"),
+        ).toEqual({
+          sessionId: "codex-session-fork-later-revised",
+          forkBoundary: boundaryOf(firstTurnId),
+        });
+      });
+    });
+
+    test("a revision of an answer before the forked-from one starts fresh", async () => {
+      await whileForking(async () => {
+        const { chatThreadId, firstTurnId } = await answeredThread(
+          "codex-session-fork-early-revised",
+        );
+        const secondTurnId = await startTurn(chatThreadId);
+        await runTurn(
+          chatThreadId,
+          secondTurnId,
+          "codex-session-fork-early-revised",
+        );
+        const thirdTurnId = await startTurn(chatThreadId);
+        await runTurn(
+          chatThreadId,
+          thirdTurnId,
+          "codex-session-fork-early-revised",
+        );
+        // The session at the second answer holds the first answer's old
+        // text.
+        await reviseAnswerOf(chatThreadId, firstTurnId);
+        const edited = await replayFrom(
+          chatThreadId,
+          await askedBy(thirdTurnId),
+          "Work on the other matter",
+        );
+        expect(
+          await runTurnStart(chatThreadId, edited, "codex-session-new"),
+        ).toEqual({ sessionId: null, forkBoundary: null });
+      });
+    });
+
+    test("a plain follow-up resumes the session whole on a harness that can fork", async () => {
+      await whileForking(async () => {
+        const { chatThreadId } = await answeredThread(
+          "codex-session-fork-plain",
+        );
+        const secondTurnId = await startTurn(chatThreadId);
+        expect(
+          await runTurnStart(
+            chatThreadId,
+            secondTurnId,
+            "codex-session-fork-plain",
+          ),
+        ).toEqual({
+          sessionId: "codex-session-fork-plain",
+          forkBoundary: null,
+        });
+      });
+    });
+
+    test("an edited earlier message continues the session as a new one at the answer before it", async () => {
+      await whileForking(async () => {
+        const { chatThreadId, firstTurnId } = await answeredThread(
+          "codex-session-fork-edit",
+        );
+        const secondTurnId = await startTurn(chatThreadId);
+        await runTurn(chatThreadId, secondTurnId, "codex-session-fork-edit");
+        const thirdTurnId = await startTurn(chatThreadId);
+        await runTurn(chatThreadId, thirdTurnId, "codex-session-fork-edit");
+
+        // The session holds the second and third turns past the first
+        // answer; the fork holds only what it held through that answer.
+        const edited = await replayFrom(
+          chatThreadId,
+          await askedBy(secondTurnId),
+          "Work on the other matter",
+        );
+        expect(
+          await runTurnStart(chatThreadId, edited, "codex-session-forked"),
+        ).toEqual({
+          sessionId: "codex-session-fork-edit",
+          forkBoundary: boundaryOf(firstTurnId),
+        });
+        // The fork is the session the edited history continues.
+        const followUp = await startTurn(chatThreadId);
+        expect(
+          await runTurnStart(chatThreadId, followUp, "codex-session-forked"),
+        ).toEqual({ sessionId: "codex-session-forked", forkBoundary: null });
+        // Editing the same message again forks the untouched source again.
+        const again = await replayFrom(
+          chatThreadId,
+          await askedBy(edited),
+          "Work on a third matter",
+        );
+        expect(
+          await runTurnStart(chatThreadId, again, "codex-session-forked-2"),
+        ).toEqual({
+          sessionId: "codex-session-fork-edit",
+          forkBoundary: boundaryOf(firstTurnId),
+        });
+      });
+    });
+
+    test("a regenerated answer continues the session as a new one at the answer before it", async () => {
+      await whileForking(async () => {
+        const { chatThreadId, firstTurnId } = await answeredThread(
+          "codex-session-fork-regen",
+        );
+        const secondTurnId = await startTurn(chatThreadId);
+        await runTurn(chatThreadId, secondTurnId, "codex-session-fork-regen");
+
+        const regenerated = await replayFrom(
+          chatThreadId,
+          await askedBy(secondTurnId),
+          "Work on the matter",
+        );
+        expect(
+          await runTurnStart(chatThreadId, regenerated, "codex-session-new"),
+        ).toEqual({
+          sessionId: "codex-session-fork-regen",
+          forkBoundary: boundaryOf(firstTurnId),
+        });
+      });
+    });
+
+    test("an edit of the first message has no earlier answer to fork from", async () => {
+      await whileForking(async () => {
+        const { chatThreadId, firstTurnId } = await answeredThread(
+          "codex-session-fork-first",
+        );
+        const edited = await replayFrom(
+          chatThreadId,
+          await askedBy(firstTurnId),
+          "Work on the other matter",
+        );
+        expect(
+          await runTurnStart(chatThreadId, edited, "codex-session-new"),
+        ).toEqual({ sessionId: null, forkBoundary: null });
+      });
+    });
+
+    test("an answer from elsewhere or a revision since is no point to fork from", async () => {
+      await whileForking(async () => {
+        // The answer before the regenerated one came from the cloud.
+        const cloud = await answeredThread("codex-session-fork-cloud");
+        const cloudTurnId = await startTurn(cloud.chatThreadId);
+        await answerTurn(cloud.chatThreadId, cloudTurnId, "In the cloud.");
+        const localTurnId = await startTurn(cloud.chatThreadId);
+        await runTurn(
+          cloud.chatThreadId,
+          localTurnId,
+          "codex-session-fork-cloud-2",
+        );
+        const regenerated = await replayFrom(
+          cloud.chatThreadId,
+          await askedBy(localTurnId),
+          "Work on the matter",
+        );
+        expect(
+          await runTurnStart(
+            cloud.chatThreadId,
+            regenerated,
+            "codex-session-new",
+          ),
+        ).toEqual({ sessionId: null, forkBoundary: null });
+
+        // The answer before the regenerated one was revised after its run.
+        const revised = await answeredThread("codex-session-fork-revised");
+        const secondTurnId = await startTurn(revised.chatThreadId);
+        await runTurn(
+          revised.chatThreadId,
+          secondTurnId,
+          "codex-session-fork-revised",
+        );
+        await reviseAnswerOf(revised.chatThreadId, revised.firstTurnId);
+        const again = await replayFrom(
+          revised.chatThreadId,
+          await askedBy(secondTurnId),
+          "Work on the matter",
+        );
+        expect(
+          await runTurnStart(revised.chatThreadId, again, "codex-session-new"),
+        ).toEqual({ sessionId: null, forkBoundary: null });
+      });
     });
 
     /**
@@ -3745,6 +4029,88 @@ describe("chat turns on a computer", () => {
       expect(
         await runTurn(chatThreadId, again, "codex-session-taken-new"),
       ).toBeNull();
+    });
+
+    test("a retry after a run lost past its prompt continues the session at the last completed answer", async () => {
+      await whileForking(async () => {
+        const { chatThreadId, firstTurnId } = await answeredThread(
+          "codex-session-fork-lost",
+        );
+        const secondTurnId = await startTurn(chatThreadId);
+        await failedRunTurn(
+          chatThreadId,
+          secondTurnId,
+          async () => [],
+          "needs_login",
+        );
+        // The harness may have taken the prompt and written past the first
+        // answer before the computer went quiet: the fork leaves that out.
+        await db
+          .update(desktopRunnerRuns)
+          .set({ state: "lost", outcome: null, harnessSessionId: null })
+          .where(eq(desktopRunnerRuns.chatTurnId, secondTurnId));
+
+        const again = await replayFrom(
+          chatThreadId,
+          await askedBy(secondTurnId),
+          "Work on the matter",
+        );
+        expect(
+          await runTurnStart(chatThreadId, again, "codex-session-new"),
+        ).toEqual({
+          sessionId: "codex-session-fork-lost",
+          forkBoundary: boundaryOf(firstTurnId),
+        });
+      });
+    });
+
+    test("a turn after an interrupted one resumes it, and an edit after its answer starts fresh", async () => {
+      await whileForking(async () => {
+        const { chatThreadId } = await answeredThread(
+          "codex-session-fork-stopped",
+        );
+        const stoppedTurnId = await startTurn(chatThreadId);
+        await failedRunTurn(
+          chatThreadId,
+          stoppedTurnId,
+          async (runId) =>
+            (
+              await harnessChunks(runId, [
+                {
+                  type: "session.started",
+                  sessionId: harnessSessionId("codex-session-fork-stopped"),
+                  continuation: { type: "resumed" },
+                },
+              ])
+            ).filter(
+              (chunk) =>
+                isRecord(chunk) && chunk["type"] !== EventType.RUN_ERROR,
+            ),
+          "interrupted",
+        );
+        // The stopped answer is the message right before: the session holds
+        // what the stopped turn did, as the chat does.
+        const nextTurnId = await startTurn(chatThreadId);
+        expect(
+          await runTurnStart(
+            chatThreadId,
+            nextTurnId,
+            "codex-session-fork-stopped",
+          ),
+        ).toEqual({
+          sessionId: "codex-session-fork-stopped",
+          forkBoundary: null,
+        });
+        // An interrupted turn names no end in the session to fork at.
+        const edited = await replayFrom(
+          chatThreadId,
+          await askedBy(nextTurnId),
+          "Work on the other matter",
+        );
+        expect(
+          await runTurnStart(chatThreadId, edited, "codex-session-new"),
+        ).toEqual({ sessionId: null, forkBoundary: null });
+      });
     });
 
     test("an answer from elsewhere in between starts a fresh session", async () => {
@@ -3893,7 +4259,7 @@ describe("chat turns on a computer", () => {
         result: { content: "12 pass", status: "succeeded" },
       },
       { type: "text.completed", messageId: "msg_9", text: "All tests pass." },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     const pauseAt =
       sent.findIndex(
@@ -4009,7 +4375,7 @@ describe("chat turns on a computer", () => {
         toolCall,
         result: { content: "{}", status: "succeeded" },
       },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     const isCallChunk = (chunk: unknown, type: EventType) =>
       isRecord(chunk) &&
@@ -4208,7 +4574,7 @@ describe("chat turns on a computer", () => {
         result: { content: "answered", status: "succeeded" },
       },
       { type: "text.completed", messageId: "msg_q", text: "Drafted." },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     const pauseAt =
       sent.findIndex(
@@ -5190,7 +5556,7 @@ describe("chat turns on a computer", () => {
         result: { content: "12 pass", status: "succeeded" },
       },
       { type: "text.completed", messageId: "msg_d1", text: "All tests pass." },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     const pauseAt =
       sent.findIndex(
@@ -5386,7 +5752,7 @@ describe("chat turns on a computer", () => {
         delta,
       })),
       { type: "text.completed", messageId: "msg_c1", text: answer },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     // The sidecar's coalescing, on a clock this test moves: a delta every
     // 20 ms, as a harness streams them.
@@ -5572,7 +5938,7 @@ describe("chat turns on a computer", () => {
         messageId: "msg_s1",
         text: "The annex extends the term.",
       },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     const run = desktopRun(desktop, start.runId);
     await run.events(sent);
@@ -5645,7 +6011,7 @@ describe("chat turns on a computer", () => {
       },
       { type: "text.completed", messageId: "msg_s2", text: "Done." },
       { type: "input.settled", inputId, status: "rejected" },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     const run = desktopRun(desktop, start.runId);
     await run.events(sent);
@@ -5686,7 +6052,7 @@ describe("chat turns on a computer", () => {
           sessionId: harnessSessionId("codex-session-s3"),
           continuation: { type: "fresh" },
         },
-        { type: "turn.completed", usage: null },
+        { type: "turn.completed", usage: null, boundary: null },
       ]),
     );
     await run.finish("completed", "codex-session-s3");
@@ -5741,7 +6107,7 @@ describe("chat turns on a computer", () => {
         },
       })),
       { type: "text.completed", messageId: "msg_n1", text: "Drafted." },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     // A desktop that adds what must stay on the computer: a command's output
     // and a file's contents beside the contract's fields, a second arguments
@@ -6634,7 +7000,7 @@ describe("chat turns on a computer", () => {
         result: { content: "Czech", status: "succeeded" },
       },
       { type: "text.completed", messageId: "msg_law", text: "Czech law." },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     const pauseAt =
       sent.findIndex(

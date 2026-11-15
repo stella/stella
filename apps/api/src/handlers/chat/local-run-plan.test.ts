@@ -109,7 +109,8 @@ const startingControl = (
       picks.push(options);
       return await Promise.resolve(Result.ok(picked));
     },
-    readChatRunSession: async () => await Promise.resolve(Result.ok(null)),
+    readChatRunSession: async () =>
+      await Promise.resolve(Result.ok({ type: "fresh" })),
     startRun: async (input: StartLocalRunInput) => {
       starts.push(input);
       return await Promise.resolve(Result.ok(inserted));
