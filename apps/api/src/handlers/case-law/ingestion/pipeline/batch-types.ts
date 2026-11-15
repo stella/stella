@@ -85,6 +85,7 @@ class CaseLawBatchBoundsError extends TaggedError("CaseLawBatchBoundsError")<{
 
 /** Why an applied batch returned no receipt. */
 export const CASE_LAW_BATCH_FAILURE = {
+  FALLBACK_IDENTITY: "fallback-identity",
   /** The source lease was not held when the batch ordered or settled. */
   LEASE_LOST: "lease-lost",
   ABORTED: "aborted",

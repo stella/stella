@@ -70,6 +70,14 @@ impl SigningErrorCode {
       Self::SigningFailed => "signing_failed",
     }
   }
+
+  /// The code a wire name names, for a signer in another process that
+  /// reports its failure by [`Self::as_str`]; `None` for a name this build
+  /// does not know.
+  #[must_use]
+  pub fn from_wire(name: &str) -> Option<Self> {
+    Self::ALL.into_iter().find(|code| code.as_str() == name)
+  }
 }
 
 #[cfg(test)]
@@ -90,5 +98,14 @@ mod tests {
     names.sort_unstable();
     names.dedup();
     assert_eq!(names.len(), SigningErrorCode::ALL.len());
+  }
+
+  #[test]
+  fn reads_back_every_wire_name() {
+    for code in SigningErrorCode::ALL {
+      assert_eq!(SigningErrorCode::from_wire(code.as_str()), Some(code));
+    }
+    assert_eq!(SigningErrorCode::from_wire("PIN_INCORRECT"), None);
+    assert_eq!(SigningErrorCode::from_wire(""), None);
   }
 }
