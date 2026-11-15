@@ -62,10 +62,6 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  releaseChatQueueOnTx,
-  takeQueuedChatMessageOnTx,
-} from "@/api/lib/chat/chat-queue-gate";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
@@ -78,6 +74,10 @@ import {
   recordChatThreadNamesOnTx,
 } from "@/api/lib/chat/thread-names";
 import { lockThreadStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
+import {
+  releaseChatQueueOnTx,
+  takeQueuedChatMessageOnTx,
+} from "@/api/lib/db/chat-queue-gate";
 import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { isThreadMemoryEnabled } from "@/api/lib/memory/memory-access";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";

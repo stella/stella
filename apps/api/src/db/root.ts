@@ -23,11 +23,6 @@ import type { getAuth } from "@/api/lib/auth";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  holdQueueOfUnavailableMemberOnTx,
-  readDueQueueHeadOnTx,
-  sweepThreadsWithDueQueueOnTx,
-} from "@/api/lib/chat/chat-queue-system";
-import {
   instrumentSqlTransactionCounts,
   queryCountLogger,
 } from "@/api/lib/db-query-counter";
@@ -43,6 +38,11 @@ import {
 } from "@/api/lib/db/audit-recording";
 import type { AuditRecorder } from "@/api/lib/db/audit-recording";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import {
+  holdQueueOfUnavailableMemberOnTx,
+  readDueQueueHeadOnTx,
+  sweepThreadsWithDueQueueOnTx,
+} from "@/api/lib/db/chat-queue-system";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
 import { meterSqlClient } from "@/api/lib/db/meter-client";

@@ -10,7 +10,8 @@ import {
 } from "@/api/handlers/chat/queue/shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { holdChatQueueOnTx } from "@/api/lib/chat/chat-queue-gate";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { holdChatQueueOnTx } from "@/api/lib/db/chat-queue-gate";
 
 const config = {
   contract: "patch",
@@ -48,5 +49,12 @@ const pauseChatQueue = createSafeRootHandler(
     return paused ? Result.ok({}) : Result.err(chatThreadNotFound());
   },
 );
+
+// Every queue change locks the member's thread first, the row its turns
+// lock, and writes only that thread's queue.
+declareAggregateMutation(pauseChatQueue, {
+  type: "aggregate",
+  aggregates: ["chatThread"],
+});
 
 export default pauseChatQueue;

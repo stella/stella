@@ -55,13 +55,13 @@ import type {
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { holdChatQueueOnTx } from "@/api/lib/chat/chat-queue-gate";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { closeChatRunLogOnTx } from "@/api/lib/chat/run-log";
 import { CHAT_TURN_TIMING_ACTIVE_STATUSES } from "@/api/lib/chat/turn-status";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
+import { holdChatQueueOnTx } from "@/api/lib/db/chat-queue-gate";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";

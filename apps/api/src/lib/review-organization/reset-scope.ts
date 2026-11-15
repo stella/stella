@@ -241,6 +241,14 @@ export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_R
     // for tools, and usage limit reminders, all keyed on the same member and
     // organization.
     ["chat_browser_site_grants", "chat_limit_reminders", "chat_tool_grants"],
+    // A chat's run logs and its queue: rows of the organization's chats that
+    // the owner removes directly, in one statement.
+    [
+      "chat_run_log_entries",
+      "chat_run_logs",
+      "chat_queue_holds",
+      "chat_queued_messages",
+    ],
     // Independent search history deletion barriers under one owner policy.
     ["search_history_country_clears", "search_history_tombstones"],
   ];

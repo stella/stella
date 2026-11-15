@@ -19,11 +19,12 @@ import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   releaseChatQueueOnTx,
   wasSentOnTx,
-} from "@/api/lib/chat/chat-queue-gate";
-import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+} from "@/api/lib/db/chat-queue-gate";
 
 const config = {
   contract: "patch",
@@ -162,5 +163,12 @@ const sendQueuedChatMessageNow = createSafeRootHandler(
     return Result.ok({});
   },
 );
+
+// Every queue change locks the member's thread first, the row its turns
+// lock, and writes only that thread's queue.
+declareAggregateMutation(sendQueuedChatMessageNow, {
+  type: "aggregate",
+  aggregates: ["chatThread"],
+});
 
 export default sendQueuedChatMessageNow;

@@ -15,6 +15,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
   contract: "patch",
@@ -65,5 +66,12 @@ const moveQueuedChatMessage = createSafeRootHandler(
     return Result.ok({});
   },
 );
+
+// Every queue change locks the member's thread first, the row its turns
+// lock, and writes only that thread's queue.
+declareAggregateMutation(moveQueuedChatMessage, {
+  type: "aggregate",
+  aggregates: ["chatThread"],
+});
 
 export default moveQueuedChatMessage;

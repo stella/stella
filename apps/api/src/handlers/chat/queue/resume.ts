@@ -9,7 +9,8 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
-import { releaseChatQueueOnTx } from "@/api/lib/chat/chat-queue-gate";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { releaseChatQueueOnTx } from "@/api/lib/db/chat-queue-gate";
 
 const config = {
   contract: "patch",
@@ -47,5 +48,12 @@ const resumeChatQueue = createSafeRootHandler(
     return Result.ok({});
   },
 );
+
+// Every queue change locks the member's thread first, the row its turns
+// lock, and writes only that thread's queue.
+declareAggregateMutation(resumeChatQueue, {
+  type: "aggregate",
+  aggregates: ["chatThread"],
+});
 
 export default resumeChatQueue;

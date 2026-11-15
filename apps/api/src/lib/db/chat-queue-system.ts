@@ -9,11 +9,11 @@ import type { Transaction } from "@/api/db/root";
 import { chatQueuedMessages, chatQueueHolds, chatTurns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
+import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import {
   type DueQueuedChatMessage,
   holdDueChatQueueOnTx,
-} from "@/api/lib/chat/chat-queue-gate";
-import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
+} from "@/api/lib/db/chat-queue-gate";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /**

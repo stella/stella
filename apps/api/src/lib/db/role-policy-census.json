@@ -3021,6 +3021,106 @@
   },
   {
     "schema": "public",
+    "table": "chat_queue_holds",
+    "policy": "chat_queue_hold_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND ((workspace_id IS NULL) OR\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND) AND (EXISTS ( SELECT 1\n   FROM chat_threads ct\n  WHERE ((ct.id = chat_queue_holds.thread_id) AND (ct.user_id = chat_queue_holds.user_id) AND ((ct.organization_id)::text = (chat_queue_holds.organization_id)::text) AND (NOT (ct.workspace_id IS DISTINCT FROM chat_queue_holds.workspace_id)) AND ((cardinality(ct.data_workspace_ids) = 0) OR (NOT (EXISTS ( SELECT 1\n           FROM unnest(ct.data_workspace_ids) scoped_workspace(workspace_id)\n          WHERE ((scoped_workspace.workspace_id IS NULL) OR (NOT ((scoped_workspace.workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) OR (EXISTS ( SELECT 1\n                   FROM stella_authorized_workspaces aw\n                  WHERE ((aw.authorized_workspace_id = scoped_workspace.workspace_id) AND (aw.workspace_status <> 'deleting'::text)))))))))))))))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "chat_queue_holds",
+    "policy": "chat_queue_hold_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND ((workspace_id IS NULL) OR\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND) AND (EXISTS ( SELECT 1\n   FROM chat_threads ct\n  WHERE ((ct.id = chat_queue_holds.thread_id) AND (ct.user_id = chat_queue_holds.user_id) AND ((ct.organization_id)::text = (chat_queue_holds.organization_id)::text) AND (NOT (ct.workspace_id IS DISTINCT FROM chat_queue_holds.workspace_id)) AND ((cardinality(ct.data_workspace_ids) = 0) OR (NOT (EXISTS ( SELECT 1\n           FROM unnest(ct.data_workspace_ids) scoped_workspace(workspace_id)\n          WHERE ((scoped_workspace.workspace_id IS NULL) OR (NOT ((scoped_workspace.workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) OR (EXISTS ( SELECT 1\n                   FROM stella_authorized_workspaces aw\n                  WHERE ((aw.authorized_workspace_id = scoped_workspace.workspace_id) AND (aw.workspace_status <> 'deleting'::text)))))))))))))))"
+  },
+  {
+    "schema": "public",
+    "table": "chat_queue_holds",
+    "policy": "chat_queue_hold_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND ((workspace_id IS NULL) OR\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND) AND (EXISTS ( SELECT 1\n   FROM chat_threads ct\n  WHERE ((ct.id = chat_queue_holds.thread_id) AND (ct.user_id = chat_queue_holds.user_id) AND ((ct.organization_id)::text = (chat_queue_holds.organization_id)::text) AND (NOT (ct.workspace_id IS DISTINCT FROM chat_queue_holds.workspace_id)) AND ((cardinality(ct.data_workspace_ids) = 0) OR (NOT (EXISTS ( SELECT 1\n           FROM unnest(ct.data_workspace_ids) scoped_workspace(workspace_id)\n          WHERE ((scoped_workspace.workspace_id IS NULL) OR (NOT ((scoped_workspace.workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) OR (EXISTS ( SELECT 1\n                   FROM stella_authorized_workspaces aw\n                  WHERE ((aw.authorized_workspace_id = scoped_workspace.workspace_id) AND (aw.workspace_status <> 'deleting'::text)))))))))))))))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "chat_queue_holds",
+    "policy": "chat_queue_hold_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND ((workspace_id IS NULL) OR\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND) AND (EXISTS ( SELECT 1\n   FROM chat_threads ct\n  WHERE ((ct.id = chat_queue_holds.thread_id) AND (ct.user_id = chat_queue_holds.user_id) AND ((ct.organization_id)::text = (chat_queue_holds.organization_id)::text) AND (NOT (ct.workspace_id IS DISTINCT FROM chat_queue_holds.workspace_id)) AND ((cardinality(ct.data_workspace_ids) = 0) OR (NOT (EXISTS ( SELECT 1\n           FROM unnest(ct.data_workspace_ids) scoped_workspace(workspace_id)\n          WHERE ((scoped_workspace.workspace_id IS NULL) OR (NOT ((scoped_workspace.workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) OR (EXISTS ( SELECT 1\n                   FROM stella_authorized_workspaces aw\n                  WHERE ((aw.authorized_workspace_id = scoped_workspace.workspace_id) AND (aw.workspace_status <> 'deleting'::text)))))))))))))))",
+    "withCheck": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND ((workspace_id IS NULL) OR\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND) AND (EXISTS ( SELECT 1\n   FROM chat_threads ct\n  WHERE ((ct.id = chat_queue_holds.thread_id) AND (ct.user_id = chat_queue_holds.user_id) AND ((ct.organization_id)::text = (chat_queue_holds.organization_id)::text) AND (NOT (ct.workspace_id IS DISTINCT FROM chat_queue_holds.workspace_id)) AND ((cardinality(ct.data_workspace_ids) = 0) OR (NOT (EXISTS ( SELECT 1\n           FROM unnest(ct.data_workspace_ids) scoped_workspace(workspace_id)\n          WHERE ((scoped_workspace.workspace_id IS NULL) OR (NOT ((scoped_workspace.workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) OR (EXISTS ( SELECT 1\n                   FROM stella_authorized_workspaces aw\n                  WHERE ((aw.authorized_workspace_id = scoped_workspace.workspace_id) AND (aw.workspace_status <> 'deleting'::text)))))))))))))))"
+  },
+  {
+    "schema": "public",
+    "table": "chat_queue_holds",
+    "policy": "chat_queue_holds_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('chat_queue_holds'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('chat_queue_holds'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "chat_queued_messages",
+    "policy": "chat_queued_message_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND ((workspace_id IS NULL) OR\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND) AND (EXISTS ( SELECT 1\n   FROM chat_threads ct\n  WHERE ((ct.id = chat_queued_messages.thread_id) AND (ct.user_id = chat_queued_messages.user_id) AND ((ct.organization_id)::text = (chat_queued_messages.organization_id)::text) AND (NOT (ct.workspace_id IS DISTINCT FROM chat_queued_messages.workspace_id)) AND ((cardinality(ct.data_workspace_ids) = 0) OR (NOT (EXISTS ( SELECT 1\n           FROM unnest(ct.data_workspace_ids) scoped_workspace(workspace_id)\n          WHERE ((scoped_workspace.workspace_id IS NULL) OR (NOT ((scoped_workspace.workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) OR (EXISTS ( SELECT 1\n                   FROM stella_authorized_workspaces aw\n                  WHERE ((aw.authorized_workspace_id = scoped_workspace.workspace_id) AND (aw.workspace_status <> 'deleting'::text)))))))))))))))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "chat_queued_messages",
+    "policy": "chat_queued_message_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND ((workspace_id IS NULL) OR\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND) AND (EXISTS ( SELECT 1\n   FROM chat_threads ct\n  WHERE ((ct.id = chat_queued_messages.thread_id) AND (ct.user_id = chat_queued_messages.user_id) AND ((ct.organization_id)::text = (chat_queued_messages.organization_id)::text) AND (NOT (ct.workspace_id IS DISTINCT FROM chat_queued_messages.workspace_id)) AND ((cardinality(ct.data_workspace_ids) = 0) OR (NOT (EXISTS ( SELECT 1\n           FROM unnest(ct.data_workspace_ids) scoped_workspace(workspace_id)\n          WHERE ((scoped_workspace.workspace_id IS NULL) OR (NOT ((scoped_workspace.workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) OR (EXISTS ( SELECT 1\n                   FROM stella_authorized_workspaces aw\n                  WHERE ((aw.authorized_workspace_id = scoped_workspace.workspace_id) AND (aw.workspace_status <> 'deleting'::text)))))))))))))))"
+  },
+  {
+    "schema": "public",
+    "table": "chat_queued_messages",
+    "policy": "chat_queued_message_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND ((workspace_id IS NULL) OR\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND) AND (EXISTS ( SELECT 1\n   FROM chat_threads ct\n  WHERE ((ct.id = chat_queued_messages.thread_id) AND (ct.user_id = chat_queued_messages.user_id) AND ((ct.organization_id)::text = (chat_queued_messages.organization_id)::text) AND (NOT (ct.workspace_id IS DISTINCT FROM chat_queued_messages.workspace_id)) AND ((cardinality(ct.data_workspace_ids) = 0) OR (NOT (EXISTS ( SELECT 1\n           FROM unnest(ct.data_workspace_ids) scoped_workspace(workspace_id)\n          WHERE ((scoped_workspace.workspace_id IS NULL) OR (NOT ((scoped_workspace.workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) OR (EXISTS ( SELECT 1\n                   FROM stella_authorized_workspaces aw\n                  WHERE ((aw.authorized_workspace_id = scoped_workspace.workspace_id) AND (aw.workspace_status <> 'deleting'::text)))))))))))))))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "chat_queued_messages",
+    "policy": "chat_queued_message_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND ((workspace_id IS NULL) OR\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND) AND (EXISTS ( SELECT 1\n   FROM chat_threads ct\n  WHERE ((ct.id = chat_queued_messages.thread_id) AND (ct.user_id = chat_queued_messages.user_id) AND ((ct.organization_id)::text = (chat_queued_messages.organization_id)::text) AND (NOT (ct.workspace_id IS DISTINCT FROM chat_queued_messages.workspace_id)) AND ((cardinality(ct.data_workspace_ids) = 0) OR (NOT (EXISTS ( SELECT 1\n           FROM unnest(ct.data_workspace_ids) scoped_workspace(workspace_id)\n          WHERE ((scoped_workspace.workspace_id IS NULL) OR (NOT ((scoped_workspace.workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) OR (EXISTS ( SELECT 1\n                   FROM stella_authorized_workspaces aw\n                  WHERE ((aw.authorized_workspace_id = scoped_workspace.workspace_id) AND (aw.workspace_status <> 'deleting'::text)))))))))))))))",
+    "withCheck": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND ((workspace_id IS NULL) OR\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND) AND (EXISTS ( SELECT 1\n   FROM chat_threads ct\n  WHERE ((ct.id = chat_queued_messages.thread_id) AND (ct.user_id = chat_queued_messages.user_id) AND ((ct.organization_id)::text = (chat_queued_messages.organization_id)::text) AND (NOT (ct.workspace_id IS DISTINCT FROM chat_queued_messages.workspace_id)) AND ((cardinality(ct.data_workspace_ids) = 0) OR (NOT (EXISTS ( SELECT 1\n           FROM unnest(ct.data_workspace_ids) scoped_workspace(workspace_id)\n          WHERE ((scoped_workspace.workspace_id IS NULL) OR (NOT ((scoped_workspace.workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) OR (EXISTS ( SELECT 1\n                   FROM stella_authorized_workspaces aw\n                  WHERE ((aw.authorized_workspace_id = scoped_workspace.workspace_id) AND (aw.workspace_status <> 'deleting'::text)))))))))))))))"
+  },
+  {
+    "schema": "public",
+    "table": "chat_queued_messages",
+    "policy": "chat_queued_messages_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('chat_queued_messages'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('chat_queued_messages'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "chat_run_log_entries",
     "policy": "chat_run_log_entries_owner_access",
     "command": "ALL",

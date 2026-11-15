@@ -23,8 +23,8 @@ import {
   queuedChatSendSchema,
 } from "@/api/handlers/chat/chat-schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { wasSentOnTx } from "@/api/lib/chat/chat-queue-gate";
-import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { wasSentOnTx } from "@/api/lib/db/chat-queue-gate";
 import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { isRecord } from "@/api/lib/type-guards";
@@ -352,8 +352,9 @@ export const moveQueuedChatMessageOnTx = async ({
 };
 
 /**
- * Lock the member's own thread for a queue change, so it serializes with the
- * thread's turns; undefined when the thread is not theirs.
+ * Lock the member's own thread for a queue change (the `chatThread`
+ * aggregate, the row the thread's turns lock too), so it serializes with
+ * them; undefined when the thread is not theirs.
  */
 export const lockOwnQueueThreadOnTx = async ({
   organizationId,
@@ -366,9 +367,12 @@ export const lockOwnQueueThreadOnTx = async ({
   tx: Transaction;
   userId: SafeId<"user">;
 }): Promise<{ workspaceId: SafeId<"workspace"> | null } | undefined> => {
-  if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
-    return undefined;
-  }
+  await withAggregateLock({
+    aggregate: "chatThread",
+    mode: "update",
+    tx,
+    id: { id: threadId, organizationId, userId },
+  });
   return (
     await tx
       .select({ workspaceId: chatThreads.workspaceId })

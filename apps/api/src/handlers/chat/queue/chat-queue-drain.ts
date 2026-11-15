@@ -24,13 +24,13 @@ import type sendMessage from "@/api/handlers/chat/send-message";
 import { createResponseSet } from "@/api/http/context";
 import { status, unwrapStatus } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
+import { resolveQueuedTurnMember } from "@/api/lib/chat/queued-turn-member";
+import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
 import {
   type ChatQueueHoldWrite,
   holdDueChatQueueOnTx,
   readChatQueueGateOnTx,
-} from "@/api/lib/chat/chat-queue-gate";
-import { resolveQueuedTurnMember } from "@/api/lib/chat/queued-turn-member";
-import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
+} from "@/api/lib/db/chat-queue-gate";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 

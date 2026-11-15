@@ -20,6 +20,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -103,5 +104,12 @@ const enqueueChatMessage = createSafeRootHandler(
     }
   },
 );
+
+// Every queue change locks the member's thread first, the row its turns
+// lock, and writes only that thread's queue.
+declareAggregateMutation(enqueueChatMessage, {
+  type: "aggregate",
+  aggregates: ["chatThread"],
+});
 
 export default enqueueChatMessage;

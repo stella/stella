@@ -34,15 +34,15 @@ import {
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
   holdChatQueueOnTx,
   holdDueChatQueueOnTx,
   releaseChatQueueOnTx,
   removeQueuedChatMessageOnTx,
   takeQueuedChatMessageOnTx,
-} from "@/api/lib/chat/chat-queue-gate";
-import { sweepThreadsWithDueQueueOnTx } from "@/api/lib/chat/chat-queue-system";
-import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+} from "@/api/lib/db/chat-queue-gate";
+import { sweepThreadsWithDueQueueOnTx } from "@/api/lib/db/chat-queue-system";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
