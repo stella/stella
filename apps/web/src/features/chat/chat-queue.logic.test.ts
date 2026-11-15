@@ -36,7 +36,7 @@ const item = (
   overrides: Partial<ChatQueueItem> = {},
 ): ChatQueueItem => ({
   attachmentCount: 0,
-  createdAt: new Date("2026-11-15T10:00:00.000Z"),
+  createdAt: "2026-11-15T10:00:00.000Z",
   id: toSafeId<"chatMessage">(id),
   position: 1,
   preview: `Message ${id}`,
@@ -144,28 +144,12 @@ describe("moving a queued message", () => {
             beforeId: target.beforeId,
             id,
             queue: queueOf(...ids),
-          }).items.map((queued) => [queued.id, queued.position]);
+          }).items.map((queued) => `${queued.id}${String(queued.position)}`);
     };
-    expect(movedOrder("b", "up")).toEqual([
-      ["b", 1],
-      ["a", 2],
-      ["c", 3],
-    ]);
-    expect(movedOrder("c", "up")).toEqual([
-      ["a", 1],
-      ["c", 2],
-      ["b", 3],
-    ]);
-    expect(movedOrder("a", "down")).toEqual([
-      ["b", 1],
-      ["a", 2],
-      ["c", 3],
-    ]);
-    expect(movedOrder("b", "down")).toEqual([
-      ["a", 1],
-      ["c", 2],
-      ["b", 3],
-    ]);
+    expect(movedOrder("b", "up")).toEqual(["b1", "a2", "c3"]);
+    expect(movedOrder("c", "up")).toEqual(["a1", "c2", "b3"]);
+    expect(movedOrder("a", "down")).toEqual(["b1", "a2", "c3"]);
+    expect(movedOrder("b", "down")).toEqual(["a1", "c2", "b3"]);
   });
 });
 
@@ -181,9 +165,9 @@ describe("removing a queued message", () => {
       },
     };
     const one = withQueuedMessageRemoved({ id: "a", queue: held });
-    expect(one.items.map(({ id, position }) => [id, position])).toEqual([
-      ["b", 1],
-    ]);
+    expect(
+      one.items.map(({ id, position }) => `${id}${String(position)}`),
+    ).toEqual(["b1"]);
     expect(one.hold).toEqual(held.hold);
     expect(withQueuedMessageRemoved({ id: "b", queue: one })).toEqual({
       hold: null,

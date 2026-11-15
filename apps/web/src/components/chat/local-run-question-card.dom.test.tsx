@@ -617,7 +617,7 @@ describe("a turn paused on a local run's question", () => {
       organizationId: ORGANIZATION_ID,
       threadId: THREAD_ID,
     });
-    let sent: Promise<void> | undefined;
+    let sent: Promise<unknown> | undefined;
     await act(async () => {
       sent = live.session().sendMessage({
         content: "Draft the lease",
@@ -655,7 +655,7 @@ describe("a turn paused on a local run's question", () => {
       organizationId: ORGANIZATION_ID,
       threadId: THREAD_ID,
     });
-    let sent: Promise<void> | undefined;
+    let sent: Promise<unknown> | undefined;
     await act(async () => {
       sent = live.session().sendMessage({
         content: "Draft the lease",

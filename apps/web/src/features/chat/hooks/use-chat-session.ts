@@ -2251,7 +2251,12 @@ export const useChatSession = ({
     steerOnResumeRef.current = null;
     detached(
       (async () => {
-        if ((await chat.steerLocalTurn(steered)) === "steered") {
+        if (
+          (await chat.steerLocalTurn({
+            inputId: steered.id,
+            text: steered.text,
+          })) === "steered"
+        ) {
           await writeQueue(async () => await removeFromQueue(steered.id));
         }
       })(),
