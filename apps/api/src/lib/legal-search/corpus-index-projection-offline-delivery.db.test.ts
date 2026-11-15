@@ -107,7 +107,7 @@ const OFFLINE_DELIVERY_MIGRATION_URL = new URL(
   import.meta.url,
 );
 const OFFLINE_FAULT_MIGRATION_URL = new URL(
-  "../../../drizzle/20261115150000_corpus_projection_offline_fault/migration.sql",
+  "../../../drizzle/20261115220000_corpus_projection_offline_fault/migration.sql",
   import.meta.url,
 );
 
