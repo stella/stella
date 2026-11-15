@@ -159,6 +159,7 @@
     "handoffAccount": "Kontynuować jako <account>{email}</account> w organizacji <organization>{organizationName}</organization>?",
     "handoffTitle": "Przejdź do stella",
     "headline": "Jasność w każdej sprawie.",
+    "invalidEmailOrPassword": "Nieprawidłowy adres e-mail lub hasło.",
     "invitation": {
       "declined": "Zaproszenie odrzucone",
       "declinedDescription": "Odrzuciłeś to zaproszenie. Możesz bezpiecznie zamknąć tę stronę.",
@@ -207,6 +208,7 @@
       "useBackupCode": "Użyj zamiast tego kodu zapasowego"
     },
     "useDifferentEmail": "Użyj innego adresu e-mail",
+    "useEmailCode": "Użyj kodu z e-maila",
     "usePassword": "Użyj hasła",
     "weSentCodeTo": "Wysłaliśmy kod na adres <email>{emailAddress}</email>"
   },

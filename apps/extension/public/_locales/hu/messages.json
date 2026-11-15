@@ -68,6 +68,9 @@
   "connectStella": {
     "message": "A stella csatlakoztatása"
   },
+  "openStella": {
+    "message": "A stella megnyitása"
+  },
   "adoptTab": {
     "message": "A lap használata a stellával"
   },

@@ -16,6 +16,7 @@ import {
   billingDraftUserSettings,
   chatMessageRevisions,
   chatMessages,
+  chatQueuedMessages,
   chatThreads,
   legalReaderAnnotations,
   legalReaderAnswerMessages,
@@ -217,6 +218,36 @@ const readChatMessageRevisionsPage = async ({
       id: row.id,
       value: projections.chat_message_revisions(row, role),
     }));
+  });
+
+const readChatQueuedMessagesPage = async ({
+  projections,
+  narrowScopedDb,
+  organizationId,
+  userId,
+  cursor,
+}: OrganizationPageQueryOptions) =>
+  await narrowScopedDb(async (tx) => {
+    const rows = await tx
+      .select({ row: chatQueuedMessages })
+      .from(chatQueuedMessages)
+      .innerJoin(chatThreads, eq(chatThreads.id, chatQueuedMessages.threadId))
+      .where(
+        and(
+          eq(chatQueuedMessages.organizationId, organizationId),
+          eq(chatQueuedMessages.userId, userId),
+          isNull(chatQueuedMessages.workspaceId),
+          personalThread(userId),
+          stillMember(organizationId, userId),
+          after(chatQueuedMessages.id, cursor),
+        ),
+      )
+      .orderBy(asc(chatQueuedMessages.id))
+      .limit(ACCOUNT_EXPORT_PAGE_SIZE);
+    return projectRows(
+      rows.map(({ row }) => row),
+      projections.chat_queued_messages,
+    );
   });
 
 const readAiMemoriesPage = async ({
@@ -606,6 +637,8 @@ const readOrganizationPage = async ({
       return await readChatMessagesPage(options);
     case "chat_message_revisions":
       return await readChatMessageRevisionsPage(options);
+    case "chat_queued_messages":
+      return await readChatQueuedMessagesPage(options);
     case "ai_memories":
       return await readAiMemoriesPage(options);
     case "agent_skills":

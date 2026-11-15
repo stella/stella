@@ -381,6 +381,26 @@ const nativeAssistantContinuationBodySchema = v.strictObject({
   resume: agUiResumeSchema,
 });
 
+/**
+ * A send as the member queues it: a new user message with everything the send
+ * carries except its thread, its run (minted when it is sent) and the
+ * history changes a queued message never makes (edit, regenerate).
+ */
+export const queuedChatSendSchema = v.strictObject({
+  ...v.omit(noResumeBodySchema, [
+    "threadId",
+    "runId",
+    "truncateAfterMessageId",
+    "turnIntent",
+  ]).entries,
+  message: v.looseObject({
+    ...rawMessageProperties,
+    role: v.literal("user"),
+  }),
+});
+
+export type QueuedChatSend = v.InferOutput<typeof queuedChatSendSchema>;
+
 export const sendMessageBodySchema = v.union([
   noResumeBodySchema,
   nativeAssistantContinuationBodySchema,

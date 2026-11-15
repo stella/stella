@@ -159,6 +159,7 @@
     "handoffAccount": "Pokračovať ako <account>{email}</account> v organizácii <organization>{organizationName}</organization>?",
     "handoffTitle": "Pokračovať v aplikácii stella",
     "headline": "Jasno v každom prípade.",
+    "invalidEmailOrPassword": "Nesprávny e-mail alebo heslo.",
     "invitation": {
       "declined": "Pozvánka odmietnutá",
       "declinedDescription": "Odmietli ste túto pozvánku. Môžete túto stránku zavrieť.",
@@ -207,6 +208,7 @@
       "useBackupCode": "Použiť namiesto toho záložný kód"
     },
     "useDifferentEmail": "Použiť iný e-mail",
+    "useEmailCode": "Prihlásiť sa radšej kódom z e-mailu",
     "usePassword": "Prihlásiť sa radšej heslom",
     "weSentCodeTo": "Odoslali sme kód na <email>{emailAddress}</email>"
   },

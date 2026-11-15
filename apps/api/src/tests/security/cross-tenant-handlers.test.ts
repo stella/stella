@@ -8,7 +8,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -36,6 +36,8 @@ import {
   chatLimitReminders,
   chatMessageRevisions,
   chatMessages,
+  chatQueuedMessages,
+  chatQueueHolds,
   chatThreads,
   chatToolGrants,
   chatTurns,
@@ -98,6 +100,14 @@ import listChatMessageRevisions from "@/api/handlers/chat/messages/revisions/lis
 import revertChatMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
 import { createProposeMessageSpanEdit } from "@/api/handlers/chat/messages/revisions/span-edit";
 import listOlderChatMessages from "@/api/handlers/chat/older-messages/list";
+import cancelQueuedChatMessage from "@/api/handlers/chat/queue/cancel";
+import enqueueChatMessage from "@/api/handlers/chat/queue/enqueue";
+import moveQueuedChatMessage from "@/api/handlers/chat/queue/move";
+import pauseChatQueue from "@/api/handlers/chat/queue/pause";
+import readChatQueue from "@/api/handlers/chat/queue/read";
+import replaceQueuedChatMessage from "@/api/handlers/chat/queue/replace";
+import resumeChatQueue from "@/api/handlers/chat/queue/resume";
+import sendQueuedChatMessageNow from "@/api/handlers/chat/queue/send-now";
 import readFileChatThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateChatThread from "@/api/handlers/chat/resolve-template-thread";
@@ -596,6 +606,20 @@ const chatLimitThreadB = toSafeId<"chatThread">(
 const chatLimitCancelThreadB = toSafeId<"chatThread">(
   "22222222-2222-4222-8222-222222222324",
 );
+// A chat of B's with two queued messages; the queue's cases run in order and
+// each positive one leaves the queue as the next expects it.
+const chatQueueThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222330",
+);
+const chatQueuedFirstB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222331",
+);
+const chatQueuedSecondB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222332",
+);
+const chatQueuedThirdB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222333",
+);
 // Far enough ahead to stay a future reset whenever the suite runs.
 const chatLimitResetsAt = new Date("2100-01-01T00:00:00.000Z");
 const chatForkFromA = toSafeId<"chatThread">(
@@ -766,6 +790,33 @@ const chatLimitRemindersOf = async (threadId: SafeId<"chatThread">) =>
     })
     .from(chatLimitReminders)
     .where(eq(chatLimitReminders.threadId, threadId));
+
+const queuedSendOf = (id: SafeId<"chatMessage">, text: string) => ({
+  sendMode: "anonymized" as const,
+  message: {
+    id,
+    role: "user" as const,
+    parts: [{ type: "text" as const, content: text }],
+  },
+});
+
+/** B's queue as stored: ids in order with their revisions, and its hold. */
+const chatQueueOfB = async () => ({
+  items: await testDb
+    .select({
+      id: chatQueuedMessages.id,
+      revision: chatQueuedMessages.revision,
+    })
+    .from(chatQueuedMessages)
+    .where(eq(chatQueuedMessages.threadId, chatQueueThreadB))
+    .orderBy(asc(chatQueuedMessages.position)),
+  holds: (
+    await testDb
+      .select({ reason: chatQueueHolds.reason })
+      .from(chatQueueHolds)
+      .where(eq(chatQueueHolds.threadId, chatQueueThreadB))
+  ).map(({ reason }) => reason),
+});
 
 const chatToolGrantExists = async (grantId: SafeId<"chatToolGrant">) =>
   (
@@ -3105,6 +3156,252 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toEqual({ remindAt: null }),
   },
   {
+    // Another firm's caller reads the chat as missing; its own member reads
+    // its queue in order.
+    name: "chat queue read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readChatQueue, workspaceA, {
+        params: { threadId: chatQueueThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readChatQueue, sameUserWorkspaceB, {
+        params: { threadId: chatQueueThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        hold: null,
+        items: [
+          { id: chatQueuedFirstB, position: 1, preview: "First" },
+          { id: chatQueuedSecondB, position: 2, preview: "Second" },
+        ],
+      }),
+  },
+  {
+    name: "chat queue enqueue",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(enqueueChatMessage, workspaceA, {
+        params: { threadId: chatQueueThreadB },
+        body: { send: queuedSendOf(chatQueuedThirdB, "Third") },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(enqueueChatMessage, sameUserWorkspaceB, {
+        params: { threadId: chatQueueThreadB },
+        body: { send: queuedSendOf(chatQueuedThirdB, "Third") },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toEqual({
+        items: [
+          { id: chatQueuedFirstB, revision: 0 },
+          { id: chatQueuedSecondB, revision: 0 },
+        ],
+        holds: [],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        item: { id: chatQueuedThirdB, position: 3, preview: "Third" },
+      }),
+  },
+  {
+    name: "chat queued message replace",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(replaceQueuedChatMessage, workspaceA, {
+        params: { threadId: chatQueueThreadB, messageId: chatQueuedFirstB },
+        body: { revision: 0, send: queuedSendOf(chatQueuedFirstB, "Edited") },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(replaceQueuedChatMessage, sameUserWorkspaceB, {
+        params: { threadId: chatQueueThreadB, messageId: chatQueuedFirstB },
+        body: { revision: 0, send: queuedSendOf(chatQueuedFirstB, "Edited") },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toEqual({
+        items: [
+          { id: chatQueuedFirstB, revision: 0 },
+          { id: chatQueuedSecondB, revision: 0 },
+          { id: chatQueuedThirdB, revision: 0 },
+        ],
+        holds: [],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        item: { id: chatQueuedFirstB, revision: 1, preview: "Edited" },
+      }),
+  },
+  {
+    name: "chat queued message move",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(moveQueuedChatMessage, workspaceA, {
+        params: { threadId: chatQueueThreadB, messageId: chatQueuedThirdB },
+        body: { beforeId: chatQueuedFirstB },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const response = await runHandler(
+        moveQueuedChatMessage,
+        sameUserWorkspaceB,
+        {
+          params: { threadId: chatQueueThreadB, messageId: chatQueuedThirdB },
+          body: { beforeId: chatQueuedFirstB },
+        },
+      );
+      return { response, queue: await chatQueueOfB() };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toEqual({
+        items: [
+          { id: chatQueuedFirstB, revision: 1 },
+          { id: chatQueuedSecondB, revision: 0 },
+          { id: chatQueuedThirdB, revision: 0 },
+        ],
+        holds: [],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        response: {},
+        queue: {
+          items: [
+            { id: chatQueuedThirdB, revision: 0 },
+            { id: chatQueuedFirstB, revision: 1 },
+            { id: chatQueuedSecondB, revision: 0 },
+          ],
+          holds: [],
+        },
+      }),
+  },
+  {
+    name: "chat queue pause",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(pauseChatQueue, workspaceA, {
+        params: { threadId: chatQueueThreadB },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const response = await runHandler(pauseChatQueue, sameUserWorkspaceB, {
+        params: { threadId: chatQueueThreadB },
+      });
+      return { response, holds: (await chatQueueOfB()).holds };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toMatchObject({ holds: [] });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ response: {}, holds: ["member"] }),
+  },
+  {
+    name: "chat queue resume",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(resumeChatQueue, workspaceA, {
+        params: { threadId: chatQueueThreadB },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const response = await runHandler(resumeChatQueue, sameUserWorkspaceB, {
+        params: { threadId: chatQueueThreadB },
+      });
+      return { response, holds: (await chatQueueOfB()).holds };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toMatchObject({
+        holds: ["member"],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ response: {}, holds: [] }),
+  },
+  {
+    // Nothing runs in B's chat, so its own Send now only moves the message
+    // first; the server's queue sender sends it.
+    name: "chat queued message send now",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(sendQueuedChatMessageNow, workspaceA, {
+        params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const response = await runHandler(
+        sendQueuedChatMessageNow,
+        sameUserWorkspaceB,
+        {
+          params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+        },
+      );
+      return {
+        response,
+        first: (await chatQueueOfB()).items.at(0)?.id,
+      };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toEqual({
+        items: [
+          { id: chatQueuedThirdB, revision: 0 },
+          { id: chatQueuedFirstB, revision: 1 },
+          { id: chatQueuedSecondB, revision: 0 },
+        ],
+        holds: [],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ response: {}, first: chatQueuedSecondB }),
+  },
+  {
+    name: "chat queued message cancel",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(cancelQueuedChatMessage, workspaceA, {
+        params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const response = await runHandler(
+        cancelQueuedChatMessage,
+        sameUserWorkspaceB,
+        {
+          params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+        },
+      );
+      return {
+        response,
+        ids: (await chatQueueOfB()).items.map(({ id }) => id),
+      };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toEqual({
+        items: [
+          { id: chatQueuedSecondB, revision: 0 },
+          { id: chatQueuedThirdB, revision: 0 },
+          { id: chatQueuedFirstB, revision: 1 },
+        ],
+        holds: [],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        response: {},
+        ids: [chatQueuedThirdB, chatQueuedFirstB],
+      }),
+  },
+  {
     name: "chat message send",
     runAAgainstB: async ({ workspaceA }) => {
       streamChatStub.mockClear();
@@ -3975,6 +4272,21 @@ testState.beforeAll(async () => {
       userId: ids.userA1,
     });
   }
+  await testDb.insert(chatThreads).values(chatThreadOfB(chatQueueThreadB));
+  await testDb.insert(chatQueuedMessages).values(
+    [
+      { id: chatQueuedFirstB, text: "First" },
+      { id: chatQueuedSecondB, text: "Second" },
+    ].map(({ id, text }, index) => ({
+      id,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      workspaceId: null,
+      threadId: chatQueueThreadB,
+      position: index + 1,
+      request: queuedSendOf(id, text),
+    })),
+  );
   await testDb.insert(chatToolGrants).values([
     {
       id: chatToolGrantAlwaysB,

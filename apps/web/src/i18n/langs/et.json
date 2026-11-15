@@ -159,6 +159,7 @@
     "handoffAccount": "Kas jätkata kasutajana <account>{email}</account> organisatsioonis <organization>{organizationName}</organization>?",
     "handoffTitle": "Jätka stellasse",
     "headline": "Selgus igas asjas.",
+    "invalidEmailOrPassword": "Vale e-posti aadress või parool.",
     "invitation": {
       "declined": "Kutse tagasi lükatud",
       "declinedDescription": "Olete selle kutse tagasi lükanud. Võite selle lehe sulgeda.",
@@ -207,6 +208,7 @@
       "useBackupCode": "Kasuta selle asemel varukoodi"
     },
     "useDifferentEmail": "Kasuta teist e-posti aadressi",
+    "useEmailCode": "Kasuta hoopis e-posti koodi",
     "usePassword": "Kasuta hoopis parooli",
     "weSentCodeTo": "Saatsime koodi aadressile <email>{emailAddress}</email>"
   },

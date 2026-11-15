@@ -115,6 +115,7 @@ const seedRunningTurn = async (member?: Member) => {
     workspaceId: as.workspaceId,
   });
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: ids.orgA,
     threadId,
     userId: as.userId,

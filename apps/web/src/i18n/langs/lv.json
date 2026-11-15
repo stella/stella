@@ -159,6 +159,7 @@
     "handoffAccount": "Vai turpināt kā <account>{email}</account> organizācijā <organization>{organizationName}</organization>?",
     "handoffTitle": "Turpināt uz stella",
     "headline": "Skaidrība ikvienā lietā.",
+    "invalidEmailOrPassword": "Nepareiza e-pasta adrese vai parole.",
     "invitation": {
       "declined": "Uzaicinājums noraidīts",
       "declinedDescription": "Jūs esat noraidījis šo uzaicinājumu. Varat droši aizvērt šo lapu.",
@@ -207,6 +208,7 @@
       "useBackupCode": "Tā vietā izmantot rezerves kodu"
     },
     "useDifferentEmail": "Izmantot citu e-pasta adresi",
+    "useEmailCode": "Izmantot e-pastā saņemtu kodu",
     "usePassword": "Izmantot paroli",
     "weSentCodeTo": "Mēs nosūtījām kodu uz <email>{emailAddress}</email>"
   },

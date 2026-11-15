@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -15,8 +15,10 @@ import { loadTestEnv } from "./load-test-env";
 import { spawnPostgresTestProcess } from "./postgres-lock-diagnostics";
 import {
   anyBootsPgliteTestDatabase,
+  assertTemplateDatabaseTestsAreExclusive,
   classifyPostgresTestIsolation,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+  needsTemplateDatabase,
 } from "./postgres-test-plan";
 import { postgresTestSelectionFromEnv } from "./postgres-test-selection-env";
 import {
@@ -49,6 +51,34 @@ const durations = measured?.unwrapOr({}) ?? {};
 loadTestEnv(path.resolve(import.meta.dir, "../.env.test"));
 const parsedWorkers = parsePostgresWorkerCount(Bun.argv.slice(2));
 let clusterExclusivePaths = new Set<string>();
+
+const withMigratedTemplate = async (
+  testPaths: readonly string[],
+  run: () => Promise<number>,
+): Promise<number> => {
+  if (!needsTemplateDatabase(testPaths)) {
+    return await run();
+  }
+
+  const databaseUrl = process.env["DATABASE_URL"];
+  if (databaseUrl === undefined) {
+    panic("DATABASE_URL required for migrated template selection");
+  }
+  const sourceUrl = new URL(databaseUrl);
+  const sourceDatabase = decodeURIComponent(sourceUrl.pathname.slice(1));
+  if (sourceDatabase.length === 0) {
+    panic("DATABASE_URL must name the migrated database");
+  }
+  // The worker runner keeps this migrated source idle and connects tests
+  // only to worker clones. Repair scratch databases must use the same source,
+  // never the worker database whose setup has already opened connections.
+  process.env["STELLA_TEST_TEMPLATE_DATABASE"] = sourceDatabase;
+  try {
+    return await run();
+  } finally {
+    delete process.env["STELLA_TEST_TEMPLATE_DATABASE"];
+  }
+};
 
 const apiPackageRoot = path.resolve(import.meta.dir, "..");
 // Mirrors PGLITE_TEST_SNAPSHOT_ENV in src/tests/pglite-test-db.ts; a literal
@@ -110,6 +140,7 @@ process.exitCode = await runGatedTests({
   spawnTestProcess: spawnPostgresTestProcess,
   prepare: preparePostgresTests,
   validateTestPlan: async (apiRoot, files) => {
+    assertTemplateDatabaseTestsAreExclusive();
     clusterExclusivePaths = await classifyPostgresTestIsolation(apiRoot, files);
     const shard = parseApiTestShard(shardValue);
     if (shard !== null) {
@@ -119,6 +150,7 @@ process.exitCode = await runGatedTests({
   shardTestFiles: shardValue
     ? (files) => selectPostgresTestShard({ files, durations, shardValue })
     : undefined,
+  withTestRun: withMigratedTemplate,
   runTestFiles: async ({ bunArguments, files, gate, gateValue, preload }) => {
     const databaseUrl = process.env["DATABASE_URL"] ?? "";
     const templateUrl = new URL(databaseUrl);
