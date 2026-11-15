@@ -54,7 +54,7 @@ export const usePermissions = (permissions: PermissionInput): boolean => {
     billingAccess:
       memberView.type === "items" &&
       memberView.refetchError === undefined &&
-      memberView.items?.billingAccess === true,
+      memberView.items.billingAccess,
     permissions,
   });
 };
