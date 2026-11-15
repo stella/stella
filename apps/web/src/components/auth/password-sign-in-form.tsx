@@ -70,16 +70,19 @@ export const EmailCredentialField = ({
 
 export const SecretCredentialField = ({
   autoComplete,
+  autoFocus,
   field,
   placeholder,
 }: {
   autoComplete: "current-password" | "new-password" | "one-time-code";
+  autoFocus: boolean;
   field: TextFieldBinding;
   placeholder: string;
 }) => (
   <Field name={field.name}>
     <SecretInput
       autoComplete={autoComplete}
+      autoFocus={autoFocus}
       onBlur={field.handleBlur}
       onChange={(e) => field.handleChange(e.target.value)}
       placeholder={placeholder}
@@ -100,10 +103,13 @@ export const getOrganizationCallbackUrl = (redirectTo: string) => {
 
 export const PasswordSignInForm = ({
   autoFocus,
+  defaultEmail,
   lastUsed,
   redirectTo,
 }: {
   autoFocus: boolean;
+  /** An address already typed on this page; focus then starts at the password. */
+  defaultEmail: string;
   lastUsed: SignInMethod | null;
   redirectTo: string;
 }) => {
@@ -114,7 +120,7 @@ export const PasswordSignInForm = ({
   const form = useForm(
     schemaFormOptions({
       schema: passwordFormSchema(t("validation.invalidEmail")),
-      defaultValues: { email: "", password: "" },
+      defaultValues: { email: defaultEmail, password: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
         const { data, error } = await authClient.signIn.email({
@@ -175,7 +181,7 @@ export const PasswordSignInForm = ({
       <form.Field name="email">
         {(field) => (
           <EmailCredentialField
-            autoFocus={autoFocus}
+            autoFocus={autoFocus && defaultEmail === ""}
             field={field}
             lastUsed={lastUsed === SIGN_IN_METHOD.password}
           />
@@ -185,6 +191,7 @@ export const PasswordSignInForm = ({
         {(field) => (
           <SecretCredentialField
             autoComplete="current-password"
+            autoFocus={autoFocus && defaultEmail !== ""}
             field={field}
             placeholder={t("auth.password")}
           />

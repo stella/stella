@@ -52,6 +52,29 @@ export const resolveSignInOptions = ({
   };
 };
 
+/** Sign-in methods a link may ask the page to open with (`?method=`). */
+export const SIGN_IN_ENTRY_METHOD = { password: "password" } as const;
+
+export type SignInEntryMethod =
+  (typeof SIGN_IN_ENTRY_METHOD)[keyof typeof SIGN_IN_ENTRY_METHOD];
+
+/**
+ * Where the quiet password form stands: behind its link, open beside the
+ * other methods, or open in place of the email-code form because the server
+ * answered that the address typed there signs in with a password.
+ */
+export type PasswordEntry =
+  | { type: "closed" }
+  | { type: "offered" }
+  | { type: "required"; email: string };
+
+export const initialPasswordEntry = (
+  entryMethod: SignInEntryMethod | undefined,
+): PasswordEntry =>
+  entryMethod === SIGN_IN_ENTRY_METHOD.password
+    ? { type: "offered" }
+    : { type: "closed" };
+
 /**
  * Sign-in methods as better-auth's last-login-method plugin names them in
  * its browser cookie (set only after a sign-in succeeds; the value is the
