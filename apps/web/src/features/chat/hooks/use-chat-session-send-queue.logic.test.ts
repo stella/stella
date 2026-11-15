@@ -628,7 +628,7 @@ describe("send now while a turn runs", () => {
     expect(state.queue.map(({ id }) => id)).toEqual(["a"]);
   });
 
-  test("a refused steer stops the turn only after Send now; an explicit steer keeps the message queued", () => {
+  test("a refused steer stops the turn only after Send now; a plain send's steer keeps the message queued", () => {
     expect(steerFallback("refused", "send_now")).toBe("stop");
     expect(steerFallback("refused", "steer")).toBe("keep");
 

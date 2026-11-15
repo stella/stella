@@ -1,0 +1,4 @@
+{
+  "add-column": "One nullable varchar column without a default on desktop_runner_runs, a catalog-only change that rewrites no rows, under 1s lock_timeout and 10s statement_timeout.",
+  "add-constraint": "The check is added NOT VALID, so no existing row is scanned, under 1s lock_timeout and 10s statement_timeout; no stored row holds a boundary yet."
+}

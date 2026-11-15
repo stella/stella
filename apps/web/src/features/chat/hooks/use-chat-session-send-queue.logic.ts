@@ -182,21 +182,31 @@ export type SendNowRoute =
 
 export const sendNowRoute = (
   state: Pick<SendQueueState, "isGenerating">,
-  entry: Pick<QueuedChatEntry, "fileCount" | "options" | "text">,
+  entry: SteerableEntry,
 ): SendNowRoute => {
   if (!state.isGenerating) {
     return { type: "send" };
   }
+  const text = steerableText(entry);
+  return text === null ? { type: "stop_and_send" } : { type: "steer", text };
+};
+
+type SteerableEntry = Pick<QueuedChatEntry, "fileCount" | "options" | "text">;
+
+/**
+ * The text a turn can be steered with: a message of text alone, queued to be
+ * sent raw, since a steer hands the text to the computer's harness as is.
+ * `null` for any other message, which only goes as a message of its own.
+ */
+export const steerableText = (entry: SteerableEntry): string | null => {
   const text = entry.text.trim();
   const anonymized =
     entry.options?.body?.sendMode === CHAT_SEND_MODE.anonymized;
-  return entry.fileCount === 0 && text !== "" && !anonymized
-    ? { type: "steer", text }
-    : { type: "stop_and_send" };
+  return entry.fileCount === 0 && text !== "" && !anonymized ? text : null;
 };
 
 /**
- * Why an explicit steer left the message queued: what the turn or the API
+ * Why a steer left the message queued: what the turn or the API
  * said (`ChatLocalRunSteerRefusal`), or `message_not_plain` for a message
  * with files or one sent anonymized, which only goes as a message of its own.
  */
@@ -215,7 +225,7 @@ export const CHAT_STEER_REFUSAL_MESSAGES = {
 /**
  * Who handed a queued message to the running turn: "Send now" on it
  * (`send_now`), which means now even if the turn has to stop, or the
- * member's explicit steer (`steer`), which never stops the turn.
+ * member's plain send that steers (`steer`), which never stops the turn.
  */
 export type SteerOrigin = "send_now" | "steer";
 
@@ -223,8 +233,8 @@ export type SteerOrigin = "send_now" | "steer";
  * What follows a steer, by what became of it and who asked: `steered`
  * leaves the queue (the running answer holds the message); `refused` stops
  * the turn so the message goes next after "Send now", and leaves it queued
- * for the turn's end after an explicit steer; `unsettled` leaves it queued
- * for the turn's end.
+ * for the turn's end after a steer; `unsettled` leaves it queued for the
+ * turn's end.
  */
 export const steerFallback = (
   outcome: "steered" | "refused" | "unsettled",

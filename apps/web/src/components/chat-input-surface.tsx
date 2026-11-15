@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { CHAT_MEMBER_SEND_ACTION } from "@stll/api-contract/chat-send-intent";
 import {
   COMPOSER_BOX_ANONYMIZED_CLASS,
   COMPOSER_BOX_CLASS,
@@ -24,10 +25,7 @@ import type {
   ChatSend,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
-import {
-  type ChatComposerSteer,
-  ChatComposerSteerButton,
-} from "@/components/chat/chat-composer-steer-button";
+import { ChatComposerQueueButton } from "@/components/chat/chat-composer-queue-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
@@ -75,10 +73,13 @@ type ChatInputSurfaceProps = {
   isGenerating?: boolean;
   onStop?: () => void;
   /**
-   * The member's explicit steer, shown beside Stop while it is offered.
-   * Omit on surfaces whose turns can never be steered.
+   * The member's queue action (Cmd/Ctrl+Enter, and a button beside the
+   * primary one while `queueOffered`): it holds the draft until the turn
+   * ends. Omit on surfaces whose plain send always queues behind a turn.
    */
-  steer?: ChatComposerSteer | undefined;
+  onQueue?: ChatSend | undefined;
+  /** A plain send would steer the turn, so the queue button is shown. */
+  queueOffered?: boolean | undefined;
   /** See `ChatComposerActionButton`'s `stopping`. */
   stopping?: boolean;
   /**
@@ -149,7 +150,8 @@ export const ChatInputSurface = ({
   onFocusChange,
   isGenerating = false,
   onStop,
-  steer,
+  onQueue,
+  queueOffered,
   stopping = false,
   anonymized = false,
   dock,
@@ -203,6 +205,7 @@ export const ChatInputSurface = ({
     controller,
     inputDisabled,
     onSubmit,
+    onQueue,
     onSubmitError: handleSubmitError,
     submitDisabled,
   });
@@ -373,18 +376,20 @@ export const ChatInputSurface = ({
                 {/* The single primary affordance morphs in place: the button
                   itself resolves send vs. stop from the state it is fed, so
                   this surface cannot render a second, parallel control. */}
-                <ChatComposerSteerButton
+                <ChatComposerQueueButton
                   canSend={canSend}
-                  controller={controller}
-                  onError={handleSubmitError}
-                  steer={steer}
+                  offered={queueOffered}
+                  submitDraft={submitDraft}
                 />
                 <ChatComposerActionButton
                   canSend={canSend}
                   guideAnchorsEnabled={guideAnchorsEnabled}
                   isGenerating={isGenerating}
                   onSend={() => {
-                    detached(submitDraft(), "chat-input-surface.submit-draft");
+                    detached(
+                      submitDraft(CHAT_MEMBER_SEND_ACTION.send),
+                      "chat-input-surface.submit-draft",
+                    );
                   }}
                   onStop={onStop}
                   stopping={stopping}

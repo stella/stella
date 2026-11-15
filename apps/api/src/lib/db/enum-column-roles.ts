@@ -213,6 +213,7 @@ export const ENUM_COLUMN_ROLES = {
     family: ATTRIBUTE,
   },
   corpus_index_projection_intents: {
+    append_delivery: ATTRIBUTE,
     family: ATTRIBUTE,
   },
   corpus_index_projection_revisions: {

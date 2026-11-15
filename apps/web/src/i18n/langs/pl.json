@@ -2093,6 +2093,7 @@
       "noResults": "Brak pasujących umiejętności",
       "tryOne": "Zacznij od jednego z tych"
     },
+    "queuePrompt": "Wyślij, gdy agent skończy",
     "queuedAttachmentCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
     "queuedNotice": "W kolejce: zostanie wysłana po zakończeniu bieżącej odpowiedzi",
     "reasoning": "Rozumowanie",
@@ -2199,7 +2200,6 @@
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",
     "sources": "Źródła:",
-    "steerPrompt": "Wyślij do agenta w trakcie pracy",
     "steerRefused": {
       "cannotSteer": "Ten agent nie przyjmuje wiadomości w trakcie pracy.",
       "noRun": "Agent jeszcze nie zaczął.",

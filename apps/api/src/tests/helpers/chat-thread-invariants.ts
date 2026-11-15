@@ -1,11 +1,10 @@
 import { panic } from "better-result";
 import { asc, eq } from "drizzle-orm";
 
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+
 import { chatMessages, chatTurns } from "@/api/db/schema";
-import {
-  chatMessageFromPersisted,
-  getAwaitingUserInteractions,
-} from "@/api/handlers/chat/chat-message-parts";
+import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_TURN_STATUS_OF_OUTCOME,
   findUnsettledStoredToolCalls,
@@ -266,7 +265,7 @@ export const findTurnOutcomeMismatches = async (
 /** An interaction the stored thread offers: a tool call the client answers,
  *  on a message an `awaiting-user` turn owns. */
 export type OfferedInteraction = {
-  kind: ReturnType<typeof getAwaitingUserInteractions>[number]["type"];
+  kind: ReturnType<typeof memberWaitsOf>[number]["type"];
   messageId: SafeId<"chatMessage">;
   state: ToolCallState;
   toolCallId: string;
@@ -289,7 +288,7 @@ export const offeredInteractionsOf = ({
     .flatMap((row) =>
       // The production reader of what a turn awaits, so this lists exactly
       // what a continuation is validated against.
-      getAwaitingUserInteractions(row).flatMap(({ toolCallId, type }) => {
+      memberWaitsOf(row).flatMap(({ toolCallId, type }) => {
         const part = row.parts.find(
           (candidate) =>
             candidate.type === "tool-call" && candidate.id === toolCallId,

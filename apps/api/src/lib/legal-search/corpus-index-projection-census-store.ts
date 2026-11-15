@@ -354,10 +354,10 @@ type CorpusProjectionCensusScope = Pick<
 
 /**
  * Every index a full census of the generation covers: each index an applied
- * projection names, and each index a settled revision was written to. A loose
- * index scan over the two census indexes reads one row per distinct index id,
- * never the generation; the partial-index predicates are spelled as literals
- * so the planner can match them.
+ * projection names, and each index a settled or withdrawn revision was
+ * written to. A loose index scan over each census index reads one row per
+ * distinct index id, never the generation; the partial-index predicates are
+ * spelled as literals so the planner can match them.
  */
 export const readCorpusProjectionCensusIndexIdsTx = async (
   tx: Transaction,
@@ -372,6 +372,9 @@ export const readCorpusProjectionCensusIndexIdsTx = async (
   const settledScope = sql`${intents.family} = ${family}
     AND ${intents.generation} = ${generation}
     AND ${intents.status} = 'settled'`;
+  const withdrawnScope = sql`${intents.family} = ${family}
+    AND ${intents.generation} = ${generation}
+    AND ${intents.status} = 'withdrawn'`;
   const result: unknown = await tx.execute(sql`
     WITH RECURSIVE applied_index(index_id) AS (
       (
@@ -408,10 +411,30 @@ export const readCorpusProjectionCensusIndexIdsTx = async (
       )
       FROM settled_index
       WHERE settled_index.index_id IS NOT NULL
+    ),
+    withdrawn_index(index_id) AS (
+      (
+        SELECT ${intents.indexId} FROM ${intents}
+        WHERE ${withdrawnScope}
+        ORDER BY ${intents.indexId}
+        LIMIT 1
+      )
+      UNION ALL
+      SELECT (
+        SELECT ${intents.indexId} FROM ${intents}
+        WHERE ${withdrawnScope}
+          AND ${intents.indexId} > withdrawn_index.index_id
+        ORDER BY ${intents.indexId}
+        LIMIT 1
+      )
+      FROM withdrawn_index
+      WHERE withdrawn_index.index_id IS NOT NULL
     )
     SELECT index_id AS "indexId" FROM applied_index WHERE index_id IS NOT NULL
     UNION
     SELECT index_id AS "indexId" FROM settled_index WHERE index_id IS NOT NULL
+    UNION
+    SELECT index_id AS "indexId" FROM withdrawn_index WHERE index_id IS NOT NULL
     ORDER BY "indexId"
   `);
   return executedRows(result).map((row) =>
@@ -421,7 +444,13 @@ export const readCorpusProjectionCensusIndexIdsTx = async (
   );
 };
 
-/** Bounded retired revisions that the engine must no longer contain. */
+/**
+ * Bounded revisions that the engine must no longer contain: settled ones,
+ * whose delete was proven, and withdrawn ones, which an exact census found
+ * empty once their offline indexer had ended. One page in revision order over
+ * both: each status is read in order from its own partial index, never the
+ * other's history, and the two ordered reads merge.
+ */
 export const readSettledCorpusProjectionCensusPageTx = async (
   tx: Transaction,
   options: CorpusProjectionCensusPageOptions,
@@ -439,21 +468,32 @@ export const readSettledCorpusProjectionCensusPageTx = async (
       ? null
       : (brandValidatedCorpusIndexProjectionIntentId(options.after) ??
         panic("Lost validated corpus projection census cursor"));
-  const candidates = await tx
-    .select({ revision: corpusIndexProjectionIntents.id })
-    .from(corpusIndexProjectionIntents)
-    .where(
-      and(
-        eq(corpusIndexProjectionIntents.family, options.family),
-        eq(corpusIndexProjectionIntents.generation, options.generation),
-        eq(corpusIndexProjectionIntents.indexId, options.indexId),
-        eq(corpusIndexProjectionIntents.status, "settled"),
-        afterRevision === null
-          ? undefined
-          : gt(corpusIndexProjectionIntents.id, afterRevision),
-      ),
-    )
-    .orderBy(asc(corpusIndexProjectionIntents.id))
-    .limit(options.limit);
+  const absentWith = (status: "settled" | "withdrawn") =>
+    tx
+      .select({ revision: corpusIndexProjectionIntents.id })
+      .from(corpusIndexProjectionIntents)
+      .where(
+        and(
+          eq(corpusIndexProjectionIntents.family, options.family),
+          eq(corpusIndexProjectionIntents.generation, options.generation),
+          eq(corpusIndexProjectionIntents.indexId, options.indexId),
+          eq(corpusIndexProjectionIntents.status, status),
+          afterRevision === null
+            ? undefined
+            : gt(corpusIndexProjectionIntents.id, afterRevision),
+        ),
+      )
+      .orderBy(asc(corpusIndexProjectionIntents.id))
+      .limit(options.limit);
+  const [settled, withdrawn] = [
+    await absentWith("settled"),
+    await absentWith("withdrawn"),
+  ];
+  // Lowercase hex UUIDs order as strings exactly as PostgreSQL orders them,
+  // so the merged page continues where the cursor says. A revision has one
+  // status, so the two reads never share one.
+  const candidates = [...settled, ...withdrawn]
+    .toSorted((left, right) => (left.revision < right.revision ? -1 : 1))
+    .slice(0, options.limit);
   return censusPage(candidates, options.limit, ({ revision }) => revision);
 };

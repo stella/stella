@@ -17,7 +17,7 @@ import {
   CHAT_MEMBER_SEND_ACTION,
   type ChatMemberSendAction,
   type ChatThreadSendState,
-  isChatSteerOffered,
+  isChatQueueOffered,
 } from "@stll/api-contract/chat-send-intent";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { NewChatIcon } from "@stll/ui/icons";
@@ -292,7 +292,7 @@ export const ChatThreadPage = ({
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
-    steerMessage,
+    queueMessage,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,
@@ -332,6 +332,7 @@ export const ChatThreadPage = ({
     approvalPendingMessageId,
     localRunQuestion,
     answerLocalRunQuestion,
+    turnAwaitsMember,
   } = useChatSession({
     exceptionScope: { type: "handler", handlerId: "chat-session.thread-page" },
     chat,
@@ -680,7 +681,7 @@ export const ChatThreadPage = ({
       }
       const send = {
         [CHAT_MEMBER_SEND_ACTION.send]: sendMessage,
-        [CHAT_MEMBER_SEND_ACTION.steer]: steerMessage,
+        [CHAT_MEMBER_SEND_ACTION.queue]: queueMessage,
       } satisfies Record<ChatMemberSendAction, typeof sendMessage>;
       await send[action](message.value);
       return CHAT_SEND_SENT;
@@ -690,9 +691,9 @@ export const ChatThreadPage = ({
     async (draft: ChatInputDraft) =>
       await submitDraftAs(CHAT_MEMBER_SEND_ACTION.send, draft),
   );
-  const handleSteer = useLatestCallback(
+  const handleQueue = useLatestCallback(
     async (draft: ChatInputDraft) =>
-      await submitDraftAs(CHAT_MEMBER_SEND_ACTION.steer, draft),
+      await submitDraftAs(CHAT_MEMBER_SEND_ACTION.queue, draft),
   );
 
   return (
@@ -1002,15 +1003,14 @@ export const ChatThreadPage = ({
                     stopping={stopPending}
                     onFocusChange={setComposerFocused}
                     onSubmit={handleSubmit}
-                    steer={{
-                      offered: isChatSteerOffered(
-                        composerSendState(
-                          isGenerating,
-                          composerModels.runTarget.kind,
-                        ),
-                      ),
-                      send: handleSteer,
-                    }}
+                    onQueue={handleQueue}
+                    queueOffered={isChatQueueOffered(
+                      composerSendState({
+                        isGenerating,
+                        turnAwaitsMember,
+                        runTarget: composerModels.runTarget.kind,
+                      }),
+                    )}
                   />
                 </div>
               </div>
@@ -1027,14 +1027,26 @@ export const ChatThreadPage = ({
 };
 
 /**
- * What the composer knows of the thread when it offers a steer: a turn
- * works, on where the thread's turns run, or none does.
+ * What the composer knows of the thread when it offers the queue action: a
+ * turn works or waits on the member, on where the thread's turns run, or
+ * none does.
  */
-const composerSendState = (
-  isGenerating: boolean,
-  runTarget: ChatRunTarget["kind"],
-): ChatThreadSendState =>
-  isGenerating ? { type: "working", runTarget } : { type: "idle" };
+const composerSendState = ({
+  isGenerating,
+  turnAwaitsMember,
+  runTarget,
+}: {
+  isGenerating: boolean;
+  turnAwaitsMember: boolean;
+  runTarget: ChatRunTarget["kind"];
+}): ChatThreadSendState => {
+  if (isGenerating) {
+    return { type: "working", runTarget };
+  }
+  return turnAwaitsMember
+    ? { type: "waiting_on_member", runTarget }
+    : { type: "idle" };
+};
 
 const ChatThreadScrollSurface = ({ children }: { children: ReactNode }) => (
   <ConversationScrollProvider>

@@ -2093,6 +2093,7 @@
       "noResults": "Sobivaid oskusi pole",
       "tryOne": "Alusta ühe nendest"
     },
+    "queuePrompt": "Saada, kui agent on lõpetanud",
     "queuedAttachmentCount": "{count, plural, one {# manus} other {# manust}}",
     "queuedNotice": "Järjekorras: saadetakse, kui praegune vastus on valmis",
     "reasoning": "Arutlus",
@@ -2199,7 +2200,6 @@
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
     "sources": "Allikad:",
-    "steerPrompt": "Saada agendile töö ajal",
     "steerRefused": {
       "cannotSteer": "See agent ei võta töö ajal sõnumeid vastu.",
       "noRun": "Agent pole veel alustanud.",

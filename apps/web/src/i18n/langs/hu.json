@@ -2093,6 +2093,7 @@
       "noResults": "Nincs egyező készség",
       "tryOne": "Kezdésként próbálja ki valamelyiket"
     },
+    "queuePrompt": "Küldés, amikor az ügynök végzett",
     "queuedAttachmentCount": "{count, plural, one {# melléklet} other {# melléklet}}",
     "queuedNotice": "Sorba állítva – a jelenlegi válasz befejeztével küldjük el",
     "reasoning": "Érvelés",
@@ -2199,7 +2200,6 @@
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
     "sources": "Források:",
-    "steerPrompt": "Küldés az ügynöknek munka közben",
     "steerRefused": {
       "cannotSteer": "Ez az ügynök munka közben nem fogad üzeneteket.",
       "noRun": "Az ügynök még nem kezdett hozzá.",

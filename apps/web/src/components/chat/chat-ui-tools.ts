@@ -13,6 +13,7 @@ import {
 } from "@stll/api-contract/chat";
 import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
 import type { LocalRunToolTitleKind } from "@stll/api-contract/chat-local-run-steps";
+import { isMemberAnsweredPart } from "@stll/api-contract/chat-member-wait";
 import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import {
   chatToolLabel,
@@ -674,14 +675,6 @@ type PersistedChatPart = PersistedChatMessage["parts"][number];
 export const isApprovalRequestPart = (part: PersistedChatPart): boolean =>
   part.type === "tool-call" && part.state === "approval-requested";
 
-/** A part only the user can answer: an approval request, or a user-input
- *  card whose questions have fully arrived. */
-export const isUserAnswerablePart = (part: PersistedChatPart): boolean =>
-  isApprovalRequestPart(part) ||
-  (part.type === "tool-call" &&
-    part.state === "input-complete" &&
-    isUserInputChatToolName(part.name));
-
 /**
  * The latest assistant message, if it holds a part `isAwaitedPart` accepts
  * and no later user message supersedes its turn: the runtime appends that
@@ -718,7 +711,7 @@ export const getCurrentApprovalPendingMessageId = (
 export const getAwaitedAssistantMessageId = (
   messages: readonly PersistedChatMessage[],
 ): string | null =>
-  findAwaitedAssistantMessage(messages, isUserAnswerablePart)?.id ?? null;
+  findAwaitedAssistantMessage(messages, isMemberAnsweredPart)?.id ?? null;
 
 /**
  * Everything a conversation has open for the member to answer, one key per
@@ -726,11 +719,11 @@ export const getAwaitedAssistantMessageId = (
  * approval, a question or another user-input card) and the question a run on
  * their computer paused the turn on. Empty when the turn waits on nothing.
  *
- * This is the one definition of "the member has something open here". The
- * send queue holds on it and the runtime registry keeps a runtime for it, so
- * a new kind of wait added here (or a new user-input tool) is held and kept
- * alike. The same keys read from a runtime and from the stored thread name
- * the same items.
+ * Which parts wait on the member is `isMemberAnsweredPart`, the definition
+ * the API stores a waiting turn by and the phone reads too. The send queue
+ * holds on these keys and the runtime registry keeps a runtime for them. The
+ * same keys read from a runtime and from the stored thread name the same
+ * items.
  */
 export const openMemberWaitKeys = ({
   localRunQuestion,
@@ -739,12 +732,12 @@ export const openMemberWaitKeys = ({
   localRunQuestion: LocalRunQuestionPause | null;
   messages: readonly PersistedChatMessage[];
 }): readonly string[] => {
-  const awaited = findAwaitedAssistantMessage(messages, isUserAnswerablePart);
+  const awaited = findAwaitedAssistantMessage(messages, isMemberAnsweredPart);
   return [
     ...(awaited === null
       ? []
       : awaited.parts.flatMap((part) =>
-          part.type === "tool-call" && isUserAnswerablePart(part)
+          part.type === "tool-call" && isMemberAnsweredPart(part)
             ? [`part:${part.id}`]
             : [],
         )),
@@ -753,6 +746,20 @@ export const openMemberWaitKeys = ({
       : [`interrupt:${localRunQuestion.interruptId}`]),
   ];
 };
+
+/**
+ * The approvals the conversation waits on, by approval id: the cards of the
+ * awaited assistant message nobody has answered yet.
+ */
+export const openApprovalRequestIds = (
+  messages: readonly PersistedChatMessage[],
+): readonly string[] =>
+  findAwaitedAssistantMessage(messages, isApprovalRequestPart)?.parts.flatMap(
+    (part) =>
+      isApprovalPart(part) && part.state === "approval-requested"
+        ? [part.approval.id]
+        : [],
+  ) ?? [];
 
 /**
  * The tool work a thread already waits on when a page opens it: approval

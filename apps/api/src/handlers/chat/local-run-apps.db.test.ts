@@ -123,7 +123,7 @@ const storedTurn = async (
       result: { content: "results", status },
     },
     { type: "text.completed", messageId: "msg_1", text: "Found one." },
-    { type: "turn.completed", usage: null },
+    { type: "turn.completed", usage: null, boundary: null },
   ];
   const chunks: unknown[] = [];
   let generated = 0;
@@ -180,7 +180,8 @@ const readTurn = async ({
           approvedFolderIds: [],
         }),
       ),
-    readChatRunSession: async () => await Promise.resolve(Result.ok(null)),
+    readChatRunSession: async () =>
+      await Promise.resolve(Result.ok({ type: "fresh" })),
     startRun: async () =>
       await Promise.resolve(Result.ok({ type: "assigned", runId })),
     readEvents: async ({ afterSeq }: { afterSeq: number }) => {

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -33,6 +34,7 @@ import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const testState = createTestState({ file: import.meta.path, config: env });
 const TASK_ENTRIES = [
   "task update",
   "obligation transition",
@@ -309,7 +311,7 @@ if (!databaseUrl || !enabled) {
             assignment.push({ propertyId, content });
           }
           const previousGovernedWorkflow = env.FEATURE_GOVERNED_WORKFLOW;
-          env.FEATURE_GOVERNED_WORKFLOW = true;
+          testState.setConfig("FEATURE_GOVERNED_WORKFLOW", true);
           const pid = async (client: typeof first) => {
             const rows = await client.db.execute<{ pid: number }>(
               sql`SELECT pg_backend_pid() AS pid`,
@@ -499,7 +501,10 @@ if (!databaseUrl || !enabled) {
             );
             expect(f.enqueued).toEqual([]);
           } finally {
-            env.FEATURE_GOVERNED_WORKFLOW = previousGovernedWorkflow;
+            testState.setConfig(
+              "FEATURE_GOVERNED_WORKFLOW",
+              previousGovernedWorkflow,
+            );
             try {
               await Promise.all(pending);
             } finally {
@@ -518,7 +523,7 @@ if (!databaseUrl || !enabled) {
         });
         const before = await f.read();
         const previousGovernedWorkflow = env.FEATURE_GOVERNED_WORKFLOW;
-        env.FEATURE_GOVERNED_WORKFLOW = true;
+        testState.setConfig("FEATURE_GOVERNED_WORKFLOW", true);
         try {
           expect(
             await taskAction({
@@ -545,7 +550,10 @@ if (!databaseUrl || !enabled) {
           expect(completionNotices).toEqual([]);
           expect(f.enqueued).toEqual([]);
         } finally {
-          env.FEATURE_GOVERNED_WORKFLOW = previousGovernedWorkflow;
+          testState.setConfig(
+            "FEATURE_GOVERNED_WORKFLOW",
+            previousGovernedWorkflow,
+          );
           await f.cleanup();
         }
       });
