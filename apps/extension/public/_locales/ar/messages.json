@@ -5,8 +5,11 @@
   "adoptUnsupported": {
     "message": "لا يمكن استخدام سوى الصفحات العامة عبر HTTPS مع stella."
   },
+  "usingTabs": {
+    "message": "قيد الاستخدام:"
+  },
   "downloadKept": {
-    "message": "تنزيلات اكتملت أثناء تحكّم stella في علامة تبويب فأُبقيت: $COUNT$. تحقّق من مصدرها قبل فتحها.",
+    "message": "التنزيلات المحتفظ بها: $COUNT$، تحقّق منها قبل فتحها",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -14,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "تنزيلات أوقفها stella أثناء تحكّمه في علامة تبويب: $COUNT$.",
+    "message": "التنزيلات المتوقفة: $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -22,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "أثناء تحكّم stella في علامة تبويب: أُوقفت تنزيلات: $STOPPED$. تنزيلات اكتملت فأُبقيت (تحقّق من مصدرها قبل فتحها): $KEPT$.",
+    "message": "التنزيلات المتوقفة: $STOPPED$ · المحتفظ بها: $KEPT$، تحقّق منها قبل فتحها",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -42,15 +45,10 @@
     "message": "افتح علامة تبويب لتطبيق stella ثم حاول مجدداً."
   },
   "connectionPurpose": {
-    "message": "عندما تطلب ذلك في الدردشة، يمكن لـ stella فتح المواقع وقراءتها في علامة تبويب منفصلة باستخدام جلسات تسجيل دخولك."
+    "message": "تفتح المواقع وتقرأها للدردشة باستخدام جلسات تسجيل دخولك."
   },
   "statusConnected": {
-    "message": "متصل بـ $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
+    "message": "متصل"
   },
   "statusNotConnected": {
     "message": "غير متصل"
@@ -61,22 +59,14 @@
   "statusOpenStella": {
     "message": "افتح stella للاتصال"
   },
-  "statusTabHandedOver": {
-    "message": "تم تسليم علامة التبويب إلى stella: $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
   "allowAndConnect": {
     "message": "السماح بالوصول والاتصال"
   },
   "allowWebsiteAccess": {
     "message": "السماح بالوصول إلى المواقع"
   },
-  "connectTab": {
-    "message": "اتصال علامة تبويب stella هذه"
+  "connectStella": {
+    "message": "اتصال stella"
   },
   "adoptTab": {
     "message": "استخدام علامة التبويب هذه مع stella"
@@ -84,22 +74,28 @@
   "disconnectTab": {
     "message": "قطع الاتصال"
   },
-  "disconnectDescription": {
-    "message": "ستتوقف stella عن استخدام علامة التبويب المتصلة."
-  },
   "revokeAccess": {
-    "message": "إزالة الوصول إلى المواقع"
-  },
-  "revokeDescription": {
-    "message": "يزيل إذن فتح المواقع وقراءتها."
+    "message": "إزالة الوصول"
   },
   "checkingAccess": {
     "message": "جارٍ التحقق من الاتصال…"
   },
   "statusConnectedElsewhere": {
-    "message": "علامة تبويب أخرى في stella متصلة"
+    "message": "متصل في مكان آخر"
   },
-  "connectTabInstead": {
-    "message": "الاتصال بعلامة تبويب stella هذه بدلاً منها"
+  "connectStellaInstead": {
+    "message": "اتصال stella هنا بدلاً من ذلك"
+  },
+  "allowDesktop": {
+    "message": "استخدام مع stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop متصل"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop لا يعمل"
+  },
+  "desktopUpdateNeeded": {
+    "message": "حدّث stella desktop وهذه الإضافة"
   }
 }

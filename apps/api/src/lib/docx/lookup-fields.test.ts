@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
 import { parseResRecord } from "@stll/business-registries/ares";
 import { ARES_DEFAULT_FORMAT } from "@stll/business-registries/ares/default-format";
@@ -10,7 +9,7 @@ import {
 import type { EdgarCompany } from "@stll/business-registries/edgar";
 import { KrsValidationError } from "@stll/business-registries/krs";
 import type { OrsrCompany } from "@stll/business-registries/orsr";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -1354,10 +1353,9 @@ describe("named-format lookup — end-to-end fill", () => {
     `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
 
   const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-    const zip = new JSZip();
-    writeZipEntry(zip, "word/document.xml", documentXml);
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set("word/document.xml", documentXml);
+    zip.set(
       "[Content_Types].xml",
       `<?xml version="1.0" encoding="UTF-8"?>` +
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -1365,12 +1363,12 @@ describe("named-format lookup — end-to-end fill", () => {
         `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         `</Types>`,
     );
-    return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+    return testDocxFile(await zip.generate({ compression: "store" }));
   };
 
   const docText = async (file: ScannedFile): Promise<string> => {
-    const zip = await JSZip.loadAsync(file.bytes);
-    return (await zip.file("word/document.xml")?.async("string")) ?? "";
+    const zip = await ZipArchive.read(file.bytes);
+    return (await zip.entry("word/document.xml")?.text()) ?? "";
   };
 
   const companyField: FieldMeta = {
@@ -1513,10 +1511,9 @@ describe("lookup formats are addressed by their keys", () => {
   const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
   const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-    const zip = new JSZip();
-    writeZipEntry(zip, "word/document.xml", documentXml);
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set("word/document.xml", documentXml);
+    zip.set(
       "[Content_Types].xml",
       `<?xml version="1.0" encoding="UTF-8"?>` +
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -1524,12 +1521,12 @@ describe("lookup formats are addressed by their keys", () => {
         `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         `</Types>`,
     );
-    return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+    return testDocxFile(await zip.generate({ compression: "store" }));
   };
 
   const docText = async (file: ScannedFile): Promise<string> => {
-    const zip = await JSZip.loadAsync(file.bytes);
-    return (await zip.file("word/document.xml")?.async("string")) ?? "";
+    const zip = await ZipArchive.read(file.bytes);
+    return (await zip.entry("word/document.xml")?.text()) ?? "";
   };
 
   const NAME_RENDER = "Żabka Polska sp. z o.o.";

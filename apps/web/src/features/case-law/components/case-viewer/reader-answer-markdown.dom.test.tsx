@@ -3,9 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import en from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
 const { cleanup, render } = await import("@testing-library/react");

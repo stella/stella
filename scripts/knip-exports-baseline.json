@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 122,
+    "count": 94,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 1,
@@ -8,7 +8,6 @@
       "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts": 6,
       "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-tool.ts": 2,
       "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-write-tool.ts": 1,
-      "apps/api/src/handlers/document-reviews/propose-positions-stream.ts": 1,
       "apps/api/src/handlers/entities/copy-utils.ts": 3,
       "apps/api/src/handlers/entities/pdf-signing-redeem-handoff.ts": 1,
       "apps/api/src/handlers/files/routes.ts": 7,
@@ -20,42 +19,27 @@
       "apps/api/src/lib/auth/feature-access/view-eligibility.ts": 1,
       "apps/api/src/lib/buffer-intent-reconciliation.ts": 5,
       "apps/api/src/lib/chat/thread-compaction.ts": 1,
-      "apps/api/src/lib/document-processing-ocr-result.ts": 1,
-      "apps/api/src/lib/document-review/review-extract.ts": 2,
-      "apps/api/src/lib/document-review/review-grade.ts": 1,
-      "apps/api/src/lib/document-translation/run-queue.ts": 1,
-      "apps/api/src/lib/docx/ooxml.ts": 1,
       "apps/api/src/lib/entities/query-entities.ts": 3,
       "apps/api/src/lib/errors/tagged-errors.ts": 3,
-      "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts": 1,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-index-generation-store.ts": 1,
       "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts": 1,
       "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 1,
-      "apps/api/src/lib/legal-search/sk-document-backfill.ts": 4,
-      "apps/api/src/lib/lists/verification/run-caps.ts": 1,
+      "apps/api/src/lib/legal-search/sk-document-backfill.ts": 2,
       "apps/api/src/lib/lists/verification/run-persistence.ts": 1,
-      "apps/api/src/lib/lists/verification/run-summary.ts": 2,
       "apps/api/src/lib/mcp-upstream/connections.ts": 1,
       "apps/api/src/lib/mcp-upstream/oauth.ts": 1,
       "apps/api/src/lib/public-law-relations.ts": 1,
       "apps/api/src/lib/s3.ts": 1,
       "apps/api/src/lib/safe-id-boundaries.ts": 2,
       "apps/api/src/lib/scheduler/tasks/list-verification-run-reconcile.ts": 1,
-      "apps/api/src/lib/scouts/document-deadlines.logic.ts": 5,
-      "apps/api/src/lib/tanstack-ai-generate.ts": 1,
-      "apps/api/src/lib/template-binding/binding-sources.ts": 1,
       "apps/api/src/lib/usage/organization-access.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 1,
-      "apps/api/src/lib/workflow/verdict-engine.ts": 3,
       "apps/api/src/mcp/billing-tools.ts": 1,
       "apps/api/src/mcp/constants.ts": 1,
       "apps/api/src/mcp/context.ts": 1,
       "apps/api/src/mcp/file-comparison-picker-tool.ts": 1,
       "apps/api/src/mcp/matter-tools.ts": 1,
-      "apps/api/src/mcp/tool-types.ts": 7,
-      "apps/api/src/tests/helpers/provider-wire-contract.ts": 3,
-      "apps/api/src/tests/pglite-test-db.ts": 1
+      "apps/api/src/mcp/tool-types.ts": 7
     }
   },
   "apps/desktop": {
@@ -65,28 +49,17 @@
     }
   },
   "apps/web": {
-    "count": 14,
+    "count": 5,
     "files": {
-      "apps/web/src/components/ai-config-role-models.logic.ts": 3,
-      "apps/web/src/components/ai-suggestions/review-position-header.tsx": 1,
-      "apps/web/src/components/chat/chat-thread-messages.tsx": 1,
-      "apps/web/src/components/workspaces/property-helpers.tsx": 2,
-      "apps/web/src/features/statutes/components/statute-table.tsx": 1,
-      "apps/web/src/lib/api-contract.ts": 1,
+      "apps/web/src/components/workspaces/property-helpers.tsx": 1,
       "apps/web/src/lib/api.ts": 1,
-      "apps/web/src/lib/workspaces/format-duration.ts": 1,
       "apps/web/src/lib/workspaces/mutations/time-entries.ts": 3
     }
   },
-  "packages/business-registries": {
-    "count": 22,
+  "packages/agent-engine": {
+    "count": 1,
     "files": {
-      "packages/business-registries/src/ares/parse.ts": 1,
-      "packages/business-registries/src/ares/types.ts": 7,
-      "packages/business-registries/src/companies-house/types.ts": 1,
-      "packages/business-registries/src/denue/types.ts": 1,
-      "packages/business-registries/src/krs/types.ts": 3,
-      "packages/business-registries/src/orsr/types.ts": 9
+      "packages/agent-engine/src/harness/skill-folders.ts": 1
     }
   }
 }

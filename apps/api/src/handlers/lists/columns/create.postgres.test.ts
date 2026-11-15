@@ -33,6 +33,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import readList from "../get";
 import createColumn from "./create";
@@ -279,9 +280,7 @@ if (!databaseUrl || !runPostgres) {
         ).toBe(LIMITS.legalListColumnsPerList + 1);
       } finally {
         await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(eq(user.id, userId));
       }
     });

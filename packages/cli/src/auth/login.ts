@@ -8,11 +8,6 @@ import { createInterface } from "node:readline/promises";
 import { Temporal } from "temporal-polyfill/full";
 
 import { openInBrowser } from "./browser-open.js";
-import {
-  getRegisteredClient,
-  registeredClientSupportsScopes,
-  setRegisteredClient,
-} from "./cli-config.js";
 import { cliClientMetadataUrl } from "./client-metadata-document.js";
 import {
   CLI_IDENTITY_SCOPES,
@@ -21,16 +16,18 @@ import {
   LOOPBACK_REDIRECT_URI,
 } from "./constants.js";
 import type { StoredCredential } from "./credential-store.js";
-import { MissingOrgClaimError } from "./errors.js";
+import {
+  ClientDocumentUnsupportedError,
+  MissingOrgClaimError,
+} from "./errors.js";
 import type { CliAuthError, LoopbackTimeoutError } from "./errors.js";
 import { decodeAccessTokenClaims, decodeIdTokenClaims } from "./jwt.js";
 import {
   startLoopbackListener,
   toLoopbackCallbackError,
 } from "./loopback-listener.js";
-import type { LoopbackCallback } from "./loopback-listener.js";
+import type { LoopbackCallback, SignInOutcome } from "./loopback-listener.js";
 import { parseManualCallbackInput } from "./manual-callback.js";
-import { registerLoopbackClient } from "./oauth-client-registration.js";
 import { discoverAuthorizationServerMetadata } from "./oauth-metadata.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 import { persistLogin } from "./persist-login.js";
@@ -42,7 +39,6 @@ import { redeemAuthorizationCode } from "./token-exchange.js";
 export type LoginOptions = {
   readonly configDir: string;
   readonly orgHint: string | undefined;
-  readonly registrationScopes: readonly string[];
   /**
    * `stella:*` scopes to request. `login` adds `CLI_IDENTITY_SCOPES` itself,
    * so no caller (or `--scopes` value) can drop `offline_access` and end up
@@ -122,45 +118,27 @@ const buildAuthorizeUrl = (input: {
 };
 
 /**
- * The CLI's client id for this server: its published client metadata
- * document when the server accepts those, otherwise the cached loopback
- * registration for `serverUrl`, registering one if none exists yet.
+ * The CLI's fixed public client id on this server: the URL of the client
+ * metadata document the server publishes for it, on the issuer's origin. The
+ * CLI never registers a client of its own: the server shows a registered
+ * client as an unverified app, whatever name it gives.
  */
-const resolveClientId = async (
-  configDir: string,
+const resolveClientId = (
   serverUrl: string,
   metadata: AuthorizationServerMetadata,
-  registrationScopes: readonly string[],
-): Promise<Result<string, CliAuthError>> => {
+): Result<string, ClientDocumentUnsupportedError> => {
   const documentClientId =
     metadata.client_id_metadata_document_supported === true
       ? cliClientMetadataUrl(metadata.issuer)
       : undefined;
-  if (documentClientId) {
-    return Result.ok(documentClientId);
-  }
-
-  const cached = await getRegisteredClient(configDir, serverUrl);
-  if (cached && registeredClientSupportsScopes(cached, registrationScopes)) {
-    return Result.ok(cached.clientId);
-  }
-
-  const registered = await registerLoopbackClient(
-    metadata,
-    registrationScopes,
-    getMcpResourceUrl(serverUrl),
-  );
-  if (Result.isError(registered)) {
-    return registered;
-  }
-
-  await setRegisteredClient(
-    configDir,
-    serverUrl,
-    registered.value,
-    registrationScopes,
-  );
-  return Result.ok(registered.value);
+  return documentClientId
+    ? Result.ok(documentClientId)
+    : Result.err(
+        new ClientDocumentUnsupportedError({
+          message: `${serverUrl} cannot identify the stella CLI: its authorization server needs an https issuer that accepts client metadata documents. Use an API key (STELLA_API_KEY) for this server instead.`,
+          serverUrl,
+        }),
+      );
 };
 
 const isLoopbackCallback = (
@@ -170,6 +148,15 @@ const isLoopbackCallback = (
 type AuthorizationCode = {
   readonly code: string;
   readonly redirectUri: string;
+  /**
+   * Tells the browser that delivered the code how sign-in ended. Only the
+   * loopback redirect has a browser waiting; a pasted code has none.
+   */
+  readonly answerBrowser: (outcome: SignInOutcome) => Promise<void>;
+};
+
+const noBrowserWaiting = async (): Promise<void> => {
+  // A pasted code has no browser waiting for the outcome.
 };
 
 const awaitManualCode = async (
@@ -189,7 +176,11 @@ const awaitManualCode = async (
     );
   }
 
-  return Result.ok({ code: parsed.value.code, redirectUri });
+  return Result.ok({
+    answerBrowser: noBrowserWaiting,
+    code: parsed.value.code,
+    redirectUri,
+  });
 };
 
 /**
@@ -242,9 +233,9 @@ const awaitAuthorizationCode = async (
   }
 
   const result = await listener.waitForCallback(LOGIN_TIMEOUT_MS);
-  listener.close();
 
   if (!isLoopbackCallback(result)) {
+    listener.close();
     // Timed out waiting locally: the browser most likely isn't reachable
     // from this machine (SSH/remote dev/agent sandbox). Fall back to manual.
     io.print(
@@ -254,91 +245,45 @@ const awaitAuthorizationCode = async (
   }
 
   if (result.kind === "error") {
+    listener.close();
     return Result.err(toLoopbackCallbackError(result));
   }
 
   if (result.state !== expectedState) {
+    listener.close();
     return Result.err(
       toLoopbackCallbackError({ error: "invalid_state", kind: "error" }),
     );
   }
 
-  return Result.ok({ code: result.code, redirectUri });
+  // The listener stays open: the browser waits on the redirect until `login`
+  // reports whether the code was exchanged and the credential saved.
+  return Result.ok({
+    answerBrowser: listener.finish,
+    code: result.code,
+    redirectUri,
+  });
 };
 
-// Sequential steps with different Ok types chained via `Result.gen` +
-// `yield* Result.await(...)` (see AGENTS.md's Error Handling conventions):
-// this avoids re-wrapping every intermediate error result by hand.
-export const login = async (
-  process: NodeJS.Process,
-  options: LoginOptions,
-  boundaries: LoginBoundaries = defaultLoginBoundaries,
-): Promise<Result<LoginSuccess, CliAuthError>> =>
-  await Result.gen(async function* loginGen() {
-    const io = buildIo(process, boundaries);
-
-    const serverUrl = yield* Result.await(
-      resolveServerUrl({
-        configDir: options.configDir,
-        flagValue: options.serverFlag,
-      }),
-    );
-    const metadata = yield* Result.await(
-      discoverAuthorizationServerMetadata(serverUrl),
-    );
-    const scopes = yield* negotiateOAuthScopes({
-      advertisedScopes: metadata.scopes_supported,
-      registrationScopes: options.registrationScopes,
-      requestedScopes: [...CLI_IDENTITY_SCOPES, ...options.resourceScopes],
-      requiredScopes: options.requiredScopes,
-    });
-    const clientId = yield* Result.await(
-      resolveClientId(
-        options.configDir,
-        serverUrl,
-        metadata,
-        scopes.registrationScopes,
-      ),
-    );
-
-    const { codeChallenge, codeVerifier } = createPkcePair();
-    const state = createAuthorizationState();
-
-    if (options.orgHint) {
-      io.print(
-        `If prompted to select an organization in the browser, choose: ${options.orgHint} (the CLI cannot preselect it for you; org selection happens in the browser UI).`,
-      );
-    }
-
-    // Start the listener before building the authorize URL: the redirect_uri
-    // sent to the authorization server must be whichever one the browser
-    // will actually be redirected back to (the listener's ephemeral port, or
-    // the portless default if binding failed), and it must stay identical
-    // through to the token exchange.
-    const listener = await io.startLoopbackListener();
-    const redirectUri = listener?.redirectUri ?? LOOPBACK_REDIRECT_URI;
-
-    const authorizeUrl = buildAuthorizeUrl({
-      authorizationEndpoint: metadata.authorization_endpoint,
-      clientId,
-      codeChallenge,
-      redirectUri,
-      resource: getMcpResourceUrl(serverUrl),
-      scopes: scopes.requestedScopes,
-      state,
-    });
-
-    const callback = yield* Result.await(
-      awaitAuthorizationCode(io, authorizeUrl, redirectUri, listener, state),
-    );
-
+/** Redeems the code and builds the credential `persistLogin` stores. */
+const redeemForCredential = async (input: {
+  readonly authorization: AuthorizationCode;
+  readonly clientId: string;
+  readonly codeVerifier: string;
+  readonly metadata: AuthorizationServerMetadata;
+  readonly orgHint: string | undefined;
+  readonly scopes: readonly string[];
+  readonly serverUrl: string;
+}): Promise<Result<StoredCredential, CliAuthError>> =>
+  await Result.gen(async function* redeemGen() {
+    const { serverUrl } = input;
     const token = yield* Result.await(
       redeemAuthorizationCode({
-        clientId,
-        code: callback.code,
-        codeVerifier,
-        metadata,
-        redirectUri: callback.redirectUri,
+        clientId: input.clientId,
+        code: input.authorization.code,
+        codeVerifier: input.codeVerifier,
+        metadata: input.metadata,
+        redirectUri: input.authorization.redirectUri,
         resource: getMcpResourceUrl(serverUrl),
       }),
     );
@@ -363,27 +308,111 @@ export const login = async (
     const now = Temporal.Now.instant().epochMilliseconds;
     const credential: StoredCredential = {
       accessToken: token.access_token,
-      clientId,
+      clientId: input.clientId,
       createdAt: now,
       ...(identity?.email ? { email: identity.email } : {}),
       expiresAt: now + token.expires_in * 1000,
       ...(identity?.name ? { name: identity.name } : {}),
       orgId: claims.org_id,
-      ...(options.orgHint ? { orgLabel: options.orgHint } : {}),
+      ...(input.orgHint ? { orgLabel: input.orgHint } : {}),
       refreshToken: token.refresh_token,
-      scope: token.scope ?? scopes.requestedScopes.join(" "),
+      scope: token.scope ?? input.scopes.join(" "),
       serverUrl,
       tokenType: token.token_type,
       updatedAt: now,
     };
+    return Result.ok(credential);
+  });
 
-    await persistLogin({ configDir: options.configDir, credential });
+// Sequential steps with different Ok types chained via `Result.gen` +
+// `yield* Result.await(...)` (see AGENTS.md's Error Handling conventions):
+// this avoids re-wrapping every intermediate error result by hand.
+export const login = async (
+  process: NodeJS.Process,
+  options: LoginOptions,
+  boundaries: LoginBoundaries = defaultLoginBoundaries,
+): Promise<Result<LoginSuccess, CliAuthError>> =>
+  await Result.gen(async function* loginGen() {
+    const io = buildIo(process, boundaries);
+
+    const serverUrl = yield* Result.await(
+      resolveServerUrl({
+        configDir: options.configDir,
+        flagValue: options.serverFlag,
+      }),
+    );
+    const metadata = yield* Result.await(
+      discoverAuthorizationServerMetadata(serverUrl),
+    );
+    const scopes = yield* negotiateOAuthScopes({
+      advertisedScopes: metadata.scopes_supported,
+      requestedScopes: [...CLI_IDENTITY_SCOPES, ...options.resourceScopes],
+      requiredScopes: options.requiredScopes,
+    });
+    const clientId = yield* resolveClientId(serverUrl, metadata);
+
+    const { codeChallenge, codeVerifier } = createPkcePair();
+    const state = createAuthorizationState();
+
+    if (options.orgHint) {
+      io.print(
+        `If prompted to select an organization in the browser, choose: ${options.orgHint} (the CLI cannot preselect it for you; org selection happens in the browser UI).`,
+      );
+    }
+
+    // Start the listener before building the authorize URL: the redirect_uri
+    // sent to the authorization server must be whichever one the browser
+    // will actually be redirected back to (the listener's ephemeral port, or
+    // the portless default if binding failed), and it must stay identical
+    // through to the token exchange.
+    const listener = await io.startLoopbackListener({ expectedState: state });
+    const redirectUri = listener?.redirectUri ?? LOOPBACK_REDIRECT_URI;
+
+    const authorizeUrl = buildAuthorizeUrl({
+      authorizationEndpoint: metadata.authorization_endpoint,
+      clientId,
+      codeChallenge,
+      redirectUri,
+      resource: getMcpResourceUrl(serverUrl),
+      scopes,
+      state,
+    });
+
+    const authorization = yield* Result.await(
+      awaitAuthorizationCode(io, authorizeUrl, redirectUri, listener, state),
+    );
+
+    const credential = await redeemForCredential({
+      authorization,
+      clientId,
+      codeVerifier,
+      metadata,
+      orgHint: options.orgHint,
+      scopes,
+      serverUrl,
+    });
+    if (Result.isError(credential)) {
+      await authorization.answerBrowser({ kind: "failed", step: "exchange" });
+      return Result.err(credential.error);
+    }
+
+    const saved = await persistLogin({
+      configDir: options.configDir,
+      credential: credential.value,
+    });
+    if (Result.isError(saved)) {
+      await authorization.answerBrowser({ kind: "failed", step: "save" });
+      return Result.err(saved.error);
+    }
+
+    // Only now, with the credential on disk, may the browser say "Signed in".
+    await authorization.answerBrowser({ kind: "signed_in" });
 
     return Result.ok({
-      expiresAt: credential.expiresAt,
-      grantedScopes: credential.scope,
-      hasRefreshToken: Boolean(credential.refreshToken),
-      orgId: credential.orgId,
+      expiresAt: credential.value.expiresAt,
+      grantedScopes: credential.value.scope,
+      hasRefreshToken: Boolean(credential.value.refreshToken),
+      orgId: credential.value.orgId,
       serverUrl,
     });
   });

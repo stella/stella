@@ -11,6 +11,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { TASK_LINK_AUDIT_CHANGE } from "@/api/lib/tasks/entity-link-audit";
 
 const deleteEntityLinkBodySchema = v.object({
   linkId: resourceIdSchema("entityLink"),
@@ -94,8 +95,10 @@ export const deleteEntityLinkHandler = async function* ({
         resourceId: taskEntityId,
         metadata: {
           kind: "task",
-          change: "entity-link-removed",
+          change: TASK_LINK_AUDIT_CHANGE.REMOVED,
           linkId: body.linkId,
+          sourceEntityId: link.sourceEntityId,
+          targetEntityId: link.targetEntityId,
         },
       });
     }),

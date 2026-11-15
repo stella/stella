@@ -14,6 +14,7 @@ import type {
 } from "@/api/lib/review-organization/reset";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import type { SystemAuditCounts } from "@/api/lib/system-audit/actors";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -79,7 +80,7 @@ type ReviewResetTaskOptions = {
 export const createResetReviewOrganizationTask =
   ({
     readConfig = readReviewOrganizationConfig,
-    dependencies,
+    dependencies = { flushWorkspaceSearchRepairs },
     rlsDatabase,
   }: ReviewResetTaskOptions = {}): ReviewResetTask =>
   async ({ db, runId, signal, logger }) => {

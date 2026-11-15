@@ -12,7 +12,7 @@ const ROUTES_DIRECTORY = path.resolve(import.meta.dirname, "../../src/routes");
 const TIME_BILLING_HOOK = "@/hooks/use-time-billing-preview";
 const MIXED_ROUTE_REASONS = new Map([
   [
-    "/_protected/admin",
+    "/_protected/settings/organization",
     "Only matched settings admission and the time-policy prefetch are gated.",
   ],
   [

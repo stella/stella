@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_NSA",
   "key": "pl-nsa",
-  "parserVersion": 10,
+  "parserVersion": 12,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage."
+    "reason": "Dependency patch tracking only: @tanstack/ai is reached through the desktop runner wire schema in transaction infrastructure, not parser execution. No parser-owned value changes; the matching no-stored-row-effect declaration requires no replay."
   }
 }

@@ -84,7 +84,7 @@
 import { panic } from "better-result";
 import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
-import * as ts from "tsrs/unstable/ast";
+import * as ts from "tsrs/ast";
 import {
   API,
   type Checker,
@@ -93,7 +93,7 @@ import {
   type Symbol as CompilerSymbol,
   type Type,
   TypeFlags,
-} from "tsrs/unstable/async";
+} from "tsrs/async";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";

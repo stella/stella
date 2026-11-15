@@ -2,7 +2,7 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { API } from "tsrs/unstable/async";
+import { API } from "tsrs/async";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
@@ -44,8 +44,12 @@ export const deriveApiTestPartition = async (directory: string) => {
     const surface = await readApiTypecheckConfig(
       path.join(api, "tsconfig.declarations.json"),
     );
-    const declared = new Set(surface.fileNames);
-    const testFiles = new Set(parsed.fileNames.filter(isTest));
+    // The compiler brands its paths; the census compares them with resolved
+    // module paths, which it returns as plain strings.
+    const declared: ReadonlySet<string> = new Set(surface.fileNames);
+    const testFiles: ReadonlySet<string> = new Set(
+      parsed.fileNames.filter(isTest),
+    );
     const modules = new Map<
       string,
       { dependencies: Set<string>; unsafe: boolean }
@@ -139,7 +143,9 @@ export const deriveApiTestPartition = async (directory: string) => {
     // A safe test imported by source-owned code still belongs to source: exclude
     // every such root from the isolated project, including transitive test imports.
     const isolated = new Set(independent);
-    const sourceQueue = parsed.fileNames.filter((file) => !isolated.has(file));
+    const sourceQueue: string[] = parsed.fileNames.filter(
+      (file) => !isolated.has(file),
+    );
     const visitedSource = new Set<string>();
     for (const file of sourceQueue) {
       if (!file || visitedSource.has(file) || /\.d\.[cm]?ts$/u.test(file)) {

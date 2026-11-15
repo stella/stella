@@ -22,6 +22,7 @@ const ACCOUNT_EXPORT_ENQUEUE_FAILED = failureSink({
 
 const requestPersonalDataExport = createSafeSessionHandler(
   {
+    accountScope: "stella:account_export_write",
     accountAccess: ACCOUNT_ACCESS.accountControl,
     contract: "patch",
     access: "write",

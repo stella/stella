@@ -4,6 +4,7 @@ import * as fc from "fast-check";
 import * as v from "valibot";
 
 import {
+  defaultTranscriptionModelId,
   isTranscriptionModelId,
   TRANSCRIPTION_MODELS,
 } from "@stll/ai-catalog/transcription";
@@ -531,6 +532,45 @@ describe("dictation operation request matrix", () => {
     }
     expect(result.error).toMatchObject({
       code: "transcription_model_unavailable",
+      message: "This transcription model is not available in your region",
+      hint: "Transcription is not offered in your organization's region yet.",
+    });
+    expect(f.requests).toEqual([]);
+    expect(f.counts()).toEqual({ credentials: 0, preflights: 0 });
+  });
+
+  test("a request naming no model is sent to the region's default and settled under it", async () => {
+    const f = fixture();
+    const context = {
+      ...f.context,
+      body: { ...f.context.body, modelId: undefined },
+    } as const satisfies DictationContext;
+    const result = await executeDictation(context, f.dependencies);
+    if (result.isErr()) {
+      throw result.error;
+    }
+    expect(defaultTranscriptionModelId("eu")).toBe(MODEL);
+    expect(f.requests.at(0)?.body).toMatchObject({ model: MODEL });
+    expect(f.settlements.at(0)?.result).toEqual({
+      modelId: MODEL,
+      durationMs: 1234,
+    });
+  });
+
+  test("a request naming no model in a region without one is refused before any provider work", async () => {
+    const f = fixture();
+    const context = {
+      ...f.context,
+      managedAIResidency: "us",
+      body: { ...f.context.body, modelId: undefined },
+    } as const satisfies DictationContext;
+    const result = await executeDictation(context, f.dependencies);
+    if (result.isOk()) {
+      throw new TypeError("Expected regional refusal");
+    }
+    expect(result.error).toMatchObject({
+      code: "transcription_model_unavailable",
+      message: "No transcription model is available in your region",
     });
     expect(f.requests).toEqual([]);
     expect(f.counts()).toEqual({ credentials: 0, preflights: 0 });

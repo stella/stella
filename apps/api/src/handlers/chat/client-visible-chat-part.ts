@@ -6,7 +6,12 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 
+import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
 import { isTanStackStreamEventType } from "@/api/handlers/chat/tanstack-chat-lifecycle";
+import {
+  projectSupersededPart,
+  supersededCallOutputs,
+} from "@/api/handlers/chat/tool-result-retention";
 import type { ChatPart } from "@/api/handlers/chat/types";
 
 /** The client sees where an unknown stored part sits, never its raw payload. */
@@ -54,6 +59,59 @@ const clientVisibleSnapshotMessage = (
   return message;
 };
 
+const snapshotParts = (message: SnapshotMessage): unknown[] | null =>
+  (message.role === "assistant" ||
+    message.role === "system" ||
+    message.role === "user") &&
+  "parts" in message &&
+  Array.isArray(message.parts)
+    ? message.parts
+    : null;
+
+/**
+ * A snapshot's messages with each superseded tool result projected, as the
+ * message stores it (`chat-tool-result-retention`): on the parts of the
+ * message that made the call, and on the `tool` message the engine carries
+ * beside them. Without it, a snapshot of a paused browsing turn would carry
+ * every page the turn read.
+ */
+const retainSnapshotToolResults = (
+  messages: readonly SnapshotMessage[],
+): readonly SnapshotMessage[] => {
+  const projections = new Map<string, unknown>();
+  const withParts = messages.map((message) => {
+    const parts = snapshotParts(message);
+    if (parts === null) {
+      return message;
+    }
+    const superseded = supersededCallOutputs(parts.filter(isChatPart));
+    if (superseded.size === 0) {
+      return message;
+    }
+    for (const [callId, projection] of superseded) {
+      projections.set(callId, projection);
+    }
+    const visible = {
+      parts: parts.map((part) =>
+        isChatPart(part) ? projectSupersededPart(part, superseded) : part,
+      ),
+    };
+    return { ...message, ...visible };
+  });
+  if (projections.size === 0) {
+    return messages;
+  }
+  return withParts.map((message) => {
+    if (message.role !== "tool") {
+      return message;
+    }
+    const projection = projections.get(message.toolCallId);
+    return projection === undefined
+      ? message
+      : { ...message, content: JSON.stringify(projection) };
+  });
+};
+
 /** Last server boundary for AG-UI events carrying stored message parts. */
 export const clientVisibleStreamChunk = (chunk: StreamChunk): StreamChunk => {
   // An event the engine emits beyond the SDK's types carries no stored part.
@@ -62,7 +120,9 @@ export const clientVisibleStreamChunk = (chunk: StreamChunk): StreamChunk => {
   }
   switch (chunk.type) {
     case EventType.MESSAGES_SNAPSHOT: {
-      const messages = chunk.messages.map(clientVisibleSnapshotMessage);
+      const messages = retainSnapshotToolResults(chunk.messages).map(
+        clientVisibleSnapshotMessage,
+      );
       return messages.every(
         (message, index) => message === chunk.messages[index],
       )

@@ -374,9 +374,9 @@ export const resolveClientAddress = (
     return { address: peer, source: CLIENT_ADDRESS_SOURCE.peer };
   }
   const edgeHeader =
-    options?.edgeHeader === undefined
-      ? (env.STELLA_CLIENT_ADDRESS_HEADER ?? null)
-      : options.edgeHeader;
+    options?.edgeHeader !== undefined
+      ? options.edgeHeader
+      : (env.STELLA_CLIENT_ADDRESS_HEADER ?? null);
   return (
     addressFromTrustedPeer({
       request,
@@ -473,9 +473,9 @@ export const resolveSignupRateLimitClientIp = (
   }
 
   const edgeHeader =
-    options?.edgeHeader === undefined
-      ? (env.STELLA_CLIENT_ADDRESS_HEADER ?? null)
-      : options.edgeHeader;
+    options?.edgeHeader !== undefined
+      ? options.edgeHeader
+      : (env.STELLA_CLIENT_ADDRESS_HEADER ?? null);
   return (
     addressFromTrustedPeer({
       request,

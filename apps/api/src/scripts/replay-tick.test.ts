@@ -11,8 +11,9 @@ import { ebsBalance } from "@stll/db-load-gate/indicators";
 import { readReplayTickEnvironment } from "@/api/env-replay";
 import type { BackgroundReplayTickReport } from "@/api/handlers/case-law/ingestion/background-replay";
 import {
+  BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
-  REPLAY_HEALTH_CONFIG,
+  replayHealthConfig,
 } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -138,16 +139,16 @@ describe("scheduled replay entrypoint", () => {
   // stays a reviewed step of its own. The committed map's type already admits
   // no enrolled source, so this checks the preview budget.
   test("committed enrolment only previews, within the preview budget, and enrols nothing", () => {
-    const previews = Object.values(REPLAY_ENROLMENT).filter(
-      ({ mode }) => mode !== "off",
-    );
-    for (const preview of previews) {
-      expect(preview).toEqual({ mode: "dry-run", dailyBudget: 10_000 });
+    for (const policy of Object.values(REPLAY_ENROLMENT)) {
+      if (policy.mode === "off") {
+        continue;
+      }
+      expect(policy.mode).toBe("dry-run");
+      expect(policy.dailyBudget).toBeLessThanOrEqual(
+        BACKGROUND_REPLAY_LIMITS.maxDailyBudget,
+      );
     }
-    expect(REPLAY_ENROLMENT[ADAPTER_KEYS.CZ_US]).toEqual({
-      mode: "dry-run",
-      dailyBudget: 10_000,
-    });
+    expect(REPLAY_ENROLMENT[ADAPTER_KEYS.CZ_US].mode).toBe("dry-run");
   });
 
   test("default-off environment, global kill and unenrolled sources perform no setup", async () => {
@@ -622,8 +623,8 @@ describe("replay runtime boundaries", () => {
 describe("replay load hysteresis", () => {
   test("preflight preserves a load hold until the configured resume floor", async () => {
     let clock = Date.parse("2026-10-02T10:00:00Z");
-    let balance = REPLAY_HEALTH_CONFIG.hardFloor - 1;
-    let saved = initialBatchState(REPLAY_HEALTH_CONFIG);
+    let balance = replayHealthConfig().hardFloor - 1;
+    let saved = initialBatchState(replayHealthConfig());
     const gate = createReplayPreflightGate({
       clock: () => clock,
       loadState: async () => saved,
@@ -632,7 +633,7 @@ describe("replay load hysteresis", () => {
       },
       readVerdict: async () => {
         const signal = await ebsBalance({
-          config: REPLAY_HEALTH_CONFIG,
+          config: replayHealthConfig(),
           now: () => clock,
           read: async () => ({
             byteBalancePct: balance,
@@ -646,11 +647,11 @@ describe("replay load hysteresis", () => {
     expect((await gate.readVerdict()).kind).toBe("unknown");
     expect(saved.holdCause).toBe("load");
     clock = (saved.holdUntil ?? clock) + 1;
-    balance = REPLAY_HEALTH_CONFIG.resumeFloor - 1;
+    balance = replayHealthConfig().resumeFloor - 1;
     expect((await gate.readVerdict()).kind).toBe("unknown");
     expect(saved.holdCause).toBe("load");
     clock = (saved.holdUntil ?? clock) + 1;
-    balance = REPLAY_HEALTH_CONFIG.resumeFloor;
+    balance = replayHealthConfig().resumeFloor;
     expect((await gate.readVerdict()).kind).toBe("normal");
     expect(saved.holdCause).toBeNull();
   });

@@ -18,6 +18,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { resolveRate } from "./rates";
 
@@ -37,7 +38,7 @@ if (!databaseUrl || !runPostgres) {
     const rateTableId = createSafeId<"rateTable">();
     const activityCodeId = createSafeId<"billingCode">();
     cleanUp(async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
     });
     cleanUp(async () => {
       await db.delete(user).where(eq(user.id, userId));

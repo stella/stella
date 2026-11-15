@@ -3,10 +3,10 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { aiUnavailableResponse } from "@/__fixtures__/ai-availability";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const originalFetch = globalThis.fetch;
@@ -237,7 +237,7 @@ test("member can change a manual bulk draft's content type and save while AI dra
         ],
       },
     ]);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("dialog") === null).toBe(true);
   });
   expect(unexpectedRequests).toEqual([]);
 });

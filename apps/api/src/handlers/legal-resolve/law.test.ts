@@ -13,6 +13,7 @@ import {
 import {
   resolveCzechLaw,
   resolveLawCitation,
+  resolveSlovakLaw,
 } from "@/api/handlers/legal-resolve/law";
 import type { resolveStatuteExpression } from "@/api/handlers/legislation/by-eli";
 import type { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
@@ -188,6 +189,75 @@ describe("law citation resolution", () => {
     },
   );
 
+  test.each([
+    ["čl. 38", "cl_38"],
+    ["Čl. 95", "cl_95"],
+    ["článku 4", "cl_4"],
+    ["čl.3a", "cl_3a"],
+  ])("reads the article %s as an article", async (section, anchor) => {
+    expect(
+      await resolveCzechLaw(
+        { collection: "sb", year: "1993", number: "2", section },
+        dependencies(anchor),
+      ),
+    ).toMatchObject({
+      status: "resolved",
+      document: { section: `čl. ${anchor.slice("cl_".length)}` },
+    });
+  });
+
+  test("reads a Slovak article in the Slovak anchor grammar", async () => {
+    expect(
+      await resolveSlovakLaw(
+        {
+          collection: "Z. z.",
+          year: "2005",
+          number: "300",
+          section: "článok 46",
+        },
+        dependencies("clanok-46"),
+      ),
+    ).toMatchObject({ status: "resolved", document: { section: "čl. 46" } });
+  });
+
+  test("reads a bare number as the article of an act without that section", async () => {
+    const asked: string[] = [];
+    const result = await resolveCzechLaw(
+      { collection: "sb", year: "1993", number: "1", section: "95" },
+      {
+        ...dependencies(),
+        readPreview: (async (input) => {
+          asked.push(input.anchor);
+          return input.anchor === "cl_95"
+            ? { ...preview, url: "https://example.test/cl_95" }
+            : status(404, { message: "Provision not found" });
+        }) satisfies typeof readProvisionPreviewHandler,
+      },
+    );
+    expect(asked).toEqual(["par_95", "cl_95"]);
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: { section: "čl. 95" },
+    });
+  });
+
+  test("does not read a cited article as a section", async () => {
+    const asked: string[] = [];
+    expect(
+      await resolveCzechLaw(
+        { collection: "sb", year: "1993", number: "2", section: "čl. 38" },
+        {
+          ...dependencies(),
+          readPreview: (async (input) => {
+            asked.push(input.anchor);
+            return status(404, { message: "Provision not found" });
+          }) satisfies typeof readProvisionPreviewHandler,
+        },
+      ),
+    ).toEqual({ status: "not_found", reason: "unknown_section" });
+    expect(asked).toEqual(["cl_38"]);
+  });
+
   test("uses only the supported Collection of Laws identifier", async () => {
     let resolveCount = 0;
     const checkedDependencies = {
@@ -276,7 +346,7 @@ type WrittenCitationRead = {
 type ReadWrittenCitationOptions = {
   citation: string;
   asOf?: string;
-  namedWorks?: readonly { eli: string }[];
+  namedWorks?: readonly { eli: string; validUntil: string | null }[];
 };
 
 /** Resolves a written citation, recording the ELI opened, names read and misses reported. */
@@ -340,7 +410,7 @@ describe("written law citations", () => {
   test("a short title the profile does not list is read from the corpus's titles", async () => {
     const read = await readWrittenCitation({
       citation: "§ 2 odst. 4 písm. b) zákona o obětech trestných činů",
-      namedWorks: [{ eli: VICTIMS_ACT_ELI }],
+      namedWorks: [{ eli: VICTIMS_ACT_ELI, validUntil: null }],
     });
     expect(read.namesRead).toEqual(["zákona o obětech trestných činů"]);
     expect(read.eli).toBe(VICTIMS_ACT_ELI);
@@ -364,14 +434,42 @@ describe("written law citations", () => {
     const read = await readWrittenCitation({
       citation: "zákona o obětech trestných činů",
       namedWorks: [
-        { eli: VICTIMS_ACT_ELI },
-        { eli: CONSTITUTIONAL_COURT_ACT_ELI },
+        { eli: VICTIMS_ACT_ELI, validUntil: null },
+        { eli: CONSTITUTIONAL_COURT_ACT_ELI, validUntil: null },
       ],
     });
     expect(read.response).toEqual({
       status: "not_found",
       reason: "unknown_document",
     });
+    expect(read.reported).toEqual([]);
+  });
+
+  test("the citing date picks the act a name meant then", async () => {
+    const read = await readWrittenCitation({
+      citation: "zákona o obětech trestných činů",
+      namedWorks: [
+        {
+          eli: "https://www.e-sbirka.cz/eli/cz/sb/1963/57",
+          validUntil: "1976-01-01",
+        },
+        { eli: VICTIMS_ACT_ELI, validUntil: null },
+      ],
+    });
+    expect(read.eli).toBe(VICTIMS_ACT_ELI);
+  });
+
+  test("an act named only before it was issued, or after it ended, is not opened", async () => {
+    const read = await readWrittenCitation({
+      citation: "zákona o obětech trestných činů",
+      namedWorks: [
+        {
+          eli: "https://www.e-sbirka.cz/eli/cz/sb/1963/57",
+          validUntil: "1976-01-01",
+        },
+      ],
+    });
+    expect(read.eli).toBeUndefined();
     expect(read.reported).toEqual([]);
   });
 

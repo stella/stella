@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import {
   parseDocumentAst,
   resolveDocumentHeadingAnchor,
@@ -9,6 +10,7 @@ import {
 import { Button } from "@stll/ui/button";
 import { Columns2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { selectChangedVersions } from "@/features/statutes/provision-diff";
@@ -55,9 +57,15 @@ export const ProvisionHistory = ({
   const ast =
     statute === undefined ? null : parseDocumentAst(statute.documentAst);
   const resolvedAnchor =
-    ast === null
+    statute === undefined || ast === null
       ? null
-      : (resolveDocumentHeadingAnchor(ast.blocks, anchorId)?.anchorId ?? null);
+      : (resolveDocumentHeadingAnchor(
+          {
+            blocks: ast.blocks,
+            scheme: statuteAnchorSchemeFor(statute.country),
+          },
+          anchorId,
+        )?.anchorId ?? null);
   const { data, fetchNextPage, hasNextPage, isError, isFetchingNextPage } =
     useInfiniteQuery({
       ...provisionHistoryOptions({
@@ -172,7 +180,7 @@ export const ProvisionHistory = ({
                   title={t("statutes.compareSideBySide")}
                   {...comparisonTarget}
                 >
-                  <span className="min-w-0 truncate">{label}</span>
+                  <TruncatedText>{label}</TruncatedText>
                   <Columns2Icon aria-hidden="true" className="size-3.5" />
                 </Link>
               )}

@@ -81,6 +81,10 @@ git -C "$base_dir" submodule update --init --recursive
   else
     bash "$retry_script" bun ci --ignore-scripts
   fi
+  # The API program imports CLI sources that read untracked generated modules.
+  if [[ -f packages/scripts/src/prepare-cli-runtime.ts ]]; then
+    bun --cwd=packages/cli run codegen:runtime
+  fi
   # Older merge bases still commit the runtime aggregates.
   if [[ -f apps/api/scripts/generate-capability-runtime.ts ]]; then
     bun --filter @stll/api generate:capability-runtime

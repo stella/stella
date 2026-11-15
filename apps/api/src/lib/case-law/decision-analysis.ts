@@ -56,7 +56,10 @@ export const readDecisionAnalysis = definePublicLawSharedQuery(
     const [row] = await tx
       .select({
         ...decisionAnalysisColumns,
+        // The join key keeps a matched source from reading back as no source
+        // when its other columns are NULL; consumers ignore it.
         source: {
+          id: caseLawSources.id,
           adapterKey: caseLawSources.adapterKey,
           descriptor: caseLawSources.descriptor,
         },

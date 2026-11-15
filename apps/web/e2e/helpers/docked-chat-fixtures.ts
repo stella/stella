@@ -1,5 +1,4 @@
 import type { APIRequestContext, Page } from "@playwright/test";
-import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
@@ -20,8 +19,11 @@ import {
   dockedChatTitle,
 } from "./docked-chat-history";
 import { createUploadedDocumentRoute } from "./document";
+import { apiJson, respond } from "./route-mock";
 import { expect } from "./test";
 import { createTestWorkspace, deleteTestWorkspace } from "./workspace";
+
+const createdContactSchema = v.object({ id: v.string() });
 
 const sessionSchema = v.object({
   user: v.object({ id: v.string() }),
@@ -30,14 +32,17 @@ const sessionSchema = v.object({
 
 export const createDockedChatWorld = async (request: APIRequestContext) => {
   const workspace = await createTestWorkspace(request, "dock-geometry");
-  const contactId = randomUUID();
+  let contactId: string | undefined;
   let templateId: string | undefined;
   try {
-    await apiPut(request, "/contacts", {
-      id: contactId,
-      type: "person",
-      displayName: "Dock geometry fixture",
-    });
+    const contact = v.parse(
+      createdContactSchema,
+      await apiPut(request, "/contacts", {
+        type: "person",
+        displayName: "Dock geometry fixture",
+      }),
+    );
+    contactId = contact.id;
     const document = await createUploadedDocumentRoute({
       request,
       workspace,
@@ -82,7 +87,7 @@ export const createDockedChatWorld = async (request: APIRequestContext) => {
     return {
       workspace,
       document,
-      contactId,
+      contactId: contact.id,
       templateId: template.id,
       session,
       fileTab,
@@ -91,7 +96,9 @@ export const createDockedChatWorld = async (request: APIRequestContext) => {
     if (templateId !== undefined) {
       await apiDelete(request, `/templates/${templateId}`);
     }
-    await apiDelete(request, `/contacts/${contactId}`);
+    if (contactId !== undefined) {
+      await apiDelete(request, `/contacts/${contactId}`);
+    }
     await deleteTestWorkspace(request, workspace.id);
     throw error;
   }
@@ -113,20 +120,47 @@ export const installDockedChatHistory = async (page: Page) => {
   await page.route(
     /\/v1\/chat\/workspaces\/[^/]+\/file-thread(?:\?|$)/u,
     async (route) => {
-      await route.fulfill({ json: dockedChatFileThreadPage });
+      await respond(
+        route,
+        apiJson(
+          "v1/chat/workspaces/:workspaceId/file-thread",
+          "get",
+          dockedChatFileThreadPage,
+        ),
+      );
     },
   );
   await page.route("**/v1/chat/template-thread", async (route) => {
-    await route.fulfill({ json: dockedChatTemplateThread });
+    await respond(
+      route,
+      apiJson("v1/chat/template-thread", "post", dockedChatTemplateThread),
+    );
   });
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-    await route.fulfill({ json: dockedChatMessagePage });
+    await respond(
+      route,
+      apiJson(
+        "v1/chat/threads/:threadId/messages",
+        "get",
+        dockedChatMessagePage,
+      ),
+    );
   });
   await page.route("**/v1/chat/threads/*/suggested-prompts*", async (route) => {
-    await route.fulfill({ json: dockedChatSuggestedPrompts });
+    await respond(
+      route,
+      apiJson(
+        "v1/chat/threads/:threadId/suggested-prompts",
+        "post",
+        dockedChatSuggestedPrompts,
+      ),
+    );
   });
   await page.route("**/v1/chat/threads/*/title*", async (route) => {
-    await route.fulfill({ json: dockedChatTitle });
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/title", "get", dockedChatTitle),
+    );
   });
 };
 

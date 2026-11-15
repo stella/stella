@@ -2,10 +2,13 @@ import { afterEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { createHttpApp } from "@/api/http/app";
+import type { RequestContext } from "@/api/http/context";
+import { HTTP_FAILURE, HttpFailureError } from "@/api/http/errors";
 import { routes } from "@/api/http/route";
 import type { Middleware, RouteConfig } from "@/api/http/route";
 import {
   deploymentFeatureGate,
+  deploymentFeatureGateExcept,
   deploymentFeatureGateFlag,
   localDevelopmentGate,
 } from "@/api/lib/deployment-feature-route";
@@ -13,6 +16,7 @@ import { defineEndpoint } from "@/api/lib/endpoints";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const FLAG = "FEATURE_SHAREPOINT";
 
@@ -125,5 +129,58 @@ describe("deploymentFeatureGate", () => {
     expect(deploymentFeatureGateFlag(deploymentFeatureGate(FLAG))).toBe(FLAG);
     expect(deploymentFeatureGateFlag(localDevelopmentGate)).toBeUndefined();
     expect(deploymentFeatureGateFlag(errorBoundary)).toBeUndefined();
+  });
+});
+
+describe("deploymentFeatureGateExcept", () => {
+  const ADMITTED = '{"type":"exception"}';
+  const gate = deploymentFeatureGateExcept(
+    FLAG,
+    { maxBytes: 64, admits: (body) => body === ADMITTED },
+    { isEnabled: () => false },
+  );
+  /** Runs the disabled gate over `body`; `inner` records the request it got. */
+  const pass = async (body: string | ReadableStream<Uint8Array>) => {
+    const received: string[] = [];
+    // The refusal is thrown for the error boundary to answer.
+    const thrown = await gate(
+      asTestRaw<RequestContext>({
+        request: new Request("http://localhost/feature", {
+          method: "PUT",
+          body,
+        }),
+      }),
+      async (replacement) => {
+        received.push((await replacement?.request.text()) ?? "");
+        return new Response(null, { status: 204 });
+      },
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    return { thrown, received };
+  };
+
+  test("hands the route the admitted body it read", async () => {
+    const { thrown, received } = await pass(ADMITTED);
+
+    expect(thrown).toBeNull();
+    expect(received).toEqual([ADMITTED]);
+  });
+
+  test("answers an absent route when the body cannot be read", async () => {
+    const encoder = new TextEncoder();
+    const cutOff = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"type"'));
+        controller.error(new Error("The upload was cut off"));
+      },
+    });
+
+    const { thrown, received } = await pass(cutOff);
+
+    expect(received).toEqual([]);
+    expect(thrown).toBeInstanceOf(HttpFailureError);
+    expect(thrown).toMatchObject({ kind: HTTP_FAILURE.notFound });
   });
 });

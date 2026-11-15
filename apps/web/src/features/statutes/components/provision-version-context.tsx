@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 
 import {
   StatuteStatusDot,
@@ -72,13 +73,14 @@ export const ProvisionVersionContext = ({
       {currentVersionId !== undefined && currentVersionId !== documentId && (
         // An underlined text action, like the way into the full text below
         // it, so the status line stays one line of text rather than a toolbar.
-        <button
-          className="text-foreground hover:decoration-foreground focus-visible:ring-ring decoration-foreground-placeholder relative shrink-0 cursor-pointer rounded-xs underline underline-offset-2 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
-          onClick={() => onVersionChange(currentVersionId)}
-          type="button"
-        >
-          {t("statutes.currentWording")}
-        </button>
+        <span className="text-foreground shrink-0">
+          <Button
+            onClick={() => onVersionChange(currentVersionId)}
+            size="inline"
+          >
+            {t("statutes.currentWording")}
+          </Button>
+        </span>
       )}
     </div>
   );

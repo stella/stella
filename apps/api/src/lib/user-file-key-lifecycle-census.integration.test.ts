@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
-import JSZip from "jszip";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { createTestState } from "@stll/test-state";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
@@ -34,6 +34,13 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { processEntityDeletionCleanupRequest } from "@/api/lib/entity-deletion-cleanup-queue";
+import {
+  claimNextEntityDeletionEffectChunk,
+  completeEntityDeletionEffectChunk,
+  ensureEntityDeletionEffectChunks,
+  failEntityDeletionEffectChunk,
+} from "@/api/lib/entity-deletion-effect-store";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import {
   recordContentDeliveryReceipt,
@@ -44,6 +51,7 @@ import {
   reserveOrganizationFileBytes,
 } from "@/api/lib/files/organization-file-usage";
 import { reconcileAbandonedOrganizationFileReservations } from "@/api/lib/files/organization-file-usage-reconcile";
+import { deleteS3Keys } from "@/api/lib/files/utils";
 import { recordOrganizationStorageTeardown } from "@/api/lib/organization-storage-teardown";
 import { userFileUsageObjects } from "@/api/scripts/backfill-organization-file-usage.helpers";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -54,6 +62,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -276,9 +285,7 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
           fixture.organizationId,
         ),
       );
-    await database
-      .delete(organization)
-      .where(eq(organization.id, fixture.organizationId));
+    await deleteOrganizationsForTest(database, [fixture.organizationId]);
     await database.delete(user).where(eq(user.id, fixture.userId));
     await releaseTestDb();
   });
@@ -309,6 +316,7 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
         await deleteUserFiles({
           tx: asTestRaw<Transaction>(tx),
           currentUserId: fixture.userId,
+          retainedWorkspaceIds: [],
           s3KeysToDelete: accountDeletionKeys,
         });
         tx.rollback();
@@ -359,10 +367,10 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
     });
     expect(opened.toSorted()).toEqual(fixture.fileKeys.toSorted());
     const bytes = published.at(0) ?? panic("Archive publication required");
-    const archive = await JSZip.loadAsync(bytes);
-    const exportedFiles = Object.keys(archive.files).filter((name) =>
-      name.startsWith("files/"),
-    );
+    const archive = await ZipArchive.read(bytes);
+    const exportedFiles = archive
+      .paths()
+      .filter((name) => name.startsWith("files/"));
     expect(exportedFiles).toHaveLength(2);
   });
 
@@ -536,8 +544,22 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
       .where(inArray(userFiles.id, fixture.invalidFileIds));
   });
 
-  test("thread deletion removes both stored key forms and thumbnails", async () => {
+  test("thread deletion queues both stored key forms and thumbnails for the cleanup worker", async () => {
     testState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
+    const organizationRequests = async () =>
+      await database
+        .select({
+          id: entityDeletionCleanupRequests.id,
+          s3Keys: entityDeletionCleanupRequests.s3Keys,
+        })
+        .from(entityDeletionCleanupRequests)
+        .where(
+          eq(
+            entityDeletionCleanupRequests.organizationId,
+            fixture.organizationId,
+          ),
+        );
+    const earlier = new Set((await organizationRequests()).map(({ id }) => id));
     const result = await deleteThread.handler(
       contextFor(deleteThread, {
         params: { threadId: fixture.threadId },
@@ -546,6 +568,33 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
       }),
     );
     expect(result).toEqual({});
+    const queued = (await organizationRequests()).filter(
+      ({ id }) => !earlier.has(id),
+    );
+    expect(queued.flatMap(({ s3Keys }) => s3Keys).toSorted()).toEqual(
+      fixture.expectedKeys,
+    );
+    const effectDb =
+      asTestRaw<Parameters<typeof claimNextEntityDeletionEffectChunk>[1]>(
+        database,
+      );
+    await Promise.all(
+      queued.map(
+        async ({ id }) =>
+          await processEntityDeletionCleanupRequest(id, {
+            claimChunk: async (requestId) =>
+              await claimNextEntityDeletionEffectChunk(requestId, effectDb),
+            completeChunk: async (claim) =>
+              await completeEntityDeletionEffectChunk(claim, effectDb),
+            deleteS3Keys,
+            ensureChunks: async (requestId) =>
+              await ensureEntityDeletionEffectChunks(requestId, effectDb),
+            failChunk: async (claim, error) =>
+              await failEntityDeletionEffectChunk(claim, error, effectDb),
+            storageDeleteTimeoutMs: 10_000,
+          }),
+      ),
+    );
     for (const key of fixture.expectedKeys) {
       expect(fake.objects.has(`${envBase.S3_BUCKET}/${key}`)).toBe(false);
     }

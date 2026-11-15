@@ -5,6 +5,7 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { PencilIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { plainDateEpoch } from "@/components/billing/format-plain-date";
 import { timeEntryActionLabel } from "@/components/billing/time-entry-copy.logic";
@@ -118,17 +119,24 @@ const EntryRow = ({
             {tDay("internalWork")}
           </span>
         ) : (
-          <Link
-            className="text-muted-foreground block truncate text-xs hover:underline"
-            params={{ workspaceId: entry.workspaceId }}
-            to="/workspaces/$workspaceId/timesheets"
+          <TruncatedText
+            className="text-muted-foreground text-xs hover:underline"
+            render={
+              <Link
+                params={{ workspaceId: entry.workspaceId }}
+                to="/workspaces/$workspaceId/timesheets"
+              />
+            }
           >
             <BidiText as="span">{entry.workspaceName}</BidiText>
-          </Link>
+          </TruncatedText>
         )}
-        <BidiText as="p" className="truncate text-sm font-medium">
+        <TruncatedText
+          className="text-sm font-medium"
+          render={<BidiText as="p" />}
+        >
           {entry.narrative}
-        </BidiText>
+        </TruncatedText>
         <span className="text-muted-foreground text-xs">
           {[
             tBilling(`statuses.${entry.status}`),

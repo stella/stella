@@ -6,6 +6,11 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import {
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -14,9 +19,12 @@ import {
   DialogPanel,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { Input } from "@stll/ui/input";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
+import { NumberInput } from "@stll/ui/number-input";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import { useBoxDrag } from "@/hooks/use-box-drag";
 import type { BoxDragAdjustment } from "@/hooks/use-box-drag";
@@ -123,6 +131,7 @@ export const PageOrganizerCrop = ({
     ),
   );
   const [activeIndex, setActiveIndex] = useState(0);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const active =
     pages.at(activeIndex) ?? panic("Crop preview references a selected page");
   const geometry = geometryFor(active);
@@ -200,38 +209,57 @@ export const PageOrganizerCrop = ({
         >
           {t(canCrop ? "cropHint" : "cropTooSmall")}
         </p>
-        <details>
-          <summary className="cursor-pointer text-sm font-medium">
-            {t("cropAdvanced")}
-          </summary>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {Object.entries(SIDE_LABELS).map(([side, label]) => {
-              if (!isCropSide(side)) {
-                return panic("Unknown crop margin");
-              }
-              return (
-                <div className="space-y-1.5" key={side}>
-                  <Label htmlFor={`${id}-${side}`}>{t(label)}</Label>
-                  <Input
-                    disabled={disabled || !canCrop}
-                    id={`${id}-${side}`}
-                    inputMode="decimal"
-                    min={0}
-                    step={0.1}
-                    type="number"
-                    value={Number(margins[side].toFixed(2))}
-                    onChange={(event) => {
-                      const value = event.target.valueAsNumber;
-                      if (Number.isFinite(value)) {
-                        changeMargins({ ...margins, [side]: value });
-                      }
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </details>
+        <Collapsible onOpenChange={setAdvancedOpen} open={advancedOpen}>
+          <CollapsibleTrigger
+            render={
+              <Button
+                className="flex min-h-11"
+                data-crop-advanced=""
+                variant="plain"
+              />
+            }
+          >
+            <span className="flex items-center gap-1 text-sm font-medium">
+              <DirectionalIcon
+                className={cn(
+                  "size-4 shrink-0 transition-transform",
+                  advancedOpen && "rotate-90",
+                )}
+                flip={!advancedOpen}
+                icon={ChevronRightIcon}
+              />
+              {t("cropAdvanced")}
+            </span>
+          </CollapsibleTrigger>
+          {/* Mounted while closed (hidden until found): a drag and the arrow
+              keys write the same margins these fields show. */}
+          <CollapsiblePanel>
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              {Object.entries(SIDE_LABELS).map(([side, label]) => {
+                if (!isCropSide(side)) {
+                  return panic("Unknown crop margin");
+                }
+                return (
+                  <div className="space-y-1.5" key={side}>
+                    <Label htmlFor={`${id}-${side}`}>{t(label)}</Label>
+                    <NumberInput
+                      disabled={disabled || !canCrop}
+                      id={`${id}-${side}`}
+                      min={0}
+                      step={0.1}
+                      value={Number(margins[side].toFixed(2))}
+                      onValueChange={(value) => {
+                        if (value !== null && Number.isFinite(value)) {
+                          changeMargins({ ...margins, [side]: value });
+                        }
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </CollapsiblePanel>
+        </Collapsible>
       </DialogPanel>
       <DialogFooter>
         <Button
@@ -430,37 +458,37 @@ const CropPreview = ({
               height: `${box.height * 100}%`,
             }}
           >
-            <button
+            <Button
               {...controlProps("move")}
               aria-describedby={hintId}
               aria-label={t("cropMove")}
-              className="focus-visible:ring-ring pointer-events-auto absolute inset-0 cursor-move touch-none outline-none focus-visible:ring-2"
-              type="button"
+              className="pointer-events-auto absolute inset-0 cursor-move touch-none"
+              variant="plain"
             />
             {Object.entries(HANDLES).map(([mode, handle]) => {
               if (!isHandleMode(mode)) {
                 return panic("Unknown crop handle");
               }
               return (
-                <button
+                <Button
                   {...controlProps(mode)}
                   key={mode}
                   data-crop-handle={mode}
                   aria-describedby={hintId}
                   aria-label={t("cropHandle", { position: t(handle.label) })}
-                  className="focus-visible:ring-ring pointer-events-auto absolute z-10 flex size-11 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center outline-none focus-visible:ring-2"
+                  className="pointer-events-auto absolute z-10 flex size-11 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center"
+                  variant="plain"
                   style={{
                     left: `${handle.x * 100}%`,
                     top: `${handle.y * 100}%`,
                     cursor: handle.cursor,
                   }}
-                  type="button"
                 >
                   <span
                     aria-hidden
                     className="bg-background border-primary size-2.5 rounded-sm border-2"
                   />
-                </button>
+                </Button>
               );
             })}
           </div>

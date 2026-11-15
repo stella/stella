@@ -35,6 +35,8 @@ export type ClipboardItem =
       groupedAt: string | null;
       id: string;
       name: string | null;
+      /** Present only on a dictation stella kept itself; a copy has none. */
+      origin?: "dictation";
       plainText: string;
       sourceApp: ClipboardSourceApp | null;
       type: "text";
@@ -178,7 +180,10 @@ export const isClipboardItem = (value: unknown): value is ClipboardItem => {
 
   switch (value["type"]) {
     case "text":
-      return typeof value["plainText"] === "string";
+      return (
+        typeof value["plainText"] === "string" &&
+        (value["origin"] === undefined || value["origin"] === "dictation")
+      );
     case "formattedText":
       return (
         typeof value["plainText"] === "string" &&

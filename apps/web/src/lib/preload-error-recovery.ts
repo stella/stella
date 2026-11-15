@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
-import { readCappedBytes } from "@stll/skills/streaming";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 import { Temporal } from "@stll/time";
 
@@ -86,20 +86,19 @@ export const classifyFailedChunkLoad =
 
     return fetchWithTimeout(VERSION_MANIFEST_PATH, {
       cache: "no-store",
-      timeout: { type: "idle", ms: VERSION_MANIFEST_IDLE_TIMEOUT_MS },
+      timeout: { type: "headers", ms: VERSION_MANIFEST_IDLE_TIMEOUT_MS },
     })
       .then(async (response): Promise<FailedChunkLoadClassification> => {
         if (!response.ok || !response.body) {
           return { type: "not-skew" };
         }
-        const bytes = await readCappedBytes(
-          response.body,
-          VERSION_MANIFEST_MAX_BYTES,
+        const bodyBytes = await readBodyWithIdleDeadline(response, {
+          idleMs: VERSION_MANIFEST_IDLE_TIMEOUT_MS,
+          maxBytes: VERSION_MANIFEST_MAX_BYTES,
+        });
+        const manifest: unknown = JSON.parse(
+          new TextDecoder().decode(bodyBytes),
         );
-        if (bytes === null) {
-          return { type: "not-skew" };
-        }
-        const manifest: unknown = JSON.parse(new TextDecoder().decode(bytes));
         if (!isVersionManifest(manifest)) {
           return { type: "not-skew" };
         }

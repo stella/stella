@@ -12,6 +12,10 @@
 //     and row-state digests of the corpus tables an online repair rewrites.
 //     The rehearsal compares it across the rerun to prove the fixed point.
 //
+//   bun scripts/migration-rehearsal-db.ts ledger
+//     Prints the applied migration names, one per line, so the rehearsal can
+//     name the migrations its upgrade applied.
+//
 //   bun scripts/migration-rehearsal-db.ts contend
 //     Writes to the high-volume corpus tables the way production's workers
 //     do while an upgrade runs: two sessions, each updating one row per
@@ -41,7 +45,7 @@ import {
 } from "./migration-rehearsal-contender";
 import { formatWriterEvent } from "./migration-rehearsal-writer-gap";
 
-const COMMANDS = ["assert-empty", "contend", "digest"] as const;
+const COMMANDS = ["assert-empty", "contend", "digest", "ledger"] as const;
 type Command = (typeof COMMANDS)[number];
 
 const isCommand = (value: string | undefined): value is Command =>
@@ -133,6 +137,13 @@ try {
       process.exit(1);
     }
     console.log("database is empty");
+  } else if (command === "ledger") {
+    const rows: { name: string }[] = await client.unsafe(
+      "SELECT name FROM drizzle.__drizzle_migrations WHERE name IS NOT NULL ORDER BY name",
+    );
+    for (const { name } of rows) {
+      console.log(name);
+    }
   } else {
     const migrations = await digestOf(
       "SELECT md5(coalesce(string_agg(hash, ',' ORDER BY hash), '')) AS digest FROM drizzle.__drizzle_migrations",

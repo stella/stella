@@ -1,6 +1,6 @@
 import { mock } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load as loadHtml } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { ValidateAstFixture } from "@/api/tests/helpers/validate-ast-inputs";
@@ -88,7 +88,7 @@ const profileValidation = (
   } satisfies Record<StepName, number>;
   let sourceText = "";
   result["source normalization"] = time(() => {
-    sourceText = normalizeValidationText(cheerio.load(source)("body").text());
+    sourceText = normalizeValidationText(loadHtml(source)("body").text());
   });
   result["source skip markers"] = time(() => {
     separateValidationSkipMarkers(sourceText);
@@ -160,7 +160,7 @@ const measure = (fixture: ValidateAstFixture): Sample => {
   const baseline = process.memoryUsage().heapUsed;
   let peak = baseline;
   const loadStart = performance.now();
-  cheerio.load(fixture.markup, fixture.xml ? { xml: true } : undefined);
+  loadHtml(fixture.markup, fixture.xml ? { xml: true } : undefined);
   const load = performance.now() - loadStart;
   peak = Math.max(peak, process.memoryUsage().heapUsed);
   const parseStart = performance.now();

@@ -1,8 +1,9 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { queryOrganizationFencedRepairBatch } from "../lib/db/aggregate-lock";
 import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
@@ -332,7 +333,7 @@ export const createChatContentV3Repair = (
         tableName: CHAT_CONTENT_V3_SOURCES[source].table,
         initialSize: CHAT_CONTENT_V3_BATCH_SIZE,
         config: {
-          ...defaultConfig,
+          ...loadGateHealthConfig(),
           minSize: 1,
           maxSize: CHAT_CONTENT_V3_BATCH_SIZE,
         },

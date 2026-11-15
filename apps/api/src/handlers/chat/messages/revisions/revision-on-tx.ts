@@ -79,6 +79,7 @@ export const writeChatMessageRevisionOnTx = async ({
   if (
     !thread ||
     !(await hasChatWorkspaceAccess({
+      admitted: "active",
       workspaceId: thread.workspaceId,
       getWorkspaceAccess,
     }))

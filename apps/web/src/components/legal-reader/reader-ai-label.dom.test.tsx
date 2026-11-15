@@ -5,9 +5,9 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =

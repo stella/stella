@@ -9,6 +9,7 @@ import type {
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
 
+import { withOptionalsNullable } from "@stll/agent-input";
 import { Temporal } from "@stll/time";
 
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -23,7 +24,6 @@ import {
   withoutModelVariant,
 } from "@/api/lib/chat/provider-data-policy";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
 import {
   readEvidence,
   readProviderStatus,
@@ -233,7 +233,7 @@ const withManagedRequestEligibility = async function* ({
     yield {
       type: EventType.RUN_STARTED,
       runId: Bun.randomUUIDv7(),
-      threadId: options.threadId ?? Bun.randomUUIDv7(),
+      threadId: options.threadId,
       model: options.model,
       timestamp: Temporal.Now.instant().epochMilliseconds,
       ...(options.parentRunId === undefined

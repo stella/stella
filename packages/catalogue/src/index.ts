@@ -14,6 +14,7 @@ export {
   type LoadedCatalogueEntry,
   type LoadedEntryByKind,
   type LoadedGithubSkillEntry,
+  type NativeToolSlug,
   type ToggleableNativeToolBackendSlug,
 } from "./loader";
 export {

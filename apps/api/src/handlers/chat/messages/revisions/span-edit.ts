@@ -109,6 +109,7 @@ export const createProposeMessageSpanEdit = ({
         safeDb(
           async (tx) =>
             await readEditableMessageOnTx({
+              admitted: "active",
               tx,
               getWorkspaceAccess,
               threadId,

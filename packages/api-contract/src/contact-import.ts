@@ -4,7 +4,9 @@ import { CONTACT_TYPES } from "./workspace-contacts";
 
 export const CONTACT_IMPORT_SCHEMA_VERSION = 1 as const;
 export const CONTACT_IMPORT_MAX_COLUMNS = 100;
-export const CONTACT_IMPORT_MAX_ROWS = 500;
+export const CONTACT_BULK_DELETE_LIMIT = 500;
+// Every import can therefore be undone in one bulk-delete request.
+export const CONTACT_IMPORT_MAX_ROWS = CONTACT_BULK_DELETE_LIMIT;
 /** Upper bound for the JSON-encoded mapping: 100 columns at well under 200
  *  characters each, so an oversized field is rejected before it is parsed. */
 export const CONTACT_IMPORT_MAPPING_MAX_CHARS = 16_384;

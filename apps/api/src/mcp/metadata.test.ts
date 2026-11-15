@@ -161,7 +161,7 @@ describe("MCP protected resource metadata", () => {
       MCP_DISCOVERY_ALLOWED_HEADERS.join(", "),
     );
     expect(headers.get("Access-Control-Expose-Headers")).toBe(
-      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-cli-latest, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-stella-feature-omitted-tools, x-stella-feature-omitted-capabilities, x-request-id",
+      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-cli-latest, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-stella-feature-omitted-tools, x-stella-feature-omitted-capabilities, x-stella-mcp-registry-version, x-request-id",
     );
     expect(headers.get("x-stella-api-contract-version")).toBe(
       String(STELLA_MCP_API_CONTRACT_VERSION),

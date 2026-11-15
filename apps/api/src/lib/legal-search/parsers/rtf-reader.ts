@@ -56,14 +56,28 @@ import {
  * Western European — and a byte read against the wrong one is a silently wrong
  * letter rather than a failure, so the mapping is explicit and a code page
  * outside it is reported instead of guessed at.
+ *
+ * The double-byte pages (932 Japanese, 936 Simplified Chinese, 949 Korean,
+ * 950 Traditional Chinese) write one character as a lead byte and a trail
+ * byte, `\'81\'98` for "§" in 932. Bytes written under one page are decoded
+ * together (`PendingText`), so the pair reaches the decoder as the one
+ * character it is.
  */
 const RTF_CODE_PAGES = [
+  [874, "windows-874"],
+  [932, "shift_jis"],
+  [936, "gbk"],
+  [949, "euc-kr"],
+  [950, "big5"],
   [1250, "windows-1250"],
   [1251, "windows-1251"],
   [1252, "windows-1252"],
   [1253, "windows-1253"],
   [1254, "windows-1254"],
+  [1255, "windows-1255"],
+  [1256, "windows-1256"],
   [1257, "windows-1257"],
+  [1258, "windows-1258"],
   [10_000, "macintosh"],
 ] as const;
 
@@ -81,16 +95,26 @@ const DEFAULT_CODE_PAGE_LABEL: CodePageLabel = "windows-1252";
  * Western-European machine writes `\ansicpg1252` and a Hungarian text in a
  * `\fcharset238` font, whose byte F5 is "ő", not the "õ" of windows-1252.
  * `0` (ANSI) and `1` (default) defer to the document; `2` (symbol) has no
- * code page and does too. Any other charset (`255`, the OEM code page 437,
- * which no WHATWG decoder reads; the double-byte Asian sets) is reported
+ * code page and does too. The double-byte sets are read as their code
+ * pages: a Hungarian writer that set "§" in a `\fcharset128` font wrote it
+ * as the Shift-JIS pair `\'81\'98`. Any other charset (`255`, the OEM code
+ * page 437, and `130`, Johab, which no WHATWG decoder reads) is reported
  * where text is written in it, never read as a neighbour.
  */
 const FONT_CHARSET_CODE_PAGES = new Map<number, number>([
   [77, 10_000],
+  [128, 932],
+  [129, 949],
+  [134, 936],
+  [136, 950],
   [161, 1253],
   [162, 1254],
+  [163, 1258],
+  [177, 1255],
+  [178, 1256],
   [186, 1257],
   [204, 1251],
+  [222, 874],
   [238, 1250],
 ]);
 
@@ -442,6 +466,30 @@ const decodeBytes = (bytes: readonly number[], label: CodePageLabel): string =>
     : new TextDecoder(label).decode(Uint8Array.from(bytes));
 
 /**
+ * The C1 controls, U+0080 to U+009F. No writer types one: a decoder yields
+ * one for a byte its code page leaves undefined, which is where a
+ * double-byte pair read against a single-byte page lands: the Shift-JIS "§",
+ * 81 98, is two of them in windows-1250. The reader never puts one into the
+ * text.
+ */
+const C1_CONTROLS = /[\u0080-\u009f]/gu;
+
+/** What a decoder yields for bytes it cannot read, and what a C1 control becomes. */
+const REPLACEMENT_CHARACTER = String.fromCodePoint(0xff_fd);
+
+const isC1Control = (codePoint: number): boolean =>
+  codePoint >= 0x80 && codePoint <= 0x9f;
+
+/**
+ * Bytes, or an escape, that name no character, reported beside the control
+ * words the reader does not handle so the parse signal sees both.
+ */
+const undecodableWarning = (origin: CodePageLabel | "\\u"): string =>
+  origin === "\\u"
+    ? String.raw`rtf: \u names a C1 control character`
+    : `rtf: bytes undefined in ${origin}`;
+
+/**
  * A run of bytes read as the ASCII it is: control words and the RTF signature
  * are ASCII by definition, so each byte is its own code point.
  */
@@ -681,10 +729,31 @@ const readRtfInto = (
   const blocks: BlockContent[] = [];
   const footnotes: Footnote[] = [];
   const unknownWords = new Set<string>();
+  /** Where text named no character: the code pages, or `\u`. */
+  const undecodable = new Set<CodePageLabel | "\\u">();
   const colors: ColorValue[] = [];
 
   const codePageOf = (value: number | undefined): CodePageLabel | undefined =>
     value === undefined ? undefined : CODE_PAGE_LABELS.get(value);
+
+  /**
+   * Bytes read against the code page they were written under. A byte the
+   * page leaves undefined, or a sequence it cannot read (a lead byte without
+   * its trail), names no character: it reaches the text as U+FFFD, visible
+   * where the byte stood, and the code page is reported, never as a C1
+   * control that prints nothing and reads as nothing wrong.
+   */
+  const decodePending = (
+    bytes: readonly number[],
+    label: CodePageLabel,
+  ): string => {
+    const text = decodeBytes(bytes, label);
+    const readable = text.replaceAll(C1_CONTROLS, () => REPLACEMENT_CHARACTER);
+    if (readable.includes(REPLACEMENT_CHARACTER)) {
+      undecodable.add(label);
+    }
+    return readable;
+  };
 
   let codePageLabel: CodePageLabel =
     codePageOf(options.defaultCodePage) ?? DEFAULT_CODE_PAGE_LABEL;
@@ -735,7 +804,7 @@ const readRtfInto = (
    * the sentence.
    */
   const appendText = (text: string): void => {
-    pending.text += decodeBytes(pending.bytes, pending.label) + text;
+    pending.text += decodePending(pending.bytes, pending.label) + text;
     pending.bytes = [];
   };
 
@@ -755,7 +824,7 @@ const readRtfInto = (
   };
 
   const flushRun = (): void => {
-    const text = pending.text + decodeBytes(pending.bytes, pending.label);
+    const text = pending.text + decodePending(pending.bytes, pending.label);
     pending = { bytes: [], label: pending.label, text: "" };
     // A skipped destination is the writer's metadata: its text is not the
     // document's, and keeping it would print a colour table into the decision.
@@ -1110,7 +1179,14 @@ const readRtfInto = (
           break;
         }
         const codePoint = parameter < 0 ? parameter + 0x1_00_00 : parameter;
-        appendText(String.fromCodePoint(codePoint));
+        if (isC1Control(codePoint)) {
+          undecodable.add("\\u");
+        }
+        appendText(
+          isC1Control(codePoint)
+            ? REPLACEMENT_CHARACTER
+            : String.fromCodePoint(codePoint),
+        );
         // The escape is followed by `\ucN` replacement characters for
         // readers that cannot decode it.
         cursor = afterFallbackCharacters(
@@ -1315,9 +1391,12 @@ const readRtfInto = (
   return {
     blocks,
     footnotes,
-    warnings: [...unknownWords]
-      .toSorted()
-      .map((word) => `rtf: unhandled control word \\${word}`),
+    warnings: [
+      ...[...unknownWords]
+        .toSorted()
+        .map((word) => `rtf: unhandled control word \\${word}`),
+      ...[...undecodable].toSorted().map(undecodableWarning),
+    ],
   };
 };
 
@@ -1591,6 +1670,8 @@ const rtfLiteralSpans = (text: string): LiteralSpan[] => {
 
 // parser-output-unchanged: [cz-us] Shared lexical scanning preserves the decoder's existing recovery policy.
 // parser-output-unchanged: [hu-bhgy] Shared lexical scanning preserves the decoder's existing recovery policy.
+// parser-output-unchanged: [us-courtlistener] Only the control-residue scan below is read there; it decodes no bytes, and the code page and C1 changes reach only readRtf.
+// parser-output-unchanged: [courtlistener-parser-version] Only the control-residue scan below is read there; it decodes no bytes, and the code page and C1 changes reach only readRtf.
 /**
  * Recognize known spec tokens without decoding or changing publisher text.
  * @yields Recognized control spans outside literal path and quoted/code spans.

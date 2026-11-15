@@ -11,6 +11,7 @@ const base = {
   health: "current",
   stored: { decisions: 150, asOf: storedAsOf },
   addedLastWeek: 5,
+  unreadParts: [],
   completeness: {
     measuredSources: 1,
     stored: 150,
@@ -48,6 +49,7 @@ const base = {
 /** The answer as the refresh stores it. */
 export const CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE = {
   generatedAt: asOf,
+  unreadParts: [],
   provisionProcessing: [],
   totals: {
     addedLastWeek: 10,

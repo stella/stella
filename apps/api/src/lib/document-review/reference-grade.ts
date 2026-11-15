@@ -56,6 +56,7 @@ import type {
 } from "@/api/lib/document-review/review-delta";
 import {
   buildReviewDocumentParts,
+  fitReviewDocuments,
   reviewDocumentsScopeKey,
 } from "@/api/lib/document-review/review-document-messages";
 import type { DocxFolioCitation } from "@/api/lib/document-review/review-extract";
@@ -69,6 +70,7 @@ import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { PositionTermKind } from "@/api/lib/workflow/playbook-positions";
+import { requestBudgetBytesForTask } from "@/api/lib/workflow/request-budget";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
 const REFERENCE_GRADE_TIMEOUT_MS = 120_000;
@@ -489,7 +491,7 @@ const normalizeConsensus = (
 /** The position's own passages, grouped by the document they came from. This
  *  is the standard by construction, so it does not depend on what the model
  *  chose to cite back. */
-const passageCitations = (
+export const referencePassageCitations = (
   passages: readonly PinnedReferencePassage[],
 ): ReferenceGrading["referenceCitations"] => {
   const byFileFieldId = new Map<string, { id: string; blockId: string }[]>();
@@ -508,9 +510,10 @@ const passageCitations = (
   }));
 };
 
-/** The judgment a position falls back to when the model said nothing about
- *  it: flagged for a human rather than silently passed. */
-export const ungradedReferenceGrading = (
+/** The judgment for a position the model answered without grounding: its
+ *  conclusion cites nothing in the target, so the documents gave it nothing to
+ *  compare. A failed or skipped grading is not this; the caller flags it. */
+export const insufficientEvidenceGrading = (
   position: ReferenceStandardPosition,
 ): ReferenceGrading => ({
   verdict: ASSESSMENT_VERDICTS["not-comparable"],
@@ -523,7 +526,7 @@ export const ungradedReferenceGrading = (
   explanation: { type: "insufficient-evidence" },
   recommendation: null,
   citations: [],
-  referenceCitations: passageCitations(position.passages),
+  referenceCitations: referencePassageCitations(position.passages),
   fix: null,
 });
 
@@ -592,7 +595,7 @@ export const normalizeReferenceGrading = ({
   );
   const grounded = isGrounded(raw.assessment, citations.length > 0);
   if (!grounded) {
-    return ungradedReferenceGrading(position);
+    return insufficientEvidenceGrading(position);
   }
 
   const standardBlocks = new Map(
@@ -627,7 +630,7 @@ export const normalizeReferenceGrading = ({
     explanation: { type: "comparison", text: rationaleProse.text },
     recommendation: recommendation.length > 0 ? recommendation : null,
     citations,
-    referenceCitations: passageCitations(position.passages),
+    referenceCitations: referencePassageCitations(position.passages),
     fix,
   };
 };
@@ -745,6 +748,19 @@ export const gradeReferencePositions = async ({
 }: GradeReferencePositionsArgs): Promise<
   Result<Map<string, ReferenceGrading>, WorkflowIntegrationError>
 > => {
+  const fitted = fitReviewDocuments({
+    target,
+    references: [],
+    budgetBytes: requestBudgetBytesForTask(REFERENCE_GRADE_TASK, orgAIConfig, {
+      dataClass: "customer",
+      organizationId,
+      modelTier: admission.modelTier,
+    }),
+  });
+  if (Result.isError(fitted)) {
+    return Result.err(fitted.error);
+  }
+
   const caching = resolveCaching({
     promptCachingEnabled,
     task: REFERENCE_GRADE_TASK,
@@ -771,7 +787,11 @@ export const gradeReferencePositions = async ({
   const request: ModelMessage = {
     role: "user",
     content: [
-      ...buildReviewDocumentParts({ target, references: [], caching }),
+      ...buildReviewDocumentParts({
+        target: fitted.value.target,
+        references: [],
+        caching,
+      }),
       {
         type: "text",
         content: buildPositionsPart({ positions, perspective, targetLanguage }),

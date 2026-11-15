@@ -2,14 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
-
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -55,7 +50,11 @@ const withIntl = (node: React.ReactNode) => (
   </IntlProvider>
 );
 
-afterEach(cleanup);
+afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
+  cleanup();
+});
 afterAll(async () => {
   cleanup();
   await unregisterDomEnvironment();
@@ -111,7 +110,7 @@ test("saving a view template shows the server's length verdict under the name", 
   // Editing the name clears the stale verdict.
   fireEvent.change(input, { target: { value: "Shorter" } });
   await waitFor(() => {
-    expect(screen.queryByText(TOO_LONG_MESSAGE)).toBeNull();
+    expect(screen.queryByText(TOO_LONG_MESSAGE) === null).toBe(true);
   });
 });
 
@@ -120,6 +119,7 @@ test("creating a rate table shows the server's length verdict under the name", a
   render(
     withIntl(
       <CreateRateTableForm
+        hasDefaultTable
         onCancel={() => undefined}
         onSubmit={async (values) => {
           submitted.push(values.name);
@@ -139,3 +139,46 @@ test("creating a rate table shows the server's length verdict under the name", a
   await screen.findByText(TOO_LONG_MESSAGE);
   expect(submitted).toEqual(["Standard"]);
 });
+
+test.each([
+  {
+    hasDefaultTable: false,
+    shownChecked: true,
+    hint: messages.billing.rates.firstTableIsDefault,
+  },
+  {
+    hasDefaultTable: true,
+    shownChecked: false,
+    hint: messages.billing.rates.onlyDefaultApplies,
+  },
+])(
+  // The server makes a matter's first table its default, so the form never
+  // forces the flag from a table list that may be incomplete.
+  "a rate table form with hasDefaultTable=$hasDefaultTable shows checked=$shownChecked and submits only the reader's choice",
+  async ({ hasDefaultTable, shownChecked, hint }) => {
+    const submitted: { isDefault?: boolean | undefined }[] = [];
+    render(
+      withIntl(
+        <CreateRateTableForm
+          hasDefaultTable={hasDefaultTable}
+          onCancel={() => undefined}
+          onSubmit={async (values) => {
+            submitted.push({ isDefault: values.isDefault });
+            return undefined;
+          }}
+        />,
+      ),
+    );
+
+    screen.getByText(hint);
+    const checkbox = screen.getByRole("checkbox");
+    expect(checkbox.getAttribute("aria-checked")).toBe(String(shownChecked));
+    const input = screen.getByPlaceholderText(
+      messages.billing.rates.tableNamePlaceholder,
+    );
+    fireEvent.change(input, { target: { value: "Standard" } });
+    fireEvent.submit(input.closest("form") ?? input);
+
+    await waitFor(() => expect(submitted).toEqual([{ isDefault: false }]));
+  },
+);

@@ -7,6 +7,7 @@ import {
 import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "../../src/consts";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 
 const MACOS_USER_AGENT =
@@ -86,7 +87,7 @@ test("authenticated law pages retain the user's recent matters", async ({
       page
         .locator('[data-slot="sidebar"]')
         .getByText(workspaceName, { exact: true }),
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   } finally {
     await deleteTestWorkspace(request, workspace.id);
   }

@@ -4,7 +4,11 @@ import { TaggedError } from "better-result";
 
 export { panic } from "better-result";
 
-export { createDetached, type DetachedRejectionSink } from "./detached";
+export {
+  createDetached,
+  type DetachedOperand,
+  type DetachedRejectionSink,
+} from "./detached";
 export {
   createDevErrorLogger,
   type CreateDevErrorLoggerOptions,

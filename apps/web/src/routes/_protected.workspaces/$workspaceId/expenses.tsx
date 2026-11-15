@@ -96,8 +96,8 @@ const ExpenseListSkeleton = () => (
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex items-center gap-2">
               <Skeleton className="h-4 w-40" />
-              <Skeleton className="h-4 w-14 rounded" />
-              <Skeleton className="h-4 w-12 rounded" />
+              <Skeleton className="h-4 w-14 rounded-sm" />
+              <Skeleton className="h-4 w-12 rounded-sm" />
             </div>
             <Skeleton className="h-3 w-56" />
           </div>

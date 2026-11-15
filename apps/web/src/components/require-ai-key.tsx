@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { resolveAIProviderSettings } from "@stll/api-contract/organization-ai-availability";
 import { Button } from "@stll/ui/button";
@@ -60,6 +61,7 @@ import {
 } from "@/lib/organization/ai-config-queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 type AIAvailabilityStatus = "pending" | "available" | "unavailable";
@@ -557,24 +559,32 @@ export const AIKeyRequiredDialog = ({
   const storedProviderValues = config?.configured
     ? config.providers.map(({ provider }) => provider)
     : [];
-  const defaultsQuery = useChromeQuery({
-    ...aiDefaultsPreviewOptions({
-      organizationId: activeOrganizationId,
-      providers: providerValues,
-    }),
-    enabled: open && mayConfigure && configQuery.status === "success",
-    ...(config !== undefined &&
-    JSON.stringify(providerValues) === JSON.stringify(storedProviderValues)
-      ? {
-          initialData: {
-            defaultModels: projectDefaultRoleModels(config.defaultModels),
-            providerDefaultModels: projectProviderDefaultRoleModels(
-              config.providerDefaultModels,
-            ),
-          },
-        }
-      : {}),
-  });
+  const defaultsQuery = useChromeQuery(
+    resourceQueryOptions(
+      {
+        ...aiDefaultsPreviewOptions({
+          organizationId: activeOrganizationId,
+          providers: providerValues,
+        }),
+        enabled: open && mayConfigure && configQuery.status === "success",
+        ...(config !== undefined &&
+        JSON.stringify(providerValues) === JSON.stringify(storedProviderValues)
+          ? {
+              initialData: {
+                defaultModels: projectDefaultRoleModels(config.defaultModels),
+                providerDefaultModels: projectProviderDefaultRoleModels(
+                  config.providerDefaultModels,
+                ),
+              },
+            }
+          : {}),
+      },
+      {
+        resources: [RESOURCE_TYPE.ORGANIZATION],
+        scope: { type: "organization" },
+      },
+    ),
+  );
   const defaultsView = queryView(defaultsQuery);
   useQueryViewError(defaultsView, "AIKeyRequiredDialog:defaults-query");
   const defaultModels =
@@ -606,13 +616,13 @@ export const AIKeyRequiredDialog = ({
             setRoleModels(initialRoleModels);
           }}
         />
-        <DialogHeader className="p-4 pb-2">
+        <DialogHeader className="p-4 pb-1">
           <DialogTitle>{t("ai.keyRequired.title")}</DialogTitle>
           <DialogDescription>
             {t("ai.keyRequired.description")}
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 overflow-x-hidden overflow-y-auto px-4 pb-3">
+        <div className="min-h-0 overflow-x-hidden overflow-y-auto px-4 pt-1 pb-3">
           {configRefusalKey !== null ? (
             <p className="text-muted-foreground text-sm">
               {t(configRefusalKey)}

@@ -5,6 +5,7 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { timerParams } from "@/api/lib/billing/time-timers";
+import { scheduleTimerActivityUpdates } from "@/api/lib/push/timer-activity-queue";
 
 import { finalizeTimer } from "./finalize";
 
@@ -63,6 +64,9 @@ const confirmTimer = createSafeRootHandler(
         }),
       ),
     );
+    if (outcome.isOk()) {
+      scheduleTimerActivityUpdates([owner]);
+    }
     return Result.ok(yield* outcome);
   },
 );

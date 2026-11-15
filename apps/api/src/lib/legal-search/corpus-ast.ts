@@ -3,9 +3,9 @@ import * as v from "valibot";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import {
-  isDocumentAst,
+  headMatterOrderDegradations,
+  isDocumentAstInAnyBlockOrder,
   persistedDocumentAstSchema,
-  persistedDocumentAstWriteSchema,
 } from "@stll/legal-ast/document-ast";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -24,11 +24,6 @@ import { isRecord } from "@/api/lib/type-guards";
 /** The wire contract corpus readers accept from any stored row. */
 export const persistedCorpusAstSchema = v.nullable(
   v.union([persistedDocumentAstSchema, emptyAstSchema]),
-);
-
-/** What a payload writer may store: the reader contract plus block order. */
-const writtenCorpusAstSchema = v.nullable(
-  v.union([persistedDocumentAstWriteSchema, emptyAstSchema]),
 );
 
 class IngestedAstRejectedError extends TaggedError("IngestedAstRejectedError")<{
@@ -52,14 +47,28 @@ export const prepareCorpusAst = ({
   source,
   parserVersion,
 }: PrepareCorpusAstOptions) => {
-  const parsed = v.safeParse(writtenCorpusAstSchema, ast);
+  const parsed = v.safeParse(persistedCorpusAstSchema, ast);
   if (parsed.success) {
     // Keep a canonical AST as the parser produced it: the parsed output is a
     // rebuilt object (schema key order, undeclared fields dropped), and the
     // content hash is order-sensitive JSON, so writing it would change every
     // unchanged decision's hash and lose fields the schema does not name.
-    // Only a legacy-shaped AST is written in its normalized form.
-    const stored = isDocumentAst(ast) ? ast : parsed.output;
+    // Late head matter is reported, not normalized. Only a legacy-shaped AST
+    // is written in its normalized form.
+    const stored = isDocumentAstInAnyBlockOrder(ast) ? ast : parsed.output;
+    if (parsed.output !== null && "blocks" in parsed.output) {
+      const degradations = headMatterOrderDegradations(parsed.output.blocks);
+      if (degradations.length > 0) {
+        logger.warn(
+          "case_law.ingestion.ast_head_matter_order",
+          sanitizeErrorAttributesForOutput({
+            source: source ?? parsed.output.source.system,
+            parserVersion: parserVersion ?? null,
+            lateBlockCount: degradations.length,
+          }),
+        );
+      }
+    }
     return Result.ok({ type: "readable", ast: stored } as const);
   }
   if (

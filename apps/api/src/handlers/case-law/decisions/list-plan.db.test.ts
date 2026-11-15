@@ -147,7 +147,7 @@ test.each(ORDERS_BY_BAND)(
       expect(plan.slice(0, plan.indexOf(`${scan} using`))).not.toMatch(
         /\b(Sort|Bitmap Heap Scan)\b/u,
       );
-      expect(plan).toContain("case_law_decisions_lang_group_idx");
+      expect(plan).toContain("case_law_decisions_language_group_published_idx");
       expect(plan).toMatch(/Index Cond: .*language_group_key/u);
       expect(plan).not.toContain("Seq Scan on case_law_decisions");
     }
@@ -411,11 +411,11 @@ const explainLanguageWalk = async (
   return plan;
 };
 
-// A language is a share of a country: a tenth of it (`en`) or nearly all of
-// it (`cs`), as one language is all of a single-language country. Either way
-// the page is the language's own range of the walk, read in the page's order
-// and stopped by the limit, never every version in the language sorted for
-// one page.
+// A language is a share of a country: a tenth of it (`en`) or nearly all
+// of it (`cs`), as one language is all of a single-language country. Either
+// way the page is the language's own range of the walk, read in the page's
+// order and stopped by the limit, never every version in the language sorted
+// for one page.
 // timeout: each case explains its page twice, once in a transaction that drops
 // and restores the index, against the shared seeded database.
 test.each(

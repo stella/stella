@@ -1,4 +1,4 @@
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -79,8 +79,10 @@ export const LoadFailedCard = ({
 }) => {
   const t = useTranslations("loads");
   const writes = useTranslations("writes");
+  const settings = useTranslations("settings");
   const { signOut } = useSession();
   const [leaving, startLeaving] = useTransition();
+  const [signOutFailed, setSignOutFailed] = useState(false);
   const failure = loadFailure(error);
   const reason =
     failure.kind === "server" || failure.kind === "refused"
@@ -96,18 +98,26 @@ export const LoadFailedCard = ({
         </Text>
       ) : null}
       {failure.kind === "consent" || failure.kind === "session" ? (
-        <Button
-          disabled={leaving}
-          loading={leaving}
-          onPress={() => {
-            startLeaving(async () => {
-              await signOut();
-            });
-          }}
-          variant="outline"
-        >
-          {writes("signInAgain")}
-        </Button>
+        <>
+          <Button
+            disabled={leaving}
+            loading={leaving}
+            onPress={() => {
+              startLeaving(async () => {
+                const outcome = await signOut();
+                setSignOutFailed(outcome.isErr());
+              });
+            }}
+            variant="outline"
+          >
+            {writes("signInAgain")}
+          </Button>
+          {signOutFailed ? (
+            <Text className="max-w-90 text-center" variant="caption">
+              {settings("signOutFailed")}
+            </Text>
+          ) : null}
+        </>
       ) : (
         <RetryButton label={retryLabel} onPress={onRetry} />
       )}

@@ -4,7 +4,10 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
-import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  createChatPastedTextPart,
+} from "@stll/api-contract/chat";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 
 import {
@@ -14,9 +17,10 @@ import {
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
   getChatToolTitleKey,
+  getChatWorkAwaitedAtOpen,
   getCurrentApprovalPendingMessageId,
   getToolApprovalGrant,
-  getUserMessageHtmlHistory,
+  getUserMessageHistory,
   hasApprovalResponseAwaitingModelStep,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalOnceChatToolName,
@@ -28,7 +32,6 @@ import {
   isRunningToolPart,
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
-  isUserInputChatToolName,
   projectCanonicalChatUIMessages,
   resolveChatAssistantTurnOutcome,
   sanitizeRunningToolCalls,
@@ -44,12 +47,6 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-
-test("inherited object keys are not user-input tool names", () => {
-  for (const name of ["constructor", "toString", "__proto__"]) {
-    expect(isUserInputChatToolName(name)).toBe(false);
-  }
-});
 
 describe("playbook save consumption", () => {
   test("a reverse completion refreshes caches without following the older call", () => {
@@ -82,13 +79,13 @@ describe("playbook save consumption", () => {
         handledToolCallIds,
         messages: saves("input-complete"),
       }),
-    ).toEqual({ playbookId: "playbook-b" });
+    ).toEqual({ target: { playbookId: "playbook-b", source: "live" } });
     expect(
       consumePlaybookSaveToolCalls({
         handledToolCallIds,
         messages: saves("complete"),
       }),
-    ).toEqual({ playbookId: null });
+    ).toEqual({ target: null });
     expect(handledToolCallIds).toEqual(new Set(["save-a", "save-b"]));
     expect(
       consumePlaybookSaveToolCalls({
@@ -919,6 +916,11 @@ describe("isUnresolvedFolioAgentDocToolCallPart", () => {
   });
 });
 
+const NOTHING_AWAITED_AT_OPEN = {
+  approvalIds: new Set<string>(),
+  clientToolCallIds: new Set<string>(),
+};
+
 describe("selectUnresolvedFolioAgentDocToolCallParts", () => {
   // Core decision loop behind the file overlay's folio-agents doc-tool
   // auto-run watcher (`file-chat-overlay.tsx`): given the latest
@@ -977,6 +979,7 @@ describe("selectUnresolvedFolioAgentDocToolCallParts", () => {
     ).toBe(true);
 
     const result = selectIdleFolioAgentDocToolCallParts({
+      awaitedAtOpen: NOTHING_AWAITED_AT_OPEN,
       clientStatus: "ready",
       executedIds: new Set(),
       messageParts: [findTextPart],
@@ -985,8 +988,53 @@ describe("selectUnresolvedFolioAgentDocToolCallParts", () => {
     expect(result.map((part) => part.id)).toEqual(["tool-call-find"]);
   });
 
+  test("a thread opened with a document read waiting runs nothing until the user acts", () => {
+    // The page opens the thread as a turn left it: find_text waits on the
+    // browser's result.
+    const opened = [
+      {
+        id: "assistant-1",
+        parts: [findTextPart],
+        role: "assistant",
+      },
+    ] satisfies PersistedChatMessage[];
+    const awaitedAtOpen = getChatWorkAwaitedAtOpen(opened);
+    // The fixture must reach the fault: the read is one the overlay would run.
+    expect(
+      selectIdleFolioAgentDocToolCallParts({
+        awaitedAtOpen: NOTHING_AWAITED_AT_OPEN,
+        clientStatus: "ready",
+        executedIds: new Set(),
+        messageParts: [findTextPart],
+      }).map((part) => part.id),
+    ).toEqual(["tool-call-find"]);
+
+    expect(awaitedAtOpen.clientToolCallIds).toEqual(
+      new Set(["tool-call-find"]),
+    );
+    expect(
+      selectIdleFolioAgentDocToolCallParts({
+        awaitedAtOpen,
+        clientStatus: "ready",
+        executedIds: new Set(),
+        messageParts: [findTextPart],
+      }),
+    ).toEqual([]);
+
+    // A read the server asks for while the page is open still runs.
+    expect(
+      selectIdleFolioAgentDocToolCallParts({
+        awaitedAtOpen,
+        clientStatus: "ready",
+        executedIds: new Set(),
+        messageParts: [findTextPart, readDocumentPart],
+      }).map((part) => part.id),
+    ).toEqual(["tool-call-read"]);
+  });
+
   test("waits while the response stream can still claim the tool", () => {
     const result = selectIdleFolioAgentDocToolCallParts({
+      awaitedAtOpen: NOTHING_AWAITED_AT_OPEN,
       clientStatus: "streaming",
       executedIds: new Set(),
       messageParts: [findTextPart],
@@ -1372,10 +1420,25 @@ describe("sanitizeRunningToolCalls", () => {
   });
 });
 
-describe("getUserMessageHtmlHistory", () => {
-  test("returns user message HTML from newest to oldest", () => {
+describe("getUserMessageHistory", () => {
+  test("recalls a just-sent message's markup without its pasted texts", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
+        {
+          id: "message-1",
+          parts: [
+            { content: "<p>Review <strong>this</strong></p>", type: "text" },
+            createChatPastedTextPart("Clause 4\nClause 5"),
+          ],
+          role: "user",
+        },
+      ]),
+    ).toEqual(["<p>Review <strong>this</strong></p>"]);
+  });
+
+  test("returns user message texts from newest to oldest", () => {
+    expect(
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "Older prompt", type: "text" }],
@@ -1397,7 +1460,7 @@ describe("getUserMessageHtmlHistory", () => {
 
   test("skips user messages without text", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "Reusable prompt", type: "text" }],
@@ -1424,7 +1487,7 @@ describe("getUserMessageHtmlHistory", () => {
 
   test("trims history entries and skips whitespace-only text", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "   ", type: "text" }],

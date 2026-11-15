@@ -13,6 +13,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { evaluate } from "./github-expression";
 
 const stepSchema = v.looseObject({
@@ -275,7 +276,7 @@ test("the sole named waiver validates before checkout and derives its downstream
   // The network retry helper checkout reads only the workflow's own revision.
   const candidateCheckoutIndex = resolveSteps.findIndex(
     (step) =>
-      step.uses?.startsWith("actions/checkout@") &&
+      isRepositoryCheckoutAction(step.uses) &&
       step.with?.["ref"] !== `\${{ github.workflow_sha }}`,
   );
   expect(waiverIndex).toBeGreaterThanOrEqual(0);
@@ -357,6 +358,27 @@ test("only failed corpus preflight can use the waiver and its MCP dependency rem
   expect(result.summary).toContain(
     "Reason: Backend verification deferred; evidence=artifacts/corpus-check.log",
   );
+});
+test("a declared corpus gap succeeds only with a passed preflight and skipped MCP", () => {
+  const declared = {
+    CORPUS_DECLARED_GAP: "true",
+    CORPUS_SEARCH_WAIVED: "false",
+    CORPUS_PREFLIGHT: "success",
+    MCP_SMOKE: "skipped",
+  };
+  expect(statuses(record(declared)).at(0)).toMatchObject({
+    state: "success",
+    description: "Staging smoke success, corpus_reads=search-only: run 1",
+  });
+  for (const overrides of [
+    { CORPUS_PREFLIGHT: "failure" },
+    { MCP_SMOKE: "failure" },
+    { WEB_SMOKE: "failure" },
+  ]) {
+    expect(statuses(record({ ...declared, ...overrides })).at(0)?.state).toBe(
+      "failure",
+    );
+  }
 });
 // timeout: The matrix executes the status writer in a separate shell per outcome.
 test("unused waiver keeps normal success and every unrelated failure remains blocking", () => {

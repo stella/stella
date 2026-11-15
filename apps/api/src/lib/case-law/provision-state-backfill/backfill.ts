@@ -1,4 +1,9 @@
+/**
+ * Raw replay statements keep mutation and transition-job CTEs together.
+ * The reserved session remains the transaction boundary for each unit.
+ */
 import { panic, Result } from "better-result";
+import { sql } from "drizzle-orm";
 
 import {
   PROVISION_EXTRACTION_ADMISSION_REVISION,
@@ -6,6 +11,11 @@ import {
 } from "@stll/legal-atlas/provision-extraction-admission";
 import { Temporal } from "@stll/time";
 
+import {
+  caseLawProvisionAdmission,
+  caseLawProvisionExtractionScopes,
+} from "@/api/db/schema";
+import { replayRawWrite } from "@/api/lib/case-law/replay-write";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PROVISION_CITATION_CHECK_STEP } from "./citation-checks";
@@ -30,7 +40,7 @@ export const BOOTSTRAP_PAGE_SIZE = 1000;
 const PROVISION_BACKFILL_UNITS_PER_RUN = 200;
 const SCOPE_PAGE_SIZE = 50;
 const LOCK_TIMEOUT_MS = 30_000;
-const STATEMENT_TIMEOUT_MS = 60_000;
+export const PROVISION_BACKFILL_STATEMENT_TIMEOUT_MS = 60_000;
 
 type ScopeKey = { country: string; language: string };
 
@@ -75,7 +85,7 @@ const readBoolean = (row: unknown, key: string): boolean => {
 
 const PAGE_BUDGET = {
   lockTimeout: LOCK_TIMEOUT_MS,
-  statementTimeout: STATEMENT_TIMEOUT_MS,
+  statementTimeout: PROVISION_BACKFILL_STATEMENT_TIMEOUT_MS,
 } as const;
 
 const inTransaction = async (
@@ -259,27 +269,44 @@ const transitionScopes = async (
 ): Promise<void> => {
   // One bounded mutation owns both the generation and its durable job.
   // Ordering scope locks matches the transition worker's key order.
-  await connection.execute(
-    `WITH changed AS (
-       INSERT INTO case_law_provision_extraction_scopes AS scope
-         (country, language, status, generation)
-       SELECT country, language,
-         CASE WHEN action = 'activate' THEN 'active' ELSE 'retired' END, 1
-       FROM jsonb_to_recordset($1::text::jsonb)
-         AS input(country varchar, language varchar, action text)
-       ORDER BY country, language
-       ON CONFLICT (country, language) DO UPDATE
-         SET status = EXCLUDED.status, generation = scope.generation + 1
-         WHERE scope.status IS DISTINCT FROM EXCLUDED.status
-       RETURNING country, language, generation, status
-     )
-     INSERT INTO case_law_provision_scope_transitions
-       (country, language, generation, action)
-     SELECT country, language, generation,
-       CASE WHEN status = 'active' THEN 'activate' ELSE 'retire' END
-     FROM changed`,
-    [JSON.stringify(transitions)],
-  );
+  const statement = replayRawWrite({
+    table: caseLawProvisionExtractionScopes,
+    alias: "scope",
+    values: {
+      status: sql`EXCLUDED.status`,
+      generation: sql`scope.generation + 1`,
+    },
+    operation: {
+      kind: "upsert",
+      columns: [
+        caseLawProvisionExtractionScopes.country,
+        caseLawProvisionExtractionScopes.language,
+        caseLawProvisionExtractionScopes.status,
+        caseLawProvisionExtractionScopes.generation,
+      ],
+      source: sql`SELECT country, language,
+        CASE WHEN action = 'activate' THEN 'active' ELSE 'retired' END, 1
+      FROM jsonb_to_recordset(${JSON.stringify(transitions)}::text::jsonb)
+        AS input(country varchar, language varchar, action text)
+      ORDER BY country, language`,
+      target: [
+        caseLawProvisionExtractionScopes.country,
+        caseLawProvisionExtractionScopes.language,
+      ],
+    },
+    predicate: sql`scope.status IS DISTINCT FROM EXCLUDED.status`,
+    result: {
+      kind: "query",
+      name: "changed",
+      columns: sql`country, language, generation, status`,
+      query: sql`
+      INSERT INTO case_law_provision_scope_transitions (country, language, generation, action)
+      SELECT country, language, generation,
+        CASE WHEN status = 'active' THEN 'activate' ELSE 'retire' END FROM changed
+    `,
+    },
+  });
+  await statement.execute({ kind: "session", connection });
 };
 
 /** The admission revision the scopes were last reconciled to, if any. */
@@ -352,13 +379,23 @@ const scopeSeedStep = (admission: Admission): ProvisionBackfillStep => ({
         return;
       }
       if (applied === null || applied < admission.revision) {
-        await connection.execute(
-          `INSERT INTO case_law_provision_admission AS admission (key, revision)
-           VALUES ('global', $1)
-           ON CONFLICT (key) DO UPDATE
-             SET revision = greatest(admission.revision, EXCLUDED.revision)`,
-          [admission.revision],
-        );
+        const statement = replayRawWrite({
+          table: caseLawProvisionAdmission,
+          values: {
+            revision: sql`greatest(${caseLawProvisionAdmission.revision}, EXCLUDED.revision)`,
+          },
+          operation: {
+            kind: "upsert",
+            columns: [
+              caseLawProvisionAdmission.key,
+              caseLawProvisionAdmission.revision,
+            ],
+            source: sql`VALUES ('global', ${admission.revision})`,
+            target: [caseLawProvisionAdmission.key],
+          },
+          predicate: sql`true`,
+        });
+        await statement.execute({ kind: "session", connection });
         return;
       }
       // Retirements first, then activations.

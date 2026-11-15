@@ -28,11 +28,16 @@ import {
 import { panic, Result } from "better-result";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 
+import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
 } from "@stll/api-contract/professional-use";
+import {
+  WORKSPACE_STATUS,
+  workspaceIsVisible,
+} from "@stll/api-contract/workspace-status";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
 import { isUiLocale } from "@stll/locales";
@@ -68,6 +73,7 @@ import { appendSetCookieHeaders } from "@/api/http/context";
 import type { RequestContext, ResponseHeaders } from "@/api/http/context";
 import { status } from "@/api/http/status";
 import type { HttpStatusResponse } from "@/api/http/status";
+import { ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE } from "@/api/lib/account-export/organization-audit-gate";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -86,7 +92,12 @@ import {
   isPendingTwoFactorSignIn,
 } from "@/api/lib/auth-artifacts";
 import { revokeCredentialsForAccessReset } from "@/api/lib/auth/access-reset-revocation";
-import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from "@/api/lib/auth/access-token-lifetime";
+import {
+  type AccessibleWorkspace,
+  admitsWorkspaceStatus,
+  type WorkspaceStatusAccess,
+} from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import {
   admitApiAccessTokenRoute,
@@ -157,16 +168,25 @@ import type {
   SessionMemberCaller,
   WorkspaceCaller,
 } from "@/api/lib/auth/member-caller";
+import { createMemberInvitationSectionsPlugin } from "@/api/lib/auth/member-invitation-sections";
 import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
+import { withConfiguredOAuthResources } from "@/api/lib/auth/oauth-configured-resources";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
 } from "@/api/lib/auth/oauth-consent-info";
+import { getOAuthGrantIdentityClaims } from "@/api/lib/auth/oauth-grant-identity";
 import { withOwnClientDocuments } from "@/api/lib/auth/oauth-own-client-documents";
 import {
   createStellaOAuthProvider,
   OAUTH_DISABLED_PATHS,
 } from "@/api/lib/auth/oauth-registration-policy";
+import { currentOrganizationCreationTransaction } from "@/api/lib/auth/organization-creation-transaction";
+import { withBatchedOrganizationMemberships } from "@/api/lib/auth/organization-membership-adapter";
+import {
+  beforeOrganizationSlugCreation,
+  beforeOrganizationSlugUpdate,
+} from "@/api/lib/auth/organization-slug-hooks";
 import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
   professionalUseColumns,
@@ -240,6 +260,7 @@ import {
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
+import { socialTokenExchangePlugin } from "@/api/lib/auth/social-token-exchange";
 import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
 import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
@@ -315,6 +336,7 @@ import {
   enrichRequestContext,
   getRequestContext,
 } from "@/api/lib/observability/request-context";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
 import type { NewMembership } from "@/api/lib/organization-lifecycle-hooks";
 import {
@@ -338,6 +360,7 @@ import {
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { memoizePerRequest } from "@/api/lib/request-memo";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -355,7 +378,7 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
-import type { SseStreamBinding } from "@/api/lib/sse";
+import type { SseStreamBinding, UserConnectionAudience } from "@/api/lib/sse";
 import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
 import {
   isSyntheticPrincipal,
@@ -374,6 +397,7 @@ import {
   checkMemberAdmission,
   MEMBER_CAPACITY_REACHED_ERROR_CODE,
 } from "@/api/lib/usage/member-capacity";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { recordNewOrganizationAccessStateOnOwner } from "@/api/lib/usage/organization-access-state-owner";
 import {
   hasRenewingHostedSubscription,
@@ -384,6 +408,7 @@ import {
   memberReachesMatterSql,
   readAuthorizedWorkspaces,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
 import {
   getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
@@ -404,9 +429,6 @@ const { getAuthoritativeSessionFromCtx } = isLocalDevOpen()
 /** Authenticated handlers receive a bounded session reader. */
 export const ownerSyntheticSessionAuthorityReader =
   bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
-
-/** Access token lifetime in seconds (15 minutes). */
-const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
@@ -514,7 +536,8 @@ type EmailOtpResponseScheduleOptions = {
 };
 
 export const runEmailOtpRequestOnResponseSchedule = async ({
-  detach = (operation) => detached(operation, "auth.email-otp-delivery"),
+  detach = (operation) =>
+    detached(async () => operation, "auth.email-otp-delivery"),
   responseDelayMs,
   runRequest,
   wait = Bun.sleep,
@@ -1298,21 +1321,30 @@ const socialSignInTwoFactorRedirectPlugin = {
 } satisfies BetterAuthPlugin;
 
 /**
- * Whether the current auth request is the organization page's continue step.
- * The provider re-enters its authorize logic from that endpoint under the
- * authorize path, so the step is recognised by the request it answers.
+ * Whether the current auth request is the organization page's pick or its
+ * continue step. The provider re-enters its authorize logic from both, under
+ * the authorize path, so each is recognised by the request it answers.
+ *
+ * The pick is the page's `set-active` with the signed authorization request:
+ * setting the session's organization makes the provider resume authorizing
+ * in that same request. Answering it with the organization page again would
+ * send the browser back to the picker it just used, before the page could
+ * take its continue step.
  */
 const isOrganizationPageContinuation = (): boolean => {
   const endpoint = tryGetCurrentAuthEndpointContext();
   const request = endpoint?.request;
-  if (!request || request.method !== "POST") {
+  if (!request || request.method !== "POST" || !isRecord(endpoint.body)) {
     return false;
   }
+  const path = new URL(request.url).pathname;
+  if (path === new URL(getAuthEndpointUrl("oauth2/continue")).pathname) {
+    return endpoint.body["postLogin"] === true;
+  }
   return (
-    new URL(request.url).pathname ===
-      new URL(getAuthEndpointUrl("oauth2/continue")).pathname &&
-    isRecord(endpoint.body) &&
-    endpoint.body["postLogin"] === true
+    path === new URL(getAuthEndpointUrl("organization/set-active")).pathname &&
+    typeof endpoint.body["organizationId"] === "string" &&
+    typeof endpoint.body["oauth_query"] === "string"
   );
 };
 
@@ -1403,6 +1435,25 @@ export const mintWebHandoff = async (
     ctx: { operation: "mint" },
   });
   return null;
+};
+
+/** The answer an organization deletion gives when its storage teardown fails. */
+const organizationTeardownRefusal = (error: unknown): APIError => {
+  if (LegalHoldActiveError.is(error)) {
+    return new APIError("CONFLICT", {
+      error: LEGAL_HOLD_ACTIVE,
+      message: error.message,
+    });
+  }
+  if (error instanceof OrganizationStorageTeardownBoundError) {
+    return new APIError("BAD_REQUEST", {
+      error: "organization_storage_too_large",
+      message: error.message,
+    });
+  }
+  return new APIError("INTERNAL_SERVER_ERROR", {
+    message: "Failed to delete the organization's stored files",
+  });
 };
 
 export const createAuth = (
@@ -1513,10 +1564,12 @@ export const createAuth = (
     organizationId: SafeId<"organization">,
     kind: "invitation" | "membership",
   ): Promise<void> => {
-    const admission = await checkMemberAdmission(rootDb, {
-      organizationId,
-      kind,
-    });
+    const current = currentOrganizationCreationTransaction();
+    const options = { organizationId, kind };
+    const admission =
+      current === undefined
+        ? await checkMemberAdmission(rootDb, options)
+        : await checkMemberAdmission(current, options);
     // Better Auth rejects a request from an organization hook by the
     // APIError it throws.
     if (Result.isError(admission)) {
@@ -1631,7 +1684,12 @@ export const createAuth = (
 
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
     const adapter = withAuthRetention({
-      adapter: rawAuthAdapter(options),
+      // The provider reads OAuth resources only as this code configures
+      // them, whatever a newer release has added to the stored policy.
+      adapter: withConfiguredOAuthResources(
+        withBatchedOrganizationMemberships(rawAuthAdapter(options)),
+        oauthResources,
+      ),
       ownClientResources: getOwnNativeClientResources,
       admitClient: async () =>
         await admitOpenClient({
@@ -1724,7 +1782,17 @@ export const createAuth = (
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
     analytics: getServerAnalytics(),
     // Insert-once on the owner connection, like the seeds below.
-    recordAccessState: recordNewOrganizationAccessStateOnOwner,
+    recordAccessState: async (organizationId: SafeId<"organization">) => {
+      const tx = currentOrganizationCreationTransaction();
+      if (tx !== undefined) {
+        await recordNewOrganizationAccessState(tx, {
+          organizationId,
+          now: new Date(),
+        });
+        return;
+      }
+      await recordNewOrganizationAccessStateOnOwner(organizationId);
+    },
     // Insert-once on the owner connection, audited in the same transaction.
     // A creator who has not accepted yet records nothing here; the
     // organization is recorded when an owner accepts.
@@ -1732,6 +1800,15 @@ export const createAuth = (
       organizationId,
       userId,
     }: NewMembership) => {
+      const current = currentOrganizationCreationTransaction();
+      if (current !== undefined) {
+        await recordOrganizationProfessionalUse({
+          tx: current,
+          organizationId,
+          userId,
+        });
+        return;
+      }
       await withAggregateTransaction(
         rootDb,
         async (tx) =>
@@ -1745,14 +1822,28 @@ export const createAuth = (
     // Idempotent via the (organization_id, key) unique. Runs on the owner
     // connection (`rootDb`), which bypasses RLS the same way the org row's
     // own creation did.
-    seedDefaultDocumentTypes: async (organizationId: SafeId<"organization">) =>
-      await ensureDefaultDocumentTypes(organizationId, rootDb),
+    seedDefaultDocumentTypes: async (
+      organizationId: SafeId<"organization">,
+    ) => {
+      const current = currentOrganizationCreationTransaction();
+      if (current !== undefined) {
+        await ensureDefaultDocumentTypes(organizationId, current);
+        return;
+      }
+      await ensureDefaultDocumentTypes(organizationId, rootDb);
+    },
     // Once per membership, on the owner connection that wrote the membership
     // row; the defaults are then the member's own private skills to delete.
-    seedMemberDefaults: async (membership: NewMembership) =>
+    seedMemberDefaults: async (membership: NewMembership) => {
+      const current = currentOrganizationCreationTransaction();
+      if (current !== undefined) {
+        await seedDefaultSkills({ ...membership, tx: current });
+        return;
+      }
       await rootDb.transaction(
         async (tx) => await seedDefaultSkills({ ...membership, tx }),
-      ),
+      );
+    },
   });
 
   const organizationPlugin = organization({
@@ -1761,7 +1852,9 @@ export const createAuth = (
     roles,
     organizationHooks: {
       ...organizationLifecycleHooks,
-      async beforeCreateOrganization({ user }) {
+      beforeUpdateOrganization: beforeOrganizationSlugUpdate,
+      async beforeCreateOrganization({ user, organization: org }) {
+        await beforeOrganizationSlugCreation({ slug: org.slug });
         requireDemoAccountAccess(
           checkConfiguredDemoAccountAccess({
             email: user.email,
@@ -1776,7 +1869,7 @@ export const createAuth = (
         );
         await Promise.resolve();
       },
-      async beforeDeleteOrganization({ organization: org }) {
+      async beforeDeleteOrganization({ organization: org, user: deletedBy }) {
         // Complete the deletion here, before the plugin's adapter runs.
         // Everything that names the organization cascades away with it, and
         // those rows are the only description of the objects it owns:
@@ -1794,6 +1887,10 @@ export const createAuth = (
         // is the point: instructions committed ahead of a cascade that then
         // failed would name a live organization's documents.
         //
+        // The audit trail cascades with the organization, so the teardown
+        // owner first requires the deleting owner's complete archive of it
+        // and refuses, before writing anything, without one.
+        //
         // `org.id` is read off the row the plugin already loaded, so this is
         // where it becomes the ownership id. `rootDb` bypasses row-level
         // security exactly as the plugin's own adapter does.
@@ -1807,31 +1904,26 @@ export const createAuth = (
               if (await hasRenewingHostedSubscription(tx, organizationId)) {
                 return { type: "subscription_renews" } as const;
               }
-              return {
-                type: "deleted",
-                teardown: await completeOrganizationDeletion({
-                  organizationId,
-                  tx,
-                }),
-              } as const;
+              return await completeOrganizationDeletion({
+                deletedBy: brandPersistedUserId(deletedBy.id),
+                organizationId,
+                tx,
+              });
             }),
           catch: (cause) => cause,
         });
         if (Result.isError(teardown)) {
-          captureError(
-            teardown.error,
-            handlerErrorContext("lib.beforeDeleteOrganization.teardown_error", {
-              organizationId,
-            }),
-          );
-          throw teardown.error instanceof OrganizationStorageTeardownBoundError
-            ? new APIError("BAD_REQUEST", {
-                error: "organization_storage_too_large",
-                message: teardown.error.message,
-              })
-            : new APIError("INTERNAL_SERVER_ERROR", {
-                message: "Failed to delete the organization's stored files",
-              });
+          // An active legal hold is a refusal the caller acts on, not a fault.
+          if (!LegalHoldActiveError.is(teardown.error)) {
+            captureError(
+              teardown.error,
+              handlerErrorContext(
+                "lib.beforeDeleteOrganization.teardown_error",
+                { organizationId },
+              ),
+            );
+          }
+          throw organizationTeardownRefusal(teardown.error);
         }
 
         if (teardown.value.type === "subscription_renews") {
@@ -1839,6 +1931,15 @@ export const createAuth = (
             error: ORGANIZATION_DELETION_REFUSAL_CODE.subscriptionRenews,
             message:
               "Cancel the organization's subscription before deleting the organization.",
+          });
+        }
+        if (teardown.value.type === "refused") {
+          // `code` is what the web client reads off an auth error.
+          throw new APIError("CONFLICT", {
+            code: teardown.value.code,
+            error: teardown.value.code,
+            message:
+              ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE[teardown.value.code],
           });
         }
 
@@ -1850,7 +1951,7 @@ export const createAuth = (
         await handoffCommittedEntityDeletionCleanupBatch({
           captureDeliveryError: captureError,
           enqueueCleanup: enqueueEntityDeletionCleanup,
-          requestIds: teardown.value.teardown.requestIds,
+          requestIds: teardown.value.requestIds,
         });
       },
       // A readable refusal before the plugin writes anything; the
@@ -1917,7 +2018,10 @@ export const createAuth = (
       },
       async beforeAddMember({ organization: org, user, member: addedMember }) {
         const endpoint = tryGetCurrentAuthEndpointContext();
-        if (endpoint?.path === "/organization/create") {
+        if (
+          endpoint?.path === "/organization/create" ||
+          currentOrganizationCreationTransaction() !== undefined
+        ) {
           // Better Auth supplies the creator role, before a membership or
           // browser session exists on the system provisioning path.
           if (
@@ -1932,9 +2036,17 @@ export const createAuth = (
           // afterCreateOrganization hook. Initialize the fail-closed access
           // row before capacity admission; the lifecycle hook repeats this
           // insert after creation and the owner is idempotent.
-          await recordNewOrganizationAccessStateOnOwner(
-            brandPersistedOrganizationId(org.id),
-          );
+          const tx = currentOrganizationCreationTransaction();
+          if (tx !== undefined) {
+            await recordNewOrganizationAccessState(tx, {
+              organizationId: brandPersistedOrganizationId(org.id),
+              now: new Date(),
+            });
+          } else {
+            await recordNewOrganizationAccessStateOnOwner(
+              brandPersistedOrganizationId(org.id),
+            );
+          }
         } else {
           await requireAssignableMemberRole(
             brandPersistedOrganizationId(org.id),
@@ -2065,6 +2177,8 @@ export const createAuth = (
           }
           throw removal.error;
         }
+        // The removal cleared the member's attorney assignments on contacts.
+        announceContactSetChanged(organizationId);
       },
     },
     async sendInvitationEmail(data, request) {
@@ -2121,6 +2235,9 @@ export const createAuth = (
       "/api-key/delete",
       "/api-key/get",
       "/api-key/list",
+      // Account creation must pass the shared consent, rate-limit and receipt boundary.
+      // Internal auth.api.createOrganization remains available to that boundary.
+      "/organization/create",
       "/organization/leave",
       // OAuth client management Stella has no use for; see
       // `OAUTH_ENDPOINT_POLICY`.
@@ -2503,10 +2620,16 @@ export const createAuth = (
       // Must be registered after `twoFactorWithSignInGate` so its after-hook
       // runs after the two-factor hook has set the pending-challenge response.
       socialSignInTwoFactorRedirectPlugin,
+      // Before the outcome log, so the log counts the redirect it settles.
+      socialTokenExchangePlugin,
       // After the two-factor redirect, so it counts the response the browser
       // actually receives.
       socialSignInOutcomePlugin,
       organizationPlugin,
+      createMemberInvitationSectionsPlugin(
+        createAuthMiddleware,
+        () => new Date(),
+      ),
       createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
       createStellaOAuthProvider(
         {
@@ -2548,7 +2671,10 @@ export const createAuth = (
                     });
                     throw error;
                   }
-                  return claims.value;
+                  return {
+                    ...claims.value,
+                    ...(await getOAuthGrantIdentityClaims(input)),
+                  };
                 },
               },
             },
@@ -2564,7 +2690,7 @@ export const createAuth = (
               ),
             },
           ],
-          accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
+          accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN_SECONDS,
           refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
           refreshTokenReuseInterval: REFRESH_TOKEN_REUSE_INTERVAL,
           clientReference: ({ session }) =>
@@ -2866,7 +2992,10 @@ export const createAuth = (
       }),
     },
   });
-  return isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth;
+  return Object.assign(isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth, {
+    organizationCreateEndpoint: organizationPlugin.endpoints.createOrganization,
+    organizationUpdateEndpoint: organizationPlugin.endpoints.updateOrganization,
+  });
 };
 
 let _auth: ReturnType<typeof createAuth> | undefined;
@@ -2995,6 +3124,22 @@ export const AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
+const SESSION_READ_FAILED = failureSink({
+  event: "auth.session_read_failed",
+  expected: [],
+});
+
+/**
+ * The 500 a request gets when its session or membership could not be read,
+ * built from the read's failure so the request records why.
+ */
+export const authUnavailableAnswer = (cause: unknown) =>
+  observedStatus(
+    { sink: SESSION_READ_FAILED, cause },
+    500,
+    AUTH_REJECTION_BODY[500],
+  );
+
 /**
  * The rejection a signed-in account gets until it accepts the
  * professional-use statement; the web app answers it with the prompt.
@@ -3009,15 +3154,21 @@ const PROFESSIONAL_USE_REJECTION_BODY = {
  * body of its own; an app token refused a route gets the shared 403, never
  * the professional-use prompt.
  */
-type ValidateAuthRejection = {
-  ok: false;
-  statusCode: Exclude<AuthRejectionStatus, 404>;
-  body?: typeof PROFESSIONAL_USE_REJECTION_BODY;
-};
+type ValidateAuthRefusal =
+  | {
+      statusCode: 401 | 403;
+      body?: typeof PROFESSIONAL_USE_REJECTION_BODY;
+    }
+  | { statusCode: 500; cause: unknown };
+
+type ValidateAuthRejection = { ok: false } & ValidateAuthRefusal;
 
 const rejectValidateAuth = (
-  rejection: Omit<ValidateAuthRejection, "ok">,
-): ValidateAuthRejection => ({ ok: false, ...rejection });
+  rejection: ValidateAuthRefusal,
+): ValidateAuthRejection => ({
+  ok: false,
+  ...rejection,
+});
 
 /**
  * Account routes confirm the session still exists in storage. Organization
@@ -3056,7 +3207,7 @@ export const authenticateSession = async (
   });
 
   if (Result.isError(sessionResult)) {
-    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
+    return { ok: false, answer: authUnavailableAnswer(sessionResult.error) };
   }
 
   const session = sessionResult.value?.session;
@@ -3083,7 +3234,7 @@ export const authenticateSession = async (
     });
   });
   if (Result.isError(liveResult)) {
-    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
+    return { ok: false, answer: authUnavailableAnswer(liveResult.error) };
   }
   if (liveResult.value === null) {
     return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
@@ -3134,8 +3285,6 @@ const featureAccessColumns = (organizationId: SafeId<"organization">) => {
           >`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId} and ${featureEnrolments.featureId} = ANY(${typedPgArray(enrolmentFeatureIds, "text")})), '{}')`,
   };
 };
-
-const ACTIVE_WORKSPACE_STATUS = "active";
 
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
@@ -3299,10 +3448,13 @@ export const isActiveOrganizationMember = async ({
 };
 
 /**
- * Whether one user-channel SSE stream may still receive events. Reads through
- * the owner connection for the same reason the workspace audience does: event
- * delivery must be able to evaluate a member whose access was just removed and
- * who can no longer open an RLS-scoped request of their own.
+ * Whether a user's user-channel SSE streams may still receive events: the
+ * membership every stream needs, and which browser sessions among
+ * `sessionIds` are live (an app token's stream has none to check). One
+ * statement answers both. Reads through the owner connection for the same
+ * reason the workspace audience does: event delivery must be able to evaluate
+ * a member whose access was just removed and who can no longer open an
+ * RLS-scoped request of their own.
  */
 export const resolveUserRealtimeAuthorization = async (
   {
@@ -3315,16 +3467,15 @@ export const resolveUserRealtimeAuthorization = async (
     userId: SafeId<"user">;
   },
   db: MemberAuthorizationDb,
-): Promise<ReadonlySet<string>> => {
+): Promise<UserConnectionAudience> => {
   const uniqueSessionIds = [...new Set(sessionIds)];
-  if (uniqueSessionIds.length === 0) {
-    return new Set();
-  }
 
+  // The member row comes back once per live session, or once with no session
+  // when none is live, so a member is never lost to the join.
   const rows = await db
     .select({ sessionId: authSession.id })
     .from(member)
-    .innerJoin(
+    .leftJoin(
       authSession,
       and(
         eq(authSession.userId, member.userId),
@@ -3335,9 +3486,14 @@ export const resolveUserRealtimeAuthorization = async (
     .where(
       and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
     )
-    .limit(uniqueSessionIds.length);
+    .limit(Math.max(1, uniqueSessionIds.length));
 
-  return new Set(rows.map((row) => row.sessionId));
+  return {
+    member: rows.length > 0,
+    liveSessionIds: new Set(
+      rows.flatMap(({ sessionId }) => (sessionId === null ? [] : [sessionId])),
+    ),
+  };
 };
 
 type WorkspaceRealtimeAudienceLookup = {
@@ -3377,7 +3533,7 @@ export const resolveWorkspaceRealtimeAudience = async (
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
-        eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         memberReachesMatterSql(
           { organizationId: member.organizationId, userId: member.userId },
           workspaces.id,
@@ -3586,8 +3742,7 @@ type ResolvedIdentity = {
 };
 
 type IdentityResolution =
-  | { ok: true; identity: ResolvedIdentity }
-  | Omit<ValidateAuthRejection, "body">;
+  { ok: true; identity: ResolvedIdentity } | ValidateAuthRejection;
 
 const resolveSessionIdentity = async ({
   getSession,
@@ -3607,7 +3762,11 @@ const resolveSessionIdentity = async ({
     });
 
   if (Result.isError(sessionResult)) {
-    return { ok: false, statusCode: 500 };
+    return {
+      ok: false,
+      statusCode: 500,
+      cause: sessionResult.error,
+    };
   }
   const session = sessionResult.value?.session;
   const user = sessionResult.value?.user;
@@ -3622,7 +3781,11 @@ const resolveSessionIdentity = async ({
   }
 
   if (Result.isError(memberAuthorizationResult)) {
-    return { ok: false, statusCode: 500 };
+    return {
+      ok: false,
+      statusCode: 500,
+      cause: memberAuthorizationResult.error,
+    };
   }
 
   const authorization = memberAuthorizationResult.value;
@@ -3662,7 +3825,7 @@ const resolveAccessTokenIdentity = async ({
   });
   if (Result.isError(authenticated)) {
     if (authenticated.error.reason === "unavailable") {
-      return { ok: false, statusCode: 500 };
+      return { ok: false, statusCode: 500, cause: authenticated.error };
     }
     responseHeaders["www-authenticate"] = 'Bearer error="invalid_token"';
     return { ok: false, statusCode: 401 };
@@ -3693,7 +3856,7 @@ const resolveAccessTokenIdentity = async ({
       }),
   );
   if (Result.isError(authorizationResult)) {
-    return { ok: false, statusCode: 500 };
+    return { ok: false, statusCode: 500, cause: authorizationResult.error };
   }
   const authorization = authorizationResult.value;
   if (
@@ -3789,7 +3952,7 @@ const resolveValidateAuth = async ({
           responseHeaders,
         });
   if (!resolved.ok) {
-    return rejectValidateAuth({ statusCode: resolved.statusCode });
+    return resolved;
   }
   const {
     authorization,
@@ -3886,7 +4049,7 @@ const resolveValidateAuth = async ({
     activeWorkspaceIdsPromise ??= getAccessibleWorkspaces().then((items) => {
       const activeWorkspaceIds: SafeId<"workspace">[] = [];
       for (const item of items) {
-        if (item.status !== "deleting") {
+        if (workspaceIsVisible(item.status)) {
           activeWorkspaceIds.push(item.id);
         }
       }
@@ -4066,10 +4229,13 @@ export const createMemberAuthenticator = ({
     if (!result.ok) {
       return {
         ok: false,
-        answer: status(
-          result.statusCode,
-          result.body ?? AUTH_REJECTION_BODY[result.statusCode],
-        ),
+        answer:
+          result.statusCode === 500
+            ? authUnavailableAnswer(result.cause)
+            : status(
+                result.statusCode,
+                result.body ?? AUTH_REJECTION_BODY[result.statusCode],
+              ),
       };
     }
     const stepUp = handoffStepUpRefusal({
@@ -4091,9 +4257,6 @@ export type {
   WorkspaceCaller,
 } from "@/api/lib/auth/member-caller";
 
-/** Which matter statuses a workspace route admits; archived only where it says so. */
-export type WorkspaceStatusAccess = "active" | "active-or-archived";
-
 /**
  * Matter access for a member: the matter the validated `:workspaceId` names
  * must be one the member may use, in a status the route admits. Its audit
@@ -4106,10 +4269,7 @@ export const authorizeWorkspace = async (
   admitted: WorkspaceStatusAccess,
 ): Promise<CallerOutcome<WorkspaceCaller>> => {
   const workspace = await memberCaller.getWorkspaceAccess(workspaceId);
-  const admittedStatus =
-    workspace?.status === "active" ||
-    (admitted === "active-or-archived" && workspace?.status === "archived");
-  if (!admittedStatus) {
+  if (!admitsWorkspaceStatus(workspace?.status, admitted)) {
     return { ok: false, answer: status(404, AUTH_REJECTION_BODY[404]) };
   }
   return {

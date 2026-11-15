@@ -65,6 +65,7 @@ export const uploadEntityVersion = async ({
 }: UploadEntityVersionOptions): Promise<EntityVersionUploadResult> => {
   signal?.throwIfAborted();
   const preflight = await preflightAttachedTemplateUpload([file]);
+  signal?.throwIfAborted();
   let fileToUpload: File;
   switch (preflight.type) {
     case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.cancelled:

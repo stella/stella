@@ -5,8 +5,11 @@
   "adoptUnsupported": {
     "message": "Ze stellą można używać tylko publicznych stron HTTPS."
   },
+  "usingTabs": {
+    "message": "W użyciu:"
+  },
   "downloadKept": {
-    "message": "Pobierania zakończone, gdy stella sterowała kartą, i zachowane: $COUNT$. Przed otwarciem sprawdź, skąd pochodzą.",
+    "message": "Zachowane pobierania: $COUNT$, sprawdź przed otwarciem",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -14,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "Pobierania zatrzymane przez stellę podczas sterowania kartą: $COUNT$.",
+    "message": "Zatrzymane pobierania: $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -22,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "Gdy stella sterowała kartą: zatrzymane pobierania: $STOPPED$. Zakończone i zachowane pobierania (przed otwarciem sprawdź, skąd pochodzą): $KEPT$.",
+    "message": "Zatrzymane pobierania: $STOPPED$ · zachowane: $KEPT$, sprawdź przed otwarciem",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -42,15 +45,10 @@
     "message": "Otwórz kartę aplikacji stella i spróbuj ponownie."
   },
   "connectionPurpose": {
-    "message": "Gdy poprosisz na czacie, stella może otwierać i czytać strony w osobnej karcie, korzystając z Twoich zalogowanych sesji."
+    "message": "Otwiera i czyta strony dla czatu, korzystając z Twoich zalogowanych sesji."
   },
   "statusConnected": {
-    "message": "Połączono z $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
+    "message": "Połączono"
   },
   "statusNotConnected": {
     "message": "Brak połączenia"
@@ -61,22 +59,14 @@
   "statusOpenStella": {
     "message": "Otwórz stellę, aby się połączyć"
   },
-  "statusTabHandedOver": {
-    "message": "Karta przekazana stelli: $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
   "allowAndConnect": {
     "message": "Zezwól na dostęp i połącz"
   },
   "allowWebsiteAccess": {
     "message": "Zezwól na dostęp do stron"
   },
-  "connectTab": {
-    "message": "Połącz tę kartę stelli"
+  "connectStella": {
+    "message": "Połącz stellę"
   },
   "adoptTab": {
     "message": "Użyj tej karty ze stellą"
@@ -84,22 +74,28 @@
   "disconnectTab": {
     "message": "Rozłącz"
   },
-  "disconnectDescription": {
-    "message": "stella przestanie używać połączonej karty."
-  },
   "revokeAccess": {
-    "message": "Usuń dostęp do stron"
-  },
-  "revokeDescription": {
-    "message": "Usuwa uprawnienie do otwierania i czytania stron."
+    "message": "Usuń dostęp"
   },
   "checkingAccess": {
     "message": "Sprawdzanie połączenia…"
   },
   "statusConnectedElsewhere": {
-    "message": "Połączona jest inna karta stella"
+    "message": "Połączono gdzie indziej"
   },
-  "connectTabInstead": {
-    "message": "Połącz tę kartę stella zamiast tamtej"
+  "connectStellaInstead": {
+    "message": "Połącz stellę tutaj zamiast tamtej"
+  },
+  "allowDesktop": {
+    "message": "Używaj ze stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop: połączono"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop nie jest uruchomiony"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Zaktualizuj stella desktop i to rozszerzenie"
   }
 }

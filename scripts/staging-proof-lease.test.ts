@@ -50,7 +50,7 @@ describe("release-candidate staging power lease", () => {
       action.indexOf(
         `request_staging_lease "\${STAGING_LEASE_BEFORE_HOURS:-}"`,
       ),
-    ).toBeLessThan(action.indexOf("/dispatches"));
+    ).toBeLessThan(action.indexOf("scripts/gh-dispatch-workflow.sh"));
     expect(
       action.indexOf(`request_staging_lease "\${STAGING_LEASE_AFTER_HOURS:-}"`),
     ).toBeGreaterThan(action.indexOf('if [[ "$conclusion" == "success" ]]'));

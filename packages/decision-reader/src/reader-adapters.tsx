@@ -11,7 +11,6 @@ import type {
   CitedDecisionTarget,
   CitedProvisionTarget,
   CitedStatuteTarget,
-  ProvisionPreviewData,
   ProvisionViewPayload,
 } from "./reader-types";
 
@@ -51,21 +50,23 @@ export type ReaderStatuteLinkProps =
       citations: readonly CitedProvisionTarget[];
     };
 
-export type ProvisionPreviewRef = {
-  anchor: string;
-  citedAnchor: string | undefined;
-  documentId: string;
-};
-
 export type ReaderPresentationAdapters = {
   messages: ReaderMessages;
   /**
-   * Copies the block's permalink and reports whether it worked; the mark
-   * confirms a success in place, so the host raises no success toast.
-   * Omit when the host cannot copy a permalink; copy controls are hidden.
+   * Renders a block's permalink mark with the host's Copy of the block's
+   * link: `copy` copies it, and `copied` is true while the mark confirms in
+   * place, so the host raises no success toast. Omit when the host cannot
+   * copy a permalink; the marks are hidden.
    */
-  copyPermalink?: ((anchorId: string) => Promise<boolean>) | undefined;
+  renderPermalinkCopy?:
+    | ((props: {
+        anchorId: string;
+        render: (state: PermalinkCopyState) => ReactElement;
+      }) => ReactElement)
+    | undefined;
 };
+
+export type PermalinkCopyState = { copied: boolean; copy: () => void };
 
 export type DecisionReaderAdapters = ReaderPresentationAdapters & {
   renderDecisionLink: (props: ReaderDecisionLinkProps) => ReactElement;
@@ -74,10 +75,10 @@ export type DecisionReaderAdapters = ReaderPresentationAdapters & {
     decisionId: string;
     reason: MissingBodyReason;
   }) => ReactNode;
+  /** Opens the provision in the side panel beside the text. */
   openProvision: (provision: ProvisionViewPayload) => void;
-  loadProvisionPreview: (
-    ref: ProvisionPreviewRef,
-  ) => Promise<ProvisionPreviewData | null>;
+  /** A router link to the provision on its act's own page. */
+  provisionPageLink: (provision: CitedProvisionTarget) => ReactElement;
 };
 
 const ReaderPresentationContext =

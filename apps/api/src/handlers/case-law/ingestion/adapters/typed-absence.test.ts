@@ -22,10 +22,12 @@ import {
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 test("every registered source has a publication fixture", () => {

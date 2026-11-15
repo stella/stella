@@ -1,8 +1,9 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
+import { initialBatchState } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { lockBackfillCheckpoint } from "@/api/lib/db/aggregate-lock";
 
 import {
@@ -78,7 +79,7 @@ const enrollBatch = async (
       INSERT INTO public.database_backfill_states (name, cursor, batch)
       VALUES ($1, NULL, $2::text::jsonb) ON CONFLICT (name) DO NOTHING
     `,
-      [NAME, JSON.stringify(initialBatchState(defaultConfig))],
+      [NAME, JSON.stringify(initialBatchState(loadGateHealthConfig()))],
     );
     const row =
       (await lockBackfillCheckpoint(connection, NAME)).at(0) ??

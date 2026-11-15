@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -9,6 +9,7 @@ import { workspaces } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { withAggregateLock } from "./aggregate-lock";
 import { lockForWrite } from "./lock-for-write";
@@ -47,12 +48,15 @@ if (!databaseUrl || !enabled) {
           // expression gives the batch a deliberately different collation.
           await tx.execute(sql`CREATE TEMP VIEW organization AS
             SELECT id COLLATE "en-x-icu" AS id FROM public.organization`);
-          const localeRows = await tx.execute(sql`SELECT id FROM organization
+          const localeRows = await tx.execute(
+            sql`SELECT id FROM organization
             WHERE id IN (${sql.join(
               ids.map((id) => sql`${id}`),
               sql`, `,
             )})
-            ORDER BY id COLLATE "en-x-icu"`);
+            ORDER BY id COLLATE "en-x-icu"`,
+            "objects",
+          );
           expect(localeRows.map((row) => row["id"])).not.toEqual(sorted);
           const parents = await lockForWrite(tx, { organizationIds: ids });
           expect([...parents.organizationIds]).toEqual(sorted);
@@ -80,7 +84,7 @@ if (!databaseUrl || !enabled) {
           }
         });
       } finally {
-        await db.delete(organization).where(inArray(organization.id, ids));
+        await deleteOrganizationsForTest(db, ids);
       }
     });
   });
@@ -164,11 +168,10 @@ if (!databaseUrl || !enabled) {
           new Set([workspaceId, otherWorkspaceId]),
         );
       } finally {
-        await db
-          .delete(organization)
-          .where(
-            inArray(organization.id, [organizationId, otherOrganizationId]),
-          );
+        await deleteOrganizationsForTest(db, [
+          organizationId,
+          otherOrganizationId,
+        ]);
       }
     });
   });

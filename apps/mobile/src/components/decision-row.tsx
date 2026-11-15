@@ -1,8 +1,7 @@
 import { useRouter } from "expo-router";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useFormatter } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import type { DecisionSummary } from "@/state/case-law";
@@ -11,9 +10,16 @@ import type { DecisionSummary } from "@/state/case-law";
  * One decision, as the web's case-law grid lists it: its case number, then
  * court, date and kind, then the opening of its headnote. The date is the
  * day it was decided, never "2 days ago": Hermes cannot format relative
- * times. Tapping it opens the decision.
+ * times. Tapping it opens the decision, or does what `onPress` says, as
+ * search does to remember what found it.
  */
-export const DecisionRow = ({ decision }: { decision: DecisionSummary }) => {
+export const DecisionRow = ({
+  decision,
+  onPress,
+}: {
+  decision: DecisionSummary;
+  onPress?: (() => void) | undefined;
+}) => {
   const format = useFormatter();
   const router = useRouter();
   const decided =
@@ -30,31 +36,35 @@ export const DecisionRow = ({ decision }: { decision: DecisionSummary }) => {
   );
 
   return (
-    <Button
-      onPress={() => {
-        router.push({
-          pathname: "/law/[decisionId]",
-          params: { decisionId: decision.id, caseNumber: decision.caseNumber },
-        });
-      }}
-      size="row"
-      variant="ghost"
+    <Pressable
+      accessibilityRole="button"
+      className="border-border active:bg-accent gap-1 border-b py-3"
+      onPress={
+        onPress ??
+        (() => {
+          router.push({
+            pathname: "/law/[decisionId]",
+            params: {
+              decisionId: decision.id,
+              caseNumber: decision.caseNumber,
+            },
+          });
+        })
+      }
     >
-      <View className="border-border flex-1 gap-1 border-b py-3">
-        <Text numberOfLines={1} variant="rowTitle">
-          {decision.caseNumber}
-        </Text>
-        <Text numberOfLines={1} variant="caption">
-          {details.join(" · ")}
-        </Text>
-        {decision.preview === null ? null : (
-          <View className="pt-0.5">
-            <Text numberOfLines={3} variant="caption">
-              {decision.preview}
-            </Text>
-          </View>
-        )}
-      </View>
-    </Button>
+      <Text numberOfLines={1} variant="rowTitle">
+        {decision.caseNumber}
+      </Text>
+      <Text numberOfLines={1} variant="caption">
+        {details.join(" · ")}
+      </Text>
+      {decision.preview === null ? null : (
+        <View className="pt-0.5">
+          <Text numberOfLines={3} variant="caption">
+            {decision.preview}
+          </Text>
+        </View>
+      )}
+    </Pressable>
   );
 };

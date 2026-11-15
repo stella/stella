@@ -54,7 +54,7 @@ type BoundedStep = { where: string; step: Step; env: Env };
 // A deadline may name one matrix value; each `include` leg is then checked
 // with its own value. Any other expression stays unreadable, so it fails.
 const MATRIX_DEADLINE = /^\$\{\{\s*matrix\.([\w-]+)\s*\}\}$/u;
-export const deadlineLegs = (
+const deadlineLegs = (
   bounded: BoundedStep,
   legs: readonly MatrixLeg[],
 ): BoundedStep[] => {
@@ -145,7 +145,7 @@ const boundedRetrySteps = (): BoundedStep[] => {
   return found;
 };
 
-export const retryEnvelopeViolation = ({ where, step, env }: BoundedStep) => {
+const retryEnvelopeViolation = ({ where, step, env }: BoundedStep) => {
   const attempts = Number(env["RETRY_ATTEMPTS"] ?? DEFAULT_ATTEMPTS);
   const delays = String(env["RETRY_DELAYS_SECONDS"] ?? DEFAULT_DELAYS)
     .trim()

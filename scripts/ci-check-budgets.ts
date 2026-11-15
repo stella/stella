@@ -3,6 +3,9 @@
 // the pool stops a silent, idle check much sooner (see ci-check-pool.ts), so
 // budgets are generous: legitimate variance never fails a check.
 //
+// Each check's peak memory is the largest peak RSS those runs measured. The
+// pool admits checks by it, so concurrent checks never exceed the runner.
+//
 //   bun scripts/ci-check-budgets.ts refresh [runs]
 //
 // reads the pool logs of the latest passing CI runs (gh) and rewrites
@@ -18,12 +21,18 @@ import {
   type CheckPoolJob,
   parseCheckPool,
   readWorkingTreeCheckPool,
+  type TimeBudget,
 } from "./ci-check-pool-registry";
 import { CODE_CHECK_EXECUTION_BUDGET_MS } from "./code-check-affected";
 
 const FLOOR_SECONDS = 5 * 60;
 /** A check no passing run has measured yet. */
 export const DEFAULT_BUDGET_MINUTES = 30;
+/**
+ * The peak memory of a check no passing run has measured yet: generous, so an
+ * unmeasured heavy check shares the runner with less until it is measured.
+ */
+export const DEFAULT_PEAK_RSS_MIB = 4096;
 
 /** Nearest-rank percentile of a non-empty sample. */
 export const percentile = (samples: readonly number[], rank: number) => {
@@ -52,7 +61,7 @@ export const MINIMUM_BUDGET_SECONDS: Readonly<
 export const checkBudget = (
   samples: readonly number[],
   minimumSeconds = 0,
-): CheckBudget => {
+): TimeBudget => {
   if (samples.length === 0) {
     return {
       minutes: Math.max(DEFAULT_BUDGET_MINUTES, Math.ceil(minimumSeconds / 60)),
@@ -69,6 +78,15 @@ export const checkBudget = (
     p99Seconds: Math.round(p99),
   };
 };
+
+/**
+ * The largest measured peak, in whole MiB. A peak is a maximum, not a typical
+ * value: admitting a check by less would let concurrent peaks exceed the runner.
+ */
+export const peakRssMiB = (samples: readonly number[]) =>
+  samples.length === 0
+    ? DEFAULT_PEAK_RSS_MIB
+    : Math.max(1, Math.ceil(Math.max(...samples)));
 
 const JOB_NAME = /^(?<job>[\w-]+)(?: \(\d+\))?$/u;
 /** The pool a CI job (or one of its matrix partitions) runs, if any. */
@@ -91,6 +109,19 @@ export const passedDurations = (log: string) =>
       : [{ name, seconds }];
   });
 
+// The pool's summary table: "| Check | Result | Seconds | Peak RSS (MiB) |",
+// with pipes and backslashes in a check name escaped.
+const PASSED_ROW =
+  /\| (?<name>(?:[^|\\]|\\.)+) \| success \| \d+(?:\.\d+)? \| (?<mib>\d+) \|$/u;
+/** Peak RSS of the checks a pool job log's summary table shows as passed. */
+export const passedPeaks = (log: string) =>
+  log.split(/\r?\n/u).flatMap((line) => {
+    const groups = PASSED_ROW.exec(line)?.groups;
+    const name = groups?.["name"]?.replaceAll(/\\(.)/gu, "$1");
+    const mib = Number(groups?.["mib"]);
+    return name === undefined || !Number.isFinite(mib) ? [] : [{ name, mib }];
+  });
+
 const GH_RETRY = path.resolve(import.meta.dir, "gh-retry.sh");
 // Every GitHub API call goes through the retry owner.
 const gh = (...args: string[]) => {
@@ -108,6 +139,7 @@ const REPOSITORY = "stella/stella";
 
 const refresh = (runs: number) => {
   const samples = new Map<string, number[]>();
+  const peaks = new Map<string, number[]>();
   const runIds = gh(
     "api",
     `repos/${REPOSITORY}/actions/workflows/ci.yml/runs?status=success&per_page=${runs}`,
@@ -139,19 +171,28 @@ const refresh = (runs: number) => {
         const key = `${job}\0${name}`;
         samples.set(key, [...(samples.get(key) ?? []), seconds]);
       }
+      for (const { name, mib } of passedPeaks(log)) {
+        const key = `${job}\0${name}`;
+        peaks.set(key, [...(peaks.get(key) ?? []), mib]);
+      }
     }
   }
   const budgets = Object.fromEntries(
     CHECK_POOL_JOBS.map((job) => [
       job,
       Object.fromEntries(
-        parseCheckPool(readWorkingTreeCheckPool(job)).map(({ name }) => [
-          name,
-          checkBudget(
-            samples.get(`${job}\0${name}`) ?? [],
-            MINIMUM_BUDGET_SECONDS[job]?.[name],
-          ),
-        ]),
+        parseCheckPool(readWorkingTreeCheckPool(job)).map(
+          ({ name }): [string, CheckBudget] => [
+            name,
+            {
+              ...checkBudget(
+                samples.get(`${job}\0${name}`) ?? [],
+                MINIMUM_BUDGET_SECONDS[job]?.[name],
+              ),
+              peakRssMiB: peakRssMiB(peaks.get(`${job}\0${name}`) ?? []),
+            },
+          ],
+        ),
       ),
     ]),
   );

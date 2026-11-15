@@ -12,6 +12,7 @@ import {
 } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { installRenderProbe, RENDER_CAUSES } from "@stll/render-probe";
 import type { RenderSnapshot } from "@stll/render-probe";
 import { formatRenderReport } from "@stll/render-probe/report";
@@ -27,7 +28,6 @@ import {
 import type { StreamChunkKind } from "@/features/chat/stream-chunk-commit-budget";
 import translations from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -525,7 +525,7 @@ const Composer = ({
 }) => {
   const controller = useChatEditor({ threadRef: COMPOSER_THREAD_REF });
   const onSubmit = useLatestCallback(async (draft: ChatInputDraft) => {
-    await sendMessage(await buildChatRequestMessage(draft));
+    await sendMessage((await buildChatRequestMessage(draft)).unwrap());
     return CHAT_SEND_SENT;
   });
   return (
@@ -533,6 +533,7 @@ const Composer = ({
       controller={controller}
       context={COMPOSER_CONTEXT}
       isGenerating={isGenerating}
+      models={null}
       skillsOrganizationId={ORGANIZATION_ID}
       reservedCommands={
         messages.length > 0
@@ -589,8 +590,8 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
     expect(
       testing
         .within(page.view.container)
-        .queryByRole("button", { name: translations.chat.sendPrompt }),
-    ).not.toBeNull();
+        .queryByRole("button", { name: translations.chat.sendPrompt }) === null,
+    ).toBe(false);
   });
   const { firstAt, lastAt } = server.burst;
   if (firstAt === undefined || lastAt === undefined) {

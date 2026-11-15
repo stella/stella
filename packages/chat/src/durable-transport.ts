@@ -110,7 +110,7 @@ const terminalChatResponse = ({
   onTranscript();
   onReconnectChange(false);
   return new Response(
-    `data: ${JSON.stringify({ type: "RUN_FINISHED", runId, ...(resume?.pendingInterrupts === undefined ? {} : { outcome: { type: "interrupt", interrupts: resume.pendingInterrupts } }) })}\n\n`,
+    `data: ${JSON.stringify({ type: "RUN_FINISHED", runId, ...(resume?.pendingInterrupts !== undefined ? { outcome: { type: "interrupt", interrupts: resume.pendingInterrupts } } : {}) })}\n\n`,
     { headers: { "Content-Type": "text/event-stream" } },
   );
 };
@@ -328,6 +328,11 @@ export const createDurableChatTransport = <TMessages extends UIMessage[]>({
           return response;
         });
         if (Result.isOk(result) && result.value !== undefined) {
+          // The outage is over once the server answered for the run. The
+          // window bounds one outage, so a later drop gets its own, however
+          // long the turn stays silent in between; the backoff keeps growing
+          // until an event arrives, which bounds a stream that only flaps.
+          reconnectStartedAt = undefined;
           return result.value;
         }
         if (
@@ -335,8 +340,12 @@ export const createDurableChatTransport = <TMessages extends UIMessage[]>({
           result.error.cause instanceof ChatReconnectError &&
           result.error.cause.code !== undefined
         ) {
+          onReconnectChange(false);
           onError(result.error.cause);
-          return new Response(null, { status: 502 });
+          // The typed error above owns the user-facing cause. This synthetic
+          // response only stops the SDK: 5xx responses and fetch rejections
+          // are retryable after a durable stream has made progress.
+          return new Response(null, { status: 400 });
         }
         if (init?.signal?.aborted) {
           throw init.signal.reason;
@@ -363,7 +372,7 @@ export const createDurableChatTransport = <TMessages extends UIMessage[]>({
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     fetchClient: resumableFetch,
-    reconnect: { delayMs: 0, maxAttempts: 100 },
+    reconnect: { initialDelayMs: 0, maxAttempts: 100 },
   });
   const progress = () => {
     reconnectStartedAt = undefined;

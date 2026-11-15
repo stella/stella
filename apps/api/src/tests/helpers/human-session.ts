@@ -8,6 +8,8 @@ import {
 
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { readDevOtp } from "@/api/lib/dev-otp-store";
 
@@ -33,7 +35,7 @@ const responseCookiePairs = (res: Response): [string, string][] =>
  */
 export type HumanBrowser = {
   email: string;
-  userId: string;
+  userId: SafeId<"user">;
   cookieHeader: () => string;
   headers: () => Headers;
   setActiveOrganization: (organizationId: string) => Promise<void>;
@@ -64,7 +66,7 @@ const toHumanBrowser = async (
   }
   return {
     email,
-    userId: session.user.id,
+    userId: toSafeId<"user">(session.user.id),
     cookieHeader,
     headers,
     setActiveOrganization: async (organizationId) => {
@@ -203,7 +205,7 @@ export const createHumanSession = async ({
     browser,
     cookieHeader: browser.cookieHeader(),
     email,
-    userId: session.user.id,
+    userId: toSafeId<"user">(session.user.id),
     organizationId: session.session.activeOrganizationId,
   };
 };

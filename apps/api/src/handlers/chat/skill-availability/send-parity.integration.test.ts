@@ -203,6 +203,7 @@ const callerContext = () => ({
   orgAIConfig,
   safeDb,
   scopedDb,
+  set: { headers: {}, status: 200 },
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
 });

@@ -6,9 +6,9 @@ import {
   resourceRef,
   toResourceName,
 } from "@stll/api-contract";
-import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { formatMimeTypeLabel } from "@/components/search-dialog.shared";
 import { SEARCH_SCOPES } from "@/components/search-scope";
 import type {
   GlobalSearchHit,
@@ -19,7 +19,6 @@ import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 import {
   canUseAskAIShortcut,
-  caseLawFacetCountMessage,
   createDialogCloseActionQueue,
   getCaseLawHitRoute,
   getChatHitRoute,
@@ -691,21 +690,16 @@ describe("Ask AI keyboard shortcut", () => {
   });
 });
 
-describe("caseLawFacetCountMessage", () => {
-  test("counts matching decisions below the ceiling", () => {
-    expect(caseLawFacetCountMessage(651)).toEqual({
-      key: "search.caseLawMatchingDecisions",
-      count: 651,
-    });
-  });
-
-  test("shows a count at the ceiling as at least the ceiling", () => {
-    expect(caseLawFacetCountMessage(GLOBAL_SEARCH_RESULT_LIMIT)).toEqual({
-      key: "search.caseLawMatchingDecisionsAtLeast",
-      count: GLOBAL_SEARCH_RESULT_LIMIT,
-    });
-    expect(caseLawFacetCountMessage(GLOBAL_SEARCH_RESULT_LIMIT - 1).key).toBe(
-      "search.caseLawMatchingDecisions",
-    );
-  });
+test.each([
+  ["text/plain", "TXT"],
+  ["text/markdown", "Markdown"],
+  ["image/svg+xml", "SVG"],
+  ["application/x-msdownload", "EXE"],
+  ["application/pdf", "PDF"],
+  ["image/png", "PNG"],
+  ["text/csv", "CSV"],
+  ["application/x-7z-compressed", "7Z-COMPRESSED"],
+  ["application/vnd.apple.pages+zip", "APPLE.PAGES"],
+])("names %s as %s", (mimeType, label) => {
+  expect(formatMimeTypeLabel(mimeType)).toBe(label);
 });

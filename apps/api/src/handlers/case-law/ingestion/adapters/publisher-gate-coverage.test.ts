@@ -40,8 +40,6 @@ const DIRECT_FETCH_MODULES = {
    * court site's slot before each request.
    */
   "judges/import-cz-us-roster.ts": "reserve",
-  /** Test-only helpers, not a path any crawl takes. */
-  "ingestion/adapters/test-utils.ts": "test-only",
 } as const;
 
 /**
@@ -148,10 +146,7 @@ describe("every publisher request goes through the gate", () => {
       expect(scannedModules).toContain(entry);
     }
 
-    for (const [entry, role] of Object.entries(DIRECT_FETCH_MODULES)) {
-      if (role !== "reserve") {
-        continue;
-      }
+    for (const entry of Object.keys(DIRECT_FETCH_MODULES)) {
       // A gate wrapper earns its exemption by reserving; one that stopped
       // would otherwise keep the exemption and spend nothing.
       expect(await sourceOf(entry)).toMatch(

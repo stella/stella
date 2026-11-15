@@ -65,5 +65,5 @@ test("host themes override fallback tokens and replace one guest stylesheet", as
         .getPropertyValue("--radius")
         .trim(),
     ),
-  ).toBe(".625rem");
+  ).toBe(".5rem");
 });

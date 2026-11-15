@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 
@@ -32,7 +32,8 @@ const constitutionalSpelling = fc.record({
  * reader input, also folds a glued `IIÚS 5/98`.
  */
 test("a Slovak Constitutional Court docket keys as ingestion stores it", () => {
-  fc.assert(
+  assertProperty(
+    "a Slovak Constitutional Court docket keys as ingestion stores it",
     fc.property(
       constitutionalSpelling,
       ({ dot, gap, join, lower, mark, ordinal, senate, year }) => {
@@ -49,7 +50,7 @@ test("a Slovak Constitutional Court docket keys as ingestion stores it", () => {
         }
       },
     ),
-    propertyConfig(),
+    {},
   );
 });
 
@@ -61,7 +62,8 @@ test("a Slovak Constitutional Court docket keys as ingestion stores it", () => {
  * own docket.
  */
 test("a Slovak Constitutional Court docket stored in any accepted spelling is found by its formatted query", () => {
-  fc.assert(
+  assertProperty(
+    "a Slovak Constitutional Court docket stored in any accepted spelling is found by its formatted query",
     fc.property(
       constitutionalSpelling,
       ({ dot, gap, join, lower, mark, ordinal, senate, year }) => {
@@ -75,6 +77,6 @@ test("a Slovak Constitutional Court docket stored in any accepted spelling is fo
         );
       },
     ),
-    propertyConfig(),
+    {},
   );
 });

@@ -2,9 +2,15 @@ import { convertMessagesToModelMessages } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  isDeclinedChatToolCall,
+} from "@stll/api-contract/chat";
 
-import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
+import {
+  declineToolCall,
+  toPersistableChatMessage,
+} from "@/api/handlers/chat/chat-message-parts";
 import {
   closeCutShortCalls,
   CUT_SHORT_OUTCOME,
@@ -24,6 +30,7 @@ import type {
   ChatTurnOutcome,
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { findTranscriptProblems } from "@/api/tests/helpers/provider-request-transcript";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
@@ -290,8 +297,8 @@ describe("the history a run hands the engine", () => {
 
   // A superseded turn stores its client call as an error without a result,
   // and a stopped turn may leave an input-complete call or an approval request
-  // open. The engine would ask the client for any of them again instead of
-  // running the model. Every state is listed so a new one must choose.
+  // open. The pre-SDK context and provider-history boundaries need an explicit
+  // result for each. Every state is listed so a new one must choose.
   const unresolvedResult = (toolCallId: string): ChatPart =>
     errorToolResult(toolCallId, UNRESOLVED_CALL_ERROR);
   const openCallByState = {
@@ -314,7 +321,7 @@ describe("the history a run hands the engine", () => {
   } as const satisfies Record<ToolCallState, boolean>;
 
   for (const part of Object.values(openCallByState)) {
-    test(`an unanswered ${part.state} call on an earlier message is closed only if the engine would ask again`, () => {
+    test(`an unanswered ${part.state} call on an earlier message has its required closing result`, () => {
       const history = settleHistoryForRun({
         messages: [assistant("earlier", [part])],
         resumedMessageId: undefined,
@@ -447,11 +454,17 @@ describe("the settled history the engine converts", () => {
       resumedMessageId: undefined,
     });
 
+    const violations = violationsOf(
+      CHAT_ORACLE.providerTranscriptSettled,
+      findTranscriptProblems(modelRequest(parts)),
+    );
+    if (violations.length > 0) {
+      panic(`The settled history is unbalanced: ${JSON.stringify(violations)}`);
+    }
     expect(history[0]?.parts).toEqual([
       ...parts,
       errorToolResult("question", UNRESOLVED_CALL_ERROR),
     ]);
-    expect(findTranscriptProblems(modelRequest(parts))).toEqual([]);
   });
 
   test("a denial in a step the message goes on past is answered in that step of the provider's copy", () => {
@@ -472,6 +485,56 @@ describe("the settled history the engine converts", () => {
     // denial's answer into its step, so every request answers it the same way.
     expect(history[0]?.parts).toEqual(parts);
     expect(findTranscriptProblems(modelRequest(parts))).toEqual([]);
+  });
+
+  // An approval nobody can answer any more is declined, and stored as the
+  // engine stores a call the user declined: one shape for every reader.
+  test("a cut-short turn stores its open approvals declined in the engine's shape", () => {
+    const intro = {
+      content: "Deleting both.",
+      type: "text",
+    } satisfies ChatPart;
+    const parts = [
+      intro,
+      approval("first"),
+      approval("second"),
+      completed,
+      stored("completed"),
+    ] satisfies ChatPart[];
+    const closed = closeCutShortCalls(
+      toPersistableChatMessage({
+        id: toSafeId<"chatMessage">("01a0e22c-ba01-7525-803d-b57dcb87e6fd"),
+        parts,
+        role: "assistant",
+      }),
+    ).parts;
+
+    const declined = ["first", "second"].map((id) => {
+      const pending = approval(id);
+      if (!("approval" in pending)) {
+        return panic("The fixture's approval carries its approval");
+      }
+      return declineToolCall(pending, pending.approval);
+    });
+    // The stored parts keep their order; the denials' results follow them,
+    // where the engine appends the results it stores.
+    expect(closed).toEqual([
+      intro,
+      ...declined.map(({ call: declinedCall }) => declinedCall),
+      completed,
+      stored("completed"),
+      ...declined.map(({ result }) => result),
+    ]);
+    expect(
+      closed.filter(
+        (part) => part.type === "tool-call" && isDeclinedChatToolCall(part),
+      ),
+    ).toHaveLength(2);
+    expect(
+      findUnsettledStoredToolCalls({ outcome: "cancelled", parts: closed }),
+    ).toEqual([]);
+    // The provider is handed both calls answered in their own step.
+    expect(findTranscriptProblems(modelRequest(closed))).toEqual([]);
   });
 
   test("a denial in the message's last step is left to the engine", () => {

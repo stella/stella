@@ -5,6 +5,7 @@ export default {
   capability: "Agent CLIs the desktop installs and runs",
   owner: [
     "apps/desktop/src-tauri/src/harness_installation.rs",
+    "apps/desktop/src-tauri/src/harness_auto_install.rs",
     "apps/desktop/src-tauri/src/harness_release.rs",
     "apps/desktop/src-tauri/src/harness_archive.rs",
     "apps/desktop/src-tauri/harness/pins.json",
@@ -16,6 +17,8 @@ export default {
     "table to the pins. HarnessInstallation owns <app data>/harness and <app data>/harness-home: a " +
     "size-capped, digest-checked download, a contained unpack, a --version probe, immutable version " +
     "directories, an atomic active pointer that keeps and rolls back to the previous release, and " +
-    "in-process leases that block removal. Executables are started by absolute path, never from PATH.",
+    "in-process leases that block removal. Executables are started by absolute path, never from PATH. " +
+    "HarnessAutoInstall installs every harness not on its pinned release, one at a time, whenever the " +
+    "local agents feature turns on, retries a failure after bounded delays, and stops when it turns off.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

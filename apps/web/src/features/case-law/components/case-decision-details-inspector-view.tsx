@@ -44,9 +44,9 @@ export const CaseDecisionDetailsInspectorView = ({
   const decision =
     decisionView.type === "items" ? decisionView.items : undefined;
   const decided =
-    decision?.decisionDate === undefined || decision.decisionDate === null
-      ? null
-      : parseDeterministicDate(decision.decisionDate);
+    decision?.decisionDate !== undefined && decision.decisionDate !== null
+      ? parseDeterministicDate(decision.decisionDate)
+      : null;
 
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">

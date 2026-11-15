@@ -4,7 +4,7 @@ import fc from "fast-check";
 
 import { flattenInlineText, type Inline } from "@stll/legal-ast/inline";
 import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
-import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
@@ -726,7 +726,8 @@ const queryArbitrary = fc.record({
  * one stem leaf per word per stem field.
  */
 test("every word keeps its stem leaves while the stem pass fits", () => {
-  fc.assert(
+  assertProperty(
+    "every word keeps its stem leaves while the stem pass fits",
     fc.property(queryArbitrary, ({ fields, words }) => {
       const stemming: CorpusStemming = {
         fields,
@@ -766,7 +767,7 @@ test("every word keeps its stem leaves while the stem pass fits", () => {
         }
       }
     }),
-    propertyConfig(),
+    {},
   );
 });
 
@@ -892,7 +893,8 @@ test("faithful groups spend headroom whole and never displace a baseline grant",
 });
 
 test("non-SVK queries stay byte-identical for every morphology language", () => {
-  fc.assert(
+  assertProperty(
+    "non-SVK queries stay byte-identical for every morphology language",
     fc.property(
       fc.constantFrom(...MORPHOLOGY_LANGUAGES),
       fc.array(
@@ -934,12 +936,13 @@ test("non-SVK queries stay byte-identical for every morphology language", () => 
         }
       },
     ),
-    propertyConfig(),
+    {},
   );
 });
 
 test("Slovak compatibility preserves all baseline leaves and the actual leaf ceiling", () => {
-  fc.assert(
+  assertProperty(
+    "Slovak compatibility preserves all baseline leaves and the actual leaf ceiling",
     fc.property(
       fc.array(
         fc.constantFrom(
@@ -1004,7 +1007,7 @@ test("Slovak compatibility preserves all baseline leaves and the actual leaf cei
         }
       },
     ),
-    propertyConfig(),
+    {},
   );
   expect(svkFreeText("premlčanie", { stemming: null })).toBe(
     corpusFreeTextClause("premlčanie"),

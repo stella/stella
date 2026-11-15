@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { LinkIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { getEntityLinkResource } from "@/components/workspaces/tasks/task-links.logic";
 import type { EntityLinkResourceInput } from "@/components/workspaces/tasks/task-links.logic";
@@ -53,9 +54,9 @@ export const LinksSection = ({ linkedFrom, linkedTo }: LinksSectionProps) => {
 // -- Linked entity row --
 
 const LinkedEntityRow = ({ name, kind }: { name: string; kind: string }) => (
-  <div className="flex items-center gap-2 rounded px-1 py-0.5 text-sm">
+  <div className="flex items-center gap-2 rounded-sm px-1 py-0.5 text-sm">
     <LinkIcon className="text-muted-foreground size-3" />
-    <span className="truncate">{name}</span>
+    <TruncatedText>{name}</TruncatedText>
     <span className="text-muted-foreground text-xs">{kind}</span>
   </div>
 );

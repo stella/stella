@@ -8,10 +8,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import {
-  COURT_PARAGRAPH_NUMBERING_DEFECTS,
-  extractCourtParagraphNumbers,
-} from "@stll/legal-ast/court-paragraph-numbers";
+import { extractCourtParagraphNumbers } from "@stll/legal-ast/court-paragraph-numbers";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { resolveDecisionParagraphRange } from "@stll/legal-ast/paragraph-range";
 
@@ -384,8 +381,8 @@ describe("the hard invariants of a numbering", () => {
     // The quotation the court opened before "[117]" is still open at
     // "[118]": that number is the quoted decision's.
     expect(numbers(read("„"))).toEqual([1, 2, null, null, 3]);
-    // Without the quotation, "[118]" is a marker nothing explains.
-    expect(read("").type).toBe("rejected");
+    // An unexplained marker leaves the court's surrounding labels intact.
+    expect(numbers(read(""))).toEqual([1, 2, null, null, 3]);
   });
 
   test.each([
@@ -495,18 +492,28 @@ describe("the hard invariants of a numbering", () => {
           "[4] Soud se vrací.",
         ].map((text, index) => paragraph(index, text)),
       );
-      // "[4]" after "[6]" goes backwards; no quotation explains it.
-      expect(numbering.type).toBe("rejected");
+      // The backward marker does not erase the preceding court labels.
+      expect(numbering.type).toBe("numbered");
+      expect(
+        numbering.blocks.map((block) =>
+          block.type === "paragraph" ? (block.number ?? null) : null,
+        ),
+      ).toEqual([1, 2, 3, 4, 5, 6, null]);
     },
   );
 
-  test("consecutive lists that could own the court's next number reject the decision", () => {
-    // Court 1, 2; list 1-3; list 1-2; court 3, 4, 5; list 1-2; court 6. The
-    // first list's 3 could be the court's 3 with the second list following
-    // it; nothing settles it, so nothing is stored.
-    expect(
-      numbersOfMarked([1, 2, 1, 2, 3, 1, 2, 3, 4, 5, 1, 2, 6]).type,
-    ).not.toBe("numbered");
+  test("ambiguous consecutive lists preserve the court's established labels", () => {
+    const numbering = numbersOfMarked([1, 2, 1, 2, 3, 1, 2, 3, 4, 5, 1, 2, 6]);
+    expect(numbering.type).toBe("numbered");
+    expect(numbering.numbers.slice(0, 2)).toEqual([1, 2]);
+    expect(numbering.numbers.slice(2, 7)).toEqual([
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
+    expect(numbering.numbers.at(-1)).toBe(6);
   });
 
   test("a short decision with many lowercase points and an instruction keeps its numbering", () => {
@@ -559,23 +566,23 @@ describe("the hard invariants of a numbering", () => {
     });
   });
 
-  test("a number the court printed twice rejects the decision", () => {
+  test("a number the court printed twice is retained on both paragraphs", () => {
     expect(numbersOfMarked([1, 2, 3, 3, 4, 5])).toEqual({
-      type: "rejected",
-      numbers: [null, null, null, null, null, null],
+      type: "numbered",
+      numbers: [1, 2, 3, 3, 4, 5],
     });
   });
 
-  test("a number that could be the court's or the list's rejects the decision", () => {
+  test("ambiguous list numbers leave the established court labels intact", () => {
     // Court 1, 2, then 1-4 to the end: either a list of four, or a list of
     // two and the court's 3 and 4. Nothing later tells them apart.
     expect(numbersOfMarked([1, 2, 1, 2, 3, 4])).toEqual({
-      type: "rejected",
-      numbers: [null, null, null, null, null, null],
+      type: "numbered",
+      numbers: [1, 2, null, null, null, null],
     });
   });
 
-  test("a numbering that looks rising but leaves the court's own markers unassigned is rejected", () => {
+  test("nested list markers and stray markers leave court labels intact", () => {
     // Read greedily, the list's 3 and 4 would take the court's numbers and
     // the court's own "3." and "4." would be left over.
     const { type } = numbersOfMarked([1, 2, 1, 2, 3, 4, 3, 4, 5]);
@@ -591,22 +598,30 @@ describe("the hard invariants of a numbering", () => {
       4,
       5,
     ]);
-    // A stray the walk cannot place, between the court's 3 and 4, rejects.
-    expect(numbersOfMarked([1, 2, 3, 2, 4, 5]).type).toBe("rejected");
+    // A stray marker between the court's 3 and 4 stays in its text.
+    expect(numbersOfMarked([1, 2, 3, 2, 4, 5])).toEqual({
+      type: "numbered",
+      numbers: [1, 2, 3, null, 4, 5],
+    });
   });
 });
 
 describe("implausible numbering", () => {
-  test("is rejected with its defect and leaves every marker in the text", () => {
+  test("unexplained markers leave established labels and their own text intact", () => {
     const blocks = [1, 2, 3, 9, 14, 2, 30, 31, 7].map((number, index) =>
       paragraph(index, `${String(number)}. Soud posoudil věc znovu.`),
     );
     const numbering = extractCourtParagraphNumbers(blocks);
-    expect(numbering).toMatchObject({
-      type: "rejected",
-      defect: COURT_PARAGRAPH_NUMBERING_DEFECTS.IRREGULAR_SEQUENCE,
-    });
-    expect(numbering.blocks).toEqual(blocks);
+    expect(numbering.type).toBe("numbered");
+    expect(
+      numbering.blocks
+        .slice(0, 3)
+        .map((block) =>
+          block.type === "paragraph" ? block.number : undefined,
+        ),
+    ).toEqual([1, 2, 3]);
+    const stray = numbering.blocks.at(5);
+    expect(stray).toEqual(blocks.at(5));
   });
 
   test("a date opening a paragraph is not a number", () => {

@@ -13,6 +13,7 @@ import {
   EMAIL_CHAT_HOST,
   EMAIL_CHAT_MODE,
 } from "@/components/inspector/email-html-viewer.logic";
+import { downloadTabFile } from "@/components/inspector/file-download-service";
 import type { FileTabDisplayState } from "@/components/inspector/file-tab-panel.logic";
 import {
   ConversionRefusalFallback,
@@ -36,6 +37,7 @@ import {
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 
 const OfficeFileViewer = lazy(async () => {
@@ -162,6 +164,21 @@ const FileTabViewerComponent = ({
     [handleZoom, tab.id],
   );
 
+  const handleDownload = useCallback(() => {
+    detached(
+      downloadTabFile({
+        fieldId: tab.id,
+        fileName: tab.fileName,
+        variant: "original",
+        workspaceId: tab.workspaceId,
+        onError: (message, error) => {
+          notifyUserError(error, message);
+        },
+      }),
+      "file-tab-viewer.download",
+    );
+  }, [tab.fileName, tab.id, tab.workspaceId]);
+
   const fileViewer = (() => {
     if (isEmailDisplay) {
       if (entity.shouldSurfaceEmailResolutionError) {
@@ -275,6 +292,7 @@ const FileTabViewerComponent = ({
         colorMode={pdfColorMode}
         mimeType={tab.mimeType ?? undefined}
         onDocxScrollTopChange={docxEditor.handleScrollTopChange}
+        onDownload={handleDownload}
         onError={onViewerError}
         onPeekNavigate={closeAll}
         onWheelZoom={handlePdfWheelZoom}

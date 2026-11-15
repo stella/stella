@@ -13,7 +13,9 @@ import type { SupportedLanguage } from "@/i18n/i18n-store";
  * whenever the reader picks a regional format.
  */
 export const useMessageLocale = (): SupportedLanguage => {
-  const locale = useLocale();
+  // The provider's locale carries the reader's number system as a -u-
+  // keyword (buildMessageLocale); the language is its base name.
+  const locale = new Intl.Locale(useLocale()).baseName;
   if (!isUiLocale(locale)) {
     panic("IntlProvider must be given a supported UI language", { locale });
   }

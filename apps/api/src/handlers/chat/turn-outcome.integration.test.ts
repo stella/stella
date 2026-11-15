@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { desc, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
@@ -34,6 +34,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import { CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
@@ -72,7 +73,7 @@ import type {
   ProviderWireCassette,
   ProviderWireExchange,
 } from "@/api/tests/helpers/provider-wire-cassette";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import { replayedHarnessModel } from "@/api/tests/helpers/replayed-harness-model";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -188,6 +189,13 @@ let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 const seededSkillIds: SafeId<"agentSkill">[] = [];
 
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ profile }),
+});
+
 beforeAll(
   async () =>
     await profile.measure("fixture", async () => {
@@ -203,14 +211,12 @@ beforeAll(
       previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
       process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
         "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-      replay = installProviderWireReplay({ profile });
     }),
 );
 
 afterAll(async () => {
   try {
     await profile.measure("close", async () => {
-      replay.restore();
       env.USE_MOCK_AI = previousMockAI;
       if (previousBedrockEndpoint === undefined) {
         delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
@@ -608,7 +614,7 @@ const runTurn = async (combination: TurnCombination): Promise<TurnResult> =>
         })
         .from(chatTurns)
         .where(eq(chatTurns.threadId, threadId))
-        .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+        .orderBy(...NEWEST_CHAT_TURN_FIRST)
         .limit(1);
       const stored = await harness.readThreadMessages(threadId);
       return {
@@ -904,7 +910,7 @@ const checkPinnedContinuationFallback = async (
       .select({ status: chatTurns.status })
       .from(chatTurns)
       .where(eq(chatTurns.threadId, threadId))
-      .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+      .orderBy(...NEWEST_CHAT_TURN_FIRST)
       .limit(1);
     expect(turn?.status).toBe(
       selection === "automatic" ? "completed" : "failed",

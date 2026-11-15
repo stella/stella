@@ -16,6 +16,7 @@ import {
   canonicalLegislationAstSource,
   canonicalLegislationTextSource,
 } from "@/api/lib/legal-search/legislation-canonical-source";
+import { resolveMatterLinkProvisions } from "@/api/lib/legal-search/legislation-matter-link-provisions";
 import {
   readStoredVersionAst,
   versionAstColumnsFor,
@@ -381,4 +382,68 @@ test("the provision version lookup answers each surface by its own country list"
   expect(await answered("search")).toEqual(
     expected(PUBLIC_LEGISLATION_COUNTRIES),
   );
+});
+
+test("matter-link resolution reads a set in two statements regardless of its size", async () => {
+  const sourceId = toSafeId<"legislationSource">(
+    "0198e331-e578-7000-8000-0000000004a0",
+  );
+  await db.insert(legislationSources).values({
+    id: sourceId,
+    adapterKey: "matter-link-batch-scaling",
+    name: "Matter-link batch scaling",
+    descriptor: {
+      license: "permitted-redistribution",
+      attribution: "Publisher",
+      allowsRedistribution: true,
+      allowsDerivedAi: false,
+    },
+  });
+  const documents = Array.from({ length: 10 }, (_, index) => ({
+    id: toSafeId<"legislationDocument">(
+      `0198e331-e578-7000-8000-0000000004${(0xb0 + index).toString(16)}`,
+    ),
+    sourceId,
+    eli: `eli/cz/batch/${index}`,
+    title: `Batch statute ${index}`,
+    country: "CZE",
+    language: "cs",
+    versionValidFrom: "2024-01-01",
+    documentAst: {
+      ...DOCUMENT_AST,
+      blocks: [...DOCUMENT_AST.blocks, { ...DOCUMENT_AST.blocks[0], id: "p2" }],
+    },
+  }));
+  await db.insert(legislationDocuments).values(documents);
+  let statements = 0;
+  const countedDb = drizzle({
+    client,
+    logger: {
+      logQuery: () => {
+        statements += 1;
+      },
+    },
+  });
+  const legislationDb: LegislationReadDb = async (fn) =>
+    await fn(asTestRaw<LegislationReadTransaction>(countedDb));
+  for (const size of [1, 10]) {
+    statements = 0;
+    const resolved = await resolveMatterLinkProvisions({
+      legislationDb,
+      items: documents.slice(0, size).map(({ eli }) => ({
+        statuteId: eli,
+        jurisdiction: "Czech Republic",
+        version: "2024-01-01",
+        provisionId: "par_1-2",
+      })),
+    });
+    expect(resolved).toHaveLength(size);
+    expect(
+      resolved.every(
+        (result) =>
+          result.status === "available" && result.item.jurisdiction === "CZE",
+      ),
+    ).toBe(true);
+    expect(statements).toBe(2);
+  }
 });

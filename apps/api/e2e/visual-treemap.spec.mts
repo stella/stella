@@ -283,7 +283,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       // colour proves which scheme the chart rendered in.
       await expect(svg).toHaveCSS(
         "color",
-        colorScheme === "dark" ? "rgb(245, 245, 245)" : "rgb(38, 38, 38)",
+        colorScheme === "dark" ? "rgb(245, 245, 245)" : "rgb(23, 23, 23)",
       );
       await expect(svg.locator("text")).toContainText([
         "Nejvyšší soud",

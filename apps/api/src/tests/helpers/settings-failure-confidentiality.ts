@@ -128,9 +128,7 @@ export const assertCanonicalStoredAIConfigError = (error: unknown): void => {
     panic("Expected the stored AI config public error");
   }
   const canonical = storedAIConfigUnreadableError();
-  expect(Reflect.ownKeys(error).toSorted(compareKeys)).toEqual(
-    Reflect.ownKeys(canonical).toSorted(compareKeys),
-  );
+  expect(domainKeys(error)).toEqual(domainKeys(canonical));
   expect(errorPayload(error)).toStrictEqual(errorPayload(canonical));
 };
 

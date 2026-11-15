@@ -31,6 +31,10 @@
           ],
           "tools": [
             {
+              "name": "show_app",
+              "cache_control": null
+            },
+            {
               "name": "ask-user",
               "cache_control": null
             },
@@ -282,6 +286,10 @@
             }
           ],
           "tools": [
+            {
+              "name": "show_app",
+              "cache_control": null
+            },
             {
               "name": "ask-user",
               "cache_control": null

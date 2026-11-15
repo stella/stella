@@ -96,7 +96,7 @@ const version = (
     ...rest
   } = statute(seed);
 
-  return { ...rest, amendedBy: null, isDefault };
+  return { ...rest, amendedBy: null, changes: null, isDefault };
 };
 
 /**

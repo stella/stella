@@ -1,3 +1,4 @@
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 import { panic, Result } from "better-result";
 
 import { runEntityCheck } from "@stll/business-registries/entity-checks";
@@ -40,7 +41,7 @@ export const replay = async <T>({
     },
     { preconnect: originalFetch.preconnect },
   );
-  globalThis.fetch = fixtureFetch;
+  const installation = installTestFetch(fixtureFetch);
   try {
     const result = await operation();
     if (requests !== 1) {
@@ -48,7 +49,7 @@ export const replay = async <T>({
     }
     return result;
   } finally {
-    globalThis.fetch = originalFetch;
+    installation.restore();
   }
 };
 

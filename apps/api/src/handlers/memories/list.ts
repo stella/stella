@@ -4,6 +4,7 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 
 import { aiMemories } from "@/api/db/schema";
 import { toMemoryResponse } from "@/api/handlers/memories/response";
@@ -84,7 +85,9 @@ const listMemories = createSafeRootHandler(
       Result.tryPromise(async () => await getAccessibleWorkspaces()),
     );
     const readableWorkspaceIds = accessibleWorkspaces
-      .filter(({ status: workspaceStatus }) => workspaceStatus !== "deleting")
+      .filter(({ status: workspaceStatus }) =>
+        workspaceIsVisible(workspaceStatus),
+      )
       .map(({ id }) => id);
     const limit = normalizeTenantPageLimit(requestedLimit ?? DEFAULT_LIMIT);
     const workspaceId = requestedWorkspaceId

@@ -17,7 +17,6 @@ import { asc, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
@@ -43,7 +42,10 @@ import {
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createIngestionRoleScopedDb,
+  createTestPglite,
+} from "@/api/tests/pglite-test-db";
 
 /**
  * "srov." — compare — exists only to point at precedent, which is why the
@@ -81,9 +83,7 @@ let srovRule: { id: SafeId<"caseLawPolarityRule">; polarity: string };
 let sourceId: SafeId<"caseLawSource">;
 
 const scopedDb: ScopedDb = async (callback) =>
-  // SAFETY: pglite stands in for the transaction the pipeline expects.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
-  await callback(db as unknown as Transaction);
+  await createIngestionRoleScopedDb(db)(callback);
 
 /** Postgres holds the payload; no object store takes part in this test. */
 const corpus: CaseLawCorpusDependencies = {

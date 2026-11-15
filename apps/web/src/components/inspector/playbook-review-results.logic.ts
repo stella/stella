@@ -10,7 +10,10 @@
 import type { ReviewFlag } from "@stll/api-contract";
 
 import type { ReferenceFile } from "@/components/ai-suggestions/document-review-basis.logic";
-import type { ReviewFinding } from "@/components/ai-suggestions/document-review-queries";
+import type {
+  DecidedReviewDecision,
+  ReviewFinding,
+} from "@/components/ai-suggestions/document-review-queries";
 import { isDecisionSettled } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   PinnedPosition,
@@ -20,6 +23,7 @@ import {
   isFlaggedVerdict,
   SEVERITY_ORDER,
 } from "@/components/ai-suggestions/review-verdict";
+import type { TranslationKey } from "@/i18n/types";
 
 export type ReviewResultItem = RestoredReviewFinding & {
   /** The position this finding was graded against, or `null` when the run's
@@ -63,6 +67,17 @@ export const buildReviewResultItems = ({
  * that leaves that side worse off needs the reviewer whatever its verdict.
  * Otherwise the verdict decides.
  */
+/** How a recorded decision reads on the card. Total over the decisions a
+ *  reviewer can take, so a new disposition must state its label here rather
+ *  than rendering as nothing. */
+const DECISION_LABEL = {
+  accepted: "inspector.review.decisions.accepted",
+  dismissed: "inspector.review.decisions.dismissed",
+} as const satisfies Record<DecidedReviewDecision, TranslationKey>;
+
+export const decisionLabel = (decision: DecidedReviewDecision) =>
+  DECISION_LABEL[decision];
+
 export const isReviewDeviation = ({ finding }: ReviewResultItem): boolean => {
   if (finding.impact === "unfavourable") {
     return true;
@@ -244,6 +259,9 @@ export const buildRunSummarySentence = ({
 };
 
 type RunHistoryBasisArgs = RunBasisLabels & {
+  /** Where the run was started from when that changes what its findings
+   *  hold, already in the caller's locale; `null` for a panel review. */
+  originLabel: string | null;
   /** The pinned playbook's name, as the list endpoint read it out of the
    *  basis; `null` for a run that pinned no snapshot name. */
   playbookName: string | null;
@@ -259,6 +277,7 @@ type RunHistoryBasisArgs = RunBasisLabels & {
  * belongs to the same document.
  */
 export const buildRunHistoryBasisSentence = ({
+  originLabel,
   playbookName,
   playbookProposed,
   references,
@@ -266,6 +285,9 @@ export const buildRunHistoryBasisSentence = ({
   sideLabel,
 }: RunHistoryBasisArgs): string => {
   const parts: string[] = [];
+  if (originLabel !== null) {
+    parts.push(originLabel);
+  }
   if (references !== null) {
     parts.push(references);
   }

@@ -454,7 +454,7 @@ describe("a signed PDF with the reader's marks", () => {
       ?.getArray("Fields", resolve)
       ?.at(0, resolve);
     if (!(field instanceof PdfDict)) {
-      throw new Error("the signed fixture has no signature field");
+      throw new TypeError("the signed fixture has no signature field");
     }
     field.set(
       "Lock",

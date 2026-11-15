@@ -3,19 +3,18 @@ import type { ReactNode } from "react";
 
 import { panic, Result } from "better-result";
 import * as WebBrowser from "expo-web-browser";
-import { View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
-import {
-  Sheet,
-  SheetClose,
-  SheetHeader,
-  SheetPopup,
-  SheetTitle,
-} from "@stll/ui/sheet";
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
 import { Text } from "@stll/ui/text";
 
@@ -77,23 +76,18 @@ const SignInScreen = () => {
         }}
       >
         <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-3">
-            <StellaWordmarkLatin height={24} />
-            <View className="border-border rounded-sm border px-1.5 py-0.5">
-              <Text variant="badge">{t("beta")}</Text>
-            </View>
-          </View>
-          <Button
+          <StellaWordmarkLatin height={24} />
+          <Pressable
             accessibilityLabel={t("options")}
+            accessibilityRole="button"
+            className="size-11 items-center justify-center rounded-full active:opacity-60"
             hitSlop={8}
             onPress={() => {
               setOptionsOpen(true);
             }}
-            size="icon-xl"
-            variant="ghost"
           >
             <MoreHorizontalIcon color={ui.mutedForeground} size={20} />
-          </Button>
+          </Pressable>
         </View>
         <View className="flex-1 justify-center gap-5">
           <Text accessibilityRole="header" variant="display">
@@ -132,12 +126,30 @@ const SignInScreen = () => {
           </Text>
         </View>
       </View>
-      <Sheet onOpenChange={setOptionsOpen} open={optionsOpen}>
-        <SheetPopup>
-          <SheetHeader>
-            <SheetTitle>{t("options")}</SheetTitle>
-            <SheetClose>{t("done")}</SheetClose>
-          </SheetHeader>
+      <Modal
+        animationType="slide"
+        onRequestClose={() => {
+          setOptionsOpen(false);
+        }}
+        presentationStyle="pageSheet"
+        visible={optionsOpen}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          className="bg-background flex-1 gap-4 px-5 pt-5"
+        >
+          <View className="flex-row items-center justify-between">
+            <Text variant="headline">{t("options")}</Text>
+            <Button
+              onPress={() => {
+                setOptionsOpen(false);
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              {t("done")}
+            </Button>
+          </View>
           <View className="gap-2">
             <Text variant="label">{t("serverTitle")}</Text>
             <Text variant="caption">{t("serverDescription")}</Text>
@@ -166,8 +178,8 @@ const SignInScreen = () => {
               {t("useStella")}
             </Button>
           )}
-        </SheetPopup>
-      </Sheet>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };

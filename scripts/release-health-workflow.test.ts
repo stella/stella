@@ -53,9 +53,9 @@ describe("release health workflows", () => {
 
     expect(dispatch["needs"]).toContain("promote-production");
     expect(runs(dispatch)).toContain(
-      "actions/workflows/release-health.yml/dispatches",
+      'gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" release-health.yml main',
     );
-    expect(runs(dispatch)).toContain("inputs[release_ref]=");
+    expect(runs(dispatch)).toContain('"release_ref=$RELEASE_REF"');
     expect(health.on).toHaveProperty(
       "workflow_dispatch.inputs.release_ref.required",
       true,

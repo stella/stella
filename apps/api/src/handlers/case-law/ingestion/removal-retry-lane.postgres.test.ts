@@ -38,7 +38,10 @@ import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconcili
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { publisherRemovalProbe } from "@/api/tests/helpers/publisher-removal-probe";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -525,19 +528,21 @@ if (!databaseUrl || !runPostgresTests) {
           probes++;
           if (identity.endsWith("source-refused")) {
             currentTime = new Date(FIXED_NOW.getTime() + 30_000);
-            const originalFetch = globalThis.fetch;
-            globalThis.fetch = asFetchMock(
-              async () =>
-                new Response("rate limit", {
-                  status: 429,
-                  headers: { "Retry-After": "7200" },
-                }),
+
+            testFetchState.set(
+              asFetchMock(
+                async () =>
+                  new Response("rate limit", {
+                    status: 429,
+                    headers: { "Retry-After": "7200" },
+                  }),
+              ),
             );
             const observed = await probeUkFclRemoval(
               "uksc/2024/1",
               new AbortController().signal,
             );
-            globalThis.fetch = originalFetch;
+            testFetchState.restore();
             if (observed.isErr()) {
               throw observed.error;
             }

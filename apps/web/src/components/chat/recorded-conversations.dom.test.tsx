@@ -16,11 +16,11 @@ import path from "node:path";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ChatRouteHandoffMessage } from "@/features/chat/chat-runtime";
 import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { browserStorage } from "@/lib/account/browser-storage";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -117,7 +117,8 @@ type RecordedAction =
   | { type: "stop" }
   | { type: "drop-connection" }
   | { type: "reload" }
-  | { type: "retry" };
+  | { type: "retry" }
+  | { messageId: string; text: string; type: "continue" };
 type RecordedConversation = {
   initialPage: RecordedPage;
   scenario: string;
@@ -158,6 +159,7 @@ const STEP_KINDS: readonly RecordedAction["type"][] = [
   "approve",
   "auto-approve",
   "client-tool",
+  "continue",
   "drop-connection",
   "reload",
   "retry",
@@ -453,6 +455,11 @@ const createRecordedServer = (
   };
 
   return {
+    /**
+     * Ids the page minted for a message the recording sent under another id
+     * (a paused turn's Continue), mapped to the recorded id.
+     */
+    idAliases: new Map<string, string>(),
     /** The approvals the API holds now; a page opens with them loaded. */
     grants,
     dropConnection: () => {
@@ -533,6 +540,7 @@ const ALLOWED = messages.chat.approval.allowed;
 const DENIED = messages.chat.approval.denied;
 const SUBMIT_ANSWERS = messages.chat.askUser.submit;
 const ANSWER_PLACEHOLDER = messages.chat.askUser.placeholder;
+const CONTINUE_PAUSED_TURN = messages.chat.turnPaused.continue;
 const ASK_USER_TITLE = messages.chat.tool["ask-user"];
 const BUSY_TEXTS = [messages.chat.thinking, messages.chat.analyzingSources];
 /** The approval tool the recordings call; its one input is the call's id. */
@@ -739,7 +747,39 @@ const sortKeys = (value: unknown): unknown => {
  * object keys are sorted. Every other value, the thread's and messages' ids
  * included, must be equal.
  */
-const comparableRequests = (bodies: readonly unknown[]): unknown[] => {
+/** `text` with each page-minted id replaced by the recorded one. */
+const withAliases = (text: string, idAliases: ReadonlyMap<string, string>) => {
+  let aliased = text;
+  for (const [minted, recorded] of idAliases) {
+    aliased = aliased.replaceAll(minted, () => recorded);
+  }
+  return aliased;
+};
+
+/** The id of the Continue message a posted body sends, if it sends one. */
+const continuedMessageId = (body: unknown): string | undefined => {
+  const sent: unknown =
+    typeof body === "object" && body !== null
+      ? Reflect.get(body, "messages")
+      : undefined;
+  if (!Array.isArray(sent)) {
+    return undefined;
+  }
+  const message: unknown = sent.at(-1);
+  if (typeof message !== "object" || message === null) {
+    return undefined;
+  }
+  const id: unknown = Reflect.get(message, "id");
+  return Reflect.get(message, "content") === CONTINUE_PAUSED_TURN &&
+    typeof id === "string"
+    ? id
+    : undefined;
+};
+
+const comparableRequests = (
+  bodies: readonly unknown[],
+  idAliases: ReadonlyMap<string, string> = new Map(),
+): unknown[] => {
   const names = new Map<string, string>();
   const rename = (match: string) => {
     const known = names.get(match);
@@ -752,7 +792,7 @@ const comparableRequests = (bodies: readonly unknown[]): unknown[] => {
   };
   return bodies.map((body): unknown =>
     JSON.parse(
-      JSON.stringify(sortKeys(body))
+      withAliases(JSON.stringify(sortKeys(body)), idAliases)
         .replaceAll(CLIENT_ID_PATTERN, rename)
         .replaceAll(INSTANT_PATTERN, "<instant>"),
     ),
@@ -929,6 +969,22 @@ const performAction = async ({
       );
       return;
     }
+    case "continue": {
+      // The paused answer's Continue, which sends the recorded message under
+      // an id the page mints itself.
+      const before = server.posted.length;
+      fireEvent.click(
+        within(container).getByRole("button", { name: CONTINUE_PAUSED_TURN }),
+      );
+      await waitFor(() => {
+        expect(server.posted.length).toBeGreaterThan(before);
+      });
+      const minted = continuedMessageId(server.posted.at(before)?.body);
+      if (minted !== undefined) {
+        server.idAliases.set(minted, action.messageId);
+      }
+      return;
+    }
     case "retry": {
       // The latest answer's Retry.
       await act(async () => {
@@ -1069,17 +1125,14 @@ const replay = async (
     const lastEnded = exchanges.at(-1)?.ended;
     const midStream =
       lastEnded !== undefined && staysOpen(lastEnded) && next !== undefined;
-    await waitFor(
-      () => {
-        expect(server.posted.length, requests).toBe(expectedPosts);
-        expect(
-          midStream ? server.stalled() : server.streaming() === 0,
-          requests,
-        ).toBe(true);
-        expect(isSuspended(container)).toBe(false);
-      },
-      { timeout: 5000 },
-    );
+    await waitFor(() => {
+      expect(server.posted.length, requests).toBe(expectedPosts);
+      expect(
+        midStream ? server.stalled() : server.streaming() === 0,
+        requests,
+      ).toBe(true);
+      expect(isSuspended(container)).toBe(false);
+    });
     await flush();
     // Only the recorded requests, and nothing the recording did not serve.
     expect(server.posted.length, requests).toBe(expectedPosts);
@@ -1125,7 +1178,10 @@ const replay = async (
   }
   // The page posted what the recorded page posted, request for request.
   expect(
-    comparableRequests(server.posted.map(({ body }) => body)),
+    comparableRequests(
+      server.posted.map(({ body }) => body),
+      server.idAliases,
+    ),
     finding(RENDER_ORACLE.requestsMatchRecorded, scenario),
   ).toEqual(
     comparableRequests(server.posted.map(({ exchange }) => exchange.request)),
@@ -1160,12 +1216,16 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "allow-in-conversation": recordedAs(approvedAs("allow-in-conversation")),
   "allow-once": recordedAs(approvedAs("allow-once")),
   "always-allow": recordedAs(({ type }) => type === "auto-approve"),
+  "answer-local-question": notRecorded(
+    "The recorder runs cloud turns only; local-run-question-card.dom.test.tsx drives a local run's question through the page.",
+  ),
   "answer-question": recordedAs(({ type }) => type === "answer"),
   "attach-files": notRecorded(
     "The recorder posts text messages only; attachments need stored files.",
   ),
   "check-saved-private-input": OUTSIDE_THE_CONVERSATION,
   "check-stored-grant": OUTSIDE_THE_CONVERSATION,
+  "continue-paused-turn": recordedAs(({ type }) => type === "continue"),
   "continue-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),
@@ -1178,9 +1238,15 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "edit-answer": notRecorded(
     "The recorder drives the chat runtime, not the session hook that edits and reruns an answer.",
   ),
+  "edit-message": notRecorded(
+    "The recorder drives the chat runtime, not the session hook that edits a sent message and runs it again.",
+  ),
   export: OUTSIDE_THE_CONVERSATION,
   fork: notRecorded(
     "A fork opens another thread; the conversation property test covers it (ForkFrom).",
+  ),
+  "hold-queue-for-message-edit": notRecorded(
+    "The recorder drives the chat runtime, not the session queue an open message editor holds.",
   ),
   "improve-prompt": OUTSIDE_THE_CONVERSATION,
   "load-older": OUTSIDE_THE_CONVERSATION,
@@ -1188,6 +1254,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "new-chat": OUTSIDE_THE_CONVERSATION,
   "open-created-document": OUTSIDE_THE_CONVERSATION,
   "open-draft": OUTSIDE_THE_CONVERSATION,
+  "open-message-editor": notRecorded(
+    "Opening the editor only stops a running turn, which the recorder records as its own stop step.",
+  ),
   "open-playbook": OUTSIDE_THE_CONVERSATION,
   "refresh-edited-answer": notRecorded(
     "It reloads the canonical answer after a revision write or conflict; the recorder does not drive answer revisions.",
@@ -1356,6 +1425,81 @@ describe("a recorded conversation, rendered", () => {
         finding(RENDER_ORACLE.grantAnswersOnce, toolCallId),
       ).toHaveLength(1);
     }
+  });
+
+  test("a reopened thread whose waiting card a grant covers starts no tool call until the user answers", async () => {
+    const recording = readRecording("conversation-grant");
+    const [sent, ...later] = recording.steps;
+    const waiting =
+      sent?.exchanges.at(-1)?.page ??
+      expect.unreachable("The recording must start with a send");
+    // The page opens the thread as the first turn left it: call-1 waits,
+    // and the conversation grant covers its tool.
+    const reopened = { ...recording, initialPage: waiting, steps: later };
+    const grants = grantConversationTools(recording);
+    // The fixture must reach the fault: a grant, and the page answered
+    // the same card on its own while it watched the turn ask.
+    expect(grants).not.toEqual([]);
+    expect(later.at(0)?.action).toEqual({
+      toolCallId: "call-1",
+      type: "auto-approve",
+    });
+    const server = createRecordedServer(reopened, grants);
+    routeRequest = server.fetch;
+    openGrants = server.grants;
+    const live = await openPage(reopened);
+    await flush();
+
+    expect(
+      server.posted,
+      finding(RENDER_ORACLE.requestsMatchRecorded, "reopen"),
+    ).toEqual([]);
+    expect(readScreen(live.view.container).actionable).toEqual(["call-1"]);
+
+    // The user's own click is what resumes the turn.
+    fireEvent.click(
+      within(approvalCard(live.view.container, "call-1")).getByRole("button", {
+        name: ALLOW_ONCE,
+      }),
+    );
+    await waitFor(() => {
+      expect(server.posted).toHaveLength(1);
+    });
+  });
+
+  test("a reopened page whose kept runtime watched a card arrive starts no tool call until the user answers", async () => {
+    const recording = readRecording("conversation-grant");
+    const sent =
+      recording.steps.at(0)?.action ??
+      expect.unreachable("The recording must start with a send");
+    // No grant yet: the card that arrives while the page is open waits.
+    const server = createRecordedServer(recording, []);
+    routeRequest = server.fetch;
+    openGrants = server.grants;
+    const first = await openPage(recording);
+    const pendingActions: Promise<Result<void, unknown>>[] = [];
+    await performAction({
+      action: sent,
+      container: first.view.container,
+      live: first,
+      server,
+      pendingActions,
+    });
+    await flush();
+    expect(readScreen(first.view.container).actionable).toEqual(["call-1"]);
+    // The user leaves without answering; the registry keeps the runtime that
+    // still waits on the card. Then a grant comes to cover its tool.
+    first.view.unmount();
+    server.grants.push(...grantConversationTools(recording));
+    const posted = server.posted.length;
+    const reopened = await openPage(recording);
+    await flush();
+
+    expect(
+      server.posted.length,
+      finding(RENDER_ORACLE.requestsMatchRecorded, "reattach"),
+    ).toBe(posted);
+    expect(readScreen(reopened.view.container).actionable).toEqual(["call-1"]);
   });
 
   test("a recording performs every action the page offers, or says why not", () => {

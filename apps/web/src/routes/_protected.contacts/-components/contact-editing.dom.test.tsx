@@ -8,10 +8,10 @@ import * as v from "valibot";
 
 import { cents } from "@stll/money";
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts/a" });
 
@@ -121,6 +121,7 @@ const contact = (id: typeof A, notes: string | null) =>
     vatId: null,
     vatPayer: null,
     invoiceLanguage: null,
+    timeBillingFormat: "categories",
     bankAccounts: null,
     billingAddress: null,
     defaultHourlyRate: null,
@@ -968,8 +969,8 @@ test("invoice draft identity ignores search changes", async () => {
     appRouter.history.push("/workspaces/matter-a/invoices/invoice-b?q=next"),
   );
   await testing.waitFor(() =>
-    expect(view.getByRole("textbox", { name: "Invoice draft" })).not.toBe(
-      input,
+    expect(view.getByRole("textbox", { name: "Invoice draft" }) === input).toBe(
+      false,
     ),
   );
   expect(view.getByRole("textbox", { name: "Invoice draft" })).toHaveProperty(

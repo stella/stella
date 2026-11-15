@@ -15,6 +15,7 @@ import {
   validateArtifactDownloadExceptions,
   validateArtifactDownloads,
   validateLocalActionReferences,
+  validateLocalActionsAfterCheckout,
   validateNoRubyProcessSpawns,
   validateNoRubyShell,
   validateWorkflowJobTimeouts,
@@ -440,5 +441,84 @@ describe("workflow YAML validation", () => {
       "message",
       `${file}: runs.steps[0] run and shell must be nonempty strings`,
     );
+  });
+});
+
+describe("workspace actions run after the checkout that brings them", () => {
+  const CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+  const file = "workflow.yml";
+  const job = (steps: Record<string, unknown>[]) => ({
+    jobs: { build: { "timeout-minutes": 5, steps } },
+  });
+
+  test("a workspace action before any checkout is rejected", () => {
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([{ uses: "./.github/actions/partial-clone-checkout" }]),
+        file,
+      ),
+    ).toThrow(
+      `${file}: job build uses ./.github/actions/partial-clone-checkout before checking out the repository there; a workspace action cannot run before the checkout that brings it`,
+    );
+  });
+
+  test("a root checkout, local or through the shared retry action, makes workspace actions usable", () => {
+    for (const uses of [
+      CHECKOUT,
+      "stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d",
+    ]) {
+      expect(() =>
+        validateLocalActionsAfterCheckout(
+          job([{ uses }, { uses: "./.github/actions/ci-install" }]),
+          file,
+        ),
+      ).not.toThrow();
+    }
+  });
+
+  test("a checkout into a directory reaches only actions under it", () => {
+    const steps = [{ uses: CHECKOUT, with: { path: ".workflow-source" } }];
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([...steps, { uses: "./.workflow-source/.github/actions/build" }]),
+        file,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([...steps, { uses: "./.github/actions/build" }]),
+        file,
+      ),
+    ).toThrow("before checking out the repository there");
+  });
+
+  test("checkout and action paths compare as the checkout resolves them", () => {
+    for (const [destination, uses] of [
+      ["source//nested/", "./source/nested/.github/actions/build"],
+      ["./source/./nested", "./source/nested/.github/actions/build"],
+      ["source/nested", "./source//nested/.github/actions/build"],
+      ["./", "./.github/actions/build"],
+    ] as const) {
+      expect(
+        () =>
+          validateLocalActionsAfterCheckout(
+            job([{ uses: CHECKOUT, with: { path: destination } }, { uses }]),
+            file,
+          ),
+        `${destination} -> ${uses}`,
+      ).not.toThrow();
+    }
+  });
+
+  test("a checkout of another repository does not bring this one's actions", () => {
+    expect(() =>
+      validateLocalActionsAfterCheckout(
+        job([
+          { uses: CHECKOUT, with: { repository: "stella/folio" } },
+          { uses: "./.github/actions/build" },
+        ]),
+        file,
+      ),
+    ).toThrow("before checking out the repository there");
   });
 });

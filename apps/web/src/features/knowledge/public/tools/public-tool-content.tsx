@@ -180,9 +180,13 @@ const McpConfig = ({ entry }: { entry: LoadedEntryByKind<"mcp"> }) => {
   );
 };
 
+// Fills the screen so the details below stay out of view until the
+// documentation arrives; shown above it, they would jump away on arrival.
 const ContentLoading = () => {
   const t = useTranslations();
   return (
-    <p className="text-muted-foreground text-sm">{t("publicTools.content")}</p>
+    <p className="text-muted-foreground min-h-dvh text-sm">
+      {t("publicTools.content")}
+    </p>
   );
 };

@@ -37,25 +37,3 @@ export const invalidateDeletedEntityQueries = async ({
     }),
   ]);
 };
-
-type InvalidateRenamedEntityQueriesOptions = {
-  queryClient: QueryClient;
-  workspaceId: string;
-  entityId: string;
-};
-
-export const invalidateRenamedEntityQueries = async ({
-  queryClient,
-  workspaceId,
-  entityId,
-}: InvalidateRenamedEntityQueriesOptions): Promise<void> => {
-  await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: entitiesKeys.all(workspaceId),
-      predicate: ({ queryKey }) => isEntityCollectionQueryKey(queryKey),
-    }),
-    queryClient.invalidateQueries({
-      queryKey: entitiesKeys.detail(workspaceId, entityId),
-    }),
-  ]);
-};

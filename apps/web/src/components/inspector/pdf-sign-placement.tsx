@@ -3,6 +3,7 @@ import { useId } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -161,9 +162,9 @@ const DrawnBoxPreview = ({
     data-stamp-preview={check}
     style={boxStyle(box)}
   >
-    <span className="text-2xs max-h-full min-w-0 truncate p-1 leading-tight">
+    <TruncatedText className="text-2xs max-h-full p-1 leading-tight">
       {label}
-    </span>
+    </TruncatedText>
   </div>
 );
 
@@ -193,13 +194,10 @@ const StampBoxControl = ({ draft }: { draft: StampDraft }) => {
   });
 
   return (
-    <button
+    <Button
       aria-describedby={hintId}
       aria-label={t("workspaces.files.pdfSigning.placementBox")}
-      // Drawn at the stamp's true size; an invisible layer around a small
-      // box keeps it at least 44px to grab, equally on every side in either
-      // direction.
-      className="border-primary bg-primary/10 text-primary focus-visible:ring-ring/50 absolute flex cursor-move touch-none items-start border text-start outline-none select-none before:absolute before:inset-x-[min(0px,calc(50%-1.375rem))] before:inset-y-[min(0px,calc(50%-1.375rem))] before:content-[''] focus-visible:ring-2"
+      className="absolute flex cursor-move touch-none items-start select-none"
       data-stamp-box=""
       onKeyDown={(event) => {
         const adjustment = stampKeyAdjustment({
@@ -224,11 +222,18 @@ const StampBoxControl = ({ draft }: { draft: StampDraft }) => {
       }}
       {...pointerHandlers}
       style={boxStyle(box)}
-      type="button"
+      variant="plain"
     >
-      <span className="text-2xs max-h-full min-w-0 truncate p-1 leading-tight">
+      {/* The stamp outline, drawn at the box's true size. An invisible layer
+          around a small box keeps it at least 44px to grab, equally on every
+          side in either direction. */}
+      <span
+        aria-hidden
+        className="border-primary bg-primary/10 absolute inset-0 border before:absolute before:inset-x-[min(0px,calc(50%-1.375rem))] before:inset-y-[min(0px,calc(50%-1.375rem))] before:content-['']"
+      />
+      <TruncatedText className="text-primary text-2xs relative max-h-full p-1 leading-tight">
         {t("workspaces.files.pdfSigning.stampSignedBy")}
-      </span>
+      </TruncatedText>
       <span className="sr-only" id={hintId}>
         {t("workspaces.files.pdfSigning.placementHint")}
       </span>
@@ -240,7 +245,7 @@ const StampBoxControl = ({ draft }: { draft: StampDraft }) => {
       >
         <span className="bg-primary size-2.5" />
       </span>
-    </button>
+    </Button>
   );
 };
 

@@ -131,6 +131,7 @@ describe("sign-in", () => {
         tokenEndpoint: METADATA.token_endpoint,
         revocationEndpoint: METADATA.revocation_endpoint,
         resource: RESOURCE,
+        signInId: expect.any(String),
         refreshToken: "refresh-1",
         userId: "user-1",
       },
@@ -217,4 +218,17 @@ describe("sign-in", () => {
       }),
     ).toEqual({ error: "TokenError", redeemed: 1 });
   });
+});
+
+test("each completed sign-in has its own persisted identity", async () => {
+  const first = stellaServer();
+  const second = stellaServer();
+  const a = await signInWith(first, first.approve(approved));
+  const b = await signInWith(second, second.approve(approved));
+  expect(a.isOk()).toBeTrue();
+  expect(b.isOk()).toBeTrue();
+  if (a.isOk() && b.isOk()) {
+    expect(a.value.session.signInId.length).toBeGreaterThan(0);
+    expect(a.value.session.signInId).not.toBe(b.value.session.signInId);
+  }
 });

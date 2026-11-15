@@ -3,6 +3,7 @@
 @source "../case-law-results/*.tsx";
 @source "../statute-timeline/*.tsx";
 @source "./file-picker.tsx";
+@source "./notice.tsx";
 @source "../decision-reader/*.tsx";
 @source "../citation-graph/*.tsx";
 @source "../document-upload/*.tsx";
@@ -11,6 +12,8 @@
 /* Bundles embed this stylesheet; scanning them feeds escaped selectors back in. */
 @source not "../*/generated";
 @source "../../../ui/src";
+@source not "../../../{ui,decision-reader,mcp-apps}/src/**/*.{test,spec,story,stories,fixture}.{ts,tsx}";
+@source not "../../../{ui,decision-reader,mcp-apps}/src/**/fixtures";
 
 :root {
   font-family: var(--font-sans);
@@ -21,6 +24,46 @@ body {
   margin: 0;
   background: var(--color-background-primary, var(--background));
   color: var(--color-text-primary, var(--foreground));
+}
+
+html,
+body {
+  overflow: hidden;
+}
+[data-app-shell] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+[data-app-viewport] {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+[data-app-toolbar] {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 16px;
+  border-block-end: 1px solid var(--border);
+}
+[data-app-toolbar][hidden] {
+  display: none;
+}
+[data-app-fullscreen] {
+  min-height: 44px;
+  padding-inline: 12px;
+  border-radius: var(--radius-md);
+  font: inherit;
+  cursor: pointer;
+}
+[data-app-fullscreen]:hover {
+  background: var(--muted);
+}
+[data-app-fullscreen]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 
 .status-error {

@@ -2,6 +2,10 @@ import { panic } from "better-result";
 
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
 import type { TranscriptionModelId } from "@stll/ai-catalog/transcription";
+import type {
+  CaseLawResearchAnswerFailureReason,
+  CaseLawResearchAnswerState,
+} from "@stll/api-contract";
 import type { SanctionsSource } from "@stll/sanctions";
 
 import type { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
@@ -114,22 +118,35 @@ type McpRequestMetricInput = {
   >;
   queryCount: number;
   totalMs: number;
+  /**
+   * The called tool's latency budget (`mcp/tool-latency-budgets.ts`), on a
+   * `tools/call` record only. `overBudget` is what the slow-tool log metric
+   * filter counts, so the alarm and the canary judge by the same table.
+   */
+  latencyBudgetMs?: number;
 };
 
 export const buildMcpRequestMetricRecord = ({
   phases,
   totalMs,
+  latencyBudgetMs,
   ...fields
-}: McpRequestMetricInput) => ({
-  event: "mcp.request.phases",
-  ...fields,
-  auth: Math.floor(phases.auth),
-  context: Math.floor(phases.context),
-  server_build: Math.floor(phases.server_build),
-  tool_projection: Math.floor(phases.tool_projection),
-  dispatch: Math.floor(phases.dispatch),
-  total: Math.ceil(totalMs),
-});
+}: McpRequestMetricInput) => {
+  const total = Math.ceil(totalMs);
+  return {
+    event: "mcp.request.phases",
+    ...fields,
+    auth: Math.floor(phases.auth),
+    context: Math.floor(phases.context),
+    server_build: Math.floor(phases.server_build),
+    tool_projection: Math.floor(phases.tool_projection),
+    dispatch: Math.floor(phases.dispatch),
+    total,
+    ...(latencyBudgetMs === undefined
+      ? {}
+      : { budget: latencyBudgetMs, overBudget: total > latencyBudgetMs }),
+  };
+};
 
 export const emitMcpRequestMetric = (input: McpRequestMetricInput): void => {
   writeMetricLine(buildMcpRequestMetricRecord(input));
@@ -192,6 +209,33 @@ export const emitVerificationRunFailureMetric = (
       errorCode satisfies never;
       panic("Unknown verification failure code");
   }
+};
+
+export const CASE_LAW_RESEARCH_CELLS_EVENT = "case_law.research_answer.cells";
+
+/**
+ * Research cells one write settled, one line per outcome, counted only where
+ * the write landed. `decision_unavailable` and `no_text` on a decision the
+ * search just served mean the read path is broken, not that a model refused:
+ * the API log's metric filter counts them against all settled cells, so a
+ * read that starts failing every cell alarms within the hour instead of
+ * waiting for someone to notice empty columns.
+ */
+export const emitCaseLawResearchCellsMetric = ({
+  state,
+  failureReason,
+  cells,
+}: {
+  state: Exclude<CaseLawResearchAnswerState, "pending">;
+  failureReason: CaseLawResearchAnswerFailureReason | null;
+  cells: number;
+}): void => {
+  writeMetricLine({
+    event: CASE_LAW_RESEARCH_CELLS_EVENT,
+    state,
+    failureReason: failureReason ?? "none",
+    CaseLawResearchAnswerCells: cells,
+  });
 };
 
 export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
@@ -376,6 +420,9 @@ export const CASE_LAW_FRESHNESS_METRIC = {
   projectionConvergence: "CaseLawProjectionConvergence",
   decisionIdentifierRepairs: "CaseLawDecisionIdentifierRepairs",
   decisionIdentifierPassAgeSeconds: "CaseLawDecisionIdentifierPassAgeSeconds",
+  waitingReplacements: "CaseLawProjectionWaitingReplacements",
+  waitingReplacementOldestSeconds:
+    "CaseLawProjectionWaitingReplacementOldestSeconds",
 } as const satisfies Record<string, string>;
 
 const buildCaseLawMetricRecord = ({
@@ -411,6 +458,36 @@ export const buildCaseLawSourceSyncAgeMetric = (
   source,
 });
 
+type CaseLawWaitingReplacementDimensions = {
+  generation: string;
+  index: string;
+};
+
+/** Replacements of one index still served at their previous revision. */
+export const buildCaseLawWaitingReplacementsMetric = (
+  { generation, index }: CaseLawWaitingReplacementDimensions,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.waitingReplacements,
+    value,
+  }),
+  generation,
+  index,
+});
+
+export const buildCaseLawWaitingReplacementOldestMetric = (
+  { generation, index }: CaseLawWaitingReplacementDimensions,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.waitingReplacementOldestSeconds,
+    value,
+  }),
+  generation,
+  index,
+});
+
 export const buildCaseLawDecisionIdentifierRepairMetric = (value: number) =>
   buildCaseLawMetricRecord({
     name: CASE_LAW_FRESHNESS_METRIC.decisionIdentifierRepairs,
@@ -429,6 +506,78 @@ export const buildCaseLawProjectionConvergenceMetric = (status: string) => ({
     value: 1,
   }),
   status,
+});
+
+export const CORPUS_PROJECTION_UNSERVED_METRIC = {
+  entities: "CorpusProjectionUnservedEntities",
+  oldestAgeSeconds: "CorpusProjectionUnservedOldestAgeSeconds",
+} as const;
+
+/** `at_least` when the count stopped at its cap. */
+type CorpusProjectionUnservedCountBound = "exact" | "at_least";
+
+/** A generation's record sums its indexes; an index record names one. */
+type CorpusProjectionUnservedMetricScope =
+  { type: "generation" } | { type: "index"; indexId: string };
+
+/** An unknown age emits no age field: a lower bound would read as the age. */
+type CorpusProjectionUnservedMetricAge =
+  { type: "measured"; seconds: number } | { type: "unknown" };
+
+type CorpusProjectionUnservedMetricInput = {
+  family: string;
+  generation: string;
+  kind: "at_risk" | "absent";
+  scope: CorpusProjectionUnservedMetricScope;
+  entities: number;
+  countBound: CorpusProjectionUnservedCountBound;
+  oldestAge: CorpusProjectionUnservedMetricAge;
+};
+
+const unservedMetricScopeFields = (
+  scope: CorpusProjectionUnservedMetricScope,
+) => {
+  switch (scope.type) {
+    case "generation":
+      return { scope: scope.type };
+    case "index":
+      return { scope: scope.type, indexId: scope.indexId };
+    default:
+      scope satisfies never;
+      return panic("Unhandled unserved metric scope");
+  }
+};
+
+const unservedMetricAgeFields = (age: CorpusProjectionUnservedMetricAge) => {
+  switch (age.type) {
+    case "measured":
+      return {
+        [CORPUS_PROJECTION_UNSERVED_METRIC.oldestAgeSeconds]: age.seconds,
+      };
+    case "unknown":
+      return {};
+    default:
+      age satisfies never;
+      return panic("Unhandled unserved metric age");
+  }
+};
+
+export const buildCorpusProjectionUnservedMetric = ({
+  family,
+  generation,
+  kind,
+  scope,
+  entities,
+  countBound,
+  oldestAge,
+}: CorpusProjectionUnservedMetricInput) => ({
+  [CORPUS_PROJECTION_UNSERVED_METRIC.entities]: entities,
+  ...unservedMetricAgeFields(oldestAge),
+  family,
+  generation,
+  kind,
+  ...unservedMetricScopeFields(scope),
+  countBound,
 });
 
 export const REQUEST_CLASSES = [
@@ -536,6 +685,34 @@ export const emitChatRunLogMetric = (metric: ChatRunLogMetric): void => {
       metric satisfies never;
       panic("Unhandled chat run log metric");
   }
+};
+
+const LOCAL_RUN_STEP_CONTENT_METRIC = {
+  storedBytes: "LocalRunStepContentStoredBytes",
+  budgetReached: "LocalRunStepContentBudgetReached",
+  tooLarge: "LocalRunStepContentTooLarge",
+  refused: "LocalRunStepContentRefused",
+} as const;
+
+type LocalRunStepContentMetric = {
+  /** How the step's content settled; `refused` for a write to a settled step. */
+  state: "stored" | "too_large" | "run_budget_reached" | "refused";
+  /** Bytes this write stored. */
+  storedBytes: number;
+};
+
+/** One write of a local run's step content, by how it settled or that it was refused. */
+export const emitLocalRunStepContentMetric = ({
+  state,
+  storedBytes,
+}: LocalRunStepContentMetric): void => {
+  writeMetricLine({
+    [LOCAL_RUN_STEP_CONTENT_METRIC.storedBytes]: storedBytes,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.budgetReached]:
+      state === "run_budget_reached" ? 1 : 0,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.tooLarge]: state === "too_large" ? 1 : 0,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.refused]: state === "refused" ? 1 : 0,
+  });
 };
 
 const PROMPT_CACHE_METRIC = {

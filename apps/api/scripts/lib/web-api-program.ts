@@ -7,13 +7,13 @@
 // it, so the printer reads what that entry exports.
 import { panic, Result } from "better-result";
 import path from "node:path";
-import type { SourceFile } from "tsrs/unstable/ast";
+import type { SourceFile } from "tsrs/ast";
 import {
   API,
   type Checker,
   type Diagnostic,
   type Symbol as CompilerSymbol,
-} from "tsrs/unstable/async";
+} from "tsrs/async";
 
 import { repoRelativePath } from "@stll/portable-path";
 

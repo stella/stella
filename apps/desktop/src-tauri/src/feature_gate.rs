@@ -10,16 +10,26 @@ use std::{collections::HashSet, num::NonZeroUsize, sync::RwLock};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DesktopFeature {
   ActivityTimeline,
+  Dictation,
+  /// Transcription by stella AI; the audio leaves the computer.
+  DictationCloud,
   LocalAgents,
 }
 
 impl DesktopFeature {
-  pub const ALL: &'static [Self] = &[Self::ActivityTimeline, Self::LocalAgents];
+  pub const ALL: &'static [Self] = &[
+    Self::ActivityTimeline,
+    Self::Dictation,
+    Self::DictationCloud,
+    Self::LocalAgents,
+  ];
 
   /// The identifier the feature-access contract uses.
   pub const fn id(self) -> &'static str {
     match self {
       Self::ActivityTimeline => "activity-timeline",
+      Self::Dictation => "desktop-dictation",
+      Self::DictationCloud => "desktop-dictation-cloud",
       Self::LocalAgents => "local-agents",
     }
   }

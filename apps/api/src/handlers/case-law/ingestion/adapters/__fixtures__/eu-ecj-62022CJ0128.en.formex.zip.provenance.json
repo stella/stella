@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "48e52f1f95e3a5057f103012a4895f15347783650429b210ba5246db08eab893",
+  "sourceUrl": "https://publications.europa.eu/resource/cellar/cc021804-9350-11ee-8aa6-01aa75ed71a1.0011.03/DOC_1",
+  "capturedAt": "2026-10-28T18:07:52.472569+00:00",
+  "note": "Original FORMEX ZIP response, Accept: application/xml;type=fmx4, application/zip; Content-Type: application/zip;charset=UTF-8. Retained verbatim, including ZIP container metadata."
+}

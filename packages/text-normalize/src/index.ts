@@ -24,6 +24,7 @@
 // parser-output-unchanged: [uk-fcl] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
+// parser-output-unchanged: exports the opt-in search match options; default folds are unchanged.
 export {
   applyArabicFolds,
   applyArabicFoldsWithOffsets,
@@ -41,12 +42,26 @@ export {
   findSearchMatchRanges,
   foldSearchMatchText,
   foldSearchMatchTextWithOffsets,
+  foldSearchMatchTextWithOffsetsAndOptions,
+  foldSearchMatchTextWithOptions,
+  hasFoldedSearchMatch,
 } from "./search-match.js";
-export type { FoldedSearchText, SearchMatchRange } from "./search-match.js";
+export type {
+  FoldedSearchText,
+  SearchFoldOptions,
+  SearchMatchOptions,
+  SearchMatchRange,
+} from "./search-match.js";
 export {
+  collapseLetterSpacing,
   collapseSpacedLetters,
-  spacedLetterRunRegex,
-} from "./spaced-letters.js";
+  documentWordCounts,
+  isLetterSpacedEmphasis,
+  joinWordSeams,
+  letterGapCounts,
+  letterSpacingJoins,
+} from "./letter-spacing.js";
+export type { LetterSpacingOptions } from "./letter-spacing.js";
 export { slugify } from "./slug.js";
 export type { SlugCharset, SlugifyOptions, SlugSeparator } from "./slug.js";
 export {

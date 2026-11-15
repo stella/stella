@@ -4,8 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, renderHook } = await import("@testing-library/react");

@@ -14,6 +14,8 @@ import {
   readerPdfPageAnchorId,
 } from "@stll/api-contract/legal-reader-annotations";
 import type { MatterDocumentAnnotationRefusal } from "@stll/api-contract/legal-reader-annotations";
+import { readerTextQuoteContext } from "@stll/legal-ast/reader-text-quote";
+import type { ReaderTextQuoteSelector } from "@stll/legal-ast/reader-text-quote";
 
 import { pdfPageTextSha256 } from "@/api/lib/files/pdf-page-text";
 
@@ -26,12 +28,7 @@ export type DocumentPageSpan = {
 };
 
 export type PlacedDocumentSpans = {
-  spans: {
-    blockAnchorId: string;
-    startOffset: number;
-    endOffset: number;
-    quote: string;
-  }[];
+  spans: ReaderTextQuoteSelector[];
   pageTextSha256ByAnchorId: Map<string, string>;
 };
 
@@ -93,6 +90,7 @@ export const placeDocumentSpans = ({
       startOffset: span.startOffset,
       endOffset: span.endOffset,
       quote: span.quote,
+      ...readerTextQuoteContext(text, span),
     });
     placed.pageTextSha256ByAnchorId.set(blockAnchorId, pdfPageTextSha256(text));
   }

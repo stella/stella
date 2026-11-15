@@ -20,6 +20,12 @@ export type QueryCounter = ReadWork & {
   diagnostics: boolean;
   parent: QueryCounter | undefined;
   onQuery?: (phase: "work" | "cleanup") => void;
+  /**
+   * Each counted statement's text, from every connection wired to the
+   * counter (the member-scoped pool, the root pool, dedicated sessions), so a
+   * measurement can read what it counted rather than only how many.
+   */
+  onStatement?: (statement: string) => void;
 };
 
 export const emptyReadWork = (): ReadWork => ({
@@ -38,6 +44,10 @@ export const withRequestWork = <TResult>(
   counter: QueryCounter,
   read: () => TResult,
 ): TResult => queryCounterStore.run(counter, read);
+
+/** Run `read` with no request store; its continuations inherit that absence. */
+export const withoutRequestWork = <TResult>(read: () => TResult): TResult =>
+  queryCounterStore.exit(read);
 
 export const currentRequestWork = (): QueryCounter | undefined =>
   queryCounterStore.getStore();

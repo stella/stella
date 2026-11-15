@@ -173,7 +173,7 @@ const DependencyConditionEditor = ({
 const fieldOptionFor = (property: WorkspaceProperty): FieldOption | null => {
   const { content } = property;
 
-  if (content.type === "file") {
+  if (content.type === "file" || content.type === "record") {
     return null;
   }
 

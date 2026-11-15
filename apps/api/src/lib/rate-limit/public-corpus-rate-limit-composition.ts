@@ -1,7 +1,7 @@
 import { toResponse } from "@/api/http/respond";
 import type { Middleware } from "@/api/http/route";
-import { status } from "@/api/http/status";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
 import { hasDedicatedBudget } from "@/api/lib/rate-limit/dedicated-budgets";
 import { publicCorpusConcurrencyLimit } from "@/api/lib/rate-limit/public-corpus-concurrency";
@@ -11,6 +11,7 @@ import {
 } from "@/api/lib/rate-limit/public-corpus-rate-limits";
 import {
   asRouteBudget,
+  capacityRefusalCause,
   DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
   rateLimit,
 } from "@/api/lib/rate-limit/rate-limit";
@@ -72,7 +73,11 @@ export const createPublicCorpusRateLimitComposition = ({
     if (crawlerIdentity === CRAWLER_VERIFICATION_CAPACITY_REFUSED) {
       ctx.set.headers["Retry-After"] = "1";
       return toResponse(
-        status(503, DEFAULT_RATE_LIMIT_ERROR_RESPONSE),
+        observedStatus(
+          capacityRefusalCause("crawler verification capacity refused"),
+          503,
+          DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
+        ),
         ctx.set,
       );
     }

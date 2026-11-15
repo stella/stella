@@ -11,6 +11,8 @@ export const publicRouteExceptions: Record<string, string> = {
   "/": "RootRedirect immediately navigates according to the audience; it has no stable leaf body. Destination routes are covered separately.",
   "/auth/handoff":
     "The handoff confirmation route requires root-loader state captured from an MCP handoff; its panel is covered separately.",
+  "/sharepoint/oauth-callback":
+    "The SharePoint OAuth callback reports the outcome and navigates to the connections settings on mount; it has no stable leaf body. The destination route is covered separately.",
   "/knowledge/clauses:anonymous":
     "KnowledgeMemberOnly redirects anonymous visitors to the Knowledge landing before its page body mounts.",
   "/knowledge/styles:anonymous":
@@ -185,6 +187,7 @@ export const publicFixtureResponse = (
         vatId: null,
         vatPayer: false,
         invoiceLanguage: null,
+        timeBillingFormat: "categories",
         bankAccounts: [],
         billingAddress: null,
         defaultHourlyRate: null,

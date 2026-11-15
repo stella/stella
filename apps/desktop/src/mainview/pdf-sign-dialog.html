@@ -21,6 +21,12 @@
         -webkit-user-select: none;
         user-select: none;
       }
+      .window-drag-region {
+        height: 28px;
+        inset: 0 0 auto;
+        position: fixed;
+        z-index: 1;
+      }
       .dialog {
         flex-shrink: 0;
         padding: 56px 24px 20px;
@@ -184,6 +190,11 @@
     </style>
   </head>
   <body>
+    <div
+      aria-hidden="true"
+      class="window-drag-region"
+      data-tauri-drag-region
+    ></div>
     <main class="dialog">
       <div class="mark">
         <svg
@@ -236,6 +247,11 @@
       </div>
     </main>
     <script type="module">
+      import { installNativeContextMenuPolicy } from "../shared/native-context-menu";
+
+      installNativeContextMenuPolicy(document);
+    </script>
+    <script type="module">
       import { fitStaticDialog } from "./static-dialog-fit.js";
       // Everything the dialog renders arrives in the URL hash, set by Rust
       // when it opens the window: the certificates to choose from, the
@@ -245,8 +261,13 @@
       // this page.
       const params = new URLSearchParams(window.location.hash.slice(1));
       const strings = JSON.parse(params.get("strings") || "{}");
-      const state = JSON.parse(params.get("state") || '"unsupportedPlatform"');
-      const identities = JSON.parse(params.get("identities") || "[]");
+      // The picker as Rust last listed it; it re-lists while the user
+      // chooses, so a smart card inserted or removed shows up in place.
+      let listing = {
+        identities: JSON.parse(params.get("identities") || "[]"),
+        state: JSON.parse(params.get("state") || '"unsupportedPlatform"'),
+        stateMessageKey: params.get("stateMessage"),
+      };
       // Where the platform keeps signing keys: a sentence that names the
       // keychain has a `CertificateStore` variant, read where the store is not
       // a keychain, so the wording names it the way the user's system does.
@@ -352,34 +373,98 @@
         return parts.join(" · ");
       };
       const showIdentityDetails = () => {
-        const selected = identities.find(
+        const selected = listing.identities.find(
           (identity) => identity.id === element("identities").value,
         );
         setText("identityDetails", selected ? describeIdentity(selected) : "");
       };
+      element("identities").addEventListener("change", showIdentityDetails);
 
-      if (state === "ready") {
-        setText("subtitle", wording("pdfSignSubtitle"));
-        for (const identity of identities) {
-          const option = document.createElement("option");
-          option.value = identity.id;
-          option.textContent = identity.label;
-          element("identities").append(option);
-        }
-        element("identities").addEventListener("change", showIdentityDetails);
-        showIdentityDetails();
-        element("picker").hidden = false;
-        element("signBtn").hidden = false;
-      } else if (state === "noIdentities") {
-        showStatus(wording("pdfSignNoIdentities"), "error");
-      } else if (state === "keychainUnavailable") {
-        showStatus(
-          wording(params.get("stateMessage")) || strings[GENERIC_ERROR_KEY],
-          "error",
+      // A re-listing keeps the user's choice when that certificate is still
+      // there.
+      const renderListing = () => {
+        const ready = listing.state === "ready";
+        const select = element("identities");
+        const chosen = select.value;
+        select.replaceChildren(
+          ...listing.identities.map((identity) => {
+            const option = document.createElement("option");
+            option.value = identity.id;
+            option.textContent = identity.label;
+            return option;
+          }),
         );
-      } else {
-        showStatus(strings.pdfSignUnsupported, "error");
-      }
+        if (listing.identities.some((identity) => identity.id === chosen)) {
+          select.value = chosen;
+        }
+        showIdentityDetails();
+        setText("subtitle", ready ? wording("pdfSignSubtitle") : "");
+        element("picker").hidden = !ready;
+        element("signBtn").hidden = !ready;
+        if (ready) {
+          status.hidden = true;
+        } else if (listing.state === "noIdentities") {
+          showStatus(wording("pdfSignNoIdentities"), "error");
+        } else if (listing.state === "keychainUnavailable") {
+          showStatus(
+            wording(listing.stateMessageKey) || strings[GENERIC_ERROR_KEY],
+            "error",
+          );
+        } else {
+          showStatus(strings.pdfSignUnsupported, "error");
+        }
+      };
+      renderListing();
+
+      // Until the user signs or cancels, the dialog re-lists on focus and
+      // every few seconds, so a card inserted or pulled out while it is open
+      // updates the picker; a store that could not be read is retried only on
+      // focus. Listing reads certificates and never prompts.
+      const RELIST_INTERVAL_MS = 3000;
+      const RELISTED_STATES = ["ready", "noIdentities"];
+      let choosing = listing.state !== "unsupportedPlatform";
+      // Re-rendering only on a change keeps an open dropdown from closing
+      // under the pointer every few seconds.
+      const listingKey = ({ identities, state, stateMessageKey }) =>
+        JSON.stringify([state, stateMessageKey || null, identities]);
+      let relisting = false;
+      const relist = async () => {
+        if (!choosing || relisting || !window.__TAURI_INTERNALS__) {
+          return;
+        }
+        relisting = true;
+        try {
+          const next = await window.__TAURI_INTERNALS__.invoke(
+            "pdf_sign_identities",
+          );
+          if (
+            choosing &&
+            next &&
+            Array.isArray(next.identities) &&
+            listingKey(next) !== listingKey(listing)
+          ) {
+            listing = {
+              identities: next.identities,
+              state: next.state,
+              stateMessageKey: next.stateMessageKey,
+            };
+            renderListing();
+          }
+        } catch {
+          // The picker keeps what it last listed; signing re-reads the store
+          // and reports a certificate that is gone.
+        } finally {
+          relisting = false;
+        }
+      };
+      window.addEventListener("focus", () => {
+        void relist();
+      });
+      setInterval(() => {
+        if (RELISTED_STATES.includes(listing.state)) {
+          void relist();
+        }
+      }, RELIST_INTERVAL_MS);
 
       const respond = (body) =>
         window.__TAURI_INTERNALS__
@@ -442,6 +527,7 @@
       };
 
       element("signBtn").addEventListener("click", () => {
+        choosing = false;
         clearTimeout(retryExpiry);
         element("signBtn").disabled = true;
         element("cancelBtn").disabled = true;
@@ -455,6 +541,7 @@
       });
 
       element("cancelBtn").addEventListener("click", () => {
+        choosing = false;
         element("cancelBtn").disabled = true;
         element("signBtn").disabled = true;
         respond({ action: "cancel" });

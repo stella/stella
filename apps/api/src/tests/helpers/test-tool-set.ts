@@ -59,6 +59,7 @@ const FETCH_MOCK_PROPERTIES = {
  * Request, RequestInit) that's awkward to satisfy in tests that
  * only care about the URL string. This helper centralises the
  * widening so the per-test mock can use the input shape it asserts.
+ * Preconnect is inert so mocked requests cannot open real connections.
  */
 export const asFetchMock = (fn: TestFetchMock): typeof fetch =>
   // SAFETY: production code calls the mock with the URL it would

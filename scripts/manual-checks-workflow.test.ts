@@ -434,7 +434,7 @@ test("missing, non-test, excessive, or inapplicable targets are rejected", () =>
   );
 });
 
-test("test lists separated by anything but spaces are rejected", () => {
+test("lists of tests separated by anything but spaces are rejected", () => {
   const root = fixtureRoot();
   assertProperty(
     "test lists separated by anything but spaces are rejected",

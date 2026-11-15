@@ -10,6 +10,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./commonmark-code-oracle": "./src/commonmark-code-oracle.ts",
+    "./dom-environment": "./src/dom-environment.ts",
     "./external-state": "./src/external-state.ts",
     "./fake-timers": "./src/fake-timers.ts",
     "./preload": "./src/preload.ts",
@@ -18,16 +19,18 @@
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "test": "bun test src",
+    "test": "bun test --isolate src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/property-testing",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/property-testing"
+    "lint": "cd ../.. && bun scripts/lint.ts packages/property-testing",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/property-testing"
   },
   "dependencies": {
+    "@happy-dom/global-registrator": "21.0.4",
     "@stll/portable-path": "workspace:*",
     "@stll/sha256": "workspace:*",
     "better-result": "catalog:",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "react-dom": "catalog:react19"
   },
   "devDependencies": {
     "@stll/test-state": "workspace:*",

@@ -264,12 +264,13 @@ const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
     JSON.parse(
       part.arguments,
       (_key, value: unknown, context?: { source?: string }) => {
-        if (
-          typeof value === "number" &&
-          (context?.source === undefined ||
-            decimalIdentity(context.source) !== decimalIdentity(String(value)))
-        ) {
-          lossyLiterals.push(context?.source ?? String(value));
+        if (typeof value === "number") {
+          const roundTrips =
+            context?.source !== undefined &&
+            decimalIdentity(context.source) === decimalIdentity(String(value));
+          if (!roundTrips) {
+            lossyLiterals.push(context?.source ?? String(value));
+          }
         }
         return value;
       },

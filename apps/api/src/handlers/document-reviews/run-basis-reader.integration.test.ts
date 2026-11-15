@@ -21,13 +21,13 @@ import { inArray } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { documentReviewRuns } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
+import { memberSafeDb } from "@/api/tests/helpers/application-role-db";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -94,6 +94,7 @@ const basisWith = (
     definitionSnapshot: {
       name: "Positions confirmed for this review",
       positions: { version: 3, items: positions },
+      scope: null,
     },
   },
   references: [
@@ -137,9 +138,11 @@ const seedRun = async (
 
 /** A reader of the run's matter who can also open `extra` matters. */
 const readerOf = (extra: SafeId<"workspace">[]): SafeDb =>
-  asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1, ...extra], ids.orgA, ids.userA1),
-  );
+  memberSafeDb(testDb, {
+    organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1, ...extra],
+    userId: ids.userA1,
+  });
 
 const handlerContext = (safeDb: SafeDb, rest: Record<string, unknown>) => ({
   request: new Request("http://localhost/v1/document-reviews/runs"),

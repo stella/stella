@@ -2,12 +2,12 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
   otpSearchSchema,
   otpSessionNavigation,
 } from "@/routes/auth/-otp.logic";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { SIGN_IN_MODE } from "./sign-in-mode";
 import type { SignInMode } from "./sign-in-mode";

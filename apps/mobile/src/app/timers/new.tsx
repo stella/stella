@@ -2,11 +2,10 @@ import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useRouter } from "expo-router";
-import { ScrollView, View } from "react-native";
+import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
-import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -18,6 +17,7 @@ import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { listMatters } from "@/state/matters";
 import { startTimer } from "@/state/timers";
+import { useAppColors } from "@/theme";
 
 /**
  * A new timer, presented as a sheet over the timers: what it is for and,
@@ -34,6 +34,8 @@ const NewTimerScreen = () => {
 const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("timers");
   const tabs = useTranslations("tabs");
+  const words = useTranslations("timerActivity");
+  const colors = useAppColors();
   const router = useRouter();
   const { end } = useSession();
   const changed = useChanged();
@@ -114,10 +116,10 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
           <View className="px-1">
             <Text variant="section">{t("matterTitle")}</Text>
           </View>
-          <Suspense fallback={<Loader />}>
+          <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
             <MatterPicker
               matters={matters}
-              noneLabel={t("noMatter")}
+              noneLabel={words("noMatter")}
               onSelect={setMatterId}
               selected={matterId}
             />

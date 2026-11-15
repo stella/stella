@@ -4,11 +4,12 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
 import type { PdfSigningStamp } from "@/components/inspector/pdf-signing-stamp.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -85,10 +86,12 @@ const mount = () => {
   );
   act(() => {
     beginPdfSignPlacement({
+      cancel: () => undefined,
       confirm: (stamp) => {
         confirmed.push(stamp);
       },
       fieldId: FIELD_ID,
+      isCurrent: () => true,
     });
   });
   const surface =

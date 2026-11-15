@@ -1,11 +1,7 @@
 import { panic } from "better-result";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import {
-  API,
-  formatDiagnostics,
-  type ParsedCommandLine,
-} from "tsrs/unstable/async";
+import { API, formatDiagnostics, type ParsedCommandLine } from "tsrs/async";
 import * as v from "valibot";
 
 export const apiTypecheckArtifact = (

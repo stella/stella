@@ -11,6 +11,8 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
+import { useTranslations } from "use-intl";
+
 import { queryHighlightTokens } from "@stll/decision-reader/query-marks";
 
 import { PublicLawTable } from "@/components/public-law-table/public-law-table";
@@ -108,6 +110,7 @@ export const DecisionTable = ({
   referenceKind,
   selectedIds,
 }: DecisionTableProps) => {
+  const t = useTranslations();
   const columns = useDecisionTableColumns({
     extraColumns,
     ordering: dateOrder === null ? "answer" : "header",
@@ -124,10 +127,16 @@ export const DecisionTable = ({
       })),
     [decisions],
   );
-  const selection = useMemo(
-    () => ({ onSelectedIdsChange, selectedIds }),
-    [onSelectedIdsChange, selectedIds],
-  );
+  const selection = {
+    actions: <QuestionColumnSelectionBar surface={questions} />,
+    clearLabel: t("common.clearSelection"),
+    getRowLabel: (row: DecisionRowData) =>
+      t("common.selectRow", { label: row.decision.caseNumber }),
+    label: t("common.selectedCount", { count: selectedIds.length }),
+    onSelectedIdsChange,
+    selectedIds,
+    selectAllLabel: t("common.selectAllRows"),
+  };
 
   // The rail is a transparent strip pinned over the table's end columns, so it
   // is reserved only where it actually carries a control; otherwise it would
@@ -168,7 +177,6 @@ export const DecisionTable = ({
   return (
     <DecisionRenderScope value={renderScope}>
       <DecisionDateDirectionsScope value={dateOrder?.directions ?? null}>
-        <QuestionColumnSelectionBar surface={questions} />
         <PublicLawTable
           columns={columns}
           emptyState={emptyState}

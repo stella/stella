@@ -1,13 +1,20 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import type { Fetch } from "@/connection/http";
-import { createAccessTokenSource } from "@/connection/session";
+import {
+  createAccessTokenSource,
+  createSessionStore,
+} from "@/connection/session";
 import type { StoredSession } from "@/connection/session";
 
 import type { Timer } from "./timers";
-import { clockOf, discardTimer, elapsedSeconds, saveTimer } from "./timers";
+import { discardTimer, matterTimerAction, saveTimer } from "./timers";
 
 const SESSION: StoredSession = {
+  signInId: "sign-in-1",
   serverUrl: "https://stella.example.com",
   issuer: "https://stella.example.com/api/auth",
   clientId:
@@ -36,36 +43,22 @@ const recordingServer = () => {
     requests.push(`${init?.method ?? "GET"} ${path}${body}`);
     return Response.json({});
   };
+  const store = createSessionStore({
+    read: async () => SESSION,
+    write: async () => {},
+    prepareClear: async () => {},
+    clear: async () => {},
+  });
   const source = createAccessTokenSource({
     fetch,
     initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
     now: () => 0,
     session: SESSION,
-    store: {
-      read: async () => SESSION,
-      write: async () => {},
-      clear: async () => {},
-    },
+    store,
+    generation: store.generation(),
   });
   return { fetch, requests, source };
 };
-
-describe("a timer's time", () => {
-  test("a running timer adds the seconds since it resumed", () => {
-    const now = Date.UTC(2026, 9, 28, 10, 2, 30);
-    expect(elapsedSeconds(TIMER, now)).toBe(90 + 150);
-  });
-
-  test("a paused timer keeps what it counted", () => {
-    const paused: Timer = { ...TIMER, state: "paused", lastResumedAt: null };
-    expect(elapsedSeconds(paused, Date.UTC(2030, 0, 1))).toBe(90);
-  });
-
-  test("reads as a clock", () => {
-    expect(clockOf(309)).toBe("0:05:09");
-    expect(clockOf(45_000)).toBe("12:30:00");
-  });
-});
 
 describe("finishing a timer", () => {
   test("a timer without a matter saves as internal work, dated in the person's zone", async () => {
@@ -118,5 +111,45 @@ describe("finishing a timer", () => {
     ).toBe(
       "Billable time entries need an effective rate Set a rate for the matter.",
     );
+  });
+});
+
+describe("a matter's timer action", () => {
+  const timers = fc.array(
+    fc.record({
+      id: fc.uuid(),
+      matterId: fc.constantFrom(null, "matter-1", "matter-2"),
+      state: fc.constantFrom("running" as const, "paused" as const),
+    }),
+    { maxLength: 6 },
+  );
+
+  test("pauses the matter's running timer, else resumes its paused one, else starts", () => {
+    assertProperty(
+      "pauses the matter's running timer, else resumes its paused one, else starts",
+      fc.property(timers, (drawn) => {
+        const all = drawn.map((timer): Timer => ({ ...TIMER, ...timer }));
+        const own = all.filter((timer) => timer.matterId === "matter-1");
+        const action = matterTimerAction(all, "matter-1");
+        switch (action.type) {
+          case "pause":
+            expect(own).toContain(action.timer);
+            expect(action.timer.state).toBe("running");
+            return;
+          case "resume":
+            expect(own).toContain(action.timer);
+            expect(own.every((timer) => timer.state === "paused")).toBe(true);
+            return;
+          case "start":
+            expect(own).toEqual([]);
+        }
+      }),
+    );
+  });
+
+  test("leaves another matter's running timer alone", () => {
+    expect(
+      matterTimerAction([{ ...TIMER, matterId: "matter-2" }], "matter-1"),
+    ).toEqual({ type: "start" });
   });
 });

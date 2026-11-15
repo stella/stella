@@ -21,6 +21,8 @@ const README_PATH = path.join(PLUGIN_DIRECTORY, "README.md");
 export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "aggregate-lock-sites.ts",
   "budget-ledger.ts",
+  "case-law-replay-imports.ts",
+  "case-law-replay-writer-registry.ts",
   "database-access.ts",
   "api-client-chain.ts",
   "icon-ownership.ts",
@@ -30,8 +32,11 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "physical-properties.ts",
   "public-law-decision-surface-modules.ts",
   "public-read-io-provenance.ts",
+  "regex-sources.ts",
   "restricted-import.ts",
   "utils.ts",
+  "test-determinism-rule.ts",
+  "test-time-resolver.ts",
 ]);
 
 const pluginFiles = readdirSync(PLUGIN_DIRECTORY)
@@ -174,6 +179,16 @@ const fixtureHasRuleDisable = (source: string, ruleId: string): boolean =>
     const rules = stripBlockCommentEnd(ruleList);
 
     return rules.split(",").some((rule) => rule.trim() === ruleId);
+  });
+
+export const fixtureHasExpectedError = (
+  source: string,
+  ruleId: string,
+): boolean =>
+  source.split("\n").some((line) => {
+    const marker = /(?:\/\/|\/\*)\s*expect-error:\s*(?<rules>[^*]+)/u.exec(line)
+      ?.groups?.["rules"];
+    return marker?.split(",").some((rule) => rule.trim() === ruleId) === true;
   });
 
 // Names exported by the shared helper module. A plugin declaring one of them
@@ -341,11 +356,15 @@ for (const file of pluginFiles) {
       errors.push(`${file}: ${fullRuleId} is not enabled in production config`);
     }
     if (
-      !fixtureSources.some((fixture) =>
-        fixtureHasRuleDisable(fixture, fullRuleId),
+      !fixtureSources.some(
+        (fixture) =>
+          fixtureHasRuleDisable(fixture, fullRuleId) ||
+          fixtureHasExpectedError(fixture, fullRuleId),
       )
     ) {
-      errors.push(`${file}: fixture does not disable ${fullRuleId}`);
+      errors.push(
+        `${file}: fixture has no suppression or expect-error marker for ${fullRuleId}`,
+      );
     }
     if (
       !fixtureSources.some((fixture) =>

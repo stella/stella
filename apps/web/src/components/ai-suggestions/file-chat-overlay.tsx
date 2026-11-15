@@ -6,6 +6,17 @@ import {
   useRef,
   useState,
 } from "react";
+import type { Dispatch, RefObject, SetStateAction } from "react";
+
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { panic, Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import {
+  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
+  DOCX_SUGGESTION_SURFACE,
+} from "@stll/api-contract/chat-docx-suggestions";
 /**
  * FileChatOverlay
  *
@@ -20,17 +31,6 @@ import {
  * proposes edits via a `propose-suggestion` tool, the frontend
  * extracts and renders accept/reject cards). That work is Phase E.
  */
-import type { Dispatch, RefObject, SetStateAction } from "react";
-
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
-import { useTranslations } from "use-intl";
-
-import {
-  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
-  DOCX_SUGGESTION_SURFACE,
-} from "@stll/api-contract/chat-docx-suggestions";
 import {
   createEditorRefBridge,
   executeFolioToolCall,
@@ -60,7 +60,6 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
-import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -112,6 +111,7 @@ import {
   CHAT_SEND_KEPT,
   CHAT_SEND_SENT,
   useChatEditor,
+  useChatEditorManager,
 } from "@/components/chat-editor-provider";
 import type {
   ChatDraftAttachment,
@@ -142,11 +142,13 @@ import type {
   RegisteredFolioAgentToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
 import {
   type CreateDocumentDraftPersistence,
   getCreateDocumentDraftPersistence,
 } from "@/components/chat/create-document-draft-runtime";
-import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
+import { DockedComposerPending } from "@/components/chat/docked-composer";
+import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -164,11 +166,14 @@ import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
-  applyChatModelChange,
   chatThreadOptions,
   fileChatThreadOptions,
   materializeFileChatThread,
 } from "@/features/chat/queries";
+import {
+  useMakeSkillFromChat,
+  useSaveDraftedSkill,
+} from "@/features/chat/use-make-skill-from-chat";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getTranslator } from "@/i18n/i18n-store";
@@ -202,7 +207,6 @@ import {
   matchReservedChatCommand,
   runReservedChatCommand,
 } from "@/lib/reserved-chat-commands";
-import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
 
 type ActiveFile = {
@@ -815,18 +819,6 @@ const hasPersistedActiveDraftChatBinding = ({
     );
   });
 
-const FileChatFallback = () => {
-  const t = useTranslations("common");
-  return (
-    <div
-      className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-      aria-busy="true"
-    >
-      <Loader label={t("loading")} size="sm" />
-    </div>
-  );
-};
-
 export const FileChatOverlay = ({
   workspaceId,
   chatThreadId,
@@ -856,7 +848,7 @@ export const FileChatOverlay = ({
     }
 
     return (
-      <Suspense fallback={<FileChatFallback />}>
+      <Suspense fallback={<DockedComposerPending surface="chat" />}>
         <ResolvedFileChatOverlay
           activeFile={{ ...activeFile, fileFieldId }}
           draftPersistence={draftPersistence}
@@ -874,7 +866,7 @@ export const FileChatOverlay = ({
   }
 
   return (
-    <Suspense fallback={<FileChatFallback />}>
+    <Suspense fallback={<DockedComposerPending surface="chat" />}>
       <FileChatOverlayInner
         activeExternal={activeExternal}
         activeDraft={activeDraft}
@@ -1183,6 +1175,8 @@ const FileChatOverlayInner = ({
   presets,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
+  const saveDraftedSkill = useSaveDraftedSkill();
+  const makeSkillFromChat = useMakeSkillFromChat(saveDraftedSkill);
   const queryClient = useQueryClient();
   const capturePromptSubmitError = useCallback(
     (error: unknown): void => {
@@ -1201,6 +1195,7 @@ const FileChatOverlayInner = ({
     () => getFileChatThreadRef(chatThreadId, workspaceId),
     [chatThreadId, workspaceId],
   );
+  const { insertPastedTextIntoThread } = useChatEditorManager();
   // Per-send anonymization now reads the shared per-thread store keyed by
   // `threadRef`, same as every other chat surface: the dock's shield
   // shows `useChatAnonymized(threadRef)`, the transport reads
@@ -1495,21 +1490,17 @@ const FileChatOverlayInner = ({
     onActiveDraftChatBound?.(chatThreadId);
     return undefined;
   }, [chatThreadId, hasPersistedDraftChatBinding, onActiveDraftChatBound]);
-  // Persists the composer (+) menu's Models submenu selection into this
-  // thread's cache, mirroring `ChatThreadPage`'s wiring so the file-chat (+)
-  // menu keeps the same functionality as the main chat's.
-  const modelSelection = useChatModelSelection({
-    onPersisted: ({ model, reasoningEffort }) => {
-      applyChatModelChange({
-        model,
-        reasoningEffort,
-        queryClient,
-        queryKey: threadQueryOptions.queryKey,
-        threadId: toSafeId<"chatThread">(threadRef.threadId),
-      });
-    },
+  // The same owner of the model choice as the chat page. A file chat's turns
+  // edit the open document through this page's review queue, which only
+  // stella's own models drive, so it offers no Run on.
+  const composer = useChatComposerModels({
+    activeOrganizationId,
     threadRef,
+    stored: data,
+    queryKey: threadQueryOptions.queryKey,
+    runOn: "cloud_only",
   });
+  const composerModels = composer.models;
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: chatThreadContext,
@@ -1547,12 +1538,16 @@ const FileChatOverlayInner = ({
     isLoadingOlder,
     loadOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
+    workAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     turnAbandoned,
@@ -1599,6 +1594,14 @@ const FileChatOverlayInner = ({
     activeDraft !== undefined &&
     getCreateDocumentDraftPersistence(activeDraft.toolCallId).status ===
       "saving";
+  const handleContinuePausedTurn = useLatestCallback(async () => {
+    await continuePausedTurnWhenReady({
+      draftSaving: isDraftChatFrozen(),
+      ensureAIAvailable,
+      awaitPendingSelection: composer.awaitPendingSelection,
+      continueTurn: continuePausedTurn,
+    });
+  });
   const handlePromptSubmit = useLatestCallback(
     async ({
       prompt,
@@ -1616,7 +1619,7 @@ const FileChatOverlayInner = ({
       // Don't let a model just chosen from the (+) Models submenu race the
       // send: wait for its PATCH to settle (already toasted on failure) and
       // abort so the request can't run against the previous thread model.
-      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+      if (Result.isError(await composer.awaitPendingSelection())) {
         return CHAT_SEND_KEPT;
       }
 
@@ -1653,7 +1656,12 @@ const FileChatOverlayInner = ({
       // minimised it earlier — they're sending a new prompt
       // and want to see the response stream in.
       setPanelOpen(true);
-      await sendMessage(await buildChatRequestMessage({ files, html: prompt }));
+      const message = await buildChatRequestMessage({ files, html: prompt });
+      if (message.isErr()) {
+        notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
+      await sendMessage(message.value);
       return CHAT_SEND_SENT;
     },
   );
@@ -2058,6 +2066,7 @@ const FileChatOverlayInner = ({
     }
 
     const partsToRun = selectIdleFolioAgentDocToolCallParts({
+      awaitedAtOpen: workAwaitedAtOpen,
       clientStatus,
       executedIds,
       messageParts: message.parts,
@@ -2069,7 +2078,13 @@ const FileChatOverlayInner = ({
         "file-chat-overlay.run-folio-agent-doc-tool-call",
       );
     }
-  }, [clientStatus, messages, runFolioAgentDocToolCall]);
+  }, [
+    chat,
+    clientStatus,
+    messages,
+    runFolioAgentDocToolCall,
+    workAwaitedAtOpen,
+  ]);
 
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
@@ -2127,26 +2142,43 @@ const FileChatOverlayInner = ({
     if (getLiveEditor(editorController.editor) === null) {
       return undefined;
     }
-    editorController.setContent(pendingFileChatDraft.markdown);
-    switch (pendingFileChatDraft.delivery) {
-      case FILE_CHAT_DRAFT_DELIVERY.draft: {
+    const { handoff } = pendingFileChatDraft;
+    switch (handoff.type) {
+      case "passage": {
+        // A selected passage joins what the reader already typed, as a chip,
+        // and the caret waits after it for the question.
+        insertPastedTextIntoThread(threadRef, handoff.quote);
         editorController.focus();
-        setPanelOpen(true);
         break;
       }
-      case FILE_CHAT_DRAFT_DELIVERY.send: {
-        detached(
-          editorController.submit(
-            async ({ files, html }) =>
-              await handlePromptSubmit({ files, prompt: html }),
-          ),
-          "file-chat-overlay.handoff-send",
-        );
+      case "prose": {
+        editorController.setContent(handoff.markdown);
+        switch (handoff.delivery) {
+          case FILE_CHAT_DRAFT_DELIVERY.draft: {
+            editorController.focus();
+            setPanelOpen(true);
+            break;
+          }
+          case FILE_CHAT_DRAFT_DELIVERY.send: {
+            detached(
+              editorController.submit(
+                async ({ files, html }) =>
+                  await handlePromptSubmit({ files, prompt: html }),
+              ),
+              "file-chat-overlay.handoff-send",
+            );
+            break;
+          }
+          default: {
+            handoff.delivery satisfies never;
+            panic("Unhandled file chat draft delivery");
+          }
+        }
         break;
       }
       default: {
-        pendingFileChatDraft.delivery satisfies never;
-        panic("Unhandled file chat draft delivery");
+        handoff satisfies never;
+        panic("Unhandled file chat handoff");
       }
     }
     useInspectorCommandStore
@@ -2157,7 +2189,9 @@ const FileChatOverlayInner = ({
     activeFileFieldId,
     editorController,
     handlePromptSubmit,
+    insertPastedTextIntoThread,
     pendingFileChatDraft,
+    threadRef,
   ]);
   const [newThreadChoice, setNewThreadChoice] = useState<NewThreadChoiceState>({
     status: NEW_THREAD_CHOICE_STATUS.idle,
@@ -2230,7 +2264,7 @@ const FileChatOverlayInner = ({
     if (!(await ensureAIAvailable())) {
       return CHAT_SEND_KEPT;
     }
-    if (Result.isError(await modelSelection.awaitPendingSelection())) {
+    if (Result.isError(await composer.awaitPendingSelection())) {
       return CHAT_SEND_KEPT;
     }
     const newThreadRef: ChatThreadRef =
@@ -2241,10 +2275,12 @@ const FileChatOverlayInner = ({
             threadId: createChatThreadId(),
             workspaceId,
           };
-    await startNewThreadCommandHandoff({
+    const handoff = await startNewThreadCommandHandoff({
       activeOrganizationId,
       context: {
         ...chatThreadContext,
+        // A file chat runs on stella (see `composerModels`).
+        getRunTarget: undefined,
         getSendMode: () => getChatSendMode(newThreadRef),
       },
       files,
@@ -2252,6 +2288,10 @@ const FileChatOverlayInner = ({
       queryClient,
       threadRef: newThreadRef,
     });
+    if (handoff.isErr()) {
+      notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+      return CHAT_SEND_KEPT;
+    }
     await commitNewThread(newThreadRef.threadId, pendingReview);
     return CHAT_SEND_SENT;
   };
@@ -2473,6 +2513,17 @@ const FileChatOverlayInner = ({
             title: args.length > 0 ? args : null,
           });
         },
+        "make-skill": (args) => {
+          editorController.setContent(composerText(""));
+          if (!hasMessages) {
+            stellaToast.add({
+              title: t("chat.makeSkill.emptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          makeSkillFromChat({ intent: args, threadRef });
+        },
       });
       if (!handledReserved) {
         return await handlePromptSubmit({ prompt, files });
@@ -2582,6 +2633,7 @@ const FileChatOverlayInner = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,
@@ -2637,6 +2689,7 @@ const FileChatOverlayInner = ({
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
               onOpenPlaybook={handleOpenPlaybook}
+              onContinuePausedTurn={handleContinuePausedTurn}
               onResend={resendLatestMessage}
               queuedMessageActions={{
                 remove: removeQueuedMessage,
@@ -2644,7 +2697,6 @@ const FileChatOverlayInner = ({
               }}
               queuedMessages={queuedMessages}
               scrollContainerRef={threadScrollRef}
-              showThinkingIndicator
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
             />
@@ -2673,13 +2725,19 @@ const FileChatOverlayInner = ({
                     }
                     // Same model-race guard as the composer send path.
                     if (
-                      Result.isError(
-                        await modelSelection.awaitPendingSelection(),
-                      )
+                      Result.isError(await composer.awaitPendingSelection())
                     ) {
                       return CHAT_SEND_KEPT;
                     }
-                    await sendMessage(await buildChatRequestMessage(draft));
+                    const message = await buildChatRequestMessage(draft);
+                    if (message.isErr()) {
+                      notifyUserError(
+                        message.error,
+                        t("chat.sendErrorMessageEmpty"),
+                      );
+                      return CHAT_SEND_KEPT;
+                    }
+                    await sendMessage(message.value);
                     return CHAT_SEND_SENT;
                   }),
                   "file-chat-overlay.submit",
@@ -2712,13 +2770,7 @@ const FileChatOverlayInner = ({
           })}
           editorController={editorController}
           mcpOrganizationId={activeOrganizationId}
-          models={{
-            activeOrganizationId,
-            threadRef,
-            selectedModel: data.model,
-            selectedReasoningEffort: data.reasoningEffort,
-            selectModel: modelSelection.selectModel,
-          }}
+          models={composerModels}
           onNewThread={newThreadAction}
           reservedCommands={{ hasPersistedThread: hasMessages }}
           skillChat={{
@@ -2735,6 +2787,7 @@ const FileChatOverlayInner = ({
                   },
                 }
               : {}),
+            runTarget: composer.runTarget,
             threadRef,
             webSearch: {
               available: data.webSearchAvailable,
@@ -2762,6 +2815,7 @@ const FileChatOverlayInner = ({
           onStop={() => {
             stop();
           }}
+          stopping={stopPending}
           onSubmit={handleComposerSubmit}
           pendingCount={0}
           presets={presets}
@@ -2772,13 +2826,7 @@ const FileChatOverlayInner = ({
           dock={
             <ChatComposerDock
               data={data}
-              models={{
-                activeOrganizationId,
-                threadRef,
-                selectedModel: data.model,
-                selectedReasoningEffort: data.reasoningEffort,
-                selectModel: modelSelection.selectModel,
-              }}
+              models={composerModels}
               onNewThread={newThreadAction}
               newThreadPrompt={
                 newThreadPromptStatus !== null

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
@@ -9,11 +9,13 @@ import { drawPropertySamples } from "@stll/property-testing";
 import {
   assertReleaseQueueHistory,
   formatReleaseQueueHistoryNotice,
+  MAX_RELEASE_HISTORY_COMMITS,
   parseOptions,
-  previousReleaseTag,
+  previousRelease,
   releaseCommitHistoryQuery,
   ReleaseQueueHistoryError,
   releaseQueueHistoryWarning,
+  runPreviousReleaseCli,
   runReleaseQueueHistoryCli,
 } from "./check-release-queue-history";
 
@@ -342,6 +344,53 @@ describe("release queue history", () => {
       25, 25, 25, 25, 20,
     ]);
     expect(command.historyRequests.flat()).toEqual(commits);
+  });
+
+  test("reads a history at the commit cap and fails closed above it", () => {
+    const history = (length: number) =>
+      Array.from({ length }, (_, index) =>
+        (index + 1).toString(16).padStart(40, "d"),
+      );
+    const atCap = history(MAX_RELEASE_HISTORY_COMMITS);
+    const atCapCommand = fakeCommand({
+      commits: atCap,
+      pullRequestsFor: (sha, index) => [pullRequest(1000 + index, sha)],
+      successfulMergeGroupShas: atCap,
+    });
+    expect(check(atCapCommand).validated).toBeTrue();
+    expect(atCapCommand.historyRequests.flat()).toEqual(atCap);
+
+    const overCap = fakeCommand({
+      commits: history(MAX_RELEASE_HISTORY_COMMITS + 1),
+    });
+    const rangeReads: string[][] = [];
+    const recorded = (command: readonly string[]) => {
+      if (command[0] === "git" && command[1] === "rev-list") {
+        rangeReads.push([...command]);
+      }
+      return overCap(command);
+    };
+    expect(() => check(recorded)).toThrow(
+      `holds more than ${String(MAX_RELEASE_HISTORY_COMMITS)} first-parent commits`,
+    );
+    // The listing itself stops one past the cap, and GitHub is never asked.
+    expect(rangeReads.map((command) => command.slice(2))).toEqual([
+      [
+        "--reverse",
+        "--first-parent",
+        `--max-count=${String(MAX_RELEASE_HISTORY_COMMITS + 1)}`,
+        `v1.2.3..${BASE_SHA}`,
+      ],
+    ]);
+    expect(overCap.historyRequests).toEqual([]);
+    // Advisory callers get the reason as a warning, not a failure.
+    expect(
+      releaseQueueHistoryWarning(
+        () => ({ baseSha: BASE_SHA, previousTag: "v1.2.3" }),
+        (options) =>
+          assertReleaseQueueHistory({ ...options, command: overCap }),
+      ),
+    ).toContain(`more than ${String(MAX_RELEASE_HISTORY_COMMITS)}`);
   });
 
   test("pages through check suites until the merge-group run appears", () => {
@@ -1066,10 +1115,10 @@ const historySteps = fc.array(
   { maxLength: 6, minLength: 1 },
 );
 
-describe("previous release tag", () => {
-  test("is the nearest tag before the base, never v + an untagged VERSION", () => {
+describe("previous release", () => {
+  test("is the nearest tag before the base on a linear history, never v + an untagged VERSION", () => {
     // The histories are drawn once and built as one batch; each sample then
-    // runs the real git describe against its own branch.
+    // reads the real repository from its own branch.
     const samples = drawPropertySamples(historySteps, { numRuns: 25 });
     const { built, run } = buildHistories(samples.map(({ value }) => value));
     const tags = new Set(run(["git", "tag", "--list"]).split("\n"));
@@ -1078,11 +1127,15 @@ describe("previous release tag", () => {
       if (history === undefined) {
         throw new Error(`history ${String(index)} was not built`);
       }
-      const previous = previousReleaseTag(history.base, run);
-      expect(previous, label).toBe(history.expectedTag);
+      const previous = previousRelease(history.base, run);
+      expect(previous.tag, label).toBe(history.expectedTag);
+      // A tag on the history itself is where the history starts.
+      expect(previous.anchor, label).toBe(
+        run(["git", "rev-parse", `${history.expectedTag}^{commit}`]),
+      );
       const version = run(["git", "show", `${history.base}:VERSION`]);
       if (!tags.has(`v${version}`)) {
-        expect(previous, label).not.toBe(`v${version}`);
+        expect(previous.tag, label).not.toBe(`v${version}`);
       }
     }
   });
@@ -1117,29 +1170,218 @@ describe("previous release tag", () => {
       ghRetryScript: "/fake/gh-retry.sh",
       strict: true,
     });
-    expect(ranges).toEqual([`v1.0.1..${history.base}`]);
+    expect(ranges).toEqual([
+      `${run(["git", "rev-parse", "v1.0.1^{commit}"])}..${history.base}`,
+    ]);
     expect(report.validated).toBe(true);
+  });
+});
+
+// Release pull requests are squash-merged: each release tag sits on its
+// release branch, which main never contains. Built with ordinary commits:
+//
+//   main:          m0(1.0.0, v1.0.0) - m1 - m2 - m3 - s1(1.0.1) - m4 - m5
+//   release/v1.0.1:                     \ r1(1.0.1, v1.0.1-rc.1, v1.0.1)
+//   release/v1.0.2:                                       \ r2(1.0.2, v1.0.2)
+//
+// s1 is the squash merge of release/v1.0.1; m3 landed while it was proved.
+// v1.0.2 is already final while its pull request is still open.
+const FIXTURE_GIT_ENV: Record<string, string> = {
+  ...Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === "string" && !entry[0].startsWith("GIT_"),
+    ),
+  ),
+  GIT_AUTHOR_NAME: "Release",
+  GIT_AUTHOR_EMAIL: "release@example.com",
+  GIT_COMMITTER_NAME: "Release",
+  GIT_COMMITTER_EMAIL: "release@example.com",
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+};
+
+const fixtureGit = (cwd: string) => (command: readonly string[]) => {
+  const result = Bun.spawnSync([...command], {
+    cwd,
+    env: FIXTURE_GIT_ENV,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  if (!result.success) {
+    throw new Error(`${command.join(" ")}: ${result.stderr.toString()}`);
+  }
+  return result.stdout.toString().trim();
+};
+
+const buildSquashMergedReleases = () => {
+  const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-branches-"));
+  historyRoots.push(root);
+  const run = fixtureGit(root);
+  run(["git", "init", "--quiet", "--initial-branch=main"]);
+  const commit = (message: string, version?: string) => {
+    writeFileSync(
+      nodePath.join(root, version === undefined ? "change.txt" : "VERSION"),
+      `${version ?? message}\n`,
+    );
+    run(["git", "add", "--all"]);
+    run(["git", "commit", "--quiet", "--no-verify", "-m", message]);
+    return run(["git", "rev-parse", "HEAD"]);
+  };
+  const tag = (name: string) => {
+    run(["git", "tag", "--annotate", "--message", name, name]);
+  };
+  const m0 = commit("chore: release v1.0.0", "1.0.0");
+  tag("v1.0.0");
+  const m1 = commit("m1");
+  const m2 = commit("m2");
+  run(["git", "switch", "--quiet", "--create", "release/v1.0.1"]);
+  const r1 = commit("chore: release v1.0.1", "1.0.1");
+  tag("v1.0.1-rc.1");
+  tag("v1.0.1");
+  run(["git", "switch", "--quiet", "main"]);
+  const m3 = commit("m3");
+  const s1 = commit("chore: release v1.0.1 (#1)", "1.0.1");
+  const m4 = commit("m4");
+  run(["git", "switch", "--quiet", "--create", "release/v1.0.2"]);
+  const r2 = commit("chore: release v1.0.2", "1.0.2");
+  tag("v1.0.2");
+  run(["git", "switch", "--quiet", "main"]);
+  const m5 = commit("m5");
+  return { root, run, m0, m1, m2, m3, s1, m4, r1, r2, m5 };
+};
+
+describe("previous release of squash-merged release branches", () => {
+  test("starts main's history where the previous release last took main", () => {
+    const { run, m2, m3, m4, m5 } = buildSquashMergedReleases();
+    // No recent tag is reachable from main: describe falls back to v1.0.0.
+    expect(
+      run(["git", "describe", "--tags", "--abbrev=0", "--match", "v*", m5]),
+    ).toBe("v1.0.0");
+
+    // v1.0.2 is final but main has not merged it, so v1.0.1 is previous.
+    expect(previousRelease(m5, run)).toEqual({ tag: "v1.0.1", anchor: m2 });
+    expect(previousRelease(m4, run)).toEqual({ tag: "v1.0.1", anchor: m2 });
+    // m3 landed while v1.0.1 was proved: it is after the anchor, so the
+    // history (m2..m5) holds it although main merged it before s1.
+    expect(run(["git", "rev-parse", `${m3}^`])).toBe(m2);
+  });
+
+  test("on a release pull request head, is the release before the one it carries", () => {
+    const { run, m2, r2 } = buildSquashMergedReleases();
+    // r2 carries v1.0.2's final tag; a tag on the base never counts.
+    expect(previousRelease(r2, run)).toEqual({ tag: "v1.0.1", anchor: m2 });
+  });
+
+  test("keeps tags that main contains", () => {
+    const { run, m0, m2 } = buildSquashMergedReleases();
+    expect(previousRelease(m2, run)).toEqual({ tag: "v1.0.0", anchor: m0 });
+  });
+
+  test("names no previous release for the first release", () => {
+    const { root, run, m0 } = buildSquashMergedReleases();
+    expect(() => previousRelease(m0, run)).toThrow(
+      new ReleaseQueueHistoryError(
+        `No previous release for ${m0}: no final tag at or below VERSION 1.0.0 other than one on the base`,
+      ),
+    );
+    // The receipt gate reads the same answer through the CLI.
+    const errors: string[] = [];
+    expect(
+      runPreviousReleaseCli(
+        ["--previous-release", "--base", m0, "--repo-dir", root],
+        () => {
+          throw new Error("no output expected");
+        },
+        (message) => {
+          errors.push(message);
+        },
+        fixtureGit,
+      ),
+    ).toBe(1);
+    expect(errors.join("\n")).toContain("No previous release");
+  });
+
+  test("the CLI prints the anchor for shell gates and rejects history options", () => {
+    const { root, m2, m5 } = buildSquashMergedReleases();
+    const output: string[] = [];
+    expect(
+      runPreviousReleaseCli(
+        ["--previous-release", "--base", m5, "--repo-dir", root],
+        (message) => {
+          output.push(message);
+        },
+        (message) => {
+          throw new Error(message);
+        },
+        fixtureGit,
+      ),
+    ).toBe(0);
+    expect(output).toEqual([m2]);
+    for (const args of [
+      ["--previous-release", "--base", m5, "--require"],
+      ["--previous-release", "--base", m5, "--from", m2],
+      ["--previous-release", "--previous-release", "--base", m5],
+    ]) {
+      const errors: string[] = [];
+      expect(
+        runPreviousReleaseCli(
+          args,
+          () => {},
+          (message) => {
+            errors.push(message);
+          },
+          fixtureGit,
+        ),
+        args.join(" "),
+      ).toBe(1);
+      expect(errors, args.join(" ")).toEqual([
+        "Usage: check-release-queue-history.ts --previous-release --base <sha> [--repo-dir <path>]",
+      ]);
+    }
+  });
+
+  test("checks main's history from that anchor", () => {
+    const { run, m2, m5 } = buildSquashMergedReleases();
+    const ranges: string[] = [];
+    assertReleaseQueueHistory({
+      baseSha: m5,
+      command: (command) => {
+        if (command[0] === "git" && command[1] === "rev-list") {
+          ranges.push(command.at(-1) ?? "");
+          return "";
+        }
+        return command[0] === "git" ? run(command) : "[]";
+      },
+      ghRetryScript: "/fake/gh-retry.sh",
+      strict: true,
+    });
+    expect(ranges).toEqual([`${m2}..${m5}`]);
   });
 });
 
 // Every checked-in reader of the VERSION file, with why an untagged VERSION
 // (a version commit superseded by the next one) cannot mislead it. A new
 // reader fails here until it is classified; one that needs the previous
-// release takes it from previousReleaseTag.
+// release takes it from previousRelease.
 const VERSION_READERS: Record<string, string> = {
   ".github/ci-checks/ci-checks-rest.yml":
-    "VERSION changed against the base; the previous release comes from previousReleaseTag",
+    "VERSION changed against the base; the previous release comes from previousRelease",
   ".github/workflows/ci.yml":
     "VERSION changed in the commit, and the image build label",
   ".github/workflows/publish-npm.yml":
     "VERSION equals the release tag being published",
   ".github/workflows/release.yml":
     "VERSION equals the stable portion of the RC or final tag",
+  ".github/workflows/release-tag.yml":
+    "VERSION names the final tag of the exact finalized SHA; never the previous release",
   "scripts/check-cli-release-coupling.ts":
     "VERSION changed against the merge base; compared with npm, not with tags",
   "scripts/check-npm-publish-lag.ts":
     "VERSION bounds the newest strictly lower final tag across all release branches",
   "scripts/check-railway-template-shape.ts": "watch pattern",
+  "scripts/check-release-queue-history.ts":
+    "VERSION at the base bounds the previous final tag; an untagged VERSION names no release",
   "scripts/check-release-candidate.sh":
     "the pending version commit; its tag is the one to create",
   "scripts/check-release-changelog.sh":
@@ -1149,8 +1391,12 @@ const VERSION_READERS: Record<string, string> = {
   "scripts/ci-root-check-inputs.json": "changed-path scope",
   "scripts/finalize-release.sh":
     "VERSION names the final tag after exact-SHA RC proof; never the previous release",
+  "scripts/land-release-pr.sh":
+    "VERSION at the finalized SHA names the final tag and release branch to land",
   "scripts/prepare-maintenance-release.ts":
     "new version derives from the newest final tag; VERSION identifies untagged notes to fold",
+  "scripts/rehearse-migration-upgrade.sh":
+    "checkout image build label; base release comes from the committed production promotion record",
   "scripts/verify-release-candidate-tree.mjs":
     "VERSION changed against the release merge base and is a supported stable version",
   "scripts/verify-release-tree-proof.sh": "VERSION modified in the PR",

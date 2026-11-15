@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
 import { auditLogs, playbookDefinitions, properties } from "@/api/db/schema";
-import type { PropertyContent } from "@/api/db/schema-validators";
+import type { ScalarPropertyContent } from "@/api/db/schema-validators";
 import { createSafeDb } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -40,7 +40,7 @@ test.each([
     { version: 1, type: "text" },
     { version: 1, type: "file" },
   ],
-] satisfies [PropertyContent, PropertyContent][])(
+] satisfies [ScalarPropertyContent, ScalarPropertyContent][])(
   "materialization preserves an existing $type classification",
   async (initial, incoming) => {
     const playbookId = createSafeId<"playbookDefinition">();
@@ -63,7 +63,7 @@ test.each([
     const countAuditEvents = async () =>
       await db.$count(auditLogs, eq(auditLogs.resourceId, playbookId));
     type RunOptions = {
-      content: PropertyContent;
+      content: ScalarPropertyContent;
       issue: string;
       prependNewPosition?: boolean;
     };

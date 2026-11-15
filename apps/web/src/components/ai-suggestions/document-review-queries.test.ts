@@ -1,7 +1,11 @@
-import { QueryClient } from "@tanstack/react-query";
-import { afterEach, expect, mock, test } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { afterEach, describe, expect, mock, test } from "bun:test";
+
+import { waitFor } from "@stll/test-kit";
 
 import { APIError } from "@/lib/errors/api";
+import { toSafeId } from "@/lib/safe-id";
+import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 
 const originalFetch = globalThis.fetch;
 
@@ -146,5 +150,269 @@ test("the launcher reuses a positive cached read and still detects after not-det
     mode: "detect",
     target: { entityId: "fresh-doc", fileFieldId: "file" },
   });
+  queryClient.clear();
+});
+
+const reviewedDocument = {
+  workspaceId: "matter",
+  entityId: "reviewed-doc",
+  fileFieldId: "file",
+};
+const REVIEW_RUN_ID = "run-1";
+
+const reviewRunDetail = (status: string) => ({
+  run: {
+    id: REVIEW_RUN_ID,
+    status,
+    entityId: reviewedDocument.entityId,
+  },
+  findings: [],
+});
+
+type ReviewedDocumentServer = {
+  runStatus: string;
+  suggestionIds: string[];
+  suggestionReads: () => number;
+  historyReads: () => number;
+};
+
+const serveReviewedDocument = (
+  runStatus: string,
+  suggestionIds: string[] = [],
+): ReviewedDocumentServer => {
+  let suggestionReads = 0;
+  let historyReads = 0;
+  const server: ReviewedDocumentServer = {
+    runStatus,
+    suggestionIds,
+    suggestionReads: () => suggestionReads,
+    historyReads: () => historyReads,
+  };
+  const fetchMock = mock(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const { url } = new Request(input, init);
+      const { pathname } = new URL(url);
+      if (pathname.includes("docx-suggestions")) {
+        suggestionReads += 1;
+        return Response.json({
+          items: server.suggestionIds.map((id) => ({
+            id,
+            createdAt: "2026-11-07T16:04:24.000Z",
+          })),
+          nextCursor: null,
+        });
+      }
+      const detail = reviewRunDetail(server.runStatus);
+      if (pathname.endsWith(`/runs/${REVIEW_RUN_ID}`)) {
+        return Response.json(detail);
+      }
+      historyReads += 1;
+      return Response.json({ items: [], latest: detail, nextCursor: null });
+    },
+  );
+  globalThis.fetch = Object.assign(fetchMock, {
+    preconnect: originalFetch.preconnect,
+  });
+  return server;
+};
+
+const pollRun = async (queryClient: QueryClient) => {
+  const { documentReviewRunOptions } =
+    await import("./document-review-queries");
+  await queryClient.query({
+    ...documentReviewRunOptions({
+      workspaceId: reviewedDocument.workspaceId,
+      runId: REVIEW_RUN_ID,
+    }),
+    staleTime: 0,
+  });
+};
+
+const readRunHistory = async (queryClient: QueryClient) => {
+  const { documentReviewRunsOptions } =
+    await import("./document-review-queries");
+  await queryClient.query(documentReviewRunsOptions(reviewedDocument));
+};
+
+const observeSuggestions = (queryClient: QueryClient) => {
+  const observer = new QueryObserver(
+    queryClient,
+    docxSuggestionsOptions(reviewedDocument),
+  );
+  const unsubscribe = observer.subscribe(() => undefined);
+  const loadedIds = async (expectedLength: number) =>
+    await waitFor(
+      () => {
+        const { data, isFetching } = observer.getCurrentResult();
+        const ids = data?.items.map(({ id }) => id);
+        return !isFetching && ids?.length === expectedLength ? ids : undefined;
+      },
+      { description: `${expectedLength} loaded suggestions` },
+    );
+  return { loadedIds, unsubscribe };
+};
+
+const READ_RUN = { poll: pollRun, history: readRunHistory };
+
+describe.each(Object.entries(READ_RUN))(
+  "the pending suggestion list when a run is read by %s",
+  (_name, readRun) => {
+    test("loads the changes a run staged once the run completes", async () => {
+      const server = serveReviewedDocument("running");
+      const queryClient = new QueryClient();
+      await pollRun(queryClient);
+      const suggestions = observeSuggestions(queryClient);
+      expect(await suggestions.loadedIds(0)).toEqual([]);
+
+      server.runStatus = "completed";
+      server.suggestionIds = ["staged-by-run"];
+      await readRun(queryClient);
+
+      expect(await suggestions.loadedIds(1)).toEqual([
+        toSafeId("staged-by-run"),
+      ]);
+      suggestions.unsubscribe();
+      queryClient.clear();
+    });
+
+    test("stays as it is for a run that was already completed", async () => {
+      const server = serveReviewedDocument("completed");
+      const queryClient = new QueryClient();
+      const suggestions = observeSuggestions(queryClient);
+      await suggestions.loadedIds(0);
+
+      await readRun(queryClient);
+      await readRun(queryClient);
+      await suggestions.loadedIds(0);
+
+      expect(server.suggestionReads()).toBe(1);
+      suggestions.unsubscribe();
+      queryClient.clear();
+    });
+
+    test("stays as it is for a run that failed", async () => {
+      const server = serveReviewedDocument("running");
+      const queryClient = new QueryClient();
+      await pollRun(queryClient);
+      const suggestions = observeSuggestions(queryClient);
+      await suggestions.loadedIds(0);
+
+      server.runStatus = "failed";
+      await readRun(queryClient);
+      await suggestions.loadedIds(0);
+
+      expect(server.suggestionReads()).toBe(1);
+      suggestions.unsubscribe();
+      queryClient.clear();
+    });
+  },
+);
+
+test("the pending suggestion list refreshes when the run detail was evicted before the run completed", async () => {
+  const { documentReviewRunOptions } =
+    await import("./document-review-queries");
+  const server = serveReviewedDocument("running");
+  const queryClient = new QueryClient();
+  await pollRun(queryClient);
+  const suggestions = observeSuggestions(queryClient);
+  await suggestions.loadedIds(0);
+
+  // The reviewer closes the review while the document stays open.
+  queryClient.removeQueries({
+    queryKey: documentReviewRunOptions({
+      workspaceId: reviewedDocument.workspaceId,
+      runId: REVIEW_RUN_ID,
+    }).queryKey,
+    exact: true,
+  });
+  server.runStatus = "completed";
+  server.suggestionIds = ["staged-by-run"];
+  await pollRun(queryClient);
+
+  expect(await suggestions.loadedIds(1)).toEqual([toSafeId("staged-by-run")]);
+  suggestions.unsubscribe();
+  queryClient.clear();
+});
+
+test("the pending suggestion list refreshes once when both reads report the same completion", async () => {
+  const server = serveReviewedDocument("running");
+  const queryClient = new QueryClient();
+  await pollRun(queryClient);
+  const suggestions = observeSuggestions(queryClient);
+  await suggestions.loadedIds(0);
+
+  server.runStatus = "completed";
+  server.suggestionIds = ["staged-by-run"];
+  await Promise.all([pollRun(queryClient), readRunHistory(queryClient)]);
+
+  expect(await suggestions.loadedIds(1)).toEqual([toSafeId("staged-by-run")]);
+  expect(server.suggestionReads()).toBe(2);
+  suggestions.unsubscribe();
+  queryClient.clear();
+});
+
+const observeRunHistory = async (queryClient: QueryClient) => {
+  const { documentReviewRunsOptions } =
+    await import("./document-review-queries");
+  const observer = new QueryObserver(
+    queryClient,
+    documentReviewRunsOptions(reviewedDocument),
+  );
+  const unsubscribe = observer.subscribe(() => undefined);
+  const settled = async (description: string, latestStatus?: string) =>
+    await waitFor(
+      () => {
+        const { data, isFetching } = observer.getCurrentResult();
+        if (isFetching || data === undefined) {
+          return undefined;
+        }
+        return latestStatus === undefined ||
+          data.latest?.run.status === latestStatus
+          ? data
+          : undefined;
+      },
+      { description },
+    );
+  return { settled, unsubscribe };
+};
+
+describe.each(["completed", "failed", "cancelled"])(
+  "the open review history when its run ends as %s",
+  (endStatus) => {
+    test("reads the history again once", async () => {
+      const server = serveReviewedDocument("running");
+      const queryClient = new QueryClient();
+      const history = await observeRunHistory(queryClient);
+      await history.settled("the first history read");
+      await pollRun(queryClient);
+      expect(server.historyReads()).toBe(1);
+
+      server.runStatus = endStatus;
+      await pollRun(queryClient);
+      await history.settled("the refreshed history", endStatus);
+
+      expect(server.historyReads()).toBe(2);
+
+      await pollRun(queryClient);
+      await history.settled("the history after a later poll");
+      expect(server.historyReads()).toBe(2);
+      history.unsubscribe();
+      queryClient.clear();
+    });
+  },
+);
+
+test("the open review history stays as it is for a run read already ended", async () => {
+  const server = serveReviewedDocument("completed");
+  const queryClient = new QueryClient();
+  const history = await observeRunHistory(queryClient);
+  await history.settled("the first history read");
+
+  await pollRun(queryClient);
+  await pollRun(queryClient);
+  await history.settled("the history after the polls");
+
+  expect(server.historyReads()).toBe(1);
+  history.unsubscribe();
   queryClient.clear();
 });

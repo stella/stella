@@ -1,6 +1,16 @@
+import { useState } from "react";
+
 import { useTranslations } from "use-intl";
 
-import { TriangleAlertIcon } from "@stll/ui/icons";
+import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon, TriangleAlertIcon } from "@stll/ui/icons";
+import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type Messages from "@/i18n/langs/messages.gen";
@@ -42,6 +52,7 @@ export const ScopeSummary = ({ scopes }: { scopes: readonly string[] }) => {
   const t = useTranslations();
   const tConsent = useTranslations("consent");
   const format = useFormatter();
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
   const total = Object.values(groups).reduce(
     (sum, groupEntries) => sum + groupEntries.length,
     0,
@@ -95,34 +106,54 @@ export const ScopeSummary = ({ scopes }: { scopes: readonly string[] }) => {
           </div>
         </div>
       ) : null}
-      <details className="text-sm" data-slot="consent-permissions">
-        <summary className="text-muted-foreground min-h-11 cursor-pointer content-center">
-          {t("consent.showAllPermissions", { count: total })}
-        </summary>
-        <div className="flex flex-col gap-4 pt-1 pb-2">
-          {Object.values(SCOPE_GROUP_LABELS).map(({ group, label }) =>
-            groups[group].length > 0 ? (
-              <section key={group} className="flex flex-col gap-2">
-                <h2 className="font-medium">{t(label)}</h2>
-                <ul className="flex flex-col gap-2">
-                  {groups[group].map((entry) => (
-                    <li
-                      className="flex items-start gap-2"
-                      key={entry.type === "known" ? entry.label : entry.scope}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="bg-muted-foreground mt-2 size-1 shrink-0 rounded-full"
-                      />
-                      <ScopeLabel entry={entry} />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null,
-          )}
-        </div>
-      </details>
+      {/* Kept in the page while closed and revealed by find-in-page, so the
+          full grant can be searched before it is approved. */}
+      <Collapsible
+        data-slot="consent-permissions"
+        onOpenChange={setPermissionsOpen}
+        open={permissionsOpen}
+      >
+        <CollapsibleTrigger
+          render={<Button className="flex min-h-11 w-full" variant="plain" />}
+        >
+          <span className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm">
+            <DirectionalIcon
+              className={cn(
+                "size-4 shrink-0 transition-transform",
+                permissionsOpen && "rotate-90",
+              )}
+              flip={!permissionsOpen}
+              icon={ChevronRightIcon}
+            />
+            {t("consent.showAllPermissions", { count: total })}
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <div className="flex flex-col gap-4 pt-1 pb-2 text-sm">
+            {Object.values(SCOPE_GROUP_LABELS).map(({ group, label }) =>
+              groups[group].length > 0 ? (
+                <section key={group} className="flex flex-col gap-2">
+                  <h2 className="font-medium">{t(label)}</h2>
+                  <ul className="flex flex-col gap-2">
+                    {groups[group].map((entry) => (
+                      <li
+                        className="flex items-start gap-2"
+                        key={entry.type === "known" ? entry.label : entry.scope}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="bg-muted-foreground mt-2 size-1 shrink-0 rounded-full"
+                        />
+                        <ScopeLabel entry={entry} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null,
+            )}
+          </div>
+        </CollapsiblePanel>
+      </Collapsible>
     </section>
   );
 };

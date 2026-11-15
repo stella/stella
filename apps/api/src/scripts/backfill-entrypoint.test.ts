@@ -50,6 +50,23 @@ describe("converted backfill entrypoints wire operator input to the gated runtim
       },
     },
     {
+      entrypoint: "legislation-version-changes",
+      args: [
+        "--apply",
+        "--page",
+        "12",
+        "--limit",
+        "456",
+        "--after",
+        `${after}//eli/cz/sb/2012/89`,
+      ],
+      expected: {
+        name: `legislation-version-changes:${after}//eli/cz/sb/2012/89`,
+        tableName: "legislation_documents",
+        initialSize: 12,
+      },
+    },
+    {
       entrypoint: "property-roles",
       args: [],
       expected: {
@@ -138,5 +155,10 @@ describe("converted backfill entrypoints wire operator input to the gated runtim
         args: ["--apply", "--dry-run"],
       }),
     ).toThrow("--apply contradicts --dry-run");
+    expect(() =>
+      backfillEntrypoints["legislation-version-changes"]({
+        args: ["--apply=yes"],
+      }),
+    ).toThrow("--apply and --dry-run do not accept values");
   });
 });

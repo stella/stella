@@ -98,7 +98,7 @@ import {
   errorTag,
 } from "@/api/lib/errors/utils";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type {
   HeldRowRules,
   IngestionResult,
@@ -1996,120 +1996,114 @@ const executeReconciliationUnit = async ({
   if (unit.type === "idle") {
     return { type: "idle" };
   }
-  const lease = await acquireCaseLawSourceIngestionLease({
-    scopedDb,
-    sourceId,
-  });
-  if (lease === null) {
-    return { type: "leased" };
-  }
-
-  const resolveSourceContract = createSourceContractResolver(scopedDb);
-  try {
-    switch (unit.type) {
-      case "parked-retries":
-        return {
-          type: "worked",
-          summary: await retryParkedItems({
-            adapterKey,
-            fetchDelayMs,
-            lease,
-            now,
-            reconciliation,
-            reparseStoredRaw,
-            scopedDb,
-            resolveSourceContract,
-            sleep,
-            sourceId,
-            signal,
-          }),
-        };
-      case "textless-detail-rechecks":
-        return {
-          type: "worked",
-          summary: await recheckTextlessHeldRows({
-            adapterKey,
-            fetchDelayMs,
-            lease,
-            now,
-            readStoredRaw,
-            reconciliation,
-            reparseStoredRaw,
-            scopedDb,
-            resolveSourceContract,
-            sleep,
-            sourceId,
-            signal,
-          }),
-        };
-      case "slice":
-        return {
-          type: "worked",
-          summary: await walkSlice({
-            adapterKey,
-            fetchDelayMs,
-            ingestBudget: sliceIngestBudget,
-            lease,
-            now,
-            reason: unit.reason,
-            reconciliation,
-            reparseStoredRaw,
-            scopedDb,
-            resolveSourceContract,
-            slice: unit.slice,
-            sleep,
-            sourceId,
-            signal,
-          }).catch(async (error: unknown) => {
-            if (signal?.aborted === true) {
-              throw error;
-            }
-            // The walk is all-or-nothing by design: a listing that failed part
-            // way through writes no counts, so the slice is owed exactly as
-            // much as before. Recorded as failed, so the sweep's frontier and
-            // the backlog move past it and the retry arm owns it; and held in
-            // this process for its retry, because the tip is re-derived from
-            // the clock and would otherwise be handed straight back. Named
-            // here because the loop's window tally reports how many turns
-            // threw without saying over what; the slice a source cannot walk
-            // is the one fact that turns a standing error rate into something
-            // an operator can reproduce. Measured from the failure, not from
-            // the unit's start: a slice is several paginated requests and a
-            // walk can spend most of the runner's deadline before it throws,
-            // which would leave the hold shorter than it says or already
-            // expired.
-            sliceRetries.set(
-              unit.slice,
-              now().getTime() + RECONCILIATION_SLICE_RETRY_MS,
-            );
-            await recordSliceWalkFailure(scopedDb, {
-              sourceId,
-              slice: unit.slice,
-              walkError: describeWalkError(error),
-            });
-            logger.warn("case_law.reconciliation.slice_failed", {
+  const outcome = await withCaseLawSourceIngestionLease(
+    { scopedDb, sourceId },
+    async (lease): Promise<ReconciliationUnitOutcome> => {
+      const resolveSourceContract = createSourceContractResolver(scopedDb);
+      switch (unit.type) {
+        case "parked-retries":
+          return {
+            type: "worked",
+            summary: await retryParkedItems({
               adapterKey,
-              slice: unit.slice,
+              fetchDelayMs,
+              lease,
+              now,
+              reconciliation,
+              reparseStoredRaw,
+              scopedDb,
+              resolveSourceContract,
+              sleep,
+              sourceId,
+              signal,
+            }),
+          };
+        case "textless-detail-rechecks":
+          return {
+            type: "worked",
+            summary: await recheckTextlessHeldRows({
+              adapterKey,
+              fetchDelayMs,
+              lease,
+              now,
+              readStoredRaw,
+              reconciliation,
+              reparseStoredRaw,
+              scopedDb,
+              resolveSourceContract,
+              sleep,
+              sourceId,
+              signal,
+            }),
+          };
+        case "slice":
+          return {
+            type: "worked",
+            summary: await walkSlice({
+              adapterKey,
+              fetchDelayMs,
+              ingestBudget: sliceIngestBudget,
+              lease,
+              now,
               reason: unit.reason,
-              // Same reason as the item sink above: a walk that throws
-              // without a code is otherwise reported as a bare tag.
-              ...errorFingerprint(error),
-              ...errorSystemFields(error),
-              ...pgErrorFields(error),
-            });
-            throw error;
-          }),
-        };
-      default: {
-        unit satisfies never;
-        return panic(
-          `Unhandled reconciliation work unit: ${JSON.stringify(unit)}`,
-        );
+              reconciliation,
+              reparseStoredRaw,
+              scopedDb,
+              resolveSourceContract,
+              slice: unit.slice,
+              sleep,
+              sourceId,
+              signal,
+            }).catch(async (error: unknown) => {
+              if (signal?.aborted === true) {
+                throw error;
+              }
+              // The walk is all-or-nothing by design: a listing that failed part
+              // way through writes no counts, so the slice is owed exactly as
+              // much as before. Recorded as failed, so the sweep's frontier and
+              // the backlog move past it and the retry arm owns it; and held in
+              // this process for its retry, because the tip is re-derived from
+              // the clock and would otherwise be handed straight back. Named
+              // here because the loop's window tally reports how many turns
+              // threw without saying over what; the slice a source cannot walk
+              // is the one fact that turns a standing error rate into something
+              // an operator can reproduce. Measured from the failure, not from
+              // the unit's start: a slice is several paginated requests and a
+              // walk can spend most of the runner's deadline before it throws,
+              // which would leave the hold shorter than it says or already
+              // expired.
+              sliceRetries.set(
+                unit.slice,
+                now().getTime() + RECONCILIATION_SLICE_RETRY_MS,
+              );
+              await recordSliceWalkFailure(scopedDb, {
+                sourceId,
+                slice: unit.slice,
+                walkError: describeWalkError(error),
+              });
+              logger.warn("case_law.reconciliation.slice_failed", {
+                adapterKey,
+                slice: unit.slice,
+                reason: unit.reason,
+                // Same reason as the item sink above: a walk that throws
+                // without a code is otherwise reported as a bare tag.
+                ...errorFingerprint(error),
+                ...errorSystemFields(error),
+                ...pgErrorFields(error),
+              });
+              throw error;
+            }),
+          };
+        default: {
+          unit satisfies never;
+          return panic(
+            `Unhandled reconciliation work unit: ${JSON.stringify(unit)}`,
+          );
+        }
       }
-    }
-  } finally {
-    await lease.release();
-  }
+    },
+  );
+  return outcome ?? { type: "leased" };
 };
 
 /**

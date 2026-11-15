@@ -1,6 +1,8 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { parseTimeZoneId } from "@stll/time";
 
 import { env } from "@/api/env";
 import readOrganizationSettings, {
@@ -28,6 +30,11 @@ const emptySnapshot = createFeatureAccessSnapshot({
   userId: "user_test",
   decisions: new Map(),
 });
+const TOKYO_TIME_ZONE =
+  parseTimeZoneId("Asia/Tokyo") ?? panic("Runtime does not know Asia/Tokyo");
+const PRAGUE_TIME_ZONE =
+  parseTimeZoneId("Europe/Prague") ??
+  panic("Runtime does not know Europe/Prague");
 
 // Identity resolves through the member join; the enrolment read finds no rows.
 const unenrolledSettingsDatabase = (email: string) =>
@@ -56,13 +63,15 @@ describe("projectOrganizationSettingsRow", () => {
           { countryCode: "SK", isPrimary: false },
         ],
         promptCachingEnabled: true,
+        aiInstructions: "Use Czech legal terminology.",
         managedAIResidency: "us",
         memoryExtractionEnabled: false,
+        localRunMaxApprovalMode: "full_auto",
         timeMinimumUnitMinutes: 6,
         timeEditWindowDays: 90,
         timeLockedThroughMonth: null,
         timeNarrativeRequired: true,
-        timeZone: null,
+        timeZone: TOKYO_TIME_ZONE,
       },
       emptySnapshot,
     );
@@ -71,8 +80,12 @@ describe("projectOrganizationSettingsRow", () => {
       { countryCode: "CZ", isPrimary: true },
       { countryCode: "SK", isPrimary: false },
     ]);
+    expect(result.timeZone).toBe(TOKYO_TIME_ZONE);
+    expect(result.primaryJurisdictionTimeZone).toBe(PRAGUE_TIME_ZONE);
     expect(result.documentProcessingMode).toBe("searchable-text");
     expect(result.managedAIResidency).toBe("us");
+    expect(result.aiInstructions).toBe("Use Czech legal terminology.");
+    expect(result.aiInstructionsMaxLength).toBe(3000);
   });
 
   test("defaults practiceJurisdictions to an empty array when no row exists", () => {
@@ -99,6 +112,8 @@ describe("projectOrganizationSettingsRow", () => {
       timeLockedThroughMonth: null,
       timeNarrativeRequired: true,
       managedAIResidency: "eu",
+      aiInstructions: "",
+      aiInstructionsMaxLength: 3000,
     });
   });
 });

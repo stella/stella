@@ -10,7 +10,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { defaultVarcharSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 // ── Schemas ─────────────────────────────────────────
@@ -19,7 +19,7 @@ import { LIMITS } from "@/api/lib/limits";
 // (the recipe shape — nested parts/format/loop invariants — is beyond what
 // the route contract can express).
 export const createTemplateRecipeBodySchema = v.object({
-  name: defaultVarcharSchema,
+  name: displayNameSchema(),
   description: v.optional(v.pipe(v.string(), v.maxLength(2000))),
   definition: v.unknown(),
 });

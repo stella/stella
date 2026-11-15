@@ -6,7 +6,8 @@ import fc from "fast-check";
 import { IntlProvider } from "use-intl";
 
 import { GENERATED_VISUAL_MIME_TYPE } from "@stll/api-contract/generated-visual";
-import { propertyConfig } from "@stll/property-testing";
+import { STELLA_MCP_APP_MIME_TYPE } from "@stll/api-contract/stella-mcp-app";
+import { assertProperty } from "@stll/property-testing";
 
 import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
 import messages from "@/i18n/langs/en.json";
@@ -153,6 +154,31 @@ describe("rich chat message parts", () => {
     );
   });
 
+  test("keeps a stella app out of the inline MCP renderer and off the server render", () => {
+    const app = {
+      type: "ui-resource",
+      resource: {
+        uri: "ui://stella/case-law-results",
+        mimeType: STELLA_MCP_APP_MIME_TYPE,
+        text: JSON.stringify({
+          input: { query: "unfair dismissal" },
+          result: { structuredContent: { results: [] } },
+        }),
+      },
+      toolCallId: "app-call-one",
+      toolName: "search_case_law",
+    } as const satisfies RichChatPart;
+    expect(normalizeUiResourcePart(app)).toBeNull();
+    for (const part of [
+      app,
+      { ...app, resource: { ...app.resource, text: "<script></script>" } },
+    ]) {
+      const rendered = renderMediaPart(part);
+      expect(rendered).toContain(messages.chat.richContentUnavailable);
+      expect(rendered).not.toContain("<iframe");
+    }
+  });
+
   test("normalizes base64 MCP App HTML without weakening its contract", () => {
     const part = normalizeUiResourcePart({
       type: "ui-resource",
@@ -197,7 +223,8 @@ describe("rich chat message parts", () => {
   });
 
   test("handles every resource blob without throwing", () => {
-    fc.assert(
+    assertProperty(
+      "handles every resource blob without throwing",
       fc.property(fc.string(), (blob) => {
         expect(() =>
           normalizeUiResourcePart({
@@ -212,7 +239,7 @@ describe("rich chat message parts", () => {
           }),
         ).not.toThrow();
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

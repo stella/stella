@@ -65,7 +65,7 @@ const readProviderField = (value: object, field: string): unknown => {
 
 /** The provider error body `detail` carries: itself, or its `error` field
  *  (an SDK error keeps the body there). */
-const providerErrorBodyOf = (
+export const providerErrorBodyOf = (
   detail: unknown,
 ): Record<string, unknown> | undefined => {
   if (!isRecord(detail)) {

@@ -1,15 +1,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { repoRelativePath } from "../packages/portable-path/src/index";
 import {
   type Node,
   type ParsedSource,
   parseSource,
   walk,
 } from "../packages/scripts/src/syntax-tree";
-import type { GuardRollout } from "./guard-rollout-policy.ts";
-import { guardEnforcesLine } from "./guard-rollouts.ts";
 
 const TEST_DIRECTORY = path.resolve(
   import.meta.dirname,
@@ -19,6 +16,8 @@ const TEST_DIRECTORY = path.resolve(
 const TIMEOUT_ALLOWLIST: Readonly<Record<string, string>> = {
   "confine-owner.test.ts":
     "11.36s shuffled runtime; the changed-test gate invokes Bun directly",
+  "case-law-replay-writer-registry.test.ts":
+    "12.73s runtime auditing every replay writer; the changed-test gate invokes Bun directly",
 };
 const TEST_APIS = new Set(["test", "it", "describe", "setDefaultTimeout"]);
 
@@ -212,15 +211,7 @@ const declarationRole = (node: Node, parent: Node): IdentifierRole => {
   return isMemberName ? "name" : "reference";
 };
 
-type TestPolicyViolationOptions = {
-  file: ParsedSource;
-  enforcesLine: (line: number) => boolean;
-};
-
-const testPolicyViolation = ({
-  file,
-  enforcesLine,
-}: TestPolicyViolationOptions): string | undefined => {
+const testPolicyViolation = (file: ParsedSource): string | undefined => {
   const bindings = new Map<string, string>();
   const namespaces = new Set<string>();
   for (const statement of file.program.body) {
@@ -354,17 +345,6 @@ const testPolicyViolation = ({
     );
   };
 
-  const enforcesNode = (node: Node): boolean => {
-    const start = file.locate(node.start).line;
-    const end = file.locate(node.end).line;
-    for (let line = start; line <= end; line += 1) {
-      if (enforcesLine(line)) {
-        return true;
-      }
-    }
-    return false;
-  };
-
   let violation: string | undefined;
   walk(file.program, (node, ancestors) => {
     if (violation !== undefined || node.type === "ImportDeclaration") {
@@ -378,8 +358,7 @@ const testPolicyViolation = ({
     }
     if (
       node.type !== "ChainExpression" &&
-      isIndirectReference(node, ancestors) &&
-      enforcesNode(node)
+      isIndirectReference(node, ancestors)
     ) {
       violation = "call test APIs directly";
       return "skip-children";
@@ -402,14 +381,12 @@ const testPolicyViolation = ({
                 thirdArgument.type === "FunctionExpression")));
         const optionsArgument = optionsFirst ? secondArgument : thirdArgument;
         if (
-          (api === "setDefaultTimeout" && enforcesNode(node)) ||
+          api === "setDefaultTimeout" ||
           node.arguments.some(
-            (argument) =>
-              argument.type === "SpreadElement" && enforcesNode(argument),
+            (argument) => argument.type === "SpreadElement",
           ) ||
           (optionsArgument !== undefined &&
-            !isTimeoutFreeOptions(optionsArgument) &&
-            enforcesNode(optionsArgument))
+            !isTimeoutFreeOptions(optionsArgument))
         ) {
           violation =
             "pass test options inline without timeout keys or spreads";
@@ -425,43 +402,18 @@ const testPolicyViolation = ({
 type CustomLintTestTimeoutOptions = {
   directory?: string;
   allowlist?: Readonly<Record<string, string>>;
-  changedLines?: ReadonlyMap<string, ReadonlySet<number>>;
-  now?: Date;
-  rollouts?: readonly GuardRollout[];
-  scope?: "all" | "rollout";
 };
 
 export const customLintTestTimeoutViolations = ({
   directory = TEST_DIRECTORY,
   allowlist = TIMEOUT_ALLOWLIST,
-  changedLines,
-  now,
-  rollouts,
-  scope = "rollout",
 }: CustomLintTestTimeoutOptions = {}): string[] => {
   const violations: string[] = [];
   for (const filename of new Bun.Glob(
     "**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
   ).scanSync(directory)) {
     const source = readFileSync(path.join(directory, filename), "utf-8");
-    const file = parseSource(filename, source);
-    const repositoryFile = repoRelativePath(
-      path.resolve(import.meta.dirname, ".."),
-      path.join(directory, filename),
-    );
-    const violation = testPolicyViolation({
-      file,
-      enforcesLine: (line) =>
-        scope === "all" ||
-        guardEnforcesLine({
-          guard: "central-test-timeout",
-          file: repositoryFile,
-          line,
-          ...(changedLines === undefined ? {} : { changedLines }),
-          ...(now === undefined ? {} : { now }),
-          ...(rollouts === undefined ? {} : { rollouts }),
-        }),
-    });
+    const violation = testPolicyViolation(parseSource(filename, source));
     if (violation === undefined) {
       continue;
     }
@@ -476,9 +428,7 @@ export const customLintTestTimeoutViolations = ({
 };
 
 if (import.meta.main) {
-  const violations = customLintTestTimeoutViolations({
-    scope: process.argv.includes("--all") ? "all" : "rollout",
-  });
+  const violations = customLintTestTimeoutViolations();
   if (violations.length > 0) {
     console.error(violations.join("\n"));
     process.exit(1);

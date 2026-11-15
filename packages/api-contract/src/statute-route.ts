@@ -52,7 +52,12 @@ const NON_ASCII_ALPHANUMERIC = /[^a-z0-9]/gu;
  * The SQL twin is `legislationTitleName` in the API schema; both drop the
  * same prefix so a slug and a title search agree on what the act is called.
  */
-const TITLE_CITATION_SHAPE = String.raw`[0-9]+\/[0-9]{4} [^,]*`;
+const TITLE_CITATION_NUMBER = String.raw`[0-9]+\/[0-9]{4}`;
+const TITLE_CITATION_SHAPE = String.raw`${TITLE_CITATION_NUMBER} [^,]*`;
+const STATED_CITATION_REGEX = new RegExp(
+  String.raw`(?<![\p{N}/])${TITLE_CITATION_NUMBER}(?![\p{N}/])`,
+  "u",
+);
 const TITLE_CITATION_PREFIX_REGEX = new RegExp(
   String.raw`^${TITLE_CITATION_SHAPE}, `,
   "u",
@@ -70,6 +75,10 @@ export const statuteTitleCitationMentionRegex = (): RegExp =>
     String.raw`(?<![\p{N}/])(${TITLE_CITATION_SHAPE})\s*,\s*(?=([^,;]+))`,
     "gu",
   );
+
+/** Whether text states an act's citation, whatever punctuation follows it. */
+export const statesStatuteCitation = (text: string): boolean =>
+  STATED_CITATION_REGEX.test(text);
 
 /**
  * An official title split into the citation it opens with and the rest, by

@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 
 import oxlintConfig from "../../oxlint.config.ts";
-import migrationLedger from "../../scripts/sha256-migration-ledger.json" with { type: "json" };
 import { SHA256_OWNERS } from "../../scripts/sha256-owners.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
@@ -174,10 +173,7 @@ test("confines Bun namespace and default exports including extracted primitives"
 });
 
 test("enforces confinement in the repository base configuration", () => {
-  expect(oxlintConfig.rules["no-raw-sha256/no-raw-sha256"]).toEqual([
-    "error",
-    { allowedFiles: migrationLedger.map(({ id }) => id) },
-  ]);
+  expect(oxlintConfig.rules["no-raw-sha256/no-raw-sha256"]).toBe("error");
 });
 
 test("confines WebCrypto SHA-256 algorithm descriptors and immutable aliases", async () => {
@@ -197,32 +193,6 @@ test("confines WebCrypto SHA-256 algorithm descriptors and immutable aliases", a
       ].join("\n"),
     ),
   ).toEqual([1, 2, 4, 5]);
-});
-
-test("migration exemptions name exact files while other files remain confined", async () => {
-  const migrationSource = 'new Bun.CryptoHasher("sha256");';
-  const options = { allowedFiles: ["apps/api/src/migration-example.ts"] };
-  expect(
-    await lintSingleRule("no-raw-sha256", migrationSource, {
-      sourcePath: "apps/api/src/migration-example.ts",
-      ruleOptions: options,
-      cwd: "scratch",
-    }),
-  ).toEqual([]);
-  expect(
-    await lintSingleRule("no-raw-sha256", migrationSource, {
-      sourcePath: "apps/api/src/migration-example.ts.copy.ts",
-      ruleOptions: options,
-      cwd: "scratch",
-    }),
-  ).toEqual([1]);
-  expect(
-    await lintSingleRule("no-raw-sha256", migrationSource, {
-      sourcePath: "apps/api/src/new-example.ts",
-      ruleOptions: options,
-      cwd: "scratch",
-    }),
-  ).toEqual([1]);
 });
 
 test("an absent key does not classify a digest as keyed hashing", async () => {

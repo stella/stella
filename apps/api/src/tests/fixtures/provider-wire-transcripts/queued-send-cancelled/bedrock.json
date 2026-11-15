@@ -34,6 +34,7 @@
           },
           "toolConfig": {
             "tools": [
+              "show_app",
               "ask-user",
               "request_secret",
               "use_connector_secret",
@@ -144,6 +145,7 @@
           },
           "toolConfig": {
             "tools": [
+              "show_app",
               "ask-user",
               "request_secret",
               "use_connector_secret",

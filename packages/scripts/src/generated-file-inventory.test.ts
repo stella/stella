@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { ciGeneratedFiles } from "./generated-file-inventory";
-import { CI_GENERATED_FILES } from "./generated-files";
+import {
+  CI_GENERATED_FILES,
+  MCP_APP_GENERATED_OUTPUTS,
+} from "./generated-files";
 
 test("inventories derived MCP outputs before they exist and follows source additions and removals", () => {
   const root = mkdtempSync(path.join(tmpdir(), "generated-inventory-"));
@@ -26,16 +29,7 @@ test("inventories derived MCP outputs before they exist and follows source addit
       "packages/mcp-apps/src/reader/generated/app.html.txt",
       "packages/mcp-apps/src/reader/generated/app.js.txt",
       "packages/mcp-apps/src/reader/generated/app.css.txt",
-      "packages/mcp-apps/src/shared/generated/messages.json",
-      "packages/mcp-apps/src/shared/generated/schemas.json",
-      "packages/mcp-apps/src/shared/generated/contracts.js",
-      "packages/mcp-apps/src/shared/generated/contracts.d.ts",
-      "packages/mcp-apps/src/shared/generated/reader-messages.json",
-      "packages/mcp-apps/src/shared/generated/reader-inputs.json",
-      "packages/mcp-apps/src/shared/generated/style.css",
-      "packages/mcp-apps/src/generated/runtime.js.txt",
-      "packages/mcp-apps/src/generated/runtime.css.txt",
-      "packages/mcp-apps/src/generated/bundles.ts",
+      ...Object.values(MCP_APP_GENERATED_OUTPUTS).flat(),
     ].toSorted();
     expect(ciGeneratedFiles(root)).toEqual(expected);
     write("packages/mcp-apps/src/reader/generated/app.html.txt");

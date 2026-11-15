@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline; the source paragraphs it alone read are gone, and the rendered HTML, metadata and AST are unchanged.
 /**
  * The document the common courts' judgments API serves, read.
@@ -19,8 +20,14 @@
  * sentence.
  */
 
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
+import { load } from "@stll/html";
+import {
+  type AnyNode,
+  type Element,
+  isCDATA,
+  isTag,
+  isText,
+} from "@stll/html/nodes";
 
 import { judgeLexLink, type LexLinkRejection } from "./pl-ncourt-lexlink";
 import { ANONYMIZED_CLASS } from "./shared-inlines";
@@ -407,7 +414,7 @@ const renderBlocks = (element: Element, state: RenderState): string =>
  * `<error>` answer, an HTML page, an empty body.
  */
 export const readPlNcourtContent = (xml: string): PlNcourtContent | null => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const root = $.root().children().first().get(0);
   if (root === undefined || !isTag(root) || root.name !== "xPart") {
     return null;

@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
 
+import type { AvtMode } from "@/features/avt/avt-mode";
 import { AvtView } from "@/features/avt/avt-view";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
@@ -9,6 +10,8 @@ import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.lo
 import type { AvtWorkspaceView } from "@/lib/workspaces/view-layout";
 
 type AvtRouteProps = {
+  mode: AvtMode | undefined;
+  onModeChange: (mode: AvtMode | undefined) => void;
   view: AvtWorkspaceView;
   workspaceId: string;
   runId: string | undefined;
@@ -20,6 +23,8 @@ export const AvtRoute = ({
   workspaceId,
   runId,
   onRunChange,
+  mode,
+  onModeChange,
 }: AvtRouteProps) => {
   const enabled = useCallerFeatureEnabled(CALLER_FEATURE.verification);
   if (!enabled) {
@@ -28,6 +33,8 @@ export const AvtRoute = ({
   return (
     <AvtView
       key={view.id}
+      mode={mode}
+      onModeChange={onModeChange}
       onRunChange={onRunChange}
       runId={runId}
       view={view}

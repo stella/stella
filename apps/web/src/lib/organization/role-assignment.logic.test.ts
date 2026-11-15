@@ -5,6 +5,7 @@ import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { assignableRoles } from "@stll/permissions";
 
 import {
+  defaultInviteRole,
   hasOrganizationManagementAccess,
   inviteMemberSchema,
   roleAssignmentOptions,
@@ -60,5 +61,21 @@ describe("membership role control policy", () => {
         }).success,
       ).toBe(false);
     }
+  });
+});
+
+describe("default invitation role", () => {
+  test("is the standard member for every actor who may assign it", () => {
+    for (const actorRole of ORGANIZATION_ROLE_NAMES) {
+      const roles = assignableRoles(actorRole);
+      if (roles.length > 0) {
+        expect(defaultInviteRole(roles)).toBe("member");
+      }
+    }
+  });
+
+  test("falls back to the last role when member is not on offer", () => {
+    expect(defaultInviteRole(["admin", "external"])).toBe("external");
+    expect(defaultInviteRole([])).toBeUndefined();
   });
 });

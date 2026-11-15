@@ -23,11 +23,19 @@ import {
   ConfigurationError,
   SchedulerJobTimeoutError,
 } from "@/api/lib/errors/tagged-errors";
-import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
+import {
+  errorFingerprint,
+  errorSystemFields,
+  errorTag,
+} from "@/api/lib/errors/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import {
+  SCHEDULER_LEASE_MS,
+  SCHEDULER_MAX_RUNTIME_MS,
+} from "@/api/lib/scheduler/run-limits";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import type {
   SchedulerDb,
@@ -36,7 +44,7 @@ import type {
 } from "@/api/lib/scheduler/types";
 
 const DEFAULT_POLL_INTERVAL_MS = 60_000;
-const DEFAULT_LEASE_MS = 30 * 60_000;
+const DEFAULT_LEASE_MS = SCHEDULER_LEASE_MS;
 // A sweep runs every job that is due, once; this caps only the extra runs of
 // jobs that asked for an immediate continuation within the same sweep. Nine
 // keeps a single continuing job at the ten runs per sweep it always had, so
@@ -52,7 +60,7 @@ const MIN_LEASE_MS = 3 * DEFAULT_POLL_INTERVAL_MS;
 // that has not finished within a full lease is treated as hung. A JS promise
 // cannot be force-cancelled, so on expiry the ceiling aborts the task's signal
 // (cooperative tasks unwind), stops the heartbeat, and releases the job.
-const DEFAULT_MAX_RUNTIME_MS = DEFAULT_LEASE_MS;
+const DEFAULT_MAX_RUNTIME_MS = SCHEDULER_MAX_RUNTIME_MS;
 
 // The scheduler owns the postgres-role `rootDb`. Threaded explicitly so the
 // claim, lease, and completion paths are exercisable against a real
@@ -254,7 +262,7 @@ export const startSchedulerLoop = ({
         return;
       }
 
-      detached(runTick(), "scheduler-runner.run-tick");
+      detached(async () => runTick(), "scheduler-runner.run-tick");
     }, pollIntervalMs);
   };
 
@@ -290,7 +298,7 @@ export const startSchedulerLoop = ({
       return;
     }
 
-    detached(runTick(), "scheduler-runner.run-tick");
+    detached(async () => runTick(), "scheduler-runner.run-tick");
   }, 0);
 
   return {
@@ -520,16 +528,17 @@ export const startLeaseHeartbeat = ({
 
   const timer = setInterval(() => {
     detached(
-      renew().catch((error: unknown) => {
-        logger.warn("scheduler.lease_heartbeat_failed", {
-          "scheduler.job_id": jobId,
-          "scheduler.runner_id": runnerId,
-          "error.type": errorTag(error),
-        });
-        if (performance.now() - lastRenewedAt >= leaseMs) {
-          markLost();
-        }
-      }),
+      async () =>
+        renew().catch((error: unknown) => {
+          logger.warn("scheduler.lease_heartbeat_failed", {
+            "scheduler.job_id": jobId,
+            "scheduler.runner_id": runnerId,
+            "error.type": errorTag(error),
+          });
+          if (performance.now() - lastRenewedAt >= leaseMs) {
+            markLost();
+          }
+        }),
       "scheduler-runner.renew",
     );
   }, intervalMs);
@@ -916,6 +925,9 @@ const resolveRunOutcome = async ({
     "scheduler.run_id": runId,
     "scheduler.runner_id": runnerId,
     "scheduler.task": job.task,
+    // A panic has no code or cause, so its frame is the only thing that names
+    // the failing site. The fingerprint carries no message.
+    ...errorFingerprint(raceError),
     ...errorSystemFields(raceError),
   });
   await finishRunFailure({

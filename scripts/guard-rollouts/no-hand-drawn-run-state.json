@@ -1,0 +1,24 @@
+{
+  "id": "no-hand-drawn-run-state",
+  "rules": ["no-hand-drawn-run-state/no-hand-drawn-run-state"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-17T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-hand-drawn-run-state/no-hand-drawn-run-state",
+    "apps/web/src",
+    "apps/mobile/src",
+    "apps/desktop/src",
+    "packages/mcp-apps/src",
+    "packages/ui/src",
+    "packages/workspace-ui/src",
+    "packages/chat/src"
+  ]
+}

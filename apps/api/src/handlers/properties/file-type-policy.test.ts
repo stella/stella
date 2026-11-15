@@ -48,6 +48,7 @@ const contents = {
   int: { version: 1, type: "int" },
   money: { version: 1, type: "money", currency: null },
   person: { version: 1, type: "person" },
+  record: { version: 1, type: "record", shape: { type: "tool-output" } },
   "single-select": {
     version: 1,
     type: "single-select",
@@ -238,7 +239,12 @@ test("file column updates preserve document references", async () => {
         const after = await db.query.properties.findFirst({
           where: { id: { eq: propertyId } },
         });
-        if (
+        // An AI money column is the table-analysis feature, which this caller
+        // was not granted: admission refuses it before the file policy runs.
+        if (content.type === "money" && ai) {
+          expect(response).toMatchObject({ code: 404 });
+          expect(after).toEqual(before);
+        } else if (
           file !== (content.type === "file") ||
           (content.type === "file" && ai)
         ) {

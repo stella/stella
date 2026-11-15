@@ -14,35 +14,28 @@
  */
 
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
-import {
-  documentReviewFindingDecisions,
-  documentReviewFindings,
-} from "@/api/db/schema";
+import { documentReviewFindings } from "@/api/db/schema";
 import { decideReviewFindingBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import {
-  findingDecisionRows,
-  findingHasDecisionHistory,
-} from "@/api/lib/document-review/finding-decision-history";
+import { readFindingDecisionHistory } from "@/api/lib/document-review/finding-decision-history";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
   DOCUMENT_REVIEW_DECISION,
+  DOCUMENT_REVIEW_DECISION_REASON_SETTING,
 } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewFindingFlag } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-import { findingDecisionEvent } from "./finding-decision-event";
-
 const config = {
   contract: "patch",
   description:
-    "Record a reviewer's decision on one review finding, the flags they put beside it, and, when requested, the durable application of its proposed edit.",
+    "Record a reviewer's decision on one review finding, with an optional reason kept in its decision history, the flags they put beside it, and, when requested, the durable application of its proposed edit. Answers with the finding's decision history after it.",
   // entity:update because deciding a finding can durably apply its proposed
   // edit to the reviewed document; workspace:read alone would let a member
   // with no document-processing grant record and apply review decisions.
@@ -165,7 +158,15 @@ const decideDocumentReviewFinding = createSafeHandler(
           !decisionChanged &&
           !flagsChanged
         ) {
-          return { type: "unchanged", finding } as const;
+          return {
+            type: "unchanged",
+            finding,
+            decisions: await readFindingDecisionHistory({
+              tx,
+              workspaceId,
+              findingId: params.findingId,
+            }),
+          } as const;
         }
 
         // Read after the row lock, so decision moments follow the order in
@@ -184,6 +185,15 @@ const decideDocumentReviewFinding = createSafeHandler(
         const flags = requestedFlags ?? finding.flags;
         const appliedAt = alreadyApplied ? finding.appliedAt : now;
         const appliedBy = alreadyApplied ? finding.appliedBy : user.id;
+        // The reason belongs to this change alone: set for the update below,
+        // which the history trigger reads it from, and cleared after it, so
+        // no later write in the transaction inherits it.
+        const reason = decisionChanged ? (body.reason ?? null) : null;
+        if (reason !== null) {
+          await tx.execute(
+            sql`SELECT set_config(${DOCUMENT_REVIEW_DECISION_REASON_SETTING}, ${reason}, true)`,
+          );
+        }
 
         await tx
           .update(documentReviewFindings)
@@ -205,21 +215,13 @@ const decideDocumentReviewFinding = createSafeHandler(
             ),
           );
 
-        const eventDecision = findingDecisionEvent(finding.decision, decision);
-        if (eventDecision !== undefined) {
-          const change = {
-            workspaceId,
-            findingId: params.findingId,
-            previous: finding,
-            decision: eventDecision,
-            actorId: user.id,
-            at: now,
-            hasHistory: await findingHasDecisionHistory(tx, params.findingId),
-          };
-          await tx
-            .insert(documentReviewFindingDecisions)
-            .values(findingDecisionRows(change))
-            .onConflictDoNothing({ target: documentReviewFindingDecisions.id });
+        // The decision history is the database's: the update above appends
+        // its event (`document_review_findings_decision_history`), from the
+        // decider and moment written here, whichever surface changes it.
+        if (reason !== null) {
+          await tx.execute(
+            sql`SELECT set_config(${DOCUMENT_REVIEW_DECISION_REASON_SETTING}, '', true)`,
+          );
         }
 
         const changes: FieldDiffs = {};
@@ -265,6 +267,12 @@ const decideDocumentReviewFinding = createSafeHandler(
           appliedAt: recordsApplication ? appliedAt : finding.appliedAt,
           decidedBy,
           decidedAt,
+          // Read after the update, so it holds the event the trigger wrote.
+          decisions: await readFindingDecisionHistory({
+            tx,
+            workspaceId,
+            findingId: params.findingId,
+          }),
         } as const;
       }),
     );
@@ -311,6 +319,9 @@ const decideDocumentReviewFinding = createSafeHandler(
           ? decided.finding.appliedAt
           : decided.appliedAt
         )?.toISOString() ?? null,
+      // Every decision taken and withdrawn, oldest first, and where it
+      // stands, folded as a verified claim's decisions are.
+      decisions: decided.decisions,
     });
   },
 );

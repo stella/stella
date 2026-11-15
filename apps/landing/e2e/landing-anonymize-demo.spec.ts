@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
 
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_90_SECONDS_MS,
+} from "./wait-budgets";
+
 // Class guard: the landing anonymization demo must detect entities in a real
 // browser bundle, not just under Node. Its dictionaries reach the worker
 // through dynamic imports; a specifier the bundler cannot see statically
@@ -89,7 +94,10 @@ test("live anonymization demo highlights a city as an address", async ({
   await expect
     .poll(
       async () => (await page.evaluate(readDemoState, DEMO_SELECTORS)).status,
-      { message: "the demo's engine finishes booting", timeout: 90_000 },
+      {
+        message: "the demo's engine finishes booting",
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_90_SECONDS_MS,
+      },
     )
     .toMatch(/detected/u);
 
@@ -108,7 +116,7 @@ test("live anonymization demo highlights a city as an address", async ({
   await expect
     .poll(async () => page.evaluate(readDemoState, DEMO_SELECTORS), {
       message: `the engine highlights "${CITY}" as an address`,
-      timeout: 30_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     })
     .toMatchObject({ highlighted: [CITY], legend: [ADDRESS_LEGEND] });
 });
@@ -123,7 +131,10 @@ test("isolated browser demo matches detector output literally", async ({
   await expect
     .poll(
       async () => (await page.evaluate(readDemoState, DEMO_SELECTORS)).status,
-      { message: "the demo's engine finishes booting", timeout: 90_000 },
+      {
+        message: "the demo's engine finishes booting",
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_90_SECONDS_MS,
+      },
     )
     .toMatch(/detected/u);
 
@@ -154,7 +165,7 @@ test("live anonymization demo does not expose runtime errors", async ({
   await expect(page.locator(DEMO_SELECTORS.textarea)).toBeVisible();
   await expect(page.locator(DEMO_SELECTORS.status)).toHaveText(
     "Something went wrong. Reload the page to try again.",
-    { timeout: 30_000 },
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
 });
 

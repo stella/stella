@@ -54,6 +54,11 @@ const CASE_LAW_INPUT = {
   redacted: false,
   listingOnly: false,
   provisionKeys: [],
+  rankingSignals: {
+    citationAuthorityBucket: 0,
+    languageGroupKey: null,
+    languageGroupShared: false,
+  },
   vacatedFrom: null,
   caseNumber: "4 As 3/2008",
   identifiers: [
@@ -1077,6 +1082,111 @@ test("every passage carries its generation origin exactly when its mapping suppo
       expect(PROJECTION_GENERATION_FIELD in document).toBe(field !== null);
       if (field !== null) {
         expect(document[field]).toBe(manifest.generation);
+      }
+    }
+  }
+});
+
+const RANKED_CASE_LAW_INPUT = {
+  ...DATED_CASE_LAW_INPUT,
+  jurisdiction: "svk",
+  courtId: "sk-court-7",
+  rankingSignals: {
+    citationAuthorityBucket: 17,
+    languageGroupKey: "ECLI:SK:NSSR:2008:1",
+    languageGroupShared: true,
+  },
+} as const satisfies CaseLawProjectionInput;
+
+const TWO_PASSAGES = {
+  text: `${"first ".repeat(400)}\n\n${"second ".repeat(400)}`,
+  ast: null,
+};
+
+test("case_law_v10 writes the ranking signals on every passage, and its mapping holds each one", () => {
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v10;
+  const documents = buildCaseLawProjectionDocuments({
+    manifest,
+    input: RANKED_CASE_LAW_INPUT,
+    payload: TWO_PASSAGES,
+    revision: REVISION,
+  });
+  expect(documents.length).toBeGreaterThan(1);
+  // Every passage, not only the opening one: the scan ranks a decision by the
+  // passage it reached, and reads that passage's fields alone.
+  for (const document of documents) {
+    expect(document).toMatchObject({
+      court: RANKED_CASE_LAW_INPUT.court,
+      jurisdiction: "SVK",
+      citation_authority_bucket: 17,
+      court_id: "sk-court-7",
+      language_group_key: "ECLI:SK:NSSR:2008:1",
+      language_group_shared: true,
+      passage_count: documents.length,
+    });
+  }
+  // Strict mapping: every emitted field is one the generation maps.
+  const mapped = manifestFields("case_law_v10");
+  for (const document of documents) {
+    expect(Object.keys(document).filter((key) => !mapped.has(key))).toEqual([]);
+  }
+});
+
+test("case_law_v10 writes no field for an absent court id or language group", () => {
+  const [document, ...rest] = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v10,
+    input: DATED_CASE_LAW_INPUT,
+    payload: { text: "Právní věta", ast: null },
+    revision: REVISION,
+  });
+  expect(rest).toEqual([]);
+  expect(document).toMatchObject({
+    citation_authority_bucket: 0,
+    language_group_shared: false,
+    passage_count: 1,
+  });
+  expect(document !== undefined && "court_id" in document).toBe(false);
+  expect(document !== undefined && "language_group_key" in document).toBe(
+    false,
+  );
+});
+
+test("a generation without ranking signals writes the documents it wrote before", () => {
+  for (const generation of [
+    "case_law_v5",
+    "case_law_v6",
+    "case_law_v7",
+    "case_law_v8",
+    "case_law_v9",
+  ] as const) {
+    const manifest = CORPUS_INDEX_MANIFESTS[generation];
+    const signalled = buildCaseLawProjectionDocuments({
+      manifest,
+      input: RANKED_CASE_LAW_INPUT,
+      payload: TWO_PASSAGES,
+      revision: REVISION,
+    });
+    const unsignalled = buildCaseLawProjectionDocuments({
+      manifest,
+      input: {
+        ...RANKED_CASE_LAW_INPUT,
+        rankingSignals: CASE_LAW_INPUT.rankingSignals,
+      },
+      payload: TWO_PASSAGES,
+      revision: REVISION,
+    });
+    // The fixture reaches the fault: v10 writes these signals.
+    expect(signalled.length).toBeGreaterThan(1);
+    expect([generation, signalled]).toEqual([generation, unsignalled]);
+    for (const document of signalled) {
+      for (const field of [
+        "citation_authority_bucket",
+        "court_id",
+        "language_group_key",
+        "language_group_shared",
+        "passage_count",
+      ]) {
+        expect([generation, field in document]).toEqual([generation, false]);
       }
     }
   }

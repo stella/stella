@@ -8,11 +8,12 @@ import {
   parityGoldenUrl,
   parserParityOutput,
 } from "@/api/tests/helpers/case-law-parity";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 for (const entry of PARSER_PARITY_MANIFEST) {

@@ -12,15 +12,15 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { BidiText } from "@stll/ui/bidi-text";
-import { useCopyConfirmation } from "@stll/ui/copy-button";
+import { Button } from "@stll/ui/button";
 import { CheckIcon, SparklesIcon as Sparkles } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { useCopyControl } from "@/components/copy-control";
 import { DocumentPropertiesSection } from "@/components/inspector/document-properties-section";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
@@ -32,10 +32,8 @@ import { EditableField } from "@/components/workspaces/editable-field";
 import { Justification } from "@/components/workspaces/justification";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type {
@@ -148,13 +146,11 @@ const MetadataPanelErrorFallback = ({ reset }: { reset: () => void }) => {
       <span className="text-muted-foreground text-sm">
         {t("common.somethingWentWrong")}
       </span>
-      <button
-        className="text-primary text-sm hover:underline"
-        onClick={reset}
-        type="button"
-      >
-        {t("common.tryAgain")}
-      </button>
+      <Button onClick={reset} variant="plain">
+        <span className="text-primary text-sm hover:underline">
+          {t("common.tryAgain")}
+        </span>
+      </Button>
     </div>
   );
 };
@@ -464,7 +460,8 @@ const EntityMetadataContent = ({
             </span>
           )}
         </span>
-        <div className="text-foreground text-sm leading-snug">
+        {/* A span: this body can sit inside the justification button. */}
+        <span className="text-foreground block text-sm leading-snug">
           <EditableField
             content={field.content}
             entityKind={entity.kind}
@@ -474,7 +471,7 @@ const EntityMetadataContent = ({
             readonly={isAiField}
             workspaceId={workspaceId}
           />
-        </div>
+        </span>
       </>
     );
     if (handleJustifyClick) {
@@ -483,17 +480,21 @@ const EntityMetadataContent = ({
           className={cn("rounded-md", isActive && "bg-accent")}
           key={field.id + field.propertyId}
         >
-          <button
+          <Button
             aria-pressed={isActive}
-            className={cn(
-              "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-start",
-              !isActive && "hover:bg-accent",
-            )}
+            className="flex w-full"
             onClick={handleJustifyClick}
-            type="button"
+            variant="plain"
           >
-            {fieldBody}
-          </button>
+            <span
+              className={cn(
+                "flex w-full flex-col gap-1 rounded-md px-2 py-2",
+                !isActive && "hover:bg-accent",
+              )}
+            >
+              {fieldBody}
+            </span>
+          </Button>
           {isActive && activeJustification && fileFieldId !== null && (
             <div className="border-s-primary mx-2 mb-2 max-h-48 overflow-y-auto border-s-2 ps-3">
               <div className="text-primary text-3xs mb-1 font-semibold tracking-wide uppercase">
@@ -668,44 +669,28 @@ const CHIP_SWAP_CLASS =
  */
 const DocumentReferenceChip = ({ reference }: { reference: string }) => {
   const t = useTranslations();
-  const { copied, copy } = useCopyConfirmation(async () => {
-    const result = await copyToClipboard(reference);
-    if (Result.isError(result)) {
-      getAnalytics().captureError(result.error, {
-        fingerprintKey: "DocumentReferenceChip.copy:failure",
-        scope: {
-          type: "handler",
-          handlerId: "DocumentReferenceChip.copy:failure",
-        },
-      });
-      notifyUserError(result.error, t("errors.actionFailed"));
-      return false;
-    }
-    return true;
-  });
+  const { copied, copy } = useCopyControl({ payload: reference });
   const label = copied ? t("common.copied") : t("common.copyDocumentReference");
 
   return (
-    <Tooltip
-      content={label}
-      render={
-        <button
-          aria-label={label}
-          // The `before` box widens the hit area without growing the chip;
-          // it stays narrower horizontally so it cannot swallow clicks meant
-          // for the row's other content.
-          className="bg-muted/60 text-foreground-strong-muted hover:bg-muted hover:text-foreground focus-visible:ring-ring text-2xs relative inline-flex items-center rounded-sm px-1.5 py-0.5 font-mono outline-none before:absolute before:-inset-x-2 before:-inset-y-3 before:content-[''] focus-visible:ring-2"
-          data-copied={copied ? "" : undefined}
-          onClick={() => {
-            detached(copy(), "entity-metadata-panel.copy-document-reference");
-          }}
-          type="button"
-        />
-      }
+    <Button
+      aria-label={label}
+      data-copied={copied ? "" : undefined}
+      onClick={() => {
+        detached(
+          copy(reference),
+          "entity-metadata-panel.copy-document-reference",
+        );
+      }}
+      tooltip={label}
+      variant="plain"
     >
       {/* The reference and the confirmation share one cell, as in
-          CopyButton, so the chip keeps its width while it confirms. */}
-      <span className="grid">
+          CopyButton, so the chip keeps its width while it confirms. The
+          `before` box widens the hit area without growing the chip; it stays
+          narrower horizontally so it cannot swallow clicks meant for the
+          row's other content. */}
+      <span className="bg-muted/60 text-foreground-strong-muted hover:bg-muted hover:text-foreground text-2xs relative grid rounded-sm px-1.5 py-0.5 font-mono before:absolute before:-inset-x-2 before:-inset-y-3 before:content-['']">
         <span
           aria-hidden={copied}
           className={cn(CHIP_SWAP_CLASS, copied ? "opacity-0" : "opacity-100")}
@@ -727,6 +712,6 @@ const DocumentReferenceChip = ({ reference }: { reference: string }) => {
       <span aria-live="polite" className="sr-only">
         {copied ? t("common.copied") : ""}
       </span>
-    </Tooltip>
+    </Button>
   );
 };

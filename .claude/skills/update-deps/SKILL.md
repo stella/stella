@@ -183,15 +183,20 @@ instead of creating workspace drift. Use `bun update <package> --latest` only
 when intentionally changing the declared dependency range. Resolve and preserve
 an intended prerelease version or channel explicitly.
 
-For Rust, use targeted lockfile updates:
+For Rust, use targeted lockfile updates through the release-age quarantine:
 
 ```bash
-cargo update --manifest-path <path/to/Cargo.toml> -p <crate>
+bun run cargo:update --manifest-path <path/to/Cargo.toml> <crate>
 ```
 
-Edit the manifest only when the declared requirement must change. Do not run bare
-`cargo update` for an ordinary batch; a full-graph update must be an explicit,
-reviewed choice.
+It runs `cargo update -p <crate>`, then pins every new crates.io version younger
+than the root `bunfig.toml` quarantine (transitive ones included) back to the
+newest version that has cleared it; CI's lockfile release-age check fails such a
+pin in any `Cargo.lock`. Do not run `cargo update` directly: it takes releases
+published seconds ago. An urgent fix inside the quarantine needs a reasoned
+temporary `"cargo:<crate>"` exclude with a `# quarantine-expires:` annotation in
+the root `bunfig.toml`. Edit the manifest only when the declared requirement
+must change; a full-graph update must be an explicit, reviewed choice.
 
 For uv, update only the planned packages and review the resulting lockfile:
 

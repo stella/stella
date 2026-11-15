@@ -1,8 +1,11 @@
 import { request as playwrightRequest } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
@@ -26,16 +29,26 @@ const createOrganizationSelectionSession = async ({
     // auto-selecting the sole organization. Neither create activates its
     // organization, so the stored session has none, as after a fresh sign-in.
     const primaryCreateResponse = await loginApi.post(
-      `${API_BASE_URL}/api/auth/organization/create`,
-      { data: { ...primaryOrganization, keepCurrentActiveOrganization: true } },
+      `${API_BASE_URL}/v1/organizations`,
+      {
+        data: primaryOrganization,
+        headers: {
+          "Idempotency-Key": primaryOrganization.slug,
+          [CAPABILITY_REQUEST_HEADER]: "organizations.create",
+        },
+      },
     );
     expect(primaryCreateResponse.ok(), await primaryCreateResponse.text()).toBe(
       true,
     );
     const secondaryCreateResponse = await loginApi.post(
-      `${API_BASE_URL}/api/auth/organization/create`,
+      `${API_BASE_URL}/v1/organizations`,
       {
-        data: { ...secondaryOrganization, keepCurrentActiveOrganization: true },
+        data: secondaryOrganization,
+        headers: {
+          "Idempotency-Key": secondaryOrganization.slug,
+          [CAPABILITY_REQUEST_HEADER]: "organizations.create",
+        },
       },
     );
     expect(
@@ -81,11 +94,15 @@ test("selecting an organization completes login and renders the destination", as
   const organization = page.getByRole("button", {
     name: organizationName,
   });
-  await expect(organization).toBeVisible({ timeout: 30_000 });
+  await expect(organization).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await organization.click();
 
-  await expect(page).toHaveURL(/\/chat\/?$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/chat\/?$/u, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await expect(
     page.getByRole("textbox", { name: /type your question/iu }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 });

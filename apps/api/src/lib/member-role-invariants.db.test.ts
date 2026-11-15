@@ -9,6 +9,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { roles } from "@stll/permissions";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
+import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: PGlite;
@@ -52,7 +53,7 @@ const fixture = async () => {
     organizationId,
     userId,
     cleanUp: async () => {
-      await client.query(`DELETE FROM organization WHERE id = $1`, [
+      await client.query(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
         organizationId,
       ]);
       await client.query(`DELETE FROM "user" WHERE id = $1`, [userId]);
@@ -96,7 +97,7 @@ describe("membership role database invariants", () => {
         code: "23514",
         constraint: "member_organization_owner_required",
       });
-      await client.query(`DELETE FROM organization WHERE id = $1`, [
+      await client.query(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
         data.organizationId,
       ]);
       const { rows } = await client.query(

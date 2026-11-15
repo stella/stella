@@ -10,7 +10,7 @@ import {
   caseLawRootHandleUnderCorpusSchemaLane,
 } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
-import { SCHEDULER_BACKFILL_CONFIG } from "@/api/lib/scheduler/backfill-config";
+import { schedulerBackfillConfig } from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK =
@@ -27,7 +27,7 @@ const readDecisionTableVerdict = async (
       transaction: async (work) => await withAggregateTransaction(db, work),
     },
     tableName: "case_law_decisions",
-    config: SCHEDULER_BACKFILL_CONFIG,
+    config: schedulerBackfillConfig(),
   })();
 
 type ReconcileTaskOptions = {
@@ -62,7 +62,7 @@ export const createReconcileCaseLawDecisionIdentifiersTask =
       // db-await-in-loop: each bounded page needs a fresh admission verdict
       const verdict = await readVerdict(laneDb);
       if (
-        decideStart(verdict, "backfill_batch", SCHEDULER_BACKFILL_CONFIG)
+        decideStart(verdict, "backfill_batch", schedulerBackfillConfig())
           .decision === "wait"
       ) {
         logger.info("case_law.decision_identifier_reconciliation.held", {

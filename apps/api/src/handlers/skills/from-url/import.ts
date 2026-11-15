@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -68,6 +69,7 @@ const importSkillFromUrl = createSafeRootHandler(
         body.url,
         createSkillPackageFetchContext({
           permit: grantThirdPartyOutboundPermit(),
+          publicGithubToken: env.SKILL_IMPORT_GITHUB_TOKEN,
         }),
       ),
     );

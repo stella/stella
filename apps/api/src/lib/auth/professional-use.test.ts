@@ -2,7 +2,7 @@ import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getOAuthState } from "better-auth/api";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -17,6 +17,10 @@ import {
 } from "@/api/lib/auth/professional-use";
 import type { CreationAcceptance } from "@/api/lib/auth/professional-use";
 import { REVIEW_ACCOUNT_CREATE_USER_PATH } from "@/api/lib/auth/review-account-plugin";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const STALE_VERSION = "2000-01";
 
@@ -226,9 +230,10 @@ describe("acceptance at creation", () => {
         ),
       { preconnect: globalThis.fetch.preconnect },
     );
-    const tokenExchange = spyOn(globalThis, "fetch").mockImplementation(
-      fetchToken,
-    );
+    const tokenExchange = Object.assign(mock(asFetchMock(fetchToken)), {
+      preconnect: globalThis.fetch.preconnect,
+    });
+    testFetchState.set(tokenExchange);
     try {
       const callback = await auth.handler(
         new Request(
@@ -238,7 +243,7 @@ describe("acceptance at creation", () => {
       );
       expect(callback.status).toBe(302);
     } finally {
-      tokenExchange.mockRestore();
+      testFetchState.restore();
     }
     return decisions;
   };

@@ -1,11 +1,9 @@
 import { panic } from "better-result";
-import { is } from "drizzle-orm";
-import { PgTable } from "drizzle-orm/pg-core";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig } from "@stll/db-load-gate/health";
 
 import * as schema from "@/api/db/schema";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { createBackfillRuntime } from "./backfill-runtime";
@@ -18,6 +16,7 @@ import type {
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
 } from "./online-migration-connection";
+import { schemaTables } from "./schema-tables";
 
 const REPAIR_NAME = "entity-feature-row-gates";
 const BATCH_SIZE = 128;
@@ -98,7 +97,7 @@ const backfillRelation = async (
     name: `${REPAIR_NAME}:${tableName}`,
     tableName,
     initialSize: BATCH_SIZE,
-    config: { ...defaultConfig, maxSize: MAX_BATCH_SIZE },
+    config: { ...loadGateHealthConfig(), maxSize: MAX_BATCH_SIZE },
     connection,
   });
   try {
@@ -232,10 +231,7 @@ type EntityFeatureGateRepairOptions = {
 };
 
 const schemaPolicies = (): readonly PolicyDefinition[] =>
-  entityFeaturePolicyDefinitions(
-    Object.values(schema).filter((table) => is(table, PgTable)),
-    POLICY_NAME,
-  );
+  entityFeaturePolicyDefinitions(schemaTables(schema), POLICY_NAME);
 
 export const createEntityFeatureGateRepair = ({
   readPolicies,

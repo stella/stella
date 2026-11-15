@@ -1,3 +1,5 @@
+import { UnhandledException } from "better-result";
+
 import { isAIFailureCode } from "@stll/api-contract";
 import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
 
@@ -12,7 +14,7 @@ import {
   ClientOperationError,
   isUserSafeClientOperation,
 } from "@/lib/errors/client";
-import { EmptyUploadFileError } from "@/lib/files/upload-file-validation";
+import { UploadFileSizeError } from "@/lib/files/upload-file-validation";
 
 const SERVER_ERROR_THRESHOLD = 500;
 
@@ -39,13 +41,29 @@ export const userErrorMessage = (
   fallback: string,
 ): string => displayedMessage(toAPIError(error), fallback);
 
+/**
+ * `Result.tryPromise` wraps whatever a call threw, so the typed error the
+ * message depends on sits one level down. A transport failure stays wrapped:
+ * it says nothing about the operation, so the caller's own wording stands.
+ */
+const unwrapThrown = (error: unknown): unknown => {
+  if (!UnhandledException.is(error)) {
+    return error;
+  }
+  const { cause } = error;
+  return APIError.is(cause) && cause.transportKind !== undefined
+    ? error
+    : cause;
+};
+
 export const userErrorFromThrown = (
-  error: unknown,
+  thrown: unknown,
   fallback: string,
 ): string => {
+  const error = unwrapThrown(thrown);
   if (
     AuthClientError.is(error) ||
-    EmptyUploadFileError.is(error) ||
+    UploadFileSizeError.is(error) ||
     (ClientOperationError.is(error) && isUserSafeClientOperation(error.action))
   ) {
     return error.message;

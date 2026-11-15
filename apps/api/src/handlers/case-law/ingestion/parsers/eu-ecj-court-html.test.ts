@@ -9,9 +9,13 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 
-import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import { load } from "@stll/html";
+
+import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 
 const FIXTURE = new URL(
   "__fixtures__/eu-ecj-court-html/62026CO0122.cs.html.gz",
@@ -50,7 +54,7 @@ describe("an order published only as the Court's HTML", () => {
   });
 
   test("keeps every word of the body in order", () => {
-    const body = cheerio.load(html)("body").text();
+    const body = load(html)("body").text();
     const stored = words(parsed.fulltext);
     const source = words(body);
     let cursor = 0;

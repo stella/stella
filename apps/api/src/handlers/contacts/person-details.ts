@@ -1,8 +1,8 @@
 import { isValidContactBirthDate } from "@stll/api-contract/contact-date";
+import { MAX_CONTACT_NATIONALITY_CODES } from "@stll/api-contract/contact-write";
 import { isCountryCode } from "@stll/country-codes";
 
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
-import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const dateOfBirthFromColumns = ({

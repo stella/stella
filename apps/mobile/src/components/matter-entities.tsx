@@ -9,12 +9,14 @@ import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
+import { useRevisedLoad } from "@/components/changes";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { EntityRow } from "@/components/entity-row";
 import { LoadFailedCard } from "@/components/load-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
+import { readFileProperty } from "@/state/document-upload";
 import {
   applyEntityPage,
   EMPTY_ENTITIES_LOAD,
@@ -36,6 +38,16 @@ export const MatterEntities = ({
   workspaceId: string;
 }) => {
   const { end } = useSession();
+  // The documents column, looked up once: its files name each document's
+  // format. Without it the rows still list, only without formats.
+  const [fileField] = useState(async () => {
+    const found = await readFileProperty({
+      fetch,
+      matterId: workspaceId,
+      source,
+    });
+    return Result.isOk(found) ? found.value : null;
+  });
   // A session the server ended sends the person back to sign in, from the
   // load itself rather than from a render.
   const loadPage = async (previous: EntitiesLoad): Promise<EntitiesLoad> => {
@@ -44,13 +56,17 @@ export const MatterEntities = ({
       source,
       workspaceId,
       cursor: previous.nextCursor,
+      fileFieldId: await fileField,
     });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
       end(source);
     }
     return applyEntityPage(previous, result, epochMilliseconds());
   };
-  const [load, setLoad] = useState(async () => loadPage(EMPTY_ENTITIES_LOAD));
+  const [load, setLoad] = useRevisedLoad(
+    async () => await loadPage(EMPTY_ENTITIES_LOAD),
+    ["documents", "tasks"],
+  );
   const [refreshing, startRefresh] = useTransition();
   const [loadingMore, startLoadMore] = useTransition();
   const reload = () => {

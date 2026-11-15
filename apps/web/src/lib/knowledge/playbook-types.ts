@@ -68,10 +68,6 @@ export type ExtractPosition = Extract<Position, { mode: "extract" }>;
 // passages of a reference document someone already negotiated. Grading
 // dispatches on `source`, and so does every editor below.
 type TieredStandard = Extract<PositionStandard, { source: "tiers" }>;
-export type ReferenceStandard = Extract<
-  PositionStandard,
-  { source: "reference" }
->;
 
 export type PositionTiers = TieredStandard["tiers"];
 type GradedAskConfig = GradedPosition["ask"];

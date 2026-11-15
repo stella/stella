@@ -10,7 +10,6 @@ import type {
   PublicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 import type { UiLocale } from "@stll/locales";
-import { normalizeUnicode } from "@stll/text-normalize";
 
 import { caseLawCountryRegion } from "@/features/case-law/case-law-jurisdiction";
 import type { useFormatter } from "@/i18n/formatting-context";
@@ -71,37 +70,7 @@ export const resolveCaseLawRouteCountry = ({
     ? defaultCaseLawCountryForLocale(locale)
     : publicCaseLawCountry(country);
 
-/** What a search hit is matched against a typed reference by. */
-type DecisionRefCandidate = {
-  caseNumber: string;
-  ecli: string | null;
-};
-
 export const decodeCaseLawDecisionRef = (value: string): string =>
   Result.try(() => decodeURIComponent(value))
     .unwrapOr(value)
     .trim();
-
-const normalizeDecisionRef = (value: string): string =>
-  normalizeUnicode(value, "NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
-
-export const pickCaseLawDecisionHit = <THit extends DecisionRefCandidate>(
-  decisionRef: string,
-  hits: readonly THit[],
-): THit | null => {
-  const normalizedRef = normalizeDecisionRef(decisionRef);
-  const exactCaseNumber = hits.find(
-    (hit) => normalizeDecisionRef(hit.caseNumber) === normalizedRef,
-  );
-
-  if (exactCaseNumber) {
-    return exactCaseNumber;
-  }
-
-  const exactEcli = hits.find(
-    (hit) =>
-      hit.ecli !== null && normalizeDecisionRef(hit.ecli) === normalizedRef,
-  );
-
-  return exactEcli ?? hits.at(0) ?? null;
-};

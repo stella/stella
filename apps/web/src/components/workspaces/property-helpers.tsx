@@ -1,5 +1,3 @@
-import type { ComponentProps } from "react";
-
 import { useTranslations } from "use-intl";
 
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";
@@ -21,10 +19,6 @@ type PropertyHelperProps = {
   className?: string;
 };
 
-export const PropertyPopoverLabel = (props: ComponentProps<"span">) => (
-  <span className="text-sm font-semibold" {...props} />
-);
-
 export const PropertyName = ({ type }: PropertyHelperProps) => {
   const t = useTranslations();
 
@@ -40,6 +34,7 @@ export const PropertyName = ({ type }: PropertyHelperProps) => {
     money: t("workspaces.properties.money"),
     person: t("workspaces.properties.person"),
     clip: t("workspaces.properties.clip"),
+    record: t("workspaces.properties.record"),
   } as const satisfies Record<FieldTypeWithoutPending, string>;
 
   return (

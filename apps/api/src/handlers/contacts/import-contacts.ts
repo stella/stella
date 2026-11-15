@@ -12,6 +12,7 @@ import {
   contacts,
 } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
+import { mintContactId } from "@/api/handlers/contacts/contact-id";
 import {
   contactImportSkipReason,
   importedTaxIdentifiers,
@@ -41,16 +42,14 @@ import {
 } from "@/api/lib/imports/upsert-by-external-id";
 import { LIMITS } from "@/api/lib/limits";
 
-// The reviewed row plus the caller-generated id and, optionally, the row's
-// identity in the system it came from. The field set itself lives in
-// `contact-import-schema.ts`, shared with the validate handler.
-const importContactRowSchema = v.intersect([
-  v.object({
-    id: resourceIdSchema("contact"),
-    external: v.optional(externalRefSchema),
-  }),
-  contactImportCandidateSchema,
-]);
+// The reviewed row plus, optionally, its identity in the system it came
+// from. The field set itself lives in `contact-import-schema.ts`, shared with
+// the validate handler. The strict boundary rejects caller-selected persisted
+// identifiers: the server mints every new contact id.
+export const importContactRowSchema = v.strictObject({
+  ...contactImportCandidateSchema.entries,
+  external: v.optional(externalRefSchema),
+});
 
 export const importContactsBodySchema = v.object({
   importRequestId: resourceIdSchema("contactImportRequest"),
@@ -82,7 +81,7 @@ type ValidatedImportRow = {
 /**
  * A row cleared for writing. One that matches a stored contact by ref
  * updates it under the stored id; every other row is new and keeps the
- * caller's id.
+ * server-minted id.
  */
 type PlannedImportRow = ValidatedImportRow & { updatesStoredContact: boolean };
 
@@ -93,36 +92,30 @@ type ImportRowRuling =
   | { type: "skip"; reason: ImportSkipReason };
 
 /**
- * Apply the shared batch identity checks, then drop repeats of a caller id,
- * external ref or scheme-specific tax id; the first occurrence wins.
+ * Apply the shared batch identity checks, then drop repeats of an external
+ * ref or scheme-specific tax id; the first occurrence wins.
  */
 const validateImportRows = (
   body: ImportBody,
   resultByIndex: Map<number, ImportResultRow>,
 ): ValidatedImportRow[] => {
-  const seenContactIds = new Set<SafeId<"contact">>();
   const seenExternalRefs = new Set<string>();
   const seenTaxIds = new Set<string>();
   const validatedBatch = validateContactImportCandidates({
-    candidates: body.rows.map(
-      ({ id: _, external: _external, ...candidate }) => candidate,
-    ),
+    candidates: body.rows.map(({ external: _, ...candidate }) => candidate),
     rowNumbers: body.rows.map((_, index) => index + 1),
     taxIdScheme: body.taxIdScheme,
   });
 
   const rule = (
     index: number,
-    { id, external }: ImportBody["rows"][number],
+    { external }: ImportBody["rows"][number],
   ): ImportRowRuling => {
     const { contact, issues } =
       validatedBatch.at(index) ??
       panic("Contact import validation omitted a row");
     if (issues.length > 0) {
       return { type: "skip", reason: contactImportSkipReason(issues) };
-    }
-    if (seenContactIds.has(id)) {
-      return { type: "skip", reason: "duplicate_contact_id" };
     }
     const externalKey =
       external === undefined ? null : externalRefKey(external);
@@ -136,7 +129,6 @@ const validateImportRows = (
     if (dedupeTaxId !== null && seenTaxIds.has(dedupeTaxId)) {
       return { type: "skip", reason: "duplicate_tax_id" };
     }
-    seenContactIds.add(id);
     if (externalKey !== null) {
       seenExternalRefs.add(externalKey);
     }
@@ -145,7 +137,13 @@ const validateImportRows = (
     }
     return {
       type: "accept",
-      row: { index, id, external: external ?? null, contact, dedupeTaxId },
+      row: {
+        index,
+        id: mintContactId(),
+        external: external ?? null,
+        contact,
+        dedupeTaxId,
+      },
     };
   };
 
@@ -164,6 +162,15 @@ const validateImportRows = (
   }
   return validatedRows;
 };
+
+export const contactIdCollisionCondition = (
+  organizationId: SafeId<"organization">,
+  candidateIds: SafeId<"contact">[],
+) =>
+  and(
+    eq(contacts.organizationId, organizationId),
+    inArray(contacts.id, candidateIds),
+  ) ?? panic("Contact collision condition is empty");
 
 type PlanImportWritesOptions = {
   tx: Transaction;
@@ -199,7 +206,7 @@ const planImportWrites = async ({
       : await tx
           .select({ id: contacts.id })
           .from(contacts)
-          .where(inArray(contacts.id, candidateIds));
+          .where(contactIdCollisionCondition(organizationId, candidateIds));
   const existingIdSet = new Set(existingIds.map(({ id }) => id));
 
   const candidateTaxIds = validatedRows.flatMap(({ dedupeTaxId }) =>
@@ -247,7 +254,7 @@ const planImportWrites = async ({
         : (existingIdByRef.get(externalRefKey(candidate.external)) ?? null);
     if (existingId !== null) {
       // An update re-imports a contact this organization already holds: it
-      // takes no capacity, and the caller's fresh id is moot.
+      // takes no capacity, and the freshly minted id is moot.
       return isDuplicateTaxId(candidate, existingId)
         ? "duplicate_tax_id"
         : null;
@@ -269,9 +276,8 @@ const planImportWrites = async ({
   for (const candidate of validatedRows) {
     const reason = skipReasonFor(candidate);
     if (reason === null) {
-      // An update writes under the stored contact's id: the caller's id
-      // might belong to another contact, and the ref upsert can only absorb
-      // a conflict on the ref itself.
+      // An update writes under the stored contact's id, and the ref upsert
+      // can only absorb a conflict on the ref itself.
       const existingId =
         candidate.external === null
           ? null
@@ -305,9 +311,8 @@ type WriteImportRowsOptions = {
 
 /**
  * Insert new rows, with or without a ref; upsert rows whose ref an earlier
- * import wrote, so that contact is updated. A new row's caller id may already
- * belong to a contact this organization cannot see, so new rows skip any
- * conflict instead of aborting the batch, as rows without a ref always did.
+ * import wrote, so that contact is updated. New rows skip any id conflict
+ * instead of aborting the batch, as rows without a ref always did.
  * Every field the import models takes the incoming value, so a re-run
  * mirrors the source; what it does not model
  * (attorneys, billing details, colour, monitoring) keeps its stella value,

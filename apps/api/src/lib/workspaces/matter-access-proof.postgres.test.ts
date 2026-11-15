@@ -16,6 +16,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -79,8 +80,8 @@ const seed = async (db: GatedTestDb) => {
   ]);
   await db.insert(workspaceMembers).values({ workspaceId: assigned, userId });
   const cleanUp = async () => {
-    await db.delete(organization).where(eq(organization.id, home));
-    await db.delete(organization).where(eq(organization.id, other));
+    await deleteOrganizationsForTest(db, [home]);
+    await deleteOrganizationsForTest(db, [other]);
     await db.delete(user).where(eq(user.id, userId));
   };
   return { assigned, cleanUp, foreign, home, unassigned, userId };

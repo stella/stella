@@ -96,6 +96,7 @@ const cases = [
   {
     reason: "withdrawn",
     alias: "OZ",
+    declined: "občanského zákoníku",
     target: STATUTE_ALIASES.cze.oz,
     document: withdrawn,
     namedElis: [withdrawn.eli],
@@ -104,6 +105,7 @@ const cases = [
   {
     reason: "restricted source",
     alias: "ZP",
+    declined: "zákoníku práce",
     target: STATUTE_ALIASES.cze.zp,
     document: restricted,
     namedElis: [],
@@ -112,6 +114,7 @@ const cases = [
   {
     reason: "other country",
     alias: "ZOK",
+    declined: "zákona o obchodních korporacích",
     target: STATUTE_ALIASES.cze.zok,
     document: foreign,
     namedElis: [],
@@ -120,6 +123,7 @@ const cases = [
   {
     reason: "redistribution revoked after projection",
     alias: "TrZ",
+    declined: "trestního zákoníku",
     target: STATUTE_ALIASES.cze.trz,
     document: revoked,
     namedElis: [],
@@ -128,6 +132,7 @@ const cases = [
   {
     reason: "same-number CZE/SVK pair",
     alias: "OSŘ",
+    declined: "občanského soudního řádu",
     target: STATUTE_ALIASES.cze.osr,
     document: foreignPair,
     namedElis: [domesticPair.eli],
@@ -136,11 +141,14 @@ const cases = [
 ];
 const queriesFor = ({
   alias,
+  declined,
   target,
 }: {
   alias: string;
+  /** The act's short title declined as a citing sentence writes it. */
+  declined: string;
   target: StatuteAliasTarget;
-}) => [`${target.number}/${target.year} Sb.`, alias];
+}) => [`${target.number}/${target.year} Sb.`, alias, declined];
 const documents = [
   withdrawn,
   restricted,
@@ -250,6 +258,7 @@ beforeAll(
     );
     for (const query of queriesFor({
       alias: "TrZ",
+      declined: "trestního zákoníku",
       target: STATUTE_ALIASES.cze.trz,
     })) {
       // db-await-in-loop: capture each real query's names before permission changes.
@@ -348,7 +357,13 @@ describe("unscanned named acts obey current public eligibility", () => {
     },
   );
 
-  test.each(queriesFor({ alias: "TrZ", target: STATUTE_ALIASES.cze.trz }))(
+  test.each(
+    queriesFor({
+      alias: "TrZ",
+      declined: "trestního zákoníku",
+      target: STATUTE_ALIASES.cze.trz,
+    }),
+  )(
     "permission revoked after names were read excludes the cached pin for %s",
     async (query) => {
       const namedWorks =

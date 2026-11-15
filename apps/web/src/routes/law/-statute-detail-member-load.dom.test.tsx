@@ -3,8 +3,9 @@ import { panic } from "better-result";
 import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const STATUTE_PATH = "/law/cz/statutes/synthetic-statute";
 

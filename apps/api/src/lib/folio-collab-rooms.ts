@@ -3,6 +3,10 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { FolioCollabSnapshotLoadResponse } from "@stll/api-contract/folio-collab";
+import {
+  WORKSPACE_STATUS,
+  workspaceAcceptsWrites,
+} from "@stll/api-contract/workspace-status";
 import { roles } from "@stll/permissions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -401,7 +405,7 @@ export const decideFolioCollabRoomAuthorization = ({
     return { status: "generation-conflict" };
   }
 
-  if (workspaceStatus !== "active") {
+  if (!workspaceAcceptsWrites(workspaceStatus)) {
     return { status: "workspace-access-revoked" };
   }
 
@@ -580,7 +584,7 @@ export const touchFolioCollabRoom = async (
       .where(eq(workspaces.id, value.workspaceId))
       .limit(1)
       .for("update");
-    if (workspaceRows.at(0)?.status !== "active") {
+    if (!workspaceAcceptsWrites(workspaceRows.at(0)?.status)) {
       return {
         status: "workspace-inactive",
       } satisfies TouchFolioCollabRoomResult;
@@ -859,7 +863,7 @@ export const loadFolioCollabSnapshot = async (
           and(
             eq(workspaces.id, folioCollabRooms.workspaceId),
             eq(workspaces.organizationId, value.organizationId),
-            eq(workspaces.status, "active"),
+            eq(workspaces.status, WORKSPACE_STATUS.active),
           ),
         )
         .innerJoin(
@@ -1226,7 +1230,7 @@ export const storeFolioCollabSnapshot = async ({
               })
               .from(workspaces),
         });
-        if (workspaceRows.at(0)?.status !== "active") {
+        if (!workspaceAcceptsWrites(workspaceRows.at(0)?.status)) {
           return { status: "workspace-inactive" } as const;
         }
 
@@ -1423,7 +1427,7 @@ export const acknowledgeFolioCollabSeed = async ({
           ),
     });
     const room = rooms.at(0);
-    if (!room || room.workspaceStatus !== "active") {
+    if (!room || !workspaceAcceptsWrites(room.workspaceStatus)) {
       return { status: "access-revoked" } as const;
     }
     if (

@@ -44,6 +44,14 @@ export const REVIEW_PARTIES_MAX = 8;
 // document reads as if the other half were compliant.
 export type ReviewSkippedTerm = { subject: string; reason: ReviewSkipReason };
 
+/** What one source lost to a model's request budget. Sizes only, never text. */
+export type ReviewWithheldSource = {
+  fileFieldId: string;
+  passagesCut: number;
+  charactersWithheld: number;
+  charactersTotal: number;
+};
+
 /**
  * Why a subject was read and not compared.
  *

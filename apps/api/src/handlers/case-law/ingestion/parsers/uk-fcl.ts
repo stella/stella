@@ -329,6 +329,13 @@ const blocksOf = ({ root, role, allocateId }: BlocksOptions) => {
   return blocks;
 };
 
+/**
+ * The work date that dates the decision, named after the document's kind: a
+ * court's judgment carries `judgment`, a tribunal's decision `decision`.
+ * The other dates (`transform`, `tna-enriched`) are the archive's own.
+ */
+const DECISION_DATE_NAMES = ["judgment", "decision"] as const;
+
 const judgmentPartRole = (part: slimdom.Element) => {
   if (part.namespaceURI !== AKN) {
     return undefined;
@@ -402,9 +409,11 @@ export const parseUkFclDecision = ({
     ?.textContent?.trim();
   const work = elements(judgment, "FRBRWork").at(0);
   const dates = work === undefined ? [] : elements(work, "FRBRdate");
-  const decisionDate = dates
-    .find((date) => date.getAttribute("name") === "judgment")
-    ?.getAttribute("date");
+  const decisionDate = DECISION_DATE_NAMES.map((name) =>
+    dates
+      .find((date) => date.getAttribute("name") === name)
+      ?.getAttribute("date"),
+  ).find((date) => typeof date === "string");
   if (
     body === undefined ||
     !decisionType ||

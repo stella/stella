@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   assertNever,
@@ -165,7 +165,8 @@ const authoredMarker = fc.oneof(
 
 describe("marker round-trip", () => {
   test("every authored directive scans back to its own metadata", () => {
-    fc.assert(
+    assertProperty(
+      "every authored directive scans back to its own metadata",
       fc.property(authoredMarker, ({ meta, text }) => {
         const [scanned, ...rest] = scanMarkers(text);
         expect(rest).toEqual([]);
@@ -174,12 +175,13 @@ describe("marker round-trip", () => {
           scanned?.raw ?? "",
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("a document of authored markers scans them all, in order", () => {
-    fc.assert(
+    assertProperty(
+      "a document of authored markers scans them all, in order",
       fc.property(
         fc.array(authoredMarker, { minLength: 1, maxLength: 8 }),
         (markers) => {
@@ -190,7 +192,7 @@ describe("marker round-trip", () => {
           expect(scanInvalidMarkers(text)).toEqual([]);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -231,7 +233,8 @@ describe("scanner robustness", () => {
     .map((parts) => parts.join(""));
 
   test("no input throws, and every span lands in exactly one scan", () => {
-    fc.assert(
+    assertProperty(
+      "no input throws, and every span lands in exactly one scan",
       fc.property(braceSoup, (text) => {
         const recognized = scanMarkers(text);
         const invalid = scanInvalidMarkers(text);
@@ -247,7 +250,7 @@ describe("scanner robustness", () => {
           classifyMarkerDefect(inner, form);
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

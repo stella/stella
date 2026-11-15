@@ -4,7 +4,10 @@ import type {
 } from "@modelcontextprotocol/server";
 import type * as v from "valibot";
 
-import type { SearchPaginationOutcome } from "@stll/api-contract/search";
+import type {
+  SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+  SearchPaginationOutcome,
+} from "@stll/api-contract/search";
 
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
@@ -318,6 +321,7 @@ const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
   "stella:admin_write": "admin_write",
   "stella:account_export_read": null,
   "stella:account_export_write": null,
+  "stella:organization_create": "organization_create",
   "stella:feedback": "feedback",
   "stella:skills": null,
   "stella:external_mcps": null,
@@ -570,7 +574,9 @@ export type InternalToolResult<TData = unknown> =
 export type McpEgressPlan<TPayload = unknown> =
   | {
       egress: "compatSearch";
-      paginationOutcome?: SearchPaginationOutcome;
+      paginationOutcome?:
+        | SearchPaginationOutcome
+        | typeof SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
       nextCursor: string | null | undefined;
       results: readonly McpCompatSearchResult[];
     }

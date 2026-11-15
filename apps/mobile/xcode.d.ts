@@ -1,6 +1,6 @@
 // `xcode` ships no types, and `expo/config-plugins` types its Xcode project
-// helpers with it. These name what this app's config plugins read; the rest
-// stays opaque.
+// helpers with it. These name what this app's config plugins read and call;
+// the rest stays opaque.
 declare module "xcode" {
   export type UUID = string;
 
@@ -21,5 +21,44 @@ declare module "xcode" {
 
   export class XcodeProject {
     private constructor();
+
+    /** The parsed project; `objects` holds each section by its isa. */
+    hash: {
+      project: {
+        objects: Record<string, Record<string, unknown> | undefined>;
+      };
+    };
+
+    getFirstProject(): { firstProject: { mainGroup: UUID } };
+
+    /** A group of `files`, each referenced by its name under `path`. */
+    addPbxGroup(
+      files: readonly string[],
+      name: string,
+      path: string,
+    ): { uuid: UUID };
+
+    addToPbxGroup(group: UUID, parent: UUID): void;
+
+    /**
+     * A native target with Debug and Release configurations; an app
+     * extension is also embedded in the first target and made its dependency.
+     */
+    addTarget(
+      name: string,
+      type: "app_extension",
+      subfolder: string,
+      bundleId: string,
+    ): { uuid: UUID; pbxNativeTarget: PBXNativeTarget };
+
+    addBuildPhase(
+      files: readonly string[],
+      type:
+        | "PBXSourcesBuildPhase"
+        | "PBXResourcesBuildPhase"
+        | "PBXFrameworksBuildPhase",
+      comment: string,
+      target: UUID,
+    ): unknown;
   }
 }

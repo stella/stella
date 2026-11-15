@@ -10,7 +10,11 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/provenance";
+import { readOrganizationDataBoxIds } from "@/api/lib/email/correspondence/data-box/organization-boxes";
+import {
+  readCorrespondenceChannel,
+  readCorrespondenceProvenance,
+} from "@/api/lib/email/correspondence/provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const HANDLING_STATE_SCHEMA_VALUES = [
@@ -148,6 +152,11 @@ const updateCorrespondence = createSafeHandler(
             },
           });
         }
+        const organizationBoxIds =
+          record.channel === "data_box"
+            ? await readOrganizationDataBoxIds(tx, session.activeOrganizationId)
+            : [];
+        const channel = readCorrespondenceChannel(record, organizationBoxIds);
         const {
           source,
           sourceEntityId,
@@ -168,6 +177,7 @@ const updateCorrespondence = createSafeHandler(
           type: "ok" as const,
           record: {
             ...publicRecord,
+            ...channel,
             ...readCorrespondenceProvenance({
               source,
               sourceEntityId,

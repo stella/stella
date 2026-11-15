@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { load } from "cheerio";
 import path from "node:path";
+
+import { load } from "@stll/html";
 
 import {
   inspectMcpAppDocument,

@@ -46,15 +46,15 @@ export const tokenUsageFromTerminalChunk = (
     ...leftoverUsage
   } = leftover ?? {};
   const promptTokensDetails = nonEmptyDetails({
-    ...(spec?.cachedInputTokens === undefined
-      ? {}
-      : { cachedTokens: spec.cachedInputTokens }),
+    ...(spec?.cachedInputTokens !== undefined
+      ? { cachedTokens: spec.cachedInputTokens }
+      : {}),
     ...leftoverPromptDetails,
   });
   const completionTokensDetails = nonEmptyDetails({
-    ...(spec?.reasoningTokens === undefined
-      ? {}
-      : { reasoningTokens: spec.reasoningTokens }),
+    ...(spec?.reasoningTokens !== undefined
+      ? { reasoningTokens: spec.reasoningTokens }
+      : {}),
     ...leftoverCompletionDetails,
   });
 
@@ -76,8 +76,6 @@ const SAFE_USAGE_SCALAR_KEYS = {
   promptTokens: true,
   completionTokens: true,
   totalTokens: true,
-  durationSeconds: true,
-  unitsBilled: true,
   cost: true,
 } as const satisfies Record<
   Exclude<
@@ -152,6 +150,8 @@ const PROMPT_TOKENS_DETAIL_KEYS = {
   audioTokens: true,
   cachedTokens: true,
   cacheWriteTokens: true,
+  // A subset of cacheWriteTokens, retained as detail rather than added to it.
+  cacheWrite1hTokens: true,
   documentTokens: true,
   imageTokens: true,
   textTokens: true,
@@ -214,14 +214,7 @@ const addBilled = (
     : step;
 };
 
-/**
- * The SDK's deprecated `durationSeconds` and `unitsBilled` restate `billed`
- * without its unit; a summed run carries `billed` alone.
- */
-type SummedTokenUsageField = Exclude<
-  keyof TokenUsage,
-  "durationSeconds" | "unitsBilled"
->;
+type SummedTokenUsageField = keyof TokenUsage;
 
 /**
  * How each `TokenUsage` field combines across the steps of one run. Total over

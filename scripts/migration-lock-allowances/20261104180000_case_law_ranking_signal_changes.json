@@ -1,0 +1,5 @@
+{
+  "row-level-security": "ENABLE and FORCE RLS apply to the ranking-signal change table created empty in the same migration, before any trigger writes it, under 1s lock_timeout and 30s statement_timeout.",
+  "create-policy": "The two policies apply to the ranking-signal change table created empty in the same migration, before any trigger writes it, under 1s lock_timeout.",
+  "create-trigger": "Installing the row-level ranking-signal change triggers on case_law_decisions is a catalog-only change without a row scan; each SHARE ROW EXCLUSIVE acquisition is bounded by 1s lock_timeout, and a lost lock wait rolls the migration back for the runner's lock-retry ladder to apply again."
+}

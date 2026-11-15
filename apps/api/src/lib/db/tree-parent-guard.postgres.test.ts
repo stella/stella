@@ -26,6 +26,7 @@ import { getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -176,9 +177,7 @@ const createScope = async (db: GatedTestDb): Promise<Scope> => {
 };
 
 const dropScope = async (db: GatedTestDb, scope: Scope) =>
-  await db
-    .delete(organization)
-    .where(eq(organization.id, scope.organizationId));
+  await deleteOrganizationsForTest(db, [scope.organizationId]);
 
 /** Every chain ends at a root; a stored loop fails here. */
 const expectAcyclic = (parents: ReadonlyMap<string, string | null>) => {
@@ -278,7 +277,9 @@ if (!databaseUrl || !runPostgresTests) {
     test("every self-referencing foreign key in the database is a guarded tree or an exemption", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
-        expect(unguarded(await db.execute(selfReferenceQuery))).toEqual([]);
+        expect(
+          unguarded(await db.execute(selfReferenceQuery, "objects")),
+        ).toEqual([]);
       });
     });
 
@@ -294,7 +295,7 @@ if (!databaseUrl || !runPostgresTests) {
                 id uuid PRIMARY KEY,
                 parent_id uuid REFERENCES public.tree_guard_scan_fixture (id)
               )`);
-            found = unguarded(await tx.execute(selfReferenceQuery));
+            found = unguarded(await tx.execute(selfReferenceQuery, "objects"));
             tx.rollback();
           }),
         );
@@ -307,7 +308,8 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         for (const guard of Object.values(TREE_PARENT_GUARDS)) {
-          const rows = await db.execute(sql`
+          const rows = await db.execute(
+            sql`
             SELECT t.tgenabled::text AS enabled,
                    t.tgnargs AS nargs,
                    encode(t.tgargs, 'escape') AS args,
@@ -317,7 +319,9 @@ if (!databaseUrl || !runPostgresTests) {
               JOIN pg_class c ON c.oid = t.tgrelid
               JOIN pg_proc p ON p.oid = t.tgfoid
              WHERE c.relname = ${guard.table}
-               AND t.tgname = ${guard.constraint}`);
+               AND t.tgname = ${guard.constraint}`,
+            "objects",
+          );
           const row = rows.at(0);
           expect({ table: guard.table, found: row !== undefined }).toEqual({
             table: guard.table,
@@ -880,7 +884,7 @@ if (!databaseUrl || !runPostgresTests) {
           ) {
             return await target.execute(sql`SELECT 1`);
           }
-          const result = await target.execute(query);
+          const result = await target.execute(query, "objects");
           if (text.includes("WITH RECURSIVE")) {
             await instrument.afterCycleCheck?.();
           }

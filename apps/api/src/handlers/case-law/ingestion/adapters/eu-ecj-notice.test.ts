@@ -9,15 +9,15 @@
 
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
-import type { Element } from "domhandler";
-import JSZip from "jszip";
 
 import {
   CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
   caseLawSourceLanguagesOf,
 } from "@stll/api-contract/case-law-source-languages";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { Element } from "@stll/html/nodes";
 import type { DocumentStageObservation } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { Transaction } from "@/api/db/root";
@@ -35,6 +35,7 @@ import {
   ecjRawParts,
   euEcjAdapter,
   fetchNotice,
+  readEcjFormexArchive,
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
@@ -73,7 +74,10 @@ import {
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const CELEX = "62022CJ0128";
 const EXPRESSION = "cc021804-9350-11ee-8aa6-01aa75ed71a1.0011";
@@ -99,6 +103,10 @@ const formexEn = await gunzipText(
     import.meta.url,
   ),
 );
+
+const formexOriginalZip = await Bun.file(
+  new URL("__fixtures__/eu-ecj-62022CJ0128.en.formex.zip", import.meta.url),
+).arrayBuffer();
 
 const binding = {
   ecli: { type: "literal", value: "ECLI:EU:C:2023:951" },
@@ -161,31 +169,34 @@ const decisionFrom = async (notice: string | undefined) => {
 };
 
 describe("notice publication outcomes", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
   beforeEach(() => {
     Bun.sleep = async () => {};
   });
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
   test("a 500 notice rejects the item and a later attempt can build it", async () => {
     let noticeRequests = 0;
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      if (
-        (input instanceof Request ? input.url : String(input)).includes(
-          "/resource/celex/",
-        )
-      ) {
-        noticeRequests += 1;
-        return new Response(null, { status: noticeRequests === 1 ? 500 : 404 });
-      }
-      return new Response(documentEn, {
-        headers: { "Content-Type": "application/xhtml+xml" },
-      });
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        if (
+          (input instanceof Request ? input.url : String(input)).includes(
+            "/resource/celex/",
+          )
+        ) {
+          noticeRequests += 1;
+          return new Response(null, {
+            status: noticeRequests === 1 ? 500 : 404,
+          });
+        }
+        return new Response(documentEn, {
+          headers: { "Content-Type": "application/xhtml+xml" },
+        });
+      }),
+    );
 
     const initial = await Result.tryPromise({
       try: async () => buildDecision(binding, AbortSignal.timeout(5000)),
@@ -248,17 +259,19 @@ describe("notice publication outcomes", () => {
     "a notice refusal %s retains the row and a later publication changes its hash",
     async (status) => {
       let noticeStatus: number = status;
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = input instanceof Request ? input.url : String(input);
-        if (url.includes("/resource/celex/")) {
-          return new Response(noticeStatus === 200 ? noticeEn : null, {
-            status: noticeStatus,
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.includes("/resource/celex/")) {
+            return new Response(noticeStatus === 200 ? noticeEn : null, {
+              status: noticeStatus,
+            });
+          }
+          return new Response(documentEn, {
+            headers: { "Content-Type": "application/xhtml+xml" },
           });
-        }
-        return new Response(documentEn, {
-          headers: { "Content-Type": "application/xhtml+xml" },
-        });
-      });
+        }),
+      );
       const refused = await buildDecision(binding, AbortSignal.timeout(5000));
       expect(refused?.fulltext?.length).toBeGreaterThan(100);
       expect(refused?.judges).toBeUndefined();
@@ -288,23 +301,25 @@ describe("notice publication outcomes", () => {
     "a Formex HTTP %s permits only terminal reads and later content changes the hash",
     async (status) => {
       let formexStatus: number = status;
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = input instanceof Request ? input.url : String(input);
-        if (url.includes("/resource/celex/")) {
-          return new Response(noticeEn, {
-            headers: { "Content-Type": "application/xml" },
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.includes("/resource/celex/")) {
+            return new Response(noticeEn, {
+              headers: { "Content-Type": "application/xml" },
+            });
+          }
+          if (url.endsWith("/DOC_1")) {
+            return new Response(formexStatus === 200 ? formexEn : null, {
+              status: formexStatus,
+              headers: { "Content-Type": "application/xml" },
+            });
+          }
+          return new Response(documentEn, {
+            headers: { "Content-Type": "application/xhtml+xml" },
           });
-        }
-        if (url.endsWith("/DOC_1")) {
-          return new Response(formexStatus === 200 ? formexEn : null, {
-            status: formexStatus,
-            headers: { "Content-Type": "application/xml" },
-          });
-        }
-        return new Response(documentEn, {
-          headers: { "Content-Type": "application/xhtml+xml" },
-        });
-      });
+        }),
+      );
       const initial = buildDecision(binding, AbortSignal.timeout(5000));
       if ([408, 429, 500, 503].includes(status)) {
         const outcome = await Result.tryPromise({
@@ -393,24 +408,26 @@ describe("notice publication outcomes", () => {
     "a refused %s observation preserves complete metadata and raw; complete reads enrich earlier refusals",
     async (refusedPart) => {
       let status = 200;
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = input instanceof Request ? input.url : String(input);
-        if (url.includes("/resource/celex/")) {
-          const noticeStatus = refusedPart === "notice" ? status : 200;
-          return new Response(noticeStatus === 200 ? noticeEn : null, {
-            status: noticeStatus,
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.includes("/resource/celex/")) {
+            const noticeStatus = refusedPart === "notice" ? status : 200;
+            return new Response(noticeStatus === 200 ? noticeEn : null, {
+              status: noticeStatus,
+            });
+          }
+          if (url.endsWith("/DOC_1")) {
+            const formexStatus = refusedPart === "formex" ? status : 200;
+            return new Response(formexStatus === 200 ? formexEn : null, {
+              status: formexStatus,
+            });
+          }
+          return new Response(documentEn, {
+            headers: { "Content-Type": "application/xhtml+xml" },
           });
-        }
-        if (url.endsWith("/DOC_1")) {
-          const formexStatus = refusedPart === "formex" ? status : 200;
-          return new Response(formexStatus === 200 ? formexEn : null, {
-            status: formexStatus,
-          });
-        }
-        return new Response(documentEn, {
-          headers: { "Content-Type": "application/xhtml+xml" },
-        });
-      });
+        }),
+      );
       const read = async () => {
         const result = await buildDecision(binding, AbortSignal.timeout(5000));
         if (result === undefined) {
@@ -465,6 +482,11 @@ describe("notice publication outcomes", () => {
           metadata: refused.metadata,
           sourceDescriptor: null,
           provisionKeys: [],
+          rankingSignals: {
+            citationAuthorityBucket: 0,
+            languageGroupKey: null,
+            languageGroupShared: false,
+          },
           vacatedFrom: null,
         }),
       );
@@ -717,7 +739,7 @@ describe("the branch notice is read per expression", () => {
   });
 
   test("retains every repeated work and expression value in source order", () => {
-    const $ = cheerio.load(noticeEn, { xml: true });
+    const $ = load(noticeEn, { xml: true });
     const work = $("NOTICE > WORK").first();
     const expression = $("NOTICE > EXPRESSION").first();
     const dossierEvent = work
@@ -858,7 +880,7 @@ describe("stored Formex refresh", () => {
     expect(outcome.decision.fulltext).not.toBe("");
   });
 
-  test("a successful Formex refresh removes an earlier refusal marker", async () => {
+  test("a successful Formex refresh preserves prior refusal provenance without marking the recovered document incomplete", async () => {
     const outcome = await refreshEcjStoredFormex({
       stored: refreshStored({
         ...ecjRawParts({
@@ -877,14 +899,14 @@ describe("stored Formex refresh", () => {
     }
     const parts = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
     expect(parts?.["formex"]).toBe(formexEn);
-    expect(parts?.["formex-state"]).toBeUndefined();
+    expect(parts?.["formex-state"]).toBe("formex:refused:403");
     expect(outcome.decision.observationDetail).toBe("complete");
   });
 
   test("stores a fetched ZIP as the adapter's Formex archive shape", async () => {
-    const archive = new JSZip();
-    writeZipEntry(archive, "FORMEX/main.xml", "<new-formex />");
-    const bytes = await archive.generateAsync({ type: "uint8array" });
+    const archive = new ZipArchive();
+    archive.set("FORMEX/main.xml", "<new-formex />");
+    const bytes = await archive.generate({ compression: "store" });
     const outcome = await refreshEcjStoredFormex({
       stored: refreshStored({
         ...ecjRawParts({
@@ -906,6 +928,9 @@ describe("stored Formex refresh", () => {
     expect(outcome.bytes).toBeGreaterThan(0);
     const after = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
     expect(after?.["formex"]?.startsWith("formex-archive:")).toBe(true);
+    expect(Buffer.from(after?.["formex-original-zip"] ?? "", "base64")).toEqual(
+      Buffer.from(bytes),
+    );
   });
 
   test("rejects a refreshed decision whose source identity differs from the stored row", async () => {
@@ -946,7 +971,7 @@ describe("stored Formex refresh", () => {
       }),
     ).toEqual({ type: "notice-missing" });
 
-    const $notice = cheerio.load(noticeEn, { xml: true });
+    const $notice = load(noticeEn, { xml: true });
     $notice("NOTICE > MANIFESTATION").remove();
     expect(
       await refreshEcjStoredFormex({
@@ -1019,9 +1044,7 @@ describe("stored Formex refresh", () => {
   });
 
   test("treats a stored archive as current without contacting Cellar", async () => {
-    const currentFormex = `formex-archive:${encodeSourceRawEnvelope({
-      "FORMEX/main.xml": Buffer.from("<current-formex />").toBase64(),
-    })}`;
+    const currentFormex = await readEcjFormexArchive(formexOriginalZip);
 
     const outcome = await refreshEcjStoredFormex({
       stored: refreshStored({
@@ -1030,6 +1053,7 @@ describe("stored Formex refresh", () => {
           html: documentEn,
           notice: undefined,
           formex: currentFormex,
+          formexOriginalZip: Buffer.from(formexOriginalZip).toBase64(),
         }),
       }),
       signal,
@@ -1037,6 +1061,112 @@ describe("stored Formex refresh", () => {
         await Promise.reject(new Error("current row must not fetch")),
     });
     expect(outcome).toEqual({ type: "unchanged-already-current" });
+  });
+});
+
+describe("original Formex ZIP retention", () => {
+  test("retains the publisher archive byte for byte through capture and replay", async () => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("/resource/celex/")) {
+          return new Response(noticeEn, {
+            headers: { "content-type": "application/xml" },
+          });
+        }
+        return url.endsWith("/DOC_1")
+          ? new Response(formexOriginalZip, {
+              headers: { "content-type": "application/zip" },
+            })
+          : new Response(documentEn, {
+              headers: { "content-type": "application/xhtml+xml" },
+            });
+      }),
+    );
+    const crawled = await buildDecision(binding, AbortSignal.timeout(5000));
+    expect(crawled).toBeDefined();
+    if (crawled === undefined) {
+      return;
+    }
+    const parts = decodeSourceRawEnvelope(crawled.sourceRaw ?? "");
+    expect(Buffer.from(parts?.["formex-original-zip"] ?? "", "base64")).toEqual(
+      Buffer.from(formexOriginalZip),
+    );
+    const replayed = await reparse(storedFrom(crawled.sourceRaw ?? ""));
+    expect(replayed.type).toBe("parsed");
+    if (replayed.type === "parsed") {
+      expect(replayed.result.sourceRaw).toBe(crawled.sourceRaw);
+      expect(replayed.result.rawHash).toBe(crawled.rawHash);
+    }
+  });
+
+  test("container-only archive changes cannot be deduplicated as unchanged", async () => {
+    // The member projection loses how the archive was packed, so it cannot
+    // identify the original response.
+    const archive = new ZipArchive();
+    archive.set("FORMEX/main.xml", formexEn);
+    const originalZip = (await archive.generate({ compression: "store" }))
+      .buffer;
+    const changedZip = (await archive.generate({ compression: "deflate" }))
+      .buffer;
+    const formex = await readEcjFormexArchive(originalZip);
+    expect(await readEcjFormexArchive(changedZip)).toBe(formex);
+    const results = await Promise.all(
+      [undefined, originalZip, changedZip, originalZip].map(
+        async (zip) =>
+          await reparse(
+            storedFrom(
+              encodeSourceRawEnvelope(
+                ecjRawParts({
+                  binding,
+                  html: documentEn,
+                  notice: noticeEn,
+                  formex,
+                  formexOriginalZip:
+                    zip === undefined ? undefined : Buffer.from(zip).toBase64(),
+                }),
+              ),
+            ),
+          ),
+      ),
+    );
+    const hashes = results.map((result) => {
+      expect(result.type).toBe("parsed");
+      if (result.type !== "parsed") {
+        throw new TypeError(`Expected parsed, got ${result.type}`);
+      }
+      return result.result.rawHash;
+    });
+    expect(new Set(hashes).size).toBe(3);
+    expect(hashes.at(1)).toBe(hashes.at(3));
+  });
+
+  test("refreshes a normalized-only archive to retain the publisher ZIP", async () => {
+    const formex = await readEcjFormexArchive(formexOriginalZip);
+    const old = storedFrom(
+      encodeSourceRawEnvelope(
+        ecjRawParts({ binding, html: documentEn, notice: noticeEn, formex }),
+      ),
+    );
+    const before = await reparse(old);
+    const refreshed = await refreshEcjStoredFormex({
+      stored: old,
+      signal: AbortSignal.timeout(5000),
+      fetchFormex: async () =>
+        new Response(formexOriginalZip, {
+          headers: { "content-type": "application/zip" },
+        }),
+    });
+    expect(refreshed.type).toBe("refreshed");
+    if (refreshed.type !== "refreshed" || before.type !== "parsed") {
+      return;
+    }
+    const parts = decodeSourceRawEnvelope(refreshed.decision.sourceRaw ?? "");
+    expect(parts?.["formex"]).toBe(formex);
+    expect(Buffer.from(parts?.["formex-original-zip"] ?? "", "base64")).toEqual(
+      Buffer.from(formexOriginalZip),
+    );
+    expect(refreshed.decision.rawHash).not.toBe(before.result.rawHash);
   });
 });
 
@@ -1325,7 +1455,7 @@ for (const candidate of [
   "mailto:publisher@example.org",
 ]) {
   test(`notice manifestation URI provenance: ${candidate}`, async () => {
-    const $ = cheerio.load(noticeEn, { xml: true });
+    const $ = load(noticeEn, { xml: true });
     const manifestations = $("NOTICE > MANIFESTATION");
     expect(manifestations.length).toBeGreaterThan(0);
     manifestations.each((_, element) => {

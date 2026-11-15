@@ -221,7 +221,7 @@ const capturingExport = () => {
 
 const writtenText = (data: unknown): string => {
   if (!(data instanceof Uint8Array)) {
-    throw new Error("the export stored no bytes");
+    throw new TypeError("the export stored no bytes");
   }
   return new TextDecoder().decode(data);
 };

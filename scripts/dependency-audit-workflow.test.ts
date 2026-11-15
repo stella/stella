@@ -95,7 +95,7 @@ test("full audits run on main and every six hours with one stable remediation id
   expect(auditWorkflow.on.schedule).toEqual([{ cron: "0 */6 * * *" }]);
   const remediation = step(auditWorkflow, "remediate", "Prepare remediation");
   expect(auditWorkflow.jobs["remediate"]?.if).toBe(
-    "always() && github.event_name != 'pull_request' && (needs.audit.outputs.advisory_failure == 'true' || needs.audit.outputs.stale_acceptance == 'true')",
+    "always() && (needs.audit.outputs.advisory_failure == 'true' || needs.audit.outputs.stale_acceptance == 'true')",
   );
   expect(auditWorkflow.jobs["audit"]?.outputs?.["stale_acceptance"]).toContain(
     "steps.full-audit.outputs.stale_acceptance || 'false'",

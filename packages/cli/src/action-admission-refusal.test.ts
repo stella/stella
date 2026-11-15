@@ -8,6 +8,7 @@ import {
   readCliActionAdmissionRefusal,
   readHttpActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
+import { resolveEffectiveGrants } from "./auth/command-scopes.js";
 import { checkServerCompatibility } from "./compatibility.js";
 import type { Context } from "./context.js";
 import {
@@ -75,6 +76,7 @@ const render = async (
       configDir: "/tmp/stella-refusal",
       serverUrl: undefined,
       token: undefined,
+      effectiveGrants: resolveEffectiveGrants({}),
     },
     {
       stderr: (text) => {
@@ -135,7 +137,12 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
     ).toEqual(refusal);
     expect(resolveMcpErrorCodeExit(code)).toBe(EXPECTED_EXITS[refusal.code]);
     const tool = await render((context, writers) =>
-      renderToolError({ context, writers, result: toolResult }),
+      renderToolError({
+        context,
+        command: "matter list",
+        writers,
+        result: toolResult,
+      }),
     );
     expect(tool).toEqual({
       stderr: expected,
@@ -143,7 +150,13 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
       exit: EXPECTED_EXITS[refusal.code],
     });
     const toolJson = await render((context, writers) =>
-      renderToolError({ context, writers, result: toolResult, format: "json" }),
+      renderToolError({
+        context,
+        command: "matter list",
+        writers,
+        result: toolResult,
+        format: "json",
+      }),
     );
     expect(JSON.parse(toolJson.stderr)).toEqual({ error: refusal });
     expect(toolJson.stdout).toBe("");
@@ -221,6 +234,7 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
         async (context, writers) =>
           await streamOrRenderAllPages({
             context,
+            command: "matter list",
             writers,
             format: "json",
             textPath: undefined,

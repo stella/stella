@@ -13,7 +13,7 @@ import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 
-import { REPLAY_HEALTH_CONFIG } from "./replay-enrolment";
+import { replayHealthConfig } from "./replay-enrolment";
 import {
   classifyReplayFailure,
   type ReplayFailure,
@@ -339,7 +339,7 @@ const runReplayBatch = async ({
     failure = classifyReplayFailure(attempt.error);
   } else if (
     failure === null &&
-    (rowErrors > 0 || replayed?.haltReason !== null)
+    (rowErrors > 0 || (replayed !== null && replayed.haltReason !== null))
   ) {
     failure = replayFailure("writer-retryable");
   }
@@ -597,7 +597,7 @@ export const runBackgroundReplayTick = async ({
   dependencies,
   maxRows,
   maxDurationMs,
-  healthConfig = REPLAY_HEALTH_CONFIG,
+  healthConfig = replayHealthConfig(),
   signal,
 }: BackgroundReplayTickOptions): Promise<BackgroundReplayTickReport> => {
   if (
@@ -678,8 +678,8 @@ export const runBackgroundReplayTick = async ({
 
   const held = await dependencies.loadGateState(source);
   if (
-    held?.holdUntil !== null &&
-    held?.holdUntil !== undefined &&
+    held !== null &&
+    held.holdUntil !== null &&
     dependencies.now() < held.holdUntil
   ) {
     report.heldTooLong = isHeldTooLong(held, dependencies.now(), healthConfig);

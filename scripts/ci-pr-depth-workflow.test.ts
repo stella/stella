@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { prDepthJobs, prHeavyJobs, QUICK_GATED_CLAUSE } from "./ci-pr-jobs";
 import { evaluate } from "./github-expression";
 
@@ -240,7 +241,7 @@ const checkoutRef = (job: string) => {
         step,
       ),
     )
-    .find(({ uses }) => uses?.startsWith("actions/checkout@"));
+    .find(({ uses }) => isRepositoryCheckoutAction(uses));
   return checkout?.with?.["ref"] ?? null;
 };
 

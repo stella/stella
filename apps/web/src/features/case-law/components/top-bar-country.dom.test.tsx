@@ -8,9 +8,10 @@ import {
 } from "@tanstack/react-router";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import en from "@/i18n/langs/en.json";
 import { searchSchema } from "@/routes/law/cases/-case-law-search-schema";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, fireEvent, render, screen, waitFor } =

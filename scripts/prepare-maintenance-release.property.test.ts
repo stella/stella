@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { createTestState } from "@stll/test-state";
 
 import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdown";
@@ -31,8 +31,10 @@ import {
   readPendingChangesets,
   readPreviousRelease,
   readReleaseManifest,
+  type ReceiptCoverage,
+  type ReceiptCoverageReader,
+  receiptCoverageReader,
   refreshMaintenanceReleaseFiles,
-  refreshUnpromotedReleases,
   resolveGitHubToken,
   withFileRollback,
 } from "./prepare-maintenance-release";
@@ -62,22 +64,6 @@ const PUBLISHED = {
   publishedAt: "2026-02-03T04:05:06Z",
 } as const;
 const UNPROMOTED = { kind: "unpromoted" } as const;
-
-const failingRead = async (): Promise<typeof UNPROMOTED> => {
-  throw new MaintenanceReleaseError("GitHub is unreachable");
-};
-
-/** What the refresh rejects with; null when it completes. */
-const refreshFailure = async (
-  options: Parameters<typeof refreshUnpromotedReleases>[0],
-): Promise<unknown> => {
-  try {
-    await refreshUnpromotedReleases(options);
-  } catch (error) {
-    return error;
-  }
-  return null;
-};
 
 const failureMessage = async (tag: string): Promise<string> => {
   let previous: unknown;
@@ -219,7 +205,8 @@ describe("the token the GitHub reads are made with", () => {
   });
 
   test("changes GITHUB_TOKEN alone, whatever the parent environment holds", () => {
-    fc.assert(
+    assertProperty(
+      "changes GITHUB_TOKEN alone, whatever the parent environment holds",
       fc.property(
         fc.dictionary(fc.stringMatching(/^[A-Z][A-Z_]{0,7}$/u), fc.string()),
         fc.option(fc.string({ minLength: 1 }), { nil: null }),
@@ -237,7 +224,7 @@ describe("the token the GitHub reads are made with", () => {
           expect(child["GITHUB_TOKEN"]).toBe(token ?? parent["GITHUB_TOKEN"]);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -690,7 +677,8 @@ describe("pending changesets folded into the release", () => {
 
 describe("maintenance release preparation", () => {
   test("increments every safe stable patch version without changing its series", () => {
-    fc.assert(
+    assertProperty(
+      "increments every safe stable patch version without changing its series",
       fc.property(
         fc.nat({ max: 1_000_000 }),
         fc.nat({ max: 1_000_000 }),
@@ -707,7 +695,7 @@ describe("maintenance release preparation", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
@@ -882,78 +870,26 @@ describe("maintenance release preparation", () => {
     expect(readReleaseDates(root)).toEqual({ "v1.2.3": PUBLISHED.publishedAt });
   });
 
-  test("an unpromoted record GitHub now dates is refreshed, one still unpublished stays null", async () => {
-    const dates = {
-      "v1.2.0": "2026-01-01T00:00:00Z",
-      "v1.2.1": null,
-      "v1.2.2": null,
-      "v1.2.3": null,
-    };
-    const asked: string[] = [];
-    const refreshed = await refreshUnpromotedReleases({
-      cutVersion: "1.2.4",
-      dates,
-      previousTag: "v1.2.3",
-      readRelease: async (tag) => {
-        asked.push(tag);
-        return tag === "v1.2.2" ? PUBLISHED : UNPROMOTED;
-      },
-    });
-    // The previous final is read by the cut itself, never twice.
-    expect(asked).toEqual(["v1.2.1", "v1.2.2"]);
-    expect(refreshed).toEqual({ "v1.2.2": PUBLISHED.publishedAt });
-    expect(
-      projectReleaseDates({
-        dates,
-        previousRelease: UNPROMOTED,
-        previousTag: "v1.2.3",
-        refreshed,
-      }),
-    ).toEqual({
-      "v1.2.0": "2026-01-01T00:00:00Z",
-      "v1.2.1": null,
-      "v1.2.2": PUBLISHED.publishedAt,
-      "v1.2.3": null,
-    });
-  });
-
-  test("the manifest note never reaches the unpromoted refresh and survives the rewrite", async () => {
+  test("a recorded never-promoted release stays null even when GitHub shows it published", () => {
     const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
     roots.push(root);
-    releaseFixture(
-      root,
-      `${JSON.stringify(
-        {
-          _note: "Publication timestamps, keyed by tag.",
-          "v1.2.1": "2026-01-01T00:00:00Z",
-          "v1.2.2": null,
-        },
-        null,
-        2,
-      )}\n`,
-    );
-
-    const manifest = readReleaseManifest(root);
-    expect(manifest).toEqual({
-      note: "Publication timestamps, keyed by tag.",
-      releases: { "v1.2.1": "2026-01-01T00:00:00Z", "v1.2.2": null },
-    });
-    const asked: string[] = [];
-    const refreshed = await refreshUnpromotedReleases({
-      cutVersion: "1.2.4",
-      dates: manifest.releases,
-      previousTag: "v1.2.3",
-      readRelease: async (tag) => {
-        asked.push(tag);
-        return PUBLISHED;
+    const recorded = `${JSON.stringify(
+      {
+        _note: "Publication timestamps, keyed by tag.",
+        "v0.8.10": null,
+        "v0.9.14": null,
+        "v1.2.2": "2026-01-01T00:00:00Z",
       },
-    });
-    expect(asked).toEqual(["v1.2.2"]);
+      null,
+      2,
+    )}\n`;
+    releaseFixture(root, recorded);
 
+    // Each recorded null is a release that was never promoted to production;
+    // a GitHub release published for it later does not change that.
     prepareMaintenanceReleaseFiles({
       previousRelease: PUBLISHED,
       previousFinalVersion: "1.2.3",
-      refreshedReleases: refreshed,
       rootDir: root,
     });
     expect(
@@ -968,14 +904,22 @@ describe("maintenance release preparation", () => {
       `${JSON.stringify(
         {
           _note: "Publication timestamps, keyed by tag.",
-          "v1.2.1": "2026-01-01T00:00:00Z",
-          "v1.2.2": PUBLISHED.publishedAt,
+          "v0.8.10": null,
+          "v0.9.14": null,
+          "v1.2.2": "2026-01-01T00:00:00Z",
           "v1.2.3": PUBLISHED.publishedAt,
         },
         null,
         2,
       )}\n`,
     );
+    expect(
+      projectReleaseDates({
+        dates: readReleaseManifest(root).releases,
+        previousRelease: UNPROMOTED,
+        previousTag: "v1.2.4",
+      }),
+    ).toMatchObject({ "v0.8.10": null, "v0.9.14": null, "v1.2.4": null });
   });
 
   test.each([
@@ -989,51 +933,6 @@ describe("maintenance release preparation", () => {
     releaseFixture(root, `${JSON.stringify(entries, null, 2)}\n`);
 
     expect(() => readReleaseManifest(root)).toThrow(message);
-  });
-
-  test("a failed lookup stops the cut unless the tag is older than the newest promoted release", async () => {
-    const dates = { "v1.2.0": "2026-01-01T00:00:00Z", "v1.1.0": null };
-    const failing = failingRead;
-    expect(
-      await refreshUnpromotedReleases({
-        cutVersion: "1.2.4",
-        dates,
-        previousTag: "v1.2.3",
-        readRelease: failing,
-      }),
-    ).toEqual({});
-    expect(
-      await refreshFailure({
-        cutVersion: "1.2.4",
-        dates: { ...dates, "v1.2.1": null },
-        previousTag: "v1.2.3",
-        readRelease: failing,
-      }),
-    ).toBeInstanceOf(MaintenanceReleaseError);
-  });
-
-  test("the previous final never sets the bound for tolerated lookup failures", async () => {
-    // v1.2.3 is recorded as promoted, but the cut reads it itself: v1.1.0 is
-    // not older than a release that can be trusted, so its failure stops the cut.
-    expect(
-      await refreshFailure({
-        cutVersion: "1.2.4",
-        dates: { "v1.1.0": null, "v1.2.3": "2026-02-01T00:00:00Z" },
-        previousTag: "v1.2.3",
-        readRelease: failingRead,
-      }),
-    ).toBeInstanceOf(MaintenanceReleaseError);
-  });
-
-  test("a release at or above the cut version never sets the bound", async () => {
-    expect(
-      await refreshFailure({
-        cutVersion: "1.2.4",
-        dates: { "v1.1.0": null, "v1.3.0": "2026-02-01T00:00:00Z" },
-        previousTag: "v1.2.3",
-        readRelease: failingRead,
-      }),
-    ).toBeInstanceOf(MaintenanceReleaseError);
   });
 
   test("reads the publication date of a published release", async () => {
@@ -1218,7 +1117,7 @@ describe("maintenance release preparation", () => {
     }
     expect(caught).toBeInstanceOf(MaintenanceReleaseError);
     if (!(caught instanceof MaintenanceReleaseError)) {
-      throw new Error("Expected maintenance release failure");
+      throw new TypeError("Expected maintenance release failure");
     }
     expect(caught.message).toContain("persistent write failure");
     expect(caught.message).toContain(
@@ -1465,7 +1364,8 @@ describe("a superseded version's notes folded into the release", () => {
   // of cuts leaves no undated page behind the newest, and a bullet of a
   // superseded version stays on exactly one page.
   test("leaves every page but the newest dated after any run of cuts", () => {
-    fc.assert(
+    assertProperty(
+      "leaves every page but the newest dated after any run of cuts",
       fc.property(
         fc.array(fc.constantFrom("published", "superseded", "unpromoted"), {
           maxLength: 6,
@@ -1511,7 +1411,7 @@ describe("a superseded version's notes folded into the release", () => {
           expect(holding).toHaveLength(1);
         },
       ),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 });
@@ -1571,38 +1471,18 @@ const fakeGitHub = (responses: Record<string, unknown>) => {
   return Object.assign(read, { paths });
 };
 
-// The unmet checks ci-result publishes beside the required-jobs record.
-const heavyViolations = (overrides: Record<string, unknown> = {}) => ({
-  run_id: 11,
-  run_attempt: 1,
-  head_sha: CUT_SHA,
-  evaluated: true,
-  violations: "marketing-screenshots (planned, failure)",
-  ...overrides,
-});
-
-// The two artifacts ci-result uploads; null stands for unreadable.
-const fakeRecord =
-  (record: unknown, violations: unknown = heavyViolations()) =>
-  async (_runId: string, artifact: string): Promise<unknown> => {
-    const found = artifact === "ci-required-summary" ? record : violations;
-    if (found === null) {
-      throw new Error(`no ${artifact} artifact`);
-    }
-    return found;
-  };
+const NOT_COVERED = async (): Promise<ReceiptCoverage> => "not_covered";
 
 const cutRefusal = async (
   responses: Record<string, unknown>,
-  record: unknown = null,
-  violations: unknown = heavyViolations(),
+  coverage: ReceiptCoverageReader = NOT_COVERED,
 ): Promise<string> => {
   const written: string[] = [];
   try {
     await assertReleaseCutReady(
       CUT_SHA,
       false,
-      { json: fakeGitHub(responses), record: fakeRecord(record, violations) },
+      { json: fakeGitHub(responses), coverage },
       (text) => {
         written.push(text);
       },
@@ -1664,293 +1544,35 @@ describe("release cut readiness", () => {
     );
   });
 
-  const MARKETING_JOB = "suites / marketing-screenshots / check";
-  const COMPARISON_FAILED_STEPS = [
-    { name: "Set up job", conclusion: "success" },
-    { name: "Capture marketing screenshots", conclusion: "failure" },
-    { name: "Read screenshot comparison phase", conclusion: "success" },
-    { name: "Screenshot comparison failed", conclusion: "success" },
-  ];
-  const marketingJob = (steps: unknown[] = COMPARISON_FAILED_STEPS) => ({
-    ...job(MARKETING_JOB, "failure"),
-    steps,
-  });
-  const heavyRecord = (overrides: Record<string, unknown> = {}) => ({
-    version: 1,
-    run_id: 11,
-    head_sha: CUT_SHA,
-    basis: "evaluated",
-    depth: "heavy",
-    run_attempt: 1,
-    verdict: "failure",
-    required: [
-      { job: "ci-tests", conclusion: "success" },
-      { job: "marketing-screenshots", conclusion: "failure" },
-    ],
-    ...overrides,
-  });
-  const heavyRun = (overrides: Record<string, unknown> = {}) => ({
-    id: 11,
-    html_url: `${RUN_PREFIX}11`,
-    repository: { full_name: "stella/stella" },
-    path: ".github/workflows/main-heavy.yml",
-    head_branch: "main",
-    event: "push",
-    display_title: `Main heavy suites ${CUT_SHA}`,
-    run_attempt: 1,
-    head_sha: CUT_SHA,
-    status: "completed",
-    conclusion: "failure",
-    ...overrides,
-  });
-  type HeavyFailureOptions = { run?: Record<string, unknown>; total?: number };
-  const heavyFailure = (
-    jobs: unknown[],
-    { run = heavyRun(), total = jobs.length }: HeavyFailureOptions = {},
-  ) => ({
-    [STATUSES_PATH]: [
-      commitStatus("main/heavy", "failure", 11),
-      PR_DEPTH_GREEN,
-    ],
-    [jobsPath(11)]: { total_count: total, jobs },
-    "/actions/runs/11": run,
-  });
-  const rollups = [
-    job("suites / ci-result", "failure"),
-    job("status", "failure"),
-  ];
-
-  test("cuts with a warning when main/heavy failed only in the screenshot comparison", async () => {
-    const written: string[] = [];
-    await assertReleaseCutReady(
-      CUT_SHA,
-      false,
-      {
-        json: fakeGitHub(
-          heavyFailure([
-            job("suites / web-tests", "success"),
-            marketingJob(),
-            ...rollups,
-          ]),
-        ),
-        record: fakeRecord(heavyRecord()),
-      },
-      (text) => {
-        written.push(text);
-      },
-    );
-    expect(written).toEqual([
-      `::warning::maintenance-release: main/heavy failed only in advisory jobs (${MARKETING_JOB}) ${RUN_PREFIX}11\n`,
-      `maintenance-release: main/heavy and main/pr-depth are green on ${CUT_SHA}\n`,
-    ]);
-  });
-
-  test("refuses when another job failed beside marketing screenshots", async () => {
-    const message = await cutRefusal(
-      heavyFailure([
-        marketingJob(),
-        job("suites / api-tests (2)", "failure"),
-        ...rollups,
-      ]),
-      heavyRecord(),
-    );
-    expect(message).toContain("failing job: suites / api-tests (2) (failure)");
-  });
-
-  test.each([
-    [
-      "a skipped planned required job",
-      heavyRecord({
-        required: [
-          { job: "e2e-production-shard", conclusion: "skipped" },
-          { job: "marketing-screenshots", conclusion: "failure" },
-        ],
-      }),
-      heavyViolations(),
-    ],
-    [
-      "a folded sub-suite that is not success",
-      heavyRecord(),
-      heavyViolations({
-        violations:
-          "marketing-screenshots (planned, failure), api-image-deps (planned, failure)",
-      }),
-    ],
-    [
-      "unevaluated violations",
-      heavyRecord(),
-      heavyViolations({ evaluated: false }),
-    ],
-    ["an absent violations artifact", heavyRecord(), null],
-    [
-      "a violations artifact of another run",
-      heavyRecord(),
-      heavyViolations({ run_id: 12 }),
-    ],
-    [
-      "a violations artifact of another commit",
-      heavyRecord(),
-      heavyViolations({ head_sha: "e".repeat(40) }),
-    ],
-    ["an unreadable required-jobs record", null, heavyViolations()],
-    ["a record of another run", heavyRecord({ run_id: 12 }), heavyViolations()],
-  ])(
-    "refuses an advisory failure beside %s",
-    async (_label, record, violations) => {
-      const message = await cutRefusal(
-        heavyFailure([marketingJob(), ...rollups]),
-        record,
-        violations,
-      );
-      expect(message).toContain("main/heavy: failure");
-    },
-  );
-
-  test.each([
-    [
-      "a seed step",
-      [
-        { name: "Set up job", conclusion: "success" },
-        { name: "Capture marketing screenshots", conclusion: "failure" },
-        { name: "Screenshot comparison failed", conclusion: "skipped" },
+  // The screenshots job fails only on a functional capture failure (a
+  // difference alone passes it with a warning), so it blocks like any job.
+  test("refuses a main/heavy run that failed only in marketing screenshots", async () => {
+    const message = await cutRefusal({
+      [STATUSES_PATH]: [
+        commitStatus("main/heavy", "failure", 11),
+        PR_DEPTH_GREEN,
       ],
-    ],
-    [
-      "an earlier step beside the comparison",
-      [
-        { name: "Checkout", conclusion: "failure" },
-        { name: "Capture marketing screenshots", conclusion: "failure" },
-        { name: "Screenshot comparison failed", conclusion: "success" },
-      ],
-    ],
-  ])(
-    "refuses a failure in %s inside the screenshots job",
-    async (_label, steps) => {
-      const message = await cutRefusal(
-        heavyFailure([marketingJob(steps), ...rollups]),
-        heavyRecord(),
-      );
-      expect(message).toContain(
-        "failing job: suites / marketing-screenshots / check (failure)",
-      );
-    },
-  );
-
-  test("refuses artifacts of attempt 1 when the run is at attempt 2", async () => {
-    const message = await cutRefusal(
-      heavyFailure([marketingJob(), ...rollups], {
-        run: heavyRun({ run_attempt: 2 }),
-      }),
-      heavyRecord(),
-      heavyViolations(),
-    );
-    expect(message).toContain("main/heavy: failure");
-  });
-
-  test("cuts when the jobs and both artifacts are from the run's attempt", async () => {
-    const attempt2 = [marketingJob(), ...rollups].map((entry) => ({
-      ...entry,
-      run_attempt: 2,
-    }));
-    const written: string[] = [];
-    await assertReleaseCutReady(
-      CUT_SHA,
-      false,
-      {
-        json: fakeGitHub(
-          heavyFailure(attempt2, { run: heavyRun({ run_attempt: 2 }) }),
-        ),
-        record: fakeRecord(
-          heavyRecord({ run_attempt: 2 }),
-          heavyViolations({ run_attempt: 2 }),
-        ),
-      },
-      (text) => {
-        written.push(text);
-      },
-    );
-    expect(written.join("")).toContain("green on");
-  });
-
-  test("refuses a job list from an earlier attempt than the run's", async () => {
-    const message = await cutRefusal(
-      heavyFailure([marketingJob(), ...rollups], {
-        run: heavyRun({ run_attempt: 2 }),
-      }),
-      heavyRecord({ run_attempt: 2 }),
-      heavyViolations({ run_attempt: 2 }),
-    );
-    expect(message).toContain("main/heavy: failure");
-  });
-
-  test("refuses a job count different from total_count", async () => {
-    const message = await cutRefusal(
-      heavyFailure([marketingJob(), ...rollups], { total: 4 }),
-      heavyRecord(),
-    );
-    expect(message).toContain("main/heavy: failure");
-  });
-
-  test.each([
-    [
-      "a cancelled advisory job",
-      [{ ...marketingJob(), conclusion: "cancelled" }, ...rollups],
-    ],
-    [
-      "an unknown job name",
-      [{ ...marketingJob(), name: "suites / other-shots / check" }],
-    ],
-    ["only the aggregates failing", rollups],
-  ])("refuses %s", async (_label, jobs) => {
-    expect(await cutRefusal(heavyFailure(jobs), heavyRecord())).toContain(
-      "main/heavy: failure",
-    );
-  });
-
-  test.each([
-    ["a different workflow", { path: ".github/workflows/ci.yml" }],
-    ["a different head_sha", { head_sha: "e".repeat(40) }],
-    ["a different title commit", { display_title: "Main heavy suites x" }],
-    ["a run that is not completed", { status: "in_progress" }],
-    ["a cancelled run", { conclusion: "cancelled" }],
-    ["a successful run", { conclusion: "success" }],
-    ["another repository", { repository: { full_name: "other/stella" } }],
-  ])(
-    "refuses an advisory-only status linking to %s",
-    async (_label, overrides) => {
-      const message = await cutRefusal(
-        heavyFailure([marketingJob(), ...rollups], {
-          run: heavyRun(overrides),
-        }),
-        heavyRecord(),
-      );
-      expect(message).toContain("main/heavy: failure");
-    },
-  );
-
-  test("an unreadable run is a refusal", async () => {
-    const message = await cutRefusal(
-      {
-        ...heavyFailure([marketingJob(), ...rollups]),
-        "/actions/runs/11": new Error("HTTP 502"),
-      },
-      heavyRecord(),
-    );
-    expect(message).toContain("main/heavy: failure");
-  });
-
-  test("an error status is never advisory", async () => {
-    const message = await cutRefusal(
-      {
-        [STATUSES_PATH]: [
-          commitStatus("main/heavy", "error", 11),
-          PR_DEPTH_GREEN,
+      [jobsPath(11)]: {
+        jobs: [
+          job("suites / web-tests", "success"),
+          job("suites / marketing-screenshots / check", "failure"),
+          job("suites / ci-result", "failure"),
+          job("status", "failure"),
         ],
-        [jobsPath(11)]: { total_count: 3, jobs: [marketingJob(), ...rollups] },
       },
-      heavyRecord(),
+    });
+
+    expect(message).toBe(
+      [
+        `main is not release-ready at ${CUT_SHA}:`,
+        `  main/heavy: failure (status failure) ${RUN_PREFIX}11`,
+        "    failing job: suites / marketing-screenshots / check (failure)",
+        "    failing job: suites / ci-result (failure)",
+        "    failing job: status (failure)",
+        `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+        "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+      ].join("\n"),
     );
-    expect(message).toContain("main/heavy: failure (status error)");
   });
 
   test("reads only the newest status of each gate", async () => {
@@ -2117,13 +1739,149 @@ describe("release cut readiness", () => {
     expect(read.paths).toHaveLength(2);
   });
 
+  test("cuts without the statuses when a merge-group receipt covers the commit", async () => {
+    const asked: string[] = [];
+    const written: string[] = [];
+
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      {
+        json: fakeGitHub({
+          [STATUSES_PATH]: [],
+          [SCHEDULED_PR_DEPTH_PATH]: { workflow_runs: [] },
+        }),
+        coverage: async (sha) => {
+          asked.push(sha);
+          return "covered";
+        },
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+
+    expect(asked).toEqual([CUT_SHA]);
+    expect(written).toEqual([
+      `maintenance-release: a merge-group receipt and validated queue history stand in for main/heavy and main/pr-depth on ${CUT_SHA}\n`,
+    ]);
+  });
+
+  test("an uncovered receipt keeps both statuses required", async () => {
+    const responses = {
+      [STATUSES_PATH]: [],
+      [SCHEDULED_PR_DEPTH_PATH]: { workflow_runs: [] },
+    };
+    const expected = [
+      `main is not release-ready at ${CUT_SHA}:`,
+      "  main/heavy: missing (no status on the commit)",
+      `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+      "  main/pr-depth: missing (no status and no scheduled run on the commit)",
+      `    run it: gh workflow run main-pr-depth.yml --ref main -f sha=${CUT_SHA}`,
+      "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+    ].join("\n");
+
+    expect(await cutRefusal(responses, NOT_COVERED)).toBe(expected);
+    // A coverage check that cannot run answers nothing: the same refusal.
+    expect(
+      await cutRefusal(responses, async () => {
+        throw new Error("coverage check crashed");
+      }),
+    ).toBe(expected);
+  });
+
+  test("a failed gate refuses even when a merge-group receipt covers the commit", async () => {
+    const asked: string[] = [];
+    const message = await cutRefusal(
+      {
+        [STATUSES_PATH]: [
+          commitStatus("main/heavy", "failure", 11),
+          PR_DEPTH_GREEN,
+        ],
+        [jobsPath(11)]: { jobs: [job("suites / api-tests (2)", "failure")] },
+      },
+      async (sha) => {
+        asked.push(sha);
+        return "covered";
+      },
+    );
+
+    expect(message).toBe(
+      [
+        `main is not release-ready at ${CUT_SHA}:`,
+        `  main/heavy: failure (status failure) ${RUN_PREFIX}11`,
+        "    failing job: suites / api-tests (2) (failure)",
+        `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+        "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+      ].join("\n"),
+    );
+    expect(asked).toEqual([]);
+  });
+
+  test("green statuses cut without asking for receipt coverage", async () => {
+    const asked: string[] = [];
+    const written: string[] = [];
+
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      {
+        json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN, HEAVY_GREEN] }),
+        coverage: async (sha) => {
+          asked.push(sha);
+          return "not_covered";
+        },
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+
+    expect(asked).toEqual([]);
+    expect(written).toEqual([
+      `maintenance-release: main/heavy and main/pr-depth are green on ${CUT_SHA}\n`,
+    ]);
+  });
+
+  test("only exit 0 of the coverage command is coverage", async () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "receipt-coverage-"));
+    roots.push(root);
+    const argumentsPath = nodePath.join(root, "arguments");
+    const stub = (exitCode: number) => {
+      const path = nodePath.join(root, `exit-${String(exitCode)}.sh`);
+      writeFileSync(
+        path,
+        `printf '%s\\n' "$@" > '${argumentsPath}'\nexit ${String(exitCode)}\n`,
+      );
+      return ["bash", path];
+    };
+
+    expect(await receiptCoverageReader(stub(0))(CUT_SHA)).toBe("covered");
+    expect(readFileSync(argumentsPath, "utf-8")).toBe(
+      `stella/stella\n${CUT_SHA}\n`,
+    );
+    for (const exitCode of [1, 2, 127]) {
+      expect(await receiptCoverageReader(stub(exitCode))(CUT_SHA)).toBe(
+        "not_covered",
+      );
+    }
+    expect(
+      await receiptCoverageReader([nodePath.join(root, "absent-command")])(
+        CUT_SHA,
+      ),
+    ).toBe("not_covered");
+  });
+
   test("an explicit override prints the same refusal and lets the cut go on", async () => {
     const written: string[] = [];
 
     await assertReleaseCutReady(
       CUT_SHA,
       true,
-      { json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }) },
+      {
+        json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }),
+        coverage: NOT_COVERED,
+      },
       (text) => {
         written.push(text);
       },
