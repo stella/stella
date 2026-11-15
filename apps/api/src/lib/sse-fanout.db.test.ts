@@ -11,6 +11,7 @@ import {
 
 import {
   chatBackgroundTasksChangedRealtimeEvent,
+  chatQueueChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
   chatThreadsChangedRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
@@ -134,6 +135,7 @@ const FANOUT_CASES: { [C in RealtimeChannel]: readonly ChannelEvent[C][] } = {
   user: [
     newNotificationRealtimeEvent(),
     chatBackgroundTasksChangedRealtimeEvent(),
+    chatQueueChangedRealtimeEvent(),
     chatRunsChangedRealtimeEvent(),
     chatThreadsChangedRealtimeEvent(),
   ],

@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { asc, eq, inArray } from "drizzle-orm";
 
+import { CHAT_HISTORY_CHANGED_ERROR_CODE } from "@stll/api-contract";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -154,6 +156,7 @@ describe("a send whose thread changed between its read and its claim", () => {
         rejection: {
           code: 409,
           response: {
+            code: CHAT_HISTORY_CHANGED_ERROR_CODE,
             message:
               "The chat changed while this message was being sent; send it again",
           },

@@ -1212,7 +1212,7 @@ export const CHAT_MEMBER_MESSAGE_PLACEMENT = {
   rewrite: "rewrite",
 } as const;
 
-export type ChatMemberMessagePlacement =
+type ChatMemberMessagePlacement =
   (typeof CHAT_MEMBER_MESSAGE_PLACEMENT)[keyof typeof CHAT_MEMBER_MESSAGE_PLACEMENT];
 
 type PersistAcceptedMessageWithClaimProps = PersistMessageProps & {
