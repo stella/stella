@@ -1,17 +1,98 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { panic } from "better-result";
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import path from "node:path";
 
 import { launchExtensionHarness } from "./fixtures/harness";
 
 type Harness = Awaited<ReturnType<typeof launchExtensionHarness>>;
+type ColorScheme = "dark" | "light";
+
+const UI_PACKAGE = path.join(import.meta.dirname, "../../../packages/ui");
 
 /**
- * The page backgrounds of the web app's light and dark themes
- * (packages/ui/src/styles/theme.css), written as the app writes them.
+ * Each popup token and the web app token it takes its value from: all of
+ * them in dark, where the popup follows the app; the page background in
+ * light too.
  */
-const APP_BACKGROUND = {
-  dark: "color-mix(in srgb, oklch(14.5% 0 0) 95%, #fff)",
-  light: "#fff",
-} as const;
+const APP_TOKENS = {
+  dark: {
+    "--background": "--background",
+    "--foreground": "--foreground",
+    "--muted-foreground": "--muted-foreground",
+    "--primary": "--primary",
+    "--primary-foreground": "--primary-foreground",
+    "--secondary": "--input",
+    "--secondary-foreground": "--secondary-foreground",
+    "--status-access-needed": "--warning-foreground",
+    "--status-connected": "--success-foreground",
+    "--status-idle": "--ring",
+  },
+  light: { "--background": "--background" },
+} as const satisfies Record<ColorScheme, Record<string, string>>;
+
+/** The declarations of the first `selector` rule that sets the page background. */
+const themeRule = (css: string, selector: string): Map<string, string> => {
+  const rule =
+    css
+      .split(`\n${selector} {\n`)
+      .slice(1)
+      .map((rest) => rest.slice(0, rest.indexOf("\n}")))
+      .find((body) => /^\s*--background:/mu.test(body)) ??
+    panic(`No ${selector} rule sets --background`);
+  return new Map(
+    [...rule.matchAll(/(--[\w-]+):\s*([^;]+);/gu)].map(([, name, value]) => [
+      name ?? "",
+      (value ?? "").replaceAll(/\s+/gu, " ").trim(),
+    ]),
+  );
+};
+
+/**
+ * The web app's tokens for one scheme, read from its stylesheet with the
+ * colour scale substituted, so Chrome can paint them as they are.
+ */
+const appTokens = async (
+  colorScheme: ColorScheme,
+): Promise<Map<string, string>> => {
+  const [appCss, scaleCss] = await Promise.all([
+    readFile(path.join(UI_PACKAGE, "src/styles/theme.css"), "utf-8"),
+    readFile(
+      createRequire(path.join(UI_PACKAGE, "package.json")).resolve(
+        "tailwindcss/theme.css",
+      ),
+      "utf-8",
+    ),
+  ]);
+  const scale = new Map(
+    [...scaleCss.matchAll(/(--color-[\w-]+):\s*([^;]+);/gu)].map(
+      ([, name, value]) => [name ?? "", (value ?? "").trim()],
+    ),
+  );
+  const rule = themeRule(appCss, colorScheme === "dark" ? ".dark" : ":root");
+  const resolve = (value: string): string =>
+    value
+      .replaceAll(
+        /--alpha\((.+?) \/ ([\d.]+%)\)/gu,
+        (_match, colour: string, amount: string) =>
+          `color-mix(in srgb, ${colour} ${amount}, transparent)`,
+      )
+      .replaceAll(
+        /var\((--color-[\w-]+)\)/gu,
+        (_match, name: string) =>
+          scale.get(name) ?? panic(`Unknown colour ${name}`),
+      )
+      .replaceAll(/var\(--background\)/gu, () =>
+        resolve(rule.get("--background") ?? panic("No app background")),
+      );
+  return new Map(
+    Object.entries(APP_TOKENS[colorScheme]).map(([popupToken, appToken]) => [
+      popupToken,
+      resolve(rule.get(appToken) ?? panic(`No app token ${appToken}`)),
+    ]),
+  );
+};
 
 const openPopup = async ({ context, worker }: Harness): Promise<Page> => {
   const popup = await context.newPage();
@@ -26,20 +107,29 @@ const activeTabUrl = async ({ worker }: Harness): Promise<string | null> =>
         ?.url ?? null,
   );
 
-/** Any CSS colour as the sRGB bytes Chrome paints for it. */
-const paintedColour = async (page: Page, css: string): Promise<number[]> =>
-  await page.evaluate((colour) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1;
-    canvas.height = 1;
-    const context = canvas.getContext("2d");
-    if (context === null) {
-      return [];
-    }
-    context.fillStyle = colour;
-    context.fillRect(0, 0, 1, 1);
-    return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)];
-  }, css);
+/** Any CSS colour as the sRGB bytes Chrome paints for it, over `behind`. */
+const paintedColour = async (
+  page: Page,
+  css: string,
+  behind = "transparent",
+): Promise<number[]> =>
+  await page.evaluate(
+    ({ colour, under }) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 1;
+      const context = canvas.getContext("2d");
+      if (context === null) {
+        return [];
+      }
+      for (const fill of [under, colour]) {
+        context.fillStyle = fill;
+        context.fillRect(0, 0, 1, 1);
+      }
+      return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+    },
+    { colour: css, under: behind },
+  );
 
 const relativeLuminance = (rgb: readonly number[]): number => {
   const [red = 0, green = 0, blue = 0] = rgb.map((byte) => {
@@ -95,16 +185,38 @@ for (const colorScheme of ["light", "dark"] as const) {
         "Open stella to connect",
       );
 
+      // Every mirrored token paints as the web app's own value.
       const body = popup.locator("body");
+      const expected = await appTokens(colorScheme);
+      const appBackground = expected.get("--background") ?? "";
+      for (const [token, appValue] of expected) {
+        const popupValue = await popup.evaluate(
+          (name) =>
+            getComputedStyle(document.documentElement).getPropertyValue(name),
+          token,
+        );
+        const painted = await paintedColour(popup, popupValue, appBackground);
+        const wanted = await paintedColour(popup, appValue, appBackground);
+        expect(painted, token).toHaveLength(3);
+        // Chrome and the build may round a mixed colour one step apart.
+        for (const [channel, value] of painted.entries()) {
+          expect(
+            Math.abs(value - (wanted[channel] ?? -9)),
+            `${token}: ${popupValue} against ${appValue}`,
+          ).toBeLessThanOrEqual(1);
+        }
+      }
       expect(
         await paintedColour(popup, await computed(body, "background-color")),
-      ).toEqual(await paintedColour(popup, APP_BACKGROUND[colorScheme]));
+      ).toEqual(await paintedColour(popup, appBackground));
       expect(
         await paintedColour(popup, await computed(body, "background-color")),
       ).not.toEqual(
         await paintedColour(
           popup,
-          APP_BACKGROUND[colorScheme === "dark" ? "light" : "dark"],
+          (await appTokens(colorScheme === "dark" ? "light" : "dark")).get(
+            "--background",
+          ) ?? "",
         ),
       );
 
