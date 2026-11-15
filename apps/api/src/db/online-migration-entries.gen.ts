@@ -91,6 +91,7 @@ export { default as indexes_contacts_data_box_ids_idx } from "./online-migration
 export { default as indexes_contacts_org_id_unique } from "./online-migration-entries/indexes-contacts-org-id-unique";
 export { default as indexes_corpus_index_projection_intents_proof_idx } from "./online-migration-entries/indexes-corpus-index-projection-intents-proof-idx";
 export { default as indexes_corpus_index_projection_states_append_route_idx } from "./online-migration-entries/indexes-corpus-index-projection-states-append-route-idx";
+export { default as indexes_corpus_projection_offline_request } from "./online-migration-entries/indexes-corpus-projection-offline-request";
 export { default as indexes_corpus_projection_unserved_gauge } from "./online-migration-entries/indexes-corpus-projection-unserved-gauge";
 export { default as indexes_corpus_projection_withdrawn_census } from "./online-migration-entries/indexes-corpus-projection-withdrawn-census";
 export { default as indexes_correspondence_attachments_ws_entity_idx } from "./online-migration-entries/indexes-correspondence-attachments-ws-entity-idx";

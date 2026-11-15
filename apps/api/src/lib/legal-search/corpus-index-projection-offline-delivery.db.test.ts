@@ -26,7 +26,10 @@ import {
   recoverExpiredCorpusProjectionIntentsTx,
   reopenCorpusProjectionCleanupTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
-import type { CorpusIndexIntentStatus } from "@/api/lib/legal-search/corpus-index-projection-contract";
+import {
+  CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+  type CorpusIndexIntentStatus,
+} from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
@@ -37,6 +40,8 @@ import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus
 import { executeCorpusProjectionProofCycle } from "@/api/lib/legal-search/corpus-index-projection-prover";
 import {
   CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
+  CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS,
+  CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS,
   corpusProjectionOfflineIndexerEndedAt,
   corpusProjectionOfflineIndexerKillDeadline,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
@@ -50,7 +55,7 @@ import {
   recordAcceptedCorpusProjectionAppendsTx,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendBatchTx,
-  startCorpusProjectionOfflineAppendBatchTx,
+  startCorpusProjectionOfflineRequestChunkTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -66,11 +71,14 @@ const KILL_BUDGET_MS = corpusProjectionAppendIngestBudgetMs(MANIFEST);
 /** From the start until no write of the run can still appear. */
 const ENDED_AFTER_MS =
   KILL_BUDGET_MS + CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS;
-/** The lease a batch takes: it covers the run and its record. */
-const LEASE_MS = Math.min(
-  CORPUS_PROJECTION_LEASE_MAX_MS,
-  KILL_BUDGET_MS + 60_000,
-);
+/**
+ * The lease a batch takes. A started revision's lease must reach past its
+ * request's kill deadline plus the record margin, so the longest lease leaves
+ * this much time between reserving and a request's first start.
+ */
+const LEASE_MS = CORPUS_PROJECTION_LEASE_MAX_MS;
+const START_SLACK_MS =
+  LEASE_MS - KILL_BUDGET_MS - CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS;
 const SOURCE_ID = toSafeId<"legislationSource">(
   "0198e331-e578-7000-8000-0000000008f1",
 );
@@ -398,31 +406,62 @@ const shardsOf = async (leases: readonly CorpusProjectionIntentLease[]) => {
   return shards;
 };
 
-/** Start one shard offline and hand its file to an indexer. */
+/**
+ * Revisions one start transaction of the model takes: below the store's
+ * bound, so a request of the model spans several transactions, as a large
+ * request does.
+ */
+const MODEL_START_CHUNK = 2;
+
+/**
+ * Start one shard offline, one transaction per chunk, and hand a file of
+ * exactly the revisions that started to an indexer. `diesAfterChunks`: the
+ * process dies before that many more chunks are started, so the request is
+ * left part started, part reserved, and no indexer runs.
+ */
 const startShard = async (
   model: Model,
   leases: readonly CorpusProjectionIntentLease[],
   spawn: boolean,
+  diesAfterChunks: number | null = null,
 ) => {
   const counts = leases.map((lease) => ({
     lease,
     expectedDocumentCount: documentsOf(model.entityIds.indexOf(lease.entityId)),
   }));
-  const startedAt = await now(model);
-  const outcomes = await transactionRunner(model)(
-    async (tx) =>
-      await startCorpusProjectionOfflineAppendBatchTx(tx, {
-        leases: counts,
-        testNow: startedAt,
-      }),
-  );
-  const started = counts.filter(({ lease }) =>
-    outcomes.some(
-      ({ intentId, status }) =>
-        intentId === lease.intentId && status === "started",
-    ),
-  );
-  if (!spawn || started.length === 0) {
+  const request = {
+    requestId: Bun.randomUUIDv7(),
+    plannedRevisionCount: counts.length,
+  };
+  const started: typeof counts = [];
+  let requestStartedAt: Date | null = null;
+  for (let at = 0; at < counts.length; at += MODEL_START_CHUNK) {
+    crashIf(
+      model,
+      diesAfterChunks !== null && at / MODEL_START_CHUNK >= diesAfterChunks,
+      "between the start transactions of one request",
+    );
+    const chunk = counts.slice(at, at + MODEL_START_CHUNK);
+    const startedAt = await now(model);
+    const result = await transactionRunner(model)(
+      async (tx) =>
+        await startCorpusProjectionOfflineRequestChunkTx(tx, {
+          request,
+          leases: chunk,
+          testNow: startedAt,
+        }),
+    );
+    requestStartedAt = result.requestStartedAt ?? requestStartedAt;
+    started.push(
+      ...chunk.filter(({ lease }) =>
+        result.outcomes.some(
+          ({ intentId, status }) =>
+            intentId === lease.intentId && status === "started",
+        ),
+      ),
+    );
+  }
+  if (!spawn || started.length === 0 || requestStartedAt === null) {
     return;
   }
   const run: IndexerRun = {
@@ -431,7 +470,7 @@ const startShard = async (
       documents: expectedDocumentCount,
     })),
     killAt: corpusProjectionOfflineIndexerKillDeadline(
-      startedAt,
+      requestStartedAt,
       MANIFEST,
     ).getTime(),
     ended: "running",
@@ -488,7 +527,12 @@ const publishUpTo = async (model: Model, run: IndexerRun, to: number) => {
 type Command =
   | {
       type: "batch";
-      crash: "none" | "before_start" | "start_rollback" | "after_start";
+      crash:
+        | "none"
+        | "before_start"
+        | "start_rollback"
+        | "between_starts"
+        | "after_start";
       reject: boolean;
       /** Time between the reservation and the start: the lease runs out first. */
       startDelayMs: number;
@@ -519,14 +563,19 @@ const applyCommand = async (model: Model, next: Command) => {
           ? { type: "transaction", index: 1, phase: "rollback" }
           : { type: "none" };
       await survive(async () => {
-        const leases = await reserve(model, ENTITIES_PER_RUN);
+        const leases = await reserve(model, model.entityIds.length);
         if (next.crash === "before_start") {
           return;
         }
         model.offsetMs += next.startDelayMs;
         const spawn = next.crash !== "after_start";
         for (const shard of await shardsOf(leases)) {
-          await startShard(model, shard, spawn);
+          await startShard(
+            model,
+            shard,
+            spawn,
+            next.crash === "between_starts" ? 1 : null,
+          );
         }
         if (next.reject) {
           const rejected = model.runs.at(-1)?.file.at(0)?.revision;
@@ -800,7 +849,7 @@ const crashCommand: fc.Arbitrary<Command> = fc.oneof(
     weight: 4,
     arbitrary: fc.record({
       type: fc.constant("batch" as const),
-      // Most batches spawn an indexer; the rest die at one of three points.
+      // Most batches spawn an indexer; the rest die at one of four points.
       crash: fc.oneof(
         { weight: 3, arbitrary: fc.constant("none" as const) },
         {
@@ -808,12 +857,18 @@ const crashCommand: fc.Arbitrary<Command> = fc.oneof(
           arbitrary: fc.constantFrom(
             "before_start" as const,
             "start_rollback" as const,
+            "between_starts" as const,
             "after_start" as const,
           ),
         },
       ),
       reject: fc.constant(false),
-      startDelayMs: fc.constantFrom(0, KILL_BUDGET_MS / 2),
+      // Inside the slack the lease allows, or past it: then nothing starts.
+      startDelayMs: fc.constantFrom(
+        0,
+        START_SLACK_MS / 2,
+        START_SLACK_MS + 30_000,
+      ),
     }),
   },
   {
@@ -996,8 +1051,10 @@ const drain = async (model: Model) => {
   }
 };
 
-const newModel = async (): Promise<Model> => {
-  const entityIds = await seedEntities(ENTITIES_PER_RUN);
+const newModel = async (
+  entityCount: number = ENTITIES_PER_RUN,
+): Promise<Model> => {
+  const entityIds = await seedEntities(entityCount);
   const indexId =
     (
       await db
@@ -1170,19 +1227,38 @@ const startOffline = async (model: Model, documents: number) => {
   }
   const startedAt = await now(model);
   expect(
-    await db.transaction(
-      async (tx) =>
-        await startCorpusProjectionOfflineAppendBatchTx(
-          asTestRaw<Transaction>(tx),
-          {
-            leases: [{ lease, expectedDocumentCount: documents }],
-            testNow: startedAt,
-          },
-        ),
-    ),
+    (
+      await startWholeRequest(
+        [{ lease, expectedDocumentCount: documents }],
+        startedAt,
+      )
+    ).outcomes,
   ).toEqual([{ intentId: lease.intentId, status: "started" }]);
   return { lease, startedAt };
 };
+
+/** Start a request of at most one transaction's leases in one transaction. */
+const startWholeRequest = async (
+  leases: readonly {
+    lease: CorpusProjectionIntentLease;
+    expectedDocumentCount: number;
+  }[],
+  testNow: Date,
+) =>
+  await db.transaction(
+    async (tx) =>
+      await startCorpusProjectionOfflineRequestChunkTx(
+        asTestRaw<Transaction>(tx),
+        {
+          request: {
+            requestId: Bun.randomUUIDv7(),
+            plannedRevisionCount: leases.length,
+          },
+          leases,
+          testNow,
+        },
+      ),
+  );
 
 const intentOf = async (intentId: IntentId) =>
   (
@@ -1215,7 +1291,7 @@ const prove = async (model: Model) =>
 
 /** Every lease's request cap, as a batch would read them now. */
 const capsOfPending = async (model: Model) => {
-  const leases = await reserve(model, ENTITIES_PER_RUN);
+  const leases = await reserve(model, model.entityIds.length);
   const caps = await db.transaction(
     async (tx) =>
       await readCorpusProjectionOfflineRequestCapsTx(
@@ -1279,26 +1355,130 @@ describe("offline request caps", () => {
     expect([...model.everSingle]).toEqual([]);
   });
 
-  test("a revision that keeps its run from publishing is alone and blocked within floor(log2 N) plus the attempt limit", async () => {
-    const model = await newModel();
-    const poisoned = model.entityIds.at(0) ?? panic("No entity");
-    model.poison.add(poisoned);
-    for (let round = 0; round < 20; round += 1) {
-      if ((await stateOf(poisoned)).workStatus === "blocked") {
-        break;
+  test.each([4, 5, 8])(
+    "a revision that keeps its run from publishing is alone and blocked within floor(log2 N) plus the attempt limit, N = %i",
+    async (entityCount) => {
+      const model = await newModel(entityCount);
+      const poisoned = model.entityIds.at(0) ?? panic("No entity");
+      model.poison.add(poisoned);
+      for (let round = 0; round < 24; round += 1) {
+        if ((await stateOf(poisoned)).workStatus === "blocked") {
+          break;
+        }
+        await deliveryRound(model);
       }
-      await deliveryRound(model);
-    }
-    expect((await stateOf(poisoned)).workStatus).toBe("blocked");
-    // One shard of N = ENTITIES_PER_RUN, halved to one, then charged alone.
-    expect(model.deliveries.get(poisoned)).toBe(
-      Math.floor(Math.log2(ENTITIES_PER_RUN)) +
-        CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
+      expect((await stateOf(poisoned)).workStatus).toBe("blocked");
+      // One shard of N, halved down to one, then charged alone: 18 for 8192.
+      expect(model.deliveries.get(poisoned)).toBe(
+        Math.floor(Math.log2(entityCount)) +
+          CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
+      );
+      for (const entityId of model.entityIds.slice(1)) {
+        expect((await stateOf(entityId)).appliedRevision).not.toBeNull();
+      }
+      expect([...model.everSingle]).toEqual([]);
+    },
+  );
+
+  test("a withdrawal after a start cut short halves from what was delivered, not from the plan", async () => {
+    const model = await newModel();
+    await runCommands(model, [
+      {
+        type: "batch",
+        crash: "between_starts",
+        reject: false,
+        startDelayMs: 0,
+      },
+      { type: "advance", ms: LEASE_MS + ENDED_AFTER_MS },
+      { type: "sweep" },
+      { type: "prove", crash: { type: "none" } },
+    ]);
+    const withdrawn = (await readIntents(model.entityIds)).filter(
+      ({ status }) => status === "withdrawn",
     );
-    for (const entityId of model.entityIds.slice(1)) {
-      expect((await stateOf(entityId)).appliedRevision).not.toBeNull();
+    // The fixture differs on the boundary: two of a planned four started.
+    expect(withdrawn).toHaveLength(MODEL_START_CHUNK);
+    for (const { id } of withdrawn) {
+      expect((await intentOf(id)).appendRequestRevisionCount).toBe(
+        ENTITIES_PER_RUN,
+      );
+    }
+    model.offsetMs += 60_000;
+    const caps = await capsOfPending(model);
+    for (const entityId of model.entityIds) {
+      expect(caps.get(entityId)).toBe(
+        withdrawn.some((intent) => intent.entityId === entityId)
+          ? MODEL_START_CHUNK / 2
+          : CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
+      );
     }
     expect([...model.everSingle]).toEqual([]);
+  });
+
+  test("a start transaction past the start window, or with a lease short of the run, starts nothing and keeps the reservation", async () => {
+    const model = await newModel();
+    const leases = await reserve(model, ENTITIES_PER_RUN);
+    const counts = leases.map((lease) => ({ lease, expectedDocumentCount: 1 }));
+    const request = {
+      requestId: Bun.randomUUIDv7(),
+      plannedRevisionCount: ENTITIES_PER_RUN,
+    };
+    const chunk = async (part: typeof counts) => {
+      const at = await now(model);
+      return await db.transaction(
+        async (tx) =>
+          await startCorpusProjectionOfflineRequestChunkTx(
+            asTestRaw<Transaction>(tx),
+            { request, leases: part, testNow: at },
+          ),
+      );
+    };
+    const firstAt = await now(model);
+    const first = await chunk(counts.slice(0, 2));
+    expect(first.outcomes.map(({ status }) => status)).toEqual([
+      "started",
+      "started",
+    ]);
+    expect(first.requestStartedAt?.getTime()).toBeGreaterThanOrEqual(
+      firstAt.getTime(),
+    );
+    model.offsetMs += CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS + 1000;
+    const late = await chunk(counts.slice(2));
+    expect(late.outcomes).toEqual(
+      counts.slice(2).map(({ lease }) => ({
+        intentId: lease.intentId,
+        status: "not_started",
+        reason: "start_window_closed",
+      })),
+    );
+    // One kill deadline for the request: its first start's.
+    expect(late.requestStartedAt).toEqual(first.requestStartedAt);
+    for (const { lease } of counts.slice(2)) {
+      expect((await intentOf(lease.intentId)).status).toBe("reserved");
+    }
+
+    const fresh = await newModel();
+    const [lease] = await reserve(fresh, 1);
+    if (lease === undefined) {
+      panic("Expected one projection lease");
+    }
+    fresh.offsetMs += START_SLACK_MS + 30_000;
+    const startedAt = await now(fresh);
+    expect(
+      (
+        await startWholeRequest(
+          [{ lease, expectedDocumentCount: 1 }],
+          startedAt,
+        )
+      ).outcomes,
+    ).toEqual([
+      {
+        intentId: lease.intentId,
+        status: "not_started",
+        reason: "lease_ends_before_run",
+      },
+    ]);
+    expect((await intentOf(lease.intentId)).status).toBe("reserved");
   });
 
   test("an offline request larger than a revision's cap is refused at the start", async () => {
@@ -1323,22 +1503,28 @@ describe("offline request caps", () => {
     );
     expect([...caps.values()]).toEqual([1, 1]);
     const startedAt = await now(model);
-    const refused = await rejectionOf(
-      db.transaction(
-        async (tx) =>
-          await startCorpusProjectionOfflineAppendBatchTx(
-            asTestRaw<Transaction>(tx),
-            {
-              leases: leases.map((lease) => ({
-                lease,
-                expectedDocumentCount: 1,
-              })),
-              testNow: startedAt,
-            },
-          ),
-      ),
-    );
-    expect(String(refused)).toContain("request cap");
+    // Across the whole request: each lease alone fits its transaction, but
+    // the planned total of two passes both caps.
+    const request = {
+      requestId: Bun.randomUUIDv7(),
+      plannedRevisionCount: 2,
+    };
+    for (const lease of leases) {
+      const refused = await rejectionOf(
+        db.transaction(
+          async (tx) =>
+            await startCorpusProjectionOfflineRequestChunkTx(
+              asTestRaw<Transaction>(tx),
+              {
+                request,
+                leases: [{ lease, expectedDocumentCount: 1 }],
+                testNow: startedAt,
+              },
+            ),
+        ),
+      );
+      expect(String(refused)).toContain("request cap");
+    }
   });
 });
 
@@ -1532,18 +1718,9 @@ describe("offline settlement", () => {
     const model = await newModel();
     const leases = await reserve(model, 2);
     const startedAt = await now(model);
-    await db.transaction(
-      async (tx) =>
-        await startCorpusProjectionOfflineAppendBatchTx(
-          asTestRaw<Transaction>(tx),
-          {
-            leases: leases.map((lease) => ({
-              lease,
-              expectedDocumentCount: 3,
-            })),
-            testNow: startedAt,
-          },
-        ),
+    await startWholeRequest(
+      leases.map((lease) => ({ lease, expectedDocumentCount: 3 })),
+      startedAt,
     );
     const [partial, exact] = leases;
     if (partial === undefined || exact === undefined) {
