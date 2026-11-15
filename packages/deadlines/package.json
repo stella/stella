@@ -19,7 +19,7 @@
     "format": "bun fmt ."
   },
   "dependencies": {
-    "@stll/time": "0.4.2",
+    "@stll/time": "0.4.3",
     "better-result": "catalog:",
     "date-holidays": "3.39.1"
   },

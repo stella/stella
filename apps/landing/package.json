@@ -41,7 +41,7 @@
     "@stll/folio-react": "catalog:",
     "@stll/locales": "workspace:*",
     "@stll/portable-path": "workspace:*",
-    "@stll/time": "0.4.2",
+    "@stll/time": "0.4.3",
     "@stll/ui": "workspace:*",
     "@stll/workspace-ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
