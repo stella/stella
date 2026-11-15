@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
@@ -86,16 +86,56 @@ export const ownerLock = async () => {
   await tx.delete(timeEntries).where(submitted);
 };
 
-export const fence = async () => {
+export const ownWhere = async () => {
   await tx
     .select({ id: timeEntries.id })
     .from(timeEntries)
     .where(submitted)
     .limit(ids.length)
     .for("update");
-  // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- fixture: a reasoned exemption for a write that must also reach rows added after the lock
+  // expect-clean: require-locked-rows-write/require-locked-rows-write
   await tx
     .update(timeEntries)
     .set({ status: BILLING_STATUS.DRAFT })
     .where(eq(timeEntries.workspaceId, workspaceId));
+};
+
+export const keyFence = async () => {
+  await tx
+    .select({ id: timeEntries.id })
+    .from(timeEntries)
+    .where(eq(timeEntries.workspaceId, workspaceId))
+    .for("update");
+  // expect-clean: require-locked-rows-write/require-locked-rows-write
+  await tx
+    .update(timeEntries)
+    .set({ status: BILLING_STATUS.DRAFT })
+    .where(
+      and(
+        eq(timeEntries.workspaceId, workspaceId),
+        eq(timeEntries.status, BILLING_STATUS.SUBMITTED),
+      ),
+    );
+};
+
+export const widened = async () => {
+  const rows = await tx
+    .select({ id: timeEntries.id })
+    .from(timeEntries)
+    .where(submitted)
+    .limit(ids.length)
+    .for("update");
+  // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- fixture: the locked ids under `or` with the lock's own filter widen the write
+  await tx
+    .update(timeEntries)
+    .set({ status: BILLING_STATUS.APPROVED })
+    .where(
+      or(
+        inArray(
+          timeEntries.id,
+          rows.map(({ id }) => id),
+        ),
+        submitted,
+      ),
+    );
 };
