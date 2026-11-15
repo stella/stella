@@ -92,7 +92,7 @@ const createProbeFinishAdapter = (finish: ProbeFinish): AnyTextAdapter => ({
   },
   async *chatStream({ runId, threadId }) {
     const resolvedRunId = runId ?? "run-1";
-    const resolvedThreadId = threadId ?? "thread-1";
+    const resolvedThreadId = threadId;
     const messageId = "provider-message-1";
     yield {
       type: EventType.RUN_STARTED,
@@ -718,6 +718,12 @@ describe("AI provider canary retry contract", () => {
       local_runner_relinked: false,
       local_runner_restoring: false,
       local_runner_folder_unavailable: false,
+      local_runner_no_computer: false,
+      local_runner_harness_unavailable: false,
+      local_runner_model_unavailable: false,
+      local_runner_reasoning_effort_unavailable: false,
+      local_runner_approvals_unavailable: false,
+      local_runner_folder_not_approved: false,
       unknown: false,
     } as const satisfies Record<AIErrorKind, boolean>;
 

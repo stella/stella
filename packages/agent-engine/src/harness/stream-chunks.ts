@@ -25,6 +25,10 @@ import {
   type ChatLocalRunContext,
   type ChatLocalRunLimit,
 } from "@stll/api-contract/chat-run-target";
+import {
+  DESKTOP_RUNNER_INPUT_EVENT,
+  type DesktopRunnerInputEvent,
+} from "@stll/api-contract/desktop-runner";
 
 import {
   approvalMessage,
@@ -219,6 +223,19 @@ class ChunkMapper {
         // The harness continues on its own; its next output opens a new
         // segment. A transient retry leaves nothing to persist.
         return;
+      case "input.settled":
+        // Where the turn took (or refused) a steering message. It names the
+        // input only: the API holds the text it sent.
+        this.ensureSegment();
+        this.push({
+          type: EventType.CUSTOM,
+          name: DESKTOP_RUNNER_INPUT_EVENT,
+          value: {
+            inputId: event.inputId,
+            status: event.status,
+          } satisfies DesktopRunnerInputEvent,
+        });
+        return;
       case "turn.completed": {
         // How full the context is, for the chat's meter.
         const context: ChatLocalRunContext | null =
@@ -351,7 +368,6 @@ class ChunkMapper {
         type: EventType.TOOL_CALL_START,
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
-        toolName: toolCall.name,
         // The subagent step that made the call, beside it: the API keeps
         // the link under that step's chat call id.
         ...(toolCall.parentCallId === undefined
@@ -373,7 +389,6 @@ class ChunkMapper {
         type: EventType.TOOL_CALL_END,
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
-        toolName: toolCall.name,
         input,
       },
     );

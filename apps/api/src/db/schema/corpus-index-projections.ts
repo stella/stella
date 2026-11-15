@@ -256,6 +256,7 @@ export const corpusIndexProjectionIntents = p.pgTable(
         WHEN 'offline_indexer' THEN
           ${t.appendStartedAt} IS NOT NULL
           AND ${t.appendRequestId} IS NOT NULL
+          AND ${t.appendRequestRevisionCount} IS NOT NULL
           AND ${t.appendRequestRevisionCount} BETWEEN 1 AND ${sql.raw(String(CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS))}
           AND ${t.expectedDocumentCount} IS NOT NULL
           AND (${t.appendCommittedAt} IS NULL OR ${t.appendPublishBarrierAt} IS NOT NULL)

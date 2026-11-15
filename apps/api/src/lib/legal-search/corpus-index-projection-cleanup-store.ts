@@ -1893,28 +1893,16 @@ const commitExpiredOfflineAppendsTx = async (
     }),
     fallback: sql`${corpusIndexProjectionIntents.appendPublishBarrierAt}`,
   });
-  const committed = await tx
-    .update(corpusIndexProjectionIntents)
-    .set({
-      status: "append_committed",
-      leaseToken: null,
-      leaseExpiresAt: null,
-      appendCommittedAt: transitionAt,
-      appendPublishBarrierAt: barrierSql,
-      // No `last_error`: a revision this census applies must stay restorable
-      // like any other (`corpusIndexProjectionRevisionIsRestorable`).
-      updatedAt: transitionAt,
-    })
-    .where(
-      and(
-        inArray(
-          corpusIndexProjectionIntents.id,
-          rows.map(({ id }) => id),
-        ),
-        eq(corpusIndexProjectionIntents.status, "append_started"),
-        eq(corpusIndexProjectionIntents.appendDelivery, "offline_indexer"),
-        isNotNull(corpusIndexProjectionIntents.expectedDocumentCount),
-        sql`EXISTS (
+  const committed = await transitionBatch({
+    tx,
+    spec: CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE,
+    ids: rows.map(({ id }) => id),
+    options: {
+      to: "append_committed",
+      from: ["append_started"],
+      guard: sql`${corpusIndexProjectionIntents.appendDelivery} = 'offline_indexer'
+        AND ${corpusIndexProjectionIntents.expectedDocumentCount} IS NOT NULL
+        AND EXISTS (
           SELECT 1
           FROM ${corpusIndexProjectionStates} state
           WHERE state.family = ${corpusIndexProjectionIntents.family}
@@ -1925,9 +1913,20 @@ const commitExpiredOfflineAppendsTx = async (
             AND state.desired_fingerprint = ${corpusIndexProjectionIntents.fingerprint}
             AND state.desired_index_id = ${corpusIndexProjectionIntents.indexId}
         )`,
-      ),
-    )
-    .returning({ id: corpusIndexProjectionIntents.id });
+      set: {
+        leaseToken: null,
+        leaseExpiresAt: null,
+        appendCommittedAt: transitionAt,
+        appendPublishBarrierAt: barrierSql,
+        // No `last_error`: a revision this census applies must stay
+        // restorable like any other (`corpusIndexProjectionRevisionIsRestorable`).
+        updatedAt: transitionAt,
+      },
+    },
+    // Bookkeeping on the derived public corpus projection: no tenant data
+    // and no actor.
+    recordTransitionAuditEvent: () => undefined,
+  });
   return new Set(committed.map(({ id }) => id));
 };
 

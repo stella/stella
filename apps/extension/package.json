@@ -26,7 +26,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/chrome": "0.3.7",

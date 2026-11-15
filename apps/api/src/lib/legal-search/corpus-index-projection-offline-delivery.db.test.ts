@@ -50,6 +50,8 @@ import {
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_LEASE_MAX_MS,
   type CorpusProjectionIntentLease,
+  type CorpusProjectionOfflineRequest,
+  type CorpusProjectionOfflineStart,
   proveAcceptedCorpusProjectionAppendsTx,
   readCorpusProjectionOfflineRequestCapsTx,
   readProvableCorpusProjectionAppendsTx,
@@ -402,7 +404,7 @@ const startShard = async (
     lease,
     expectedDocumentCount: documentsOf(model.entityIds.indexOf(lease.entityId)),
   }));
-  const request = {
+  const request: CorpusProjectionOfflineRequest = {
     requestId: Bun.randomUUIDv7(),
     plannedRevisionCount: counts.length,
   };
@@ -1392,7 +1394,7 @@ describe("offline request caps", () => {
     const model = await newModel();
     const leases = await reserve(model, ENTITIES_PER_RUN);
     const counts = leases.map((lease) => ({ lease, expectedDocumentCount: 1 }));
-    const request = {
+    const request: CorpusProjectionOfflineRequest = {
       requestId: Bun.randomUUIDv7(),
       plannedRevisionCount: ENTITIES_PER_RUN,
     };
@@ -1418,7 +1420,7 @@ describe("offline request caps", () => {
     model.offsetMs += CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS + 1000;
     const late = await chunk(counts.slice(2));
     expect(late.outcomes).toEqual(
-      counts.slice(2).map(({ lease }) => ({
+      counts.slice(2).map(({ lease }): CorpusProjectionOfflineStart => ({
         intentId: lease.intentId,
         status: "not_started",
         reason: "start_window_closed",
@@ -1478,7 +1480,7 @@ describe("offline request caps", () => {
     const startedAt = await now(model);
     // Across the whole request: each lease alone fits its transaction, but
     // the planned total of two passes both caps.
-    const request = {
+    const request: CorpusProjectionOfflineRequest = {
       requestId: Bun.randomUUIDv7(),
       plannedRevisionCount: 2,
     };
@@ -1506,7 +1508,7 @@ describe("offline request caps", () => {
       lease,
       expectedDocumentCount: 1,
     }));
-    const request = {
+    const request: CorpusProjectionOfflineRequest = {
       requestId: Bun.randomUUIDv7(),
       plannedRevisionCount: MODEL_START_CHUNK,
     };
@@ -1524,12 +1526,13 @@ describe("offline request caps", () => {
         `)
       ).rows;
     // The lock is taken before the earlier starts are counted, so a second
-    // transaction of the request waits for this one and counts its rows.
+    // transaction of the request waits for this one and counts its rows. It
+    // is the same lock however the caller spells the request's identity.
     const held = await db.transaction(async (tx) => {
       await startCorpusProjectionOfflineRequestChunkTx(
         asTestRaw<Transaction>(tx),
         {
-          request,
+          request: { ...request, requestId: request.requestId.toUpperCase() },
           leases: counts.slice(0, MODEL_START_CHUNK),
           testNow: startedAt,
         },
@@ -1571,7 +1574,7 @@ describe("offline request caps", () => {
       panic("Expected one projection lease");
     }
     // Planned with three more that never started: it travelled alone.
-    const request = {
+    const request: CorpusProjectionOfflineRequest = {
       requestId: Bun.randomUUIDv7(),
       plannedRevisionCount: ENTITIES_PER_RUN,
     };
@@ -2011,5 +2014,21 @@ describe("offline delivery guards", () => {
         `),
       ),
     ).toContain("corpus_index_projection_intents_append_delivery_shape");
+    // Nor is one without its request's planned total.
+    const offlineStart = (total: ReturnType<typeof sql>) => sql`
+      UPDATE corpus_index_projection_intents
+      SET status = 'append_started', append_started_at = clock_timestamp(),
+          append_delivery = 'offline_indexer',
+          append_request_id = ${Bun.randomUUIDv7()}::uuid,
+          expected_document_count = 1,
+          append_request_revision_count = ${total}
+      WHERE id = ${bare.intentId}
+    `;
+    expect(await rejected(db.execute(offlineStart(sql`NULL`)))).toContain(
+      "corpus_index_projection_intents_append_delivery_shape",
+    );
+    expect(await rejected(db.execute(offlineStart(sql`1`)))).toBe(
+      "no rejection",
+    );
   });
 });

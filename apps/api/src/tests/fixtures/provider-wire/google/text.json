@@ -26,7 +26,6 @@
                 "role": "user"
               }
             ],
-            "serviceTier": "standard",
             "safetySettings": [
               {
                 "category": "HARM_CATEGORY_HARASSMENT",
@@ -62,18 +61,21 @@
                           "minLength": 1
                         }
                       },
-                      "required": ["name"],
+                      "required": [
+                        "name"
+                      ],
                       "additionalProperties": false
                     }
                   }
                 ]
               }
             ],
+            "serviceTier": "standard",
             "generationConfig": {
               "maxOutputTokens": 65536,
               "thinkingConfig": {
-                "includeThoughts": false,
-                "thinkingLevel": "LOW"
+                "thinkingLevel": "LOW",
+                "includeThoughts": false
               }
             }
           }

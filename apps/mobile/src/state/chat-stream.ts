@@ -1,7 +1,8 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
+import type { AIErrorKind } from "@stll/api-contract/ai-errors";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
   CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
@@ -23,8 +24,9 @@ import type { ApiError } from "@/state/api-request";
 import { answerBlocks, messageText } from "@/state/chat-answer";
 import { attachmentParts } from "@/state/chat-attachments";
 import type { ReadyFile } from "@/state/chat-attachments";
+import { streamedTurnFailure } from "@/state/chat-failure";
 import { contextNoticeIn } from "@/state/chat-messages";
-import type { ChatEntry } from "@/state/chat-messages";
+import type { ChatEntry, ChatRetry } from "@/state/chat-messages";
 import type { LocalRunTarget } from "@/state/chat-pending-input";
 
 /** One server-sent event: the id it carried, if any, and its data lines joined. */
@@ -132,7 +134,8 @@ const chatEventSchema = v.union([
     type: v.literal("RUN_FINISHED"),
     outcome: v.optional(v.looseObject({ type: v.string() })),
   }),
-  v.object({ type: v.literal("RUN_ERROR") }),
+  // `code` names the failure, as the stored answer's outcome does.
+  v.object({ type: v.literal("RUN_ERROR"), code: v.optional(v.unknown()) }),
 ]);
 
 export type ChatEvent = v.InferOutput<typeof chatEventSchema>;
@@ -207,6 +210,8 @@ export type StreamedAnswer = {
   readonly parts: readonly StreamedPart[];
   readonly status: AnswerStatus;
   readonly contextNotice: ChatContextNotice | null;
+  /** Why the run failed, once its error event said. */
+  readonly failure?: AIErrorKind;
 };
 
 export const EMPTY_ANSWER: StreamedAnswer = {
@@ -359,10 +364,17 @@ export const applyChatEvent = (
       return { ...answer, status: finishedStatus(event.outcome?.type) };
     }
     case "RUN_ERROR": {
-      break;
+      return {
+        ...answer,
+        status: "failed",
+        failure: streamedTurnFailure(event.code),
+      };
+    }
+    default: {
+      event satisfies never;
+      return panic("Unknown chat event");
     }
   }
-  return { ...answer, status: "failed" };
 };
 
 function finishedStatus(outcome: string | undefined): AnswerStatus {
@@ -536,6 +548,43 @@ export const chatContinueBody = ({
   };
 };
 
+/**
+ * Answers the thread's latest message again: the stored message goes back
+ * as it is, asking for a regeneration, which replaces the answer that
+ * failed. A thread whose turns run on the person's computer names its
+ * target, so the turn runs there again rather than on stella's own models.
+ */
+export const chatRegenerateBody = ({
+  anonymized,
+  matterId,
+  retry: { messageId, parts, runTarget },
+  runId,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly matterId: string | undefined;
+  readonly retry: ChatRetry;
+  readonly runId: string;
+  readonly threadId: string;
+}) => {
+  const forwarded = {
+    ...turnScope({ anonymized, matterId, runId, threadId }),
+    ...(runTarget === undefined ? {} : { runTarget }),
+    message: { id: messageId, role: "user", parts },
+    turnIntent: CHAT_TURN_INTENT.regenerate,
+  };
+  return {
+    threadId,
+    runId,
+    state: {},
+    messages: [{ id: messageId, role: "user" }],
+    tools: [],
+    context: [],
+    forwardedProps: forwarded,
+    data: forwarded,
+  };
+};
+
 /** The paused message an answer continues, and what the answer carries. */
 type ChatContinuation = {
   readonly messageId: string;
@@ -674,12 +723,14 @@ const readChatStream = async ({
           signal: controller.signal,
         });
         clearTimeout(connectTimer);
-        if (!response.ok || response.body === null) {
-          return response.status;
-        }
+        // A refusal names the turn too once the server has stored the
+        // message, so the thread, not the draft, holds what was sent.
         const turnId = response.headers.get(CHAT_TURN_ID_HEADER);
         if (turnId !== null) {
           onTurn?.(turnId);
+        }
+        if (!response.ok || response.body === null) {
+          return response.status;
         }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -842,6 +893,43 @@ export const continueChatTurn = async ({
         runTarget,
         threadId,
       }),
+    ),
+    fetch,
+    method: "POST",
+    onEvent,
+    onTurn,
+    path: "/v1/chat",
+    signal,
+    source,
+  });
+
+/** Answers the thread's latest message again and streams the new answer, as a send does. */
+export const regenerateChatTurn = async ({
+  anonymized,
+  fetch,
+  matterId,
+  onEvent,
+  onTurn,
+  retry,
+  runId,
+  signal,
+  source,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly fetch: StreamFetch;
+  readonly matterId: string | undefined;
+  readonly onEvent: (event: ChatEvent) => void;
+  readonly onTurn: (turnId: string) => void;
+  readonly retry: ChatRetry;
+  readonly runId: string;
+  readonly signal: AbortSignal;
+  readonly source: AccessTokenSource;
+  readonly threadId: string;
+}): Promise<Result<StreamEnd, StreamBreak>> =>
+  await readChatStream({
+    body: JSON.stringify(
+      chatRegenerateBody({ anonymized, matterId, retry, runId, threadId }),
     ),
     fetch,
     method: "POST",

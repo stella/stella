@@ -122,7 +122,8 @@ if (!databaseUrl || !runPostgresTests) {
         })
       ).unwrap();
 
-      const [row] = await db.execute(sql<JsonbStorageRow>`
+      const [row] = await db.execute(
+        sql<JsonbStorageRow>`
         SELECT
           jsonb_typeof(document_ast) AS "storageType",
           document_ast ->> 'version' AS "version"
@@ -130,7 +131,9 @@ if (!databaseUrl || !runPostgresTests) {
         WHERE source_id = ${sourceId}
           AND case_number = ${ingestionResult.caseNumber}
           AND language = ${ingestionResult.language}
-      `);
+      `,
+        "objects",
+      );
 
       expect(row).toBeDefined();
       expect(row?.["storageType"]).toBe("object");
@@ -161,7 +164,8 @@ if (!databaseUrl || !runPostgresTests) {
         })
       ).unwrap();
 
-      const [row] = await db.execute(sql<JsonbStorageRow>`
+      const [row] = await db.execute(
+        sql<JsonbStorageRow>`
         SELECT
           jsonb_typeof(document_ast) AS "storageType",
           document_ast ->> 'version' AS "version"
@@ -169,7 +173,9 @@ if (!databaseUrl || !runPostgresTests) {
         WHERE source_id = ${sourceId}
           AND case_number = ${ingestionResult.caseNumber}
           AND language = ${ingestionResult.language}
-      `);
+      `,
+        "objects",
+      );
 
       expect(row).toBeDefined();
       expect(row?.["storageType"]).toBe("object");

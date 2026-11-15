@@ -29,7 +29,6 @@ const EXPECTED_REGISTRY_RESOLVED = [
   "@stll/anonymize-wasm",
   "@stll/anonymize-win32-x64-msvc",
   "@stll/docx-core",
-  "@stll/docx-utils",
   "@stll/folio-agents",
   "@stll/folio-core",
   "@stll/folio-fonts",

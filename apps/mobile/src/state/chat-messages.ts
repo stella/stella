@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import type { AIErrorKind } from "@stll/api-contract/ai-errors";
 import {
   CHAT_CONTEXT_NOTICE_METADATA_KEY,
   chatContextNoticeSchema,
@@ -16,8 +17,9 @@ import type { AnswerBlock } from "@/state/chat-answer";
 import type { ChatDraft, SentFile } from "@/state/chat-attachments";
 import { draftDocumentsOf } from "@/state/chat-documents";
 import type { ChatDraftDocument } from "@/state/chat-documents";
-import { pendingInputOf } from "@/state/chat-pending-input";
-import type { PendingInput } from "@/state/chat-pending-input";
+import { storedTurnFailure } from "@/state/chat-failure";
+import { localRunTargetOf, pendingInputOf } from "@/state/chat-pending-input";
+import type { LocalRunTarget, PendingInput } from "@/state/chat-pending-input";
 
 /**
  * A stored message part. Text, reasoning, tool calls and attached files are
@@ -45,8 +47,8 @@ const messageSchema = v.object({
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
   parts: v.array(partSchema),
   /**
-   * Read for whether the message's turn waits for the person, and for the
-   * answer's context notice.
+   * Read for whether the message's turn waits for the person or failed, and
+   * for the answer's context notice.
    */
   metadata: v.optional(v.unknown()),
 });
@@ -75,6 +77,8 @@ export type ChatEntry = {
   readonly blocks: readonly AnswerBlock[];
   readonly files: readonly SentFile[];
   readonly drafts: readonly ChatDraftDocument[];
+  /** Why the answer's turn failed; absent for one that did not. */
+  readonly failure?: AIErrorKind;
   /** What the answer's context left out, as the web says it too. */
   readonly contextNotice: ChatContextNotice | null;
 };
@@ -99,6 +103,19 @@ export const contextNoticeIn = (
 };
 
 /**
+ * What answers the thread's latest message again once its answer failed:
+ * that message as the thread stores it, and the computer target the thread's
+ * turns run on, if they run on the person's computer.
+ */
+export type ChatRetry = {
+  /** The answer that failed, which the new one replaces. */
+  readonly answerId: string;
+  readonly messageId: string;
+  readonly parts: readonly unknown[];
+  readonly runTarget: LocalRunTarget | undefined;
+};
+
+/**
  * Messages oldest first, the cursor for the page before them (null at the
  * thread's start), the turn still answering, if one is, whether the thread
  * has sent anonymized text, which every later message must keep to, and, on
@@ -110,13 +127,16 @@ export type ChatMessagesPage = {
   readonly activeTurnId: string | null;
   readonly usedAnonymization: boolean;
   readonly pendingInput: PendingInput | null;
+  /** On the thread's latest page, when its latest answer failed. */
+  readonly retry: ChatRetry | null;
 };
 
 type StoredMessage = v.InferOutput<typeof messageSchema>;
 
 /**
  * What a phone can show of one stored message. System messages and messages
- * with nothing to draw are left out.
+ * with nothing to draw are left out; a failed answer always draws, as the
+ * reason it failed.
  */
 export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
   if (message.role !== "user" && message.role !== "assistant") {
@@ -137,11 +157,16 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
       : [];
   });
   const drafts = draftDocumentsOf(message.parts);
+  const failure =
+    message.role === "assistant"
+      ? storedTurnFailure(message.metadata)
+      : undefined;
   if (
     text === "" &&
     blocks.length === 0 &&
     files.length === 0 &&
-    drafts.length === 0
+    drafts.length === 0 &&
+    failure === undefined
   ) {
     return undefined;
   }
@@ -157,7 +182,35 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
       message.role === "assistant"
         ? (contextNoticeIn(message.metadata) ?? null)
         : null,
+    ...(failure === undefined ? {} : { failure }),
   };
+};
+
+/**
+ * The retry a page offers: only when its last message is an answer that
+ * failed, for the person's message it answered, which is then the thread's
+ * latest.
+ */
+const retryOf = (
+  messages: readonly StoredMessage[],
+  runTarget: unknown,
+): ChatRetry | null => {
+  const last = messages.at(-1);
+  if (
+    last?.role !== "assistant" ||
+    storedTurnFailure(last.metadata) === undefined
+  ) {
+    return null;
+  }
+  const asked = messages.findLast(({ role }) => role === "user");
+  return asked === undefined
+    ? null
+    : {
+        answerId: last.id,
+        messageId: asked.id,
+        parts: asked.parts,
+        runTarget: localRunTargetOf(runTarget),
+      };
 };
 
 /** A message this phone sends, as the thread shows it until the stored one replaces it. */
@@ -200,6 +253,7 @@ const toPage = (
         runTarget: page.runTarget,
       })
     : null,
+  retry: latest ? retryOf(page.messages, page.runTarget) : null,
 });
 
 /** An older page in front of what is loaded, without a message twice. */

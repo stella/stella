@@ -13,6 +13,7 @@ import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
   DESKTOP_RUNNER_FS_POLICIES,
+  DESKTOP_RUNNER_INPUT_EVENT,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DESKTOP_RUNNER_OUTPUT_EVENT,
   DESKTOP_RUNNER_REASONING_EFFORTS,
@@ -783,6 +784,12 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
       path: SIZE,
     }),
   },
+  // A steer's text is the member's words: logged as its size only.
+  "turn/steer": {
+    threadId: IDENTIFIER,
+    expectedTurnId: IDENTIFIER,
+    input: list({ type: vocabulary(["text"]), text: SIZE }),
+  },
   "turn/interrupt": CODEX_IN_TURN,
   "turn/started": { threadId: IDENTIFIER, turn: CODEX_TURN },
   "turn/completed": { threadId: IDENTIFIER, turn: CODEX_TURN },
@@ -965,6 +972,12 @@ const SIDECAR_HOST_FIELDS: Readonly<
     decision: vocabulary(DESKTOP_RUNNER_APPROVAL_DECISIONS),
   },
   "run.answer": { runId: IDENTIFIER, requestId: IDENTIFIER, answers: SIZE },
+  // A steer's text is the member's words: logged as its size only.
+  "run.input": {
+    runId: IDENTIFIER,
+    inputId: IDENTIFIER,
+    message: object({ role: vocabulary(["user"]), content: SIZE }),
+  },
   "run.interrupt": { runId: IDENTIFIER },
   "run.cancel": { runId: IDENTIFIER },
   "run.token": { runId: IDENTIFIER, expiresAt: INSTANT },
@@ -1005,6 +1018,7 @@ const SIDECAR_CHUNK = object({
   name: vocabulary([
     DESKTOP_RUNNER_CHECKPOINT_EVENT,
     DESKTOP_RUNNER_OUTPUT_EVENT,
+    DESKTOP_RUNNER_INPUT_EVENT,
     HARNESS_CONTINUATION_EVENT,
     ...AGENT_HARNESSES.map(harnessSessionIdEvent),
   ]),

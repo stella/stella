@@ -146,14 +146,15 @@ const insertAs = async ({
   userId: SafeId<"user">;
   workspaceIds: SafeId<"workspace">[];
 }) =>
-  await scopedQuery(
-    workspaceIds,
-    ids.orgA,
-    async (tx) =>
-      await tryCatch(async () => {
+  await tryCatch(async () =>
+    scopedQuery(
+      workspaceIds,
+      ids.orgA,
+      async (tx) => {
         await tx.insert(agentSkills).values(boundSkillRow(options));
-      }),
-    userId,
+      },
+      userId,
+    ),
   );
 
 describe("bound agent skill RLS", () => {

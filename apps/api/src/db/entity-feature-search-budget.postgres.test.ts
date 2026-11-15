@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
-import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
+import { getTableConfig } from "drizzle-orm/pg-core";
 
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -28,18 +28,18 @@ import {
 import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+import { schemaTables } from "./schema-tables";
+
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const databaseUrl = process.env["DATABASE_URL"];
 const ENTITY_COUNT = 100_000;
 const MATCHES_PER_KIND = 1000;
 const SAMPLE_COUNT = 5;
 // Every table the schema gates carries one feature policy for the app role.
-const POLICY_COUNT = Object.values(schema).filter(
-  (table) =>
-    is(table, PgTable) &&
-    getTableConfig(table).policies.some(
-      (policy) => policy.name === "workspace_entity_feature",
-    ),
+const POLICY_COUNT = schemaTables(schema).filter((table) =>
+  getTableConfig(table).policies.some(
+    (policy) => policy.name === "workspace_entity_feature",
+  ),
 ).length;
 const MAX_BUFFER_RATIO = 1.25;
 const QUERY_TEXT = "budgetneedle";

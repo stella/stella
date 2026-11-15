@@ -23,6 +23,7 @@ import {
   isUnsupportedChatPart,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import { assertProperty } from "@stll/property-testing";
@@ -36,7 +37,6 @@ import {
   classifyChatPartForPersistence,
   createChatTextPart,
   getAwaitingUserInteraction,
-  getAwaitingUserInteractions,
   getResumedUserInteraction,
   isChatAttachmentPart,
   isChatPart,
@@ -517,9 +517,7 @@ describe("persisted chat message parts", () => {
       },
     ] as const satisfies ChatPart[];
 
-    expect(
-      getAwaitingUserInteractions({ parts: [...parts], role: "assistant" }),
-    ).toEqual([
+    expect(memberWaitsOf({ parts: [...parts], role: "assistant" })).toEqual([
       { toolCallId: "approval-first", type: "approval" },
       { toolCallId: "approval-second", type: "approval" },
     ]);
@@ -545,7 +543,7 @@ describe("persisted chat message parts", () => {
       state: "approval-requested",
     } as const;
     expect(
-      getAwaitingUserInteractions({
+      memberWaitsOf({
         role: "assistant",
         parts: [server, client, approval],
       }),
@@ -575,7 +573,7 @@ describe("persisted chat message parts", () => {
       const content = toPersistedChatMessageContentV3({ data: [tagged] });
       const parts = normalizePersistedChatMessageContent(content).parts;
       expect(parts).toEqual([tagged]);
-      expect(getAwaitingUserInteractions({ role: "assistant", parts })).toEqual(
+      expect(memberWaitsOf({ role: "assistant", parts })).toEqual(
         executor === "client"
           ? [{ toolCallId: call.id, type: "client-tool" }]
           : [],
@@ -652,9 +650,7 @@ describe("persisted chat message parts", () => {
         }
         expect(chatToolExecutor(parts.at(0))).toBe(executor);
         expect(isServerChatToolCall(parts.at(0))).toBe(executor === "server");
-        expect(
-          getAwaitingUserInteractions({ role: "assistant", parts }),
-        ).toEqual(
+        expect(memberWaitsOf({ role: "assistant", parts })).toEqual(
           executor === "server"
             ? []
             : [
@@ -774,7 +770,7 @@ describe("persisted chat message parts", () => {
       text,
     ];
     expect(page.parts).toEqual(expected);
-    expect(getAwaitingUserInteractions(page)).toEqual([]);
+    expect(memberWaitsOf(page)).toEqual([]);
     const exported = normalizePersistedChatMessageContent(content).parts;
     expect(exported).toEqual(page.parts);
     expect(assembleMessageMarkdown(exported)).toBe(markdown);
@@ -811,9 +807,9 @@ describe("persisted chat message parts", () => {
       },
     ] as const satisfies ChatPart[];
 
-    expect(
-      getAwaitingUserInteractions({ parts: [...parts], role: "assistant" }),
-    ).toEqual([{ toolCallId: "ask-1", type: "ask-user" }]);
+    expect(memberWaitsOf({ parts: [...parts], role: "assistant" })).toEqual([
+      { toolCallId: "ask-1", type: "ask-user" },
+    ]);
     expect(
       getResumedUserInteraction({
         awaited: [
@@ -848,9 +844,9 @@ describe("persisted chat message parts", () => {
       },
     ] as const satisfies ChatPart[];
 
-    expect(
-      getAwaitingUserInteractions({ parts: [...parts], role: "assistant" }),
-    ).toEqual([{ toolCallId: "draft-1", type: "client-tool" }]);
+    expect(memberWaitsOf({ parts: [...parts], role: "assistant" })).toEqual([
+      { toolCallId: "draft-1", type: "client-tool" },
+    ]);
   });
 
   test("resolves a client-tool interaction only through its awaited call", () => {

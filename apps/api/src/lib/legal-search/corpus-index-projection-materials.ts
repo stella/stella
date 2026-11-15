@@ -155,7 +155,6 @@ const rejection = (
 
 type MaterialRow = {
   documentId: string;
-  projectionEpoch: CorpusProjectionIntentLease["epoch"];
   textS3Key: string | null;
 };
 
@@ -168,10 +167,15 @@ type ProjectedMaterialRow = {
 };
 
 // Every family sorts its leases the same way: a lease whose reservation moved
-// is lost, one whose canonical row, desired state or derived descriptor moved
+// is lost, one whose generation's desired state or derived descriptor moved
 // is stale, and one without a text pointer is unreadable. `project` derives a
 // row's descriptor and material, and runs only for a lease whose reservation
 // and canonical state are still there.
+//
+// Currency is the generation's own: its desired state still names the
+// lease's epoch, fingerprint and index, and the canonical row still derives
+// that content. The canonical row's epoch is not compared, since another
+// generation's change moves it without touching what this lease carries.
 const sortLeasesByReadiness = <Row extends MaterialRow>(
   {
     leases,
@@ -204,11 +208,10 @@ const sortLeasesByReadiness = <Row extends MaterialRow>(
       continue;
     }
     const { descriptor, material } = project(row);
-    if (
-      row.projectionEpoch !== lease.epoch ||
+    const stale =
       !stateMatchesLease(state, lease) ||
-      !descriptorMatchesLease(descriptor, lease)
-    ) {
+      !descriptorMatchesLease(descriptor, lease);
+    if (stale) {
       rejected.push(rejection(lease, "stale", "canonical input changed"));
       continue;
     }
@@ -251,7 +254,6 @@ const readCaseLawMaterials = async (
       // here: the builder already holds it, from the payload object this
       // transaction hands on a pointer to.
       metadata: caseLawDecisions.metadata,
-      projectionEpoch: caseLawDecisions.projectionEpoch,
       textS3Key: caseLawDecisions.textS3Key,
       astS3Key: caseLawDecisions.astS3Key,
       sourceDescriptor: caseLawSources.descriptor,
@@ -361,7 +363,6 @@ const readLegislationMaterials = async (
   const rows = await tx
     .select({
       ...LEGISLATION_PROJECTION_CANONICAL_COLUMNS,
-      projectionEpoch: legislationDocuments.projectionEpoch,
       textS3Key: legislationDocuments.textS3Key,
       astS3Key: legislationDocuments.astS3Key,
       sourceDescriptor: legislationSources.descriptor,
