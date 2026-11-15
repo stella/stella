@@ -40,7 +40,11 @@ import { resourceMutation } from "@/lib/workspace-realtime";
 
 const getNameOnlySchema = () => v.pick(getOrganizationSchema(), ["name"]);
 
-type OrganizationProfileUpdate = { name: string } | { logo: string | null };
+/** A write names its organization so a switch mid-upload cannot redirect it. */
+type OrganizationProfileUpdate = {
+  organizationId: string;
+  fields: { name: string } | { logo: string | null };
+};
 
 export const OrganizationProfileCard = () => {
   const t = useTranslations();
@@ -58,8 +62,14 @@ export const OrganizationProfileCard = () => {
       mutation: "updateOrganization",
       queryClient,
       scope: { type: "organization" },
-      mutationFn: async (update: OrganizationProfileUpdate) => {
-        const result = await authClient.organization.update({ data: update });
+      mutationFn: async ({
+        organizationId,
+        fields,
+      }: OrganizationProfileUpdate) => {
+        const result = await authClient.organization.update({
+          organizationId,
+          data: fields,
+        });
         readQueryResult(
           result.error
             ? Result.err(toAuthClientError(result.error))
@@ -86,9 +96,11 @@ export const OrganizationProfileCard = () => {
   });
 
   const uploadLogo = async (file: File) => {
+    // Pin the organization the file was picked for before the resize awaits.
+    const organizationId = data.id;
     const logo = await toOrganizationLogo(file);
     if (logo) {
-      updateMutation.mutate({ logo });
+      updateMutation.mutate({ organizationId, fields: { logo } });
     } else {
       notifyUserProblem(t("settings.organization.logoInvalid"));
     }
@@ -116,7 +128,11 @@ export const OrganizationProfileCard = () => {
       return undefined;
     }
     const renamed = await Result.tryPromise(
-      async () => await updateMutation.mutateAsync({ name: pendingName }),
+      async () =>
+        await updateMutation.mutateAsync({
+          organizationId: data.id,
+          fields: { name: pendingName },
+        }),
     );
     if (Result.isError(renamed)) {
       // The mutation already reported the failure; keep the confirm dialog
@@ -172,7 +188,10 @@ export const OrganizationProfileCard = () => {
                     <Button
                       disabled={updateMutation.isPending}
                       onClick={() => {
-                        updateMutation.mutate({ logo: null });
+                        updateMutation.mutate({
+                          organizationId: data.id,
+                          fields: { logo: null },
+                        });
                       }}
                       size="sm"
                       type="button"
