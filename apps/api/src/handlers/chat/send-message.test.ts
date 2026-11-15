@@ -20,6 +20,7 @@ import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   chatMessages,
+  chatQueueHolds,
   chatRunLogEntries,
   chatRunLogs,
   chatThreadNames,
@@ -247,6 +248,16 @@ const selectChatMessages = () => ({
     })),
 });
 
+/**
+ * A turn that fails holds its thread's queue in its settlement; these
+ * threads queue nothing, so the hold's statement is not a run-id lookup.
+ */
+const withoutQueueHolds =
+  (execute: (statement: SQL) => Promise<unknown>) => async (statement: SQL) =>
+    new PgDialect().sqlToQuery(statement).sql.includes("chat_queue_holds")
+      ? { rows: [] }
+      : await execute(statement);
+
 const withThreadNameReads = (select: () => { from: () => unknown }) => () => ({
   from: (table: unknown) => fromSharedReads(table, () => select().from()),
 });
@@ -270,12 +281,20 @@ const withRegistryCredentialQuery = (transaction: unknown): unknown => {
   }
   const query = "query" in transaction ? transaction.query : undefined;
   return {
+    // A member's send releases the thread's queue in its acceptance.
+    delete: (table: unknown) => {
+      if (table !== chatQueueHolds) {
+        throw new Error("Unexpected delete in chat send test");
+      }
+      return { where: async () => await Promise.resolve([]) };
+    },
     execute: async (statement: SQL) => {
-      if (
-        !new PgDialect()
-          .sqlToQuery(statement)
-          .sql.includes("chat_turn_run_id_taken")
-      ) {
+      const text = new PgDialect().sqlToQuery(statement).sql;
+      // A turn that fails holds its thread's queue; these threads have none.
+      if (text.includes("chat_queue_holds")) {
+        return await Promise.resolve({ rows: [] });
+      }
+      if (!text.includes("chat_turn_run_id_taken")) {
         throw new Error("Unexpected SQL execution in chat send test");
       }
       return { rows: [{ taken: false }] };
@@ -1430,7 +1449,7 @@ describe("send message disconnect handling", () => {
       createContext({
         contextMatterIds: [],
         transaction: {
-          execute: lookup,
+          execute: withoutQueueHolds(lookup),
           insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
@@ -1631,7 +1650,7 @@ describe("send message disconnect handling", () => {
           createContext({
             contextMatterIds: [],
             transaction: {
-              execute: lookup,
+              execute: withoutQueueHolds(lookup),
               insert: withRunLogInsert((table) => {
                 const original = insert(table);
                 return {
