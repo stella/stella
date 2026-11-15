@@ -22,6 +22,7 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import type { AskUserAnswer } from "@stll/api-contract/chat-ask-user";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import { assertProperty } from "@stll/property-testing";
 
@@ -34,7 +35,6 @@ import {
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   createChatAttachmentPart,
-  getAwaitingUserInteractions,
   isChatPart,
   normalizePersistedChatMessageContent,
   toPersistableChatMessage,
@@ -1256,7 +1256,7 @@ describe("validateMessage", () => {
     const read = normalizePersistedChatMessageContent(content).parts;
     expect(history.parts).toEqual(read);
     expect(read.map(chatToolExecutor)).toEqual(["server", "server", "client"]);
-    expect(getAwaitingUserInteractions(history)).toEqual([
+    expect(memberWaitsOf(history)).toEqual([
       { toolCallId: gate.id, type: "approval" },
       { toolCallId: pending.id, type: "client-tool" },
     ]);
@@ -1310,7 +1310,7 @@ describe("validateMessage", () => {
           "server",
           "client",
         ]);
-        expect(getAwaitingUserInteractions(result.value.message)).toEqual([]);
+        expect(memberWaitsOf(result.value.message)).toEqual([]);
         expect(
           chatRefsWrittenIn({
             parts: result.value.message.parts,

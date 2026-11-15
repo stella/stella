@@ -34,6 +34,10 @@ import {
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
 import {
+  isApprovedClientCallAwaitingResult,
+  memberWaitsOf,
+} from "@stll/api-contract/chat-member-wait";
+import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
@@ -70,11 +74,9 @@ import {
   classifyChatPartForPersistence,
   createChatTextPart,
   getAwaitingUserInteraction,
-  getAwaitingUserInteractions,
   getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
   isAnswerFilePart,
-  isApprovedClientCallAwaitingResult,
   isChatAttachmentPart,
   isChatDocumentPart,
   isChatPart,
@@ -2654,7 +2656,7 @@ const resolveAdmissionLossOutcome = ({
     processor.processChunk(chunk);
   }
   finalizeResponseProcessor(processor);
-  const interaction = getAwaitingUserInteractions(getResponseMessage()).find(
+  const interaction = memberWaitsOf(getResponseMessage()).find(
     (candidate) =>
       toolCallsWithCompleteInput.has(candidate.toolCallId) &&
       (candidate.type === "approval" || handedOut.has(candidate.toolCallId)),

@@ -7,6 +7,7 @@ import {
   type ChatForkStepContent,
 } from "@stll/api-contract/chat-local-run-step-content";
 import { chatLocalRunOfCall } from "@stll/api-contract/chat-local-run-step-output";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -24,7 +25,6 @@ import {
   chatMessageFromPersisted,
   continueStoredChatPart,
   createChatAttachmentPart,
-  getAwaitingUserInteractions,
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
   getChatAttachmentPlaceholder,
@@ -294,7 +294,7 @@ const settleForkedPendingInteractions = (
   // A pre-outcome message carries no `turnOutcome` and can still hold an
   // unanswered call, so the parts decide too. A message that awaited the user
   // is superseded on the fork even when settling left nothing to answer.
-  const pending = getAwaitingUserInteractions({
+  const pending = memberWaitsOf({
     parts: settled.parts,
     role: settled.role,
   });

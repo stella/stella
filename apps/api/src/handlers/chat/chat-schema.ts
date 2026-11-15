@@ -42,6 +42,10 @@ import {
   askUserInputSchema,
   askUserOutputSchema,
 } from "@stll/api-contract/chat-ask-user";
+import {
+  isApprovedClientCallAwaitingResult,
+  memberWaitsOf,
+} from "@stll/api-contract/chat-member-wait";
 import { chatUserMessageContentSchema } from "@stll/api-contract/chat-message-content";
 import {
   type ChatRunTarget,
@@ -61,10 +65,8 @@ import {
 import {
   chatMessageFromPersisted,
   continueStoredChatPart,
-  getAwaitingUserInteractions,
   getResumedUserInteraction,
   hasServerOwnedChatPartType,
-  isApprovedClientCallAwaitingResult,
   isChatPart,
   isChatTextPart,
   isIncomingChatPart,
@@ -1055,7 +1057,7 @@ const validateContinuationToolCallIntegrity = ({
     validatedCallsById.set(incomingCall.id, validatedCallResult.value);
   }
 
-  const awaitedInteractions = getAwaitingUserInteractions(persistedMessage);
+  const awaitedInteractions = memberWaitsOf(persistedMessage);
   const awaitedCallIds = new Set(
     awaitedInteractions.map(({ toolCallId }) => toolCallId),
   );
@@ -1701,7 +1703,7 @@ export const validateToolCallParts = ({
   const serverAuthoredCallIds = new Set<string>();
   const parts: ChatPart[] = [];
   const awaitedCallIds = new Set(
-    getAwaitingUserInteractions(message).map(({ toolCallId }) => toolCallId),
+    memberWaitsOf(message).map(({ toolCallId }) => toolCallId),
   );
   const firstAwaitedIndex = message.parts.findIndex(
     (part) => part.type === "tool-call" && awaitedCallIds.has(part.id),
