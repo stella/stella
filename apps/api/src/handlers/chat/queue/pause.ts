@@ -10,6 +10,7 @@ import {
 } from "@/api/handlers/chat/queue/shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { holdChatQueueOnTx } from "@/api/lib/db/chat-queue-gate";
 
@@ -46,7 +47,14 @@ const pauseChatQueue = createSafeRootHandler(
         return true;
       }),
     );
-    return paused ? Result.ok({}) : Result.err(chatThreadNotFound());
+    if (!paused) {
+      return Result.err(chatThreadNotFound());
+    }
+    announceChatQueueChange({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
+    return Result.ok({});
   },
 );
 
