@@ -35,6 +35,11 @@ const answer = (
   }
   const court = args["court"];
   if (court === undefined) {
+    // Facets are opt-in: a search that does not name them gets none.
+    const requested = args["facets"];
+    if (!Array.isArray(requested) || !requested.includes("court")) {
+      return { facets: null, results: [] };
+    }
     return {
       facets: {
         court: [
@@ -188,6 +193,21 @@ describe("the case-law identity canary", () => {
       status: "passed",
       detail: `4 identities across 2 courts resolved to the decision search found; docket only (no ECLI sampled): ${SUPREME}`,
     });
+  });
+
+  test("the seed search asks for court facets", async () => {
+    const seeds: unknown[] = [];
+    const recording: CallCaseLawTool = async (name, args) => {
+      if (name === "search_case_law" && args["court"] === undefined) {
+        seeds.push(args["facets"]);
+      }
+      return await deployment(exact)(name, args);
+    };
+    await sampleCaseLawIdentities(recording);
+    expect(seeds.length).toBeGreaterThan(0);
+    for (const facets of seeds) {
+      expect(facets).toContain("court");
+    }
   });
 
   test("a country whose search is closed has nothing to sample", async () => {

@@ -170,6 +170,7 @@ const probeCountry = async (
 ): Promise<CaseLawIdentityProbeOutcome> => {
   const seeded = await searchOf(callTool, {
     country,
+    facets: ["court"],
     limit: 1,
     queries: [FACET_SEED_QUERY[country]],
   });
