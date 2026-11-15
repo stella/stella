@@ -57,11 +57,62 @@ const readChatTimestamp = (value: string): Date =>
   parseDeterministicDate(value) ??
   panic("The chat API returned an invalid timestamp");
 
+type SerializedSubagentPart = Extract<
+  SerializedChatMessage["parts"][number],
+  { type: "subagent" }
+>;
+type SubagentChatPart = Extract<
+  PersistedChatMessage["parts"][number],
+  { type: "subagent" }
+>;
+type SerializedChildMessage =
+  SerializedSubagentPart["subagent"]["messages"][number];
+type ChildMessage = SubagentChatPart["subagent"]["messages"][number];
+
+/** A sub-agent part as the page holds it: each of its child's messages and
+ *  parts read back as a message's own are. */
+const deserializeSubagentPart = (
+  part: SerializedSubagentPart,
+): SubagentChatPart => ({
+  ...part,
+  subagent: {
+    ...part.subagent,
+    messages: part.subagent.messages.map(deserializeChildMessage),
+  },
+});
+
+const deserializeChildMessage = ({
+  createdAt,
+  parts,
+  ...message
+}: SerializedChildMessage): ChildMessage => ({
+  ...message,
+  ...(createdAt === undefined
+    ? {}
+    : { createdAt: readChatTimestamp(createdAt) }),
+  parts: parts.map(deserializeChildPart),
+});
+
+const deserializeChildPart = (
+  part: SerializedChildMessage["parts"][number],
+): ChildMessage["parts"][number] => {
+  if (part.type === "subagent") {
+    return deserializeSubagentPart(part);
+  }
+  if (part.type !== "tool-result") {
+    return part;
+  }
+  const { createdAt, ...rest } = part;
+  return createdAt === undefined
+    ? rest
+    : { ...rest, createdAt: readChatTimestamp(createdAt) };
+};
+
 const deserializeChatPart = (
   part: SerializedChatMessage["parts"][number],
 ): PersistedChatMessage["parts"][number] => {
   if (part.type === "subagent") {
-    return panic("A persisted chat message contains a subagent part");
+    return deserializeSubagentPart(part);
   }
   if (part.type !== "tool-result") {
     return part;
