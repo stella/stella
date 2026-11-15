@@ -257,22 +257,19 @@ const serve = ({ waiting }: { waiting: boolean }) => {
         },
       });
     }
-    switch (action) {
-      case "move": {
-        const beforeId = beforeIdOf(body);
-        const at =
-          beforeId === null ? without.length : without.indexOf(beforeId);
-        state.order = [...without.slice(0, at), id, ...without.slice(at)];
-        return Response.json({});
-      }
-      case "send-now":
-        state.order = [id, ...without];
-        state.hold = null;
-        return Response.json({});
-      default:
-        state.unexpected.push(route);
-        return Response.json({ message: "Not served" }, { status: 404 });
+    if (action === "move") {
+      const beforeId = beforeIdOf(body);
+      const at = beforeId === null ? without.length : without.indexOf(beforeId);
+      state.order = [...without.slice(0, at), id, ...without.slice(at)];
+      return Response.json({});
     }
+    if (action === "send-now") {
+      state.order = [id, ...without];
+      state.hold = null;
+      return Response.json({});
+    }
+    state.unexpected.push(route);
+    return Response.json({ message: "Not served" }, { status: 404 });
   };
   return state;
 };
