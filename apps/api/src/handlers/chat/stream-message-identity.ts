@@ -1,9 +1,15 @@
 import {
   EventType,
+  interleaveActivityRecords,
+  modelMessagesToUIMessages,
   modelMessageToUIMessage,
   uiMessagesToWire,
 } from "@tanstack/ai";
-import type { StreamChunk, ToolCall } from "@tanstack/ai";
+import type {
+  ChatMiddlewareContext,
+  StreamChunk,
+  ToolCall,
+} from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import {
@@ -23,6 +29,7 @@ import type {
 import { classifyAIError } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { SNAPSHOT_OWNERS_METADATA_KEY } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -110,7 +117,7 @@ export const remapOutgoingMessageIds = async function* ({
   mapMessageId,
   source,
 }: RemapOutgoingMessageIdsProps): AsyncIterable<PublicStreamChunk> {
-  const snapshotMessageIds = new Map<string, SafeId<"chatMessage">>();
+  const snapshotMessageIds = new Map<string, string>();
   for await (const chunk of source) {
     yield remapChunkMessageId({
       chunk,
@@ -119,6 +126,54 @@ export const remapOutgoingMessageIds = async function* ({
       snapshotMessageIds,
     });
   }
+};
+
+/** Snapshot-local evidence from the actual SDK model state, after guarding,
+ * compaction and new model calls. Only temporary conversion copies carry row
+ * markers; only the emitted chunk carries the resulting map. The remapper
+ * consumes it before either persistence or client delivery. */
+export const attachSnapshotMessageOwners = (
+  context: Pick<ChatMiddlewareContext, "messages" | "activities" | "runId">,
+  chunk: StreamChunk,
+): StreamChunk => {
+  if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+    return chunk;
+  }
+  const marker = "__stellaSnapshotOwner";
+  const rows = uiMessagesToWire(
+    interleaveActivityRecords(
+      modelMessagesToUIMessages(
+        context.messages.map((message, index) => {
+          const id = message.id || `snapshot_${context.runId}_${index}`;
+          return {
+            ...message,
+            id,
+            metadata: { ...message.metadata, [marker]: id },
+          };
+        }),
+      ),
+      [...(context.activities ?? [])],
+    ),
+    { includeSnapshotStructuredOutput: true, includeActivity: true },
+  );
+  const owners = Object.fromEntries(
+    rows.flatMap((row): [string, string][] => {
+      if (row.role !== "assistant") {
+        return [];
+      }
+      const owner: unknown = isRecord(row.metadata)
+        ? Reflect.get(row.metadata, marker)
+        : undefined;
+      if (typeof owner !== "string") {
+        return panic("The SDK snapshot conversion lost the assistant owner");
+      }
+      return [[row.id, owner]];
+    }),
+  );
+  return {
+    ...chunk,
+    metadata: { ...chunk.metadata, [SNAPSHOT_OWNERS_METADATA_KEY]: owners },
+  };
 };
 
 /**
@@ -422,7 +477,10 @@ type AssistantSnapshotMessage = Extract<SnapshotMessage, { role: "assistant" }>;
  * the run's messages fold into it rather than beside it.
  *
  * TanStack also splits every assistant message it replays at each tool
- * result, and every copy keeps the message's id. The client keeps one message
+ * result. Older copies shared an id; v1 gives segments unique ids. Ordered
+ * blocks within one model call additionally link with metadata.tanstack.continues.
+ * Result-boundary segments instead use the canonical history ownership map.
+ * The client keeps one message
  * per id, so the snapshot carries exactly one assistant message per id, at
  * the position of that id's first copy; each copy's reasoning moves ahead of
  * it, where the client attaches reasoning to the next assistant message.
@@ -432,17 +490,38 @@ const mergeSnapshotAssistantMessages = ({
   mapMessageId,
   messages,
   snapshotMessageIds,
+  snapshotOwners,
 }: {
   existingMessageIds: ReadonlySet<string>;
   mapMessageId: MessageIdMapper;
   messages: readonly SnapshotMessage[];
-  snapshotMessageIds: Map<string, SafeId<"chatMessage">>;
+  snapshotMessageIds: Map<string, string>;
+  snapshotOwners: unknown;
 }): SnapshotMessage[] => {
+  const ownersByRowId = new Map<string, string>();
   const groupId = (message: AssistantSnapshotMessage): string => {
-    if (existingMessageIds.has(message.id)) {
-      return message.id;
+    const sourceOwner: unknown = isRecord(snapshotOwners)
+      ? snapshotOwners[message.id]
+      : undefined;
+    if (typeof sourceOwner === "string") {
+      const owner = existingMessageIds.has(sourceOwner)
+        ? sourceOwner
+        : mapMessageId(sourceOwner);
+      snapshotMessageIds.set(message.id, owner);
+      return owner;
     }
-    const mergedId = mapMessageId(message.id);
+    const metadata = isRecord(message.metadata) ? message.metadata : undefined;
+    const tanstack = metadata?.["tanstack"];
+    const continues = isRecord(tanstack) ? tanstack["continues"] : undefined;
+    const owner =
+      typeof continues === "string" ? ownersByRowId.get(continues) : undefined;
+    if (owner !== undefined) {
+      snapshotMessageIds.set(message.id, owner);
+      return owner;
+    }
+    const mergedId = existingMessageIds.has(message.id)
+      ? message.id
+      : mapMessageId(message.id);
     snapshotMessageIds.set(message.id, mergedId);
     return mergedId;
   };
@@ -461,6 +540,7 @@ const mergeSnapshotAssistantMessages = ({
       continue;
     }
     const id = groupId(message);
+    ownersByRowId.set(message.id, id);
     const group = groups.get(id);
     if (group === undefined) {
       const created: AssistantSnapshotGroup = {
@@ -707,16 +787,21 @@ const remapChunkMessageId = ({
   chunk: PublicStreamChunk;
   existingMessageIds: ReadonlySet<string>;
   mapMessageId: MessageIdMapper;
-  snapshotMessageIds: Map<string, SafeId<"chatMessage">>;
+  snapshotMessageIds: Map<string, string>;
 }): PublicStreamChunk => {
   if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+    const { [SNAPSHOT_OWNERS_METADATA_KEY]: snapshotOwners, ...metadata } =
+      chunk.metadata ?? {};
+    const { metadata: _privateMetadata, ...snapshot } = chunk;
     return {
-      ...chunk,
+      ...snapshot,
+      ...(Object.keys(metadata).length > 0 && { metadata }),
       messages: mergeSnapshotAssistantMessages({
         existingMessageIds,
         mapMessageId,
         messages: chunk.messages,
         snapshotMessageIds,
+        snapshotOwners,
       }),
     };
   }

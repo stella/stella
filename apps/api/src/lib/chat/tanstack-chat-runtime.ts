@@ -29,6 +29,9 @@ import {
 import { arrayOrEmpty } from "@/api/lib/array";
 import { isRecord } from "@/api/lib/type-guards";
 
+/** Internal snapshot evidence, consumed before persistence and client delivery. */
+export const SNAPSHOT_OWNERS_METADATA_KEY = "__stellaSnapshotOwners";
+
 /**
  * Top-level keys `normalizeStreamChunk` takes off an engine-emitted chunk, per
  * event type. Some are moved into `metadata.tanstack` and some are dropped;

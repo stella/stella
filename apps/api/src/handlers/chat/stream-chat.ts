@@ -146,6 +146,7 @@ import {
 } from "@/api/handlers/chat/snapshot-reconciliation";
 import {
   assistantMessageStartChunk,
+  attachSnapshotMessageOwners,
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
   findDeniedApprovals,
@@ -2153,8 +2154,9 @@ const createChatRuntimeMiddleware = ({
   return {
     name: "stella-chat-runtime",
     ...terminalHooks,
-    onChunk: (_ctx, chunk) => {
+    onChunk: (ctx, chunk) => {
       state.producedAnswer ||= chunkCarriesAnswer(chunk);
+      return attachSnapshotMessageOwners(ctx, chunk);
     },
     onConfig: async (ctx, config) => {
       if (ctx.phase !== "beforeModel") {

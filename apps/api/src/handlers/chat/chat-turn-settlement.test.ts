@@ -296,8 +296,8 @@ describe("the history a run hands the engine", () => {
 
   // A superseded turn stores its client call as an error without a result,
   // and a stopped turn may leave an input-complete call or an approval request
-  // open. The engine would ask the client for any of them again instead of
-  // running the model. Every state is listed so a new one must choose.
+  // open. The pre-SDK context and provider-history boundaries need an explicit
+  // result for each. Every state is listed so a new one must choose.
   const unresolvedResult = (toolCallId: string): ChatPart =>
     errorToolResult(toolCallId, UNRESOLVED_CALL_ERROR);
   const openCallByState = {
@@ -320,7 +320,7 @@ describe("the history a run hands the engine", () => {
   } as const satisfies Record<ToolCallState, boolean>;
 
   for (const part of Object.values(openCallByState)) {
-    test(`an unanswered ${part.state} call on an earlier message is closed only if the engine would ask again`, () => {
+    test(`an unanswered ${part.state} call on an earlier message has its required closing result`, () => {
       const history = settleHistoryForRun({
         messages: [assistant("earlier", [part])],
         resumedMessageId: undefined,
