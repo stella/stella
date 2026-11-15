@@ -25,13 +25,14 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { readReservedCorpusProjectionMaterialsTx } from "@/api/lib/legal-search/corpus-index-projection-materials";
 import {
-  corpusProjectionOfflineBlockFits,
+  corpusProjectionOfflineBlockJoins,
   type CorpusProjectionOfflineBuildPolicy,
   corpusProjectionOfflineLeaseCanStart,
+  corpusProjectionOfflineNextShardClass,
   type CorpusProjectionOfflinePlan,
+  corpusProjectionOfflineShardClass,
   corpusProjectionOfflineShardIsClosed,
   corpusProjectionOfflineShardName,
-  corpusProjectionOfflineStartChunks,
   corpusProjectionOfflineStopReservingAtMs,
   planCorpusProjectionOfflineBuild,
   validateCorpusProjectionOfflineRunId,
@@ -63,6 +64,7 @@ import {
 import {
   CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
   type CorpusProjectionIntentLease,
+  readCorpusProjectionOfflineRequestCapsTx,
   recordAcceptedCorpusProjectionAppendsTx,
   reserveCorpusProjectionRoutePageTx,
   startCorpusProjectionOfflineAppendBatchTx,
@@ -90,11 +92,16 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
  * certainly ended (its kill deadline plus the end margin, by the database
  * clock). The outcome only stops a run whose deliveries keep failing.
  *
- * Entities the proof hands back: a withdrawn or retired revision that shared
- * its shard leaves its entity in single requests, uncharged. A batch never
- * reserves such an entity (`reserveCorpusProjectionRoutePageTx` takes
- * batchable ones only), so the per-row path, which isolates and charges
- * single revisions, owns it from then on; the progress counts them.
+ * One shard file is one start request. An empty delivery cannot say which
+ * revision, if any, was at fault, so a revision withdrawn from a request of
+ * several stays batched, uncharged, and may start again only in a request of
+ * at most half that size (`readCorpusProjectionOfflineRequestCapsTx`); alone,
+ * it is charged like any isolated document fault and blocks at the attempt
+ * limit. Files are therefore grouped by request cap
+ * (`corpusProjectionOfflineShardClass`), so a delivery failure halves exactly
+ * what failed together. A retired revision that shared its request leaves its
+ * entity in single requests, which only the per-row path sends; the batch
+ * never reserves such an entity and the progress counts it as handed over.
  */
 
 type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
@@ -244,6 +251,8 @@ export type CorpusProjectionOfflineBuildProgress = {
     deadlinePassed: number;
     /** Shards started but not delivered, as the run lost its lock. */
     undelivered: number;
+    /** Files of revisions an earlier empty delivery capped. */
+    capped: number;
     /** Bytes and indexer time of ingested shards: the measured rate. */
     ingestedBytes: number;
     ingestedMs: number;
@@ -251,13 +260,18 @@ export type CorpusProjectionOfflineBuildProgress = {
   recorded: number;
   /** Applied by this run's proof. */
   proved: number;
-  /** Absent once the indexer had certainly ended; no delete owed. */
+  /**
+   * Absent once the indexer had certainly ended; no delete owed. The entity
+   * is reserved again, by this run or a later one, in a request of at most
+   * half the one it was withdrawn from.
+   */
   withdrawn: number;
   /** Queued for a delete: inexact, or desired state moved. */
   sentToCleanup: number;
   /**
-   * Withdrawn or retired revisions whose entity the proof left in single
-   * requests: the per-row path owns those entities now.
+   * Retired revisions that shared their request, whose entity the proof left
+   * in single requests: the per-row path owns those entities now. A
+   * withdrawn revision stays with the batch, in a smaller request.
    */
   perRowHandoffs: number;
   blockedByProof: number;
@@ -314,6 +328,7 @@ const emptyProgress = (
     killedAtDeadline: 0,
     deadlinePassed: 0,
     undelivered: 0,
+    capped: 0,
     ingestedBytes: 0,
     ingestedMs: 0,
   },
@@ -336,17 +351,20 @@ type ShardEntry = {
   range: CorpusProjectionShardRange;
 };
 
-/** A built block that did not fit its shard, carried to the next one. */
+/** A built block waiting for a shard of its class. */
 type CarriedBlock = {
   lease: CorpusProjectionIntentLease;
   documentCount: number;
   block: string;
+  /** `corpusProjectionOfflineShardClass` of its request cap. */
+  shardClass: number;
 };
 
 type StartedShard = {
   shard: CorpusProjectionOfflineShard;
   entries: ShardEntry[];
   startedAt: Date;
+  shardClass: number;
 };
 
 /** A recorded revision this run still has to see decided. */
@@ -355,6 +373,8 @@ type PendingProof = {
   notBeforeMs: number;
   /** When its indexer has certainly ended, on the database clock. */
   endedAtMs: number;
+  /** Revisions its start request held; a retirement from more isolates it. */
+  requestSize: number;
 };
 
 type Stop = Exclude<CorpusProjectionOfflineBuildOutcome["status"], "drained">;
@@ -443,8 +463,12 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   readonly #hold: CorpusProjectionOfflineBuildLockHold;
   readonly #progress: CorpusProjectionOfflineBuildProgress;
   readonly #pending = new Map<ProjectionRevision, PendingProof>();
-  /** Built blocks reserved for a shard they did not fit; at most one page. */
-  #carried: CarriedBlock[] = [];
+  /**
+   * Built blocks waiting for a shard of their class, in reservation order.
+   * Capped classes are served before any page is reserved again, so this
+   * holds at most what one full shard's pages brought besides it.
+   */
+  #waiting: CarriedBlock[] = [];
   #exhausted = false;
   #stop: Stop | null = null;
   #consecutiveFailures = 0;
@@ -513,7 +537,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     try {
       while (
         this.#stop === null &&
-        (!this.#exhausted || this.#carried.length > 0)
+        (!this.#exhausted || this.#waiting.length > 0)
       ) {
         const slot = await slots.acquire();
         // db-await-in-loop: one shard per pass: proofs due before more work is reserved, batched per census
@@ -536,7 +560,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       await slots.drain();
     }
     slots.rethrow();
-    await this.#releaseCarried();
+    await this.#releaseWaiting();
     await this.#drainProofs();
     this.#report();
     return this.#stop ?? "drained";
@@ -688,11 +712,15 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     name: string,
     stopReservingAtMs: number,
   ): Promise<StartedShard | null> {
-    const entries = await this.#fill(staging, stopReservingAtMs);
+    const shardClass = corpusProjectionOfflineNextShardClass(
+      this.#plan,
+      this.#waiting.map((block) => block.shardClass),
+    );
+    const entries = await this.#fill(staging, shardClass, stopReservingAtMs);
     if (entries.length === 0) {
       return null;
     }
-    const started = await this.#start(entries);
+    const started = await this.#start(entries, shardClass);
     if (started === null) {
       return null;
     }
@@ -718,12 +746,24 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       ),
       bytes: file.bytes,
     };
-    return { shard, entries: started.entries, startedAt: started.startedAt };
+    return {
+      shard,
+      entries: started.entries,
+      startedAt: started.startedAt,
+      shardClass,
+    };
   }
 
-  /** Fill a shard's staging file from carried blocks, then reserved pages. */
+  /**
+   * Fill a shard of one class: from waiting blocks of that class first, then,
+   * for the largest class only, from newly reserved pages. A block of another
+   * class waits for a shard of its own; a capped class never reserves, so its
+   * file may be small, and that is the point: it holds only what failed
+   * together before.
+   */
   async #fill(
     staging: CorpusProjectionShardStaging,
+    shardClass: number,
     stopReservingAtMs: number,
   ): Promise<ShardEntry[]> {
     const entries: ShardEntry[] = [];
@@ -731,33 +771,41 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     const fill = () => ({
       revisions: entries.length,
       bytes: staging.bytes(),
+      limit: shardClass,
       earliestLeaseExpiresAtMs,
     });
-    const place = async (block: CarriedBlock): Promise<boolean> => {
-      const bytes = Buffer.byteLength(block.block, "utf-8");
-      if (!corpusProjectionOfflineBlockFits(this.#plan, fill(), bytes)) {
-        return false;
+    /** Place the blocks of this class that fit; return every other one. */
+    const placeAll = async (
+      blocks: readonly CarriedBlock[],
+    ): Promise<CarriedBlock[]> => {
+      const left: CarriedBlock[] = [];
+      for (const block of blocks) {
+        if (
+          !corpusProjectionOfflineBlockJoins(this.#plan, fill(), {
+            shardClass: block.shardClass,
+            bytes: Buffer.byteLength(block.block, "utf-8"),
+          })
+        ) {
+          left.push(block);
+          continue;
+        }
+        const range = await staging.append(block.block);
+        entries.push({
+          lease: block.lease,
+          documentCount: block.documentCount,
+          range,
+        });
+        const expiresAtMs = block.lease.leaseExpiresAt.getTime();
+        earliestLeaseExpiresAtMs =
+          earliestLeaseExpiresAtMs === null
+            ? expiresAtMs
+            : Math.min(earliestLeaseExpiresAtMs, expiresAtMs);
       }
-      const range = await staging.append(block.block);
-      entries.push({
-        lease: block.lease,
-        documentCount: block.documentCount,
-        range,
-      });
-      const expiresAtMs = block.lease.leaseExpiresAt.getTime();
-      earliestLeaseExpiresAtMs =
-        earliestLeaseExpiresAtMs === null
-          ? expiresAtMs
-          : Math.min(earliestLeaseExpiresAtMs, expiresAtMs);
-      return true;
+      return left;
     };
-    const carried = this.#carried;
-    this.#carried = [];
-    for (const [index, block] of carried.entries()) {
-      if (!(await place(block))) {
-        this.#carried = carried.slice(index);
-        return entries;
-      }
+    this.#waiting = await placeAll(this.#waiting);
+    if (shardClass < this.#plan.shardRevisionCap) {
+      return entries;
     }
     while (!this.#exhausted) {
       const nowMs = await this.#nowMs();
@@ -769,16 +817,11 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       }
       const limit = Math.min(
         CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
-        this.#plan.shardRevisionCap - entries.length,
+        shardClass - entries.length,
       );
       // db-await-in-loop: a page walk: one reservation page of up to an append's revisions per pass
       const built = await this.#reserveAndBuildPage(limit);
-      for (const [index, block] of built.entries()) {
-        if (!(await place(block))) {
-          this.#carried = built.slice(index);
-          return entries;
-        }
-      }
+      this.#waiting.push(...(await placeAll(built)));
     }
     return entries;
   }
@@ -792,7 +835,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     const { runInTransaction, family, generation, indexId, policy } =
       this.#options;
     const testNow = await this.#testNow();
-    const { page, materials } = await this.#admit(
+    const { page, materials, caps } = await this.#admit(
       { phase: "reserve", revisions: limit },
       async () => {
         const reserved = await runInTransaction(
@@ -807,17 +850,26 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
               ...(testNow === undefined ? {} : { testNow }),
             }),
         );
+        if (reserved.leases.length === 0) {
+          return {
+            page: reserved,
+            materials: { ready: [], rejected: [] },
+            caps: new Map<ProjectionRevision, number>(),
+          };
+        }
         return {
           page: reserved,
-          materials:
-            reserved.leases.length === 0
-              ? { ready: [], rejected: [] }
-              : await runInTransaction(
-                  async (tx) =>
-                    await readReservedCorpusProjectionMaterialsTx(tx, {
-                      leases: reserved.leases,
-                    }),
-                ),
+          ...(await runInTransaction(async (tx) => ({
+            materials: await readReservedCorpusProjectionMaterialsTx(tx, {
+              leases: reserved.leases,
+            }),
+            // Stable while the leases are held: only a withdrawal of the
+            // entity's own outstanding revision could lower them.
+            caps: await readCorpusProjectionOfflineRequestCapsTx(
+              tx,
+              reserved.leases,
+            ),
+          }))),
         };
       },
     );
@@ -861,6 +913,13 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           lease: material.lease,
           documentCount: built.value.documentCount,
           block: `${built.value.parts.join("\n")}\n`,
+          shardClass: corpusProjectionOfflineShardClass(
+            this.#plan,
+            caps.get(material.lease.intentId) ??
+              panic(
+                `Reserved revision has no request cap: ${material.lease.intentId}`,
+              ),
+          ),
         });
       } else {
         failures.push(
@@ -885,88 +944,82 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   }
 
   /**
-   * Start a shard's revisions offline, in start transactions of at most one
-   * append's revisions. A revision whose lease no longer covers its run's kill
-   * and record is cancelled instead, so it is never in the file. The run's
-   * kill deadline counts from the first start, the earliest.
+   * Start a shard's revisions offline as one request, the file's: a delivery
+   * failure then halves exactly the request that failed together. The shard
+   * holds one class, so the request is within every revision's cap. A
+   * revision whose lease no longer covers its run's kill and record is
+   * cancelled instead, so it is never in the file.
    */
   async #start(
     entries: readonly ShardEntry[],
+    shardClass: number,
   ): Promise<{ entries: ShardEntry[]; startedAt: Date } | null> {
     const { runInTransaction } = this.#options;
-    const started: ShardEntry[] = [];
-    let startedAt: Date | null = null;
-    for (const chunk of corpusProjectionOfflineStartChunks(entries)) {
-      const nowMs = await this.#nowMs();
-      const startable = chunk.filter(({ lease }) =>
-        corpusProjectionOfflineLeaseCanStart(
-          this.#plan,
-          lease.leaseExpiresAt.getTime(),
-          nowMs,
+    if (entries.length > shardClass) {
+      return panic("An offline shard holds more revisions than its class");
+    }
+    const nowMs = await this.#nowMs();
+    const startable = entries.filter(({ lease }) =>
+      corpusProjectionOfflineLeaseCanStart(
+        this.#plan,
+        lease.leaseExpiresAt.getTime(),
+        nowMs,
+      ),
+    );
+    const late = entries.filter((entry) => !startable.includes(entry));
+    const cancelled = await cancelCorpusProjectionReservations({
+      runInTransaction,
+      leases: late.map(({ lease }) => lease),
+      errorMessage:
+        "projection reservation no longer covers an offline run before its start",
+      testNow: await this.#testNow(),
+    });
+    this.#progress.notStarted.cancelled += cancelled.cancelled;
+    this.#progress.notStarted.leaseLost += cancelled.leaseLost;
+    if (startable.length === 0) {
+      return null;
+    }
+    const testNow = await this.#testNow();
+    const result = await this.#admit(
+      { phase: "start", revisions: startable.length },
+      async () =>
+        await runInTransaction(
+          async (tx) =>
+            await startCorpusProjectionOfflineAppendBatchTx(tx, {
+              leases: startable.map(({ lease, documentCount }) => ({
+                lease,
+                expectedDocumentCount: documentCount,
+              })),
+              testNow,
+            }),
         ),
-      );
-      const late = chunk.filter((entry) => !startable.includes(entry));
-      // db-await-in-loop: one cancellation batch per start chunk of at most an append's revisions
-      const cancelled = await cancelCorpusProjectionReservations({
-        runInTransaction,
-        leases: late.map(({ lease }) => lease),
-        errorMessage:
-          "projection reservation no longer covers an offline run before its start",
-        testNow: await this.#testNow(),
-      });
-      this.#progress.notStarted.cancelled += cancelled.cancelled;
-      this.#progress.notStarted.leaseLost += cancelled.leaseLost;
-      if (startable.length === 0) {
-        continue;
-      }
-      const testNow = await this.#testNow();
-      const result = await this.#admit(
-        { phase: "start", revisions: startable.length },
-        async () =>
-          await runInTransaction(
-            async (tx) =>
-              await startCorpusProjectionOfflineAppendBatchTx(tx, {
-                leases: startable.map(({ lease, documentCount }) => ({
-                  lease,
-                  expectedDocumentCount: documentCount,
-                })),
-                testNow,
-              }),
-          ),
-      );
-      const statusOf = new Map(
-        result.revisions.map(({ intentId, status }) => [intentId, status]),
-      );
-      for (const entry of startable) {
-        const status = statusOf.get(entry.lease.intentId);
-        switch (status) {
-          case "started":
-            started.push(entry);
-            break;
-          case "stale_cancelled":
-            this.#progress.notStarted.cancelled += 1;
-            break;
-          case "lease_lost":
-          case undefined:
-            this.#progress.notStarted.leaseLost += 1;
-            break;
-          default:
-            status satisfies never;
-            return panic(`Unhandled offline start: ${String(status)}`);
-        }
-      }
-      if (
-        result.revisions.some(({ status }) => status === "started") &&
-        (startedAt === null || result.startedAt.getTime() < startedAt.getTime())
-      ) {
-        startedAt = result.startedAt;
+    );
+    const statusOf = new Map(
+      result.revisions.map(({ intentId, status }) => [intentId, status]),
+    );
+    const started: ShardEntry[] = [];
+    for (const entry of startable) {
+      const status = statusOf.get(entry.lease.intentId);
+      switch (status) {
+        case "started":
+          started.push(entry);
+          break;
+        case "stale_cancelled":
+          this.#progress.notStarted.cancelled += 1;
+          break;
+        case "lease_lost":
+        case undefined:
+          this.#progress.notStarted.leaseLost += 1;
+          break;
+        default:
+          status satisfies never;
+          return panic(`Unhandled offline start: ${String(status)}`);
       }
     }
     this.#progress.started += started.length;
-    if (startedAt === null || started.length === 0) {
-      return null;
-    }
-    return { entries: started, startedAt };
+    return started.length === 0
+      ? null
+      : { entries: started, startedAt: result.startedAt };
   }
 
   /**
@@ -980,6 +1033,9 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   async #deliverAndRecord(started: StartedShard): Promise<void> {
     const { shard } = started;
     const shards = this.#progress.shards;
+    if (started.shardClass < this.#plan.shardRevisionCap) {
+      shards.capped += 1;
+    }
     if (await this.#hold.stillHeld()) {
       const outcome = validateDeliveryOutcome(
         await this.#options.deliver(shard),
@@ -1023,6 +1079,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   }
 
   async #record({ entries, startedAt }: StartedShard): Promise<void> {
+    const requestSize = entries.length;
     const { runInTransaction, family, generation } = this.#options;
     const endedAtMs = corpusProjectionOfflineIndexerEndedAt(
       startedAt,
@@ -1053,7 +1110,11 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
         switch (status) {
           case "accepted":
             this.#progress.recorded += 1;
-            this.#pending.set(intentId, { notBeforeMs: nowMs, endedAtMs });
+            this.#pending.set(intentId, {
+              notBeforeMs: nowMs,
+              endedAtMs,
+              requestSize,
+            });
             break;
           case "stale_cleanup_pending":
             this.#progress.recorded += 1;
@@ -1062,7 +1123,11 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           case "lease_lost":
             // The sweep or an erasure moved it first; a census still decides
             // it if the sweep committed it, so it stays this run's to prove.
-            this.#pending.set(intentId, { notBeforeMs: nowMs, endedAtMs });
+            this.#pending.set(intentId, {
+              notBeforeMs: nowMs,
+              endedAtMs,
+              requestSize,
+            });
             break;
           default:
             status satisfies never;
@@ -1145,11 +1210,14 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           break;
         case "withdrawn":
           progress.withdrawn += 1;
-          progress.perRowHandoffs += 1;
           break;
         case "unproven_cleanup_pending":
           progress.sentToCleanup += 1;
-          progress.perRowHandoffs += 1;
+          // Retired from a shared request, the entity goes to single
+          // requests, which only the per-row path sends.
+          if ((pending?.requestSize ?? 1) > 1) {
+            progress.perRowHandoffs += 1;
+          }
           break;
         case "stale_cleanup_pending":
           progress.sentToCleanup += 1;
@@ -1179,9 +1247,9 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
    * Cancel the reservations of built blocks no shard took, so the per-row
    * path can take their entities at once instead of after their leases.
    */
-  async #releaseCarried(): Promise<void> {
-    const carried = this.#carried;
-    this.#carried = [];
+  async #releaseWaiting(): Promise<void> {
+    const carried = this.#waiting;
+    this.#waiting = [];
     const cancelled = await cancelCorpusProjectionReservations({
       runInTransaction: this.#options.runInTransaction,
       leases: carried.map(({ lease }) => lease),

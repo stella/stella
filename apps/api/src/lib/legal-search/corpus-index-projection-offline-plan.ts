@@ -35,14 +35,18 @@ import {
 /** A conservative indexing rate: half the per-core rate measured offline. */
 export const CORPUS_PROJECTION_OFFLINE_DEFAULT_INGEST_BYTES_PER_SECOND = 8_000_000;
 export const CORPUS_PROJECTION_OFFLINE_DEFAULT_MAX_SHARD_BYTES = 1024 ** 3;
+/**
+ * A shard file is started as one request, so it holds at most one append's
+ * revisions; that is also the largest offline request cap.
+ */
 export const CORPUS_PROJECTION_OFFLINE_DEFAULT_MAX_SHARD_REVISIONS =
-  16 * CORPUS_PROJECTION_APPEND_MAX_REVISIONS;
+  CORPUS_PROJECTION_APPEND_MAX_REVISIONS;
 
 const MIN_INGEST_BYTES_PER_SECOND = 1_000_000;
 const MAX_INGEST_BYTES_PER_SECOND = 1_000_000_000;
 const MIN_SHARD_BYTES = 1024 ** 2;
 const MAX_SHARD_BYTES = 4 * 1024 ** 3;
-const MAX_SHARD_REVISIONS = 128 * CORPUS_PROJECTION_APPEND_MAX_REVISIONS;
+const MAX_SHARD_REVISIONS = CORPUS_PROJECTION_APPEND_MAX_REVISIONS;
 const MIN_FILL_WINDOW_MS = 10_000;
 const MAX_SLOTS = 8;
 const MAX_PROOF_ALLOWANCE_MS = 30 * 60_000;
@@ -229,6 +233,8 @@ export const planCorpusProjectionOfflineBuild = (
 type ShardFill = {
   revisions: number;
   bytes: number;
+  /** The shard's class: the most revisions it may hold. */
+  limit: number;
   /** The earliest lease expiry among the shard's revisions, or null if empty. */
   earliestLeaseExpiresAtMs: number | null;
 };
@@ -245,7 +251,7 @@ export const corpusProjectionOfflineShardIsClosed = (
   nowMs: number,
 ): boolean =>
   fill.revisions > 0 &&
-  (fill.revisions >= plan.shardRevisionCap ||
+  (fill.revisions >= Math.min(fill.limit, plan.shardRevisionCap) ||
     fill.bytes >= plan.shardByteCap ||
     (fill.earliestLeaseExpiresAtMs !== null &&
       fill.earliestLeaseExpiresAtMs - nowMs <= plan.closeMarginMs));
@@ -256,9 +262,20 @@ export const corpusProjectionOfflineBlockFits = (
   fill: ShardFill,
   blockBytes: number,
 ): boolean =>
-  fill.revisions === 0 ||
-  (fill.revisions < plan.shardRevisionCap &&
-    fill.bytes + blockBytes <= plan.shardByteCap);
+  fill.revisions < Math.min(fill.limit, plan.shardRevisionCap) &&
+  (fill.revisions === 0 || fill.bytes + blockBytes <= plan.shardByteCap);
+
+/**
+ * Whether a built block joins a shard: it is of the shard's class (its
+ * `limit`) and still fits. A block of another class waits for its own.
+ */
+export const corpusProjectionOfflineBlockJoins = (
+  plan: CorpusProjectionOfflinePlan,
+  fill: ShardFill,
+  block: { shardClass: number; bytes: number },
+): boolean =>
+  block.shardClass === fill.limit &&
+  corpusProjectionOfflineBlockFits(plan, fill, block.bytes);
 
 /** Whether a reservation can still start, with its run's kill inside its lease. */
 export const corpusProjectionOfflineLeaseCanStart = (
@@ -274,30 +291,41 @@ export const corpusProjectionOfflineStopReservingAtMs = (
 ): number => deadlineMs - plan.stopReservingBeforeMs;
 
 /**
- * Split a shard's revisions into start transactions of at most one append's
- * revisions, of near-equal size. A request of one revision is charged for a
- * document fault as an isolated one, so a shard of several revisions never
- * starts one alone.
+ * The class of a revision whose offline request cap is `cap`
+ * (`readCorpusProjectionOfflineRequestCapsTx`): the cap, bounded by the run's
+ * shard size. A shard file is started as one request, so it holds revisions
+ * of one class only and at most that many. Revisions that never failed share
+ * the largest class; a revision a failed delivery left capped travels only
+ * with revisions capped alike, so an empty delivery halves exactly what
+ * failed together and drags no revision that never failed into small files.
+ * A class of one is a revision alone in its file: its next empty delivery is
+ * charged to it, and nothing else is charged with it.
  */
-export const corpusProjectionOfflineStartChunks = <Entry>(
-  entries: readonly Entry[],
-): Entry[][] => {
-  if (entries.length === 0) {
-    return [];
+export const corpusProjectionOfflineShardClass = (
+  plan: CorpusProjectionOfflinePlan,
+  cap: number,
+): number =>
+  Number.isSafeInteger(cap) && cap >= 1
+    ? Math.min(cap, plan.shardRevisionCap)
+    : panic(`Offline request cap is not a positive integer: ${cap}`);
+
+/**
+ * The class the next shard serves: the smallest class any built block is
+ * waiting in, so capped revisions go first and their leases do not run out
+ * behind full shards; otherwise the largest class, filled from new
+ * reservations. Capped revisions only come from failed deliveries and each
+ * failure halves their class, so they cannot hold uncapped work back for
+ * longer than they take to drain.
+ */
+export const corpusProjectionOfflineNextShardClass = (
+  plan: CorpusProjectionOfflinePlan,
+  waitingClasses: Iterable<number>,
+): number => {
+  let next = plan.shardRevisionCap;
+  for (const waiting of waitingClasses) {
+    next = Math.min(next, waiting);
   }
-  const count = Math.ceil(
-    entries.length / CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
-  );
-  const base = Math.floor(entries.length / count);
-  const larger = entries.length % count;
-  const chunks: Entry[][] = [];
-  let offset = 0;
-  for (let index = 0; index < count; index += 1) {
-    const size = base + (index < larger ? 1 : 0);
-    chunks.push(entries.slice(offset, offset + size));
-    offset += size;
-  }
-  return chunks;
+  return next;
 };
 
 const SHARD_NAME_PART = /^[A-Za-z0-9._-]+$/u;

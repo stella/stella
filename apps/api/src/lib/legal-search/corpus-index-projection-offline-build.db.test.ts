@@ -44,6 +44,10 @@ import {
   type CorpusProjectionOfflineBuildPolicy,
   planCorpusProjectionOfflineBuild,
 } from "@/api/lib/legal-search/corpus-index-projection-offline-plan";
+import {
+  type CorpusProjectionIntentLease,
+  readCorpusProjectionOfflineRequestCapsTx,
+} from "@/api/lib/legal-search/corpus-index-projection-store";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { installCorpusProjectionGuards } from "@/api/tests/helpers/corpus-projection-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -133,6 +137,15 @@ type Model = {
   crash: CrashPoint;
   transactions: number;
   lockHeld: boolean;
+  /**
+   * Entities whose revision keeps any run it is in from publishing, as a
+   * document the engine cannot index might.
+   */
+  poisoned: Set<string>;
+  /** The shard size of the run in progress. */
+  maxShardRevisions: number;
+  /** Every delivery: how many revisions, and whether a poisoned one. */
+  deliveries: { revisions: number; poisoned: boolean }[];
   reached: Set<CorpusIndexIntentStatus>;
 };
 
@@ -254,6 +267,7 @@ const readStates = async (entityIds: readonly string[]) =>
       appliedRevision: corpusIndexProjectionStates.appliedRevision,
       appendMode: corpusIndexProjectionStates.appendMode,
       workStatus: corpusIndexProjectionStates.workStatus,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
     })
     .from(corpusIndexProjectionStates)
     .where(inArray(corpusIndexProjectionStates.entityId, [...entityIds]));
@@ -295,6 +309,14 @@ const deliverer =
     const intents = await db
       .select({
         id: corpusIndexProjectionIntents.id,
+        family: corpusIndexProjectionIntents.family,
+        generation: corpusIndexProjectionIntents.generation,
+        entityId: corpusIndexProjectionIntents.entityId,
+        epoch: corpusIndexProjectionIntents.epoch,
+        fingerprint: corpusIndexProjectionIntents.fingerprint,
+        indexId: corpusIndexProjectionIntents.indexId,
+        leaseToken: corpusIndexProjectionIntents.leaseToken,
+        leaseExpiresAt: corpusIndexProjectionIntents.leaseExpiresAt,
         status: corpusIndexProjectionIntents.status,
         appendDelivery: corpusIndexProjectionIntents.appendDelivery,
         expectedDocumentCount:
@@ -338,7 +360,46 @@ const deliverer =
     }
     expect(shard.revisionCount).toBe(revisions.length);
     expect(shard.documentCount).toBe(lines.length);
-    expect(shard.revisionCount).toBeLessThanOrEqual(SHARD_REVISIONS);
+    // One file is one request, within every revision's request cap, and of
+    // one cap class: a revision capped to one is alone, and a revision an
+    // empty delivery capped never shares a file with one capped otherwise.
+    const caps = await db.transaction(
+      async (tx) =>
+        await readCorpusProjectionOfflineRequestCapsTx(
+          asTestRaw<Transaction>(tx),
+          intents.map(
+            (intent) =>
+              ({
+                intentId: intent.id,
+                family: intent.family,
+                generation: intent.generation,
+                entityId: intent.entityId,
+                epoch: intent.epoch,
+                fingerprint: intent.fingerprint,
+                indexId: intent.indexId,
+                leaseToken:
+                  intent.leaseToken ?? panic("Started without a lease"),
+                leaseExpiresAt:
+                  intent.leaseExpiresAt ?? panic("Started without a lease"),
+                appendMode: intent.appendMode,
+              }) satisfies CorpusProjectionIntentLease,
+          ),
+        ),
+    );
+    const capValues = [...caps.values()];
+    expect(shard.revisionCount).toBeLessThanOrEqual(Math.min(...capValues));
+    expect(shard.revisionCount).toBeLessThanOrEqual(model.maxShardRevisions);
+    expect(
+      new Set(capValues.map((cap) => Math.min(cap, model.maxShardRevisions)))
+        .size,
+    ).toBe(1);
+    if (capValues.includes(1)) {
+      expect(shard.revisionCount).toBe(1);
+    }
+    const poisoned = intents.some(({ entityId }) =>
+      model.poisoned.has(entityId),
+    );
+    model.deliveries.push({ revisions: revisions.length, poisoned });
 
     const startedAt = await now(model);
     const publish = (skip: string | null) => {
@@ -366,6 +427,16 @@ const deliverer =
         };
       };
     model.offsetMs += 1000;
+    if (poisoned) {
+      // The run publishes nothing, whatever it exits with.
+      model.finishedPaths.add(shard.path);
+      return {
+        type: "failed",
+        exitCode: 1,
+        startedAt,
+        endedAt: await now(model),
+      };
+    }
     if (behaviour === "ingest") {
       publish(null);
       return {
@@ -428,6 +499,9 @@ const changeDesired = async (entityId: string) => {
         desiredEpoch: document?.epoch ?? panic("No canonical row"),
         workStatus: "eligible",
         retryNotBefore: null,
+        failureAttempts: 0,
+        lastFailureKind: null,
+        lastFailureMessage: null,
       })
       .where(eq(corpusIndexProjectionStates.entityId, entityId));
   });
@@ -448,6 +522,8 @@ type RunCommand = {
   changeBeforeStart: boolean;
   /** Move a started entity's desired state just before its record. */
   changeBeforeRecord: boolean;
+  /** The run's shard size, when not the model's default. */
+  maxShardRevisions?: number;
 };
 
 type Command = RunCommand | { type: "advance"; ms: number };
@@ -529,6 +605,7 @@ const runBuild = async (
 ): Promise<CorpusProjectionOfflineBuildOutcome | null> => {
   model.transactions = 0;
   model.crash = command.crash;
+  model.maxShardRevisions = command.maxShardRevisions ?? SHARD_REVISIONS;
   await expirePassedLeases(model);
   const deadline = new Date((await now(model)).getTime() + RUN_MS);
   const outcome = await Result.tryPromise({
@@ -556,7 +633,11 @@ const runBuild = async (
         runId: "model",
         shardDirectory,
         deadline,
-        policy: { ...POLICY, slots: command.slots },
+        policy: {
+          ...POLICY,
+          slots: command.slots,
+          maxShardRevisions: model.maxShardRevisions,
+        },
         deliver: deliverer(model, [...command.deliveries]),
         lock: lockOf(model),
         admit: admissionOf(model, command),
@@ -682,6 +763,9 @@ const newModel = async (): Promise<Model> => {
     transactions: 0,
     lockHeld: false,
     reached: new Set(),
+    poisoned: new Set(),
+    maxShardRevisions: SHARD_REVISIONS,
+    deliveries: [],
   };
 };
 
@@ -702,8 +786,8 @@ const QUIET_RUN = {
 } as const satisfies RunCommand;
 
 /**
- * Later runs with nothing failing, until every entity is applied or was
- * handed to the per-row path with nothing left in flight.
+ * Later runs with nothing failing, until every entity is applied, blocked,
+ * or was handed to the per-row path with nothing left in flight.
  */
 const drain = async (model: Model) => {
   for (let round = 0; round < 6; round += 1) {
@@ -715,6 +799,7 @@ const drain = async (model: Model) => {
     const settled = states.every(
       (state) =>
         state.appliedRevision !== null ||
+        state.workStatus === "blocked" ||
         (state.appendMode === "single" &&
           intents.every(
             ({ entityId, status }) =>
@@ -877,23 +962,14 @@ describe("offline route build", () => {
                 intent.status,
               );
             }
-            // Every entity is served, or was handed to the per-row path
-            // after a revision that shared a shard came back empty.
+            // An empty delivery keeps its entities batched, in smaller
+            // requests, so later runs serve every entity.
             for (const state of states) {
+              expect(state.appendMode).toBe("batchable");
               const served = intents.find(
                 ({ id }) => id === state.appliedRevision,
               );
-              if (served === undefined) {
-                expect(state.appendMode).toBe("single");
-                expect(
-                  intents.some(
-                    ({ entityId, status }) =>
-                      entityId === state.entityId && status === "withdrawn",
-                  ),
-                ).toBe(true);
-              } else {
-                expect(served.status).toBe("applied");
-              }
+              expect(served?.status).toBe("applied");
             }
           },
         ),
@@ -1009,6 +1085,102 @@ describe("offline route build", () => {
     },
     propertyTestTimeout(600_000),
   );
+
+  test("a refused shard of many entities leaves them batched, and the next run delivers them in halves", async () => {
+    const model = await newModel();
+    const first = await runBuild(model, {
+      ...QUIET_RUN,
+      deliveries: ["refuse"],
+      maxShardRevisions: 8,
+    });
+    expect(model.deliveries).toEqual([
+      { revisions: ENTITIES, poisoned: false },
+    ]);
+    expect(first?.progress.withdrawn).toBe(ENTITIES);
+    expect(first?.progress.perRowHandoffs).toBe(0);
+    // Nobody is charged for an empty run of many: every entity stays
+    // batched, uncharged, and retries shortly.
+    for (const state of await readStates(model.entityIds)) {
+      expect(state).toMatchObject({
+        appendMode: "batchable",
+        workStatus: "retry_scheduled",
+        failureAttempts: 0,
+      });
+    }
+    model.offsetMs += 60_000;
+    const second = await runBuild(model, {
+      ...QUIET_RUN,
+      maxShardRevisions: 8,
+    });
+    expect(model.deliveries.slice(1)).toEqual([
+      { revisions: ENTITIES / 2, poisoned: false },
+      { revisions: ENTITIES / 2, poisoned: false },
+    ]);
+    expect(second?.progress.proved).toBe(ENTITIES);
+  });
+
+  test("a revision that keeps its run from publishing is blocked within floor(log2 N) + 5 deliveries while its shard mates apply", async () => {
+    const model = await newModel();
+    const poison = model.entityIds.at(2) ?? panic("No entity");
+    model.poisoned.add(poison);
+    for (let round = 0; round < 16; round += 1) {
+      // Past the retry each charged attempt schedules.
+      model.offsetMs += 10 * 60_000;
+      await runBuild(model, { ...QUIET_RUN, maxShardRevisions: 8 });
+      await assertStepInvariants(model);
+      const states = await readStates(model.entityIds);
+      if (
+        states.find(({ entityId }) => entityId === poison)?.workStatus ===
+        "blocked"
+      ) {
+        break;
+      }
+    }
+    const states = await readStates(model.entityIds);
+    for (const state of states) {
+      if (state.entityId === poison) {
+        expect(state.workStatus).toBe("blocked");
+      } else {
+        expect(state.appliedRevision).not.toBeNull();
+      }
+    }
+    const withPoison = model.deliveries.filter(({ poisoned }) => poisoned);
+    // Halved from a request of N until alone, then charged to the limit.
+    expect(withPoison.length).toBeLessThanOrEqual(
+      Math.floor(Math.log2(ENTITIES)) + 5,
+    );
+    expect(withPoison.map(({ revisions }) => revisions)).toEqual([
+      ENTITIES,
+      ENTITIES / 2,
+      1,
+      1,
+      1,
+      1,
+      1,
+    ]);
+  });
+
+  test("revisions capped to one are each delivered alone, and uncapped ones never join them", async () => {
+    const model = await newModel();
+    // Shards of three refused: each of their revisions may next start only
+    // in a request of one.
+    await runBuild(model, {
+      ...QUIET_RUN,
+      deliveries: ["refuse", "refuse"],
+      maxShardRevisions: 3,
+    });
+    const later = await seedEntities(4);
+    model.entityIds.push(...later);
+    model.offsetMs += 60_000;
+    const run = await runBuild(model, { ...QUIET_RUN, maxShardRevisions: 8 });
+    // The four that never failed share one file; the six capped ones, which
+    // the same page reserved beside them, wait and then go alone.
+    expect(model.deliveries.slice(2).map(({ revisions }) => revisions)).toEqual(
+      [4, 1, 1, 1, 1, 1, 1],
+    );
+    expect(run?.progress.proved).toBe(ENTITIES + 4);
+    expect(run?.progress.shards.capped).toBe(ENTITIES);
+  });
 
   test("a second run on the same route is refused while the first holds its lock", async () => {
     const model = await newModel();

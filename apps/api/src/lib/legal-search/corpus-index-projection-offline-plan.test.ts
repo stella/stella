@@ -22,11 +22,13 @@ import {
   CORPUS_PROJECTION_OFFLINE_DEFAULT_MAX_SHARD_REVISIONS,
   CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS,
   corpusProjectionOfflineBlockFits,
+  corpusProjectionOfflineBlockJoins,
   type CorpusProjectionOfflineBuildPolicy,
   corpusProjectionOfflineLeaseCanStart,
+  corpusProjectionOfflineNextShardClass,
+  corpusProjectionOfflineShardClass,
   corpusProjectionOfflineShardIsClosed,
   corpusProjectionOfflineShardName,
-  corpusProjectionOfflineStartChunks,
   corpusProjectionOfflineStopReservingAtMs,
   planCorpusProjectionOfflineBuild,
 } from "@/api/lib/legal-search/corpus-index-projection-offline-plan";
@@ -71,7 +73,10 @@ const manifestAndPolicy = fc
     manifest: fc.constantFrom(...MANIFESTS),
     ingestBytesPerSecond: fc.integer({ min: 1_000_000, max: 1_000_000_000 }),
     maxShardBytes: fc.integer({ min: 1024 ** 2, max: 4 * 1024 ** 3 }),
-    maxShardRevisions: fc.integer({ min: 1, max: 128 * 512 }),
+    maxShardRevisions: fc.integer({
+      min: 1,
+      max: CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+    }),
     closeAllowanceMs: fc.integer({ min: 0, max: 60_000 }),
     fillFraction: fc.double({ min: 0, max: 1, noNaN: true }),
     proofAllowanceMs: fc.integer({ min: 0, max: 30 * 60_000 }),
@@ -146,6 +151,7 @@ describe("offline build plan", () => {
           // after the close allowance.
           const fill = {
             revisions: 1,
+            limit: plan.shardRevisionCap,
             bytes: 0,
             earliestLeaseExpiresAtMs: leaseExpiresAtMs,
           };
@@ -219,26 +225,35 @@ describe("offline build plan", () => {
       "offline-build.shard-fill",
       fc.property(
         manifestAndPolicy,
+        fc.integer({ min: 1, max: CORPUS_PROJECTION_APPEND_MAX_REVISIONS }),
         fc.array(fc.integer({ min: 1, max: 64 * 1024 ** 2 }), {
           minLength: 1,
-          maxLength: 200,
+          maxLength: 600,
         }),
-        ({ manifest, policy }, blockSizes) => {
+        ({ manifest, policy }, limit, blockSizes) => {
           const plan = planCorpusProjectionOfflineBuild(manifest, policy);
           let revisions = 0;
           let bytes = 0;
           for (const size of blockSizes) {
-            const fill = { revisions, bytes, earliestLeaseExpiresAtMs: null };
+            const fill = {
+              revisions,
+              bytes,
+              limit,
+              earliestLeaseExpiresAtMs: null,
+            };
             if (!corpusProjectionOfflineBlockFits(plan, fill, size)) {
               break;
             }
             revisions += 1;
             bytes += size;
           }
-          // A shard takes at least one block, and only a lone block may
-          // exceed the byte cap.
+          // A shard takes at least one block, never more than its class or
+          // the run's shard size, and only a lone block may exceed the byte
+          // cap.
           expect(revisions).toBeGreaterThanOrEqual(1);
-          expect(revisions).toBeLessThanOrEqual(plan.shardRevisionCap);
+          expect(revisions).toBeLessThanOrEqual(
+            Math.min(limit, plan.shardRevisionCap),
+          );
           if (revisions > 1) {
             expect(bytes).toBeLessThanOrEqual(plan.shardByteCap);
           }
@@ -247,34 +262,92 @@ describe("offline build plan", () => {
     );
   });
 
-  test("offline-build.start-chunks", () => {
+  /**
+   * Request caps as a reservation reads them: none for a revision that never
+   * failed, half of a request it was withdrawn from otherwise.
+   */
+  const requestCap = fc.oneof(
+    {
+      weight: 3,
+      arbitrary: fc.constant(CORPUS_PROJECTION_APPEND_MAX_REVISIONS),
+    },
+    {
+      weight: 2,
+      arbitrary: fc
+        .integer({ min: 1, max: CORPUS_PROJECTION_APPEND_MAX_REVISIONS })
+        .map((withdrawnFrom) => Math.max(1, Math.floor(withdrawnFrom / 2))),
+    },
+    { weight: 1, arbitrary: fc.constant(1) },
+  );
+
+  test("offline-build.shard-class", () => {
     assertProperty(
-      "offline-build.start-chunks",
+      "offline-build.shard-class",
       fc.property(
-        fc.oneof(
-          fc.integer({ min: 1, max: 40_000 }),
-          // Counts just past a multiple of one start's revisions, where an
-          // even split matters most.
-          fc.integer({ min: 1, max: 80 }).chain((starts) =>
-            fc.integer({
-              min: starts * CORPUS_PROJECTION_APPEND_MAX_REVISIONS - 1,
-              max: starts * CORPUS_PROJECTION_APPEND_MAX_REVISIONS + 2,
-            }),
-          ),
-        ),
-        (count) => {
-          const entries = Array.from({ length: count }, (_, index) => index);
-          const chunks = corpusProjectionOfflineStartChunks(entries);
-          expect(chunks.flat()).toEqual(entries);
-          for (const chunk of chunks) {
-            expect(chunk.length).toBeLessThanOrEqual(
-              CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+        manifestAndPolicy,
+        fc.array(requestCap, { minLength: 1, maxLength: 400 }),
+        ({ manifest, policy }, caps) => {
+          const plan = planCorpusProjectionOfflineBuild(manifest, policy);
+          // Pack every block the way a run does: the next shard serves the
+          // smallest waiting class and takes only blocks of that class.
+          let waiting = caps.map((cap, index) => ({
+            index,
+            cap,
+            shardClass: corpusProjectionOfflineShardClass(plan, cap),
+          }));
+          const shards: (typeof waiting)[] = [];
+          while (waiting.length > 0) {
+            const shardClass = corpusProjectionOfflineNextShardClass(
+              plan,
+              waiting.map((block) => block.shardClass),
             );
-            // A lone revision in a start is charged as an isolated request.
-            if (count > 1) {
-              expect(chunk.length).toBeGreaterThan(1);
+            const shard: typeof waiting = [];
+            const left: typeof waiting = [];
+            for (const block of waiting) {
+              const joins = corpusProjectionOfflineBlockJoins(
+                plan,
+                {
+                  revisions: shard.length,
+                  bytes: shard.length,
+                  limit: shardClass,
+                  earliestLeaseExpiresAtMs: null,
+                },
+                { shardClass: block.shardClass, bytes: 1 },
+              );
+              if (joins) {
+                shard.push(block);
+              } else {
+                left.push(block);
+              }
             }
+            expect(shard.length).toBeGreaterThan(0);
+            shards.push(shard);
+            waiting = left;
           }
+          expect(
+            shards
+              .flat()
+              .map(({ index }) => index)
+              .toSorted((a, b) => a - b),
+          ).toEqual(caps.map((_, index) => index));
+          for (const shard of shards) {
+            // One request per file, within every revision's cap.
+            const smallest = Math.min(...shard.map(({ cap }) => cap));
+            expect(shard.length).toBeLessThanOrEqual(smallest);
+            expect(shard.length).toBeLessThanOrEqual(plan.shardRevisionCap);
+            // A revision that may only start alone is alone, and a capped
+            // revision never shares a file with one of another class.
+            if (smallest === 1) {
+              expect(shard.length).toBe(1);
+            }
+            expect(
+              new Set(shard.map(({ shardClass }) => shardClass)).size,
+            ).toBe(1);
+          }
+          // Smallest class first: no shard of a larger class precedes one of
+          // a smaller class that was already waiting.
+          const order = shards.map((shard) => shard[0]?.shardClass ?? 0);
+          expect(order).toEqual(order.toSorted((a, b) => a - b));
         },
       ),
     );
@@ -288,6 +361,10 @@ describe("offline build plan", () => {
       [{ ingestBytesPerSecond: 1_000_000 - 1 }, "ingest rate"],
       [{ maxShardBytes: 1024 }, "shard byte limit"],
       [{ maxShardRevisions: 0 }, "shard revision limit"],
+      [
+        { maxShardRevisions: CORPUS_PROJECTION_APPEND_MAX_REVISIONS + 1 },
+        "shard revision limit",
+      ],
       [{ fillWindowMs: 10_000 - 1 }, "fill window"],
       [
         {
