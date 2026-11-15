@@ -11,6 +11,7 @@ import { compareCodeUnit } from "@stll/collation";
 import {
   SITEMAP_LANGUAGE_GROUP_INDEX,
   SITEMAP_MONTH_INDEX,
+  SITEMAP_RANGE_INDEX,
 } from "@/api/db/case-law-sitemap-indexes";
 import {
   caseLawDecisions,
@@ -24,14 +25,13 @@ import {
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { sitemapMonthCountSql } from "@/api/lib/case-law/sitemap-shard-refresh";
-import { LIMITS } from "@/api/lib/limits";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { explainRoot } from "@/api/tests/query-plans/plan-walker";
 import { vacuumUntilAllVisible } from "@/api/tests/query-plans/visibility";
 
 /**
- * A month of a country's decisions, each probing its language group twice. The
+ * A month of a country's decisions, each probing its language group. The
  * plan registry's synthetic profile keeps partial indexes at their seed size,
  * so this measures the heap rows a read visits on real rows: every row of a
  * scan that reads the heap, and each heap fetch of an index-only scan.
@@ -81,7 +81,7 @@ const heapRowsVisited = (node: PlanNode): number => {
 };
 
 // timeout: an embedded Postgres seeds 40,000 rows and builds and vacuums their indexes twice.
-test("a sitemap month and a shard page read the heap only for the page's rows", async () => {
+test("a sitemap month count reads no heap, and a shard read only its own decisions", async () => {
   const client = new PGlite();
   try {
     for (const table of [caseLawSources, caseLawDecisions]) {
@@ -142,17 +142,17 @@ test("a sitemap month and a shard page read the heap only for the page's rows", 
         .filter(isDecisionScan)
         .reduce((sum, node) => sum + heapRowsVisited(node), 0);
     };
-    const shardConditions = getShardConditions({
-      ...MONTH,
-      bucket: "00",
-    });
+    const shardConditions = getShardConditions(MONTH);
     if (!Array.isArray(shardConditions)) {
       panic("The shard fixture must be valid");
     }
+    // The month is one range: it holds fewer decisions than a cut.
+    const wholeMonth = { start: null, end: null };
     const shardRead = async () =>
       await sitemapShardDecisionsQuery(
         asTestRaw<CaseLawPublicReadTransaction>(db),
         shardConditions,
+        wholeMonth,
       );
 
     // The month's index before it carried the language group, and the group's
@@ -167,12 +167,16 @@ test("a sitemap month and a shard page read the heap only for the page's rows", 
     await vacuum();
     const month = sitemapMonthCountSql(MONTH);
     const heapRowsBefore = await heapRows(month);
-    expect(heapRowsBefore).toBeGreaterThan(2 * ROWS_IN_MONTH);
+    expect(heapRowsBefore).toBeGreaterThan(ROWS_IN_MONTH);
     const pageBefore = await shardRead();
     expect(pageBefore.length).toBeGreaterThan(0);
 
     await client.exec("DROP INDEX before_month; DROP INDEX before_group");
-    const indexes = [SITEMAP_MONTH_INDEX, SITEMAP_LANGUAGE_GROUP_INDEX];
+    const indexes = [
+      SITEMAP_MONTH_INDEX,
+      SITEMAP_LANGUAGE_GROUP_INDEX,
+      SITEMAP_RANGE_INDEX,
+    ];
     for (const { createSql } of indexes) {
       await client.exec(
         createSql.replace("CREATE INDEX CONCURRENTLY", "CREATE INDEX"),
@@ -201,19 +205,19 @@ test("a sitemap month and a shard page read the heap only for the page's rows", 
     const pageIds = (rows: readonly { id: string }[]) =>
       rows.map(({ id }) => id).toSorted(compareCodeUnit);
     expect(pageIds(page)).toEqual(pageIds(pageBefore));
-    expect(page.length).toBeLessThanOrEqual(
-      LIMITS.caseLawSitemapShardUrlLimit + 1,
-    );
     const pageHeapRows = await heapRows(
       sitemapShardDecisionsQuery(
         asTestRaw<CaseLawPublicReadTransaction>(db),
         shardConditions,
+        wholeMonth,
       ).getSQL(),
     );
     process.stdout.write(
       `Sitemap shard heap rows: ${String(pageHeapRows)} for ${String(page.length)} URLs\n`,
     );
-    expect(pageHeapRows).toBeLessThanOrEqual(page.length);
+    // Each decision of the range is read once, a translation included; no
+    // decision of another month, and no probe, reads the heap.
+    expect(pageHeapRows).toBe(ROWS_IN_MONTH);
   } finally {
     await client.close();
   }

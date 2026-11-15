@@ -7,10 +7,10 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
-  decisionBucketSqlFor,
   decisionMonthSqlFor,
   decisionYearSqlFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
+import { groupableSql } from "@/api/lib/groupable-sql";
 
 type OldSitemapRefreshDb = Pick<typeof rootDb, "select">;
 
@@ -22,7 +22,10 @@ type OldSitemapRefreshDb = Pick<typeof rootDb, "select">;
 export const oldSitemapBucketCountsQuery = (db: OldSitemapRefreshDb) => {
   const decisionYearSql = decisionYearSqlFor(caseLawDecisions);
   const decisionMonthSql = decisionMonthSqlFor(caseLawDecisions);
-  const decisionBucketSql = decisionBucketSqlFor(caseLawDecisions);
+  // The 64 hashed buckets months were split into at the time.
+  const decisionBucketSql = groupableSql(
+    sql<string>`lpad(mod(hashtext(${caseLawDecisions.id}::text)::bigint + 2147483648, 64)::text, 2, '0')`,
+  );
   return db
     .select({
       country: caseLawDecisions.country,

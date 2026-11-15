@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import {
   caseLawDecisions,
   caseLawPopulationCountsLive,
+  caseLawSitemapShards,
   caseLawSources,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
@@ -155,6 +156,15 @@ beforeAll(async () => {
       name: "listing",
     }),
   ]);
+  // The month the sitemap read below serves, as the refresh lists it.
+  await db.insert(caseLawSitemapShards).values({
+    country: "CZE",
+    year: "2026",
+    month: "03",
+    bucket: "all",
+    total: 2,
+    lastModifiedAt: new Date("2026-03-31T00:00:00Z"),
+  });
   await db.insert(caseLawDecisions).values([
     seedDecision({
       id: publishedId,

@@ -502,7 +502,7 @@ test(
 );
 
 test.each(["case-law.sitemap-month-count", "case-law.sitemap-shard-read"])(
-  "%s confines representative and alternate probes to the document group",
+  "%s confines its language-group probes to the document group",
   async (id) => {
     const entry =
       QUERY_PLAN_REGISTRY.find((candidate) => candidate.id === id) ??
@@ -515,16 +515,32 @@ test.each(["case-law.sitemap-month-count", "case-law.sitemap-shard-read"])(
     const decisions = scans.filter(
       ({ relation }) => relation === "case_law_decisions",
     );
-    // The shard read then fetches its page's rows by primary key.
-    expect(decisions).toHaveLength(
-      id === "case-law.sitemap-shard-read" ? 4 : 3,
-    );
-    const outer = decisions.find(
-      ({ index }) => index === "case_law_decisions_sitemap_month_published_idx",
+    const shardRead = id === "case-law.sitemap-shard-read";
+    // The count cuts and counts the month off its index, and probes each
+    // decision's representative; the shard read reads one range of the date
+    // index and probes the representative and the alternates of each row.
+    expect(decisions).toHaveLength(shardRead ? 3 : 3);
+    const outer = decisions.find(({ index }) =>
+      shardRead
+        ? index === "case_law_decisions_country_date_published_idx"
+        : index === "case_law_decisions_sitemap_month_published_idx",
     );
     expect(outer?.indexCond).toMatch(/\bcountry(?:\)::text)? = /u);
-    expect(outer?.indexCond).toMatch(/\bdecision_date >= /u);
-    expect(outer?.indexCond).toMatch(/\bdecision_date < /u);
+    if (shardRead) {
+      // The month's ends and the range's start bound the index range.
+      expect(outer?.indexCond).toMatch(
+        /COALESCE\(decision_date, '-infinity'::date\) >= /u,
+      );
+      expect(outer?.indexCond).toMatch(
+        /COALESCE\(decision_date, '-infinity'::date\) < /u,
+      );
+      expect(outer?.indexCond).toMatch(
+        /ROW\(COALESCE\(decision_date, '-infinity'::date\), id\) >= /u,
+      );
+    } else {
+      expect(outer?.indexCond).toMatch(/\bdecision_date >= /u);
+      expect(outer?.indexCond).toMatch(/\bdecision_date < /u);
+    }
     const representative = decisions.find(({ indexCond }) =>
       indexCond?.includes("id < case_law_decisions"),
     );
@@ -532,8 +548,10 @@ test.each(["case-law.sitemap-month-count", "case-law.sitemap-shard-read"])(
       filter?.includes("language)::text <> (case_law_decisions.language"),
     );
     expect(representative).toBeDefined();
-    expect(alternate).toBeDefined();
-    for (const probe of [representative, alternate]) {
+    expect(alternate === undefined).toBe(!shardRead);
+    for (const probe of shardRead
+      ? [representative, alternate]
+      : [representative]) {
       expect(probe?.index).toBe(
         "case_law_decisions_language_group_published_idx",
       );
@@ -544,10 +562,9 @@ test.each(["case-law.sitemap-month-count", "case-law.sitemap-shard-read"])(
         /country(?:\)::text)? = \(case_law_decisions\w*\.country/u,
       );
     }
-    for (const alias of [
-      "sitemap_sibling_source",
-      "sitemap_alternate_source",
-    ]) {
+    for (const alias of shardRead
+      ? ["sitemap_sibling_source", "sitemap_alternate_source"]
+      : ["sitemap_sibling_source"]) {
       const source = scans.find((scan) => scan.alias === alias);
       expect(source?.relation).toBe("case_law_sources");
       expect(source?.filter).toContain("allowsRedistribution");

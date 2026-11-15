@@ -8,7 +8,7 @@ import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 
 import {
   caseLawDecisions,
-  caseLawSitemapChanges,
+  caseLawSitemapShards,
   caseLawSources,
   databaseBackfillStates,
 } from "@/api/db/schema";
@@ -21,22 +21,19 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { SITEMAP_RANGE_ROWS } from "@/api/lib/case-law/sitemap-shard-budget";
+import { refreshCaseLawSitemapShards } from "@/api/lib/case-law/sitemap-shard-refresh";
 import {
-  refreshCaseLawSitemapShards,
-  SITEMAP_SHARD_SPLIT_THRESHOLD,
-} from "@/api/lib/case-law/sitemap-shard-refresh";
-import {
-  decisionBucketSqlFor,
   SITEMAP_ALL_BUCKET,
+  sitemapRangeBucket,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { caseLawPublishedDecisionsFixtureSql } from "@/api/tests/helpers/case-law-publication-view-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
+import { CASE_LAW_SITEMAP_RANGE_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import {
   ONLINE_MIGRATION_REPAIRS,
@@ -46,19 +43,30 @@ import {
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 type RefreshDb = Parameters<typeof refreshCaseLawSitemapShards>[0];
-const QUIET_MONTH_DECISIONS = 5000;
-const LARGE_MONTH_DECISIONS = LIMITS.caseLawSitemapShardUrlLimit + 1;
+/** A month that stays one file. */
+const QUIET_MONTH_DECISIONS = 1000;
+/** A month a dozen ranges long, its last one partly filled. */
+const LARGE_MONTH_DECISIONS = 12 * SITEMAP_RANGE_ROWS + 37;
+/** Undated decisions, one range and a bit. */
+const UNDATED_DECISIONS = SITEMAP_RANGE_ROWS + 200;
+const SEEDED =
+  QUIET_MONTH_DECISIONS + LARGE_MONTH_DECISIONS + UNDATED_DECISIONS;
+/** The shard lastmod every seeded decision carries but one per month. */
+const SEEDED_UPDATE = new Date("2024-07-01T00:00:00Z");
+const NEWEST_UPDATE = new Date("2024-07-02T09:30:00Z");
+
+const dayOf = (date: Date) => date.toISOString().slice(0, 10);
 
 if (!databaseUrl || !enabled) {
-  describe.skip("sitemap packing enrollment (postgres)", () => {
+  describe.skip("sitemap range enrollment (postgres)", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {
       expect(enabled && Boolean(databaseUrl)).toBe(false);
     });
   });
 } else {
-  describe("sitemap packing enrollment (postgres)", () => {
-    // timeout: seeds and reads a full protocol-sized sitemap through real PostgreSQL.
-    test("monolingual months pack at the split threshold with flat reads, cached bucket partitions and lastmod", async () => {
+  describe("sitemap range enrollment (postgres)", () => {
+    // timeout: seeds over twenty thousand decisions and reads every listed file through real PostgreSQL.
+    test("enrolled months are cut into ranges that list every decision once, keep its lastmod, and read flat", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         let measuredQueries: string[] | undefined;
         const { db: isolated } = openClient({
@@ -69,7 +77,7 @@ if (!databaseUrl || !enabled) {
             },
           },
         });
-        const schemaName = `sitemap_capacity_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+        const schemaName = `sitemap_ranges_${Bun.randomUUIDv7().replaceAll("-", "")}`;
         const schema = sql.identifier(schemaName);
         await isolated.execute(sql`CREATE SCHEMA ${schema}`);
         try {
@@ -110,22 +118,30 @@ if (!databaseUrl || !enabled) {
             sql`ALTER TABLE ${schema}.case_law_sitemap_changes RENAME CONSTRAINT ${sql.identifier(copiedConstraint["conname"])} TO case_law_sitemap_changes_month_xact_key`,
           );
 
-          const capacitySourceId = createSafeId<"caseLawSource">();
+          const sourceId = createSafeId<"caseLawSource">();
           await isolated.insert(caseLawSources).values({
-            id: capacitySourceId,
-            adapterKey: "sitemap-capacity-fixture",
-            name: "Sitemap capacity fixture",
+            id: sourceId,
+            adapterKey: "sitemap-range-fixture",
+            name: "Sitemap range fixture",
             enabled: false,
           });
-          const newest = new Date("2024-07-02T09:30:00Z");
+          // Decisions arrive interleaved across the three months, as a
+          // corpus is ingested over years; the first of each month is the
+          // newest written.
           await isolated.execute(sql`
             INSERT INTO case_law_decisions
               (id, source_id, case_number, court, country, language, language_group_key, decision_date, updated_at)
-            SELECT md5('sitemap-capacity-' || i::text)::uuid, ${capacitySourceId}::uuid,
-              'sitemap-capacity-' || i::text, 'Fixture court', 'CZE', 'cs', 'sitemap-capacity-' || i::text,
-              CASE WHEN i < ${QUIET_MONTH_DECISIONS} THEN '2024-06-15'::date ELSE '2026-06-15'::date END,
-              CASE WHEN i = 0 OR i = ${QUIET_MONTH_DECISIONS} THEN ${newest.toISOString()}::timestamptz ELSE '2024-07-01'::timestamptz END
-            FROM generate_series(0, ${QUIET_MONTH_DECISIONS + LARGE_MONTH_DECISIONS - 1}::integer) AS i
+            SELECT md5('sitemap-range-' || i::text)::uuid, ${sourceId}::uuid,
+              'sitemap-range-' || i::text, 'Fixture court', 'CZE', 'cs', 'sitemap-range-' || i::text,
+              CASE
+                WHEN i < ${QUIET_MONTH_DECISIONS} THEN '2024-06-01'::date + (i % 28)
+                WHEN i < ${QUIET_MONTH_DECISIONS + LARGE_MONTH_DECISIONS} THEN '2026-06-01'::date + (i % 28)
+                ELSE NULL
+              END,
+              CASE WHEN i IN (0, ${QUIET_MONTH_DECISIONS}, ${QUIET_MONTH_DECISIONS + LARGE_MONTH_DECISIONS})
+                THEN ${NEWEST_UPDATE.toISOString()}::timestamptz
+                ELSE ${SEEDED_UPDATE.toISOString()}::timestamptz END
+            FROM generate_series(0, ${SEEDED - 1}::integer) AS i
           `);
           await isolated.execute(sql`ANALYZE case_law_decisions`);
           await isolated.execute(sql`ANALYZE case_law_sources`);
@@ -139,95 +155,34 @@ if (!databaseUrl || !enabled) {
                   await read(asTestRaw<CaseLawPublicReadTransaction>(tx)),
               ),
           );
-          // Quiet legacy packing has no pending invalidation; only the larger
-          // new month is enrolled before the packing migration runs.
+          // The listing before ranges: every month one file, as the protocol
+          // ceiling left them. No change is pending.
           await isolated.execute(sql`
             INSERT INTO case_law_sitemap_shards (country, year, month, bucket, total, last_modified_at)
-            SELECT 'CZE', '2024', '06', ${decisionBucketSqlFor(caseLawDecisions)}, count(*)::int, max(updated_at)
-            FROM case_law_decisions WHERE decision_date = '2024-06-15'::date GROUP BY 4
+            SELECT country, coalesce(to_char(decision_date, 'YYYY'), 'undated'),
+              coalesce(to_char(decision_date, 'MM'), '00'), 'all', count(*)::int,
+              max(updated_at)
+            FROM case_law_decisions GROUP BY 1, 2, 3
           `);
-          await isolated
-            .insert(caseLawSitemapChanges)
-            .values({ country: "CZE", year: "2026", month: "06" });
-          await refreshCaseLawSitemapShards(isolatedRefresh);
-          const listed = await listSitemapShardsHandler(readDb);
-          if (!("items" in listed)) {
-            panic("Expected fixture sitemap index");
+          const listedBefore = await listSitemapShardsHandler(readDb);
+          if (!("items" in listedBefore)) {
+            panic("Expected the listing before ranges");
           }
+          expect(listedBefore.items).toHaveLength(3);
           expect(
-            listed.items.filter(({ year }) => year === "2026"),
-          ).toHaveLength(64);
-          const query = {
-            country: "cze",
-            year: "2026",
-            month: "06",
-            bucket: SITEMAP_ALL_BUCKET,
-          };
-          expect(
-            await listSitemapShardDecisionsHandler(query, readDb),
-          ).toMatchObject({
-            code: 500,
-          });
-          // Keeps the newest row (index QUIET_MONTH_DECISIONS) and drops the tail.
-          const keepLargeMonth = async (decisions: number) => {
-            await isolated.execute(sql`
-              DELETE FROM case_law_decisions WHERE case_number IN (
-                SELECT 'sitemap-capacity-' || i::text
-                FROM generate_series(${QUIET_MONTH_DECISIONS + decisions}::integer, ${QUIET_MONTH_DECISIONS + LARGE_MONTH_DECISIONS - 1}::integer) AS i
-              )
-            `);
-            await isolated
-              .insert(caseLawSitemapChanges)
-              .values({ country: "CZE", year: "2026", month: "06" });
-            await refreshCaseLawSitemapShards(isolatedRefresh);
-          };
-          await keepLargeMonth(SITEMAP_SHARD_SPLIT_THRESHOLD + 1);
-          const pastThreshold = await listSitemapShardsHandler(readDb);
-          if (!("items" in pastThreshold)) {
-            panic("Expected fixture sitemap index past the split threshold");
-          }
-          expect(
-            pastThreshold.items.filter(({ year }) => year === "2026"),
-          ).toHaveLength(64);
-          await keepLargeMonth(SITEMAP_SHARD_SPLIT_THRESHOLD);
-          const packed = await listSitemapShardsHandler(readDb);
-          if (!("items" in packed)) {
-            panic("Expected consolidated fixture sitemap index");
-          }
-          expect(
-            packed.items.filter(({ year }) => year === "2026"),
-          ).toMatchObject([
-            {
-              bucket: SITEMAP_ALL_BUCKET,
-              lastmod: newest.toISOString().slice(0, 10),
-            },
-          ]);
-          const quietBefore = packed.items.filter(
-            ({ year }) => year === "2024",
-          );
-          expect(quietBefore).toHaveLength(64);
-          const quietBucketQuery = { ...query, year: "2024", bucket: "00" };
-          const quietBucketBefore = await listSitemapShardDecisionsHandler(
-            quietBucketQuery,
-            readDb,
-          );
-          if (!("items" in quietBucketBefore)) {
-            panic("Expected cached quiet bucket before enrollment");
-          }
+            listedBefore.items.every(
+              ({ lastmod }) => lastmod === dayOf(NEWEST_UPDATE),
+            ),
+          ).toBe(true);
+          // A hundred more listed countries make the enrollment page.
           await isolated.execute(sql`
             INSERT INTO case_law_sitemap_shards (country, year, month, bucket, total, last_modified_at)
             SELECT 'X' || chr(65 + (i / 26)::int) || chr(65 + (i % 26)::int),
-              '1800', '01', lpad(bucket::text, 2, '0'), 1, ${newest.toISOString()}::timestamptz
-            FROM generate_series(0, 99) AS i CROSS JOIN generate_series(0, 63) AS bucket
-          `);
-          await isolated.execute(sql`
-            INSERT INTO case_law_decisions (id, source_id, case_number, country, court, language, decision_date)
-            VALUES (${createSafeId<"caseLawDecision">()}::uuid, ${capacitySourceId}::uuid, 'no-snapshot-fixture', 'XNS', 'Fixture court', 'xx', '1888-01-01'::date)
+              '1800', '01', 'all', 1, ${NEWEST_UPDATE.toISOString()}::timestamptz
+            FROM generate_series(0, 99) AS i
           `);
           await isolated.execute(sql`ANALYZE case_law_sitemap_shards`);
-          await isolated
-            .insert(caseLawSitemapChanges)
-            .values({ country: "XAA", year: "*", month: "*" });
+
           const pageSizes: number[] = [];
           const repairQueries: string[] = [];
           const redirect = (statement: string) =>
@@ -262,7 +217,7 @@ if (!databaseUrl || !enabled) {
               { reserve: async () => await reserveConnection(repairClient) },
               {
                 repairs: ONLINE_MIGRATION_REPAIRS.filter(
-                  (repair) => repair === CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
+                  (repair) => repair === CASE_LAW_SITEMAP_RANGE_ENROLLMENT,
                 ),
                 indexGate: { ebs: { type: "disabled" }, log: () => undefined },
                 reserveObserver: async () =>
@@ -278,70 +233,37 @@ if (!databaseUrl || !enabled) {
             .where(
               eq(
                 databaseBackfillStates.name,
-                CASE_LAW_SITEMAP_PACKING_ENROLLMENT.name,
+                CASE_LAW_SITEMAP_RANGE_ENROLLMENT.name,
               ),
             );
-          expect(await enroll()).toEqual({ type: "complete" });
-          const pendingEnrollment = await isolated
-            .select()
-            .from(caseLawSitemapChanges)
-            .where(sql`year = '*' AND month = '*'`);
+          expect(checkpoint?.cursor).toBe("complete");
+          expect(checkpoint?.batch).toEqual(initialBatchState(defaultConfig));
+          expect(pageSizes).toEqual([100, 1]);
+
           const tickOptions = {
             changeRowBudget: 10_000,
             discoveryTargetBudget: 64,
           };
-          // Each enrolled country contributes its broad target and at most two fixture months.
-          const maxDrainTicks =
-            Math.ceil(
-              (2 * pendingEnrollment.length + 2) /
-                tickOptions.discoveryTargetBudget,
-            ) + 1;
           let drained = await refreshCaseLawSitemapShards(
             isolatedRefresh,
             tickOptions,
           );
           for (
             let tick = 1;
-            drained.type === "pending" && tick < maxDrainTicks;
+            drained.type === "pending" && tick < 20;
             tick += 1
           ) {
+            // db-await-in-loop: consecutive scheduler runs drain the enrolled countries
             drained = await refreshCaseLawSitemapShards(
               isolatedRefresh,
               tickOptions,
             );
           }
           expect(drained.type).toBe("refreshed");
-          const repacked = await listSitemapShardsHandler(readDb);
-          if (!("items" in repacked)) {
-            panic("Expected repacked quiet month");
-          }
-          expect(
-            repacked.items.filter(({ year }) => year === "2024"),
-          ).toHaveLength(1);
-          expect(
-            repacked.items.filter(({ year }) => year === "2024"),
-          ).toMatchObject([
-            {
-              bucket: SITEMAP_ALL_BUCKET,
-              lastmod: newest.toISOString().slice(0, 10),
-            },
-          ]);
-          expect(checkpoint?.cursor).toBe("complete");
-          expect(checkpoint?.batch).toEqual(initialBatchState(defaultConfig));
 
-          expect(pendingEnrollment).toHaveLength(101);
-          expect(
-            pendingEnrollment.some(({ country }) => country === "XNS"),
-          ).toBe(false);
-          expect(pageSizes).toEqual([100, 1]);
-          expect(
-            await isolated.select().from(caseLawSitemapChanges),
-          ).toHaveLength(0);
+          // A second enrollment is one completion read and queues nothing.
           repairQueries.length = 0;
           expect(await enroll()).toEqual({ type: "complete" });
-          expect(
-            await isolated.select().from(caseLawSitemapChanges),
-          ).toHaveLength(0);
           const completionQueries = repairQueries.filter(
             (statement) =>
               statement.includes("public.database_backfill_states") ||
@@ -350,57 +272,106 @@ if (!databaseUrl || !enabled) {
           );
           expect(completionQueries).toHaveLength(1);
           expect(completionQueries.at(0)).toContain("WHERE name = $1 LIMIT 1");
-          const quietBucketAfter = await listSitemapShardDecisionsHandler(
-            quietBucketQuery,
-            readDb,
-          );
-          expect(quietBucketAfter).toEqual(quietBucketBefore);
-          const smallerQueries: string[] = [];
-          measuredQueries = smallerQueries;
-          const smaller = await listSitemapShardDecisionsHandler(
-            { ...query, year: "2024" },
-            readDb,
-          );
-          measuredQueries = undefined;
-          if (!("items" in smaller)) {
-            panic("Expected the smaller measurement fixture");
+
+          const listed = await listSitemapShardsHandler(readDb);
+          if (!("items" in listed)) {
+            panic("Expected the listing after ranges");
           }
-          expect(smaller.items).toHaveLength(QUIET_MONTH_DECISIONS);
-          const largerQueries: string[] = [];
-          measuredQueries = largerQueries;
-          const full = await listSitemapShardDecisionsHandler(query, readDb);
-          measuredQueries = undefined;
-          if (!("items" in full)) {
-            panic(
-              "Expected a complete monolingual month at the split threshold",
+          const monthFiles = (year: string, month: string) =>
+            listed.items.filter(
+              (shard) =>
+                shard.country === "cze" &&
+                shard.year === year &&
+                shard.month === month,
             );
-          }
-          expect(full.items).toHaveLength(SITEMAP_SHARD_SPLIT_THRESHOLD);
-          expect(largerQueries).toHaveLength(smallerQueries.length);
-          expect(
-            full.items.find(
-              ({ caseNumber }) =>
-                caseNumber === `sitemap-capacity-${QUIET_MONTH_DECISIONS}`,
-            )?.updatedAt,
-          ).toEqual(newest);
-          const cached = await listSitemapShardDecisionsHandler(
-            { ...query, bucket: "00" },
-            readDb,
+          // The quiet month keeps its one file, its URL and its lastmod.
+          expect(monthFiles("2024", "06")).toEqual(
+            listedBefore.items.filter(({ year }) => year === "2024"),
           );
-          if (!("items" in cached)) {
-            panic("Expected cached bucket URL to remain readable");
-          }
-          const expected = await isolated
-            .select({ id: caseLawDecisions.id })
-            .from(caseLawDecisions)
-            .where(
-              sql`${caseLawDecisions.decisionDate} = '2026-06-15'::date AND ${decisionBucketSqlFor(caseLawDecisions)} = '00'`,
-            );
-          expect(cached.items.length).toBeGreaterThan(0);
-          expect(cached.items.length).toBe(expected.length);
+          const largeFiles = monthFiles("2026", "06");
+          expect(largeFiles.map(({ bucket }) => bucket)).toEqual(
+            Array.from(
+              { length: Math.ceil(LARGE_MONTH_DECISIONS / SITEMAP_RANGE_ROWS) },
+              (_, position) => sitemapRangeBucket(position),
+            ),
+          );
           expect(
-            cached.items.map(({ id }) => id).toSorted(compareCodeUnit),
-          ).toEqual(expected.map(({ id }) => id).toSorted(compareCodeUnit));
+            monthFiles("undated", "00").map(({ bucket }) => bucket),
+          ).toEqual(["0000", "0001"]);
+          // The whole large month is no longer a file of its own.
+          expect(
+            await listSitemapShardDecisionsHandler(
+              {
+                country: "cze",
+                year: "2026",
+                month: "06",
+                bucket: SITEMAP_ALL_BUCKET,
+              },
+              readDb,
+            ),
+          ).toMatchObject({ code: 404 });
+
+          // Every file of every month, read as a crawler reads them: each
+          // decision listed exactly once, with the date it had, and each
+          // file dated by its own newest decision, never later.
+          const stored = new Map(
+            (
+              await isolated
+                .select({
+                  id: caseLawDecisions.id,
+                  updatedAt: caseLawDecisions.updatedAt,
+                })
+                .from(caseLawDecisions)
+            ).map(({ id, updatedAt }) => [id, updatedAt.toISOString()]),
+          );
+          const served: string[] = [];
+          const statementsPerFile = new Set<number>();
+          for (const file of listed.items.filter(
+            ({ country }) => country === "cze",
+          )) {
+            const statements: string[] = [];
+            measuredQueries = statements;
+            // db-await-in-loop: one read per listed file, as a crawler fetches each
+            const page = await listSitemapShardDecisionsHandler(file, readDb);
+            measuredQueries = undefined;
+            if (!("items" in page)) {
+              panic(
+                `Expected ${file.year}/${file.month}/${file.bucket} to be served`,
+              );
+            }
+            statementsPerFile.add(statements.length);
+            expect(page.items.length).toBeLessThanOrEqual(SITEMAP_RANGE_ROWS);
+            for (const item of page.items) {
+              expect(item.updatedAt.toISOString()).toBe(stored.get(item.id));
+            }
+            const newest = Math.max(
+              ...page.items.map(({ updatedAt }) => updatedAt.getTime()),
+            );
+            expect(file.lastmod).toBe(dayOf(new Date(newest)));
+            expect(newest).toBeLessThanOrEqual(NEWEST_UPDATE.getTime());
+            served.push(...page.items.map(({ id }) => id));
+          }
+          // A file of a dozen-range month reads as many statements as the
+          // quiet month's one file.
+          expect(statementsPerFile.size).toBe(1);
+          expect(served).toHaveLength(SEEDED);
+          expect(served.toSorted(compareCodeUnit)).toEqual(
+            [...stored.keys()].toSorted(compareCodeUnit),
+          );
+          // Only the ranges holding a month's newest decision carry its date.
+          expect(
+            largeFiles.filter(
+              ({ lastmod }) => lastmod === dayOf(NEWEST_UPDATE),
+            ),
+          ).toHaveLength(1);
+          expect(
+            (
+              await isolated
+                .select({ bucket: caseLawSitemapShards.bucket })
+                .from(caseLawSitemapShards)
+                .where(eq(caseLawSitemapShards.year, "2026"))
+            ).every(({ bucket }) => bucket !== SITEMAP_ALL_BUCKET),
+          ).toBe(true);
         } finally {
           measuredQueries = undefined;
           await isolated.execute(
@@ -410,6 +381,6 @@ if (!databaseUrl || !enabled) {
           await isolated.execute(sql`DROP SCHEMA ${schema} CASCADE`);
         }
       });
-    }, 120_000);
+    }, 300_000);
   });
 }

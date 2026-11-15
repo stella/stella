@@ -63,8 +63,12 @@ import {
   ID_PAGE_SIZE,
 } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
+import {
+  SITEMAP_RANGE_ROWS,
+  SITEMAP_RANGE_ROWS_CEILING,
+} from "@/api/lib/case-law/sitemap-shard-budget";
 import { sitemapMonthCountSql } from "@/api/lib/case-law/sitemap-shard-refresh";
-import { SITEMAP_SHARD_BUCKET_COUNT } from "@/api/lib/case-law/sitemap-shard-sql";
+import { SITEMAP_RANGES_PER_MONTH_MAX } from "@/api/lib/case-law/sitemap-shard-sql";
 import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import {
@@ -125,7 +129,6 @@ const shardConditions = getShardConditions({
   country: "CZE",
   year: "2010",
   month: "02",
-  bucket: "all",
 });
 if (!Array.isArray(shardConditions)) {
   panic("The query-plan shard fixture must be valid");
@@ -315,9 +318,9 @@ export const QUERY_PLAN_REGISTRY = [
     planMode: "covering-index",
     heapFetchMitigation: {
       type: "heapFetchBudget",
-      rows: SITEMAP_SHARD_BUCKET_COUNT * LIMITS.caseLawSitemapShardUrlLimit,
+      rows: SITEMAP_RANGES_PER_MONTH_MAX * SITEMAP_RANGE_ROWS,
       reason:
-        "Scheduler-only recount of one country-month, read as one range of the partial sitemap index; a month the sitemap can still list holds at most one URL limit per bucket, and heap visits are only for pages not yet all-visible.",
+        "Scheduler-only recount of one country-month, read as one range of the partial sitemap index for the cut and again for the count; a month the sitemap can list holds at most as many ranges as their names hold, and heap visits are only for pages not yet all-visible.",
     },
     contract: planContracts["case-law.sitemap-month-count"],
   },
@@ -338,13 +341,17 @@ export const QUERY_PLAN_REGISTRY = [
     id: "case-law.sitemap-shard-read",
     class: "page",
     role: "public-law-reader",
-    build: (tx) => sitemapShardDecisionsQuery(tx, shardConditions),
+    build: (tx) =>
+      sitemapShardDecisionsQuery(tx, shardConditions, {
+        start: { date: "2010-02-11", id: QUERY_PLAN_SAMPLE.caseLaw.decisionId },
+        end: null,
+      }),
     seed: "case-law",
     heapFetchMitigation: {
       type: "heapFetchBudget",
-      rows: SITEMAP_SHARD_BUCKET_COUNT * LIMITS.caseLawSitemapShardUrlLimit,
+      rows: SITEMAP_RANGE_ROWS_CEILING + 1,
       reason:
-        "One country-month, read as one range of the partial sitemap index before the page is fetched; a month the sitemap can still list holds at most one URL limit per bucket, and heap visits are only for pages not yet all-visible.",
+        "One range of one country-month, read as one range of the date index and stopped one decision past what a file may serve; each decision's language-group probes visit the heap only for pages not yet all-visible.",
     },
     contract: planContracts["case-law.sitemap-shard-read"],
   },

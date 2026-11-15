@@ -10,7 +10,11 @@ import {
   CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
   CorpusSchemaLaneUnavailableError,
 } from "@/api/db/corpus-schema-lane";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawSitemapShards,
+  caseLawSources,
+} from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import {
@@ -35,8 +39,10 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { SITEMAP_RANGE_ROWS_CEILING } from "@/api/lib/case-law/sitemap-shard-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import {
   createTestPglite,
@@ -129,6 +135,26 @@ afterAll(async () => {
   await client.close();
 });
 
+/** List one file of a month in the index, as the refresh writes it. */
+const listShard = async (
+  shard: Pick<
+    typeof caseLawSitemapShards.$inferInsert,
+    | "bucket"
+    | "month"
+    | "rangeEndDate"
+    | "rangeEndId"
+    | "rangeStartDate"
+    | "rangeStartId"
+    | "total"
+    | "year"
+  >,
+) =>
+  await db.insert(caseLawSitemapShards).values({
+    country: "CZE",
+    lastModifiedAt: new Date("2026-01-01T00:00:00Z"),
+    ...shard,
+  });
+
 test("sitemap shards reject countries outside the public list", async () => {
   const unavailable = await listSitemapShardDecisionsHandler(
     { bucket: "all", country: "xaa", month: "03", year: "2020" },
@@ -173,6 +199,7 @@ test("sitemap bounds every language group even within a larger batch", async () 
     }),
   );
   await db.insert(caseLawDecisions).values(variants);
+  await listShard({ bucket: "all", month: "06", total: 1, year: "2020" });
   const response = await listSitemapShardDecisionsHandler(
     { country: "cze", year: "2020", month: "06", bucket: "all" },
     caseLawDb,
@@ -310,4 +337,81 @@ test("a shard read refused by the schema lane answers 503 with Retry-After", asy
     code: CORPUS_MAINTENANCE_CODE,
     retryable: true,
   });
+});
+
+test("a month the index does not list is not served", async () => {
+  const response = await listSitemapShardDecisionsHandler(
+    { bucket: "all", country: "cze", month: "01", year: "2021" },
+    caseLawDb,
+  );
+  expect(response).toMatchObject({ code: 404 });
+});
+
+test("a file whose count outgrew what one read may serve is refused", async () => {
+  await listShard({
+    bucket: "all",
+    month: "05",
+    total: SITEMAP_RANGE_ROWS_CEILING + 1,
+    year: "2020",
+  });
+  const response = await listSitemapShardDecisionsHandler(
+    { bucket: "all", country: "cze", month: "05", year: "2020" },
+    caseLawDb,
+  );
+  expect(response).toMatchObject({ code: 500 });
+});
+
+test("the ranges of a split month serve each of its decisions once, in index order", async () => {
+  // Ids in the order the date index keeps them within one day.
+  const ids = Array.from(
+    { length: 6 },
+    (_, index) => `0190a000-0000-7000-8000-${String(index).padStart(12, "0")}`,
+  );
+  await db.insert(caseLawDecisions).values(
+    ids.map((id, index) => ({
+      id: brandPersistedCaseLawDecisionId(id),
+      sourceId,
+      caseNumber: `range ${String(index)}`,
+      court: "Nejvyšší soud",
+      country: "CZE",
+      language: "cs",
+      decisionDate: index < 4 ? "2020-09-10" : "2020-09-20",
+    })),
+  );
+  const cutAt = { date: "2020-09-10", id: ids[2] ?? panic("Missing id") };
+  await listShard({
+    bucket: "0000",
+    month: "09",
+    rangeEndDate: cutAt.date,
+    rangeEndId: cutAt.id,
+    total: 2,
+    year: "2020",
+  });
+  await listShard({
+    bucket: "0001",
+    month: "09",
+    rangeStartDate: cutAt.date,
+    rangeStartId: cutAt.id,
+    total: 4,
+    year: "2020",
+  });
+  const read = async (bucket: string) => {
+    const response = await listSitemapShardDecisionsHandler(
+      { bucket, country: "cze", month: "09", year: "2020" },
+      caseLawDb,
+    );
+    if (!("items" in response)) {
+      return panic(`Expected range ${bucket} to be served`);
+    }
+    return response.items.map(({ id }) => id);
+  };
+  expect(await read("0000")).toEqual(ids.slice(0, 2));
+  expect(await read("0001")).toEqual(ids.slice(2));
+  // A split month is listed only as its ranges.
+  expect(
+    await listSitemapShardDecisionsHandler(
+      { bucket: "all", country: "cze", month: "09", year: "2020" },
+      caseLawDb,
+    ),
+  ).toMatchObject({ code: 404 });
 });
