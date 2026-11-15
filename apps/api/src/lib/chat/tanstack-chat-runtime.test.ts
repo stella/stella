@@ -105,6 +105,7 @@ test("finishes an asynchronous document mutation before a sibling read starts", 
     { type: EventType.TOOL_CALL_RESULT }
   >["content"][] = [];
   for await (const chunk of streamChatChunks({
+    threadId: "test-thread",
     adapter,
     messages: [],
     tools,
@@ -206,6 +207,7 @@ test("sequential gated and ungated calls execute in document order after approva
             capture: (message) => message,
           });
           for await (const chunk of streamChatChunks({
+            threadId: "test-thread",
             adapter,
             messages: [],
             tools,
@@ -243,6 +245,7 @@ test("sequential gated and ungated calls execute in document order after approva
             processor.addToolApprovalResponse(part.approval.id, approved);
           }
           for await (const chunk of streamChatChunks({
+            threadId: "test-thread",
             adapter,
             messages: processor.getMessages(),
             tools,
@@ -357,6 +360,7 @@ test("SDK-resolved MCP tools retain server ownership behind approval, including 
     });
     const starts: PublicToolCallStartChunk[] = [];
     for await (const chunk of streamChatChunks({
+      threadId: "test-thread",
       adapter,
       messages: [],
       tools: [
@@ -438,6 +442,7 @@ test("a continuation snapshot preserves normalized legacy server ownership", asy
     structuredOutput: () => panic("No structured output in this test"),
   };
   for await (const chunk of streamChatChunks({
+    threadId: "test-thread",
     adapter,
     messages: [historical],
     tools: [
@@ -531,6 +536,7 @@ test("snapshots retain a stored executor when its tool definition changes", asyn
       capture: (message) => message,
     });
     for await (const chunk of streamChatChunks({
+      threadId: "test-thread",
       adapter,
       messages: [historical],
       tools: [
@@ -625,6 +631,7 @@ test("a plain client request after a pending gate can finish while server succes
   });
   const interrupts: string[] = [];
   for await (const chunk of streamChatChunks({
+    threadId: "test-thread",
     adapter,
     messages: [],
     tools,
@@ -682,6 +689,7 @@ test("a plain client request after a pending gate can finish while server succes
   expect(pending.state).toBe("approval-requested");
   processor.addToolApprovalResponse(pending.approval.id, true);
   for await (const chunk of streamChatChunks({
+    threadId: "test-thread",
     adapter,
     messages: processor.getMessages(),
     tools,
@@ -768,13 +776,13 @@ const PROBE_VALUES = {
  * Of the keys the engine takes off a chunk, the ones it re-files under
  * `metadata.tanstack`. The rest are dropped: `error` folds into the spec
  * `message`/`code`, `result` leaves as a separate `TOOL_CALL_RESULT`,
- * `toolName` on a start event folds into `toolCallName`, and the two delta
+ * The removed `toolName` alias is retained only as metadata; the two delta
  * events lose their trio outright.
  */
 const MOVED_TO_METADATA = {
   RUN_FINISHED: ["finishReason", "model"],
   RUN_ERROR: ["finishReason", "model", "runId", "threadId"],
-  TOOL_CALL_START: [],
+  TOOL_CALL_START: ["toolName"],
   TOOL_CALL_END: ["input", "output", "state", "toolName"],
   TEXT_MESSAGE_CONTENT: [],
   TOOL_CALL_ARGS: [],
@@ -949,7 +957,7 @@ const rejectedToolCallEndInput = (chunk: PublicToolCallEndChunk): unknown =>
   chunk.input;
 
 const rejectedToolCallStartName = (chunk: PublicToolCallStartChunk): unknown =>
-  // @ts-expect-error the engine folds `toolName` into `toolCallName`
+  // @ts-expect-error the removed `toolName` alias is metadata, not a spec key
   chunk.toolName;
 
 test("engine-emitted chunks reject a top-level read of a moved key", () => {

@@ -606,16 +606,18 @@ export const createApprovalHarness = ({
     });
     if (sources.contextMatterIds !== undefined) {
       // The matters the page's context names, as its composer sends them
-      // (TanStack mirrors the forwarded props as `data`).
+      // (older TanStack clients also mirror forwarded props as `data`).
       const contextMatterIds = [...sources.contextMatterIds];
       Object.assign(body.forwardedProps, { contextMatterIds });
-      Object.assign(body.data, { contextMatterIds });
+      if (body.data !== undefined) {
+        Object.assign(body.data, { contextMatterIds });
+      }
     }
     if (user?.context !== undefined) {
       // The profile the page sends with every message.
       const userContext = { ...user.context };
       Object.assign(body.forwardedProps, { userContext });
-      if (typeof body.data === "object") {
+      if (body.data !== undefined) {
         Object.assign(body.data, { userContext });
       }
     }

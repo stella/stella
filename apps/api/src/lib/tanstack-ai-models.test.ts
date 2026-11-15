@@ -31,6 +31,7 @@ import { toDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
 import type { TanStackModelOptions } from "@/api/lib/tanstack-ai-models";
+import { isRecord } from "@/api/lib/type-guards";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
@@ -63,6 +64,7 @@ testState.setConfig("USE_MOCK_AI", false);
 
 const {
   clearByokAdapterCache,
+  createTanStackTextAdapterFactory,
   getTanStackTextModelInfoForTask,
   getTanStackTextModelInfoById,
   getStructuredOutputFallbackModelId,
@@ -2072,4 +2074,78 @@ describe("approved structured-output fallback selection", () => {
       }),
     ).toBeNull();
   });
+});
+
+describe("reviewed reasoning policy reaches the provider wire", () => {
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    for (const preference of ["default", "none", "high"] as const) {
+      test(`${provider} preserves its ${preference} reasoning request`, async () => {
+        const modelId = BYOK_DEFAULT_MODELS[provider].chat.modelId;
+        const options = tanStackModelOptionsForTask({
+          provider,
+          modelId,
+          task: "chat",
+          organizationId: null,
+          ...(preference === "default" ? {} : { reasoningEffort: preference }),
+        });
+        const bodies: unknown[] = [];
+        const originalFetch = globalThis.fetch;
+        testFetchState.set(
+          Object.assign(
+            async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+              const request =
+                input instanceof Request
+                  ? input
+                  : new Request(input.toString(), init);
+              bodies.push(await request.clone().json());
+              return new Response(
+                JSON.stringify({
+                  error: { message: "stop", type: "invalid_request_error" },
+                  message: "stop",
+                }),
+                {
+                  status: 400,
+                  headers: {
+                    "content-type": "application/json",
+                    "x-amzn-errortype": "ValidationException",
+                  },
+                },
+              );
+            },
+            { preconnect: originalFetch.preconnect },
+          ),
+        );
+        try {
+          const adapter = createTanStackTextAdapterFactory({
+            provider,
+            apiKey: "test-key",
+            dataClass: "customer",
+          })(modelId);
+          for await (const _chunk of adapter.chatStream({
+            logger: resolveDebugOption(false),
+            model: modelId,
+            messages: [{ role: "user", content: "Answer" }],
+            modelOptions: options,
+          })) {
+            // The SDK emits its request, then the fixture refuses it.
+          }
+        } finally {
+          testFetchState.restore();
+        }
+        expect(bodies).toHaveLength(1);
+        const body = bodies[0];
+        if (!isRecord(body)) {
+          throw new TypeError("Expected a provider request");
+        }
+        const expected: Record<string, unknown> = options;
+        expect(body["reasoning"]).toEqual(expected["reasoning"]);
+        expect(body["thinking"]).toEqual(expected["thinking"]);
+        expect(body["output_config"]).toEqual(expected["output_config"]);
+        const config = body["generationConfig"];
+        expect(isRecord(config) ? config["thinkingConfig"] : undefined).toEqual(
+          expected["thinkingConfig"],
+        );
+      });
+    }
+  }
 });

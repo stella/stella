@@ -213,6 +213,17 @@ describe("a provider stop reason", () => {
     }
   });
 
+  test.each(["max_messages", "steered"])(
+    "an OpenAI %s response remains unfinished after visible text",
+    async (reason) => {
+      expect(
+        endingOf(
+          await decide("openai", [started, delta, finishedWith(reason)]),
+        ),
+      ).toBe("error:provider_stream_incomplete");
+    },
+  );
+
   test("a Google continuation leaves a partial answer unfinished", async () => {
     for (const chunks of [
       [started],

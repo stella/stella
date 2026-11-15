@@ -1493,7 +1493,7 @@ export const createChatRuntime = ({
       // Transitional reload path for turns persisted before native AG-UI
       // interrupt descriptors were available. New live turns always resolve
       // through the bound interrupt above.
-      await client.addToolApprovalResponse(response);
+      await client.addLegacyToolApprovalResponse(response);
     });
   };
 

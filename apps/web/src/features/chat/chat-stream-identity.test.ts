@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   isCanonicalChatUIMessage,
@@ -127,11 +128,22 @@ const answerBody = (
         });
         break;
       case "reasoning":
-        chunks.push({
-          type: EventType.REASONING_MESSAGE_CONTENT,
-          messageId: `${answerId}-reasoning-${String(steps)}`,
-          delta: op.delta,
-        });
+        chunks.push(
+          {
+            type: EventType.REASONING_MESSAGE_START,
+            messageId: `${answerId}-reasoning-${String(steps)}`,
+            role: "assistant",
+          },
+          {
+            type: EventType.REASONING_MESSAGE_CONTENT,
+            messageId: `${answerId}-reasoning-${String(steps)}`,
+            delta: op.delta,
+          },
+          {
+            type: EventType.REASONING_MESSAGE_END,
+            messageId: `${answerId}-reasoning-${String(steps)}`,
+          },
+        );
         break;
       case "snapshot":
         // Materialized from the current messages when the stream yields it.
@@ -450,7 +462,29 @@ const streamSession = async ({
               id: approvalId,
               reason: "approval_required",
               toolCallId: awaited,
-              metadata: { kind: "approval", toolName: TOOL_NAME },
+              responseSchema: {
+                type: "object",
+                properties: { approved: { type: "boolean" } },
+                required: ["approved"],
+                additionalProperties: false,
+              },
+              metadata: {
+                kind: "approval",
+                toolName: TOOL_NAME,
+                "tanstack:interruptBinding": {
+                  v: 1,
+                  kind: "tool-approval",
+                  interruptId: approvalId,
+                  interruptedRunId: run.runId,
+                  generation: 0,
+                  toolName: TOOL_NAME,
+                  toolCallId: awaited,
+                  originalArgs: {},
+                  inputSchemaHash: "server-owned",
+                  approvalSchemaHash: "server-owned",
+                  responseSchemaHash: "server-owned",
+                },
+              },
             },
           ],
         },
@@ -462,6 +496,7 @@ const streamSession = async ({
   // Woken when the client stops loading.
   const idleWaiters = new Set<() => void>();
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
+    threadId: "thread-identity",
     initialMessages: session.history,
     connection: {
       connect: (messages, _data, _signal, run) => {
@@ -478,10 +513,10 @@ const streamSession = async ({
         chunk.type === EventType.MESSAGES_SNAPSHOT
       ) {
         stepName = undefined;
-      } else if (chunk.type === EventType.STEP_STARTED) {
-        stepName = chunk.stepName;
+      } else if (chunk.type === EventType.REASONING_MESSAGE_START) {
+        stepName = chunk.messageId;
       }
-      // STEP_FINISHED retains the SDK's current thinking step.
+      // Reasoning message IDs own thinking; STEP events carry activity only.
     },
     onLoadingChange: (isLoading) => {
       if (!isLoading) {
@@ -528,10 +563,24 @@ const streamSession = async ({
         spec: { end: "finish", ops: session.continuation },
       });
       cause = "approval";
-      await client.addToolApprovalResponse({
-        id: approvalId,
-        approved: session.approved,
+      const interrupt = client
+        .getInterrupts()
+        .find((pending) => pending.id === approvalId);
+      if (interrupt?.kind !== "generic") {
+        throw new TypeError("Expected the server-owned approval binding");
+      }
+      expect(
+        await rejectionOf(
+          client.addLegacyToolApprovalResponse({
+            id: approvalId,
+            approved: session.approved,
+          }),
+        ),
+      ).toMatchObject({
+        message:
+          "Native interrupts must be resolved through their bound descriptor",
       });
+      interrupt.resolveInterrupt({ approved: session.approved });
       await settle();
     }
     if (session.regenerate !== null) {
@@ -1033,7 +1082,7 @@ describe("streamed chunks keep what they do not change", () => {
     ).toThrow("expect(received).toBe(expected)");
   });
 
-  test("whitespace text on a fallback assistant retains strict projected identity checks", async () => {
+  test("whitespace text after a snapshot retains strict projected identity checks", async () => {
     const history = transcript([[{ type: "text", content: "Settled answer" }]]);
     const observed = await streamSession({
       session: {
@@ -1060,7 +1109,7 @@ describe("streamed chunks keep what they do not change", () => {
         raw.some((message) => {
           const part = message.parts.at(-1);
           return (
-            !STREAMED_IDS.has(message.id) &&
+            !history.some(({ id }) => id === message.id) &&
             part?.type === "text" &&
             part.content === " "
           );
@@ -1097,7 +1146,7 @@ describe("streamed chunks keep what they do not change", () => {
     ).toThrow("expect(received).toBe(expected)");
   });
 
-  test("tools reuse the reasoning assistant created after a snapshot", async () => {
+  test("tools retain the reasoning assistant identity after a snapshot", async () => {
     const history = transcript([
       [{ type: "text", content: "Earlier settled answer" }],
     ]);
@@ -1138,7 +1187,7 @@ describe("streamed chunks keep what they do not change", () => {
       if (
         next.shown.some(
           (message) =>
-            !STREAMED_IDS.has(message.id) &&
+            !historyIds.has(message.id) &&
             (toolTargetsMessage({
               cause,
               message,
@@ -1620,6 +1669,7 @@ describe("the chat runtime keeps settled messages while an answer streams", () =
       fetchClient: server.replayFetch,
     });
     const replay = new ChatClient<ChatClientTools, unknown, readonly []>({
+      threadId: "thread-identity",
       initialMessages: history,
       onMessagesChange: notifyChange,
       connection: {

@@ -476,16 +476,40 @@ export const agUiSendMessageBodySchema = v.union([
   v.strictObject({
     ...agUiEnvelopeCommonProperties,
     forwardedProps: noResumeBodySchema,
-    data: noResumeBodySchema,
+    // Older clients duplicated forwardedProps here; v1 sends only the canonical field.
+    data: v.exactOptional(noResumeBodySchema),
   }),
   v.strictObject({
     ...agUiEnvelopeCommonProperties,
     forwardedProps: nativeAssistantContinuationBodySchema,
-    data: nativeAssistantContinuationBodySchema,
+    data: v.exactOptional(nativeAssistantContinuationBodySchema),
     parentRunId: agUiRunIdSchema,
     resume: agUiResumeSchema,
   }),
 ]);
+
+/** Correlate the native envelope with the strictly parsed application input.
+ * v1 omits the deprecated data alias; older clients must send the same input in it. */
+export const hasAgUiEnvelopeCorrelationMismatch = (
+  transport: v.InferOutput<typeof agUiSendMessageBodySchema>,
+): boolean => {
+  const body = transport.forwardedProps;
+  return (
+    transport.threadId !== body.threadId ||
+    transport.runId !== body.runId ||
+    ("parentRunId" in transport ? transport.parentRunId : undefined) !==
+      ("parentRunId" in body ? body.parentRunId : undefined) ||
+    !deepEquals(
+      "resume" in transport ? transport.resume : undefined,
+      "resume" in body ? body.resume : undefined,
+    ) ||
+    (transport.data !== undefined && !deepEquals(transport.data, body)) ||
+    !transport.messages.some(
+      (message) =>
+        message.id === body.message.id && message.role === body.message.role,
+    )
+  );
+};
 
 type RawIncomingMessage = v.InferOutput<typeof rawMessageSchema>;
 type AgUiResume = v.InferOutput<typeof agUiResumeSchema>;

@@ -2,12 +2,16 @@ import {
   chat,
   convertMessagesToModelMessages,
   maxIterations,
+  normalizeToUIMessage,
   toolDefinition,
 } from "@tanstack/ai";
-import type { AnyTextAdapter, ModelMessage } from "@tanstack/ai";
+import type { AnyTextAdapter, ModelMessage, StreamChunk } from "@tanstack/ai";
+import { ChatClient } from "@tanstack/ai-client";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
 import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
@@ -147,6 +151,7 @@ const runRequest = async ({
     workspaceIds: [],
   });
   for await (const _chunk of chat({
+    threadId: "test-thread",
     adapter,
     agentLoopStrategy: maxIterations(4),
     messages,
@@ -357,12 +362,19 @@ const runAndStore = async ({
   history,
   resumedMessageId,
   turns,
+  correlation,
 }: {
   history: ChatMessage[];
   resumedMessageId?: string;
   turns: ScriptedTurn[];
-}): Promise<{ prompts: string[][]; stored: ChatMessage }> => {
+  correlation?: { threadId: string; runId: string };
+}): Promise<{
+  prompts: string[][];
+  stored: ChatMessage;
+  chunks: StreamChunk[];
+}> => {
   const prompts: string[][] = [];
+  const chunks: StreamChunk[] = [];
   const adapter = withProviderStreamContract({
     ...scriptedAdapterBase,
     async *chatStream({ messages, model, runId, threadId }) {
@@ -400,6 +412,8 @@ const runAndStore = async ({
     },
     processor,
     source: streamChatChunks({
+      threadId: correlation?.threadId ?? "test-thread",
+      ...(correlation === undefined ? {} : { runId: correlation.runId }),
       adapter,
       agentLoopStrategy: maxIterations(4),
       messages: guardProviderHistory({
@@ -409,11 +423,12 @@ const runAndStore = async ({
       tools: [deleteTool],
     }),
   })) {
-    // Draining the stream runs the request and stores its message.
+    chunks.push(_chunk);
   }
   expect(prompts).toHaveLength(turns.length);
   return {
     prompts,
+    chunks,
     stored: finished.message ?? panic("The request stored no message"),
   };
 };
@@ -532,4 +547,102 @@ describe("a step whose every call was denied, followed by a step that opens with
     expect(prefixBreaks(prompts)).toEqual([]);
     expect(prompts.flatMap(unansweredCalls)).toEqual([]);
   });
+});
+
+describe("persisted approvals from before native interrupt descriptors", () => {
+  for (const approved of [true, false]) {
+    test(`the real client resumes a stored ${approved ? "approval" : "denial"} through the server and reloads its settled result`, async () => {
+      const pending = {
+        ...assistant([approvalCall("legacy-call", undefined)]),
+        id: STORED_ASSISTANT_ID,
+      };
+      const posted: ChatMessage[][] = [];
+      const stored: ChatMessage[] = [];
+      const client = new ChatClient({
+        threadId: "legacy-thread",
+        initialMessages: [user("legacy-user", "Delete the draft"), pending],
+        connection: {
+          async *connect(messages, _data, _signal, run) {
+            if (run === undefined) {
+              panic("A continuation needs a run context");
+            }
+            expect(run.resume).toBeUndefined();
+            const history = messages.map(
+              (message) =>
+                toChatMessage(
+                  normalizeToUIMessage(message, () =>
+                    panic("Every message already has an ID"),
+                  ),
+                ) ?? panic("A posted message must retain its parts"),
+            );
+            posted.push(history);
+            const result = await runAndStore({
+              history,
+              resumedMessageId: pending.id,
+              turns: [answer("Finished.")],
+              correlation: run,
+            });
+            stored.push(result.stored);
+            yield* result.chunks;
+          },
+        },
+      });
+      client.attach();
+      try {
+        await client.addLegacyToolApprovalResponse({
+          id: "approval_legacy-call",
+          approved,
+        });
+        expect(posted).toHaveLength(1);
+        expect(posted[0]?.at(-1)?.parts).toContainEqual(
+          expect.objectContaining({
+            state: "approval-responded",
+            approval: expect.objectContaining({ approved }),
+          }),
+        );
+        const settled =
+          stored[0] ?? panic("The server must store the continued turn");
+        const call = settled.parts.find(
+          (part) => part.type === "tool-call" && part.id === "legacy-call",
+        );
+        expect(call).toMatchObject({
+          state: approved ? "complete" : "approval-responded",
+          approval: expect.objectContaining({ approved }),
+        });
+        if (approved) {
+          expect(call).toMatchObject({ output: { deleted: "legacy-call" } });
+        }
+        const live = client
+          .getMessages()
+          .map((message) => toChatMessage(message));
+        expect(live.at(-1)).toEqual(toChatMessage(settled));
+        const reloaded = new ChatClient({
+          threadId: "legacy-thread",
+          initialMessages: [user("legacy-user", "Delete the draft"), settled],
+          connection: {
+            async *connect() {
+              panic("Reloading a completed turn must not send");
+              yield* [];
+            },
+          },
+        });
+        expect(
+          reloaded.getMessages().map((message) => toChatMessage(message)),
+        ).toEqual(live);
+        expect(
+          await rejectionOf(
+            client.addLegacyToolApprovalResponse({
+              id: "approval_legacy-call",
+              approved: !approved,
+            }),
+          ),
+        ).toMatchObject({
+          message: "The stored approval is no longer pending",
+        });
+        expect(posted).toHaveLength(1);
+      } finally {
+        client.detach();
+      }
+    });
+  }
 });

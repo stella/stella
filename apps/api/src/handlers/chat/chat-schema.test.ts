@@ -51,6 +51,7 @@ import {
   activeStatuteSchema,
   activeTemplateSchema,
   agUiSendMessageBodySchema,
+  hasAgUiEnvelopeCorrelationMismatch,
   parseMessage,
   requireUserMessageContent,
   resolveBrowserExtensionCapability,
@@ -619,6 +620,30 @@ describe("native AG-UI request envelope", () => {
     data: forwardedProps,
   };
 
+  test("accepts v1 and older client envelopes but refuses invalid aliases and correlation drift", () => {
+    const { data: _legacyData, ...current } = request;
+    for (const input of [current, request]) {
+      const parsed = v.parse(agUiSendMessageBodySchema, input);
+      expect(hasAgUiEnvelopeCorrelationMismatch(parsed)).toBe(false);
+      for (const mutation of [
+        { threadId: "019fc771-8b17-74bf-b85e-559afc54cfe6" },
+        { runId: "another-run" },
+        { messages: [{ ...forwardedProps.message, id: "another-message" }] },
+        { messages: [{ ...forwardedProps.message, role: "assistant" }] },
+        { data: { ...forwardedProps, runId: "another-run" } },
+      ]) {
+        expect(
+          hasAgUiEnvelopeCorrelationMismatch(
+            v.parse(agUiSendMessageBodySchema, { ...input, ...mutation }),
+          ),
+        ).toBe(true);
+      }
+    }
+    for (const data of [null, [], "wrong", 1, {}]) {
+      expect(v.is(agUiSendMessageBodySchema, { ...current, data })).toBe(false);
+    }
+  });
+
   test("accepts the canonical envelope with a complete native resume batch", () => {
     const resume = [
       {
@@ -633,15 +658,37 @@ describe("native AG-UI request envelope", () => {
       parentRunId: "run-parent",
       resume,
     };
-    expect(
-      v.is(agUiSendMessageBodySchema, {
-        ...request,
+    const { data: _legacyData, ...current } = request;
+    for (const alias of [{}, { data: continuationForwardedProps }]) {
+      const input = {
+        ...current,
+        messages: [continuationForwardedProps.message],
         parentRunId: "run-parent",
         resume,
         forwardedProps: continuationForwardedProps,
-        data: continuationForwardedProps,
-      }),
-    ).toBe(true);
+        ...alias,
+      };
+      const parsed = v.parse(agUiSendMessageBodySchema, input);
+      expect(hasAgUiEnvelopeCorrelationMismatch(parsed)).toBe(false);
+      expect(
+        hasAgUiEnvelopeCorrelationMismatch({
+          ...parsed,
+          parentRunId: "other-parent",
+        }),
+      ).toBe(true);
+      expect(
+        hasAgUiEnvelopeCorrelationMismatch({
+          ...parsed,
+          resume: [
+            {
+              ...resume[0],
+              interruptId: "other-interrupt",
+              status: "resolved",
+            },
+          ],
+        }),
+      ).toBe(true);
+    }
   });
 
   test("rejects untyped fields, incomplete resume items, and user-message resumes", () => {

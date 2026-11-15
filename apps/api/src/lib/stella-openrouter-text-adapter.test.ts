@@ -355,6 +355,7 @@ describe("OpenRouter document transport", () => {
         "google/gemini-2.5-flash",
       );
       for await (const _chunk of chat({
+        threadId: "test-thread",
         adapter: wireAdapter,
         messages: [
           {

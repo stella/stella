@@ -1,0 +1,197 @@
+Incomplete and failed streams retain reported usage; terminal events
+retain provider stop evidence. Upstream handles max_tokens usage.
+Native thinking/output_config remain available for capability-checked provider
+settings that unified reasoning cannot express without adding effort/display.
+The two representations are mutually exclusive and conflict before dispatch.
+Structured requests retain native settings; schema output merges its format.
+Regressions: apps/api/src/lib/chat/provider-stream-contract.test.ts and
+apps/api/src/lib/tanstack-ai-provider-wire.test.ts.
+
+# Native thinking in structuredOutput uses the existing model-gated JSON Schema path;
+# forced tools reject manual thinking or suppress adaptive thinking. Unknown models fail closed.
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -12,6 +12,9 @@
+ import { REDACTED_THINKING_ID_PREFIX, orderedAssistantBlocks, splitMidConversationChanges, toRetryAfterMs, toRunErrorDetails, toRunErrorRawEvent, transformMessagesForReplay } from "@tanstack/ai/adapter-internals";
+ import { BaseTextAdapter } from "@tanstack/ai/adapters";
+ //#region src/adapters/text.ts
++function assertReasoningRepresentation(options) {
++	if (options.reasoning !== void 0 && (options.modelOptions?.thinking !== void 0 || options.modelOptions?.output_config?.effort !== void 0)) throw new TypeError("Specify either reasoning or native Anthropic thinking/effort options, not both.");
++}
+ /**
+ * Narrow an opaque tool-call `metadata` to {@link AnthropicServerToolMetadata}
+ * when it follows the provider-executed convention, else `null`.
+@@ -350,8 +353,17 @@
+ 			tools: options.chatOptions.tools?.map((tool) => resolveComputerUseTool(tool, this.model))
+ 		};
+ 		const { logger } = chatOptions;
++		assertReasoningRepresentation(chatOptions);
+ 		const { reasoning: _reasoning, ...requestOptions } = chatOptions;
+-		const requestParams = this.mapCommonOptionsToAnthropic(requestOptions, { stream: false });
++		const nativeThinking = requestOptions.modelOptions?.thinking;
++		const useNativeSchema = nativeThinking !== void 0 && nativeThinking.type !== "disabled";
++		if (useNativeSchema && !this.supportsCombinedToolsAndSchema()) throw new Error("Anthropic structured output with thinking requires a model supporting native JSON Schema output");
++		const requestParams = this.mapCommonOptionsToAnthropic(useNativeSchema ? {
++			...requestOptions,
++			tools: void 0,
++			toolChoice: void 0,
++			outputSchema
++		} : requestOptions, { stream: false });
+ 		const structuredOutputTool = {
+ 			name: "structured_output",
+ 			description: "Use this tool to provide your response in the required structured format.",
+@@ -371,10 +383,12 @@
+ 			const response = await this.clientFor(chatOptions.wrapFetch).beta.messages.create({
+ 				...requestParams,
+ 				stream: false,
+-				tools: [structuredOutputTool],
+-				tool_choice: {
+-					type: "tool",
+-					name: "structured_output"
++				...!useNativeSchema && {
++					tools: [structuredOutputTool],
++					tool_choice: {
++						type: "tool",
++						name: "structured_output"
++					}
+ 				},
+ 				...betas && { betas }
+ 			}, {
+@@ -419,6 +433,7 @@
+ 	}
+ 	mapCommonOptionsToAnthropic(options, { stream = true } = {}) {
+ 		const modelOptions = options.modelOptions;
++		assertReasoningRepresentation(options);
+ 		const replay = transformMessagesForReplay(options.messages, {
+ 			provider: this.provider,
+ 			api: this.api,
+@@ -437,6 +452,8 @@
+ 		const validProviderOptions = {};
+ 		if (modelOptions) {
+ 			const validKeys = [
++				"thinking",
++				"output_config",
+ 				"cache_control",
+ 				"container",
+ 				"context_management",
+@@ -484,7 +501,8 @@
+ 			}, ...blocks] : blocks;
+ 		})();
+ 		const combinedSchema = options.outputSchema;
+-		const outputConfig = combinedSchema || reasoningOutputConfig ? { output_config: {
++		const outputConfig = combinedSchema || reasoningOutputConfig || modelOptions?.output_config ? { output_config: {
++			...modelOptions?.output_config,
+ 			...reasoningOutputConfig,
+ 			...combinedSchema ? { format: {
+ 				type: "json_schema",
+@@ -850,6 +868,7 @@
+ 		let hasEmittedRunFinished = false;
+ 		let currentBlockType = null;
+ 		let messageStartUsage;
++		let reportedUsage;
+ 		try {
+ 			for await (const event of stream) {
+ 				if (event.type === "message_start") {
+@@ -857,6 +876,8 @@
+ 					model = event.message.model;
+ 				}
+ 				logger.provider(`provider=anthropic type=${event.type}`, { chunk: event });
++				if (event.type === "message_start" && event.message.usage) reportedUsage = event.message.usage;
++				if (event.type === "message_delta" && event.usage) reportedUsage = event.usage;
+ 				if (!hasEmittedRunStarted) {
+ 					hasEmittedRunStarted = true;
+ 					yield {
+@@ -1180,20 +1201,7 @@
+ 							timestamp: Date.now()
+ 						};
+ 					}
+-					if (!hasEmittedRunFinished) {
+-						hasEmittedRunFinished = true;
+-						const usage = buildAnthropicUsage(messageStartUsage);
+-						yield {
+-							type: EventType.RUN_FINISHED,
+-							...responseId !== void 0 && { responseId },
+-							runId,
+-							threadId,
+-							model,
+-							timestamp: Date.now(),
+-							finishReason: "stop",
+-							...usage && { usage }
+-						};
+-					}
++
+ 				} else if (event.type === "message_delta") {
+ 					if (event.delta.stop_reason) {
+ 						hasEmittedRunFinished = true;
+@@ -1223,7 +1231,8 @@
+ 									model,
+ 									timestamp: Date.now(),
+ 									finishReason: "tool_calls",
+-									usage
++									usage,
++									metadata: { providerStopReason: event.delta.stop_reason }
+ 								};
+ 								break;
+ 							case "max_tokens":
+@@ -1245,7 +1254,8 @@
+ 										message: "The response was cut off because the maximum token limit was reached.",
+ 										code: "max_tokens"
+ 									},
+-									usage
++									usage,
++									metadata: { providerStopReason: event.delta.stop_reason }
+ 								};
+ 								break;
+ 							case "model_context_window_exceeded": {
+@@ -1260,7 +1270,8 @@
+ 										message,
+ 										code: CONTEXT_OVERFLOW_CODE
+ 									},
+-									usage
++									usage,
++									metadata: { providerStopReason: event.delta.stop_reason }
+ 								};
+ 								break;
+ 							}
+@@ -1274,7 +1285,8 @@
+ 									timestamp: Date.now(),
+ 									finishReason: "content_filter",
+ 									...event.delta.stop_details && { rawEvent: event.delta.stop_details },
+-									usage
++									usage,
++									metadata: { providerStopReason: event.delta.stop_reason }
+ 								};
+ 								break;
+ 							default: yield {
+@@ -1285,7 +1297,8 @@
+ 								model,
+ 								timestamp: Date.now(),
+ 								finishReason: "stop",
+-								usage
++								usage,
++								metadata: { providerStopReason: event.delta.stop_reason }
+ 							};
+ 						}
+ 					}
+@@ -1297,7 +1310,7 @@
+ 			const code = runErrorCode(err);
+ 			const rawEvent = toRunErrorRawEvent(error);
+ 			const retryAfterMs = toRetryAfterMs(error);
+-			const usage = hasEmittedRunFinished ? void 0 : buildAnthropicUsage(messageStartUsage);
++			const usage = buildAnthropicUsage(reportedUsage, messageStartUsage);
+ 			logger.errors("anthropic.processAnthropicStream fatal", {
+ 				error,
+ 				source: "anthropic.processAnthropicStream"
+diff --git a/dist/esm/model-meta.js b/dist/esm/model-meta.js
+--- a/dist/esm/model-meta.js
++++ b/dist/esm/model-meta.js
+@@ -646,6 +646,8 @@
+ * in `structuredOutput`.
+ */
+ var ANTHROPIC_COMBINED_TOOLS_AND_SCHEMA_MODELS = /* @__PURE__ */ new Set([
++	"claude-fable-5-2",
++	"claude-haiku-4-5-20251001",
+ 	CLAUDE_HAIKU_5_5.id,
+ 	CLAUDE_SONNET_5_5.id,
+ 	CLAUDE_OPUS_4_5.id,

@@ -508,20 +508,26 @@ export const withProviderRetryWait = async <T>(
 
 export const generateTanStackTextForTask = async (
   options: GenerateTanStackTextForTaskOptions,
-): Promise<string> =>
-  await withGenerationDeadline(
+): Promise<string> => {
+  const threadId = Bun.randomUUIDv7();
+  return await withGenerationDeadline(
     options,
     async (abortSignal, deadlineAt) =>
       await withProviderRetryWait(
         abortSignal,
         async () =>
-          await generateTanStackTextWithin({ ...options, abortSignal }),
+          await generateTanStackTextWithin(
+            { ...options, abortSignal },
+            threadId,
+          ),
         deadlineAt,
       ),
   );
+};
 
 const generateTanStackTextWithin = async (
   options: GenerateTanStackTextForTaskOptions,
+  threadId: string,
 ): Promise<string> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
   const abortSignal = admittedDispatchSignal(options);
@@ -539,6 +545,7 @@ const generateTanStackTextWithin = async (
 
   try {
     for await (const delta of streamTanStackTextDeltas({
+      threadId,
       abortController,
       analytics: options.analytics,
       beforeEachDispatch: options.beforeEachDispatch,
@@ -594,6 +601,7 @@ export const streamTanStackTextForTask = async function* (
     : undefined;
 
   yield* streamTanStackTextDeltas({
+    threadId: Bun.randomUUIDv7(),
     abortController,
     analytics: options.analytics,
     caching: options.caching,
@@ -791,6 +799,7 @@ const afterDispatchCheck = async function* <TChunk>(
 };
 
 const streamTanStackTextDeltas = async function* ({
+  threadId,
   abortController,
   analytics,
   beforeEachDispatch,
@@ -803,6 +812,7 @@ const streamTanStackTextDeltas = async function* ({
   temperature,
   onFinish,
 }: {
+  threadId: string;
   abortController: AbortController | undefined;
   analytics: TanStackAIAnalyticsCallbacks | undefined;
   beforeEachDispatch?: DispatchCheck | undefined;
@@ -823,6 +833,7 @@ const streamTanStackTextDeltas = async function* ({
     stream: (requestedServiceTier) =>
       afterDispatchCheck(beforeEachDispatch, () =>
         streamChatChunks({
+          threadId,
           adapter: textAdapterWithNormalizedStops(model),
           messages,
           ...systemPromptsPatch({ caching, model, system }),
@@ -1625,6 +1636,7 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
   const abortController = abortSignal
     ? abortControllerFromSignal(abortSignal)
     : undefined;
+  const threadId = Bun.randomUUIDv7();
   const run = async (
     messages: GuardedModelMessages<ModelMessage[]>,
     requestModel: ResolvedTanStackTextModel,
@@ -1653,6 +1665,7 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
               run: async (serviceTier) => {
                 await checkBeforeDispatch(options.beforeEachDispatch);
                 return await generateChatObject({
+                  threadId,
                   adapter: requestModel.adapter,
                   messages,
                   outputSchema: tanStackOutputSchema,
@@ -1855,6 +1868,7 @@ const streamTanStackStructuredOutput = async function* <
   system: GuardedSystemPrompt | undefined;
   temperature: number | undefined;
 }): AsyncIterable<TanStackStructuredOutputEvent<v.InferOutput<TSchema>>> {
+  const threadId = Bun.randomUUIDv7();
   let completed = false;
   let rawJson = "";
   guardStructuredOutputBudget({ model, outputSchema });
@@ -1876,6 +1890,7 @@ const streamTanStackStructuredOutput = async function* <
     serviceTier,
     stream: (requestedServiceTier) =>
       streamChatObjectWithManagedErrors({
+        threadId,
         adapter: model.adapter,
         messages,
         outputSchema: tanStackOutputSchema,

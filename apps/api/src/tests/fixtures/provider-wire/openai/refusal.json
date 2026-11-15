@@ -16,7 +16,9 @@
             "content-type": "application/json"
           },
           "body": {
-            "include": ["reasoning.encrypted_content"],
+            "include": [
+              "reasoning.encrypted_content"
+            ],
             "store": false,
             "max_output_tokens": 128000,
             "service_tier": "default",
@@ -45,11 +47,17 @@
                       "type": "string"
                     },
                     "note": {
-                      "type": ["string", "null"],
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "minLength": 1
                     }
                   },
-                  "required": ["name", "note"],
+                  "required": [
+                    "name",
+                    "note"
+                  ],
                   "additionalProperties": false
                 },
                 "strict": true
@@ -74,6 +82,10 @@
   "expect": {
     "outcome": "error",
     "errorKind": "unknown",
-    "usageAfterFailure": "The adapter ends the run at the refusal content part; response.completed reports usage after it."
+    "usage": {
+      "promptTokens": 31,
+      "completionTokens": 7,
+      "totalTokens": 38
+    }
   }
 }

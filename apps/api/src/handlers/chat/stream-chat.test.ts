@@ -4465,6 +4465,7 @@ describe("outgoing chat stream message ids", () => {
       },
       processor: new StreamProcessor(),
       source: chat({
+        threadId: "test-thread",
         adapter,
         messages: [{ content: "Hello", role: "user" }],
       }),

@@ -7,6 +7,9 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   INCOMPLETE_STREAM_CODE,
@@ -536,9 +539,15 @@ for (const boundary of ["base contract", "run tool-call ledger"] as const) {
         };
         if (sink.length === 1) {
           yield {
-            type: EventType.STEP_STARTED,
-            stepName: "thinking",
-            stepId: "step-1",
+            type: EventType.REASONING_START,
+            messageId: "thinking-1",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.REASONING_MESSAGE_START,
+            messageId: "thinking-1",
+            role: "reasoning",
             model,
             timestamp: 1,
           };
@@ -550,10 +559,22 @@ for (const boundary of ["base contract", "run tool-call ledger"] as const) {
             timestamp: 1,
           };
           yield {
-            type: EventType.STEP_FINISHED,
-            stepName: "thinking",
-            stepId: "step-1",
-            signature,
+            type: EventType.REASONING_ENCRYPTED_VALUE,
+            subtype: "message",
+            entityId: "thinking-1",
+            encryptedValue: signature,
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.REASONING_MESSAGE_END,
+            messageId: "thinking-1",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.REASONING_END,
+            messageId: "thinking-1",
             model,
             timestamp: 1,
           };
@@ -596,6 +617,7 @@ for (const boundary of ["base contract", "run tool-call ledger"] as const) {
       inputSchema: toTanStackToolSchema(v.object({})),
     }).server(async () => ({ found: true }));
     for await (const _chunk of chat({
+      threadId: "test-thread",
       adapter,
       messages: [{ role: "user", content: "Search" }],
       tools: [search],
@@ -825,4 +847,217 @@ describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
       anthropicBlocks(body).filter(({ type }) => type === "thinking"),
     ).toHaveLength(1);
   });
+});
+
+describe("Anthropic native reasoning across adapter upgrades", () => {
+  const schema = {
+    type: "object",
+    properties: { answer: { type: "string" } },
+    required: ["answer"],
+    additionalProperties: false,
+  };
+  const success = () =>
+    Response.json({
+      id: "msg_structured",
+      type: "message",
+      role: "assistant",
+      model: "claude-sonnet-4-6",
+      content: [{ type: "text", text: '{"answer":"yes"}' }],
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 20, output_tokens: 8 },
+    });
+  const policies = [
+    { name: "provider default", options: {} },
+    { name: "adaptive default", options: { thinking: { type: "adaptive" } } },
+    { name: "disabled", options: { thinking: { type: "disabled" } } },
+    {
+      name: "explicit budget",
+      options: { thinking: { type: "enabled", budget_tokens: 10_000 } },
+    },
+    {
+      name: "explicit effort",
+      options: {
+        thinking: { type: "adaptive" },
+        output_config: { effort: "high" },
+      },
+    },
+  ] as const;
+  for (const policy of policies) {
+    for (const mode of ["stream", "structured"] as const) {
+      test(`${mode} preserves ${policy.name} without inventing effort or display`, async () => {
+        const { bodies, fetch } = recordingFetch(
+          mode === "structured" ? success : refused,
+        );
+        const adapter: AnyTextAdapter = createAnthropicChat(
+          "claude-sonnet-4-6",
+          "test-key",
+          { fetch },
+        );
+        const chatOptions = {
+          logger: resolveDebugOption(false),
+          model: adapter.model,
+          messages: [{ role: "user", content: "Answer" }],
+          modelOptions: policy.options,
+        } satisfies Parameters<AnyTextAdapter["chatStream"]>[0];
+        if (mode === "stream") {
+          for await (const _chunk of adapter.chatStream(chatOptions)) {
+            // Record the actual SDK request; the fixture refuses it.
+          }
+        } else {
+          const result = await adapter.structuredOutput({
+            chatOptions,
+            outputSchema: schema,
+          });
+          expect(result.data).toEqual({ answer: "yes" });
+          expect(result.usage).toMatchObject({
+            promptTokens: 20,
+            completionTokens: 8,
+            totalTokens: 28,
+          });
+        }
+        expect(bodies).toHaveLength(1);
+        const body = bodies[0];
+        if (!isRecord(body)) {
+          panic("The request must be an object");
+        }
+        expect(body["thinking"]).toEqual(
+          "thinking" in policy.options ? policy.options.thinking : undefined,
+        );
+        const nativeSchema =
+          mode === "structured" &&
+          "thinking" in policy.options &&
+          policy.options.thinking.type !== "disabled";
+        const effort =
+          "output_config" in policy.options
+            ? policy.options.output_config
+            : undefined;
+        expect(body["output_config"]).toEqual(
+          nativeSchema
+            ? { ...effort, format: { type: "json_schema", schema } }
+            : effort,
+        );
+        if (nativeSchema) {
+          expect(body["tool_choice"]).toBeUndefined();
+          expect(body["tools"]).toBeUndefined();
+        }
+      });
+    }
+  }
+
+  for (const mode of ["stream", "structured"] as const) {
+    test(`${mode} rejects competing reasoning representations before dispatch`, async () => {
+      const { bodies, fetch } = recordingFetch(refused);
+      const adapter: AnyTextAdapter = createAnthropicChat(
+        "claude-sonnet-4-6",
+        "test-key",
+        { fetch },
+      );
+      const chatOptions = {
+        logger: resolveDebugOption(false),
+        model: adapter.model,
+        messages: [{ role: "user", content: "Answer" }],
+        reasoning: { level: "high", summary: false },
+        modelOptions: { thinking: { type: "adaptive" } },
+      } satisfies Parameters<AnyTextAdapter["chatStream"]>[0];
+      if (mode === "stream") {
+        const chunks = [];
+        for await (const chunk of adapter.chatStream(chatOptions)) {
+          chunks.push(chunk);
+        }
+        expect(chunks).toContainEqual(
+          expect.objectContaining({
+            type: EventType.RUN_ERROR,
+            message:
+              "Specify either reasoning or native Anthropic thinking/effort options, not both.",
+          }),
+        );
+      } else {
+        expect(
+          await rejectionOf(
+            adapter.structuredOutput({
+              chatOptions,
+              outputSchema: { type: "object" },
+            }),
+          ),
+        ).toMatchObject({
+          message:
+            "Specify either reasoning or native Anthropic thinking/effort options, not both.",
+        });
+      }
+      expect(bodies).toHaveLength(0);
+    });
+  }
+  test("every offered Anthropic model supports the schema path required by thinking", () => {
+    for (const model of BYOK_MODEL_OPTIONS.anthropic) {
+      const adapter: AnyTextAdapter = createAnthropicChat(model, "test-key");
+      expect(adapter.supportsCombinedToolsAndSchema?.(), model).toBe(true);
+    }
+  });
+
+  test("streaming merges the generated schema with native effort", async () => {
+    const { bodies, fetch } = recordingFetch(refused);
+    const adapter: AnyTextAdapter = createAnthropicChat(
+      "claude-sonnet-4-6",
+      "test-key",
+      { fetch },
+    );
+    for await (const _chunk of adapter.chatStream({
+      logger: resolveDebugOption(false),
+      model: adapter.model,
+      messages: [{ role: "user", content: "Answer" }],
+      modelOptions: {
+        thinking: { type: "adaptive" },
+        output_config: { effort: "high" },
+      },
+      outputSchema: schema,
+    })) {
+      // Drain the real adapter stream; this canary observes its emitted request.
+    }
+    expect(bodies).toHaveLength(1);
+    const body = bodies[0];
+    if (!isRecord(body)) {
+      panic("The request must be an object");
+    }
+    expect(body["output_config"]).toEqual({
+      effort: "high",
+      format: { type: "json_schema", schema },
+    });
+  });
+
+  for (const model of [
+    "claude-fable-5-2",
+    "claude-haiku-4-5-20251001",
+  ] as const) {
+    test(`${model} preserves thinking through a successful native schema response`, async () => {
+      const { bodies, fetch } = recordingFetch(success);
+      const adapter: AnyTextAdapter = createAnthropicChat(model, "test-key", {
+        fetch,
+      });
+      const thinking =
+        model === "claude-fable-5-2"
+          ? { type: "adaptive" }
+          : { type: "enabled", budget_tokens: 10_000 };
+      const result = await adapter.structuredOutput({
+        chatOptions: {
+          logger: resolveDebugOption(false),
+          model,
+          messages: [{ role: "user", content: "Answer" }],
+          modelOptions: { thinking },
+        },
+        outputSchema: schema,
+      });
+      expect(result.data).toEqual({ answer: "yes" });
+      expect(bodies).toHaveLength(1);
+      const body = bodies[0];
+      if (!isRecord(body)) {
+        panic("The request must be an object");
+      }
+      expect(body["thinking"]).toEqual(thinking);
+      expect(body["output_config"]).toEqual({
+        format: { type: "json_schema", schema },
+      });
+      expect(body["tool_choice"]).toBeUndefined();
+    });
+  }
 });

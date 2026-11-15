@@ -202,7 +202,7 @@ describe("sending a message on a loaded thread", () => {
 // continuation's `parentRunId` and `resume`, `turnIntent`,
 // `truncateAfterMessageId`), which the page builds from its whole message
 // list. From the AG-UI envelope it reads only the correlation: the same
-// thread, run, `parentRunId` and `resume`, `data` equal to `forwardedProps`,
+// thread, run, `parentRunId` and `resume`, any legacy `data` equal to `forwardedProps`,
 // and an envelope message with the posted message's id and role
 // (`hasEnvelopeCorrelationMismatch` in the API's send handler). Each kind must
 // pass that check with an envelope carrying the posted message alone.
@@ -236,15 +236,30 @@ const correlationOf = (body: JsonObject) => {
       isJsonObject(entry) && ANCHOR_ROLES.has(String(entry["role"])),
   );
   return {
-    anchors: anchors.map(
-      (anchor) => `${String(anchor["role"])} ${String(anchor["id"])}`,
-    ),
+    // v1 can split one assistant into ordered wire rows around tool results.
+    // Each extra row must explicitly name that same posted message as its owner.
+    anchors: [
+      ...new Set(
+        anchors.map((anchor) => {
+          const metadata = anchor["metadata"];
+          const tanstack = isJsonObject(metadata)
+            ? metadata["tanstack"]
+            : undefined;
+          const owner =
+            isJsonObject(tanstack) && typeof tanstack["continues"] === "string"
+              ? tanstack["continues"]
+              : anchor["id"];
+          return `${String(anchor["role"])} ${String(owner)}`;
+        }),
+      ),
+    ],
     matches:
       body["threadId"] === forwarded["threadId"] &&
       body["runId"] === forwarded["runId"] &&
       body["parentRunId"] === forwarded["parentRunId"] &&
       JSON.stringify(body["resume"]) === JSON.stringify(forwarded["resume"]) &&
-      JSON.stringify(body["data"]) === JSON.stringify(forwarded) &&
+      (body["data"] === undefined ||
+        JSON.stringify(body["data"]) === JSON.stringify(forwarded)) &&
       anchors.some(
         (anchor) =>
           anchor["id"] === message["id"] && anchor["role"] === message["role"],

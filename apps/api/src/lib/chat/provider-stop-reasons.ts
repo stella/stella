@@ -134,6 +134,10 @@ const MISTRAL = {
 const OPENAI = {
   completed: "ended",
   max_output_tokens: "length",
+  // These incomplete responses need another response, not a larger token
+  // ceiling. WebSocket steering's automatic successor is not this SSE run.
+  max_messages: "unfinished",
+  steered: "unfinished",
   content_filter: "content_filter",
   incomplete: "unfinished",
   cancelled: "unfinished",

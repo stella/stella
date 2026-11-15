@@ -187,11 +187,8 @@ async function* recordingProduced(
   step: { signatures: string[]; toolCallIds: string[] },
 ): AsyncGenerator<AdapterYieldChunk> {
   for await (const chunk of chunks) {
-    if (
-      chunk.type === EventType.STEP_FINISHED &&
-      chunk.signature !== undefined
-    ) {
-      step.signatures.push(chunk.signature);
+    if (chunk.type === EventType.REASONING_ENCRYPTED_VALUE) {
+      step.signatures.push(chunk.encryptedValue);
     }
     if (chunk.type === EventType.TOOL_CALL_START) {
       step.toolCallIds.push(chunk.toolCallId);
