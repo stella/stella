@@ -229,6 +229,55 @@ export const corpusProjectionLegacyFixture = (
     );
   };
 
+  /**
+   * A fresh copy at the state's desired value, appended, applied now and named
+   * by the state, in the statement shapes of this release's prover. The copy
+   * the state named before must already have left `applied`.
+   */
+  const namesFreshCopy = async (entityId: string) => {
+    const revision = uuid();
+    await run(sql`
+      INSERT INTO corpus_index_projection_intents (
+        id, family, generation, entity_id, epoch, fingerprint, index_id, status,
+        lease_token, lease_expires_at
+      )
+      SELECT ${revision}, family, generation, entity_id, desired_epoch,
+        desired_fingerprint, desired_index_id, 'reserved', ${uuid()},
+        clock_timestamp() + interval '5 minutes'
+      FROM corpus_index_projection_states
+      WHERE entity_id = ${entityId} AND desired_action = 'upsert'
+    `);
+    await run(sql`
+      UPDATE corpus_index_projection_intents
+      SET status = 'append_started',
+          append_started_at = clock_timestamp() - interval '2 hours'
+      WHERE id = ${revision}
+    `);
+    await run(sql`
+      UPDATE corpus_index_projection_intents
+      SET status = 'append_committed',
+          append_committed_at = clock_timestamp() - interval '2 hours',
+          expected_document_count = 1
+      WHERE id = ${revision}
+    `);
+    await run(sql`
+      UPDATE corpus_index_projection_intents
+      SET status = 'applied', lease_token = NULL, lease_expires_at = NULL,
+          applied_at = clock_timestamp()
+      WHERE id = ${revision}
+    `);
+    await run(sql`
+      UPDATE corpus_index_projection_states state
+      SET applied_action = 'upsert', applied_epoch = intent.epoch,
+          applied_revision = intent.id, applied_fingerprint = intent.fingerprint,
+          applied_index_id = intent.index_id, applied_at = intent.applied_at,
+          updated_at = clock_timestamp()
+      FROM corpus_index_projection_intents intent
+      WHERE intent.id = ${revision} AND state.entity_id = ${entityId}
+    `);
+    return revision;
+  };
+
   /** The earlier release's replacement preparation of one served revision. */
   const previousPrepare = async (entityId: string, revision: string) => {
     await run(sql`
@@ -494,6 +543,7 @@ export const corpusProjectionLegacyFixture = (
     servedEntity,
     changeDesired,
     thisReleaseChanges,
+    namesFreshCopy,
     previousPrepare,
     previousClaim,
     previousRecordDelete,

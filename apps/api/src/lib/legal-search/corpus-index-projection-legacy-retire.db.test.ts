@@ -14,8 +14,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   type LegacyServedCopyRetireCursor,
+  LegacyServedCopyRetireCutoverMismatchError,
   retireLegacyUnprovenServedCopiesTx,
 } from "@/api/lib/legal-search/corpus-index-projection-legacy-retire";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusProjectionLegacyFixture,
   GENERATION,
@@ -40,6 +42,8 @@ const {
   servedEntity,
   changeDesired,
   thisReleaseChanges,
+  namesFreshCopy,
+  previousPrepare,
   seedGeneration,
   claim,
   intentOf,
@@ -282,6 +286,118 @@ describe("the one-off pass over copies the previous release left served", () => 
     expect(await intentOf(legacy.revision)).toMatchObject({
       status: "applied",
     });
+  });
+
+  test("refuses to resume a walk under another cutover than its cursor carries", async () => {
+    const first = await erasedThenUndone(fingerprint(1));
+    const second = await erasedThenUndone(fingerprint(2));
+    const instant = await cutoverAt();
+    const page = await pass(instant, null, 1);
+    const cursor = page.next ?? panic("The walk ended after one page");
+    expect(cursor.cutoverAt).toBe(instant.toString());
+    expect(await stateOf(first.entityId)).toMatchObject({
+      appliedRevision: null,
+    });
+
+    for (const other of [
+      instant.subtract({ milliseconds: 1 }),
+      instant.add({ milliseconds: 1 }),
+    ]) {
+      for (const mode of ["count", "retire"] as const) {
+        // db-await-in-loop: one refusal per instant and mode
+        const refusal = await pass(other, cursor, 1, mode).then(
+          () => null,
+          (error: unknown) => error,
+        );
+        expect(refusal).toBeInstanceOf(
+          LegacyServedCopyRetireCutoverMismatchError,
+        );
+      }
+    }
+    expect(await intentOf(second.revision)).toMatchObject({
+      status: "applied",
+    });
+
+    // The same instant, however it is spelled, resumes the walk.
+    const resumed = await pass(
+      Temporal.Instant.from(cursor.cutoverAt),
+      cursor,
+      1,
+    );
+    expect(resumed.outcomes).toMatchObject({ retired: 1 });
+    expect((await stateOf(second.entityId)).appliedRevision).toBeNull();
+  });
+
+  test("an erasure written after the cutover stamps its own instant, and its undo retires the copy", async () => {
+    const legacy = await erasedThenUndone(fingerprint(1));
+    const undoneAt = await desiredAtOf(legacy.entityId);
+    const instant = await cutoverAt();
+    // This release erases the state while it is two changes behind its copy:
+    // the erasure is pending from its own write, not from the undo before it.
+    await run(sql`
+      UPDATE legislation_documents
+      SET content_hash = ${EMPTY_CORPUS_CONTENT_HASHES[0] ?? panic("No empty hash")}
+      WHERE id = ${legacy.entityId}
+    `);
+    await thisReleaseReprojects(legacy.entityId);
+    expect(await stateOf(legacy.entityId)).toMatchObject({
+      desiredAction: "erase",
+      appliedRevision: toSafeId<"corpusIndexProjectionIntent">(legacy.revision),
+    });
+    const erasedAt = await desiredAtOf(legacy.entityId);
+    expect(erasedAt.getTime()).toBeGreaterThan(undoneAt.getTime());
+    expect(erasedAt.getTime()).toBeGreaterThanOrEqual(
+      instant.epochMilliseconds,
+    );
+
+    // Its undo is this release's too, which retires the copy at once.
+    await thisReleaseChanges(legacy.entityId, fingerprint(2));
+    expect(await stateOf(legacy.entityId)).toEqual({
+      desiredAction: "upsert",
+      appliedAction: null,
+      appliedRevision: null,
+    });
+    expect(await intentOf(legacy.revision)).toMatchObject({
+      status: "cleanup_pending",
+      lastError: "projection revision retired by an undone erasure",
+    });
+    expect((await pass(instant, null, 16)).scanned).toBe(0);
+  });
+
+  test("keeps a copy applied at or after the cutover whatever instant its state records", async () => {
+    const legacy = await erasedThenUndone(fingerprint(1));
+    await previousPrepare(legacy.entityId, legacy.revision);
+    const instant = await cutoverAt();
+    // After the cutover the state names a fresh copy, and its desired value
+    // then moves two changes past it with the recorded instant left before
+    // the cutover, the shape a switch would keep had the desired value moved
+    // during the fresh copy's flight.
+    const fresh = await namesFreshCopy(legacy.entityId);
+    const before = await desiredAtOf(legacy.entityId);
+    await changeDesired(
+      legacy.entityId,
+      4,
+      { action: "upsert", fingerprint: fingerprint(2) },
+      { desiredAtRecorded: false },
+    );
+    await changeDesired(
+      legacy.entityId,
+      5,
+      { action: "upsert", fingerprint: fingerprint(3) },
+      { desiredAtRecorded: false },
+    );
+    expect(await desiredAtOf(legacy.entityId)).toEqual(before);
+    expect(before.getTime()).toBeLessThan(instant.epochMilliseconds);
+
+    const result = await pass(instant, null, 16);
+    expect(result.outcomes).toMatchObject({
+      retired: 0,
+      kept_after_cutover: 1,
+    });
+    expect(await stateOf(legacy.entityId)).toMatchObject({
+      appliedRevision: toSafeId<"corpusIndexProjectionIntent">(fresh),
+    });
+    expect(await intentOf(fresh)).toMatchObject({ status: "applied" });
   });
 
   test("skips a state the state guard refuses to write and carries on", async () => {

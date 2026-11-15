@@ -173,16 +173,16 @@ type CorpusProjectionNamedCopyColumns = {
 /**
  * An upsert state names an upsert copy that two or more desired changes
  * separate from the desired state, and the copy holds other content than the
- * state desires. An erasure and its undo take two changes, so such a copy may
- * be the pre-erasure one unless the writer that undid the erasure retired it,
- * which only this release's writer does.
+ * state desires: a superseded copy that is not provably current, since an
+ * erasure and its undo also take two changes.
  *
- * The desired writer stops moving `desired_at` once a state is in this shape,
- * so from then on it records when the copy fell this far behind and no later
- * write (an epoch-only reconciliation, a ranking-signal re-projection, another
- * content change) can move it past the legacy pass's cutover. The one-off
- * pass (`retireLegacyUnprovenServedCopiesTx`) retires such a copy when that
- * instant precedes the cutover. Both go together once the pass has run.
+ * An upsert write by the desired writer leaves `desired_at` unchanged once a
+ * state is in this shape, so from then on it records when the copy fell this
+ * far behind and no later upsert write (an epoch-only reconciliation, a
+ * ranking-signal re-projection, another content change) moves it past the
+ * one-off pass's cutover. The pass (`retireLegacyUnprovenServedCopiesTx`)
+ * retires such a copy when that instant precedes the cutover. Both go
+ * together once the pass has run.
  */
 export const corpusIndexProjectionNamedCopyTrailsTwoChanges = ({
   desiredAction,

@@ -1,7 +1,7 @@
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 import { type SQL, sql } from "drizzle-orm";
 
-import type { Temporal } from "@stll/time";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -23,18 +23,30 @@ import { isRecord } from "@/api/lib/type-guards";
 
 /** Where `retireLegacyUnprovenServedCopiesTx` resumes its walk. */
 export type LegacyServedCopyRetireCursor = {
+  /**
+   * The cutover the walk decides by, as an ISO instant. A walk is only
+   * consistent under one cutover, so a call resuming from this cursor must
+   * pass the same one.
+   */
+  cutoverAt: string;
   indexId: string;
   /** `updated_at` as PostgreSQL renders it, at full precision. */
   updatedAt: string;
   entityId: string;
 };
 
+/** A call resumed a walk under another cutover than the one it started with. */
+export class LegacyServedCopyRetireCutoverMismatchError extends TaggedError(
+  "LegacyServedCopyRetireCutoverMismatchError",
+)<{ message: string; cursorCutoverAt: string; cutoverAt: string }> {}
+
 type RetireLegacyServedCopiesOptions = {
   family: CorpusFamily;
   generation: string;
   /**
    * From this instant on every runner writes with this release. The pass
-   * refuses an instant later than the database clock.
+   * refuses an instant later than the database clock, and a cursor that was
+   * returned under another instant.
    */
   cutoverAt: Temporal.Instant;
   after: LegacyServedCopyRetireCursor | null;
@@ -63,8 +75,8 @@ export type LegacyServedCopyRetirePage = {
   /**
    * What became of each, by outcome: retired; kept because one change
    * separates the copy from the desired state, because the copy holds the
-   * desired content, because the copy fell two changes behind at or after
-   * the cutover, because the named revision is no longer `applied` (the
+   * desired content, because the copy was applied, or fell two changes
+   * behind, at or after the cutover, because the named revision is no longer `applied` (the
    * cleanup claim's to decide), or because the state changed since the page
    * read it; or skipped (`skipped_canonical_epoch`) because the state's
    * desired epoch no longer matches its canonical row, so the state guard
@@ -132,10 +144,10 @@ export const legacyServedCopyRetirePageQuery = ({
   generation,
   after,
   limit,
-}: Pick<
-  RetireLegacyServedCopiesOptions,
-  "family" | "generation" | "after" | "limit"
->) => sql`
+}: Pick<RetireLegacyServedCopiesOptions, "family" | "generation" | "limit"> & {
+  /** The walk's key; the cutover a cursor carries does not narrow the page. */
+  after: Omit<LegacyServedCopyRetireCursor, "cutoverAt"> | null;
+}) => sql`
   SELECT state.entity_id::text AS entity_id,
     state.desired_index_id AS index_id,
     state.updated_at::text AS updated_at
@@ -158,26 +170,27 @@ export const legacyServedCopyRetirePageQuery = ({
 `;
 
 /**
- * A one-off pass over states an earlier release wrote. That release could undo
- * an erasure without retiring the copy the state still named, so a served copy
- * two or more desired epochs behind, holding other content than the state
- * desires, may be the pre-erasure one. This release retires such a copy
- * whenever it writes an undo itself.
+ * A one-off pass that retires a superseded copy a state still serves when it
+ * is not provably current: two or more desired epochs separate it from the
+ * desired state, it holds other content than the state desires, and the
+ * changes that separate it are not all known to this release's desired
+ * writer, which retires the copy itself when one of them undoes an erasure.
  *
- * What tells the two apart is `desired_at`: this release's desired writer
- * stops moving it once the named copy trails by two changes with other
- * content (`corpusIndexProjectionNamedCopyTrailsTwoChanges`, judged on the row
- * before each write), so it keeps the instant the copy fell that far behind.
- * If that instant precedes `cutoverAt`, the instant from which every runner
- * writes with this release, an earlier release wrote one of those changes
- * and the copy is retired, however often this release has written the state
- * since (an epoch-only reconciliation or a ranking-signal re-projection
- * included). If it is at or after the cutover, both changes came from this
- * release, which would have retired the copy had one been an undo, so the
- * copy keeps serving. A `NULL` instant predates the column and counts as
- * before. A copy holding the desired content is kept whatever the gap. The
- * pass, the writer's rule and their inputs are deleted in a later release
- * once the pass has run in every registered generation.
+ * What tells them apart is `desired_at`: an upsert write by this release's
+ * desired writer leaves it unchanged once the named copy trails by two changes
+ * with other content (`corpusIndexProjectionNamedCopyTrailsTwoChanges`, judged
+ * on the row before each write), so it keeps the instant the copy fell that
+ * far behind. If that instant precedes `cutoverAt`, the instant from which
+ * every runner writes with this release, the copy is retired, however often
+ * this release has written the state since (an epoch-only reconciliation or a
+ * ranking-signal re-projection included). If it is at or after the cutover,
+ * the undo of an erasure that moved the copy this far behind was written by
+ * this release, which retired the copy then, so the copy keeps serving. A
+ * `NULL` instant predates the column and counts as before. A copy applied at
+ * or after the cutover keeps serving whatever the instant: every change since
+ * its apply was written by this release. A copy holding the desired content
+ * is kept whatever the gap. The pass, the writer's rule and their inputs are
+ * deleted once the pass has run in every registered generation.
  *
  * It walks `corpus_index_projection_states_replacement_route_idx` in its key
  * order, one bounded page per call, and is resumable from the cursor it
@@ -197,6 +210,17 @@ export const retireLegacyUnprovenServedCopiesTx = async (
 ): Promise<LegacyServedCopyRetirePage> => {
   if (!Number.isInteger(limit) || limit < 1 || limit > LEGACY_RETIRE_MAX_PAGE) {
     return panic("Legacy served-copy retire page size is invalid");
+  }
+  if (
+    after !== null &&
+    !Temporal.Instant.from(after.cutoverAt).equals(cutoverAt)
+  ) {
+    throw new LegacyServedCopyRetireCutoverMismatchError({
+      message:
+        "Legacy served-copy retire resumed under another cutover than its cursor",
+      cursorCutoverAt: after.cutoverAt,
+      cutoverAt: cutoverAt.toString(),
+    });
   }
   const cutover = sql`${cutoverAt.toString()}::timestamptz`;
   const [clock] = executedRows(
@@ -264,8 +288,9 @@ export const retireLegacyUnprovenServedCopiesTx = async (
             THEN 'kept_one_change'
           WHEN NOT ${trailsTwoChanges}
             THEN 'kept_same_content'
-          WHEN ${states.desiredAt} IS NOT NULL
-            AND ${states.desiredAt} >= ${cutover}
+          WHEN (${states.desiredAt} IS NOT NULL
+              AND ${states.desiredAt} >= ${cutover})
+            OR named.applied_at >= ${cutover}
             THEN 'kept_after_cutover'
           WHEN ${canonicalProjectionEpoch(family)} IS DISTINCT FROM ${states.desiredEpoch}
             THEN 'skipped_canonical_epoch'
@@ -311,6 +336,7 @@ export const retireLegacyUnprovenServedCopiesTx = async (
       page.length < limit
         ? null
         : {
+            cutoverAt: cutoverAt.toString(),
             indexId: last.indexId,
             updatedAt: last.updatedAt,
             entityId: last.entityId,
