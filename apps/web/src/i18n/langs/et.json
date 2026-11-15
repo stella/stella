@@ -2348,17 +2348,17 @@
       "input": "Sisend",
       "interrupted": "Katkes enne lõpetamist",
       "localOutput": {
+        "arriving": "Saabub endiselt arvutist, kus see samm käivitati",
         "conversation": "Alamagendi vestlus",
         "conversationPrompt": "Ülesanne",
         "conversationReport": "Aruanne",
         "cut": "Kuvatakse esimesed {kept} (kokku {total})",
         "diff": "Failimuudatused",
-        "elsewhere": "Avage arvutis, kus see käivitati",
         "empty": "Väljund puudub",
-        "failed": "stella töölauarakendus selles arvutis ei suutnud seda kuvada.",
-        "imageTooLarge": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte selles arvutis ei salvestata, seega ei saa seda siin kuvada.",
-        "notKept": "Sellest sammust pole selles arvutis midagi salvestatud",
-        "reading": "Loetakse sellest arvutist"
+        "imageTooLargeToStore": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte ei salvestata, seega ei saa seda kuvada.",
+        "notCopied": "Sellesse vestlusesse pole veel kopeeritud",
+        "notStored": "Sellest sammust ei salvestatud midagi",
+        "runBudgetReached": "Ei salvestatud: see käivitus oli juba salvestanud nii palju, kui üks käivitus tohib"
       },
       "output": "Väljund",
       "patternInPath": "{pattern} asukohas {path}",

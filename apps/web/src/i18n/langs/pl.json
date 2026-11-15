@@ -2348,17 +2348,17 @@
       "input": "Dane wejściowe",
       "interrupted": "Przerwano przed ukończeniem",
       "localOutput": {
+        "arriving": "Wciąż napływa z komputera, na którym uruchomiono ten krok",
         "conversation": "Rozmowa subagenta",
         "conversationPrompt": "Zadanie",
         "conversationReport": "Raport",
         "cut": "Wyświetlono pierwsze {kept} z {total}",
         "diff": "Zmiany w plikach",
-        "elsewhere": "Otwórz na komputerze, na którym to uruchomiono",
         "empty": "Brak wyniku",
-        "failed": "Aplikacja desktopowa stella na tym komputerze nie mogła tego wyświetlić.",
-        "imageTooLarge": "Ten obraz ma {total}. Obrazy większe niż {kept} nie są zachowywane na tym komputerze, dlatego nie można go tutaj wyświetlić.",
-        "notKept": "Z tego kroku nic nie zostało zachowane na tym komputerze",
-        "reading": "Odczytywanie z tego komputera"
+        "imageTooLargeToStore": "Ten obraz ma {total}. Obrazy większe niż {kept} nie są zapisywane, dlatego nie można go wyświetlić.",
+        "notCopied": "Jeszcze nie skopiowano do tego czatu",
+        "notStored": "Z tego kroku nic nie zostało zapisane",
+        "runBudgetReached": "Nie zapisano: to uruchomienie zapisało już tyle, ile może zapisać jedno uruchomienie"
       },
       "output": "Wynik",
       "patternInPath": "{pattern} w {path}",

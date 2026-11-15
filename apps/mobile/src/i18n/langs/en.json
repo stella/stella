@@ -223,7 +223,6 @@
       "browserPressKey": "Press {key} in “{target}” on {url}",
       "browserSelect": "Select “{option}” in “{target}” on {url}",
       "browserType": "Enter text into “{target}” on {url}",
-      "opensOnComputer": "Open on the computer that ran it",
       "status": {
         "needs_approval": "Waiting for approval",
         "running": "In progress",
