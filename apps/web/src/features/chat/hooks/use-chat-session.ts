@@ -62,7 +62,7 @@ import {
   isChatClientRequestActive,
   isNonPersistentGrantChatToolName,
   isSuggestChangesApplyOutput,
-  openApprovalRequestIds,
+  openHarnessApprovalRequestIds,
   openMemberWaitKeys,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
@@ -951,7 +951,7 @@ export const useChatSession = ({
       const entry = sendQueueRef.current.queue.find(
         (queued) => queued.id === id,
       );
-      const approvalIds = openApprovalRequestIds(
+      const approvalIds = openHarnessApprovalRequestIds(
         projectCanonicalChatUIMessages(chat.getSnapshot().messages),
       );
       if (
@@ -976,15 +976,19 @@ export const useChatSession = ({
   /** What the thread is doing now, as the send routing reads it. */
   const threadSendState = useCallback((): ChatThreadSendState => {
     const steering = getTurnSteering?.() ?? CHAT_TURN_STEERING.notSteerable;
-    if (sendQueueRef.current.isGenerating) {
-      return { type: "working", steering };
-    }
+    // A wait is read first: a card can show while the request that brought
+    // it still ends, and a steer then has to decline it to reach the turn.
     const { localRunQuestion, messages: shown } = chat.getSnapshot();
-    return openMemberWaitKeys({
-      localRunQuestion,
-      messages: projectCanonicalChatUIMessages(shown),
-    }).length > 0
-      ? { type: "waiting_on_member", steering }
+    if (
+      openMemberWaitKeys({
+        localRunQuestion,
+        messages: projectCanonicalChatUIMessages(shown),
+      }).length > 0
+    ) {
+      return { type: "waiting_on_member", steering };
+    }
+    return sendQueueRef.current.isGenerating
+      ? { type: "working", steering }
       : { type: "idle" };
   }, [chat, getTurnSteering]);
 
