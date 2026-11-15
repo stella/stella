@@ -1,158 +1,105 @@
 import { panic } from "better-result";
 
 import {
+  CHAT_LOCAL_RUN_STEP_CONTENT_STATE,
+  type ChatLocalRunStepContent,
+} from "@stll/api-contract/chat-local-run-step-content";
+import {
   CHAT_LOCAL_RUN_CONVERSATION_ROLES,
-  CHAT_LOCAL_RUN_STEP_MAX_BYTES,
-  type ChatLocalRunImageType,
-  chatLocalRunImageType,
   parseChatLocalRunConversation,
 } from "@stll/api-contract/chat-local-run-step-output";
 
 /**
  * What a coding agent's step produced on the member's computer (a command's
- * output, a change's diff), as the step's row shows it. The page reads it
- * from stella desktop on this computer (`local-run-step-output.ts`); it never
- * passes through the API.
+ * output, a change's diff, a subagent's conversation, an image it viewed), as
+ * the step's row shows it. stella stores it with the conversation, and the
+ * page reads it from the API one window at a time
+ * (`local-run-step-output.ts`).
  */
 
-/** What reading a step's output reports, in order. */
-export type LocalRunStepOutputEvent =
-  | { type: "elsewhere" }
-  | { type: "not-kept" }
-  | { type: "started"; totalBytes: number }
-  | { type: "text"; text: string; bytes: number };
+/** A stored step's text, as one read answers a window of it. */
+type StoredText = Extract<
+  ChatLocalRunStepContent,
+  { state: "stored"; text: string }
+>;
 
 /**
- * `elsewhere`: this computer does not hold the run, or no stella desktop
- * answers here. `not-kept`: the run is here but kept nothing for the step.
- * `shown`: the text read so far, of `totalBytes` the step produced.
+ * `unread`: nothing answered yet. `text`: the text read so far, of
+ * `storedBytes` stored and `totalBytes` the step produced. Every other view
+ * is the API's answer as it came: an image, or why nothing is shown.
  */
 export type LocalRunStepOutputView =
-  | { status: "elsewhere" }
-  | { status: "not-kept" }
-  | { status: "shown"; text: string; keptBytes: number; totalBytes: number };
-
-/**
- * How long a read output stays fresh: for good once the desktop answered (a
- * finished step's output never changes), not at all when the run was found
- * elsewhere, since stella desktop may have started since, or when the read
- * was cut short.
- */
-export const localRunStepOutputStaleTime = (
-  output: LocalRunStepOutputView | LocalRunStepImageView | undefined,
-): number =>
-  output?.status === "elsewhere" || output?.status === "incomplete"
-    ? 0
-    : Number.POSITIVE_INFINITY;
+  | { status: "unread" }
+  | {
+      status: "text";
+      kind: StoredText["kind"];
+      text: string;
+      readBytes: number;
+      storedBytes: number;
+      totalBytes: number;
+    }
+  | {
+      status: "answered";
+      content: Exclude<ChatLocalRunStepContent, StoredText>;
+    };
 
 export const LOCAL_RUN_STEP_OUTPUT_UNREAD: LocalRunStepOutputView = {
-  status: "shown",
-  text: "",
-  keptBytes: 0,
-  totalBytes: 0,
+  status: "unread",
 };
 
-/** The row's view after one more event. */
+const isStoredText = (
+  content: ChatLocalRunStepContent,
+): content is StoredText =>
+  content.state === CHAT_LOCAL_RUN_STEP_CONTENT_STATE.stored &&
+  content.kind !== "image";
+
+/**
+ * The row's view after one more answer. A window that starts where the text
+ * read so far ends continues it; any other answer replaces the view.
+ */
 export const foldLocalRunStepOutput = (
   view: LocalRunStepOutputView,
-  event: LocalRunStepOutputEvent,
+  content: ChatLocalRunStepContent,
 ): LocalRunStepOutputView => {
-  switch (event.type) {
-    case "elsewhere":
-      return { status: "elsewhere" };
-    case "not-kept":
-      return { status: "not-kept" };
-    case "started":
-      return {
-        status: "shown",
-        text: "",
-        keptBytes: 0,
-        totalBytes: event.totalBytes,
-      };
+  if (!isStoredText(content)) {
+    return { status: "answered", content };
+  }
+  const bytes = new TextEncoder().encode(content.text).byteLength;
+  const continues = view.status === "text" && content.start === view.readBytes;
+  return {
+    status: "text",
+    kind: content.kind,
+    text: continues ? `${view.text}${content.text}` : content.text,
+    readBytes: content.start + bytes,
+    storedBytes: content.storedBytes,
+    totalBytes: content.totalBytes,
+  };
+};
+
+/**
+ * How long a read step stays fresh: for good once it settled (a settled
+ * step's content never changes), not at all while it may still change: its
+ * content is arriving, a fork has yet to copy it, or a read was cut short.
+ */
+export const localRunStepOutputStaleTime = (
+  view: LocalRunStepOutputView | undefined,
+): number => {
+  switch (view?.status) {
+    case undefined:
+    case "unread":
+      return 0;
     case "text":
-      return view.status === "shown"
-        ? {
-            status: "shown",
-            text: `${view.text}${event.text}`,
-            keptBytes: view.keptBytes + event.bytes,
-            totalBytes: view.totalBytes,
-          }
-        : view;
+      return view.readBytes < view.storedBytes ? 0 : Number.POSITIVE_INFINITY;
+    case "answered":
+      return view.content.state ===
+        CHAT_LOCAL_RUN_STEP_CONTENT_STATE.arriving ||
+        view.content.state === CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notCopied
+        ? 0
+        : Number.POSITIVE_INFINITY;
     default:
-      event satisfies never;
-      return panic("Unhandled step output event");
+      view satisfies never;
+      return panic("Unhandled step output view");
   }
-};
-
-/** Whether a step's text is more than the computer keeps of it. */
-export const isLocalRunStepOutputCut = (totalBytes: number) =>
-  totalBytes > CHAT_LOCAL_RUN_STEP_MAX_BYTES.text;
-
-/**
- * An image a step viewed, as its row shows it. `too-large`: the image is
- * more than the computer keeps of one, so none of it is there.
- * `incomplete`: the read ended before every kept byte arrived, so there is
- * no image to show yet. `not-image`: what the computer handed over does not
- * begin as an image stella shows. `shown`: the image, as the kind its own
- * bytes name.
- */
-export type LocalRunStepImageView =
-  | { status: "elsewhere" }
-  | { status: "not-kept" }
-  | { status: "too-large"; totalBytes: number }
-  | { status: "incomplete" }
-  | { status: "not-image" }
-  | { status: "shown"; src: string; type: ChatLocalRunImageType };
-
-/** `String.fromCodePoint` takes its bytes as arguments: this many at once. */
-const BASE64_CHUNK_BYTES = 0x80_00;
-
-const base64Of = (bytes: Uint8Array): string => {
-  let binary = "";
-  for (let start = 0; start < bytes.length; start += BASE64_CHUNK_BYTES) {
-    binary += String.fromCodePoint(
-      ...bytes.subarray(start, start + BASE64_CHUNK_BYTES),
-    );
-  }
-  return btoa(binary);
-};
-
-/**
- * The view of an image read from the computer. Its kind is read from the
- * bytes (`chatLocalRunImageType`), never taken from the answer's headers or
- * the file's name, and it is shown only as that kind, in an image element:
- * bytes that are not one of the kinds shown are never given to the page as
- * anything else.
- */
-export const localRunStepImageView = ({
-  chunks,
-  totalBytes,
-}: {
-  chunks: readonly Uint8Array[];
-  totalBytes: number;
-}): LocalRunStepImageView => {
-  if (totalBytes > CHAT_LOCAL_RUN_STEP_MAX_BYTES.image) {
-    return { status: "too-large", totalBytes };
-  }
-  const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  // The desktop never sends more than the cap; nothing past it is shown.
-  if (length > CHAT_LOCAL_RUN_STEP_MAX_BYTES.image) {
-    return { status: "not-image" };
-  }
-  // Part of an image is not the image: a read cut short shows nothing.
-  if (length !== totalBytes) {
-    return { status: "incomplete" };
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-  const type = chatLocalRunImageType(bytes);
-  return type === null
-    ? { status: "not-image" }
-    : { status: "shown", type, src: `data:${type};base64,${base64Of(bytes)}` };
 };
 
 /**

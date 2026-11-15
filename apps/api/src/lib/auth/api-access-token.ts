@@ -195,6 +195,12 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/tasks/update.ts",
   },
+  // Deleting a task opens at the tasks consent, as `delete_task` does; the
+  // matter's entity delete beside it, which reaches documents, stays closed.
+  "DELETE /v1/tasks/:workspaceId/:taskId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/delete.ts",
+  },
   // Who works on a task: the people it can go to are the matter's members.
   "GET /v1/workspaces/:workspaceId/members": {
     scope: "stella:read",

@@ -223,7 +223,6 @@
       "browserPressKey": "Naciśnij klawisz {key} w „{target}” na stronie {url}",
       "browserSelect": "Wybierz „{option}” w „{target}” na stronie {url}",
       "browserType": "Wprowadź tekst w „{target}” na stronie {url}",
-      "opensOnComputer": "Otwórz na komputerze, na którym to uruchomiono",
       "status": {
         "needs_approval": "Oczekiwanie na zatwierdzenie",
         "running": "W toku",
@@ -267,7 +266,8 @@
       "tomorrow": "Jutro",
       "week": "W tym tygodniu",
       "later": "Później",
-      "none": "Bez terminu"
+      "none": "Bez terminu",
+      "closed": "Wykonane lub anulowane"
     },
     "markDone": "Oznacz jako wykonane",
     "reopen": "Otwórz ponownie",
@@ -281,7 +281,43 @@
     "doneAssigning": "Gotowe",
     "someone": "Ktoś",
     "membersFailed": "Nie udało się wczytać członków sprawy.",
-    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie."
+    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie.",
+    "statusTitle": "Status",
+    "priorityTitle": "Priorytet",
+    "priority": {
+      "none": "Brak",
+      "urgent": "Pilny",
+      "high": "Wysoki",
+      "medium": "Średni",
+      "low": "Niski"
+    },
+    "subtasks": "Podzadania",
+    "linked": "Powiązane elementy",
+    "delete": "Usuń zadanie",
+    "deleteTitle": "Usunąć zadanie?",
+    "deleteMessage": "Czy na pewno chcesz usunąć „{name}”? Tej operacji nie można cofnąć.",
+    "cancel": "Anuluj",
+    "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "readOnly": "To zadanie pochodzi z połączonego kalendarza i nie można go tu zmienić.",
+    "untitled": "Zadanie bez tytułu",
+    "loadOneFailed": "Nie udało się wczytać tego zadania.",
+    "filter": "Filtr",
+    "whoseTitle": "Przypisane do",
+    "whose": {
+      "mine": "Mnie",
+      "everyone": "Kogokolwiek",
+      "unassigned": "Nikogo"
+    },
+    "showTitle": "Pokaż",
+    "show": {
+      "open": "Otwarte",
+      "overdue": "Zaległe",
+      "all": "Wszystkie, także wykonane"
+    },
+    "emptyFilteredTitle": "Brak zadań",
+    "emptyFilteredDescription": "Zadania pasujące do tego filtra pojawią się tutaj.",
+    "loadMore": "Wczytaj więcej",
+    "loadMoreFailed": "Nie udało się wczytać kolejnych zadań."
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",

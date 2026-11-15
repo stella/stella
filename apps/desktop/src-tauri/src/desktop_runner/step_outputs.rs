@@ -3,8 +3,10 @@
 //! ([`run_folders::step_output_store`]), also for a run in a folder the member
 //! linked: one directory per run, holding the run's output key, written here
 //! when the run starts, and one file per step, written by the sidecar where
-//! `run.start` names. The bridge reads them for a page on this computer;
-//! nothing here leaves it, and it goes with the chat's folder.
+//! `run.start` names. The bridge reads them for a page on this computer. The
+//! sidecar sends them to stella while the run goes, and what a run could not
+//! send by its end is sent from here (`awaited_steps`). The store goes with
+//! the chat's folder.
 
 use std::path::{Path, PathBuf};
 

@@ -18,6 +18,7 @@ import {
   chatLocalRunStepContentUploadedSchema,
   chatLocalRunStepContentUploadPath,
 } from "@stll/api-contract/chat-local-run-step-content";
+import stepContentFixtures from "@stll/api-contract/chat-local-run-step-content.fixtures";
 import { CHAT_LOCAL_RUN_STEP_MAX_BYTES } from "@stll/api-contract/chat-local-run-step-output";
 import {
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
@@ -221,6 +222,9 @@ const put = async (
     body,
   });
 };
+
+/** How the desktop sends a step after its run's end, and reads the answer. */
+const { late: LATE_REQUEST } = stepContentFixtures;
 
 const stateOf = async (response: Response) => {
   expect(response.status).toBe(200);
@@ -578,14 +582,18 @@ describe("a computer sending what a finished run still had to send", () => {
     value: string,
     desktopId: string | null = late.computer.desktopId,
   ) => {
+    // Spelled as the desktop spells it: both read the same fixture.
     const body = new FormData();
-    body.set("content", text(value));
+    body.set(LATE_REQUEST.contentPart, text(value));
     const url = new URL(
       chatLocalRunAwaitedStepContentPath(run.runId, key),
       server.url,
     );
-    url.searchParams.set("kind", "command");
-    url.searchParams.set("totalBytes", String(Buffer.byteLength(value)));
+    url.searchParams.set(LATE_REQUEST.query.kind, "command");
+    url.searchParams.set(
+      LATE_REQUEST.query.totalBytes,
+      String(Buffer.byteLength(value)),
+    );
     return await fetch(url, {
       method: "PUT",
       headers:
@@ -596,9 +604,17 @@ describe("a computer sending what a finished run still had to send", () => {
     });
   };
 
+  /** A refusal's code, answered with the status the desktop judges it by. */
   const refusalOf = async (response: Response) => {
-    expect(response.status).toBe(409);
-    const refusal: unknown = await response.json();
+    const refusal = v.parse(
+      v.object({ code: v.string() }),
+      await response.json(),
+    );
+    const answer =
+      [...LATE_REQUEST.refused, ...LATE_REQUEST.notThisAccount].find(
+        ({ code }) => code === refusal.code,
+      ) ?? panic(`The desktop's fixture names no answer ${refusal.code}`);
+    expect(response.status).toBe(answer.status);
     return refusal;
   };
 
@@ -673,10 +689,14 @@ describe("a computer sending what a finished run still had to send", () => {
     });
     // Another member, even naming the run's own installation and key.
     late.computer = { ...own, userId: ids.userA2 };
-    expect((await putLate(run, key, "x")).status).toBe(404);
+    expect(await refusalOf(await putLate(run, key, "x"))).toMatchObject({
+      code: "not_found",
+    });
     // A request that names no installation is not looked at further.
     late.computer = own;
-    expect((await putLate(run, key, "x", null)).status).toBe(400);
+    expect(await refusalOf(await putLate(run, key, "x", null))).toMatchObject({
+      code: "validation_error",
+    });
     expect(await read(run, key)).toMatchObject({ type: "awaited" });
   });
 });
