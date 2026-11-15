@@ -577,7 +577,9 @@ describe("offline build plan", () => {
     );
   });
 
-  test("a lone kill is the engine's only when the measured rate cannot index the revision in the kill budget", () => {
+  // A lone kill is the engine's only when the rate achieved on shards that
+  // ran to their end cannot index the revision in the kill budget.
+  test("offline-build.lone-kill-rate", () => {
     const budgetMs = 600_000;
     // Nothing measured yet: no evidence the engine is too slow.
     expect(
