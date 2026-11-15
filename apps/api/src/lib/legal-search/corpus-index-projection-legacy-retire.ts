@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import type { Temporal } from "@stll/time";
 
@@ -112,14 +112,13 @@ const requireOutcome = (value: string): LegacyRetireOutcome =>
 /** The canonical epoch the state guard compares each state with. */
 const canonicalProjectionEpoch = (family: CorpusFamily) => {
   const states = corpusIndexProjectionStates;
-  switch (family) {
-    case "case_law":
-      return sql`(SELECT ${caseLawDecisions.projectionEpoch} FROM ${caseLawDecisions}
-        WHERE ${caseLawDecisions.id} = ${states.entityId})`;
-    case "legislation":
-      return sql`(SELECT ${legislationDocuments.projectionEpoch} FROM ${legislationDocuments}
-        WHERE ${legislationDocuments.id} = ${states.entityId})`;
-  }
+  const epochs = {
+    case_law: sql`(SELECT ${caseLawDecisions.projectionEpoch} FROM ${caseLawDecisions}
+      WHERE ${caseLawDecisions.id} = ${states.entityId})`,
+    legislation: sql`(SELECT ${legislationDocuments.projectionEpoch} FROM ${legislationDocuments}
+      WHERE ${legislationDocuments.id} = ${states.entityId})`,
+  } satisfies Record<CorpusFamily, SQL>;
+  return epochs[family];
 };
 
 /**
