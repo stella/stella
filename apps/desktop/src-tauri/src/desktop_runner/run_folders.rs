@@ -38,10 +38,10 @@ pub(super) fn checkpoint_store(dir: &Path) -> PathBuf {
   PathBuf::from(name)
 }
 
-/// Beside a chat's folder, what its runs' steps produced (a command's output,
-/// a change's diff) and each run's output key: `<runId>/key`, which the
-/// desktop writes, and `<runId>/<stepKey>`, which the sidecar writes where
-/// `run.start` names (`stepOutputDir`).
+/// Beside a chat's folder, what its runs' steps produced and has still to
+/// reach stella: one file per step, which the sidecar writes where
+/// `run.start` names (`stepOutputDir`), sends, and leaves for the app to
+/// send (`awaited_steps`) when its run ends before it could.
 pub(super) const STEP_OUTPUT_STORE_SUFFIX: &str = ".step-outputs";
 
 /// A chat folder's step output store: the folder's name with
