@@ -106,7 +106,7 @@ const REFUSAL_MESSAGES = {
   [BROWSER_DOWNLOAD_REFUSAL.interrupted]:
     "Chrome could not finish the download.",
   [BROWSER_DOWNLOAD_REFUSAL.redirected]:
-    "The PDF's address sent the download to another site or a private address, so nothing was saved. sourceUrl is where it was sent.",
+    "The PDF's address answered with a redirect, which is never followed, so nothing was saved.",
   [BROWSER_DOWNLOAD_REFUSAL.vanished]:
     "The downloaded file was gone before it could be saved.",
   [BROWSER_DOWNLOAD_REFUSAL.notStaged]:

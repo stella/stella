@@ -278,7 +278,11 @@ export const createDesktopLink = ({
           type: "download",
         });
       },
-      started: (chatId: string, deliveryId: string) => {
+      started: (
+        chatId: string,
+        deliveryId: string,
+        shownDocument: string | null,
+      ) => {
         if (current === null) {
           return;
         }
@@ -286,6 +290,7 @@ export const createDesktopLink = ({
           controllerId: chatId,
           deliveryId,
           protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          shownDocument,
           source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
           type: "download-started",
         });

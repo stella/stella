@@ -53,6 +53,7 @@ import {
   saveShownPdf,
   setDownloadReporter,
   setDownloadScope,
+  setShownPdfReader,
   type SuggestFilename,
   takeDownloadNotices,
 } from "../lib/download-guard";
@@ -69,6 +70,7 @@ import {
   POPUP_PORT_NAME,
   type PopupResponse,
 } from "../lib/popup-request";
+import { offscreenShownPdfReader } from "../lib/shown-pdf-reader";
 import { SIGN_IN_POLICY, type SignInPolicy } from "../lib/sign-in-policy";
 import {
   forgetStellaTab,
@@ -558,6 +560,7 @@ const handlePopupRequest = async (
 export default defineBackground(() => {
   onContainedTabsChanged(setDownloadScope);
   setDownloadReporter(desktopLink.downloadReporter);
+  setShownPdfReader(offscreenShownPdfReader);
   loadDownloadScope().catch(() => undefined);
   registerOptionalListeners();
   chrome.permissions.onAdded.addListener(registerOptionalListeners);

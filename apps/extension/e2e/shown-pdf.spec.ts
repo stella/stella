@@ -1,9 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { createServer } from "node:http";
 
 import {
+  closeServer,
   createCommandSender,
   elementNamed,
   launchExtensionHarness,
+  listen,
   openInNewControlledTab,
   successful,
   targetOf,
@@ -12,8 +15,9 @@ import {
 /**
  * A PDF a research site shows in the tab, in Chrome's own viewer: the
  * read says so and returns no text. Under the web connection nothing is
- * saved; a stella desktop chat's save is covered by the unit tests, since
- * no native host runs here.
+ * saved. A stella desktop chat's save runs through the offscreen reader,
+ * tested here in Chrome against local servers; the rest of the save is
+ * covered by the unit tests, since no native host runs here.
  */
 
 const CONTROLLER_ID = "controller-shown-pdf";
@@ -61,11 +65,17 @@ test("a PDF shown in the tab reads as a PDF with no text, and the web connection
     await harness.pair(CONTROLLER_ID);
     const { send } = createCommandSender(harness.stella, CONTROLLER_ID);
 
-    // Opened directly.
-    const opened = await openInNewControlledTab(
+    // The site's search page, in a tab chat controls.
+    const first = await openInNewControlledTab(
       harness,
       send,
-      `${SITE_ORIGIN}${PDF_PATH}`,
+      `${SITE_ORIGIN}/search`,
+    );
+    expect(first.document).toBeUndefined();
+
+    // Opened directly in that tab: `open` itself must read the PDF.
+    const opened = successful(
+      await send({ action: "open", url: `${SITE_ORIGIN}${PDF_PATH}` }),
     );
     expect(opened.document).toEqual({ type: "pdf" });
     expect(opened.text).toBe("");
@@ -91,5 +101,92 @@ test("a PDF shown in the tab reads as a PDF with no text, and the web connection
     expect(await downloadCount(harness)).toBe(0);
   } finally {
     await harness.close();
+  }
+});
+
+type Answer = { body: string; headers: Record<string, string>; status: number };
+
+/** A loopback server answering each path with `answer`, recording every path asked for. */
+const startServer = async (answer: (path: string) => Answer) => {
+  const requests: string[] = [];
+  const server = createServer((request, response) => {
+    const path = request.url ?? "/";
+    requests.push(path);
+    const { body, headers, status } = answer(path);
+    response.writeHead(status, headers);
+    response.end(body);
+  });
+  const port = await listen(server);
+  return { origin: `http://127.0.0.1:${String(port)}`, requests, server };
+};
+
+const PDF_TEXT = "%PDF-1.4\n%%EOF\n";
+
+test("the shown PDF reader in Chrome reads an address once and never follows its redirect", async () => {
+  // timeout: it launches Chrome with the extension and opens its offscreen document.
+  test.setTimeout(120_000);
+  // Stands in for a private host a redirect points at.
+  const target = await startServer(() => ({
+    body: PDF_TEXT,
+    headers: { "content-type": "application/pdf" },
+    status: 200,
+  }));
+  const site = await startServer((path) =>
+    path === "/redirect"
+      ? {
+          body: "",
+          headers: { location: `${target.origin}/internal.pdf` },
+          status: 302,
+        }
+      : {
+          body: PDF_TEXT,
+          headers: {
+            "cache-control": "no-store",
+            "content-type": "application/pdf",
+          },
+          status: 200,
+        },
+  );
+  const harness = await launchExtensionHarness();
+  try {
+    const read = async (url: string): Promise<unknown> =>
+      await harness.worker.evaluate(async (address) => {
+        const open = await chrome.runtime.getContexts({
+          contextTypes: ["OFFSCREEN_DOCUMENT"],
+        });
+        if (open.length === 0) {
+          await chrome.offscreen.createDocument({
+            justification: "Reads a shown PDF in the end-to-end test.",
+            reasons: ["BLOBS"],
+            url: "offscreen.html",
+          });
+        }
+        const answer: unknown = await chrome.runtime.sendMessage({
+          maxBytes: 1024,
+          target: "stella-shown-pdf-reader",
+          type: "read",
+          url: address,
+        });
+        return answer;
+      }, url);
+
+    expect(await read(`${site.origin}/redirect`)).toEqual({
+      reason: "redirected",
+      type: "refused",
+    });
+    expect(site.requests).toEqual(["/redirect"]);
+    expect(target.requests).toEqual([]);
+
+    expect(await read(`${site.origin}/decisions/42`)).toMatchObject({
+      bytes: PDF_TEXT.length,
+      downloadUrl: expect.stringMatching(/^blob:chrome-extension:\/\//u),
+      fetchedUrl: `${site.origin}/decisions/42`,
+      type: "read",
+    });
+    expect(site.requests).toEqual(["/redirect", "/decisions/42"]);
+  } finally {
+    await harness.close();
+    await closeServer(site.server);
+    await closeServer(target.server);
   }
 });

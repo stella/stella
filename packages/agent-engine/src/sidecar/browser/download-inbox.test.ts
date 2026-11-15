@@ -75,8 +75,11 @@ const settled = (
     type: "settled",
   }) as const;
 
-const started = (deliveryId: string, controllerId = RUN.threadId) =>
-  ({ controllerId, deliveryId, type: "started" }) as const;
+const started = (
+  deliveryId: string,
+  controllerId = RUN.threadId,
+  shownDocument: string | null = null,
+) => ({ controllerId, deliveryId, shownDocument, type: "started" }) as const;
 
 describe("a browser step's downloads", () => {
   test("a step waits for the downloads it started and its result carries them", async () => {
@@ -98,6 +101,7 @@ describe("a browser step's downloads", () => {
       downloads: [{ ...REFUSED_INTERRUPTED, sourceUrl: PDF_ADDRESS }],
       saving: 0,
       shown: null,
+      shownSaving: false,
     });
     // It ended when the download settled, and its timer with it.
     expect(time.pending()).toEqual([]);
@@ -115,7 +119,12 @@ describe("a browser step's downloads", () => {
       since,
     });
     time.runOut();
-    expect(await taking).toEqual({ downloads: [], saving: 1, shown: null });
+    expect(await taking).toEqual({
+      downloads: [],
+      saving: 1,
+      shown: null,
+      shownSaving: false,
+    });
 
     inbox.arrive(settled("d-1"));
     const later = await inbox.take(RUN, {
@@ -184,7 +193,7 @@ describe("a browser step's downloads", () => {
 
     expect(
       await inbox.take(RUN, { shownAddress: null, signal: NOT_STOPPED, since }),
-    ).toEqual({ downloads: [], saving: 0, shown: null });
+    ).toEqual({ downloads: [], saving: 0, shown: null, shownSaving: false });
     expect(time.pending()).toEqual([]);
   });
 });
@@ -215,7 +224,12 @@ describe("a document the tab shows", () => {
       signal: NOT_STOPPED,
       since: inbox.mark(),
     });
-    expect(again).toEqual({ downloads: [], saving: 0, shown: outcome });
+    expect(again).toEqual({
+      downloads: [],
+      saving: 0,
+      shown: outcome,
+      shownSaving: false,
+    });
 
     // Another run of the chat saves its own copy; until then none is known.
     const otherRun = await inbox.take(
@@ -290,6 +304,27 @@ describe("a document the tab shows", () => {
         since: inbox.mark(),
       })
     ).shown;
+
+  test("only the shown document's own save in progress counts as it saving", async () => {
+    const inbox = inboxWith(manualClock().clock);
+    // A page's download and another PDF's save are still running.
+    inbox.arrive(started("d-1"));
+    inbox.arrive(started("d-2", RUN.threadId, `${PDF_ADDRESS}/annex`));
+    const take = async () =>
+      await inbox.take(RUN, {
+        shownAddress: `${PDF_ADDRESS}#page=2`,
+        signal: NOT_STOPPED,
+        since: inbox.mark(),
+      });
+
+    expect(await take()).toMatchObject({ saving: 2, shownSaving: false });
+
+    inbox.arrive(started("d-3", RUN.threadId, PDF_ADDRESS));
+    expect(await take()).toMatchObject({ saving: 3, shownSaving: true });
+
+    inbox.arrive(settled("d-3", PDF_ADDRESS, PDF_ADDRESS));
+    expect(await take()).toMatchObject({ saving: 2, shownSaving: false });
+  });
 
   test("a refusal after the document was saved never replaces its saved copy", async () => {
     const inbox = movingInbox();

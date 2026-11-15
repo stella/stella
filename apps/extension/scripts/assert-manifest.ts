@@ -78,6 +78,7 @@ if (
     "activeTab",
     "alarms",
     "declarativeNetRequest",
+    "offscreen",
     "scripting",
     "storage",
   ])

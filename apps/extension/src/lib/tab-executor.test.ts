@@ -1045,6 +1045,21 @@ describe("a tab showing a PDF", () => {
     expect(shown.map(({ url }) => url)).toEqual([PDF_URL]);
   });
 
+  test("going back onto a PDF reads it as a PDF and hands nothing on", async () => {
+    const { handlers } = installFakeChrome();
+    handlers["back"] = () => [{ frameId: 0, result: undefined }];
+    showPdf(handlers);
+    const { onPdfShown, shown } = recordShown();
+
+    expect(await run({ action: "go-back" }, { onPdfShown })).toMatchObject({
+      snapshot: { document: { type: "pdf" }, url: PDF_URL },
+      status: "success",
+    });
+    // A page reached by going back was saved by the read that read it, or
+    // was never read by the chat: nothing starts a save.
+    expect(shown).toEqual([]);
+  });
+
   test("a read that fails hands nothing on", async () => {
     const { handlers } = installFakeChrome();
     showPdf(handlers);

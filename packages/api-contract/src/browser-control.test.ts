@@ -772,10 +772,16 @@ describe("stella desktop transport", () => {
       controllerId: "thread-1",
       deliveryId: "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      shownDocument: "https://example.com/decision.pdf",
       source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
       type: "download-started",
     } as const;
     expect(parseBrowserDesktopResponse(started)).toEqual(started);
+    expect(
+      parseBrowserDesktopResponse({ ...started, shownDocument: null }),
+    ).toEqual({ ...started, shownDocument: null });
+    const { shownDocument: _shown, ...unsaid } = started;
+    expect(parseBrowserDesktopResponse(unsaid)).toBeNull();
     expect(
       parseBrowserDesktopResponse({
         ...started,

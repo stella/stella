@@ -55,6 +55,8 @@ type HeldDownload = { shownDocument: string | null } & (
 type Started = {
   /** When it was announced, in the inbox's clock. */
   at: number;
+  /** The address of the shown PDF it saves; null for a page's download. */
+  shownDocument: string | null;
   /** Its place in the order downloads were announced. */
   sequence: number;
 };
@@ -71,6 +73,8 @@ export type TakenDownloads = {
   downloads: BrowserDownloadOutcome[];
   /** Downloads Chrome is still saving; a later result lists them. */
   saving: number;
+  /** Whether the shown document's own save is among those still saving. */
+  shownSaving: boolean;
   /**
    * For a result showing a document: what became of that document's own
    * save in this run, the latest when there were several; null when none
@@ -221,6 +225,10 @@ export const createDownloadInbox = ({
           chat.started.set(report.deliveryId, {
             at: clock.now(),
             sequence: announced,
+            shownDocument:
+              report.shownDocument === null
+                ? null
+                : browserDocumentAddress(report.shownDocument),
           });
           chat.started = newest(chat.started, MAX_STARTED_DOWNLOADS);
           return;
@@ -285,9 +293,16 @@ export const createDownloadInbox = ({
         }),
       );
       remember(run.runId, settled);
+      const shownDocument =
+        shownAddress === null ? null : browserDocumentAddress(shownAddress);
       return {
         downloads: settled.map(({ outcome }) => outcome),
         saving: chat.started.size,
+        shownSaving:
+          shownDocument !== null &&
+          [...chat.started.values()].some(
+            (started) => started.shownDocument === shownDocument,
+          ),
         shown:
           shownAddress === null
             ? null

@@ -845,6 +845,8 @@ const readPreflight = async (
 /** Hears of a PDF a read found the tab showing; the transport decides what follows. */
 type PdfShownHandler = (shown: ShownPdf) => Promise<void>;
 
+const SAVE_NOTHING: PdfShownHandler = async () => undefined;
+
 /**
  * What the tab's top document is, asked of that very document: a read
  * bound to the same document id describes the same document.
@@ -1526,7 +1528,12 @@ const runGoBack = async (
     }
     progress.dispatched = true;
     await navigateBack(tabId);
-    return await readOutcome(navigation, tabId, run);
+    // A page reached by going back is one the chat read there before, whose
+    // PDF that read saved, or one it never read, which nothing saves.
+    return await readOutcome(navigation, tabId, {
+      ...run,
+      onPdfShown: SAVE_NOTHING,
+    });
   } finally {
     navigation.dispose();
   }

@@ -91,6 +91,8 @@ export type BrowserBridgeDownload =
       /** The chat it belongs to, as the chat's commands named it. */
       controllerId: string;
       deliveryId: string;
+      /** The address of the PDF the tab showed, when this saves one; else null. */
+      shownDocument: string | null;
     }
   | {
       type: "settled";
@@ -318,6 +320,7 @@ const downloadReport = (
     : {
         controllerId: response.controllerId,
         deliveryId: response.deliveryId,
+        shownDocument: response.shownDocument,
         type: "started",
       };
 

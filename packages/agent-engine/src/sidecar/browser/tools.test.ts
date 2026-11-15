@@ -149,6 +149,7 @@ const recorder = (
     decision = APPROVAL_DECISION.approve,
     downloads = [],
     saving = 0,
+    shownSaving = false,
     shownSaves = new Map(),
   }: {
     approvals?: DesktopRunnerApprovalMode;
@@ -157,6 +158,8 @@ const recorder = (
     downloads?: BrowserDownloadOutcome[];
     /** Downloads still saving, as the inbox counts them. */
     saving?: number;
+    /** Whether the shown document's own save is still running. */
+    shownSaving?: boolean;
     /** What each shown document's save became, by address, as the inbox knows it. */
     shownSaves?: Map<string, BrowserDownloadOutcome>;
   } = {},
@@ -186,6 +189,7 @@ const recorder = (
       return {
         downloads: downloads.splice(0),
         saving,
+        shownSaving,
         shown:
           shownAddress === null ? null : (shownSaves.get(shownAddress) ?? null),
       };
@@ -630,7 +634,10 @@ describe("a tab showing a PDF", () => {
 
   test("a save still running is named as such, never as page text", async () => {
     const session = createLocalBrowserSession();
-    const browser = recorder([pdfPage("r-1")], { saving: 1 });
+    const browser = recorder([pdfPage("r-1")], {
+      saving: 1,
+      shownSaving: true,
+    });
 
     const read = parsed(await session.call("snapshot", {}, browser.context));
 
@@ -641,6 +648,19 @@ describe("a tab showing a PDF", () => {
     });
     expect(read).not.toHaveProperty("text");
     expect(read).not.toHaveProperty("elements");
+  });
+
+  test("other downloads still saving never make the PDF's own file saving", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([pdfPage("r-1")], { saving: 2 });
+
+    const read = parsed(await session.call("snapshot", {}, browser.context));
+
+    expect(read).toMatchObject({
+      document: "pdf",
+      file: { status: "not_saved" },
+      savingDownloads: 2,
+    });
   });
 
   test("a PDF with no save known says it was not saved", async () => {

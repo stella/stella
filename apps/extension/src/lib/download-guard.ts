@@ -24,6 +24,7 @@ import {
 } from "./download-trace";
 import { parseControllableUrl } from "./origin-policy";
 import { isPdfMimeType, type ShownPdf } from "./shown-document";
+import type { ShownPdfRead, ShownPdfReader } from "./shown-pdf-reader";
 import {
   BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY,
   BROWSER_SHOWN_PDF_SAVES_STORAGE_KEY,
@@ -174,7 +175,12 @@ export const desktopDownloadVerdict = (
  * download stopped before it started is reported settled only.
  */
 export type DownloadReporter = {
-  started: (chatId: string, deliveryId: string) => void;
+  started: (
+    chatId: string,
+    deliveryId: string,
+    /** The shown PDF's address when the delivery saves one; null otherwise. */
+    shownDocument: string | null,
+  ) => void;
   settled: (report: SettledDelivery) => void;
 };
 
@@ -208,6 +214,12 @@ type Delivery = {
    * it itself; null for a download a page started.
    */
   shownDocument: string | null;
+  /**
+   * For a shown PDF: the extension's own `blob:` address of the bytes its
+   * reader fetched, which Chrome saves; null until the read, and for a
+   * page's download.
+   */
+  downloadUrl: string | null;
   /** Where Chrome is told to save it, relative to its download folder. */
   stagedPath: string;
   sourceUrl: string;
@@ -249,6 +261,7 @@ const newDelivery = (
   return {
     chatId,
     deliveryId,
+    downloadUrl: null,
     shownDocument,
     sourceUrl,
     stagedPath: browserDownloadStagedPath(deliveryId),
@@ -332,21 +345,27 @@ const reportStopped = (
   });
 };
 
-/**
- * Whether a shown PDF's save may keep what Chrome fetched: the address
- * Chrome ended on must be one the tab itself may load (the origin policy:
- * public HTTPS, never stella or a private host) and on the site the tab
- * showed the PDF from. The save is the extension's own request, outside
- * the tab's network rules, so a redirect is judged here. Chrome reports
- * only the address a download ended on, not the hops before it.
- */
-const shownSaveMayKeep = (
-  shownDocument: string,
-  fetchedUrl: string,
-): boolean => {
-  const shown = parseControllableUrl(shownDocument);
-  const fetched = parseControllableUrl(fetchedUrl);
-  return shown !== null && fetched !== null && fetched.origin === shown.origin;
+const NO_READ: ShownPdfRead = {
+  reason: BROWSER_DOWNLOAD_STOP_REASON.interrupted,
+  type: "refused",
+};
+
+/** Until the worker sets the offscreen reader, nothing is fetched. */
+let shownPdfReader: ShownPdfReader = {
+  read: async () => NO_READ,
+  release: async () => undefined,
+};
+
+/** Set once by the worker: the offscreen document's reader. */
+export const setShownPdfReader = (reader: ShownPdfReader): void => {
+  shownPdfReader = reader;
+};
+
+/** Frees a shown save's bytes once Chrome no longer needs them. */
+const releaseShownBytes = async (delivery: Delivery): Promise<void> => {
+  if (delivery.downloadUrl !== null) {
+    await shownPdfReader.release(delivery.downloadUrl).catch(() => undefined);
+  }
 };
 
 /** Downloads stella stopped, and finished ones it kept, since the popup last showed them. */
@@ -506,7 +525,8 @@ const cancelDownload = async (downloadId: number): Promise<void> => {
 /**
  * The shown PDF save a download of this extension's is, moved to the
  * deliveries under its download id; null when it is none. Matched by the
- * address the save asked Chrome for.
+ * `blob:` address the save asked Chrome for, which only the extension
+ * holds.
  */
 const claimShownSave = (
   download: Pick<chrome.downloads.DownloadItem, "id" | "url">,
@@ -516,7 +536,7 @@ const claimShownSave = (
     return claimed;
   }
   const starting = [...startingShownSaves.values()].find(
-    ({ shownDocument }) => shownDocument === download.url,
+    ({ downloadUrl }) => downloadUrl !== null && downloadUrl === download.url,
   );
   if (starting === undefined) {
     return null;
@@ -530,9 +550,9 @@ const claimShownSave = (
 const discardOnFinish = new Set<number>();
 
 /**
- * Stops a shown PDF's save whose fetch ended where it may not keep it:
- * Chrome stops it, a file it already finished is removed (only this
- * download's own file), and the chat hears where the fetch ended.
+ * Stops a shown PDF's save that Chrome took from anywhere but the bytes
+ * the reader kept: Chrome stops it, a file it already finished is removed
+ * (only this download's own file), and the chat hears where it came from.
  */
 const refuseShownSave = async (
   downloadId: number,
@@ -540,6 +560,7 @@ const refuseShownSave = async (
   fetchedUrl: string,
 ): Promise<void> => {
   deliveries.delete(downloadId);
+  await releaseShownBytes(delivery);
   reportStopped(
     {
       ...delivery,
@@ -563,9 +584,9 @@ const fetchedUrlOf = (
 
 /**
  * A download this extension started: only a shown PDF's save, which is
- * never traced, since the extension asked for it. One whose fetch ended
- * where it may not keep it (`shownSaveMayKeep`) or larger than the limit
- * is stopped, as is any download of the extension's that no save explains.
+ * never traced, since the extension asked for it. One Chrome takes from
+ * anywhere but the reader's `blob:` address, or larger than the limit, is
+ * stopped, as is any download of the extension's that no save explains.
  * Chrome holds the file at its name until the judgement is done, so a
  * refused save never gets a staged name.
  */
@@ -573,17 +594,17 @@ const judgeOwnDownload = async (
   download: chrome.downloads.DownloadItem,
 ): Promise<void> => {
   const delivery = claimShownSave(download);
-  const shownDocument = delivery?.shownDocument ?? null;
-  if (delivery === null || shownDocument === null) {
+  if (delivery === null) {
     await cancelDownload(download.id);
     return;
   }
-  if (!shownSaveMayKeep(shownDocument, fetchedUrlOf(download))) {
+  if (fetchedUrlOf(download) !== delivery.downloadUrl) {
     await refuseShownSave(download.id, delivery, fetchedUrlOf(download));
     return;
   }
   if (download.totalBytes > BROWSER_CONTROL_LIMITS.downloadBytes) {
     deliveries.delete(download.id);
+    await releaseShownBytes(delivery);
     reportStopped(delivery, BROWSER_DOWNLOAD_STOP_REASON.tooLarge);
     await cancelDownload(download.id);
   }
@@ -637,7 +658,7 @@ const runJudgement = async (
     case "deliver": {
       const delivery = deliveries.get(download.id);
       if (delivery !== undefined) {
-        reporter.started(delivery.chatId, delivery.deliveryId);
+        reporter.started(delivery.chatId, delivery.deliveryId, null);
       }
       return;
     }
@@ -755,9 +776,9 @@ export const holdDownloadForJudgement = (
  * Called for every download change: a download a desktop chat takes is
  * reported once it settles, saved or not. Where Chrome saved it, and the
  * address it fetched in the end, are reported as Chrome says; stella
- * desktop checks the file itself. A shown PDF's save is judged again on
- * every new final address and once more when it finishes, so a redirect
- * Chrome reports late is never kept.
+ * desktop checks the file itself. A shown PDF's save must keep coming
+ * from the reader's `blob:` address, judged on every new final address and
+ * once more when it finishes; its bytes are freed once it settles.
  */
 export const reportDeliveredDownload = async (
   delta: chrome.downloads.DownloadDelta,
@@ -770,7 +791,7 @@ export const reportDeliveredDownload = async (
   if (
     delivery.shownDocument !== null &&
     redirectedTo !== undefined &&
-    !shownSaveMayKeep(delivery.shownDocument, redirectedTo)
+    redirectedTo !== delivery.downloadUrl
   ) {
     await refuseShownSave(delta.id, delivery, redirectedTo);
     return;
@@ -782,16 +803,18 @@ export const reportDeliveredDownload = async (
   deliveries.delete(delta.id);
   const [item] = await chrome.downloads.search({ id: delta.id });
   if (item?.state !== "complete" || item.filename === "") {
+    await releaseShownBytes(delivery);
     reportStopped(delivery, BROWSER_DOWNLOAD_STOP_REASON.interrupted);
     return;
   }
   if (
     delivery.shownDocument !== null &&
-    !shownSaveMayKeep(delivery.shownDocument, fetchedUrlOf(item))
+    fetchedUrlOf(item) !== delivery.downloadUrl
   ) {
     await refuseShownSave(delta.id, delivery, fetchedUrlOf(item));
     return;
   }
+  await releaseShownBytes(delivery);
   reporter.settled({
     chatId: delivery.chatId,
     deliveryId: delivery.deliveryId,
@@ -803,7 +826,12 @@ export const reportDeliveredDownload = async (
       mime: item.mime.slice(0, 255),
       outcome: "saved",
       path: item.filename.slice(0, BROWSER_CONTROL_LIMITS.downloadPathChars),
-      sourceUrl: sourceUrlOf(item),
+      // A shown PDF's save came from the reader's own address; the address
+      // the reader fetched is where it came from.
+      sourceUrl:
+        delivery.shownDocument === null
+          ? sourceUrlOf(item)
+          : delivery.sourceUrl,
       suggestedName: delivery.suggestedName,
     },
     shownDocument: delivery.shownDocument,
@@ -878,11 +906,13 @@ export type ShownPdfRequest = ShownPdf & {
  * Saves a PDF the chat's tab shows through the same path as a download:
  * only for the desktop chat holding the browser while stella desktop is
  * connected, once per address in each of its runs, within the same limits,
- * into the staging folder under a fresh name, reported the same way.
- * Chrome fetches the tab's own address again, with the cookies it applies
- * to it; a site that serves an address once answers that second request
- * with an error, which comes back as an interrupted download or as a file
- * stella desktop refuses.
+ * into the staging folder under a fresh name, reported the same way. The
+ * reader (`shown-pdf-reader`) fetches the address once more, with the
+ * cookies Chrome applies, from the HTTP cache when it holds it, and never
+ * follows a redirect; Chrome then saves the reader's own `blob:` address.
+ * A site that serves an address once answers that second request with an
+ * error, which comes back as an interrupted download or as a file stella
+ * desktop refuses.
  */
 export const saveShownPdf = async ({
   controllerId,
@@ -926,27 +956,42 @@ export const saveShownPdf = async ({
     startingShownSaves.delete(delivery.deliveryId);
     return;
   }
-  reporter.started(chatId, delivery.deliveryId);
+  reporter.started(chatId, delivery.deliveryId, address);
+  const read = await shownPdfReader
+    .read(address, BROWSER_CONTROL_LIMITS.downloadBytes)
+    .catch(() => NO_READ);
+  if (read.type === "refused") {
+    startingShownSaves.delete(delivery.deliveryId);
+    reportStopped(delivery, read.reason);
+    return;
+  }
+  const prepared: Delivery = {
+    ...delivery,
+    downloadUrl: read.downloadUrl,
+    sourceUrl: read.fetchedUrl.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
+  };
+  startingShownSaves.set(prepared.deliveryId, prepared);
   // Without the optional downloads permission there is nothing to ask.
   const started = Reflect.has(chrome, "downloads")
     ? await Result.tryPromise(
         async () =>
           await chrome.downloads.download({
             conflictAction: "uniquify",
-            filename: delivery.stagedPath,
+            filename: prepared.stagedPath,
             saveAs: false,
-            url: address,
+            url: read.downloadUrl,
           }),
       )
     : null;
   if (started === null || Result.isError(started)) {
-    startingShownSaves.delete(delivery.deliveryId);
-    reportStopped(delivery, BROWSER_DOWNLOAD_STOP_REASON.interrupted);
+    startingShownSaves.delete(prepared.deliveryId);
+    await releaseShownBytes(prepared);
+    reportStopped(prepared, BROWSER_DOWNLOAD_STOP_REASON.interrupted);
     return;
   }
   // Chrome may have named the download already; then its judgement
   // claimed the save.
-  claimShownSave({ id: started.value, url: address });
+  claimShownSave({ id: started.value, url: read.downloadUrl });
 };
 
 /**

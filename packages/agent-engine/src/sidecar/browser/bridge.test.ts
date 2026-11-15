@@ -203,6 +203,7 @@ describe("the browser bridge and its native host", () => {
       controllerId: "thread-1",
       deliveryId,
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      shownDocument: null,
       source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
       type: "download-started",
     });
@@ -221,7 +222,12 @@ describe("the browser bridge and its native host", () => {
         description: "both download reports",
       }),
     ).toEqual([
-      { controllerId: "thread-1", deliveryId, type: "started" },
+      {
+        controllerId: "thread-1",
+        deliveryId,
+        shownDocument: null,
+        type: "started",
+      },
       {
         controllerId: "thread-1",
         deliveryId,

@@ -397,10 +397,10 @@ const foundView = (found: BrowserControlFound) => ({
  */
 const pdfView = (
   snapshot: BrowserControlSnapshot,
-  { saving, shown }: Pick<TakenDownloads, "saving" | "shown">,
+  { shown, shownSaving }: Pick<TakenDownloads, "shown" | "shownSaving">,
   knownTabs: ReadonlySet<number> | null,
 ) => {
-  const savingFile = saving > 0 ? PDF_SAVING : PDF_NOT_SAVED;
+  const savingFile = shownSaving ? PDF_SAVING : PDF_NOT_SAVED;
   return {
     contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
     url: snapshot.url,
@@ -412,7 +412,12 @@ const pdfView = (
   };
 };
 
-const NO_DOWNLOADS: TakenDownloads = { downloads: [], saving: 0, shown: null };
+const NO_DOWNLOADS: TakenDownloads = {
+  downloads: [],
+  saving: 0,
+  shown: null,
+  shownSaving: false,
+};
 
 /**
  * A result as the agent reads it; a sign-in is its own status. Downloads

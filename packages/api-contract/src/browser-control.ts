@@ -1084,8 +1084,8 @@ export const BROWSER_DOWNLOAD_STOP_REASON = {
   /** Chrome could not finish it. */
   interrupted: "interrupted",
   /**
-   * A shown PDF's address sent its save on to an address outside the
-   * public web, or off the site the tab showed it from.
+   * A shown PDF's address answered its save with a redirect, which the
+   * save never follows.
    */
   redirected: "redirected",
 } as const;
@@ -1146,6 +1146,8 @@ const desktopDownloadStartedResponseSchema = v.strictObject({
   controllerId: controllerIdSchema,
   deliveryId: deliveryIdSchema,
   protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  /** As on the `download` that follows: the shown PDF's address, or null. */
+  shownDocument: v.nullable(urlSchema),
   source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
   type: v.literal("download-started"),
 });
