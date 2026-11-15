@@ -390,7 +390,7 @@ function useTurnSteer({
           return;
         default:
           outcome satisfies never;
-          return panic("Unhandled steer outcome");
+          panic("Unhandled steer outcome");
       }
     })();
     return true;
