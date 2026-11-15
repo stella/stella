@@ -11,7 +11,10 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
-import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import {
+  hasCustomerDecisionModel,
+  hasInstanceDecisionModel,
+} from "@/api/lib/workflow/decisions/decision-model";
 
 import { resolveAIConfigDefaults } from "./ai-config-defaults";
 
@@ -29,6 +32,13 @@ type AIConfigResult = {
    * caller takes its generative or rule-based path.
    */
   decisionInstanceProvisioned: boolean;
+  /**
+   * Whether Anchor Verification asks the decision model for verdicts
+   * (`enabled`), and whether it can: the org has a decision model of its
+   * own, or runs on the instance's models and the instance has one
+   * (`available`). Only an available model can be turned on.
+   */
+  verificationDecisionModel: { enabled: boolean; available: boolean };
 } & ReturnType<typeof resolveAIConfigDefaults> &
   (
     | { configured: false }
@@ -72,6 +82,7 @@ const readAIConfig = createSafeRootHandler(
           columns: {
             aiConfigEncrypted: true,
             aiConfigIv: true,
+            verificationDecisionModelEnabled: true,
           },
         }),
       ),
@@ -81,12 +92,17 @@ const readAIConfig = createSafeRootHandler(
     const iv = row?.aiConfigIv;
     const instanceProvisioned = hasTanStackInstanceProvider();
     const decisionInstanceProvisioned = hasInstanceDecisionModel("customer");
+    const verificationEnabled = row?.verificationDecisionModelEnabled ?? false;
 
     let result: AIConfigResult = {
       ...resolveAIConfigDefaults([]),
       configured: false,
       instanceProvisioned,
       decisionInstanceProvisioned,
+      verificationDecisionModel: {
+        enabled: verificationEnabled,
+        available: hasCustomerDecisionModel(null),
+      },
     };
 
     if (ciphertext || iv) {
@@ -118,6 +134,10 @@ const readAIConfig = createSafeRootHandler(
         decision: decisionModelResponse(aiConfig.decision),
         instanceProvisioned,
         decisionInstanceProvisioned,
+        verificationDecisionModel: {
+          enabled: verificationEnabled,
+          available: hasCustomerDecisionModel(aiConfig),
+        },
       };
     }
 

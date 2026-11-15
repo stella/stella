@@ -228,6 +228,22 @@
         "running": "Folyamatban",
         "failed": "Sikertelen",
         "interrupted": "Leállítva"
+      },
+      "output": {
+        "command": "Kimenet",
+        "diff": "Fájlmódosítások",
+        "conversation": "Az alügynök beszélgetése",
+        "conversationPrompt": "Feladat",
+        "conversationReport": "Jelentés",
+        "cut": "Az első {kept} látható, összesen {total}",
+        "empty": "Nincs kimenet",
+        "arriving": "Még érkezik arról a számítógépről, amelyen a lépés futott",
+        "notCopied": "Még nincs átmásolva ebbe a csevegésbe",
+        "notStored": "Ebből a lépésből semmi sem lett mentve",
+        "runBudgetReached": "Nincs mentve: ez a futtatás már annyit mentett, amennyit egy futtatás menthet",
+        "imageTooLargeToStore": "Ez a kép {total} méretű. A {kept} méretnél nagyobb képek nem kerülnek mentésre, ezért nem jeleníthető meg.",
+        "loadFailed": "Nem sikerült betölteni.",
+        "showMore": "Több megjelenítése"
       }
     },
     "processSummary": {

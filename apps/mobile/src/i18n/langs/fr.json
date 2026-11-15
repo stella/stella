@@ -228,6 +228,22 @@
         "running": "En cours",
         "failed": "Échec",
         "interrupted": "Arrêté"
+      },
+      "output": {
+        "command": "Résultat",
+        "diff": "Modifications des fichiers",
+        "conversation": "Conversation du sous-agent",
+        "conversationPrompt": "Tâche",
+        "conversationReport": "Rapport",
+        "cut": "Affichage des {kept} premiers sur {total}",
+        "empty": "Aucun résultat",
+        "arriving": "Toujours en cours de réception depuis l’ordinateur qui a exécuté cette étape",
+        "notCopied": "Pas encore copié dans cette conversation",
+        "notStored": "Rien de cette étape n’a été enregistré",
+        "runBudgetReached": "Non enregistré : cette exécution avait déjà enregistré tout ce qu’une exécution peut enregistrer",
+        "imageTooLargeToStore": "Cette image fait {total}. Les images de plus de {kept} ne sont pas enregistrées ; elle ne peut donc pas être affichée.",
+        "loadFailed": "Échec du chargement.",
+        "showMore": "Afficher plus"
       }
     },
     "processSummary": {

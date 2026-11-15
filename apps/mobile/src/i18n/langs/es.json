@@ -228,6 +228,22 @@
         "running": "En curso",
         "failed": "Falló",
         "interrupted": "Detenido"
+      },
+      "output": {
+        "command": "Salida",
+        "diff": "Cambios en archivos",
+        "conversation": "Conversación del subagente",
+        "conversationPrompt": "Tarea",
+        "conversationReport": "Informe",
+        "cut": "Se muestran los primeros {kept} de {total}",
+        "empty": "Sin salida",
+        "arriving": "Todavía está llegando desde el ordenador que ejecutó este paso",
+        "notCopied": "Aún no se ha copiado a este chat",
+        "notStored": "No se guardó nada de este paso",
+        "runBudgetReached": "No se guardó: esta ejecución ya había guardado todo lo que puede guardar una ejecución",
+        "imageTooLargeToStore": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan, por lo que no se puede mostrar.",
+        "loadFailed": "No se ha podido cargar.",
+        "showMore": "Mostrar más"
       }
     },
     "processSummary": {

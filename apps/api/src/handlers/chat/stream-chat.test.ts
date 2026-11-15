@@ -173,6 +173,8 @@ import {
 import type { MessageIdMapper, StoredHistory } from "./stream-message-identity";
 import type { TANSTACK_TOOL_RESULT_STATE_LIFECYCLE } from "./tanstack-chat-lifecycle";
 
+const FIXTURE_TIMESTAMP = Date.parse("2026-01-01T00:00:00.000Z");
+
 /** A run whose history the engine holds exactly as stored. */
 const NOTHING_REWRITTEN: StoredHistory = {
   loadServed: async () => await Promise.resolve(Result.ok(new Map())),
@@ -346,7 +348,7 @@ const createScriptedAdapter = (
     const resolvedRunId = runId ?? "run-1";
     const resolvedThreadId = threadId ?? "thread-1";
     const messageId = `provider-message-${String(turnIndex + 1)}`;
-    const timestamp = Date.now();
+    const timestamp = FIXTURE_TIMESTAMP;
     yield {
       type: EventType.RUN_STARTED,
       runId: resolvedRunId,
@@ -419,7 +421,7 @@ const createTextReplyAdapter = (text: string): AnyTextAdapter => ({
     const resolvedRunId = runId ?? "run-1";
     const resolvedThreadId = threadId ?? "thread-1";
     const messageId = "provider-reply";
-    const timestamp = Date.now();
+    const timestamp = FIXTURE_TIMESTAMP;
     yield {
       type: EventType.RUN_STARTED,
       runId: resolvedRunId,
@@ -1707,7 +1709,7 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
     },
     async *chatStream({ model, runId, threadId }) {
       iteration += 1;
-      const timestamp = Date.now();
+      const timestamp = FIXTURE_TIMESTAMP;
       const resolvedRunId = runId ?? "run-1";
       const resolvedThreadId = threadId ?? "thread-1";
       if (iteration > 1) {

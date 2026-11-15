@@ -8,14 +8,14 @@ import {
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE,
   type ChatLocalRunStepContent,
 } from "@stll/api-contract/chat-local-run-step-content";
-
-import { chatKeys } from "@/features/chat/chat-query-contract";
 import {
   foldLocalRunStepOutput,
   LOCAL_RUN_STEP_OUTPUT_UNREAD,
-  localRunStepOutputStaleTime,
   type LocalRunStepOutputView,
-} from "@/features/chat/local-run-step-output.logic";
+} from "@stll/api-contract/chat-local-run-step-content-view";
+
+import { chatKeys } from "@/features/chat/chat-query-contract";
+import { localRunStepOutputStaleTime } from "@/features/chat/local-run-step-output.logic";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import type { SafeId } from "@/lib/safe-id";

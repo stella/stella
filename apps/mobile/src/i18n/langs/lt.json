@@ -228,6 +228,22 @@
         "running": "Vykdoma",
         "failed": "Nepavyko",
         "interrupted": "Sustabdyta"
+      },
+      "output": {
+        "command": "Išvestis",
+        "diff": "Failų pakeitimai",
+        "conversation": "Subagento pokalbis",
+        "conversationPrompt": "Užduotis",
+        "conversationReport": "Ataskaita",
+        "cut": "Rodomi pirmieji {kept} iš {total}",
+        "empty": "Išvesties nėra",
+        "arriving": "Vis dar gaunama iš kompiuterio, kuriame buvo vykdomas šis žingsnis",
+        "notCopied": "Į šį pokalbį dar nenukopijuota",
+        "notStored": "Iš šio žingsnio nieko neišsaugota",
+        "runBudgetReached": "Neišsaugota: šis vykdymas jau išsaugojo tiek, kiek leidžiama vienam vykdymui",
+        "imageTooLargeToStore": "Šio paveikslėlio dydis – {total}. Didesni nei {kept} paveikslėliai nesaugomi, todėl jo parodyti negalima.",
+        "loadFailed": "Nepavyko įkelti.",
+        "showMore": "Rodyti daugiau"
       }
     },
     "processSummary": {
