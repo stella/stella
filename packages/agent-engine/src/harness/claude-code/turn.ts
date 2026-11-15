@@ -17,6 +17,8 @@ import type {
 } from "../adapter";
 import {
   type HarnessApprovalOption,
+  type HarnessBoundary,
+  harnessBoundary,
   harnessContextUsage,
   type HarnessContinuation,
   type HarnessEvent,
@@ -354,6 +356,12 @@ export class ClaudeCodeTurnSession {
   /** Steering messages written and not echoed yet: uuid to input id. */
   private readonly steering = new Map<string, string>();
   private assistantError: string | null = null;
+  /**
+   * The transcript entry of the main thread's last assistant message: where
+   * the turn ends in its session once it completes. Subagents write to side
+   * chains, which never count.
+   */
+  private lastAssistantEntry: HarnessBoundary | null = null;
   /** The main thread's last model request, for the context it held. */
   private lastRequest: LastRequest | null = null;
   private readonly rejectedResets: Temporal.Instant[] = [];
@@ -740,6 +748,8 @@ export class ClaudeCodeTurnSession {
       this.assistantError = parsed.error;
       return;
     }
+    this.lastAssistantEntry =
+      parsed.uuid === undefined ? null : harnessBoundary(parsed.uuid);
     const { usage } = parsed.message;
     if (usage !== undefined) {
       // The next request carries this one's prompt and answer.
@@ -996,6 +1006,7 @@ export class ClaudeCodeTurnSession {
       this.emit({
         type: "turn.completed",
         usage: usageOf(parsed, this.lastRequest),
+        boundary: this.lastAssistantEntry,
       });
       return;
     }

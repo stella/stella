@@ -138,6 +138,10 @@ const userAgent = (version: string) =>
 export const FAKE_OUTDATED_VERSION = "0.150.0";
 export const FAKE_THREAD_ID = "thread-a";
 export const FAKE_RESUMED_THREAD_ID = "thread-old";
+/** The thread `thread/fork` makes of the resumed one. */
+export const FAKE_FORKED_THREAD_ID = "thread-forked";
+/** The turn of the resumed thread a fork keeps through. */
+export const FAKE_FORK_BOUNDARY = "019a5e1c-7f3d-7c2a-9b4e-2f6d8a1c3e5b";
 const FAKE_TURN_ID = "turn-1";
 /** The server name the holder registers the browser tools under. */
 const FAKE_BROWSER_SERVER = "stella_browser";
@@ -1161,6 +1165,51 @@ export const FAKE_SCENARIOS = {
     {
       notify: "turn/completed",
       params: { threadId: FAKE_RESUMED_THREAD_ID, turn: turn("completed") },
+    },
+  ],
+  fork_ok: [
+    ...handshake(),
+    {
+      expect: "thread/fork",
+      result: { thread: { id: FAKE_FORKED_THREAD_ID } },
+    },
+    ...startTurn(),
+    {
+      notify: "turn/completed",
+      params: { threadId: FAKE_FORKED_THREAD_ID, turn: turn("completed") },
+    },
+  ],
+  fork_missing: [
+    ...handshake(),
+    {
+      expect: "thread/fork",
+      error: {
+        code: -32_600,
+        message: `no rollout found for thread id ${FAKE_RESUMED_THREAD_ID}`,
+      },
+    },
+    { expect: "thread/start", result: { thread: { id: FAKE_THREAD_ID } } },
+    ...startTurn(),
+    completed(),
+  ],
+  fork_archived: [
+    ...handshake(),
+    {
+      expect: "thread/fork",
+      error: {
+        code: -32_600,
+        message: `session ${FAKE_RESUMED_THREAD_ID} is archived`,
+      },
+    },
+    { expect: "thread/unarchive", result: {} },
+    {
+      expect: "thread/fork",
+      result: { thread: { id: FAKE_FORKED_THREAD_ID } },
+    },
+    ...startTurn(),
+    {
+      notify: "turn/completed",
+      params: { threadId: FAKE_FORKED_THREAD_ID, turn: turn("completed") },
     },
   ],
   resume_archived: [

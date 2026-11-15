@@ -24,6 +24,7 @@ import {
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import {
   CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
   CHAT_RUN_TARGET_KIND,
@@ -50,7 +51,6 @@ import type { TurnBrowserExtension } from "@/api/handlers/chat/browser-extension
 import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
-  getAwaitingUserInteractions,
   getResumedUserInteraction,
   isChatPart,
   toPersistableChatMessage,
@@ -899,7 +899,7 @@ export class ChatSendLifecycle {
     ) {
       return false;
     }
-    const interaction = getAwaitingUserInteractions(this.checkpoint).at(0);
+    const interaction = memberWaitsOf(this.checkpoint).at(0);
     if (interaction === undefined) {
       return false;
     }
@@ -1668,7 +1668,7 @@ const acceptIncomingTurn = async ({
           acceptedTurnId: null,
           continuationInteraction:
             getResumedUserInteraction({
-              awaited: getAwaitingUserInteractions(
+              awaited: memberWaitsOf(
                 validationThreadState.persistedMessage === null
                   ? null
                   : chatMessageFromPersisted({

@@ -74,7 +74,10 @@ without all three:
   page-opened tab stays confined and a download is traced to its frame.
 
 `activeTab` lets the popup read the URL of the stella tab it was opened on
-when connecting.
+when connecting. `offscreen` lets a stella desktop chat save a PDF its tab
+shows: an offscreen document fetches the PDF's own address once, never
+following a redirect, and keeps the bytes as a `blob:` address of the
+extension's that Chrome then saves.
 
 Chat reads the controlled tab. That tab is either one stella opened through
 `open`, or a tab the user already has open: open the popup on that page and

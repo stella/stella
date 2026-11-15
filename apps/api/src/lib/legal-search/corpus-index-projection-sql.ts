@@ -2,6 +2,7 @@ import { sql, type SQLWrapper } from "drizzle-orm";
 
 import {
   CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
+  CORPUS_INDEX_OUTSTANDING_INDEX_QUIESCENT_STATUSES,
   CORPUS_INDEX_QUIESCENT_INTENT_STATUSES,
   type CorpusIndexDesiredAction,
   corpusIndexIntentStatusesWithCopy,
@@ -173,16 +174,17 @@ type CorpusProjectionNamedCopyColumns = {
 /**
  * An upsert state names an upsert copy that two or more desired changes
  * separate from the desired state, and the copy holds other content than the
- * state desires. An erasure and its undo take two changes, so such a copy may
- * be the pre-erasure one unless the writer that undid the erasure retired it,
- * which only this release's writer does.
+ * state desires: a superseded copy that is not provably current, since an
+ * erasure and its undo also take two changes.
  *
- * The desired writer stops moving `desired_at` once a state is in this shape,
- * so from then on it records when the copy fell this far behind and no later
- * write (an epoch-only reconciliation, a ranking-signal re-projection, another
- * content change) can move it past the legacy pass's cutover. The one-off
- * pass (`retireLegacyUnprovenServedCopiesTx`) retires such a copy when that
- * instant precedes the cutover. Both go together once the pass has run.
+ * An upsert write by the desired writer leaves `desired_at` unchanged once a
+ * state is in this shape, so from then on it records when the copy fell this
+ * far behind and no later upsert write (an epoch-only reconciliation, a
+ * ranking-signal re-projection, another content change) moves it past the
+ * one-off pass's cutover. The pass (`retireLegacyUnprovenServedCopiesTx`)
+ * considers such a copy only when that instant precedes the cutover, and
+ * retires it only with a recorded erasure. Both go together once the pass has
+ * run.
  */
 export const corpusIndexProjectionNamedCopyTrailsTwoChanges = ({
   desiredAction,
@@ -226,13 +228,20 @@ export const corpusIndexProjectionProducesAppend = (status: SQLWrapper) =>
 
 /**
  * One source of truth for "this entity still owes the index an exact action",
- * shared by the append and erasure anti-joins and by the partial index that
- * answers them. The index predicate and the query predicate are the same
- * expression, so PostgreSQL can prove the implication and the probe never
- * walks an entity's quiescent revision history, however long it grows.
+ * shared by the append and erasure anti-joins. The partial index that answers
+ * them leaves out a subset of these statuses
+ * (`corpusIndexProjectionOutstandingIndexPredicate`), so PostgreSQL proves
+ * this predicate implies the index's and the probe never walks an entity's
+ * settled or cancelled history, however long it grows.
  */
 export const corpusIndexProjectionIntentIsOutstanding = (status: SQLWrapper) =>
   sql`${status} NOT IN (${sqlLiteralValues(CORPUS_INDEX_QUIESCENT_INTENT_STATUSES)})`;
+
+/** The outstanding-intent partial index's own predicate, as it was built. */
+export const corpusIndexProjectionOutstandingIndexPredicate = (
+  status: SQLWrapper,
+) =>
+  sql`${status} NOT IN (${sqlLiteralValues(CORPUS_INDEX_OUTSTANDING_INDEX_QUIESCENT_STATUSES)})`;
 
 const ERASE_ACTION: CorpusIndexDesiredAction = "erase";
 const ERASE_ACTION_LITERAL = sql.raw(`'${ERASE_ACTION}'`);

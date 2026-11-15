@@ -1074,6 +1074,10 @@ const acceptAndProveProjectionAppend = async ({
           break;
         case "awaiting_publication":
           return panic(`A waited request left ${outcome.intentId} unproven`);
+        // Only an offline revision censused after its indexer ended is
+        // withdrawn, and a waited request is never offline.
+        case "withdrawn":
+          return panic(`A waited request withdrew ${outcome.intentId}`);
         default:
           outcome satisfies never;
           return panic(`Unhandled inline proof: ${String(outcome)}`);

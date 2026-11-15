@@ -2,6 +2,8 @@ import { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { deferred } from "@stll/test-kit";
+
 import {
   createdDocxSuggestionRows,
   DOCX_SUGGESTION_CACHE_WRITE,
@@ -366,16 +368,14 @@ type InFlightCreate = {
 const startInFlightCreate = (ids: readonly string[]): InFlightCreate => {
   const queryClient = new QueryClient();
   seedCache(queryClient, []);
-  const create = Promise.withResolvers<undefined>();
+  const create = deferred<undefined>();
   const persist = trackReviewSessionWrite(
     ENTITY_ID,
     persistBatch({ queryClient, ids, created: create.promise }),
   );
   return {
     queryClient,
-    resolveCreate: () => {
-      create.resolve(undefined);
-    },
+    resolveCreate: () => create.resolve(undefined),
     persist,
   };
 };
@@ -403,10 +403,15 @@ describe("a session reset racing an in-flight create", () => {
       "s2",
     ]);
 
-    const settled = settleReviewSessionWrites(ENTITY_ID);
-    // The create lands on a later task, after anything that does not wait.
-    setTimeout(resolveCreate, 0);
-    await settled;
+    const settleFinished = deferred<undefined>();
+    const settling = settleReviewSessionWrites(ENTITY_ID).then(() =>
+      settleFinished.resolve(undefined),
+    );
+    // The create is unresolved when settle starts, so settle must stay pending.
+    await Promise.resolve();
+    expect(settleFinished.settled()).toBe(false);
+    resolveCreate();
+    await settling;
     useReviewStore.getState().resetSession(ENTITY_ID);
     await persist;
 
@@ -418,10 +423,15 @@ describe("a session reset racing an in-flight create", () => {
     queueUnpersisted(["s1"], "pending");
     const { queryClient, resolveCreate } = startInFlightCreate(["s1"]);
 
-    const settled = settleReviewSessionWrites(ENTITY_ID);
-    // The create lands on a later task, after anything that does not wait.
-    setTimeout(resolveCreate, 0);
-    await settled;
+    const settleFinished = deferred<undefined>();
+    const settling = settleReviewSessionWrites(ENTITY_ID).then(() =>
+      settleFinished.resolve(undefined),
+    );
+    // The create is unresolved when settle starts, so settle must stay pending.
+    await Promise.resolve();
+    expect(settleFinished.settled()).toBe(false);
+    resolveCreate();
+    await settling;
     const persistedIds = (
       useReviewStore.getState().sessions[ENTITY_ID] ?? []
     ).flatMap((item) =>
@@ -461,12 +471,15 @@ describe("review writes a session reset waits for", () => {
       })(),
     );
 
-    const settled = settleReviewSessionWrites(ENTITY_ID);
-    // The accept's response lands on a later task.
-    setTimeout(() => {
-      response.resolve(undefined);
-    }, 0);
-    await settled;
+    const settleFinished = deferred<undefined>();
+    const settling = settleReviewSessionWrites(ENTITY_ID).then(() =>
+      settleFinished.resolve(undefined),
+    );
+    // The accept response is unresolved when settle starts.
+    await Promise.resolve();
+    expect(settleFinished.settled()).toBe(false);
+    response.resolve(undefined);
+    await settling;
 
     const pendingIds = (
       useReviewStore.getState().sessions[ENTITY_ID] ?? []

@@ -73,7 +73,7 @@ describe("a turn whose harness keeps retrying the provider", () => {
     lifecycle.emit({ type: "text.delta", messageId: "m", delta: "Back" });
     // Past the window, which the progress disarmed.
     jest.advanceTimersByTime(60_000);
-    lifecycle.emit({ type: "turn.completed", usage: null });
+    lifecycle.emit({ type: "turn.completed", usage: null, boundary: null });
     await done;
     expect(events.map(({ type }) => type)).toEqual([
       "retrying",
