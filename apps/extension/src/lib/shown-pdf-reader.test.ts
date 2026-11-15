@@ -18,23 +18,8 @@ const readRequest = (url: string) =>
     url,
   }) as const;
 
-/** A tab as Chrome describes a content script's. */
-const pageTab: chrome.tabs.Tab = {
-  active: true,
-  autoDiscardable: true,
-  discarded: false,
-  frozen: false,
-  groupId: -1,
-  highlighted: true,
-  id: 3,
-  incognito: false,
-  index: 0,
-  lastAccessed: 0,
-  pinned: false,
-  selected: true,
-  url: "https://fixture-library.test/decisions/42",
-  windowId: 1,
-};
+/** The tab a content script's sender names. */
+const pageTab = { id: 3, url: "https://fixture-library.test/decisions/42" };
 
 describe("the offscreen reader's requests", () => {
   test("it takes a read of a public HTTPS address from the extension's worker", () => {
@@ -66,6 +51,8 @@ describe("the offscreen reader's requests", () => {
         id: "another-extension",
         origin: "chrome-extension://another-extension",
       },
+      // A port Chrome names no sender for.
+      undefined,
     ]) {
       expect(
         takeShownPdfReaderRequest(request, sender, EXTENSION_ID),

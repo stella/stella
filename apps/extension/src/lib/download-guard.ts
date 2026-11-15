@@ -352,8 +352,8 @@ const NO_READ: ShownPdfRead = {
 
 /** Until the worker sets the offscreen reader, nothing is fetched. */
 let shownPdfReader: ShownPdfReader = {
-  read: async () => NO_READ,
-  release: async () => undefined,
+  read: () => Promise.resolve(NO_READ),
+  release: () => Promise.resolve(),
 };
 
 /** Set once by the worker: the offscreen document's reader. */

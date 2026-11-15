@@ -2,35 +2,49 @@ import { panic } from "better-result";
 
 import {
   readShownPdf,
+  SHOWN_PDF_READER_PORT,
   takeShownPdfReaderRequest,
 } from "../../lib/shown-pdf-reader";
 
 /**
  * The offscreen document: it fetches a PDF the chat's tab shows and keeps
  * its bytes as a `blob:` address until the worker has had Chrome save it
- * (`shown-pdf-reader`). It answers only this extension's worker and pages,
- * and reads only public HTTPS addresses.
+ * (`shown-pdf-reader`). Each request comes over a port of its own; only
+ * this extension's worker and pages are answered, and only public HTTPS
+ * addresses are read. Anything else closes the port unanswered.
  */
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  const request = takeShownPdfReaderRequest(message, sender, chrome.runtime.id);
-  if (request === null) {
-    return false;
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== SHOWN_PDF_READER_PORT) {
+    return;
   }
-  switch (request.type) {
-    case "read":
-      readShownPdf(request.url, request.maxBytes)
-        .then(sendResponse)
-        .catch(() => {
-          sendResponse(null);
-        });
-      // Answered once the read settles.
-      return true;
-    case "release":
-      URL.revokeObjectURL(request.downloadUrl);
-      sendResponse(null);
-      return false;
-    default:
-      request satisfies never;
-      return panic("Unhandled shown PDF reader request");
-  }
+  port.onMessage.addListener((message: unknown) => {
+    const request = takeShownPdfReaderRequest(
+      message,
+      port.sender,
+      chrome.runtime.id,
+    );
+    if (request === null) {
+      port.disconnect();
+      return;
+    }
+    switch (request.type) {
+      case "read":
+        readShownPdf(request.url, request.maxBytes)
+          .then((answer) => {
+            port.postMessage(answer);
+            return undefined;
+          })
+          .catch(() => {
+            port.disconnect();
+          });
+        return;
+      case "release":
+        URL.revokeObjectURL(request.downloadUrl);
+        port.disconnect();
+        return;
+      default:
+        request satisfies never;
+        panic("Unhandled shown PDF reader request");
+    }
+  });
 });

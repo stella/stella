@@ -545,6 +545,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   },
   {
     reason:
+      "Chrome extension offscreen document: its chrome.runtime message listener is the runtime boundary, answering the worker with typed reads. Enrol together with apps/extension/src/entrypoints.",
+    unit: "apps/extension/src/entrypoints/offscreen",
+  },
+  {
+    reason:
       "Chrome extension popup: DOM lookups and chrome.* calls are the runtime boundary. Enrol together with apps/extension/src/entrypoints.",
     unit: "apps/extension/src/entrypoints/popup",
   },

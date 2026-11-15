@@ -18,6 +18,16 @@ import { parseControllableUrl } from "./origin-policy";
 
 const TARGET = "stella-shown-pdf-reader";
 
+/** The port the worker opens to the offscreen document for one request. */
+export const SHOWN_PDF_READER_PORT = "stella-shown-pdf-reader";
+
+/** A message's sender, as far as the reader's check reads it. */
+type ReaderSender = {
+  readonly id?: string;
+  readonly origin?: string;
+  readonly tab?: object;
+};
+
 const STOP = BROWSER_DOWNLOAD_STOP_REASON;
 
 /** What a read gives back to the worker. */
@@ -75,7 +85,7 @@ type ShownPdfReaderRequest = v.InferOutput<typeof readerRequestSchema>;
  * a tab, beside a page.
  */
 const fromExtensionContext = (
-  sender: Pick<chrome.runtime.MessageSender, "id" | "origin" | "tab">,
+  sender: ReaderSender,
   extensionId: string,
 ): boolean =>
   sender.id === extensionId &&
@@ -92,11 +102,15 @@ const fromExtensionContext = (
  */
 export const takeShownPdfReaderRequest = (
   message: unknown,
-  sender: Pick<chrome.runtime.MessageSender, "id" | "origin" | "tab">,
+  sender: ReaderSender | undefined,
   extensionId: string,
 ): ShownPdfReaderRequest | null => {
   const parsed = v.safeParse(readerRequestSchema, message);
-  if (!parsed.success || !fromExtensionContext(sender, extensionId)) {
+  if (
+    !parsed.success ||
+    sender === undefined ||
+    !fromExtensionContext(sender, extensionId)
+  ) {
     return null;
   }
   const request = parsed.output;
@@ -199,26 +213,39 @@ const ensureOffscreenDocument = async (): Promise<void> => {
   await creating;
 };
 
-/** The worker's reader: the offscreen document, over runtime messages. */
+/**
+ * Sends one request to the offscreen document over a port of its own and
+ * resolves with the first answer, or undefined once the document closes
+ * the port without one.
+ */
+const askReader = async (request: ShownPdfReaderRequest): Promise<unknown> => {
+  await ensureOffscreenDocument();
+  return await new Promise<unknown>((resolve) => {
+    const port = chrome.runtime.connect({ name: SHOWN_PDF_READER_PORT });
+    port.onMessage.addListener((answer: unknown) => {
+      resolve(answer);
+      port.disconnect();
+    });
+    port.onDisconnect.addListener(() => {
+      resolve(undefined);
+    });
+    port.postMessage(request);
+  });
+};
+
+/** The worker's reader: the offscreen document, over a port per request. */
 export const offscreenShownPdfReader: ShownPdfReader = {
   read: async (url, maxBytes) => {
-    await ensureOffscreenDocument();
-    const answer: unknown = await chrome.runtime.sendMessage({
+    const answer = await askReader({
       maxBytes,
       target: TARGET,
       type: "read",
       url,
-    } satisfies ShownPdfReaderRequest);
+    });
     const parsed = v.safeParse(shownPdfReadSchema, answer);
     return parsed.success ? parsed.output : refusedRead(STOP.interrupted);
   },
   release: async (downloadUrl) => {
-    await chrome.runtime
-      .sendMessage({
-        downloadUrl,
-        target: TARGET,
-        type: "release",
-      } satisfies ShownPdfReaderRequest)
-      .catch(() => undefined);
+    await askReader({ downloadUrl, target: TARGET, type: "release" });
   },
 };

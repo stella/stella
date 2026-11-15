@@ -161,18 +161,26 @@ test("the shown PDF reader in Chrome answers the worker and never reads an addre
             url: "offscreen.html",
           });
         }
-        // A message the reader leaves unanswered ends without a value, or
-        // with Chrome's error that nothing answered.
-        const answer: unknown = await chrome.runtime
-          .sendMessage({
+        // One request over a port of its own, as the worker's reader asks;
+        // a request the reader refuses closes the port unanswered.
+        return await new Promise<unknown>((resolve) => {
+          const port = chrome.runtime.connect({
+            name: "stella-shown-pdf-reader",
+          });
+          port.onMessage.addListener((answer: unknown) => {
+            resolve(answer);
+            port.disconnect();
+          });
+          port.onDisconnect.addListener(() => {
+            resolve("unanswered");
+          });
+          port.postMessage({
             maxBytes: 1024,
             target: "stella-shown-pdf-reader",
             type: "read",
             url: address,
-          })
-          // swallow-ok: an unanswered message rejects; the test asserts that outcome as "unanswered"
-          .catch(() => undefined);
-        return answer ?? "unanswered";
+          });
+        });
       }, url);
 
     // The worker is answered: this public address resolves nowhere here,
