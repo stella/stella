@@ -12,6 +12,7 @@ import {
   createMembershipScopedDb,
   createSafeDb,
   createScopedDb,
+  TRANSACTION_DEADLINE,
 } from "@/api/db/scoped";
 import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
@@ -714,6 +715,7 @@ export const resolveMcpSessionContext = async (
     organizationId,
     serverValidatedWorkspaceIds: [],
     userId,
+    deadline: TRANSACTION_DEADLINE.request,
   });
   const accessibleWorkspaces = await loadAccessibleMcpWorkspaces({
     organizationId,
@@ -761,6 +763,7 @@ export const resolveMcpSessionContext = async (
       organizationId,
       serverValidatedWorkspaceIds,
       userId,
+      deadline: TRANSACTION_DEADLINE.request,
     };
     return {
       pinServerValidatedWorkspaceId,

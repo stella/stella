@@ -1,16 +1,29 @@
 import { Result, UnhandledException } from "better-result";
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
-import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
+import {
+  createSafeDb,
+  markRlsDatabase,
+  reportOverDeadline,
+  setScopedTransactionSettings,
+  TRANSACTION_DEADLINE,
+  TRANSACTION_DEADLINE_MODE,
+} from "@/api/db/scoped";
+import type { TransactionDeadline } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   DatabaseError,
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields } from "@/api/lib/errors/utils";
+import { logger } from "@/api/lib/observability/logger";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
  * A transaction that fails before its callback runs.
@@ -110,5 +123,81 @@ describe("createSafeDb failure classification", () => {
     const error = await failedTransaction(new Error("not a database failure"));
 
     expect(UnhandledException.is(error)).toBe(true);
+  });
+});
+
+type SettingsTransaction = Parameters<
+  typeof setScopedTransactionSettings
+>[0]["tx"];
+
+describe("scoped transaction deadline", () => {
+  const dialect = new PgDialect();
+  /** A transaction that records the settings statements it is sent. */
+  const recordingTransaction = () => {
+    const statements: string[] = [];
+    const tx = {
+      execute: async (query: SQL) => {
+        statements.push(dialect.sqlToQuery(query).sql);
+        return await Promise.resolve([]);
+      },
+    };
+    return { statements, tx: asTestRaw<SettingsTransaction>(tx) };
+  };
+  const settingsFor = async (deadline?: TransactionDeadline) => {
+    const { statements, tx } = recordingTransaction();
+    await setScopedTransactionSettings({
+      tx,
+      organizationId: mintAuthProviderId<"organization">(),
+      userId: mintAuthProviderId<"user">(),
+      workspaceScope: {
+        type: WORKSPACE_ACCESS_MODE.explicit,
+        workspaceIds: [createSafeId<"workspace">()],
+      },
+      featureIds: [],
+      ...(deadline === undefined ? {} : { deadline }),
+    });
+    return statements;
+  };
+
+  const enforced: TransactionDeadline = {
+    timeoutMs: TRANSACTION_DEADLINE.request.timeoutMs,
+    mode: TRANSACTION_DEADLINE_MODE.enforce,
+  };
+
+  it("sets an enforced deadline in the same statement as its scope", async () => {
+    const statements = await settingsFor(enforced);
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toContain("set_config('role'");
+    expect(statements[0]).toContain("set_config('transaction_timeout'");
+  });
+
+  it("only observes a request's deadline, and sets none for background work", async () => {
+    for (const deadline of [TRANSACTION_DEADLINE.request, undefined]) {
+      const statements = await settingsFor(deadline);
+      expect(statements.join("\n")).not.toContain("transaction_timeout");
+    }
+  });
+
+  it("reports a transaction that ran past its deadline, and nothing else", () => {
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    try {
+      const { timeoutMs } = TRANSACTION_DEADLINE.request;
+      reportOverDeadline({ deadline: undefined, elapsedMs: timeoutMs * 2 });
+      reportOverDeadline({
+        deadline: TRANSACTION_DEADLINE.request,
+        elapsedMs: timeoutMs,
+      });
+      expect(warn).not.toHaveBeenCalled();
+      reportOverDeadline({
+        deadline: TRANSACTION_DEADLINE.request,
+        elapsedMs: timeoutMs + 1,
+      });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toBe(
+        "database.transaction_over_deadline",
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

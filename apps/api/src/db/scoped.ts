@@ -27,6 +27,8 @@ import {
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { logger } from "@/api/lib/observability/logger";
+import { getMountedRequestRoute } from "@/api/lib/observability/request-context";
 import {
   getPgDriverErrorCode,
   getPgErrorCode,
@@ -90,6 +92,28 @@ export type WorkspaceScope =
       serverValidatedWorkspaceIds: readonly SafeId<"workspace">[];
     };
 
+/**
+ * The deadline a whole transaction runs under. `statement_timeout` restarts
+ * with every statement; an enforced deadline sets `transaction_timeout`, which
+ * bounds the run of them (past it the server ends the session). An observed
+ * deadline only reports a transaction that ran past it, so the cases that run
+ * long legitimately are known before it is enforced. The transaction that
+ * opens the scope owns the deadline: savepoints and nested scopes inherit it
+ * and cannot set another.
+ */
+export const TRANSACTION_DEADLINE_MODE = {
+  observe: "observe",
+  enforce: "enforce",
+} as const;
+export type TransactionDeadline = {
+  timeoutMs: number;
+  mode: (typeof TRANSACTION_DEADLINE_MODE)[keyof typeof TRANSACTION_DEADLINE_MODE];
+};
+export const TRANSACTION_DEADLINE = {
+  /** A request's transaction: observed until its long cases are measured. */
+  request: { timeoutMs: 30_000, mode: TRANSACTION_DEADLINE_MODE.observe },
+} as const satisfies Record<"request", TransactionDeadline>;
+
 type RunScopedTransactionOptions<
   TTransaction extends ScopedTransactionBase,
   T,
@@ -100,6 +124,8 @@ type RunScopedTransactionOptions<
   userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
+  /** Omitted for background work, which runs under the pool's statement bound only. */
+  deadline?: TransactionDeadline | undefined;
 };
 
 type SetScopedTransactionSettingsOptions = {
@@ -108,6 +134,8 @@ type SetScopedTransactionSettingsOptions = {
   userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
   featureIds: readonly string[];
+  /** Set only by the transaction that opens the scope. */
+  deadline?: TransactionDeadline | undefined;
 };
 
 const workspaceIdsSetting = (workspaceScope: WorkspaceScope): string => {
@@ -125,6 +153,7 @@ export const setScopedTransactionSettings = async ({
   userId,
   workspaceScope,
   featureIds,
+  deadline,
 }: SetScopedTransactionSettingsOptions): Promise<void> => {
   const wsIds = workspaceIdsSetting(workspaceScope);
   if (userId === null) {
@@ -149,7 +178,12 @@ export const setScopedTransactionSettings = async ({
       set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
       set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
       set_config('${sql.raw(SETTING_USER_ID)}', ${userId ?? ""}, true),
-      set_config('app.enabled_features', ${JSON.stringify(featureIds)}, true)`,
+      set_config('app.enabled_features', ${JSON.stringify(featureIds)}, true)${
+        deadline?.mode !== TRANSACTION_DEADLINE_MODE.enforce
+          ? sql``
+          : sql`,
+      set_config('transaction_timeout', ${`${String(deadline.timeoutMs)}ms`}, true)`
+      }`,
   );
 };
 
@@ -237,6 +271,54 @@ const runScopedTransaction = async <
   userId,
   workspaceScope,
   featureAccessSnapshot,
+  deadline,
+}: RunScopedTransactionOptions<TTransaction, T>): Promise<T> => {
+  const startedAt = performance.now();
+  try {
+    return await openScopedTransaction({
+      database,
+      fn,
+      organizationId,
+      userId,
+      workspaceScope,
+      featureAccessSnapshot,
+      deadline,
+    });
+  } finally {
+    reportOverDeadline({ deadline, elapsedMs: performance.now() - startedAt });
+  }
+};
+
+/** Report a request transaction that ran past its deadline, whatever its outcome. */
+export const reportOverDeadline = ({
+  deadline,
+  elapsedMs,
+}: {
+  deadline: TransactionDeadline | undefined;
+  elapsedMs: number;
+}): void => {
+  if (deadline === undefined || elapsedMs <= deadline.timeoutMs) {
+    return;
+  }
+  logger.warn("database.transaction_over_deadline", {
+    "http.route": getMountedRequestRoute() ?? "unmounted",
+    "db.transaction.duration_ms": Math.round(elapsedMs),
+    "db.transaction.deadline_ms": deadline.timeoutMs,
+    "db.transaction.deadline_mode": deadline.mode,
+  });
+};
+
+const openScopedTransaction = async <
+  TTransaction extends ScopedTransactionBase,
+  T,
+>({
+  database,
+  fn,
+  organizationId,
+  userId,
+  workspaceScope,
+  featureAccessSnapshot,
+  deadline,
 }: RunScopedTransactionOptions<TTransaction, T>): Promise<T> =>
   await database.transaction(async (tx: TTransaction) => {
     if (
@@ -258,6 +340,7 @@ const runScopedTransaction = async <
       userId,
       workspaceScope,
       featureIds,
+      deadline,
     });
 
     return await fn(tx);
@@ -312,6 +395,8 @@ type MembershipScopedDbOptions = {
    */
   serverValidatedWorkspaceIds: readonly SafeId<"workspace">[];
   userId: SafeId<"user">;
+  /** A request scope passes `TRANSACTION_DEADLINE.request`; background work none. */
+  deadline?: TransactionDeadline | undefined;
 };
 
 /**
@@ -326,6 +411,7 @@ export const createMembershipScopedDb =
       serverValidatedWorkspaceIds,
       userId,
       featureAccessSnapshot,
+      deadline,
     }: MembershipScopedDbOptions,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
@@ -338,6 +424,7 @@ export const createMembershipScopedDb =
       organizationId,
       userId,
       featureAccessSnapshot,
+      deadline,
       fn,
     });
 
@@ -489,6 +576,7 @@ export const createMembershipSafeDb =
       serverValidatedWorkspaceIds,
       userId,
       featureAccessSnapshot,
+      deadline,
     }: MembershipScopedDbOptions,
   ) =>
   async <T>(
@@ -507,6 +595,7 @@ export const createMembershipSafeDb =
             organizationId,
             userId,
             featureAccessSnapshot,
+            deadline,
             fn,
           }),
         catch: toSafeDbError,

@@ -65,6 +65,7 @@ import {
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
+  TRANSACTION_DEADLINE,
 } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -4022,6 +4023,7 @@ export const resolveValidateAuth = async ({
     organizationId: activeOrganizationId,
     serverValidatedWorkspaceIds,
     userId,
+    deadline: TRANSACTION_DEADLINE.request,
   };
   const { scopedDb, safeDb } = createAuthDatabases(databaseIdentity);
 
