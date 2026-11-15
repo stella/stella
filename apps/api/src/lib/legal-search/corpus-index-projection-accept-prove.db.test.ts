@@ -388,6 +388,7 @@ const REPEATED_PROOF = {
   already_applied: "already_applied",
   stale_cleanup_pending: "not_accepted",
   unproven_cleanup_pending: "not_accepted",
+  withdrawn: "not_accepted",
   blocked: "not_accepted",
   awaiting_publication: "awaiting_publication",
   not_accepted: "not_accepted",

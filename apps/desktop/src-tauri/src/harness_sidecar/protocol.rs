@@ -14,11 +14,11 @@ use serde_json::Value;
 
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessCapability, JsonObject, McpBinding,
-  ReasoningEffort, RunAnswer, RunApproval, RunAttachment, RunOutcome, RunPolicy,
-  RunRef, RunTokenRefresh,
+  ReasoningEffort, RunAnswer, RunApproval, RunAttachment, RunInput, RunOutcome,
+  RunPolicy, RunRef, RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 6;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 7;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.
@@ -221,7 +221,7 @@ pub(crate) struct SidecarRunStart {
   pub(crate) reasoning_effort: Option<ReasoningEffort>,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
-  pub(crate) harness_session_id: Option<String>,
+  pub(crate) session: SidecarRunSession,
   /// Files to copy into `workspace_dir` before the harness starts.
   pub(crate) attachments: Vec<RunAttachment>,
   /// The skill folders listed on this computer; never known to the API.
@@ -230,6 +230,24 @@ pub(crate) struct SidecarRunStart {
   pub(crate) tool_path: Vec<String>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
+}
+
+/// The native session a run's turn continues: none, the session whole, or a
+/// new session holding what it held through `boundary`, which leaves the
+/// session itself as it was.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub(crate) enum SidecarRunSession {
+  Fresh,
+  #[serde(rename_all = "camelCase")]
+  Resume {
+    session_id: String,
+  },
+  #[serde(rename_all = "camelCase")]
+  Fork {
+    session_id: String,
+    boundary: String,
+  },
 }
 
 /// Put a run's folder back as it was before the run, from the checkpoint the
@@ -252,6 +270,10 @@ pub(crate) enum HostMessage {
   HarnessProbe(HarnessProbe),
   #[serde(rename = "run.start")]
   RunStart(Box<SidecarRunStart>),
+  /// A user message for the run's running turn; the holder answers with a
+  /// `stella.run-input` chunk on the run's stream.
+  #[serde(rename = "run.input")]
+  RunInput(RunInput),
   #[serde(rename = "run.approval")]
   RunApproval(RunApproval),
   #[serde(rename = "run.answer")]
@@ -282,6 +304,7 @@ impl HostMessage {
     "hello",
     "harness.probe",
     "run.start",
+    "run.input",
     "run.approval",
     "run.answer",
     "run.interrupt",
@@ -419,6 +442,8 @@ pub(crate) struct SidecarRunFinished {
   pub(crate) seq: NonZeroU32,
   pub(crate) outcome: RunOutcome,
   pub(crate) harness_session_id: Option<String>,
+  /// Where a completed turn ended in that session; `None` otherwise.
+  pub(crate) harness_boundary: Option<String>,
 }
 
 /// The answer to a folder restore; it names no file.

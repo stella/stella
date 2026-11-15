@@ -14,6 +14,7 @@ const productionManifest = {
     "activeTab",
     "alarms",
     "declarativeNetRequest",
+    "offscreen",
     "scripting",
     "storage",
   ],

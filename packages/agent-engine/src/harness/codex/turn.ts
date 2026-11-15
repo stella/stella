@@ -10,10 +10,12 @@ import {
 import type {
   HarnessInteractionResponse,
   HarnessRespondError,
+  HarnessSteerInput,
   HarnessTurn,
 } from "../adapter";
 import {
   type HarnessApprovalOption,
+  harnessBoundary,
   harnessContextUsage,
   type HarnessContinuation,
   type HarnessEvent,
@@ -74,6 +76,7 @@ import {
   isCodexServerRequestMethod,
   METHOD_NOT_FOUND,
   TurnStartResponseSchema,
+  TurnSteerResponseSchema,
 } from "./protocol";
 import { readRateLimits } from "./rate-limits";
 
@@ -430,8 +433,41 @@ export class CodexTurnSession {
   turn(): HarnessTurn {
     return this.lifecycle.turn({
       respond: (response) => this.respond(response),
+      steer: (input) => {
+        this.steer(input);
+      },
       interrupt: async () => this.interrupt(),
     });
+  }
+
+  /**
+   * Add the message to the running native turn. Between a capacity failure
+   * and its continuation no turn runs, so nothing can take it then.
+   */
+  private steer({ inputId, text }: HarnessSteerInput) {
+    const client = this.client;
+    const { threadId, turnId } = this;
+    if (client === null || threadId === null || turnId === null) {
+      this.lifecycle.settleInput(inputId, "rejected");
+      return;
+    }
+    // Settled as the answer is read: what the server writes after it,
+    // the turn's end included, comes after the message joined the turn.
+    const steered = client.request(
+      "turn/steer",
+      {
+        threadId,
+        expectedTurnId: turnId,
+        input: [{ type: "text", text, text_elements: [] }],
+      },
+      (answer) => {
+        const taken =
+          Result.isOk(answer) &&
+          v.safeParse(TurnSteerResponseSchema, answer.value).success;
+        this.lifecycle.settleInput(inputId, taken ? "accepted" : "rejected");
+      },
+    );
+    this.detached(steered, "codex-turn.steer");
   }
 
   private emit(event: HarnessEvent) {
@@ -569,7 +605,13 @@ export class CodexTurnSession {
     const { turn } = parsed;
     switch (turn.status) {
       case "completed":
-        this.emit({ type: "turn.completed", usage: this.usage });
+        // The thread holds every earlier continuation of this turn before
+        // this one, so the turn's end is this native turn's id.
+        this.emit({
+          type: "turn.completed",
+          usage: this.usage,
+          boundary: harnessBoundary(turn.id),
+        });
         return;
       case "interrupted":
         this.emit({ type: "turn.interrupted" });

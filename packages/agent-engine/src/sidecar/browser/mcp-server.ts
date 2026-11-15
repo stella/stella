@@ -10,11 +10,8 @@ import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runne
 
 import { LOCAL_BROWSER_MCP_SERVER_NAME } from "../../harness/tool-parts";
 import type { StellaSandboxMcpBinding } from "../../sandbox";
-import type { BrowserBridge, BrowserBridgeDownload } from "./bridge";
-import {
-  type BrowserDownloadOutcome,
-  receiveBrowserDownload,
-} from "./downloads";
+import type { BrowserBridge } from "./bridge";
+import { createDownloadInbox, type TakenDownloads } from "./download-inbox";
 import type { HostRouter } from "./host-router";
 import {
   type ApproveAction,
@@ -294,69 +291,6 @@ const createEndpoints = (chatGone: (threadId: string) => void) => {
 
 type LocalBrowserSession = ReturnType<typeof createLocalBrowserSession>;
 
-/** Downloads one chat keeps for its next browser result; older ones go first. */
-const MAX_HELD_DOWNLOADS = 16;
-
-type HeldDownload =
-  | { type: "saving"; outcome: Promise<BrowserDownloadOutcome> }
-  | { type: "waiting"; download: BrowserBridgeDownload["download"] };
-
-/**
- * Each chat's downloads until a browser result of the chat reports them.
- * One that arrives while a run of the chat is held is saved into that run's
- * folder at once; one that arrives between runs waits for the next run's
- * folder.
- */
-const createDownloadInbox = (
-  runOf: (threadId: string) => BrowserMcpRun | null,
-  /** The member's home folder: Chrome saves downloads under it. */
-  home: string,
-) => {
-  const chats = new Map<string, HeldDownload[]>();
-  const receive = async (
-    download: BrowserBridgeDownload["download"],
-    run: BrowserMcpRun,
-  ) =>
-    await receiveBrowserDownload(download, {
-      home,
-      workspaceDir: run.workspaceDir,
-    });
-  return {
-    arrive: ({ controllerId, download }: BrowserBridgeDownload) => {
-      const run = runOf(controllerId);
-      const held: HeldDownload =
-        run === null
-          ? { download, type: "waiting" }
-          : { outcome: receive(download, run), type: "saving" };
-      chats.set(
-        controllerId,
-        [...(chats.get(controllerId) ?? []), held].slice(-MAX_HELD_DOWNLOADS),
-      );
-    },
-    /** The chat's downloads so far, saved into `run`'s folder; reported once. */
-    take: async (run: BrowserMcpRun): Promise<BrowserDownloadOutcome[]> => {
-      const held = chats.get(run.threadId) ?? [];
-      chats.delete(run.threadId);
-      return await Promise.all(
-        held.map(async (entry) => {
-          switch (entry.type) {
-            case "saving":
-              return await entry.outcome;
-            case "waiting":
-              return await receive(entry.download, run);
-            default:
-              entry satisfies never;
-              return panic("Unhandled held download");
-          }
-        }),
-      );
-    },
-    clear: () => {
-      chats.clear();
-    },
-  };
-};
-
 /** The inbox the extension's downloads arrive in; none without the extension. */
 const downloadInboxFor = (
   source: LocalBrowserMcpOptions["downloads"],
@@ -365,9 +299,17 @@ const downloadInboxFor = (
   if (source === null) {
     return null;
   }
-  const inbox = createDownloadInbox(runOf, source.home);
+  const inbox = createDownloadInbox({ home: source.home, runOf });
   source.onDownload(inbox.arrive);
   return inbox;
+};
+
+/** What a step reports without the extension: no download can arrive. */
+const NOTHING_DOWNLOADED: TakenDownloads = {
+  downloads: [],
+  saving: 0,
+  shown: null,
+  shownSaving: false,
 };
 
 /** A chat's page state, kept while any run of the chat is held. */
@@ -463,6 +405,8 @@ export const startLocalBrowserMcp = ({
           );
         }
         const { arguments: input, name } = params.output;
+        // Downloads announced from here on are this step's own.
+        const since = downloads?.mark() ?? 0;
         const result = await whileCalling(
           { id, requestSignal, serving },
           async (signal) =>
@@ -470,8 +414,10 @@ export const startLocalBrowserMcp = ({
               acts: browser.actsFor(held.threadId),
               approvals: held.approvals,
               approve: held.approve,
-              downloads: async () =>
-                downloads === null ? [] : await downloads.take(held),
+              downloads: async (shownAddress) =>
+                downloads === null
+                  ? NOTHING_DOWNLOADED
+                  : await downloads.take(held, { shownAddress, signal, since }),
               signal,
               send: async (command, observedTab) =>
                 await browser.request(
@@ -568,6 +514,7 @@ export const startLocalBrowserMcp = ({
       return null;
     }
     browser.cancel({ controllerId: ended.held.threadId, turnId: runId });
+    downloads?.forgetRun(runId);
     if (!endpoints.servesThread(ended.held.threadId)) {
       sessions.delete(ended.held.threadId);
     }

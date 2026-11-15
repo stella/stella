@@ -302,13 +302,24 @@ export const DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS = [
   "probe_failed",
 ] as const;
 
-/** What a ready harness reports it can do; the API never assumes more. */
+/**
+ * What a ready harness reports it can do; the API never assumes more.
+ * `steer`: a running turn takes a user message (`run.input`) and goes on with
+ * it, instead of being stopped and started again.
+ * `fork`: a run continues a session from a boundary an earlier run reported
+ * (`run.start.harnessForkBoundary`) as a new session, leaving that one as it
+ * was.
+ */
 export const DESKTOP_RUNNER_HARNESS_CAPABILITIES = [
   "approvals",
   "interrupt",
   "resume",
   "image_input",
+  "steer",
+  "fork",
 ] as const;
+export type DesktopRunnerHarnessCapability =
+  (typeof DESKTOP_RUNNER_HARNESS_CAPABILITIES)[number];
 
 /**
  * Why a desktop refused a run command. `harness_unavailable` matches a harness
@@ -387,6 +398,22 @@ export const DESKTOP_RUNNER_RUN_OUTCOMES = [
   "limit_reached",
   "needs_login",
 ] as const;
+type DesktopRunnerRunOutcome = (typeof DESKTOP_RUNNER_RUN_OUTCOMES)[number];
+const DESKTOP_RUNNER_RUN_OUTCOME = {
+  completed: "completed",
+  interrupted: "interrupted",
+  cancelled: "cancelled",
+  failed: "failed",
+  limit_reached: "limit_reached",
+  needs_login: "needs_login",
+} as const satisfies Record<DesktopRunnerRunOutcome, DesktopRunnerRunOutcome>;
+
+/** The outcomes of a run whose turn did not complete. */
+const DESKTOP_RUNNER_UNCOMPLETED_RUN_OUTCOMES =
+  DESKTOP_RUNNER_RUN_OUTCOMES.filter(
+    (outcome): outcome is Exclude<DesktopRunnerRunOutcome, "completed"> =>
+      outcome !== DESKTOP_RUNNER_RUN_OUTCOME.completed,
+  );
 
 /**
  * A local run's sandbox. The network is open and file writes stay inside the
@@ -498,6 +525,22 @@ const instantSchema = v.pipe(
 const harnessSchema = v.picklist(AGENT_HARNESSES);
 const harnessSessionIdSchema = v.nullable(
   v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+);
+
+/** Longest harness boundary either side carries. */
+export const DESKTOP_RUNNER_MAX_HARNESS_BOUNDARY_LENGTH = 256;
+
+/**
+ * Where a completed turn ended in its harness session, as the harness names
+ * it: a Codex turn id, or the uuid of a Claude Code session's last assistant
+ * message. A later run may continue the session from there as a new one.
+ * Never starts with `-`, so a harness never reads it as a flag.
+ */
+export const harnessBoundarySchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_RUNNER_MAX_HARNESS_BOUNDARY_LENGTH),
+  v.regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u),
 );
 const modelIdSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
 /** Longest MCP token a run message carries. */
@@ -709,6 +752,29 @@ const outputFileNameSchema = v.pipe(
   v.maxLength(255),
 );
 
+/**
+ * The CUSTOM chunk a desktop reports what became of one `run.input` with, at
+ * the point in the run where it happened: `accepted` once the harness took
+ * the message into the running turn, `rejected` when it did not (no turn
+ * running, the turn already ending, a harness that takes none). Every input a
+ * desktop forwards gets exactly one, before the run's finish. It names the
+ * input only; the text stays the API's own, in its `run.input`.
+ */
+export const DESKTOP_RUNNER_INPUT_EVENT = "stella.run-input";
+
+export const DESKTOP_RUNNER_INPUT_STATUSES = ["accepted", "rejected"] as const;
+
+export const desktopRunnerInputEventSchema = v.strictObject({
+  inputId: v.pipe(v.string(), v.uuid()),
+  status: v.picklist(DESKTOP_RUNNER_INPUT_STATUSES),
+});
+export type DesktopRunnerInputEvent = v.InferOutput<
+  typeof desktopRunnerInputEventSchema
+>;
+
+/** Longest message one `run.input` steers a running turn with. */
+export const DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH = 65_536;
+
 export const desktopRunnerOutputEventSchema = v.variant("status", [
   v.strictObject({
     status: v.literal("uploaded"),
@@ -850,14 +916,30 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
       ),
     ),
   }),
-  v.object({
-    type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished),
-    runId: runIdSchema,
-    seq: seqSchema,
-    outcome: v.picklist(DESKTOP_RUNNER_RUN_OUTCOMES),
-    /** The harness session a later run resumes; `null` if none started. */
-    harnessSessionId: harnessSessionIdSchema,
-  }),
+  /**
+   * Only a completed run names where its turn ended in the session
+   * (`harnessBoundary`); `null` when the harness named none, and absent from
+   * a desktop from before boundaries existed.
+   */
+  v.variant("outcome", [
+    v.object({
+      type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished),
+      runId: runIdSchema,
+      seq: seqSchema,
+      outcome: v.literal(DESKTOP_RUNNER_RUN_OUTCOME.completed),
+      /** The harness session a later run resumes; `null` if none started. */
+      harnessSessionId: harnessSessionIdSchema,
+      harnessBoundary: v.optional(v.nullable(harnessBoundarySchema), null),
+    }),
+    v.object({
+      type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished),
+      runId: runIdSchema,
+      seq: seqSchema,
+      outcome: v.picklist(DESKTOP_RUNNER_UNCOMPLETED_RUN_OUTCOMES),
+      harnessSessionId: harnessSessionIdSchema,
+      harnessBoundary: v.optional(v.null(), null),
+    }),
+  ]),
   /** How a `folder.restore` ended; it names no file. */
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored),
@@ -936,6 +1018,14 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     reasoningEffort: v.optional(v.nullable(reasoningEffortSchema), null),
     /** The session to resume, from an earlier run's `run.finished`. */
     harnessSessionId: harnessSessionIdSchema,
+    /**
+     * Set only with `harnessSessionId`, and only for a harness that reports
+     * `fork`: the run continues that session as a new one holding what it
+     * held through this boundary (an earlier run's `harnessBoundary`), and
+     * the session itself stays as it was. `null` resumes it whole; a
+     * command queued before the field existed reads as that.
+     */
+    harnessForkBoundary: v.optional(v.nullable(harnessBoundarySchema), null),
     instructions: v.pipe(v.string(), v.maxLength(65_536)),
     messages: v.pipe(
       v.array(modelMessageSchema),
@@ -958,11 +1048,23 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
       expiresAt: instantSchema,
     }),
   }),
+  /**
+   * A user message for the run's running turn, sent only to a harness that
+   * reports `steer`; its content is the message's text. The desktop answers
+   * with a `DESKTOP_RUNNER_INPUT_EVENT` chunk on the run's stream.
+   */
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runInput),
     runId: runIdSchema,
     inputId: v.pipe(v.string(), v.uuid()),
-    message: v.looseObject({ role: v.literal("user") }),
+    message: v.looseObject({
+      role: v.literal("user"),
+      content: v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH),
+      ),
+    }),
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runApproval),
