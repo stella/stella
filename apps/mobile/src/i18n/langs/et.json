@@ -17,6 +17,7 @@
     "loadFailed": "Teie vestlusi ei õnnestunud laadida.",
     "runsLoadFailed": "Ei õnnestunud kontrollida, millised vestlused teid ootavad.",
     "retry": "Proovi uuesti",
+    "resend": "Saada uuesti",
     "untitled": "Pealkirjata vestlus",
     "loadMoreFailed": "Laadi veel",
     "loadOlderFailed": "Laadi varasemad sõnumid",

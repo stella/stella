@@ -17,6 +17,7 @@
     "loadFailed": "No se pudieron cargar sus conversaciones.",
     "runsLoadFailed": "No se pudo comprobar qué conversaciones esperan su respuesta.",
     "retry": "Reintentar",
+    "resend": "Reenviar",
     "untitled": "Conversación sin título",
     "loadMoreFailed": "Cargar más",
     "loadOlderFailed": "Cargar mensajes anteriores",

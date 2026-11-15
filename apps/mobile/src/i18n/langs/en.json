@@ -17,6 +17,7 @@
     "loadFailed": "Your conversations could not be loaded.",
     "runsLoadFailed": "Could not check which conversations are waiting for you.",
     "retry": "Try again",
+    "resend": "Resend",
     "untitled": "Untitled conversation",
     "loadMoreFailed": "Load more",
     "loadOlderFailed": "Load earlier messages",

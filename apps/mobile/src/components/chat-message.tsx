@@ -113,7 +113,7 @@ const FailedAnswer = ({
       <Text variant="error">{t(`failure.${CHAT_FAILURE_KEYS[failure]}`)}</Text>
       {onRetry === undefined ? null : (
         <Button onPress={onRetry} variant="outline">
-          {t("retry")}
+          {t("resend")}
         </Button>
       )}
     </View>

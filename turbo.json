@@ -1893,6 +1893,8 @@
         // The phone draws the web's recorded chats and its step titles.
         "$TURBO_ROOT$/apps/web/src/components/chat/__fixtures__/recorded-conversations/**",
         "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
+        // And gives each failed turn the reason the web's map names.
+        "$TURBO_ROOT$/apps/web/src/lib/errors/ai-failure.ts",
         "$TURBO_ROOT$/packages/ui/src/**"
       ]
     },
