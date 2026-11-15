@@ -575,8 +575,16 @@ type StartCorpusProjectionOfflineRequestChunkOptions = {
  */
 export const startCorpusProjectionOfflineRequestChunkTx = async (
   tx: Transaction,
-  { request, leases, testNow }: StartCorpusProjectionOfflineRequestChunkOptions,
+  {
+    request: given,
+    leases,
+    testNow,
+  }: StartCorpusProjectionOfflineRequestChunkOptions,
 ): Promise<AppendStartTransaction> => {
+  // One spelling per request: PostgreSQL compares uuids by value, but the
+  // request lock hashes the text, so every transaction of a request must
+  // pass the same text whatever case its caller wrote.
+  const request = { ...given, requestId: given.requestId.toLowerCase() };
   const first = leases.at(0)?.lease;
   if (
     first === undefined ||

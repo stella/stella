@@ -32,6 +32,7 @@ ALTER TABLE "corpus_index_projection_intents"
       WHEN 'offline_indexer' THEN
         "append_started_at" IS NOT NULL
         AND "append_request_id" IS NOT NULL
+        AND "append_request_revision_count" IS NOT NULL
         AND "append_request_revision_count" BETWEEN 1 AND 8192
         AND "expected_document_count" IS NOT NULL
         AND ("append_committed_at" IS NULL OR "append_publish_barrier_at" IS NOT NULL)

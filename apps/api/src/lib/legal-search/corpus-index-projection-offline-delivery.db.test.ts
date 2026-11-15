@@ -1526,12 +1526,13 @@ describe("offline request caps", () => {
         `)
       ).rows;
     // The lock is taken before the earlier starts are counted, so a second
-    // transaction of the request waits for this one and counts its rows.
+    // transaction of the request waits for this one and counts its rows. It
+    // is the same lock however the caller spells the request's identity.
     const held = await db.transaction(async (tx) => {
       await startCorpusProjectionOfflineRequestChunkTx(
         asTestRaw<Transaction>(tx),
         {
-          request,
+          request: { ...request, requestId: request.requestId.toUpperCase() },
           leases: counts.slice(0, MODEL_START_CHUNK),
           testNow: startedAt,
         },
@@ -2013,5 +2014,21 @@ describe("offline delivery guards", () => {
         `),
       ),
     ).toContain("corpus_index_projection_intents_append_delivery_shape");
+    // Nor is one without its request's planned total.
+    const offlineStart = (total: ReturnType<typeof sql>) => sql`
+      UPDATE corpus_index_projection_intents
+      SET status = 'append_started', append_started_at = clock_timestamp(),
+          append_delivery = 'offline_indexer',
+          append_request_id = ${Bun.randomUUIDv7()}::uuid,
+          expected_document_count = 1,
+          append_request_revision_count = ${total}
+      WHERE id = ${bare.intentId}
+    `;
+    expect(await rejected(db.execute(offlineStart(sql`NULL`)))).toContain(
+      "corpus_index_projection_intents_append_delivery_shape",
+    );
+    expect(await rejected(db.execute(offlineStart(sql`1`)))).toBe(
+      "no rejection",
+    );
   });
 });
