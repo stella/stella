@@ -166,7 +166,12 @@ type ClaimCorpusProjectionCleanupOptions<Family extends CorpusFamily> =
  *   separates it from the desired state and its content differs from what
  *   the state desires, so an erasure undone in between cannot be ruled out
  *   and the copy may be the pre-erasure one. Deleting it is the safe
- *   direction; the entity is appended anew.
+ *   direction; the entity is appended anew. It also takes a never-claimed
+ *   copy whose cleanup an earlier release's erasure or drift repair queued
+ *   (`last_error` set), even when an undo brought the desired content back
+ *   to exactly the copy's: `last_error` is what singles out preparation for
+ *   the restore, so that small class is deleted on purpose rather than
+ *   restored (see `corpusIndexProjectionRevisionIsRestorable`).
  */
 const CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS = [
   "unserved",

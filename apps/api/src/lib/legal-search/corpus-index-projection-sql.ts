@@ -121,7 +121,13 @@ type CorpusProjectionRestoreColumns = CorpusProjectionServedColumns & {
  *   - the desired fingerprint and index equal the revision's: the copy holds
  *     exactly what the state desires, whatever came in between.
  *
- * Anything else is not restored. The database guard on
+ * Anything else is not restored. That includes a revision with
+ * `last_error` set whose content equals the desired value (an earlier
+ * release's erasure fence or drift repair, followed by an undo back to the
+ * same content): the claim deletes it as `served_unproven` and the entity is
+ * appended anew after settlement. Restoring it would need `last_error` to
+ * stop singling out preparation, so the small class is left to the
+ * conservative direction on purpose. The database guard on
  * `cleanup_pending -> applied` repeats this predicate.
  */
 export const corpusIndexProjectionRevisionIsRestorable = ({
@@ -150,6 +156,51 @@ export const corpusIndexProjectionRevisionIsRestorable = ({
       AND ${desiredIndexId} = ${revisionIndexId}
     )
   )
+)`;
+
+type CorpusProjectionNamedCopyColumns = {
+  desiredAction: SQLWrapper;
+  appliedAction: SQLWrapper;
+  appliedRevision: SQLWrapper;
+  appliedEpoch: SQLWrapper;
+  desiredEpoch: SQLWrapper;
+  appliedFingerprint: SQLWrapper;
+  desiredFingerprint: SQLWrapper;
+  appliedIndexId: SQLWrapper;
+  desiredIndexId: SQLWrapper;
+};
+
+/**
+ * An upsert state names an upsert copy that two or more desired changes
+ * separate from the desired state, and the copy holds other content than the
+ * state desires. An erasure and its undo take two changes, so such a copy may
+ * be the pre-erasure one unless the writer that undid the erasure retired it,
+ * which only this release's writer does.
+ *
+ * The desired writer stops moving `desired_at` once a state is in this shape,
+ * so from then on it records when the copy fell this far behind and no later
+ * write (an epoch-only reconciliation, a ranking-signal re-projection, another
+ * content change) can move it past the legacy pass's cutover. The one-off
+ * pass (`retireLegacyUnprovenServedCopiesTx`) retires such a copy when that
+ * instant precedes the cutover. Both go together once the pass has run.
+ */
+export const corpusIndexProjectionNamedCopyTrailsTwoChanges = ({
+  desiredAction,
+  appliedAction,
+  appliedRevision,
+  appliedEpoch,
+  desiredEpoch,
+  appliedFingerprint,
+  desiredFingerprint,
+  appliedIndexId,
+  desiredIndexId,
+}: CorpusProjectionNamedCopyColumns) => sql`(
+  ${desiredAction} = 'upsert'
+  AND ${appliedAction} = 'upsert'
+  AND ${appliedRevision} IS NOT NULL
+  AND ${desiredEpoch} >= ${appliedEpoch} + 2
+  AND (${desiredFingerprint}, ${desiredIndexId})
+    IS DISTINCT FROM (${appliedFingerprint}, ${appliedIndexId})
 )`;
 
 /**

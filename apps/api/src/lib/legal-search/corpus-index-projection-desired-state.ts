@@ -46,6 +46,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import { corpusIndexProjectionNamedCopyTrailsTwoChanges } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
@@ -1038,6 +1039,23 @@ export const writeDesiredStates = async (
     return;
   }
   const undone = await readUndoneErasuresTx(tx, values);
+  const states = corpusIndexProjectionStates;
+  // Judged on the row before this write: once its named copy trails by two
+  // changes with other content, `desired_at` keeps the instant that happened,
+  // so the legacy pass can tell a copy an earlier release left behind from one
+  // this release's own writes moved past (see the predicate).
+  const namedCopyTrailsTwoChanges =
+    corpusIndexProjectionNamedCopyTrailsTwoChanges({
+      desiredAction: states.desiredAction,
+      appliedAction: states.appliedAction,
+      appliedRevision: states.appliedRevision,
+      appliedEpoch: states.appliedEpoch,
+      desiredEpoch: states.desiredEpoch,
+      appliedFingerprint: states.appliedFingerprint,
+      desiredFingerprint: states.desiredFingerprint,
+      appliedIndexId: states.appliedIndexId,
+      desiredIndexId: states.desiredIndexId,
+    });
   const desiredStateUnchanged = sql`(
     ${corpusIndexProjectionStates.desiredAction},
     ${corpusIndexProjectionStates.desiredEpoch},
@@ -1063,7 +1081,7 @@ export const writeDesiredStates = async (
         {
           desiredAction: sql`excluded.desired_action`,
           desiredEpoch: sql`excluded.desired_epoch`,
-          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
+          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} OR ${namedCopyTrailsTwoChanges} THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
           desiredFingerprint: sql`excluded.desired_fingerprint`,
           desiredIndexId: sql`excluded.desired_index_id`,
           workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
