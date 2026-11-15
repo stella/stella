@@ -78,7 +78,7 @@ export const readFileEndpoint = createSafeHandler(
   },
 );
 
-export const readEmailHtmlPreviewEndpoint = createSafeHandler(
+const readEmailHtmlPreviewEndpoint = createSafeHandler(
   {
     contract: "patch",
     contentDelivery: {
@@ -115,7 +115,7 @@ export const readEmailHtmlPreviewEndpoint = createSafeHandler(
   },
 );
 
-export const printPdfEndpoint = createSafeHandler(
+const printPdfEndpoint = createSafeHandler(
   {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,
@@ -149,7 +149,7 @@ export const printPdfEndpoint = createSafeHandler(
   },
 );
 
-export const stampedDownloadEndpoint = createSafeHandler(
+const stampedDownloadEndpoint = createSafeHandler(
   {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,
@@ -186,7 +186,7 @@ export const stampedDownloadEndpoint = createSafeHandler(
   },
 );
 
-export const readDocumentPropertiesEndpoint = createSafeHandler(
+const readDocumentPropertiesEndpoint = createSafeHandler(
   {
     contract: "patch",
     contentDelivery: {
@@ -256,7 +256,7 @@ const AUTHORED_PROPERTY_BODY = {
   typeof documentPropertyValue
 >;
 
-export const updateDocumentPropertiesEndpoint = createSafeHandler(
+const updateDocumentPropertiesEndpoint = createSafeHandler(
   {
     contract: "patch",
     contentDelivery: {
@@ -301,7 +301,7 @@ export const updateDocumentPropertiesEndpoint = createSafeHandler(
   },
 );
 
-export const scrubbedDownloadEndpoint = createSafeHandler(
+const scrubbedDownloadEndpoint = createSafeHandler(
   {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,
@@ -379,7 +379,7 @@ export const markedDownloadEndpoint = createSafeHandler(
   },
 );
 
-export const ocrExportEndpoint = createSafeHandler(
+const ocrExportEndpoint = createSafeHandler(
   {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,

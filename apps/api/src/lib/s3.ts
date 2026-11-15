@@ -491,7 +491,7 @@ export const resolveS3Credentials = async ({
   return staticCredentials;
 };
 
-export class S3DeadlineCredentialsError extends TaggedError(
+class S3DeadlineCredentialsError extends TaggedError(
   "S3DeadlineCredentialsError",
 )<{
   message: string;

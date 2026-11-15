@@ -2730,7 +2730,7 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
 
 // --- tool definitions -----------------------------------------------------
 
-export const MATTER_TOOL_DEFINITIONS = [
+const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:

@@ -1725,7 +1725,7 @@ const handleGetUsageTool: TypedMcpToolHandler<
   );
 };
 
-export const BILLING_TOOL_DEFINITIONS = [
+const BILLING_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     annotations: {
