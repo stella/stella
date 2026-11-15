@@ -24,8 +24,8 @@ const {
   reconcileBufferObjectCleanupIntents,
   reconcileStaleBufferIntentsGlobally,
   releaseObjectCleanupIntentsForLifecycle,
+  reserveObjectCleanupIntentsForKey,
   reserveObjectCleanupIntents,
-  reserveObjectCleanupIntentsForKeys,
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } = await import("@/api/lib/buffer-intent-reconciliation");
 
@@ -190,7 +190,7 @@ test("reserves multi-workspace ownership under one ordered lock", async () => {
       }),
   );
 
-  const result = await reserveObjectCleanupIntents({
+  const result = await reserveObjectCleanupIntentsForKey({
     objectKey: `${organizationId}/shared-object`,
     organizationId,
     safeDb,
@@ -252,7 +252,7 @@ test("reserves several objects in one transaction, each under every owner", asyn
   const file = `${organizationId}/scan.png`;
   const thumbnail = `${organizationId}/scan.thumbnail.webp`;
 
-  const result = await reserveObjectCleanupIntentsForKeys({
+  const result = await reserveObjectCleanupIntents({
     objectKeys: [file, thumbnail],
     organizationId,
     safeDb,
@@ -312,7 +312,7 @@ test("reserves organization-scoped ownership without inventing a matter", async 
       }),
   );
 
-  const result = await reserveObjectCleanupIntents({
+  const result = await reserveObjectCleanupIntentsForKey({
     objectKey: "user-id/global-chat-file",
     organizationId,
     safeDb,
@@ -355,7 +355,7 @@ test("reserves chat ownership for archived scope while deletion stays fenced", a
       }),
   );
 
-  const result = await reserveObjectCleanupIntents({
+  const result = await reserveObjectCleanupIntentsForKey({
     objectKey: "user-id/archived-chat-file",
     organizationId,
     safeDb,

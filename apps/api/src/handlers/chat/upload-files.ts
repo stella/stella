@@ -46,7 +46,7 @@ import {
   BUFFER_INTENT_WRITE_TIMEOUT_MS,
   lockObjectCleanupIntentsForWriter,
   OBJECT_INTENT_WORKSPACE_AVAILABILITY,
-  reserveObjectCleanupIntentsForKeys,
+  reserveObjectCleanupIntents,
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
@@ -666,7 +666,7 @@ const reserveChatObjectCleanupIntents: ReserveChatObjectCleanupIntents = async (
   const cleanupWorkspaceIds = chatObjectCleanupWorkspaceIds(
     threadScopeResult.value,
   );
-  return await reserveObjectCleanupIntentsForKeys({
+  return await reserveObjectCleanupIntents({
     chatThreadId: threadId,
     objectKeys,
     organizationId: threadScopeResult.value.organizationId,

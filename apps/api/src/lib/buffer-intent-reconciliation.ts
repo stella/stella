@@ -226,7 +226,7 @@ type ObjectCleanupIntentScope = {
  * check and one insert however many objects there are. Answers each key's
  * intent ids.
  */
-export const reserveObjectCleanupIntentsForKeys = async ({
+export const reserveObjectCleanupIntents = async ({
   chatThreadId,
   objectKeys,
   organizationId,
@@ -308,13 +308,13 @@ export const reserveObjectCleanupIntentsForKeys = async ({
 };
 
 /** Reserve exact-key recovery ownership before a non-upload writer calls PUT. */
-export const reserveObjectCleanupIntents = async ({
+export const reserveObjectCleanupIntentsForKey = async ({
   objectKey,
   ...scope
 }: ObjectCleanupIntentScope & {
   objectKey: string;
 }): Promise<Result<SafeId<"pendingUpload">[], SafeDbError>> => {
-  const result = await reserveObjectCleanupIntentsForKeys({
+  const result = await reserveObjectCleanupIntents({
     ...scope,
     objectKeys: [objectKey],
   });
@@ -337,7 +337,7 @@ export const reserveObjectCleanupIntent = async ({
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
 }): Promise<Result<SafeId<"pendingUpload">, SafeDbError>> => {
-  const result = await reserveObjectCleanupIntents({
+  const result = await reserveObjectCleanupIntentsForKey({
     objectKey,
     organizationId,
     safeDb,
