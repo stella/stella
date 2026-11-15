@@ -111,6 +111,7 @@ import {
   isContested,
   isSettled,
 } from "@/features/avt/verdict";
+import { verdictProvenanceLine } from "@/features/avt/verdict-provenance.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -228,6 +229,7 @@ export const ClaimDetailPanel = ({
           conflictCount={conflicts.length}
           supportCount={supports.length}
         />
+        <VerdictProvenance decider={claim.decider} />
         {claim.recheck !== null && (
           <RecheckSummary recheck={claim.recheck} state={claim.verdict.state} />
         )}
@@ -917,6 +919,26 @@ type VerdictBasisProps = {
 
 /** What the tool's verdict rests on, in words: how many facts support and
  *  conflict with it, or why there is no verdict to weigh. */
+/** Who decided the verdict, when it was not the generative model alone. */
+const VerdictProvenance = ({
+  decider,
+}: {
+  decider: VerificationClaim["decider"];
+}) => {
+  const t = useTranslations();
+  const line = verdictProvenanceLine(decider);
+  if (line === null) {
+    return null;
+  }
+  return (
+    <p className="text-muted-foreground text-2xs leading-relaxed">
+      {line.type === "decision-model"
+        ? t("avt.claimDetail.verdictBy", { model: line.model })
+        : t("avt.claimDetail.verdictByGenerativeModel")}
+    </p>
+  );
+};
+
 const VerdictBasis = ({
   claim,
   supportCount,

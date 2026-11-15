@@ -47,6 +47,7 @@ const UNPROJECTED_DATA_BOX_SETTINGS_COLUMNS = [
   "urlFetchApiKeyIv", // Provider encryption metadata must not be projected.
   "managedAIResidency", // AI policy belongs to general settings.
   "promptCachingEnabled", // AI policy belongs to general settings.
+  "verificationDecisionModelEnabled", // AI policy belongs to the AI settings.
   "aiInstructions", // AI policy belongs to general settings.
   "sharepointConnectionEnabled", // Connection policy belongs to general settings.
   "memoryExtractionEnabled", // Memory policy belongs to general settings.
