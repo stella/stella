@@ -1094,13 +1094,28 @@ export const FAKE_SCENARIOS = {
   steered_over_approval: [
     ...freshTurn(),
     ...removeDraft("Deletes a file"),
-    { expect: "turn/steer", result: { turnId: FAKE_TURN_ID } },
-    item("completed", {
-      ...command("call-rm", "declined"),
-      command: "rm draft.md",
-    }),
-    item("completed", agentMessage("m-steer", FAKE_STEERED_OVER_APPROVAL)),
-    completed(),
+    {
+      byDecision: {
+        // Approved, the message never follows: the turn answers as
+        // `approval_outcome` does.
+        approved: [
+          item("completed", agentMessage("m-2", FAKE_APPROVED_ANSWER)),
+          completed(),
+        ],
+        denied: [
+          { expect: "turn/steer", result: { turnId: FAKE_TURN_ID } },
+          item("completed", {
+            ...command("call-rm", "declined"),
+            command: "rm draft.md",
+          }),
+          item(
+            "completed",
+            agentMessage("m-steer", FAKE_STEERED_OVER_APPROVAL),
+          ),
+          completed(),
+        ],
+      },
+    },
   ],
   /** The turn is no longer the active one when the steer arrives. */
   steer_refused: [

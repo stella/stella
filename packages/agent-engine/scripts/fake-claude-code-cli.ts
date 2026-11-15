@@ -1136,10 +1136,25 @@ export const FAKE_SCENARIOS = {
       { command: "rm draft.md" },
       { decision_reason: FAKE_APPROVAL_REASON },
     ),
-    { echoUser: true },
-    toolResult("call-rm", "The user denied this action.", true),
-    assistant("msg-2", [{ type: "text", text: FAKE_STEERED_OVER_APPROVAL }]),
-    result(),
+    {
+      byDecision: {
+        // Approved, the message never follows: the turn answers as
+        // `approval_outcome` does.
+        approved: [
+          toolResult("call-rm", ""),
+          assistant("msg-2", [{ type: "text", text: FAKE_APPROVED_ANSWER }]),
+          result(),
+        ],
+        denied: [
+          { echoUser: true },
+          toolResult("call-rm", "The user denied this action.", true),
+          assistant("msg-2", [
+            { type: "text", text: FAKE_STEERED_OVER_APPROVAL },
+          ]),
+          result(),
+        ],
+      },
+    },
   ],
   /** The turn ends before it takes the message written mid-turn. */
   steer_too_late: [
