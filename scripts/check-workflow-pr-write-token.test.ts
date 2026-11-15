@@ -8,6 +8,16 @@ import {
   WORKFLOW_PRIVILEGE_ALLOWLIST,
 } from "./check-workflow-pr-write-token";
 
+/** The revision an exemption pins its called workflow to. */
+const pinnedRevision = (key: keyof typeof WORKFLOW_PRIVILEGE_ALLOWLIST) => {
+  const exemption: { calls?: string } = WORKFLOW_PRIVILEGE_ALLOWLIST[key];
+  const revision = exemption.calls?.split("@").at(1);
+  if (revision === undefined) {
+    throw new Error(`${key} pins no called workflow`);
+  }
+  return revision;
+};
+
 const workflow = (
   on: string,
   body: string,
@@ -535,7 +545,9 @@ jobs:
     uses: stella/.github/.github/workflows/pr-lint.yml@${revision}`,
       );
     expect(caller("main")).not.toHaveLength(0);
-    expect(caller("5764ab66e4df84cfd2e642c7d7e4678261e668f8")).toEqual([]);
+    expect(
+      caller(pinnedRevision(".github/workflows/pr-lint.yml:pr-lint")),
+    ).toEqual([]);
   });
   test("binds a job-pattern exemption to its gate, privileges and pinned call", () => {
     const gate = [
@@ -546,7 +558,7 @@ jobs:
     ];
     const release = ({
       conjuncts = gate,
-      revision = "042baebaf071329b956555c05caf5736504c278d",
+      revision = pinnedRevision(".github/workflows/publish-npm.yml:release-*"),
       extraSecret = "",
     } = {}) =>
       checkWorkflowPrivilegeSource(
