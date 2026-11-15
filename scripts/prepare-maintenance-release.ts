@@ -1306,34 +1306,36 @@ export type ReceiptCoverageReader = (sha: string) => Promise<ReceiptCoverage>;
 
 const RELEASE_REPOSITORY = "stella/stella";
 
+const RECEIPT_COVERAGE_COMMAND = [
+  "bash",
+  "scripts/check-release-receipt-coverage.sh",
+] as const;
+
 /**
- * The rule release health applies before the final tag, asked of the script
- * that owns it (check-release-receipt-coverage.sh, via
- * check-release-main-health.sh). Only its exit 0 is coverage: no receipt,
- * uncovered history and a crash all keep both statuses required.
+ * The proof the release health check (check-release-main-health.sh) accepts
+ * for a main commit that carries no release-candidate tag, asked of the
+ * script that owns it with the repository and commit appended to `command`.
+ * Only its exit 0 is coverage: no receipt, uncovered history, any other exit
+ * and a command that cannot start all keep both statuses required.
  */
-const readReceiptCoverage: ReceiptCoverageReader = async (sha) => {
-  const spawned = Result.try(() =>
-    Bun.spawn(
-      [
-        "bash",
-        "scripts/check-release-receipt-coverage.sh",
-        RELEASE_REPOSITORY,
-        sha,
-      ],
-      {
+export const receiptCoverageReader =
+  (
+    command: readonly string[] = RECEIPT_COVERAGE_COMMAND,
+  ): ReceiptCoverageReader =>
+  async (sha) => {
+    const spawned = Result.try(() =>
+      Bun.spawn([...command, RELEASE_REPOSITORY, sha], {
         cwd: ROOT_DIR,
         stderr: "inherit",
         stdin: "ignore",
         stdout: "ignore",
-      },
-    ),
-  );
-  if (Result.isError(spawned)) {
-    return "not_covered";
-  }
-  return (await spawned.value.exited) === 0 ? "covered" : "not_covered";
-};
+      }),
+    );
+    if (Result.isError(spawned)) {
+      return "not_covered";
+    }
+    return (await spawned.value.exited) === 0 ? "covered" : "not_covered";
+  };
 
 export type ReleaseCutReaders = {
   json?: GitHubJsonReader;
@@ -1341,10 +1343,11 @@ export type ReleaseCutReaders = {
 };
 
 /**
- * Refuses the cut unless main/heavy and main/pr-depth are green on it, or a
- * merge-group receipt on it covers them by the rule release health applies
- * before the final tag. With --allow-unproven-main the same verdict is
- * printed and the cut goes on.
+ * Refuses the cut unless main/heavy and main/pr-depth are green on it, or,
+ * when neither has failed, a merge-group receipt on it covers them: the same
+ * proof the release health check accepts for a main commit that carries no
+ * release-candidate tag. A failed gate is never covered. With
+ * --allow-unproven-main the same verdict is printed and the cut goes on.
  */
 export const assertReleaseCutReady = async (
   sha: string,
@@ -1362,9 +1365,18 @@ export const assertReleaseCutReady = async (
     );
     return;
   }
-  const readCoverage = readers.coverage ?? readReceiptCoverage;
-  const coverage = await Result.tryPromise(async () => readCoverage(sha));
-  if (Result.isOk(coverage) && coverage.value === "covered") {
+  // A receipt stands in only for evidence that is absent or not yet in; a
+  // gate that ran and failed refuses whatever the receipt says.
+  const failed = gates.some(({ state }) => state === "failure");
+  const readCoverage = readers.coverage ?? receiptCoverageReader();
+  const coverage = failed
+    ? null
+    : await Result.tryPromise(async () => readCoverage(sha));
+  if (
+    coverage !== null &&
+    Result.isOk(coverage) &&
+    coverage.value === "covered"
+  ) {
     write(
       `maintenance-release: a merge-group receipt and validated queue history stand in for main/heavy and main/pr-depth on ${sha}\n`,
     );

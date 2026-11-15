@@ -22,8 +22,9 @@ export type CutGateCheck =
     }
   | {
       /**
-       * main/heavy and main/pr-depth green on the base commit, or a
-       * merge-group receipt covering them as release health accepts.
+       * main/heavy and main/pr-depth green on the base commit, or, when
+       * neither failed, a merge-group receipt covering them: the proof the
+       * release health check accepts for a main commit without an RC tag.
        */
       readonly kind: "main-statuses";
     };

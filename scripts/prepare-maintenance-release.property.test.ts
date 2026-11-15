@@ -33,6 +33,7 @@ import {
   readReleaseManifest,
   type ReceiptCoverage,
   type ReceiptCoverageReader,
+  receiptCoverageReader,
   refreshMaintenanceReleaseFiles,
   resolveGitHubToken,
   withFileRollback,
@@ -1789,6 +1790,34 @@ describe("release cut readiness", () => {
     ).toBe(expected);
   });
 
+  test("a failed gate refuses even when a merge-group receipt covers the commit", async () => {
+    const asked: string[] = [];
+    const message = await cutRefusal(
+      {
+        [STATUSES_PATH]: [
+          commitStatus("main/heavy", "failure", 11),
+          PR_DEPTH_GREEN,
+        ],
+        [jobsPath(11)]: { jobs: [job("suites / api-tests (2)", "failure")] },
+      },
+      async (sha) => {
+        asked.push(sha);
+        return "covered";
+      },
+    );
+
+    expect(message).toBe(
+      [
+        `main is not release-ready at ${CUT_SHA}:`,
+        `  main/heavy: failure (status failure) ${RUN_PREFIX}11`,
+        "    failing job: suites / api-tests (2) (failure)",
+        `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+        "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+      ].join("\n"),
+    );
+    expect(asked).toEqual([]);
+  });
+
   test("green statuses cut without asking for receipt coverage", async () => {
     const asked: string[] = [];
     const written: string[] = [];
@@ -1812,6 +1841,35 @@ describe("release cut readiness", () => {
     expect(written).toEqual([
       `maintenance-release: main/heavy and main/pr-depth are green on ${CUT_SHA}\n`,
     ]);
+  });
+
+  test("only exit 0 of the coverage command is coverage", async () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "receipt-coverage-"));
+    roots.push(root);
+    const argumentsPath = nodePath.join(root, "arguments");
+    const stub = (exitCode: number) => {
+      const path = nodePath.join(root, `exit-${String(exitCode)}.sh`);
+      writeFileSync(
+        path,
+        `printf '%s\\n' "$@" > '${argumentsPath}'\nexit ${String(exitCode)}\n`,
+      );
+      return ["bash", path];
+    };
+
+    expect(await receiptCoverageReader(stub(0))(CUT_SHA)).toBe("covered");
+    expect(readFileSync(argumentsPath, "utf-8")).toBe(
+      `stella/stella\n${CUT_SHA}\n`,
+    );
+    for (const exitCode of [1, 2, 127]) {
+      expect(await receiptCoverageReader(stub(exitCode))(CUT_SHA)).toBe(
+        "not_covered",
+      );
+    }
+    expect(
+      await receiptCoverageReader([nodePath.join(root, "absent-command")])(
+        CUT_SHA,
+      ),
+    ).toBe("not_covered");
   });
 
   test("an explicit override prints the same refusal and lets the cut go on", async () => {
