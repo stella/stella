@@ -30,6 +30,7 @@ import {
   type FakeScenarioName,
 } from "../../scripts/fake-claude-code-cli";
 import {
+  FAKE_FORKED_THREAD_ID,
   FAKE_OUTDATED_VERSION,
   FAKE_PRIVATE_TEXT,
   FAKE_THREAD_ID,
@@ -376,7 +377,7 @@ const startRun = (
     stepOutputDir: path.join(at.root, "runs", "chat.step-outputs"),
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
-    harnessSessionId: null,
+    session: { type: "fresh" },
     reasoningEffort: null,
     policy: { network: "open", fs: "workspace", approvals: "ask" },
     mcp: {
@@ -635,6 +636,7 @@ describe("harness holder over its socket", () => {
           "resume",
           "image_input",
           "steer",
+          "fork",
         ],
         approvalModes: ["ask", "auto", "full_auto"],
         models: [
@@ -940,6 +942,7 @@ describe("harness holder over its socket", () => {
     expect(finished).toMatchObject({
       outcome: "completed",
       harnessSessionId: FAKE_THREAD_ID,
+      harnessBoundary: "turn-1",
     });
     expect(seqs(client, runId)).toEqual(range(1, finished.seq));
     const chunks = chunksOf(client, runId);
@@ -1082,7 +1085,7 @@ describe("harness holder over its socket", () => {
       client.messages.findIndex((message) => message.type === "run.finished"),
     );
     const second = runStart(client, holder, "background_terminal", {
-      harnessSessionId: FAKE_THREAD_ID,
+      session: { type: "resume", sessionId: FAKE_THREAD_ID },
     });
     expect(await client.waitFor(is("run.finished", second))).toMatchObject({
       outcome: "completed",
@@ -1161,7 +1164,7 @@ describe("harness holder over its socket", () => {
     const first = runStart(client, holder, "background_terminal");
     await client.waitFor(is("run.finished", first));
     const second = runStart(client, holder, "background_terminal", {
-      harnessSessionId: FAKE_THREAD_ID,
+      session: { type: "resume", sessionId: FAKE_THREAD_ID },
     });
     client.send({ type: "run.cancel", runId: second });
     expect(await client.waitFor(is("run.finished", second))).toMatchObject({
@@ -1172,6 +1175,50 @@ describe("harness holder over its socket", () => {
     expect(
       fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
     ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
+  test("a fork of a kept process's session ends that process and continues the session as a new one", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const launch = {
+      harness: "codex",
+      executable: fakeCodex(holder.root, "background_terminal"),
+      model: "gpt-test",
+    } as const;
+    const first = startRun(client, holder, launch);
+    const finished = await client.waitFor(is("run.finished", first));
+    expect(finished).toMatchObject({
+      outcome: "completed",
+      harnessSessionId: FAKE_THREAD_ID,
+      harnessBoundary: "turn-1",
+    });
+    // The same launch as the kept process, which would otherwise take the
+    // turn: only the fork tells them apart.
+    writeFileSync(
+      launch.executable,
+      `#!/bin/sh\nexec "${process.execPath}" "${FAKE_SERVER}" "fork_ok" "$@"\n`,
+    );
+    const second = startRun(client, holder, launch, {
+      session: {
+        type: "fork",
+        sessionId: FAKE_THREAD_ID,
+        boundary: finished.harnessBoundary ?? "",
+      },
+    });
+    expect(await client.waitFor(is("run.finished", second))).toMatchObject({
+      outcome: "completed",
+      harnessSessionId: FAKE_FORKED_THREAD_ID,
+      harnessBoundary: "turn-1",
+    });
+    // The work the kept process held belongs to the turns the fork leaves
+    // out: it ended before the fork's harness started.
+    expect(holder.startups()).toHaveLength(2);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+    expect(
+      holder.received().find(({ method }) => method === "thread/fork")?.params,
+    ).toMatchObject({ threadId: FAKE_THREAD_ID, lastTurnId: "turn-1" });
   });
 
   test("ends a chat's kept process before a run with another session starts", async () => {
@@ -1623,6 +1670,7 @@ describe("harness holder over its socket", () => {
       seq: 3,
       outcome: "failed",
       harnessSessionId: null,
+      harnessBoundary: null,
     });
     expect(chunksOf(client, runId).map((chunk) => chunk.type)).toEqual([
       "RUN_STARTED",
@@ -1783,7 +1831,7 @@ describe("harness holder over its socket", () => {
       skillFolders: [],
       toolPath: [],
       unreadablePaths: [],
-      harnessSessionId: null,
+      session: { type: "fresh" },
       policy: { network: "open", fs: "workspace", approvals: "ask" },
       mcp: {
         serverName: "stella",
@@ -1797,6 +1845,7 @@ describe("harness holder over its socket", () => {
       runId,
       outcome: "failed",
       harnessSessionId: FAKE_THREAD_ID,
+      harnessBoundary: null,
     });
     // One refusal, and nothing of the run after it but its end.
     expect(refusedAt).toHaveLength(1);
@@ -1875,7 +1924,7 @@ describe("harness holder over its socket", () => {
         skillFolders: [],
         toolPath: [],
         unreadablePaths: [],
-        harnessSessionId: null,
+        session: { type: "fresh" },
         policy: { network: "open", fs: "workspace", approvals: "ask" },
         mcp: {
           serverName: "stella",
@@ -2048,7 +2097,7 @@ describe("harness holder over its socket", () => {
         skillFolders: [],
         toolPath: [],
         unreadablePaths: [],
-        harnessSessionId: null,
+        session: { type: "fresh" },
         policy: { network: "open", fs: "workspace", approvals: "ask" },
         mcp: {
           serverName: "stella",

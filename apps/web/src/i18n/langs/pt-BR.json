@@ -2093,6 +2093,7 @@
       "noResults": "Sem habilidades correspondentes",
       "tryOne": "Experimente um destes para começar"
     },
+    "queuePrompt": "Enviar quando o agente terminar",
     "queuedAttachmentCount": "{count, plural, one {# anexo} many {# anexos} other {# anexos}}",
     "queuedNotice": "Na fila: será enviada quando a resposta atual terminar",
     "reasoning": "Raciocínio",
@@ -2199,7 +2200,6 @@
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
     "sources": "Fontes:",
-    "steerPrompt": "Enviar ao agente enquanto ele trabalha",
     "steerRefused": {
       "cannotSteer": "Este agente não aceita mensagens enquanto trabalha.",
       "noRun": "O agente ainda não começou.",

@@ -1,12 +1,14 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
+import {
+  isApprovedClientCallAwaitingResult,
+  memberWaitsOf,
+} from "@stll/api-contract/chat-member-wait";
 
 import {
   cancelPendingChatToolCalls,
   continueStoredChatPart,
-  getAwaitingUserInteractions,
-  isApprovedClientCallAwaitingResult,
   isChatPart,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { AwaitingUserInteraction } from "@/api/handlers/chat/chat-message-parts";
@@ -376,7 +378,7 @@ export const findHandedOutInteraction = ({
   interruptToolCallIds: ReadonlySet<string>;
   message: Pick<ChatMessage, "parts" | "role"> | null;
 }): AwaitingUserInteraction | null =>
-  getAwaitingUserInteractions(message).find(({ toolCallId }) =>
+  memberWaitsOf(message).find(({ toolCallId }) =>
     interruptToolCallIds.has(toolCallId),
   ) ?? null;
 

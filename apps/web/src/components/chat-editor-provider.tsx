@@ -29,6 +29,10 @@ import {
   CHAT_FILE_INPUT_ACCEPT,
   isChatFileMimeType,
 } from "@stll/api-contract/chat-file-types";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  type ChatMemberSendAction,
+} from "@stll/api-contract/chat-send-intent";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { ChatComposerLinks } from "@stll/chat/link-editor";
 import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
@@ -321,9 +325,23 @@ export type ChatEditorController = {
    */
   setContent: (content: ComposerSource) => void;
   setEditable: (editable: boolean) => void;
-  setSubmitHandler: (handler: (() => Promise<void>) | null) => void;
-  submit: (send: ChatSend) => Promise<void>;
+  setSubmitHandler: (handler: ChatComposerSubmitHandler | null) => void;
+  /**
+   * Send the draft through `send`. `action` names the member's action when
+   * it went through the surface's submit handler, so a send confirmed after
+   * a warning repeats that action.
+   */
+  submit: (send: ChatSend, action?: ChatMemberSendAction) => Promise<void>;
 };
+
+/**
+ * A surface's submit: Enter and the send button are the plain `send`,
+ * Cmd/Ctrl+Enter is `queue`. A surface that offers no queue sends both
+ * alike.
+ */
+export type ChatComposerSubmitHandler = (
+  action: ChatMemberSendAction,
+) => Promise<void>;
 
 // The stable manager API: every field is a `useCallback`, so the whole value
 // keeps one identity for the provider's lifetime. `extensionVersion` — the one
@@ -680,6 +698,11 @@ type UseChatComposerWiringOptions = {
   controller: ChatEditorController;
   inputDisabled: boolean;
   onSubmit: ChatSend;
+  /**
+   * The member's queue action (Cmd/Ctrl+Enter, a queue button); omitted, it
+   * sends as `onSubmit` does.
+   */
+  onQueue?: ChatSend | undefined;
   onSubmitError?: ((error: unknown) => void) | undefined;
   /**
    * Pre-submit gate. Return `false` to abort the submit (e.g. when a
@@ -704,25 +727,33 @@ export const useChatComposerWiring = ({
   controller,
   inputDisabled,
   onSubmit,
+  onQueue,
   onSubmitError,
   onSubmitGuard,
   submitDisabled,
 }: UseChatComposerWiringOptions) => {
   const { blur, setEditable, setSubmitHandler, submit } = controller;
 
-  const submitDraft = useCallback(async () => {
-    if (submitDisabled) {
-      return;
-    }
-    if (onSubmitGuard?.() === false) {
-      return;
-    }
-    try {
-      await submit(onSubmit);
-    } catch (error) {
-      onSubmitError?.(error);
-    }
-  }, [onSubmit, onSubmitError, onSubmitGuard, submit, submitDisabled]);
+  const submitDraft = useCallback(
+    async (action: ChatMemberSendAction) => {
+      if (submitDisabled) {
+        return;
+      }
+      if (onSubmitGuard?.() === false) {
+        return;
+      }
+      const send =
+        action === CHAT_MEMBER_SEND_ACTION.queue && onQueue !== undefined
+          ? onQueue
+          : onSubmit;
+      try {
+        await submit(send, action);
+      } catch (error) {
+        onSubmitError?.(error);
+      }
+    },
+    [onQueue, onSubmit, onSubmitError, onSubmitGuard, submit, submitDisabled],
+  );
 
   useExternalSyncEffect(() => {
     setSubmitHandler(submitDraft);
@@ -783,7 +814,7 @@ export const useChatEditor = ({
       via: "ghost-tab",
     });
   });
-  const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
+  const submitHandlerRef = useRef<ChatComposerSubmitHandler | null>(null);
   const confirmedCredentialSendRef = useRef(false);
   const fileIdCounterRef = useRef(0);
   const activePluginKeysRef = useRef<(string | PluginKey)[]>([]);
@@ -1214,11 +1245,11 @@ export const useChatEditor = ({
         }
       }
 
-      // Submit on Enter or Cmd/Ctrl+Enter. Shift+Enter falls
-      // through to the HardBreak extension (newline). A
-      // suggestion plugin a surface registers owns Enter while its
-      // popup is open — let it pick the highlighted item instead of
-      // submitting the prompt.
+      // Submit on Enter (the plain send) or Cmd/Ctrl+Enter (the queue
+      // action). Shift+Enter falls through to the HardBreak extension
+      // (newline). A suggestion plugin a surface registers owns Enter
+      // while its popup is open — let it pick the highlighted item instead
+      // of submitting the prompt.
       if (event.key !== "Enter" || event.isComposing) {
         return false;
       }
@@ -1230,7 +1261,14 @@ export const useChatEditor = ({
       }
 
       event.preventDefault();
-      detached(submitHandlerRef.current?.(), "chat-editor-provider.submit");
+      detached(
+        submitHandlerRef.current?.(
+          event.metaKey || event.ctrlKey
+            ? CHAT_MEMBER_SEND_ACTION.queue
+            : CHAT_MEMBER_SEND_ACTION.send,
+        ),
+        "chat-editor-provider.submit",
+      );
       return true;
     },
   }));
@@ -1631,7 +1669,7 @@ export const useChatEditor = ({
   }, [addFiles]);
 
   const submit = useCallback(
-    async (send: ChatSend) => {
+    async (send: ChatSend, action?: ChatMemberSendAction) => {
       if (!isUsableEditor(editor)) {
         return;
       }
@@ -1646,7 +1684,7 @@ export const useChatEditor = ({
         warnCredentialSend(() => {
           confirmedCredentialSendRef.current = true;
           detached(
-            submitHandlerRef.current?.(),
+            submitHandlerRef.current?.(action ?? CHAT_MEMBER_SEND_ACTION.send),
             "chat-editor-provider.credential-send-anyway",
           );
         });
@@ -1726,7 +1764,7 @@ export const useChatEditor = ({
   const canSubmit = !isEmpty || attachments.length > 0;
 
   const setSubmitHandler = useCallback(
-    (handler: (() => Promise<void>) | null) => {
+    (handler: ChatComposerSubmitHandler | null) => {
       submitHandlerRef.current = handler;
     },
     [],

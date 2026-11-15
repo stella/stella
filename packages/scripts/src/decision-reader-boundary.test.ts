@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
@@ -374,6 +381,41 @@ const scannedSources = (
   }
   return sources;
 };
+
+test("scanned sources recover when a listed file disappears before reading", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "decision-reader-scan-"));
+  try {
+    const disappearingFile = path.join(directory, "disappearing.ts");
+    const siblingFile = path.join(directory, "sibling.ts");
+    writeFileSync(disappearingFile, "export const missing = true;\n");
+    writeFileSync(siblingFile, "export const present = true;\n");
+
+    const relativeDirectory = repoRelativePath(repositoryRoot, directory);
+    const relativeDisappearingFile = repoRelativePath(
+      repositoryRoot,
+      disappearingFile,
+    );
+    const relativeSiblingFile = repoRelativePath(repositoryRoot, siblingFile);
+    const observed: string[] = [];
+
+    const sources = scannedSources([`${relativeDirectory}/*.ts`], (file) => {
+      observed.push(file);
+      if (file === relativeDisappearingFile) {
+        rmSync(disappearingFile);
+      }
+      return true;
+    });
+
+    expect(observed.toSorted()).toEqual(
+      [relativeDisappearingFile, relativeSiblingFile].toSorted(),
+    );
+    expect(sources).toEqual([
+      { file: relativeSiblingFile, text: "export const present = true;\n" },
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("web has no second owner for any extracted reader module", () => {
   expect(

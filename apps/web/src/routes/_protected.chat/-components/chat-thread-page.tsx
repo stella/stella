@@ -12,12 +12,17 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import {
   CHAT_MEMBER_SEND_ACTION,
   type ChatMemberSendAction,
   type ChatThreadSendState,
-  isChatSteerOffered,
+  type ChatTurnSteering,
+  chatTurnSteering,
+  isChatQueueOffered,
 } from "@stll/api-contract/chat-send-intent";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { NewChatIcon } from "@stll/ui/icons";
@@ -77,6 +82,7 @@ import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thre
 import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
+  localRunnersOptions,
 } from "@/features/chat/queries";
 import {
   resolveThreadActiveSkill,
@@ -229,6 +235,11 @@ export const ChatThreadPage = ({
     queryKey: threadQueryOptions.queryKey,
   });
   const { getRunTarget } = composerModels;
+  const turnSteering = useChatTurnSteering(
+    activeOrganizationId,
+    composerModels.runTarget,
+  );
+  const getTurnSteering = useLatestCallback(() => turnSteering);
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
@@ -292,7 +303,7 @@ export const ChatThreadPage = ({
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
-    steerMessage,
+    queueMessage,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,
@@ -332,6 +343,7 @@ export const ChatThreadPage = ({
     approvalPendingMessageId,
     localRunQuestion,
     answerLocalRunQuestion,
+    turnAwaitsMember,
   } = useChatSession({
     exceptionScope: { type: "handler", handlerId: "chat-session.thread-page" },
     chat,
@@ -339,7 +351,7 @@ export const ChatThreadPage = ({
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,
-    getRunTarget,
+    getTurnSteering,
     initialOlderCursor: data.olderCursor,
     playbookPane: "auto-open",
     onError: (nextError) => {
@@ -680,7 +692,7 @@ export const ChatThreadPage = ({
       }
       const send = {
         [CHAT_MEMBER_SEND_ACTION.send]: sendMessage,
-        [CHAT_MEMBER_SEND_ACTION.steer]: steerMessage,
+        [CHAT_MEMBER_SEND_ACTION.queue]: queueMessage,
       } satisfies Record<ChatMemberSendAction, typeof sendMessage>;
       await send[action](message.value);
       return CHAT_SEND_SENT;
@@ -690,9 +702,9 @@ export const ChatThreadPage = ({
     async (draft: ChatInputDraft) =>
       await submitDraftAs(CHAT_MEMBER_SEND_ACTION.send, draft),
   );
-  const handleSteer = useLatestCallback(
+  const handleQueue = useLatestCallback(
     async (draft: ChatInputDraft) =>
-      await submitDraftAs(CHAT_MEMBER_SEND_ACTION.steer, draft),
+      await submitDraftAs(CHAT_MEMBER_SEND_ACTION.queue, draft),
   );
 
   return (
@@ -1002,15 +1014,14 @@ export const ChatThreadPage = ({
                     stopping={stopPending}
                     onFocusChange={setComposerFocused}
                     onSubmit={handleSubmit}
-                    steer={{
-                      offered: isChatSteerOffered(
-                        composerSendState(
-                          isGenerating,
-                          composerModels.runTarget.kind,
-                        ),
-                      ),
-                      send: handleSteer,
-                    }}
+                    onQueue={handleQueue}
+                    queueOffered={isChatQueueOffered(
+                      composerSendState({
+                        isGenerating,
+                        turnAwaitsMember,
+                        steering: turnSteering,
+                      }),
+                    )}
                   />
                 </div>
               </div>
@@ -1027,14 +1038,47 @@ export const ChatThreadPage = ({
 };
 
 /**
- * What the composer knows of the thread when it offers a steer: a turn
- * works, on where the thread's turns run, or none does.
+ * Whether the thread's turns take a message mid-turn, from what the member's
+ * computers report; read only for a turn bound for one, from the list the
+ * Run on menu reads too.
  */
-const composerSendState = (
-  isGenerating: boolean,
-  runTarget: ChatRunTarget["kind"],
-): ChatThreadSendState =>
-  isGenerating ? { type: "working", runTarget } : { type: "idle" };
+const useChatTurnSteering = (
+  activeOrganizationId: string,
+  runTarget: ChatRunTarget,
+): ChatTurnSteering => {
+  const localRunnersView = queryView(
+    useQuery({
+      ...localRunnersOptions(activeOrganizationId),
+      enabled: runTarget.kind === CHAT_RUN_TARGET_KIND.local,
+    }),
+  );
+  return chatTurnSteering(
+    runTarget,
+    localRunnersView.type === "items" ? localRunnersView.items : undefined,
+  );
+};
+
+/**
+ * What the composer knows of the thread when it offers the queue action: a
+ * turn works or waits on the member, with whether it takes a message
+ * mid-turn, or none does.
+ */
+const composerSendState = ({
+  isGenerating,
+  turnAwaitsMember,
+  steering,
+}: {
+  isGenerating: boolean;
+  turnAwaitsMember: boolean;
+  steering: ChatTurnSteering;
+}): ChatThreadSendState => {
+  if (isGenerating) {
+    return { type: "working", steering };
+  }
+  return turnAwaitsMember
+    ? { type: "waiting_on_member", steering }
+    : { type: "idle" };
+};
 
 const ChatThreadScrollSurface = ({ children }: { children: ReactNode }) => (
   <ConversationScrollProvider>

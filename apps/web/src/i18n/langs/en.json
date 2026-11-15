@@ -2093,6 +2093,7 @@
       "noResults": "No matching skills",
       "tryOne": "Try one of these to start"
     },
+    "queuePrompt": "Send when the agent finishes",
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued: sends when the current response finishes",
     "reasoning": "Reasoning trace",
@@ -2199,7 +2200,6 @@
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",
     "sources": "Sources:",
-    "steerPrompt": "Send to the agent while it works",
     "steerRefused": {
       "cannotSteer": "This agent cannot take messages while it works.",
       "noRun": "The agent has not started yet.",

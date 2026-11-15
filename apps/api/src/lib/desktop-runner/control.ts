@@ -50,6 +50,7 @@ import {
   approveLinkedFolder,
   type ChatRunBinding,
   type ChatRunForRequest,
+  type ChatRunSession,
   type DesktopRunnerDb,
   type DesktopRunnerRunView,
   insertAssignedRun,
@@ -136,7 +137,8 @@ export type StartLocalRunInput = {
   reasoningEffort: DesktopRunnerReasoningEffort | null;
   /** How much the run asks before it acts; the computer must report it. */
   approvals: DesktopRunnerApprovalMode;
-  harnessSessionId: string | null;
+  /** The harness session the run continues, and how (`readChatRunSession`). */
+  session: ChatRunSession;
   instructions: string;
   messages: RunStart["messages"];
   /** Files to copy into the run's folder; each link is signed on every send. */
@@ -359,6 +361,24 @@ const withRestoredNote = (
   return [...messages.slice(0, -1), { ...last, content: [...parts, note] }];
 };
 
+/** A session as `run.start` carries it. */
+const runStartSession = (session: ChatRunSession) => {
+  switch (session.type) {
+    case "fresh":
+      return { harnessSessionId: null, harnessForkBoundary: null };
+    case "resume":
+      return { harnessSessionId: session.sessionId, harnessForkBoundary: null };
+    case "fork":
+      return {
+        harnessSessionId: session.sessionId,
+        harnessForkBoundary: session.boundary,
+      };
+    default:
+      session satisfies never;
+      return panic("Unknown chat run session");
+  }
+};
+
 const startRun = async (
   deps: ControlDeps,
   input: StartLocalRunInput,
@@ -375,7 +395,7 @@ const startRun = async (
     harnessVersion: input.harnessVersion,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
-    harnessSessionId: input.harnessSessionId,
+    ...runStartSession(input.session),
     instructions: input.instructions,
     messages: input.messages,
     attachments: input.attachments.map(({ path, s3Key }) => ({ path, s3Key })),
@@ -903,10 +923,10 @@ export const createDesktopRunnerControl = ({
      */
     readBackgroundTasks: async (options: BackgroundTasksOptions) =>
       await readBackgroundTasks(deps, options),
-    /** The harness session a thread's next turn on this computer resumes. */
+    /** How a thread's next turn on this computer continues its session. */
     readChatRunSession: async (
       options: Parameters<typeof readChatRunSession>[1],
-    ): Promise<Result<string | null, DatabaseError>> =>
+    ): Promise<Result<ChatRunSession, DatabaseError>> =>
       await Result.tryPromise({
         try: async () => await readChatRunSession(db, options),
         catch: toDatabaseError,

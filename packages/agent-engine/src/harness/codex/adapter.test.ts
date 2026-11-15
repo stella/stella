@@ -40,6 +40,8 @@ import { createDetached } from "@stll/errors";
 
 import {
   FAKE_CONTEXT_WINDOW,
+  FAKE_FORK_BOUNDARY,
+  FAKE_FORKED_THREAD_ID,
   FAKE_FUTURE_RESET,
   FAKE_LONG_COMMAND,
   FAKE_MCP_CALL,
@@ -57,7 +59,11 @@ import {
 } from "../../../scripts/fake-stella-turn";
 import { PROTOCOL_LOG_OFF } from "../../protocol-log";
 import type { HarnessTurn, HarnessTurnInput } from "../adapter";
-import { type HarnessEvent, harnessSessionId } from "../events";
+import {
+  harnessBoundary,
+  type HarnessEvent,
+  harnessSessionId,
+} from "../events";
 import { packageCacheEnvironment } from "../package-cache";
 import { harnessEventsToChunks } from "../stream-chunks";
 import { createCodexHarnessAdapter } from "./adapter";
@@ -277,6 +283,7 @@ describe("Codex adapter over a stdio app-server", () => {
         reasoningOutputTokens: 5,
         context: { usedTokens: 150, windowTokens: FAKE_CONTEXT_WINDOW },
       },
+      boundary: harnessBoundary("turn-1"),
     });
   });
 
@@ -961,6 +968,31 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
+  test("a steer sent with a declined approval joins the turn that asked", async () => {
+    const inputId = crypto.randomUUID();
+    const { events, received } = await run("steered_over_approval", {
+      onEvent: async (event, turn) => {
+        if (event.type !== "approval.requested") {
+          return;
+        }
+        const declined = await turn.respond({
+          type: "approval",
+          requestId: event.request.requestId,
+          decision: "deny",
+        });
+        expect(Result.isOk(declined)).toBe(true);
+        expect(
+          await turn.steer({ inputId, text: "Also check the annex." }),
+        ).toEqual(Result.ok());
+      },
+    });
+    expect(received().map(({ method }) => method)).toContain("turn/steer");
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId, status: "accepted" },
+    ]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
   test("a steer the server refuses settles rejected and the turn goes on", async () => {
     const inputId = crypto.randomUUID();
     const { events } = await run("steer_refused", {
@@ -1082,6 +1114,125 @@ describe("Codex adapter over a stdio app-server", () => {
       input: [{ type: "text", text: "Search both." }],
     });
     expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  const forkRequest = {
+    type: "fork",
+    sessionId: harnessSessionId(FAKE_RESUMED_THREAD_ID),
+    boundary:
+      harnessBoundary(FAKE_FORK_BOUNDARY) ??
+      panic("the fake's boundary is one the protocol carries"),
+  } as const;
+
+  /** The `thread/*` requests the turn sent, background terminals aside. */
+  const threadMethods = (
+    received: Awaited<ReturnType<typeof run>>["received"],
+  ) =>
+    received()
+      .map(({ method }) => method)
+      .filter(
+        (m) =>
+          m?.startsWith("thread/") === true &&
+          !m.startsWith("thread/backgroundTerminals/"),
+      );
+
+  test("a completed turn ends at its native turn", async () => {
+    const { events } = await run("resume_ok", {
+      overrides: {
+        continuation: {
+          type: "resume",
+          sessionId: harnessSessionId(FAKE_RESUMED_THREAD_ID),
+        },
+      },
+    });
+    expect(terminal(events)).toEqual({
+      type: "turn.completed",
+      usage: null,
+      boundary: harnessBoundary("turn-1"),
+    });
+  });
+
+  test("a fork continues the session through the boundary turn as a new thread with this turn's settings", async () => {
+    const { events, received } = await run("fork_ok", {
+      overrides: { continuation: forkRequest },
+    });
+    expect(events[0]).toEqual({
+      type: "session.started",
+      sessionId: harnessSessionId(FAKE_FORKED_THREAD_ID),
+      continuation: { type: "forked" },
+    });
+    expect(threadMethods(received)).toEqual(["thread/fork"]);
+    const fresh = await run("tool_calls");
+    const settingsOf = (
+      runReceived: Awaited<ReturnType<typeof run>>["received"],
+      method: string,
+    ) =>
+      Object.keys(
+        v.parse(
+          v.looseObject({}),
+          runReceived().find((request) => request.method === method)?.params,
+        ),
+      ).toSorted();
+    // Through the boundary, inclusive, with every setting a new thread of
+    // this turn gets, never the stored thread's.
+    expect(settingsOf(received, "thread/fork")).toEqual(
+      [
+        ...settingsOf(fresh.received, "thread/start"),
+        "threadId",
+        "lastTurnId",
+        "excludeTurns",
+      ].toSorted(),
+    );
+    expect(
+      received().find(({ method }) => method === "thread/fork")?.params,
+    ).toMatchObject({
+      threadId: FAKE_RESUMED_THREAD_ID,
+      lastTurnId: FAKE_FORK_BOUNDARY,
+      excludeTurns: true,
+      model: "gpt-test",
+      approvalPolicy: "untrusted",
+      sandbox: "workspace-write",
+    });
+    // The fork holds the history: the prompt is the new message alone.
+    expect(
+      received().find(({ method }) => method === "turn/start")?.params,
+    ).toMatchObject({
+      threadId: FAKE_FORKED_THREAD_ID,
+      input: [{ type: "text", text: "Search both." }],
+    });
+  });
+
+  test("a fork of a missing session falls back to the transcript and says so", async () => {
+    const { events, received } = await run("fork_missing", {
+      overrides: { continuation: forkRequest },
+    });
+    expect(events[0]).toEqual({
+      type: "session.started",
+      sessionId: harnessSessionId(FAKE_THREAD_ID),
+      continuation: {
+        type: "resume_unavailable",
+        reason: "session_not_found",
+        message: `no rollout found for thread id ${FAKE_RESUMED_THREAD_ID}`,
+      },
+    });
+    expect(threadMethods(received)).toEqual(["thread/fork", "thread/start"]);
+    const prompt = JSON.stringify(
+      received().find(({ method }) => method === "turn/start")?.params,
+    );
+    expect(prompt).toContain("Find the leases.");
+    expect(prompt).toContain("Search both.");
+  });
+
+  test("an archived session is unarchived and then forked", async () => {
+    const { events, received } = await run("fork_archived", {
+      overrides: { continuation: forkRequest },
+    });
+    expect(threadMethods(received)).toEqual([
+      "thread/fork",
+      "thread/unarchive",
+      "thread/fork",
+    ]);
+    expect(events[0]).toMatchObject({ continuation: { type: "forked" } });
   });
 
   test("an archived session is unarchived and then resumed", async () => {
@@ -1242,7 +1393,12 @@ describe("Codex adapter over a stdio app-server", () => {
         event.type === "text.completed" ? [event.text] : [],
       ),
     ).toEqual(["Reading.", "Recovered."]);
-    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    // The turn ends at its continuation, which the thread holds after the
+    // native turn the capacity ended.
+    expect(terminal(events)).toMatchObject({
+      type: "turn.completed",
+      boundary: "turn-2",
+    });
     expect(delays).toEqual([10]);
     expect(starts).toHaveLength(2);
     expect(starts[1]?.params).toEqual({ threadId: FAKE_THREAD_ID, input: [] });
@@ -1373,6 +1529,7 @@ describe("Codex adapter over a stdio app-server", () => {
         "resume",
         "image_input",
         "steer",
+        "fork",
       ],
       approvalModes: ["ask", "auto", "full_auto"],
       // The plan's main window is at 40 %.
@@ -1795,7 +1952,11 @@ describe("Codex items as chat parts", () => {
     for (const native of ["never forwarded", "+x", "1. Search", "compact-1"]) {
       expect(stored).not.toContain(native);
     }
-    expect(terminal(events)).toEqual({ type: "turn.completed", usage: null });
+    expect(terminal(events)).toEqual({
+      type: "turn.completed",
+      usage: null,
+      boundary: harnessBoundary("turn-1"),
+    });
   });
 
   test("a subagent is a step that ends with the subagent, the steps it takes are its steps, and what it was told, wrote and reported stays on the computer", async () => {
@@ -2166,6 +2327,7 @@ const CLIENT_METHODS = [
   "model/list",
   "thread/start",
   "thread/resume",
+  "thread/fork",
   "thread/unarchive",
   "turn/start",
   "turn/interrupt",

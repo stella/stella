@@ -656,15 +656,15 @@ async fn a_finished_run_is_forgotten_once_acknowledged_and_a_run_welcome_omits_i
       .emit(RunOutput::Finished {
         outcome: RunOutcome::Completed,
         harness_session_id: Some("session-1".to_owned()),
+        harness_boundary: Some("turn-1".to_owned()),
       })
       .unwrap()
       .get(),
     2
   );
-  assert_eq!(
-    connection.receive_type("run.finished").await["harnessSessionId"],
-    "session-1"
-  );
+  let finished_message = connection.receive_type("run.finished").await;
+  assert_eq!(finished_message["harnessSessionId"], "session-1");
+  assert_eq!(finished_message["harnessBoundary"], "turn-1");
   // Nothing follows the final message.
   assert_eq!(done.emit(text_chunk("late")), Err(EmitError::RunClosed));
   connection

@@ -148,7 +148,7 @@ const createComputer = () => {
         linkedFolders: [],
         approvedFolderIds: [],
       }),
-    readChatRunSession: async () => Result.ok(null),
+    readChatRunSession: async () => Result.ok({ type: "fresh" }),
     startRun: async () => Result.ok({ type: "assigned", runId: RUNNER_RUN_ID }),
     readEvents: async ({ afterSeq }) =>
       Result.ok({
@@ -399,7 +399,7 @@ describe("a turn on the member's computer", () => {
         messageId: "answer",
         text: "Reading the file. The build passes.",
       },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     const firstText = chunks.findIndex(hasText("Reading the file."));
     expect(firstText).toBeGreaterThan(-1);
@@ -461,7 +461,7 @@ describe("a turn on the member's computer", () => {
       },
       { type: "text.delta", messageId: "answer", delta: "All tests pass." },
       { type: "text.completed", messageId: "answer", text: "All tests pass." },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     const pauseAt = chunks.findIndex(isPause) + 1;
     expect(pauseAt).toBeGreaterThan(0);

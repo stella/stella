@@ -16,6 +16,7 @@ import {
   or,
   type SQL,
   sql,
+  type SQLWrapper,
 } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -27,6 +28,7 @@ import {
   DESKTOP_RUNNER_SERVER_MESSAGE,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
+  type DesktopRunnerHarnessCapability,
   type DesktopRunnerHarnessReport,
   desktopRunnerHarnessReportSchema,
   type DesktopRunnerLimits,
@@ -1106,6 +1108,10 @@ const advanceRun = async ({
           // reported opening.
           harnessSessionId:
             message.harnessSessionId ?? sql`${runs.harnessSessionId}`,
+          // A boundary is a point in the session the finish names; the
+          // contract lets only a completed run send one.
+          harnessBoundary:
+            message.harnessSessionId === null ? null : message.harnessBoundary,
         },
         recordTransitionAuditEvent: skipRunAudit,
       });
@@ -2385,6 +2391,8 @@ type ChatRunSessionOptions = {
   chat: ChatRunBinding;
   desktopId: string;
   harness: AgentHarness;
+  /** What that harness on that computer reports it can do now. */
+  capabilities: readonly DesktopRunnerHarnessCapability[];
   /**
    * The linked folder the turn works in, `null` for the chat's own: a
    * harness keeps its sessions per working folder, so a session from
@@ -2394,25 +2402,60 @@ type ChatRunSessionOptions = {
 };
 
 /**
- * The harness session turn `chat.turnId` resumes on this computer and
- * harness, or `null` when the turn starts a fresh one and hands the harness
- * the chat's own history.
+ * How a turn continues the harness session the chat's earlier turns ran in
+ * on its computer: not at all (it hands the harness the chat's own history),
+ * the session whole, or a new session holding what the session held through
+ * an earlier run's boundary.
+ */
+export type ChatRunSession =
+  | { type: "fresh" }
+  | { type: "resume"; sessionId: string }
+  | { type: "fork"; sessionId: string; boundary: string };
+
+/**
+ * The harness session turn `chat.turnId` continues on this computer and
+ * harness, and how.
  *
  * A session holds every turn the runs that continued it were given and
- * answered, so it is resumed only while the chat still holds exactly those:
- * the newest run of the thread on this computer and harness left it, and its
- * turn's answer is still the message right before the one this turn answers.
- * An edit or a regeneration deletes that answer and every later message, and
- * an answer from the cloud or from another computer or harness takes its
- * place, so any of them starts fresh; a revision of any message of the thread
- * since that run's turn began does too, because the session holds the text
- * it replaced (no revision is accepted while a turn runs). A fork is another
- * thread and holds no run, so it starts fresh.
+ * answered, so it is continued only while the chat still holds exactly those.
+ * - Resume: the newest run of the thread on this computer and harness left
+ *   the session, and its turn's answer is still the message right before the
+ *   one this turn answers.
+ * - Fork: an edit or a regeneration deleted later messages, and the message
+ *   right before the one this turn answers is the answer of an earlier run
+ *   whose turn completed at a recorded boundary. A session only grows (a
+ *   resume appends, a fork writes a new one) and is never cut in place, so
+ *   what it held through that boundary is still what that run left, and the
+ *   new session holds exactly the chat up to that answer. The session itself
+ *   is not changed, so a retried start forks the same prefix again.
+ * - Fresh, for anything else: an answer from the cloud or from another
+ *   computer, harness or folder in its place, or a harness that cannot fork.
+ *   A revision since the continued run's turn began of any message before
+ *   the one this turn answers starts fresh too, because the session holds
+ *   the text it replaced (no revision is accepted while a turn runs). An
+ *   edit or a regeneration writes no revision, and the revisions of the
+ *   messages it deletes go with them. A fork is another thread and holds no
+ *   run, so it starts fresh.
  */
 export const readChatRunSession = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { owner, chat, desktopId, harness, linkedFolderId }: ChatRunSessionOptions,
-): Promise<string | null> => {
+  {
+    owner,
+    chat,
+    desktopId,
+    harness,
+    capabilities,
+    linkedFolderId,
+  }: ChatRunSessionOptions,
+): Promise<ChatRunSession> => {
+  const sameSessions = and(
+    eq(runs.chatThreadId, chat.threadId),
+    eq(runs.desktopId, desktopId),
+    eq(runs.harness, harness),
+    eq(runs.userId, owner.userId),
+    eq(runs.organizationId, owner.organizationId),
+    sql`${runs.linkedFolderId} IS NOT DISTINCT FROM ${linkedFolderId}::uuid`,
+  );
   // The run that last wrote the session: a later one resumed it or replaced
   // it, whatever state it ended in. A run records its session id once the
   // session takes its prompt. A run without one is passed over only when it
@@ -2429,12 +2472,7 @@ export const readChatRunSession = async (
     .from(runs)
     .where(
       and(
-        eq(runs.chatThreadId, chat.threadId),
-        eq(runs.desktopId, desktopId),
-        eq(runs.harness, harness),
-        eq(runs.userId, owner.userId),
-        eq(runs.organizationId, owner.organizationId),
-        sql`${runs.linkedFolderId} IS NOT DISTINCT FROM ${linkedFolderId}::uuid`,
+        sameSessions,
         or(
           isNotNull(runs.harnessSessionId),
           and(
@@ -2448,46 +2486,95 @@ export const readChatRunSession = async (
     .orderBy(desc(runs.createdAt), desc(runs.runId))
     .limit(1)
     .as("newest_run");
-  // The message right before the one this turn answers, in the thread's
-  // order: the answer this turn continues. The boundary is the asking
-  // message's own row, read in the database by id.
+  // The thread's messages before the one this turn answers, in the
+  // thread's order: what a continued session holds. The boundary is the
+  // asking message's own row, read in the database by id.
+  const beforeAsking = sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select m.created_at, m.id from chat_messages m join chat_turns t on t.user_message_id = m.id and t.thread_id = m.thread_id where t.id = ${chat.turnId} and t.thread_id = ${chat.threadId})`;
+  // The message right before the one this turn answers: the answer this
+  // turn continues.
   const continued = db
     .select({ id: chatMessages.id })
     .from(chatMessages)
-    .where(
-      and(
-        eq(chatMessages.threadId, chat.threadId),
-        sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select m.created_at, m.id from chat_messages m join chat_turns t on t.user_message_id = m.id and t.thread_id = m.thread_id where t.id = ${chat.turnId} and t.thread_id = ${chat.threadId})`,
-      ),
-    )
+    .where(and(eq(chatMessages.threadId, chat.threadId), beforeAsking))
     .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
     .limit(1);
-  const rows = await db
-    .select({ harnessSessionId: newest.harnessSessionId })
-    .from(newest)
-    .innerJoin(chatTurns, eq(chatTurns.id, newest.chatTurnId))
-    .where(
-      and(
-        eq(newest.state, "finished"),
-        isNotNull(newest.harnessSessionId),
-        eq(chatTurns.threadId, chat.threadId),
-        eq(chatTurns.assistantMessageId, sql`(${continued})`),
-        // Both times are the database's own: the turn's start, read by id.
-        notExists(
-          db
-            .select({ id: chatMessageRevisions.id })
-            .from(chatMessageRevisions)
-            .where(
-              and(
-                eq(chatMessageRevisions.threadId, chat.threadId),
-                sql`${chatMessageRevisions.createdAt} >= (select t.created_at from chat_turns t where t.id = ${newest.chatTurnId})`,
-              ),
-            ),
+  // No message the session holds was revised since the continued turn
+  // began; a revision of a message an edit replaced is not in it. Both
+  // times are the database's own: the turn's start, read by id.
+  const unrevisedSince = (turnId: SQLWrapper) =>
+    notExists(
+      db
+        .select({ id: chatMessageRevisions.id })
+        .from(chatMessageRevisions)
+        .innerJoin(
+          chatMessages,
+          and(
+            eq(chatMessages.id, chatMessageRevisions.messageId),
+            eq(chatMessages.threadId, chatMessageRevisions.threadId),
+          ),
+        )
+        .where(
+          and(
+            eq(chatMessageRevisions.threadId, chat.threadId),
+            beforeAsking,
+            sql`${chatMessageRevisions.createdAt} >= (select t.created_at from chat_turns t where t.id = ${turnId})`,
+          ),
         ),
-      ),
-    )
-    .limit(1);
-  return rows.at(0)?.harnessSessionId ?? null;
+    );
+  const resumed = (
+    await db
+      .select({ harnessSessionId: newest.harnessSessionId })
+      .from(newest)
+      .innerJoin(chatTurns, eq(chatTurns.id, newest.chatTurnId))
+      .where(
+        and(
+          eq(newest.state, "finished"),
+          isNotNull(newest.harnessSessionId),
+          eq(chatTurns.threadId, chat.threadId),
+          eq(chatTurns.assistantMessageId, sql`(${continued})`),
+          unrevisedSince(newest.chatTurnId),
+        ),
+      )
+      .limit(1)
+  ).at(0)?.harnessSessionId;
+  if (resumed !== undefined && resumed !== null) {
+    return { type: "resume", sessionId: resumed };
+  }
+  if (!capabilities.includes("fork")) {
+    return { type: "fresh" };
+  }
+  // The run whose completed turn answered that message, at the point its
+  // turn ended in its session.
+  const forked = (
+    await db
+      .select({
+        sessionId: runs.harnessSessionId,
+        boundary: runs.harnessBoundary,
+      })
+      .from(runs)
+      .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
+      .where(
+        and(
+          sameSessions,
+          eq(runs.state, "finished"),
+          eq(runs.outcome, "completed"),
+          isNotNull(runs.harnessSessionId),
+          isNotNull(runs.harnessBoundary),
+          eq(chatTurns.threadId, chat.threadId),
+          eq(chatTurns.assistantMessageId, sql`(${continued})`),
+          unrevisedSince(chatTurns.id),
+        ),
+      )
+      .orderBy(desc(runs.createdAt), desc(runs.runId))
+      .limit(1)
+  ).at(0);
+  if (forked === undefined) {
+    return { type: "fresh" };
+  }
+  const { sessionId, boundary } = forked;
+  return sessionId === null || boundary === null
+    ? { type: "fresh" }
+    : { type: "fork", sessionId, boundary };
 };
 
 type ChatRunForRequestOptions = {

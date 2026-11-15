@@ -2093,6 +2093,7 @@
       "noResults": "Keine passenden Skills",
       "tryOne": "Probieren Sie zum Einstieg einen davon aus"
     },
+    "queuePrompt": "Senden, wenn der Agent fertig ist",
     "queuedAttachmentCount": "{count, plural, one {# Anhang} other {# Anhänge}}",
     "queuedNotice": "Eingereiht – wird gesendet, sobald die aktuelle Antwort abgeschlossen ist",
     "reasoning": "Argumentation",
@@ -2199,7 +2200,6 @@
     "sourcePlaceholder": "Chat über {title}",
     "sourcePlaceholderAction": "Chat über",
     "sources": "Quellen:",
-    "steerPrompt": "An den Agenten senden, während er arbeitet",
     "steerRefused": {
       "cannotSteer": "Dieser Agent nimmt während der Arbeit keine Nachrichten an.",
       "noRun": "Der Agent hat noch nicht begonnen.",

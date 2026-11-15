@@ -2093,6 +2093,7 @@
       "noResults": "Žiadne zhodné zručnosti",
       "tryOne": "Začni s jedným z týchto"
     },
+    "queuePrompt": "Odoslať, keď agent skončí",
     "queuedAttachmentCount": "{count, plural, one {# príloha} few {# prílohy} other {# príloh} many {# prílohy}}",
     "queuedNotice": "V poradí – odošle sa po dokončení aktuálnej odpovede",
     "reasoning": "Uvažovanie",
@@ -2199,7 +2200,6 @@
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
     "sources": "Zdroje:",
-    "steerPrompt": "Poslať agentovi počas práce",
     "steerRefused": {
       "cannotSteer": "Tento agent počas práce neprijíma správy.",
       "noRun": "Agent ešte nezačal.",

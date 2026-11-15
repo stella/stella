@@ -342,6 +342,9 @@ describe("downloads of a chat's tab", () => {
     });
     reportDownload({
       controllerId: "thread-1",
+      deliveryId: crypto.randomUUID(),
+      shownDocument: null,
+      type: "settled",
       download: {
         bytes: 23,
         mime: "application/pdf",
@@ -354,6 +357,9 @@ describe("downloads of a chat's tab", () => {
     // Another chat's download never reaches this one.
     reportDownload({
       controllerId: "thread-2",
+      deliveryId: crypto.randomUUID(),
+      shownDocument: null,
+      type: "settled",
       download: {
         outcome: "stopped",
         reason: "not-pdf",
