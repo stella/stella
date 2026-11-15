@@ -44,7 +44,7 @@ import {
   ONLINE_SCOPE,
   onlineStepLifecycle,
 } from "./online-step-lifecycle";
-import type { OnlineScope } from "./online-step-lifecycle";
+import type { OnlineScope, OnlineStepKind } from "./online-step-lifecycle";
 
 // Catalog work keeps a short lock budget; every statement that locks a table
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
@@ -210,16 +210,24 @@ type PresentIndexState = {
 type OnlineIndexState = { type: "missing" } | PresentIndexState;
 
 /** Only repair builds indexes, so only repair carries the index gate. */
+/** Whether a walk visits a step; the rest are left to their owner. */
+type OnlineStepFilter = (kind: OnlineStepKind, name: string) => boolean;
+
+const EVERY_STEP: OnlineStepFilter = () => true;
+
 type OnlineMigrationMode =
   | {
       operation: "repair";
-      /** The steps this run builds; the rest are left to their owner. */
-      scope: OnlineScope;
+      inScope: OnlineStepFilter;
       indexGate: OnlineIndexGateOptions;
       reserveObserver: () => Promise<OnlineMigrationConnection>;
       timing: MigrationTiming;
     }
-  | { operation: "validate"; report: OnlineMigrationStartupReport };
+  | {
+      operation: "validate";
+      inScope: OnlineStepFilter;
+      report: OnlineMigrationStartupReport;
+    };
 
 type OnlineMigrationOptions = {
   repairs: readonly OnlineRepair[];
@@ -256,7 +264,13 @@ export const runOnlineMigrations = async (
 ): Promise<OnlineMigrationOutcome> =>
   await processOnlineMigrations(
     pool,
-    { operation: "repair", scope, indexGate, reserveObserver, timing },
+    {
+      operation: "repair",
+      inScope: (kind, name) => isInOnlineScope(scope, kind, name),
+      indexGate,
+      reserveObserver,
+      timing,
+    },
     options,
   );
 
@@ -283,6 +297,20 @@ export type OnlineMigrationStartupReport = {
   regressed: RegressedOnlineRepair[];
 };
 
+const readNewestAppliedMigration = async (
+  connection: OnlineMigrationConnection,
+): Promise<string> => {
+  const row = (
+    await connection.query(
+      "SELECT name FROM drizzle.__drizzle_migrations WHERE name IS NOT NULL ORDER BY name DESC LIMIT 1",
+    )
+  ).at(0);
+  if (!isRecord(row) || typeof row["name"] !== "string") {
+    return panic("Online migration startup requires a named applied migration");
+  }
+  return row["name"];
+};
+
 /**
  * Startup validation. It never waits on the migrator: a migrate run holds the
  * online lock for a whole index build, longer than any statement timeout, so
@@ -306,22 +334,14 @@ export const reportOnlineMigrations = async (
         return { type: "migrator_active" };
       }
       try {
-        const row = (
-          await connection.query(
-            "SELECT name FROM drizzle.__drizzle_migrations WHERE name IS NOT NULL ORDER BY name DESC LIMIT 1",
-          )
-        ).at(0);
-        if (!isRecord(row) || typeof row["name"] !== "string") {
-          panic("Online migration startup requires a named applied migration");
-        }
         const report: OnlineMigrationStartupReport = {
-          newestAppliedMigration: row["name"],
+          newestAppliedMigration: await readNewestAppliedMigration(connection),
           pending: [],
           regressed: [],
         };
         const outcome = await walkOnlineMigrations({
           connection,
-          mode: { operation: "validate", report },
+          mode: { operation: "validate", inScope: EVERY_STEP, report },
           options,
         });
         if (outcome.type !== "complete") {
@@ -333,6 +353,117 @@ export const reportOnlineMigrations = async (
       }
     } finally {
       await connection.query(RESTORE_STATEMENT_TIMEOUT_SQL, [sessionTimeout]);
+    }
+  } finally {
+    await connection.release();
+  }
+};
+
+/** What one call of the pending runner did. */
+export type PendingOnlineUnitOutcome =
+  /** A migrate run or another runner holds the online lock; try later. */
+  | { type: "busy" }
+  /** No pending entry has work left. */
+  | { type: "idle" }
+  /** The first pending unit, walked once; `deferred` resumes on a later call. */
+  | {
+      type: "ran";
+      step: PendingOnlineMigrationStep;
+      outcome: OnlineMigrationOutcome;
+    };
+
+const READ_LOCK_TIMEOUT_SQL =
+  "SELECT current_setting('lock_timeout') AS timeout";
+const RESTORE_LOCK_TIMEOUT_SQL = "SELECT set_config('lock_timeout', $1, false)";
+
+const readLockTimeout = async (
+  connection: OnlineMigrationConnection,
+): Promise<string> => {
+  const row = (await connection.query(READ_LOCK_TIMEOUT_SQL)).at(0);
+  if (!isRecord(row) || typeof row["timeout"] !== "string") {
+    return panic("Session lock timeout is unreadable");
+  }
+  return row["timeout"];
+};
+
+const isPendingStep: OnlineStepFilter = (kind, name) =>
+  onlineStepLifecycle(kind, name) === ONLINE_LIFECYCLE.pending;
+
+/**
+ * Builds the first unfinished unit of a pending entry, after a rollout that
+ * left pending entries to be built later (`migrate --online=finalized`).
+ *
+ * It never waits for the online lock: a migrate run holding it owns every
+ * step, so the runner reports `busy` and a later call retries. It walks one
+ * unit per call and then releases the lock, so a migrate run waits behind at
+ * most one unit. Units come in the phase's order (indexes, cutovers,
+ * retirements, repairs), so an index a repair walks is built first.
+ */
+export const runNextPendingOnlineUnit = async (
+  pool: OnlineMigrationPool,
+  {
+    indexGate,
+    reserveObserver,
+    timing = DEFAULT_MIGRATION_TIMING,
+    ...options
+  }: Omit<OnlineRepairOptions, "scope">,
+): Promise<PendingOnlineUnitOutcome> => {
+  const connection = await pool.reserve();
+  let sessionStatus: "active" | "terminated" = "active";
+  const terminate = connection.terminate;
+  if (terminate) {
+    connection.terminate = async () => {
+      sessionStatus = "terminated";
+      await terminate();
+    };
+  }
+  try {
+    if (!(await tryAcquireOnlineMigrationLock(connection))) {
+      return { type: "busy" };
+    }
+    const statementTimeout = await readStatementTimeout(connection);
+    const lockTimeout = await readLockTimeout(connection);
+    try {
+      await connection.execute(STARTUP_VALIDATION_TIMEOUT_SQL);
+      const report: OnlineMigrationStartupReport = {
+        newestAppliedMigration: await readNewestAppliedMigration(connection),
+        pending: [],
+        regressed: [],
+      };
+      const validated = await walkOnlineMigrations({
+        connection,
+        mode: { operation: "validate", inScope: isPendingStep, report },
+        options,
+      });
+      if (validated.type !== "complete") {
+        return panic("Online migration validation cannot defer");
+      }
+      const step = report.pending.at(0);
+      if (!step) {
+        return { type: "idle" };
+      }
+      await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
+      await connection.execute("SET statement_timeout = '0'");
+      const outcome = await walkOnlineMigrations({
+        connection,
+        mode: {
+          operation: "repair",
+          inScope: (kind, name) => kind === step.kind && name === step.name,
+          indexGate,
+          reserveObserver,
+          timing,
+        },
+        options,
+      });
+      return { type: "ran", step, outcome };
+    } finally {
+      if (sessionStatus === "active") {
+        await connection.query(RESTORE_STATEMENT_TIMEOUT_SQL, [
+          statementTimeout,
+        ]);
+        await connection.query(RESTORE_LOCK_TIMEOUT_SQL, [lockTimeout]);
+        await releaseOnlineMigrationLock(connection);
+      }
     }
   } finally {
     await connection.release();
@@ -508,7 +639,11 @@ const walkOnlineMigrations = async ({
       return retirements;
     }
   } else {
-    await reportOnlineReplacements({ connection, report: mode.report });
+    await reportOnlineReplacements({
+      connection,
+      report: mode.report,
+      inScope: mode.inScope,
+    });
   }
   return await processOnlineRepairAt({
     connection,
@@ -536,10 +671,7 @@ const processOnlineIndexAt = async ({
   if (!index) {
     return COMPLETE;
   }
-  if (
-    mode.operation === "repair" &&
-    !isInOnlineScope(mode.scope, "index", index.name)
-  ) {
+  if (!mode.inScope("index", index.name)) {
     return await processOnlineIndexAt({
       connection,
       mode,
@@ -592,10 +724,7 @@ const processOnlineIndexCutoverAt = async ({
   if (!cutover) {
     return COMPLETE;
   }
-  if (
-    mode.operation === "repair" &&
-    !isInOnlineScope(mode.scope, "cutover", cutover.final.name)
-  ) {
+  if (!mode.inScope("cutover", cutover.final.name)) {
     return await processOnlineIndexCutoverAt({
       connection,
       mode,
@@ -718,10 +847,7 @@ const processOnlineRepairAt = async ({
   if (!repair) {
     return COMPLETE;
   }
-  if (
-    mode.operation === "repair" &&
-    !isInOnlineScope(mode.scope, "repair", repair.name)
-  ) {
+  if (!mode.inScope("repair", repair.name)) {
     return await processOnlineRepairAt({
       connection,
       mode,
@@ -874,9 +1000,7 @@ const retireReplacedIndexAt = async (
   if (!replacement) {
     return COMPLETE;
   }
-  if (
-    !isInOnlineScope(repair.scope, "replacement_drop", replacement.legacyName)
-  ) {
+  if (!repair.inScope("replacement_drop", replacement.legacyName)) {
     return await retireReplacedIndexAt(connection, repair, offset + 1);
   }
 
@@ -972,16 +1096,27 @@ export const retireOnlineIndex = async ({
 type ReportOnlineReplacementsOptions = {
   connection: OnlineMigrationConnection;
   report: OnlineMigrationStartupReport;
+  inScope: OnlineStepFilter;
   offset?: number;
 };
 
 const reportOnlineReplacements = async ({
   connection,
   report,
+  inScope,
   offset = 0,
 }: ReportOnlineReplacementsOptions): Promise<void> => {
   const replacement = ONLINE_INDEX_REPLACEMENTS.at(offset);
   if (!replacement) {
+    return;
+  }
+  if (!inScope("replacement_drop", replacement.legacyName)) {
+    await reportOnlineReplacements({
+      connection,
+      report,
+      inScope,
+      offset: offset + 1,
+    });
     return;
   }
   const index = ONLINE_MIGRATION_INDEXES.find(({ name }) =>
@@ -1011,7 +1146,12 @@ const reportOnlineReplacements = async ({
       reason: "retired index remains",
     });
   }
-  await reportOnlineReplacements({ connection, report, offset: offset + 1 });
+  await reportOnlineReplacements({
+    connection,
+    report,
+    inScope,
+    offset: offset + 1,
+  });
 };
 
 const assertReplacementIndexAt = async (
