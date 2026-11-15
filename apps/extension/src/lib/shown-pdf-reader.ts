@@ -2,6 +2,8 @@ import * as v from "valibot";
 
 import { BROWSER_DOWNLOAD_STOP_REASON } from "@stll/api-contract/browser-control";
 
+import { parseControllableUrl } from "./origin-policy";
+
 /**
  * The one place a PDF the chat's tab shows is fetched for its save. The
  * request asks for the document's own address once and never follows a
@@ -67,12 +69,40 @@ const readerRequestSchema = v.variant("type", [
 
 type ShownPdfReaderRequest = v.InferOutput<typeof readerRequestSchema>;
 
-/** A message for the offscreen reader; null for any other message. */
-export const parseShownPdfReaderRequest = (
-  input: unknown,
+/**
+ * Whether a message comes from this extension's own worker or pages: never
+ * from a content script, which carries the extension's id too but runs in
+ * a tab, beside a page.
+ */
+const fromExtensionContext = (
+  sender: Pick<chrome.runtime.MessageSender, "id" | "origin" | "tab">,
+  extensionId: string,
+): boolean =>
+  sender.id === extensionId &&
+  sender.tab === undefined &&
+  (sender.origin === undefined ||
+    sender.origin === `chrome-extension://${extensionId}`);
+
+/**
+ * The request the offscreen document takes from one message; null leaves
+ * the message unanswered. It takes only this extension's worker or pages,
+ * and reads only an address the origin policy lets a controlled tab load
+ * (public HTTPS, never stella or a private host), whatever its caller
+ * checked.
+ */
+export const takeShownPdfReaderRequest = (
+  message: unknown,
+  sender: Pick<chrome.runtime.MessageSender, "id" | "origin" | "tab">,
+  extensionId: string,
 ): ShownPdfReaderRequest | null => {
-  const parsed = v.safeParse(readerRequestSchema, input);
-  return parsed.success ? parsed.output : null;
+  const parsed = v.safeParse(readerRequestSchema, message);
+  if (!parsed.success || !fromExtensionContext(sender, extensionId)) {
+    return null;
+  }
+  const request = parsed.output;
+  return request.type === "read" && parseControllableUrl(request.url) === null
+    ? null
+    : request;
 };
 
 const isRedirect = (response: Response): boolean =>

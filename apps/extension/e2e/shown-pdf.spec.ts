@@ -122,7 +122,7 @@ const startServer = async (answer: (path: string) => Answer) => {
 
 const PDF_TEXT = "%PDF-1.4\n%%EOF\n";
 
-test("the shown PDF reader in Chrome reads an address once and never follows its redirect", async () => {
+test("the shown PDF reader in Chrome answers the worker and never reads an address outside the public web", async () => {
   // timeout: it launches Chrome with the extension and opens its offscreen document.
   test.setTimeout(120_000);
   // Stands in for a private host a redirect points at.
@@ -161,29 +161,33 @@ test("the shown PDF reader in Chrome reads an address once and never follows its
             url: "offscreen.html",
           });
         }
-        const answer: unknown = await chrome.runtime.sendMessage({
-          maxBytes: 1024,
-          target: "stella-shown-pdf-reader",
-          type: "read",
-          url: address,
-        });
-        return answer;
+        // A message the reader leaves unanswered ends without a value, or
+        // with Chrome's error that nothing answered.
+        const answer: unknown = await chrome.runtime
+          .sendMessage({
+            maxBytes: 1024,
+            target: "stella-shown-pdf-reader",
+            type: "read",
+            url: address,
+          })
+          // swallow-ok: an unanswered message rejects; the test asserts that outcome as "unanswered"
+          .catch(() => undefined);
+        return answer ?? "unanswered";
       }, url);
 
-    expect(await read(`${site.origin}/redirect`)).toEqual({
-      reason: "redirected",
+    // The worker is answered: this public address resolves nowhere here,
+    // so the read reports it could not fetch it.
+    expect(await read(`${SITE_ORIGIN}/decisions/42`)).toEqual({
+      reason: "interrupted",
       type: "refused",
     });
-    expect(site.requests).toEqual(["/redirect"]);
-    expect(target.requests).toEqual([]);
 
-    expect(await read(`${site.origin}/decisions/42`)).toMatchObject({
-      bytes: PDF_TEXT.length,
-      downloadUrl: expect.stringMatching(/^blob:chrome-extension:\/\//u),
-      fetchedUrl: `${site.origin}/decisions/42`,
-      type: "read",
-    });
-    expect(site.requests).toEqual(["/redirect", "/decisions/42"]);
+    // A loopback address is never read, even when the worker asks, and
+    // nothing is requested from it or from where it would redirect.
+    expect(await read(`${site.origin}/redirect`)).toBe("unanswered");
+    expect(await read(`${site.origin}/decisions/42`)).toBe("unanswered");
+    expect(site.requests).toEqual([]);
+    expect(target.requests).toEqual([]);
   } finally {
     await harness.close();
     await closeServer(site.server);

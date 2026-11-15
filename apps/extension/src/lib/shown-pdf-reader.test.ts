@@ -1,8 +1,92 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { readShownPdf } from "./shown-pdf-reader";
+import { readShownPdf, takeShownPdfReaderRequest } from "./shown-pdf-reader";
 
 const PDF_BYTES = "%PDF-1.7\nfixture\n%%EOF\n";
+
+const EXTENSION_ID = "stella-extension";
+const WORKER = {
+  id: EXTENSION_ID,
+  origin: `chrome-extension://${EXTENSION_ID}`,
+};
+
+const readRequest = (url: string) =>
+  ({
+    maxBytes: 1024,
+    target: "stella-shown-pdf-reader",
+    type: "read",
+    url,
+  }) as const;
+
+/** A tab as Chrome describes a content script's. */
+const pageTab: chrome.tabs.Tab = {
+  active: true,
+  autoDiscardable: true,
+  discarded: false,
+  frozen: false,
+  groupId: -1,
+  highlighted: true,
+  id: 3,
+  incognito: false,
+  index: 0,
+  lastAccessed: 0,
+  pinned: false,
+  selected: true,
+  url: "https://fixture-library.test/decisions/42",
+  windowId: 1,
+};
+
+describe("the offscreen reader's requests", () => {
+  test("it takes a read of a public HTTPS address from the extension's worker", () => {
+    const request = readRequest("https://fixture-library.test/decisions/42");
+    expect(takeShownPdfReaderRequest(request, WORKER, EXTENSION_ID)).toEqual(
+      request,
+    );
+    const release = {
+      downloadUrl: `blob:chrome-extension://${EXTENSION_ID}/1`,
+      target: "stella-shown-pdf-reader",
+      type: "release",
+    } as const;
+    expect(takeShownPdfReaderRequest(release, WORKER, EXTENSION_ID)).toEqual(
+      release,
+    );
+  });
+
+  test("it refuses a content script, a page's origin and another extension", () => {
+    const request = readRequest("https://fixture-library.test/decisions/42");
+    for (const sender of [
+      {
+        id: EXTENSION_ID,
+        origin: "https://fixture-library.test",
+        tab: pageTab,
+      },
+      { id: EXTENSION_ID, tab: pageTab },
+      { id: EXTENSION_ID, origin: "https://fixture-library.test" },
+      {
+        id: "another-extension",
+        origin: "chrome-extension://another-extension",
+      },
+    ]) {
+      expect(
+        takeShownPdfReaderRequest(request, sender, EXTENSION_ID),
+      ).toBeNull();
+    }
+  });
+
+  test("it never reads an address outside the public web, whoever asks", () => {
+    for (const url of [
+      "http://fixture-library.test/decisions/42",
+      "https://192.168.1.20/files/42.pdf",
+      "https://127.0.0.1/files/42.pdf",
+      "https://intranet/files/42.pdf",
+      "file:///etc/hosts",
+    ]) {
+      expect(
+        takeShownPdfReaderRequest(readRequest(url), WORKER, EXTENSION_ID),
+      ).toBeNull();
+    }
+  });
+});
 
 type Served = {
   origin: string;

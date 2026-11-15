@@ -1,18 +1,19 @@
 import { panic } from "better-result";
 
 import {
-  parseShownPdfReaderRequest,
   readShownPdf,
+  takeShownPdfReaderRequest,
 } from "../../lib/shown-pdf-reader";
 
 /**
  * The offscreen document: it fetches a PDF the chat's tab shows and keeps
  * its bytes as a `blob:` address until the worker has had Chrome save it
- * (`shown-pdf-reader`). It answers only this extension's worker.
+ * (`shown-pdf-reader`). It answers only this extension's worker and pages,
+ * and reads only public HTTPS addresses.
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  const request = parseShownPdfReaderRequest(message);
-  if (request === null || sender.id !== chrome.runtime.id) {
+  const request = takeShownPdfReaderRequest(message, sender, chrome.runtime.id);
+  if (request === null) {
     return false;
   }
   switch (request.type) {
