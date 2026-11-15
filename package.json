@@ -366,7 +366,8 @@
     "oxlint-tailwindcss@1.17.1": "patches/oxlint-tailwindcss@1.17.1.patch",
     "@astrojs/mdx@8.1.3": "patches/@astrojs%2Fmdx@8.1.3.patch",
     "@better-auth/cimd@1.7.19": "patches/@better-auth%2Fcimd@1.7.19.patch",
-    "@better-auth/oauth-provider@1.7.19": "patches/@better-auth%2Foauth-provider@1.7.19.patch"
+    "@better-auth/oauth-provider@1.7.19": "patches/@better-auth%2Foauth-provider@1.7.19.patch",
+    "drizzle-orm@1.0.0-rc.5": "patches/drizzle-orm@1.0.0-rc.5.patch"
   },
   "trustedDependencies": [
     "lefthook"
