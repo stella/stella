@@ -2348,17 +2348,17 @@
       "input": "Vstup",
       "interrupted": "Přerušeno před dokončením",
       "localOutput": {
+        "arriving": "Stále se přenáší z počítače, na kterém krok běžel",
         "conversation": "Konverzace dílčího agenta",
         "conversationPrompt": "Zadání",
         "conversationReport": "Zpráva",
         "cut": "Zobrazeno prvních {kept} z {total}",
         "diff": "Změny souborů",
-        "elsewhere": "Otevřete na počítači, kde krok běžel",
         "empty": "Žádný výstup",
-        "failed": "Desktopová aplikace stella na tomto počítači to nedokázala zobrazit.",
-        "imageTooLarge": "Tento obrázek má {total}. Obrázky větší než {kept} se na tomto počítači neukládají, proto jej zde nelze zobrazit.",
-        "notKept": "Z tohoto kroku není na tomto počítači nic uloženo",
-        "reading": "Načítání z tohoto počítače"
+        "imageTooLargeToStore": "Tento obrázek má {total}. Obrázky větší než {kept} se neukládají, proto jej nelze zobrazit.",
+        "notCopied": "Do tohoto chatu zatím nebylo zkopírováno",
+        "notStored": "Z tohoto kroku nebylo nic uloženo",
+        "runBudgetReached": "Neuloženo: tento běh už uložil tolik, kolik jeden běh smí"
       },
       "output": "Výstup",
       "patternInPath": "{pattern} v {path}",
@@ -2381,6 +2381,10 @@
       "needsInputTitle": "stella potřebuje váš vstup",
       "replyReadyBody": "stella dokončila odpověď ve vašem chatu.",
       "replyReadyTitle": "Odpověď je hotová"
+    },
+    "turnPaused": {
+      "continue": "Pokračovat",
+      "status": "Pozastaveno po {count, plural, one {# volání nástroje} few {# voláních nástrojů} many {# volání nástroje} other {# voláních nástrojů}}"
     },
     "turnStatus": {
       "answerFailed": "Odpověď se nepodařilo dokončit",

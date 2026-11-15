@@ -2348,17 +2348,17 @@
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
       "localOutput": {
+        "arriving": "Todavía está llegando desde el ordenador que ejecutó este paso",
         "conversation": "Conversación del subagente",
         "conversationPrompt": "Tarea",
         "conversationReport": "Informe",
         "cut": "Se muestran los primeros {kept} de {total}",
         "diff": "Cambios en archivos",
-        "elsewhere": "Ábrelo en el ordenador que lo ejecutó",
         "empty": "Sin salida",
-        "failed": "La aplicación de escritorio de stella en este ordenador no pudo mostrarlo.",
-        "imageTooLarge": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan en este ordenador, por lo que no se puede mostrar aquí.",
-        "notKept": "No se guardó nada de este paso en este ordenador",
-        "reading": "Leyendo desde este ordenador"
+        "imageTooLargeToStore": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan, por lo que no se puede mostrar.",
+        "notCopied": "Aún no se ha copiado a este chat",
+        "notStored": "No se guardó nada de este paso",
+        "runBudgetReached": "No se guardó: esta ejecución ya había guardado todo lo que puede guardar una ejecución"
       },
       "output": "Salida",
       "patternInPath": "{pattern} en {path}",
@@ -2381,6 +2381,10 @@
       "needsInputTitle": "stella necesita tu respuesta",
       "replyReadyBody": "stella terminó de responder en tu chat.",
       "replyReadyTitle": "Respuesta lista"
+    },
+    "turnPaused": {
+      "continue": "Continuar",
+      "status": "En pausa tras {count, plural, one {# llamada a herramienta} many {# llamadas a herramientas} other {# llamadas a herramientas}}"
     },
     "turnStatus": {
       "answerFailed": "No se pudo terminar la respuesta",

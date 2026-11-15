@@ -339,7 +339,6 @@ describe("drawing an answer from its events", () => {
         description: "Check the lease",
         agentType: null,
         status: "done",
-        opensOnComputer: true,
         stepCount: 1,
         steps: [
           {
@@ -348,7 +347,6 @@ describe("drawing an answer from its events", () => {
             titleKind: null,
             subtitle: { type: "text", text: "rg lease" },
             status: "done",
-            opensOnComputer: false,
           },
         ],
       },
@@ -362,7 +360,6 @@ describe("drawing an answer from its events", () => {
             titleKind: null,
             subtitle: { type: "text", text: "ls" },
             status: "done",
-            opensOnComputer: false,
           },
           { type: "tool", label: "list_templates", status: "running" },
         ],

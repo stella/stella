@@ -136,12 +136,6 @@ export const AnswerSubagent = ({
             {facts.join(" · ")}
           </Text>
         )}
-        {block.opensOnComputer ? (
-          // What it was told, wrote and reported never leaves that computer.
-          <Text style={[styles.detail, { color: colors.muted }]}>
-            {t("localRun.opensOnComputer")}
-          </Text>
-        ) : null}
       </View>
     </>
   );
@@ -197,7 +191,6 @@ const useStepTitle = () => {
 
 /** Each step by its title, with what it was about under it. */
 const StepList = ({ steps }: { steps: readonly AnswerStep[] }) => {
-  const t = useTranslations("chat");
   const colors = useAppColors();
   const stepTitle = useStepTitle();
   const localRunSubtitleText = useLocalRunSubtitleText();
@@ -240,11 +233,6 @@ const StepList = ({ steps }: { steps: readonly AnswerStep[] }) => {
                 {detail}
               </Text>
             )}
-            {step.type === "local" && step.opensOnComputer ? (
-              <Text style={[styles.detail, { color: colors.muted }]}>
-                {t("localRun.opensOnComputer")}
-              </Text>
-            ) : null}
           </View>
         );
       })}

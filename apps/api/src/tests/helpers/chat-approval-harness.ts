@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
+import type { ChatTurnBudget } from "@stll/chat-limits";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
@@ -375,6 +376,8 @@ export const createApprovalHarness = ({
     notify: () => void;
   }>();
   const turnSettlementFailures = new Map<string, unknown>();
+  /** Per thread: the narrower budget its turns run under. */
+  const turnBudgets = new Map<string, ChatTurnBudget>();
   /** Every run started on a thread, by its terminal promise. */
   const runSettlements = new Map<string, Promise<unknown>[]>();
   const notifyTurnSettlement = (threadId: string) => {
@@ -542,8 +545,10 @@ export const createApprovalHarness = ({
           notifyTurnSettlement(props.threadId);
         },
       );
+      const turnBudget = turnBudgets.get(props.threadId);
       return await streamChat({
         ...props,
+        ...(turnBudget === undefined ? {} : { turnBudget }),
         ...(localRunOf === undefined
           ? {}
           : { localRun: localRunOf(props.threadId) }),
@@ -1840,6 +1845,16 @@ export const createApprovalHarness = ({
     /** From now on, `threadId`'s responses reach the page whole again. */
     streamWhole: (threadId: SafeId<"chatThread">) => {
       liveThreads.delete(threadId);
+    },
+    /**
+     * From now on, `threadId`'s turns run under `budget` instead of
+     * `CHAT_TURN_BUDGET`, so a scripted turn reaches a cap in a few steps.
+     */
+    limitTurnBudget: (
+      threadId: SafeId<"chatThread">,
+      budget: ChatTurnBudget,
+    ) => {
+      turnBudgets.set(threadId, budget);
     },
     /**
      * Runs `race` once, when the next send has read its thread and is about

@@ -2348,17 +2348,17 @@
       "input": "المدخلات",
       "interrupted": "توقّف قبل الاكتمال",
       "localOutput": {
+        "arriving": "لا يزال يصل من الحاسوب الذي نفّذ هذه الخطوة",
         "conversation": "محادثة الوكيل الفرعي",
         "conversationPrompt": "المهمة",
         "conversationReport": "التقرير",
         "cut": "يُعرض أول {kept} من {total}",
         "diff": "تغييرات الملفات",
-        "elsewhere": "افتحه على الحاسوب الذي نفّذه",
         "empty": "لا توجد مخرجات",
-        "failed": "تعذّر على تطبيق stella لسطح المكتب على هذا الحاسوب عرض هذا.",
-        "imageTooLarge": "حجم هذه الصورة {total}. لا تُحفظ على هذا الحاسوب الصور التي تتجاوز {kept}، لذا لا يمكن عرضها هنا.",
-        "notKept": "لم يُحفظ شيء من هذه الخطوة على هذا الحاسوب",
-        "reading": "جارٍ القراءة من هذا الحاسوب"
+        "imageTooLargeToStore": "حجم هذه الصورة {total}. لا تُحفظ الصور التي تتجاوز {kept}، لذا لا يمكن عرضها.",
+        "notCopied": "لم يُنسخ إلى هذه الدردشة بعد",
+        "notStored": "لم يُحفظ شيء من هذه الخطوة",
+        "runBudgetReached": "لم يُحفظ: كان هذا التشغيل قد حفظ بالفعل أقصى ما يُسمح به لتشغيل واحد"
       },
       "output": "المخرجات",
       "patternInPath": "{pattern} في {path}",
@@ -2381,6 +2381,10 @@
       "needsInputTitle": "تحتاج stella إلى مدخلاتك",
       "replyReadyBody": "أنهت stella الرد في الدردشة.",
       "replyReadyTitle": "الرد جاهز"
+    },
+    "turnPaused": {
+      "continue": "متابعة",
+      "status": "متوقف مؤقتًا بعد {count, plural, zero {# استدعاء أداة} one {استدعاء أداة واحد} two {استدعاءين لأداة} few {# استدعاءات أدوات} many {# استدعاءً لأداة} other {# استدعاء أداة}}"
     },
     "turnStatus": {
       "answerFailed": "تعذّر إكمال الإجابة",

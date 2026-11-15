@@ -2348,17 +2348,17 @@
       "input": "Ievade",
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "localOutput": {
+        "arriving": "Joprojām tiek saņemts no datora, kurā šis solis tika izpildīts",
         "conversation": "Apakšaģenta saruna",
         "conversationPrompt": "Uzdevums",
         "conversationReport": "Ziņojums",
         "cut": "Rāda pirmos {kept} no {total}",
         "diff": "Failu izmaiņas",
-        "elsewhere": "Atveriet datorā, kurā tas tika izpildīts",
         "empty": "Nav izvades",
-        "failed": "stella darbvirsmas lietotne šajā datorā to nevarēja parādīt.",
-        "imageTooLarge": "Šī attēla izmērs ir {total}. Attēli, kas lielāki par {kept}, šajā datorā netiek saglabāti, tāpēc to šeit nevar parādīt.",
-        "notKept": "No šī soļa šajā datorā nekas nav saglabāts",
-        "reading": "Notiek lasīšana no šī datora"
+        "imageTooLargeToStore": "Šī attēla izmērs ir {total}. Attēli, kas lielāki par {kept}, netiek saglabāti, tāpēc to nevar parādīt.",
+        "notCopied": "Vēl nav nokopēts uz šo tērzēšanu",
+        "notStored": "No šī soļa nekas netika saglabāts",
+        "runBudgetReached": "Nav saglabāts: šī izpilde jau bija saglabājusi tik daudz, cik drīkst viena izpilde"
       },
       "output": "Izvade",
       "patternInPath": "{pattern} ({path})",
@@ -2381,6 +2381,10 @@
       "needsInputTitle": "stellai vajadzīga jūsu rīcība",
       "replyReadyBody": "stella pabeidza atbildēt jūsu tērzēšanā.",
       "replyReadyTitle": "Atbilde gatava"
+    },
+    "turnPaused": {
+      "continue": "Turpināt",
+      "status": "Apturēts pēc {count, plural, zero {# rīka izsaukumiem} one {# rīka izsaukuma} other {# rīka izsaukumiem}}"
     },
     "turnStatus": {
       "answerFailed": "Atbildi neizdevās pabeigt",

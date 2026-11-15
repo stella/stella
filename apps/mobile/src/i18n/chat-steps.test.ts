@@ -61,7 +61,6 @@ const WEB_LOCAL_RUN_KEYS = {
   browserType: ["chat", "toolCall", "browserType"],
   browserPressKey: ["chat", "toolCall", "browserPressKey"],
   browserSelect: ["chat", "toolCall", "browserSelect"],
-  opensOnComputer: ["chat", "toolCall", "localOutput", "elsewhere"],
   status: {
     needs_approval: ["chat", "turnStatus", "waitingForApproval"],
     running: ["tasks", "statusValues", "in_progress"],

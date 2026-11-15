@@ -11,7 +11,6 @@ import {
   isLocalRunInterruptedOutput,
   type LocalRunStepCall,
   localRunStepFailed,
-  localRunStepOutputKind,
   type LocalRunStepStanding,
   localRunSubagentGroups,
   type LocalRunSubagentStatus,
@@ -67,12 +66,6 @@ export type AnswerStep =
       readonly titleKind: LocalRunToolTitleKind | null;
       readonly subtitle: LocalRunToolSubtitle | null;
       readonly status: StepStatus;
-      /**
-       * The step viewed an image, which stays on the computer that ran it:
-       * stella desktop serves it there to a page on that computer only, so
-       * the phone says where it opens instead of opening it.
-       */
-      readonly opensOnComputer: boolean;
     }
   | { readonly type: "reasoning"; readonly text: string };
 
@@ -101,11 +94,6 @@ export type AnswerBlock =
       readonly description: string | null;
       readonly agentType: string | null;
       readonly status: LocalRunSubagentStatus;
-      /**
-       * The subagent ended with a result, so what it was told, wrote and
-       * reported is kept on the computer that ran it, which alone opens it.
-       */
-      readonly opensOnComputer: boolean;
       /** Every step it took, one that waits on an approval included. */
       readonly stepCount: number;
       /**
@@ -133,15 +121,7 @@ const toStep = (part: AnswerPart): AnswerStep => {
   });
   return local === null
     ? { type: "tool", label, status }
-    : {
-        type: "local",
-        label,
-        status,
-        ...local,
-        opensOnComputer:
-          status !== "running" &&
-          localRunStepOutputKind({ name, input: part.input }) === "image",
-      };
+    : { type: "local", label, status, ...local };
 };
 
 /** A call runs until it completes; it failed when it errored or said so. */
@@ -260,9 +240,6 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
         own: ownStanding,
         steps: taken.map(({ part }) => stepStanding(part)),
       }),
-      opensOnComputer:
-        own.output !== undefined &&
-        (ownStanding === "done" || ownStanding === "failed"),
       stepCount: taken.length,
       steps: taken
         .filter((step) => groups.rowIn.has(step.id))
