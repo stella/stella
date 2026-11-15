@@ -2334,6 +2334,7 @@
       "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
+      "user_message": "Az ügynök munkája közben elküldve",
       "web_search": "Keresés az interneten"
     },
     "toolCall": {
@@ -6030,6 +6031,7 @@
         "title": "Kódoló ügynökök a tagok számítógépein",
         "updated": "A kódoló ügynökök engedélyei frissítve"
       },
+      "logoInvalid": "Válasszon legfeljebb 5 MB méretű PNG-, JPEG- vagy WebP-képet.",
       "matterNumbering": "Ügyszámozás",
       "matterNumberingDescription": "Beállíthatja, hogyan generálódjanak az új ügyek hivatkozási számai",
       "membersDescription": "Kezelje, kik férhetnek hozzá ehhez a szervezethez, és a függőben lévő meghívókat",
@@ -6078,6 +6080,7 @@
         "title": "Időzóna",
         "updated": "Időzóna frissítve"
       },
+      "uploadLogo": "Logó feltöltése",
       "usage": "Használat",
       "usageDescription": "Használati korlátok és jogosultsági állapot ehhez a szervezethez",
       "usageEmptyDescription": "Állíts be használati jogosultságot, hogy a szervezet használhassa a mért AI-funkciókat.",

@@ -27,11 +27,15 @@ export const LEGISLATION_PARTIAL_WRITERS = {
     "publisherExpressionId",
     "updatedAt",
   ],
+  // Projection bookkeeping keeps the document's public freshness, so these
+  // owners write `updated_at` only back to itself.
   "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts": [
     "projectionEpoch",
+    "updatedAt",
   ],
   "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": [
     "projectionEpoch",
+    "updatedAt",
   ],
   // Derived from the stored body, never part of it: the summary records the
   // payload revision it was computed from instead of advancing one.

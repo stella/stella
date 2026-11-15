@@ -2334,6 +2334,7 @@
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
+      "user_message": "Envoyé pendant que l’agent travaillait",
       "web_search": "Recherche web"
     },
     "toolCall": {
@@ -6030,6 +6031,7 @@
         "title": "Agents de code sur les ordinateurs des membres",
         "updated": "Autorisations des agents de code mises à jour"
       },
+      "logoInvalid": "Choisissez une image PNG, JPEG ou WebP de 5 Mo maximum.",
       "matterNumbering": "Numérotation des dossiers",
       "matterNumberingDescription": "Configurez la génération des nouveaux numéros de référence des dossiers",
       "membersDescription": "Gérez qui a accès à cette organisation et les invitations en attente",
@@ -6078,6 +6080,7 @@
         "title": "Fuseau horaire",
         "updated": "Fuseau horaire mis à jour"
       },
+      "uploadLogo": "Importer un logo",
       "usage": "Utilisation",
       "usageDescription": "Limites d’utilisation et état des droits pour cette organisation",
       "usageEmptyDescription": "Configurez un droit d’utilisation pour activer les fonctionnalités d’IA mesurées pour cette organisation.",

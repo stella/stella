@@ -54,10 +54,35 @@ type MessageView = {
   id: string;
   reasoning: string[];
   role: UIMessage["role"];
+  subagents: SubagentView[];
   text: string;
   toolCalls: ToolCallView[];
   toolResults: { error: string | null; state: string; toolCallId: string }[];
 };
+
+type SubagentUIPart = Extract<UIPart, { type: "subagent" }>;
+
+/** A sub-agent run as its card shows it: the run, the call that started it,
+ *  where it stands, and each of its child's messages under the same view. */
+type SubagentView = {
+  error: string | null;
+  id: string;
+  interruptIds: string[] | null;
+  messages: MessageView[];
+  name: string;
+  parentToolCallId: string | null;
+  status: SubagentUIPart["subagent"]["status"];
+};
+
+const subagentView = ({ subagent }: SubagentUIPart): SubagentView => ({
+  error: subagent.error === undefined ? null : jsonValue(subagent.error),
+  id: subagent.id,
+  interruptIds: subagent.interruptIds ?? null,
+  messages: subagent.messages.map(messageView),
+  name: subagent.name,
+  parentToolCallId: subagent.parentToolCallId ?? null,
+  status: subagent.status,
+});
 
 export const TEXT_SEGMENT_SEPARATOR = "\n\n";
 
@@ -94,6 +119,7 @@ const messageView = (message: UIMessage): MessageView => {
   const activities: MessageView["activities"] = [];
   const text: string[] = [];
   const reasoning: string[] = [];
+  const subagents: SubagentView[] = [];
   const toolCalls: ToolCallView[] = [];
   const toolResults: MessageView["toolResults"] = [];
   for (const part of message.parts) {
@@ -128,11 +154,14 @@ const messageView = (message: UIMessage): MessageView => {
         });
         break;
       }
+      case "subagent": {
+        subagents.push(subagentView(part));
+        break;
+      }
       case "audio":
       case "document":
       case "image":
       case "structured-output":
-      case "subagent":
       case "ui-resource":
       case "video": {
         // Attachments and rich parts round-trip as stored parts; the chat
@@ -146,6 +175,7 @@ const messageView = (message: UIMessage): MessageView => {
     id: message.id,
     reasoning,
     role: message.role,
+    subagents,
     text: text.join(TEXT_SEGMENT_SEPARATOR),
     toolCalls,
     toolResults,

@@ -796,6 +796,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-billing-cap-crossings.fixture.ts", [
     "require-billing-cap-crossings/require-billing-cap-crossings",
   ]),
+  fixtureRuleOverride("require-locked-rows-write.fixture.ts", [
+    "require-locked-rows-write/require-locked-rows-write",
+  ]),
   fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
     "require-running-entry-guard/require-running-entry-guard",
   ]),
@@ -1807,6 +1810,7 @@ const config = defineConfig({
     "no-direct-property-table-write/no-direct-property-table-write": "error",
     "no-direct-entity-insert/no-direct-entity-insert": "error",
     "no-direct-field-write/no-direct-field-write": "error",
+    "no-independent-fallback-state/no-independent-fallback-state": "error",
     "no-direct-folio-snapshot-retirement/no-direct-folio-snapshot-retirement":
       "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
@@ -2282,6 +2286,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-worker-database-login-posture.ts",
     "./.oxlint-plugins/require-billing-cap-crossings.ts",
+    "./.oxlint-plugins/require-locked-rows-write.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/no-direct-clause-variant-insert.ts",
@@ -2292,6 +2297,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-field-write.ts",
     "./.oxlint-plugins/no-chat-table-write.ts",
     "./.oxlint-plugins/fill-diagnostics.ts",
+    "./.oxlint-plugins/no-independent-fallback-state.ts",
     "./.oxlint-plugins/no-direct-folio-snapshot-retirement.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-direct-decision-identifier-column-write.ts",
@@ -6185,6 +6191,15 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "require-billing-cap-crossings/require-billing-cap-crossings": "error",
+      },
+    },
+    {
+      // A row lock decides on the rows it returned; a later write to the same
+      // table must name those rows, not repeat the lock's filter.
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-locked-rows-write/require-locked-rows-write": "error",
       },
     },
     {

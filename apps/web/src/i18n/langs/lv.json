@@ -2334,6 +2334,7 @@
       "update_reader_annotation": "Rediģēt izcēlumu vai komentāru",
       "use-browser": "Jūsu pārlūkprogrammas izmantošana",
       "use_connector_secret": "Izmanto savienotāja piekļuves informāciju",
+      "user_message": "Nosūtīts aģenta darba laikā",
       "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {
@@ -6030,6 +6031,7 @@
         "title": "Programmēšanas aģenti dalībnieku datoros",
         "updated": "Programmēšanas aģentu atļaujas atjauninātas"
       },
+      "logoInvalid": "Izvēlieties PNG, JPEG vai WebP attēlu, kas nepārsniedz 5 MB.",
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
       "membersDescription": "Pārvaldiet, kam ir piekļuve šai organizācijai, un gaidošos uzaicinājumus",
@@ -6078,6 +6080,7 @@
         "title": "Laika josla",
         "updated": "Laika josla atjaunināta"
       },
+      "uploadLogo": "Augšupielādēt logotipu",
       "usage": "Lietojums",
       "usageDescription": "Šīs organizācijas lietojuma limiti un tiesību statuss",
       "usageEmptyDescription": "Konfigurējiet lietojuma tiesības, lai šai organizācijai iespējotu mērītas AI funkcijas.",

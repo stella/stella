@@ -4,6 +4,8 @@ import {
   type HarnessInteractionResponse,
   type HarnessLiveSession,
   HarnessRespondError,
+  HarnessSteerError,
+  type HarnessSteerInput,
   type HarnessTurn,
 } from "./adapter";
 import { createEventQueue } from "./event-queue";
@@ -85,6 +87,10 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
   private hasEnded = false;
   private isInterrupting = false;
   private attached: TClient | null = null;
+  /** Every input the turn was steered with. */
+  private readonly inputs = new Set<string>();
+  /** Inputs whose `input.settled` is not out yet. */
+  private readonly unsettled = new Set<string>();
   /** Armed by a retry; any other event before it fires is progress. */
   private retryStall: ReturnType<typeof setTimeout> | null = null;
   /** How the terminal event left the process: kept, or ended (`null`). */
@@ -144,21 +150,74 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
     respond: (
       response: HarnessInteractionResponse,
     ) => Result<void, HarnessRespondError>;
+    /**
+     * Hand the running turn the message. Called once per input, before the
+     * terminal event; the session settles it through `settleInput`, and the
+     * terminal event settles it `rejected` if the session has not.
+     */
+    steer: (input: HarnessSteerInput) => void;
     interrupt: () => Promise<void>;
   }): HarnessTurn {
     return {
       events: this.queue.items,
       respond: async (response) =>
         await Promise.resolve(session.respond(response)),
+      steer: async (input) =>
+        await Promise.resolve(this.steer(input, session.steer)),
       interrupt: async () => session.interrupt(),
       release: async () => this.release(),
       dispose: async () => this.dispose(),
     };
   }
 
+  private steer(
+    input: HarnessSteerInput,
+    hand: (input: HarnessSteerInput) => void,
+  ): Result<void, HarnessSteerError> {
+    if (this.hasEnded) {
+      return Result.err(
+        new HarnessSteerError({
+          reason: "turn_ended",
+          message: "The turn has already ended.",
+        }),
+      );
+    }
+    // An input handed over again (a desktop that restarted before it
+    // recorded the first) keeps the one outcome it has or will have.
+    if (this.inputs.has(input.inputId)) {
+      return Result.ok();
+    }
+    this.inputs.add(input.inputId);
+    this.unsettled.add(input.inputId);
+    // A stop is on its way: whatever the harness does next ends the turn.
+    if (this.isInterrupting) {
+      this.settleInput(input.inputId, "rejected");
+      return Result.ok();
+    }
+    hand(input);
+    return Result.ok();
+  }
+
+  /**
+   * Report what became of a steering message, once; a later report for the
+   * same input, or one for an input never handed over, is dropped.
+   */
+  settleInput(inputId: string, status: "accepted" | "rejected") {
+    if (this.hasEnded || !this.unsettled.delete(inputId)) {
+      return;
+    }
+    this.queue.push({ type: "input.settled", inputId, status });
+  }
+
   emit(event: HarnessEvent) {
     if (this.hasEnded) {
       return;
+    }
+    if (isTerminal(event)) {
+      // Every input the turn was handed is settled before the turn ends.
+      for (const inputId of [...this.unsettled]) {
+        this.settleInput(inputId, "rejected");
+      }
     }
     this.watchRetries(event);
     this.queue.push(event);

@@ -565,6 +565,17 @@ const projectionEpochUpdate = (
   }
 };
 
+/**
+ * The projection epoch is search-projection bookkeeping: no reader of the
+ * decision or document sees it. Every write of it keeps `updated_at`, the
+ * public freshness that sitemaps, change cursors and compare-and-set tokens
+ * read, as the other bookkeeping writers of these rows do.
+ */
+export const CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS = {
+  case_law: sql<Date>`${caseLawDecisions.updatedAt}`,
+  legislation: sql<Date>`${legislationDocuments.updatedAt}`,
+} as const satisfies Record<CorpusIndexProjectionSubject["family"], unknown>;
+
 const setCanonicalProjectionEpoch = async (
   tx: Transaction,
   update: CanonicalProjectionEpochUpdate,
@@ -582,6 +593,7 @@ const setCanonicalProjectionEpoch = async (
           ),
           fallback: sql`${caseLawDecisions.projectionEpoch}`,
         }),
+        updatedAt: CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS.case_law,
       });
       await tx
         .update(caseLawDecisions)
@@ -600,6 +612,7 @@ const setCanonicalProjectionEpoch = async (
     case "legislation": {
       const write = replayWrite(legislationDocuments, {
         projectionEpoch: update.epoch,
+        updatedAt: CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS.legislation,
       });
       await tx
         .update(legislationDocuments)
@@ -1041,9 +1054,12 @@ export const writeDesiredStates = async (
   const undone = await readUndoneErasuresTx(tx, values);
   const states = corpusIndexProjectionStates;
   // Judged on the row before this write: once its named copy trails by two
-  // changes with other content, `desired_at` keeps the instant that happened,
-  // so the legacy pass can tell a copy an earlier release left behind from one
-  // this release's own writes moved past (see the predicate).
+  // changes with other content, an upsert write keeps `desired_at` at the
+  // instant that happened, so the legacy pass can tell a copy that fell that
+  // far behind before its cutover from one that fell behind after it (see the
+  // predicate). A write that turns the state into an erasure stamps its own
+  // instant, so the erasure's pending time is its own; the undo that follows
+  // it retires the copy here (`readUndoneErasuresTx`).
   const namedCopyTrailsTwoChanges =
     corpusIndexProjectionNamedCopyTrailsTwoChanges({
       desiredAction: states.desiredAction,
@@ -1081,7 +1097,7 @@ export const writeDesiredStates = async (
         {
           desiredAction: sql`excluded.desired_action`,
           desiredEpoch: sql`excluded.desired_epoch`,
-          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} OR ${namedCopyTrailsTwoChanges} THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
+          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} OR (excluded.desired_action = 'upsert' AND ${namedCopyTrailsTwoChanges}) THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
           desiredFingerprint: sql`excluded.desired_fingerprint`,
           desiredIndexId: sql`excluded.desired_index_id`,
           workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
@@ -1116,12 +1132,26 @@ type DesiredStateSnapshot = {
   desiredIndexId: string | null;
 };
 
-const desiredStateMatches = (
-  state: DesiredStateSnapshot,
-  epoch: bigint,
+/**
+ * Whether a generation's desired state already holds what the canonical row
+ * derives for it. One rule for every reader that asks: reconciliation, the
+ * seeding of one generation, and any sweep comparing desired state with the
+ * canonical rows (import this; never restate it).
+ *
+ * Content decides: the action, and for an upsert the fingerprint and index.
+ * The desired epoch orders one generation's revisions of the entity; the
+ * canonical row's epoch is never behind any of them, and a generation whose
+ * content did not change is not drifted for trailing it.
+ */
+export const corpusProjectionDesiredStateHolds = (
+  state: Pick<
+    DesiredStateSnapshot,
+    "desiredAction" | "desiredEpoch" | "desiredFingerprint" | "desiredIndexId"
+  >,
+  canonicalEpoch: bigint,
   descriptor: CorpusIndexProjectionDescriptor,
 ): boolean =>
-  state.desiredEpoch === epoch &&
+  state.desiredEpoch <= canonicalEpoch &&
   state.desiredAction === descriptor.action &&
   state.desiredFingerprint ===
     (descriptor.action === "upsert" ? descriptor.fingerprint : null) &&
@@ -1184,7 +1214,7 @@ const reconcileProjectionPlan = ({
     const state = byGeneration.get(generation);
     return (
       state !== undefined &&
-      !desiredStateMatches(state, currentEpoch, descriptor)
+      !corpusProjectionDesiredStateHolds(state, currentEpoch, descriptor)
     );
   });
 
@@ -1193,13 +1223,16 @@ const reconcileProjectionPlan = ({
     epoch += 1n;
   }
 
+  // A drift still moves every generation to the new epoch together, so a
+  // state that owes work always desires the canonical epoch: a builder of an
+  // earlier release fences its leases by that equality.
   const values = projections
     .filter(({ generation, descriptor }) => {
       const state = byGeneration.get(generation);
       return (
         existingDrifted ||
         state === undefined ||
-        !desiredStateMatches(state, epoch, descriptor)
+        !corpusProjectionDesiredStateHolds(state, epoch, descriptor)
       );
     })
     .map(({ generation, descriptor }) =>
@@ -1384,15 +1417,12 @@ export const ensureCorpusProjectionDesiredStateTx = async (
     .for("update");
   const existingState = existing.at(0);
   if (existingState !== undefined) {
-    const expectedFingerprint =
-      descriptor.action === "upsert" ? descriptor.fingerprint : null;
-    const expectedIndexId =
-      descriptor.action === "upsert" ? descriptor.indexId : null;
     if (
-      existingState.desiredEpoch !== locked.epoch ||
-      existingState.desiredAction !== descriptor.action ||
-      existingState.desiredFingerprint !== expectedFingerprint ||
-      existingState.desiredIndexId !== expectedIndexId
+      !corpusProjectionDesiredStateHolds(
+        existingState,
+        locked.epoch,
+        descriptor,
+      )
     ) {
       return panic(
         `Existing corpus desired state does not match canonical input: ${subject.family}/${generation}/${subject.entityId}`,

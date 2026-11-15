@@ -8,6 +8,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_INPUT_REFUSAL_CODE,
+  CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -23,6 +24,7 @@ import {
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import {
   CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
   CHAT_RUN_TARGET_KIND,
@@ -49,7 +51,6 @@ import type { TurnBrowserExtension } from "@/api/handlers/chat/browser-extension
 import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
-  getAwaitingUserInteractions,
   getResumedUserInteraction,
   isChatPart,
   toPersistableChatMessage,
@@ -898,7 +899,7 @@ export class ChatSendLifecycle {
     ) {
       return false;
     }
-    const interaction = getAwaitingUserInteractions(this.checkpoint).at(0);
+    const interaction = memberWaitsOf(this.checkpoint).at(0);
     if (interaction === undefined) {
       return false;
     }
@@ -1667,7 +1668,7 @@ const acceptIncomingTurn = async ({
           acceptedTurnId: null,
           continuationInteraction:
             getResumedUserInteraction({
-              awaited: getAwaitingUserInteractions(
+              awaited: memberWaitsOf(
                 validationThreadState.persistedMessage === null
                   ? null
                   : chatMessageFromPersisted({
@@ -2458,6 +2459,7 @@ export const createSendMessage = (
       safeDb,
       scopedDb,
       session,
+      set,
       usageLane,
       user,
     }) {
@@ -2834,8 +2836,10 @@ export const createSendMessage = (
           webSearchProviders,
         } = preparedIncomingMessage;
 
-        // A turn bound for a computer is routed before it is admitted or
-        // stored: a computer that cannot take it refuses the send.
+        // Whether a turn may be asked to run on a computer at all. Which
+        // computer takes it is decided once the turn is stored, as its run
+        // starts, so a computer that cannot take it fails the turn the
+        // member's message is stored with.
         const localRun = yield* Result.await(
           resolveChatLocalRun({
             runTarget: body.runTarget,
@@ -2930,6 +2934,12 @@ export const createSendMessage = (
           toolWorkspaceIds,
           turnExecution,
         } = acceptedTurnResult.value;
+        // From here the member's message and its turn are stored, so every
+        // answer names the turn, a refusal included: a client then knows
+        // from the response alone that the thread holds what it sent. A
+        // stream refused before it opens (`ChatTurnFailureResponse`) gets the
+        // header from here too.
+        set.headers[CHAT_TURN_ID_HEADER] = turnExecution.id;
 
         const skillBindingScope = yield* Result.await(
           settleInternalPreflight(

@@ -306,6 +306,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth invokes these hooks and consumes rejected APIError values.
   // Better Auth organization hooks reject invalid slug operations through APIError.
   "apps/api/src/lib/auth/organization-slug-hooks.ts",
+  "apps/api/src/lib/auth/organization-logo-hooks.ts",
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
   "apps/api/src/lib/auth/request-budget-hooks.ts",
@@ -542,6 +543,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
     reason:
       "Chrome extension worker and popup: chrome.* APIs fail by rejection and the injected page script cannot import better-result; the worker turns failures into protocol error codes at its message boundary. Enrol once chrome.* calls sit behind Result.tryPromise.",
     unit: "apps/extension/src/entrypoints",
+  },
+  {
+    reason:
+      "Chrome extension offscreen document: its chrome.runtime message listener is the runtime boundary, answering the worker with typed reads. Enrol together with apps/extension/src/entrypoints.",
+    unit: "apps/extension/src/entrypoints/offscreen",
   },
   {
     reason:

@@ -23,6 +23,7 @@ import type {
   HarnessLiveSession,
   HarnessProbe,
   HarnessStartError,
+  HarnessSteerInput,
   HarnessTurn,
 } from "../harness/adapter";
 import {
@@ -46,6 +47,8 @@ import { createEventQueue } from "../harness/event-queue";
 import {
   approvalMessage,
   HARNESS_FAILURE_OUTCOME,
+  type HarnessBoundary,
+  harnessBoundary,
   type HarnessEvent,
   type HarnessFailure,
   harnessSessionId,
@@ -78,6 +81,7 @@ import {
 } from "./outputs";
 import {
   SIDECAR_MAX_BACKGROUND_TASKS,
+  SIDECAR_RUN_SESSION,
   type SidecarFolderRestore,
   type SidecarHarnessLaunchSettings,
   type SidecarHostMessage,
@@ -85,6 +89,7 @@ import {
   type SidecarProbeOutcome,
   type SidecarRejection,
   type SidecarRestoreOutcome,
+  type SidecarRunInput,
   type SidecarRunStart,
 } from "./protocol";
 import { keepStepOutput, stepOutputRunDir } from "./step-outputs";
@@ -101,7 +106,8 @@ import { createStepUploads, stepContentUploader } from "./step-uploads";
  * still runs leaves its harness process to the chat's folder (a live
  * session, `HarnessLiveSession`): the chat's next run continues in it when it
  * resumes that session with the same launch, and sees that work. Anything
- * else ends it first: another session or launch, a stop of the next run, a
+ * else ends it first: another session or launch, a fork of a session (that
+ * work belongs to turns the fork leaves out), a stop of the next run, a
  * restore of the folder, the idle limit, the holder stopping, or another API
  * origin. It also ends by itself once its background work does. While it
  * waits, `background.tasks` reports how much work it holds.
@@ -114,6 +120,30 @@ export type SidecarCommand = Exclude<
 >;
 
 type RunOutcome = (typeof DESKTOP_RUNNER_RUN_OUTCOMES)[number];
+
+/** How a run's turn ended, and what it left of its native session. */
+type RunEnd = {
+  value: RunOutcome;
+  sessionId: string | null;
+  /** Where the turn ended in the session, once it completed. */
+  boundary: HarnessBoundary | null;
+};
+
+/**
+ * A run's last message. Only a completed turn's end is a point a later run
+ * may continue from; a run the desktop missed part of fails and names none.
+ */
+const runFinishedMessage = (runId: string, end: RunEnd, broken: boolean) => {
+  const outcome = broken ? "failed" : end.value;
+  return {
+    type: "run.finished",
+    runId,
+    outcome,
+    harnessSessionId: end.sessionId,
+    harnessBoundary:
+      outcome === "completed" && end.sessionId !== null ? end.boundary : null,
+  } as const;
+};
 
 /** How long an interrupt or a shutdown waits before a harness is killed. */
 const HARNESS_GRACE_MS = 5000;
@@ -170,13 +200,39 @@ const continuationOf = (
   if (taken !== null) {
     return { type: "live", session: taken.session };
   }
-  return message.harnessSessionId === null
-    ? { type: "fresh" }
-    : {
+  const { session } = message;
+  switch (session.type) {
+    case SIDECAR_RUN_SESSION.fresh:
+      return { type: "fresh" };
+    case SIDECAR_RUN_SESSION.resume:
+      return {
         type: "resume",
-        sessionId: harnessSessionId(message.harnessSessionId),
+        sessionId: harnessSessionId(session.sessionId),
       };
+    case SIDECAR_RUN_SESSION.fork: {
+      const boundary = harnessBoundary(session.boundary);
+      return boundary === null
+        ? panic("The protocol carries only boundaries a harness can name")
+        : {
+            type: "fork",
+            sessionId: harnessSessionId(session.sessionId),
+            boundary,
+          };
+    }
+    default:
+      session satisfies never;
+      return panic("Unknown run session");
+  }
 };
+
+/**
+ * The session a kept process holds that the run's turn continues whole; a
+ * fork continues none, since its session is a new one.
+ */
+const resumedSessionOf = (message: SidecarRunStart): string | null =>
+  message.session.type === SIDECAR_RUN_SESSION.resume
+    ? message.session.sessionId
+    : null;
 
 export type HarnessLaunch = {
   harness: AgentHarness;
@@ -238,6 +294,8 @@ type HeldRun = {
   /** The run's folder, resolved: no restore touches it while the run is held. */
   readonly workspaceDir: string;
   turn: HarnessTurn | null;
+  /** Steering messages that came before the turn opened; it takes them then. */
+  heldInputs: HarnessSteerInput[];
   /** Set before the turn starts too: a turn that opens later stops at once. */
   stop: RunStop;
   /** Ends the attachment copy that comes before the turn. */
@@ -679,6 +737,11 @@ export class SidecarHost {
       case "run.start":
         this.start(message, config);
         return;
+      case "run.input":
+        this.withRun(message, (run) => {
+          this.steer(run, message);
+        });
+        return;
       case "run.approval":
         this.withRun(message, (run) => {
           // A browser tool's question about one of its steps is answered here.
@@ -897,6 +960,7 @@ export class SidecarHost {
     const run: HeldRun = {
       workspaceDir: path.resolve(message.workspaceDir),
       turn: null,
+      heldInputs: [],
       // A run that starts while the host stops is cancelled like the held ones.
       stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
       stopCopying: new AbortController(),
@@ -1104,6 +1168,32 @@ export class SidecarHost {
   }
 
   /**
+   * Hand a steering message to the run's turn, or hold it until the turn
+   * opens. The turn reports what became of it on the run's stream; a turn
+   * that already ended reports nothing, and the run's finish follows.
+   */
+  private steer(run: HeldRun, message: SidecarRunInput) {
+    const input = { inputId: message.inputId, text: message.message.content };
+    if (run.turn === null) {
+      run.heldInputs.push(input);
+      return;
+    }
+    this.handInput(run.turn, input);
+  }
+
+  private handInput(turn: HarnessTurn, input: HarnessSteerInput) {
+    const hand = async () => {
+      const steered = await turn.steer(input);
+      if (Result.isError(steered)) {
+        this.options.log(
+          `a steer reached an ended turn: ${steered.error.reason}`,
+        );
+      }
+    };
+    this.detached(hand(), "sidecar.steer");
+  }
+
+  /**
    * Hand an approval decision or question answers to the harness. The answer
    * itself is never logged: it may hold a secret the question asked for.
    */
@@ -1170,7 +1260,7 @@ export class SidecarHost {
       !(
         live.session.harness === message.harness &&
         live.launch === run.launch &&
-        live.session.sessionId === message.harnessSessionId &&
+        live.session.sessionId === resumedSessionOf(message) &&
         live.proxy === config.proxy
       )
     ) {
@@ -1359,9 +1449,10 @@ export class SidecarHost {
       run.live = null;
       await this.endLive(untaken);
     }
-    const outcome: { value: RunOutcome; sessionId: string | null } = {
+    const outcome: RunEnd = {
       value: "failed",
       sessionId: null,
+      boundary: null,
     };
     const runId = message.runId;
     /**
@@ -1469,6 +1560,7 @@ export class SidecarHost {
             break;
           case "turn.completed":
             outcome.value = "completed";
+            outcome.boundary = event.boundary;
             // A stop ends the wait: a stopped run does not wait to send.
             await steps.end("completed", run.outputSharing.signal);
             await shareRunOutputs();
@@ -1494,6 +1586,7 @@ export class SidecarHost {
           case "reasoning.completed":
           case "tool.started":
           case "retrying":
+          case "input.settled":
           case "model.rerouted":
             yield event;
             break;
@@ -1509,6 +1602,9 @@ export class SidecarHost {
       run.turn = opened.value;
       if (run.stop !== RUN_STOP.none) {
         this.detached(opened.value.interrupt(), "sidecar.interrupt");
+      }
+      for (const input of run.heldInputs.splice(0)) {
+        this.handInput(opened.value, input);
       }
       events = run.approvals.withEvents(opened.value.events);
     } else if (run.stop !== RUN_STOP.none) {
@@ -1558,12 +1654,7 @@ export class SidecarHost {
     } else if (kept !== null) {
       await this.keepLive({ message, config, run, session: kept });
     }
-    const finished = {
-      type: "run.finished",
-      runId,
-      outcome: delivery.broken ? "failed" : outcome.value,
-      harnessSessionId: outcome.sessionId,
-    } as const;
+    const finished = runFinishedMessage(runId, outcome, delivery.broken);
     // Every accepted run ends with one `run.finished`: a native session id
     // the contract cannot carry fails the run instead of losing its end.
     if (!this.options.send(finished)) {
@@ -1571,6 +1662,7 @@ export class SidecarHost {
         ...finished,
         outcome: "failed",
         harnessSessionId: null,
+        harnessBoundary: null,
       });
     }
   }

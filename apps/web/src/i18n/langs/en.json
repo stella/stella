@@ -2334,6 +2334,7 @@
       "update_reader_annotation": "Edit highlight or comment",
       "use-browser": "Using your browser",
       "use_connector_secret": "Using connector credential",
+      "user_message": "Sent while the agent was working",
       "web_search": "Searching the web"
     },
     "toolCall": {
@@ -6030,6 +6031,7 @@
         "title": "Coding agents on members' computers",
         "updated": "Coding agent permissions updated"
       },
+      "logoInvalid": "Choose a PNG, JPEG or WebP image up to 5 MB.",
       "matterNumbering": "Matter numbering",
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization and any pending invitations",
@@ -6078,6 +6080,7 @@
         "title": "Time zone",
         "updated": "Time zone updated"
       },
+      "uploadLogo": "Upload logo",
       "usage": "Usage",
       "usageDescription": "Usage limits and entitlement state for this organization",
       "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organization.",

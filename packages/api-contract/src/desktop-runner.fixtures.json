@@ -99,7 +99,14 @@
       "unsupported",
       "unavailable"
     ],
-    "harnessCapabilities": ["approvals", "interrupt", "resume", "image_input"],
+    "harnessCapabilities": [
+      "approvals",
+      "interrupt",
+      "resume",
+      "image_input",
+      "steer",
+      "fork"
+    ],
     "harnessUnavailableReasons": [
       "harness_failed",
       "unexpected_answer",
@@ -217,7 +224,14 @@
             "id": "codex",
             "state": "ready",
             "version": "0.48.0",
-            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "capabilities": [
+              "approvals",
+              "interrupt",
+              "resume",
+              "image_input",
+              "steer",
+              "fork"
+            ],
             "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
@@ -511,42 +525,48 @@
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "seq": 20,
         "outcome": "completed",
-        "harnessSessionId": "session-1"
+        "harnessSessionId": "session-1",
+        "harnessBoundary": "019a5e1c-7f3d-7c2a-9b4e-2f6d8a1c3e5b"
       },
       {
         "type": "run.finished",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "seq": 21,
         "outcome": "interrupted",
-        "harnessSessionId": null
+        "harnessSessionId": null,
+        "harnessBoundary": null
       },
       {
         "type": "run.finished",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "seq": 22,
         "outcome": "cancelled",
-        "harnessSessionId": "session-1"
+        "harnessSessionId": "session-1",
+        "harnessBoundary": null
       },
       {
         "type": "run.finished",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "seq": 23,
         "outcome": "failed",
-        "harnessSessionId": null
+        "harnessSessionId": null,
+        "harnessBoundary": null
       },
       {
         "type": "run.finished",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "seq": 24,
         "outcome": "limit_reached",
-        "harnessSessionId": "session-1"
+        "harnessSessionId": "session-1",
+        "harnessBoundary": null
       },
       {
         "type": "run.finished",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "seq": 25,
         "outcome": "needs_login",
-        "harnessSessionId": null
+        "harnessSessionId": null,
+        "harnessBoundary": null
       },
       {
         "type": "folder.restored",
@@ -629,6 +649,7 @@
         "model": "model-large",
         "reasoningEffort": "xhigh",
         "harnessSessionId": null,
+        "harnessForkBoundary": null,
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
           {
@@ -678,6 +699,7 @@
         "model": "model-large",
         "reasoningEffort": null,
         "harnessSessionId": "session-1",
+        "harnessForkBoundary": "019a5e1c-7f3d-7c2a-9b4e-2f6d8a1c3e5b",
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
           {
@@ -903,6 +925,7 @@
         "model": "model-large",
         "reasoningEffort": null,
         "harnessSessionId": null,
+        "harnessForkBoundary": null,
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
           {
@@ -954,6 +977,7 @@
         "model": "model-large",
         "reasoningEffort": null,
         "harnessSessionId": null,
+        "harnessForkBoundary": null,
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
           {
@@ -1083,6 +1107,30 @@
           "type": "run.rejected",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "reason": "busy"
+        }
+      },
+      {
+        "name": "a boundary for a turn that did not complete",
+        "reason": "invalid",
+        "message": {
+          "type": "run.finished",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "seq": 3,
+          "outcome": "interrupted",
+          "harnessSessionId": "session-1",
+          "harnessBoundary": "019a5e1c-7f3d-7c2a-9b4e-2f6d8a1c3e5b"
+        }
+      },
+      {
+        "name": "a boundary that reads as a flag",
+        "reason": "invalid",
+        "message": {
+          "type": "run.finished",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "seq": 3,
+          "outcome": "completed",
+          "harnessSessionId": "session-1",
+          "harnessBoundary": "--dangerously-skip-permissions"
         }
       },
       {
@@ -1245,6 +1293,27 @@
         "message": {
           "type": "run.pause",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
+        }
+      },
+      {
+        "name": "run.input with content parts instead of text",
+        "message": {
+          "type": "run.input",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "inputId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "message": {
+            "role": "user",
+            "content": [{ "type": "text", "content": "Also check the annex." }]
+          }
+        }
+      },
+      {
+        "name": "run.input with an empty message",
+        "message": {
+          "type": "run.input",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "inputId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "message": { "role": "user", "content": "" }
         }
       },
       {

@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import type { ChatLocalRunSteerOutcome } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
@@ -49,6 +50,7 @@ import {
   approveLinkedFolder,
   type ChatRunBinding,
   type ChatRunForRequest,
+  type ChatRunSession,
   type DesktopRunnerDb,
   type DesktopRunnerRunView,
   insertAssignedRun,
@@ -61,7 +63,9 @@ import {
   readMemberRunners,
   readOpenRunChatThread,
   readRun,
+  readRunInputText,
   readRunOutputFile,
+  readSteerableChatRun,
   readStoredRunEvents,
   readThreadBackgroundTasks,
   recordChatReadSeq,
@@ -133,7 +137,8 @@ export type StartLocalRunInput = {
   reasoningEffort: DesktopRunnerReasoningEffort | null;
   /** How much the run asks before it acts; the computer must report it. */
   approvals: DesktopRunnerApprovalMode;
-  harnessSessionId: string | null;
+  /** The harness session the run continues, and how (`readChatRunSession`). */
+  session: ChatRunSession;
   instructions: string;
   messages: RunStart["messages"];
   /** Files to copy into the run's folder; each link is signed on every send. */
@@ -356,6 +361,24 @@ const withRestoredNote = (
   return [...messages.slice(0, -1), { ...last, content: [...parts, note] }];
 };
 
+/** A session as `run.start` carries it. */
+const runStartSession = (session: ChatRunSession) => {
+  switch (session.type) {
+    case "fresh":
+      return { harnessSessionId: null, harnessForkBoundary: null };
+    case "resume":
+      return { harnessSessionId: session.sessionId, harnessForkBoundary: null };
+    case "fork":
+      return {
+        harnessSessionId: session.sessionId,
+        harnessForkBoundary: session.boundary,
+      };
+    default:
+      session satisfies never;
+      return panic("Unknown chat run session");
+  }
+};
+
 const startRun = async (
   deps: ControlDeps,
   input: StartLocalRunInput,
@@ -372,7 +395,7 @@ const startRun = async (
     harnessVersion: input.harnessVersion,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
-    harnessSessionId: input.harnessSessionId,
+    ...runStartSession(input.session),
     instructions: input.instructions,
     messages: input.messages,
     attachments: input.attachments.map(({ path, s3Key }) => ({ path, s3Key })),
@@ -631,6 +654,40 @@ const readEvents = async (
   });
 };
 
+type SteerChatTurnOptions = {
+  owner: RunOwner;
+  chat: ChatRunBinding;
+  inputId: string;
+  text: string;
+};
+
+const steerChatTurn = async (
+  deps: ControlDeps,
+  { owner, chat, inputId, text }: SteerChatTurnOptions,
+): Promise<Result<ChatLocalRunSteerOutcome, DesktopRunnerControlError>> => {
+  const run = await Result.tryPromise({
+    try: async () => await readSteerableChatRun(deps.db, { owner, chat }),
+    catch: toDatabaseError,
+  });
+  if (run.isErr()) {
+    return run;
+  }
+  if (run.value === null || !run.value.steerable) {
+    return Result.ok("unavailable");
+  }
+  const queued = await queue(deps, owner, {
+    type: DESKTOP_RUNNER_SERVER_MESSAGE.runInput,
+    runId: run.value.runId,
+    inputId,
+    message: { role: "user", content: text },
+  });
+  return queued.map((outcome) =>
+    outcome.type === "queued" || outcome.type === "duplicate"
+      ? "queued"
+      : "unavailable",
+  );
+};
+
 type BackgroundTasksOptions = {
   owner: RunOwner;
   threadId: SafeId<"chatThread">;
@@ -647,6 +704,17 @@ const readBackgroundTasks = async (
         threadId,
         freshSince: seenSince(deps),
       }),
+    catch: toDatabaseError,
+  });
+
+type RunInputTextOptions = Parameters<typeof readRunInputText>[1];
+
+const readSteeredText = async (
+  deps: ControlDeps,
+  options: RunInputTextOptions,
+): Promise<Result<string | null, DatabaseError>> =>
+  await Result.tryPromise({
+    try: async () => await readRunInputText(deps.db, options),
     catch: toDatabaseError,
   });
 
@@ -701,6 +769,16 @@ export const createDesktopRunnerControl = ({
         inputId,
         message,
       }),
+    /**
+     * Steer chat turn `chat.turnId` with `text`: hand it to the turn's run
+     * when its harness reports `steer`; idempotent on `inputId`. `queued`
+     * means the computer will say on the run's stream whether it took it.
+     */
+    steerChatTurn: async (options: SteerChatTurnOptions) =>
+      await steerChatTurn(deps, options),
+    /** The text the owner's run was steered with under `inputId`. */
+    readRunInputText: async (options: RunInputTextOptions) =>
+      await readSteeredText(deps, options),
     /** Answer an approval the run requested; idempotent on `requestId`. */
     answerApproval: async ({
       owner,
@@ -823,10 +901,10 @@ export const createDesktopRunnerControl = ({
      */
     readBackgroundTasks: async (options: BackgroundTasksOptions) =>
       await readBackgroundTasks(deps, options),
-    /** The harness session a thread's next turn on this computer resumes. */
+    /** How a thread's next turn on this computer continues its session. */
     readChatRunSession: async (
       options: Parameters<typeof readChatRunSession>[1],
-    ): Promise<Result<string | null, DatabaseError>> =>
+    ): Promise<Result<ChatRunSession, DatabaseError>> =>
       await Result.tryPromise({
         try: async () => await readChatRunSession(db, options),
         catch: toDatabaseError,

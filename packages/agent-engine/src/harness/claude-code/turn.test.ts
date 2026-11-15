@@ -167,6 +167,7 @@ describe("a Claude Code subagent's messages", () => {
           expect(events.at(-1)).toEqual({
             type: "turn.completed",
             usage: null,
+            boundary: null,
           });
           // Exactly what the adapter cannot read is shown as unsupported, as
           // a step of the subagent; none is dropped.

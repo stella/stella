@@ -2334,6 +2334,7 @@
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
       "use-browser": "Korzystanie z Twojej przeglądarki",
       "use_connector_secret": "Używanie danych dostępowych łącznika",
+      "user_message": "Wysłano podczas pracy agenta",
       "web_search": "Wyszukiwanie w sieci"
     },
     "toolCall": {
@@ -6030,6 +6031,7 @@
         "title": "Agenci programistyczni na komputerach członków",
         "updated": "Uprawnienia agentów programistycznych zostały zaktualizowane"
       },
+      "logoInvalid": "Wybierz obraz PNG, JPEG lub WebP o rozmiarze do 5 MB.",
       "matterNumbering": "Numeracja spraw",
       "matterNumberingDescription": "Skonfiguruj sposób generowania numerów referencyjnych nowych spraw",
       "membersDescription": "Zarządzaj tym, kto ma dostęp do tej organizacji, oraz oczekującymi zaproszeniami",
@@ -6078,6 +6080,7 @@
         "title": "Strefa czasowa",
         "updated": "Strefa czasowa została zaktualizowana"
       },
+      "uploadLogo": "Prześlij logo",
       "usage": "Użycie",
       "usageDescription": "Limity użycia i stan uprawnień tej organizacji",
       "usageEmptyDescription": "Skonfiguruj uprawnienie do użycia, aby włączyć mierzone funkcje AI w tej organizacji.",

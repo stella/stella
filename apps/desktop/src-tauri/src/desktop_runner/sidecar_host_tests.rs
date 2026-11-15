@@ -39,6 +39,8 @@ const LINKED_FOLDER_ID: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000d1";
 const OFFLINE_FOLDER_ID: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000d2";
 /// The approval request id the stand-in holder asks with.
 const REQUEST_ID: &str = "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f";
+/// A `run.input` id; the stand-in holder's harness takes every input.
+const INPUT_ID: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000c3";
 /// The stand-in's scenarios, each a model the probe reports.
 const MODELS: &[&str] = &[
   "gpt-test",
@@ -711,6 +713,14 @@ fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
     unlinked["linkedFolderId"] = json!(run_id());
     let mut unoffered_effort = run_start(&run_id(), "gpt-test");
     unoffered_effort["reasoningEffort"] = json!("max");
+    // This harness reports no `fork`: resuming the whole session instead
+    // would hand it turns the chat no longer holds.
+    let mut fork = run_start(&run_id(), "gpt-test");
+    fork["harnessSessionId"] = json!("thread-old");
+    fork["harnessForkBoundary"] = json!("019a5e1c-7f3d-7c2a-9b4e-2f6d8a1c3e5b");
+    let mut sessionless_fork = run_start(&run_id(), "gpt-test");
+    sessionless_fork["harnessForkBoundary"] =
+      json!("019a5e1c-7f3d-7c2a-9b4e-2f6d8a1c3e5b");
     let cases = [
       (run_start(&run_id(), "gpt-unknown"), "model_unavailable"),
       (unoffered_effort, "model_unavailable"),
@@ -719,6 +729,8 @@ fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
       (unsandboxed, "policy_unsupported"),
       (offline, "folder_offline"),
       (unlinked, "folder_unlinked"),
+      (fork, "harness_unsupported"),
+      (sessionless_fork, "unknown_run"),
     ];
     for (start, reason) in cases {
       connection.send(start.clone()).await;
@@ -834,7 +846,7 @@ fn approvals_answers_interrupts_and_cancels_reach_the_harness_and_its_end_comes_
 }
 
 #[test]
-fn a_holder_that_dies_ends_its_runs_failed_and_input_is_answered_on_the_stream() {
+fn a_holder_that_dies_ends_its_runs_failed_and_input_reaches_the_holder() {
   let place = Place::new();
   run(async {
     let host = place.host(None, Duration::from_secs(3600));
@@ -851,15 +863,19 @@ fn a_holder_that_dies_ends_its_runs_failed_and_input_is_answered_on_the_stream()
       .send(json!({
         "type": "run.input",
         "runId": waiting,
-        "inputId": "input-1",
+        "inputId": INPUT_ID,
         "message": {"role": "user", "content": "And the appeal?"},
       }))
       .await;
+    // The holder answers on the run's stream whether its harness took it.
     let answered = connection.receive_type("run.event").await;
     assert_eq!(answered["seq"], 2);
-    assert_eq!(answered["chunk"]["type"], "RUN_ERROR");
-    assert_eq!(answered["chunk"]["code"], "input_unsupported");
-    assert_eq!(answered["chunk"]["runId"], waiting.as_str());
+    assert_eq!(answered["chunk"]["type"], "CUSTOM");
+    assert_eq!(answered["chunk"]["name"], "stella.run-input");
+    assert_eq!(
+      answered["chunk"]["value"],
+      json!({"inputId": INPUT_ID, "status": "accepted"})
+    );
 
     let crashed = run_id();
     connection.send(run_start(&crashed, "crash")).await;

@@ -87,6 +87,12 @@ export const PROVIDER_CALL_FAILURE_REASON = {
   local_runner_relinked: "provider_unavailable",
   local_runner_restoring: "provider_unavailable",
   local_runner_folder_unavailable: "provider_unavailable",
+  local_runner_no_computer: "provider_unavailable",
+  local_runner_harness_unavailable: "provider_unavailable",
+  local_runner_model_unavailable: "provider_unavailable",
+  local_runner_reasoning_effort_unavailable: "provider_unavailable",
+  local_runner_approvals_unavailable: "provider_unavailable",
+  local_runner_folder_not_approved: "provider_unavailable",
   unknown: "unclassified",
 } as const satisfies Record<AIErrorKind, FailureReason>;
 

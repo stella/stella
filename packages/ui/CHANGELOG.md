@@ -1,5 +1,25 @@
 # @stll/ui
 
+## 0.72.0
+
+### Minor Changes
+
+- [#8425](https://github.com/stella/stella/pull/8425) [`c115c6c`](https://github.com/stella/stella/commit/c115c6cf21780277c98908cbd26a8bb5f279591f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/icons` no longer exports `ColumnsIcon`: its last use is gone, and the plain re-export list holds only the icons the workspace draws. Import it from `lucide-react` if you still need it.
+
+- [#8415](https://github.com/stella/stella/pull/8415) [`7b112d3`](https://github.com/stella/stella/commit/7b112d309728e72aa60d00c8c5d120f83aff698c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `EditPagesIcon` names the glyph for opening a document's pages to reorder, rotate, crop or delete them, and replaces `FilePenLineIcon`, which `@stll/ui/icons` no longer exports. `SplitButton` draws both halves in the foreground colour of other ghost buttons.
+
+- [#8523](https://github.com/stella/stella/pull/8523) [`f6326a3`](https://github.com/stella/stella/commit/f6326a3fbfbbdadaa8839b122e162249ea42ec54) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/file-size` formats a byte count in the reader's locale (`formatFileSize`, with a `use-intl` formatter) and picks its decimal unit (`getFileSizeDisplay`), for the web and the phone alike.
+
+### Patch Changes
+
+- [#8413](https://github.com/stella/stella/pull/8413) [`7600aee`](https://github.com/stella/stella/commit/7600aee38e07fc7f5956849dd6619e547f3fe400) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `InlineRenameInput` keeps its 10ch floor in a fixed length that a row sized from its content measures, so a short field no longer takes width from the text beside it when it opens.
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh the supported chart, editor, icon, and styling dependency versions.
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+
+- [#8387](https://github.com/stella/stella/pull/8387) [`617b308`](https://github.com/stella/stella/commit/617b308dc6d81b9d5cfb15395de717419afcff99) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the cloud icon from `@stll/ui/icons`.
+
 ## 0.71.0
 
 ### Minor Changes

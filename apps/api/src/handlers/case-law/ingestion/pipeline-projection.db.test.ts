@@ -53,6 +53,9 @@ const corpus = {
 const input = (court: string, rawHash: string): IngestionResult =>
   plainTextIngestionResult({
     caseNumber: "4 As 3/2008",
+    // The publisher's id keeps a refresh that restates the court on its
+    // decision; a document-less identity would read it as a sibling.
+    sourceDocumentId: "nss-4-as-3-2008",
     court,
     country: "CZE",
     language: "cs",

@@ -131,7 +131,24 @@ const createComputer = () => {
     return event;
   };
   const control: LocalRunContext["control"] = {
-    readChatRunSession: async () => Result.ok(null),
+    pickDesktop: async () =>
+      Result.ok({
+        type: "available",
+        desktopId: DESTINATION.desktopId,
+        harness: {
+          id: DESTINATION.harness,
+          state: "ready",
+          version: DESTINATION.harnessVersion,
+          capabilities: [],
+          approvalModes: [DESTINATION.approvals],
+          models: [
+            { id: DESTINATION.model, label: "Local", reasoningEfforts: [] },
+          ],
+        },
+        linkedFolders: [],
+        approvedFolderIds: [],
+      }),
+    readChatRunSession: async () => Result.ok({ type: "fresh" }),
     startRun: async () => Result.ok({ type: "assigned", runId: RUNNER_RUN_ID }),
     readEvents: async ({ afterSeq }) =>
       Result.ok({
@@ -183,6 +200,7 @@ const createComputer = () => {
     answerQuestion: async () => panic("No question is asked here"),
     pairAppCall: async () => panic("No app call is reported here"),
     readRunOutputFile: async () => panic("No output file is reported here"),
+    readRunInputText: async () => panic("No steer is reported here"),
   };
   const context: LocalRunContext = {
     control,
@@ -334,7 +352,16 @@ const localSource =
     createLocalChatRun(
       computer.context,
       resume === undefined
-        ? { type: "start", destination: DESTINATION }
+        ? {
+            type: "start",
+            target: {
+              kind: "local",
+              harness: DESTINATION.harness,
+              model: DESTINATION.model,
+              approvals: DESTINATION.approvals,
+              reasoningEffort: DESTINATION.reasoningEffort,
+            },
+          }
         : { type: "resume", harness: DESTINATION.harness },
     ).stream({
       chatRunId: "chat-run-bound",
@@ -372,7 +399,7 @@ describe("a turn on the member's computer", () => {
         messageId: "answer",
         text: "Reading the file. The build passes.",
       },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     const firstText = chunks.findIndex(hasText("Reading the file."));
     expect(firstText).toBeGreaterThan(-1);
@@ -434,7 +461,7 @@ describe("a turn on the member's computer", () => {
       },
       { type: "text.delta", messageId: "answer", delta: "All tests pass." },
       { type: "text.completed", messageId: "answer", text: "All tests pass." },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     const pauseAt = chunks.findIndex(isPause) + 1;
     expect(pauseAt).toBeGreaterThan(0);
