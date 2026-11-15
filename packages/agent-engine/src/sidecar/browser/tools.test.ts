@@ -231,7 +231,8 @@ describe("the local browser tools", () => {
     for (const [index, tool] of readOnly.entries()) {
       const before = plain[index]?.description ?? "";
       expect(tool.description.includes("nothing is downloaded")).toBe(
-        before.includes("A PDF the page downloads is saved"),
+        before.includes("A PDF the page downloads is saved") ||
+          before.includes("A PDF the tab shows"),
       );
       expect(plain[index]?.description).not.toContain("nothing is downloaded");
     }

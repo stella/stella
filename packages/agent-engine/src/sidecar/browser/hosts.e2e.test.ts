@@ -249,7 +249,7 @@ const read = async (leg: HostLeg) => {
     stepOutputDir: path.join(root, "runs", "chat.step-outputs"),
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the notice period decision." }],
-    harnessSessionId: null,
+    session: { type: "fresh" },
     policy: { network: "open", fs: "workspace", approvals: "auto" },
     mcp: {
       serverName: "stella",

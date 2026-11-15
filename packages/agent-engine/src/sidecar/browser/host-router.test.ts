@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BROWSER_CONTROL_ERROR_CODE,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
@@ -28,7 +29,7 @@ const fakeHost = (name: string, acts: boolean) => {
         localBrowserResult({
           code: BROWSER_CONTROL_ERROR_CODE.executionFailed,
           message: name,
-          protocolVersion: 7,
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
           status: "error",
         }),
       );
