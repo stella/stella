@@ -113,7 +113,7 @@ describe("send lifecycle checkpoint indexing", () => {
   });
 
   test("uses the injected indexer when admission loss restores before and after run handoff", async () => {
-    for (const phase of ["preflight", "handed-over"] as const) {
+    for (const phase of ["preflight", "with-run"] as const) {
       const checkpoint = toPersistableChatMessage({
         id: toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
         metadata: {
@@ -231,7 +231,7 @@ describe("send lifecycle checkpoint indexing", () => {
         Result.isOk(await lifecycle.reserveExecutionPeriod("run_lifecycle")),
       ).toBe(true);
       const run =
-        phase === "handed-over"
+        phase === "with-run"
           ? lifecycle.startRun(undefined, CHAT_RUN_TARGET_KIND.cloud)
           : undefined;
       admission.abort(
