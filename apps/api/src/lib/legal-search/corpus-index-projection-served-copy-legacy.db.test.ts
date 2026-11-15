@@ -561,10 +561,33 @@ describe("cleanup of revisions the previous release left served", () => {
       unserved: 0,
       served_after_delete: 0,
       served_unproven: 1,
+      served_unproven_same_content: 0,
     });
     expect(await intentOf(revision)).toMatchObject({
       status: "cleanup_started",
       cleanupAttempts: 1,
+    });
+  });
+
+  test("a revision prepared two epochs behind with unchanged content is claimed and counted apart, never restored", async () => {
+    const { entityId, revision } = await servedEntity();
+    await changeDesired(entityId, 2, {
+      action: "upsert",
+      fingerprint: fingerprint(0),
+    });
+    await changeDesired(entityId, 3, {
+      action: "upsert",
+      fingerprint: fingerprint(0),
+    });
+    await previousPrepare(entityId, revision);
+
+    const result = await claim();
+    expect(result.restoredIntentIds).toEqual([]);
+    expect(result.claimed).toEqual({
+      unserved: 0,
+      served_after_delete: 0,
+      served_unproven: 0,
+      served_unproven_same_content: 1,
     });
   });
 
@@ -648,6 +671,7 @@ describe("cleanup of revisions the previous release left served", () => {
       unserved: 0,
       served_after_delete: 0,
       served_unproven: 1,
+      served_unproven_same_content: 0,
     });
     expect(await intentOf(revision)).toMatchObject({
       status: "cleanup_started",
@@ -670,6 +694,7 @@ describe("cleanup of revisions the previous release left served", () => {
       unserved: 0,
       served_after_delete: 1,
       served_unproven: 0,
+      served_unproven_same_content: 0,
     });
     expect(await intentOf(revision)).toMatchObject({
       status: "cleanup_started",
@@ -763,7 +788,12 @@ describe("cleanup of revisions the previous release left served", () => {
     // Nothing the first turn read is left at the head of the queue.
     expect(await claim()).toEqual({
       leases: [],
-      claimed: { unserved: 0, served_after_delete: 0, served_unproven: 0 },
+      claimed: {
+        unserved: 0,
+        served_after_delete: 0,
+        served_unproven: 0,
+        served_unproven_same_content: 0,
+      },
       restoredIntentIds: [],
       skippedLocked: 0,
     });

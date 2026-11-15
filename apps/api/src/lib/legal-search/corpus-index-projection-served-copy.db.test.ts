@@ -574,7 +574,8 @@ const claimCleanup = async (run: ModelRun) => {
   run.servedClaims +=
     claim.restoredIntentIds.length +
     claim.claimed.served_after_delete +
-    claim.claimed.served_unproven;
+    claim.claimed.served_unproven +
+    claim.claimed.served_unproven_same_content;
   const leaseToken = claim.leases.at(0)?.leaseToken;
   if (leaseToken === undefined) {
     return;
