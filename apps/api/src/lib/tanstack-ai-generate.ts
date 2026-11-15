@@ -249,7 +249,7 @@ type GenerateTanStackObjectForTaskOptions<TSchema extends v.GenericSchema> =
       outputSchema: TSchema;
     };
 
-export type TanStackStructuredOutputPartial<TOutput> = NonNullable<
+type TanStackStructuredOutputPartial<TOutput> = NonNullable<
   StructuredOutputPart<TOutput>["partial"]
 >;
 
