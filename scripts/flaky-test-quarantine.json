@@ -20,13 +20,6 @@
       "reason": "Times out at the 5 s fast-suite limit under parallel load on main as well as on branches, together with the retry case in the same file; it mounts two server-history clients and needs a lighter fixture.",
       "created": "2026-11-10",
       "expires": "2026-11-24"
-    },
-    {
-      "id": "packages/scripts/src/decision-reader-boundary.test.ts::source imports never reference any removed reader module",
-      "owner": "stella",
-      "reason": "The test globs every source file and then reads each one; in a turbo run at concurrency 2 the @stll/mcp-apps test regenerates packages/mcp-apps/src/generated/bundles.ts in between, so the read can find the file gone (ENOENT in run job 132545465662). The scan needs to skip files that vanish after the glob or read a stable file list.",
-      "created": "2026-11-14",
-      "expires": "2026-11-28"
     }
   ]
 }
