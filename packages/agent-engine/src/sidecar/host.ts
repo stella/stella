@@ -5,6 +5,10 @@ import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import {
+  CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
+  CHAT_LOCAL_RUN_STEPS_AWAITED_MAX,
+} from "@stll/api-contract/chat-local-run-step-content";
 import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import type {
   DESKTOP_RUNNER_RUN_OUTCOMES,
@@ -449,6 +453,14 @@ const STEP_UPLOAD_END_WAIT_MS = {
   stopped: 20_000,
 } as const;
 
+/**
+ * Beside a run's kept steps, the folder of the steps still to send: the
+ * sidecar's while the run goes, and under the second name the desktop app's
+ * once the run announced them at its end.
+ */
+const STEP_PENDING_SUFFIX = ".pending";
+const STEP_AWAITED_SUFFIX = ".awaited";
+
 type RunStepsOptions = {
   /** The API the run's steps are sent to, and the proxy holding its token. */
   config: Pick<Config, "apiOrigin" | "proxy">;
@@ -456,6 +468,11 @@ type RunStepsOptions = {
   message: { stepOutputDir: string; workspaceDir: string };
   runId: string;
   log: SidecarHostOptions["log"];
+  /**
+   * Hands one of the run's messages to the holder, which keeps it for the
+   * desktop app; `false` when the holder did not take it.
+   */
+  send: (message: SidecarHostOutput) => boolean;
 };
 
 /**
@@ -468,10 +485,12 @@ const openRunSteps = ({
   message: { stepOutputDir, workspaceDir },
   runId,
   log,
+  send,
 }: RunStepsOptions) => {
   const runDir = stepOutputRunDir(stepOutputDir, runId);
   const uploads = createStepUploads({
-    pendingDir: `${runDir}.pending`,
+    pendingDir: `${runDir}${STEP_PENDING_SUFFIX}`,
+    awaitedDir: `${runDir}${STEP_AWAITED_SUFFIX}`,
     keptFile: (stepKey) => path.join(runDir, stepKey),
     upload: stepContentUploader({
       apiOrigin,
@@ -502,10 +521,12 @@ const openRunSteps = ({
       }
     },
     /**
-     * Send what the steps still have to send, before the event that ends the
-     * turn: a run that finished takes nothing more. `signal` ends the wait.
+     * The turn ends. Before its last event: send what the steps still have
+     * to send (`signal` ends the wait), then stop sending and announce the
+     * steps this computer still holds. A run that finished takes nothing
+     * more, except the steps it named before its finish.
      */
-    drain: async (
+    end: async (
       end: keyof typeof STEP_UPLOAD_END_WAIT_MS,
       signal?: AbortSignal,
     ) => {
@@ -514,8 +535,34 @@ const openRunSteps = ({
         retryEveryMs: STEP_UPLOAD_RETRY_MS,
         ...(signal === undefined ? {} : { signal }),
       });
+      const left = await uploads.leave(CHAT_LOCAL_RUN_STEPS_AWAITED_MAX);
+      if (Result.isError(left)) {
+        // What cannot be listed is not named, so it is not sent later.
+        log("a run's unsent step content could not be listed");
+        return;
+      }
+      if (left.value.stepKeys.length === 0 && left.value.more === 0) {
+        return;
+      }
+      // The folder is handed over before it is announced, so no stop of
+      // this process leaves announced steps where nobody sends them from: a
+      // folder handed over and never announced is refused by the API and
+      // removed. An announcement the holder did not take awaits nothing.
+      const announced = send({
+        type: "run.event",
+        runId,
+        chunk: {
+          type: EventType.CUSTOM,
+          name: CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
+          value: left.value,
+          timestamp: Temporal.Now.instant().epochMilliseconds,
+        },
+      });
+      if (!announced) {
+        await uploads.withdraw();
+      }
     },
-    /** The run is over: nothing more is sent, and what waited is dropped. */
+    /** The run is over: what waited and was not announced is dropped. */
     close: uploads.close,
   };
 };
@@ -1308,14 +1355,14 @@ export class SidecarHost {
      */
     const delivery = { broken: false };
     const send = (runMessage: SidecarHostOutput) => {
-      if (delivery.broken || this.options.send(runMessage)) {
-        return;
+      if (!delivery.broken && !this.options.send(runMessage)) {
+        delivery.broken = true;
+        this.options.log(
+          `a run's ${runMessage.type} message could not be written; stopping the run`,
+        );
+        this.stop(run, RUN_STOP.interrupt);
       }
-      delivery.broken = true;
-      this.options.log(
-        `a run's ${runMessage.type} message could not be written; stopping the run`,
-      );
-      this.stop(run, RUN_STOP.interrupt);
+      return !delivery.broken;
     };
     const relabel = (nativeId: string) => {
       const requestId = crypto.randomUUID();
@@ -1366,7 +1413,13 @@ export class SidecarHost {
     };
 
     const { options } = this;
-    const steps = openRunSteps({ config, message, runId, log: options.log });
+    const steps = openRunSteps({
+      config,
+      message,
+      runId,
+      log: options.log,
+      send,
+    });
     /**
      * The adapter's events with harness request ids replaced by runner UUIDs.
      * An approval request is announced after the chunks of its event: the
@@ -1406,19 +1459,19 @@ export class SidecarHost {
           case "turn.completed":
             outcome.value = "completed";
             // A stop ends the wait: a stopped run does not wait to send.
-            await steps.drain("completed", run.outputSharing.signal);
+            await steps.end("completed", run.outputSharing.signal);
             await shareRunOutputs();
             yield event;
             break;
           case "turn.interrupted":
             outcome.value =
               run.stop === RUN_STOP.cancel ? "cancelled" : "interrupted";
-            await steps.drain("stopped");
+            await steps.end("stopped");
             yield event;
             break;
           case "turn.failed":
             outcome.value = HARNESS_FAILURE_OUTCOME[event.failure.type];
-            await steps.drain("stopped");
+            await steps.end("stopped");
             yield event;
             break;
           case "tool.completed":
