@@ -94,8 +94,7 @@ const clientCallAwaitsResolution = (state: string): boolean =>
 export const isApprovedClientCallAwaitingResult = (part: unknown): boolean => {
   const call = toolCallViewOf(part);
   return (
-    call !== null &&
-    call.state === "approval-responded" &&
+    call?.state === "approval-responded" &&
     call.approved === true &&
     !call.hasOutput &&
     chatToolExecutor(part) === "client"
