@@ -926,6 +926,14 @@ const JOINING_RUNNERS = {
       argument: 1,
       suppliesTransaction: true,
     },
+    // Awaits its callback and returns its result, then pings the turns it
+    // wrote: the transaction the callback opens is the handler's own.
+    {
+      module: `${API}lib/chat/chat-run-pings.ts`,
+      exported: "withChatRunPings",
+      argument: 0,
+      suppliesTransaction: false,
+    },
   ],
   /**
    * Followed callees only: `<receiver>.transaction(cb)` where the receiver
