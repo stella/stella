@@ -69,6 +69,14 @@ const localRunTargetSchema = v.object({
 
 export type LocalRunTarget = v.InferOutput<typeof localRunTargetSchema>;
 
+/** The thread's run target when its turns run on the person's computer. */
+export const localRunTargetOf = (
+  runTarget: unknown,
+): LocalRunTarget | undefined => {
+  const target = v.safeParse(localRunTargetSchema, runTarget);
+  return target.success ? target.output : undefined;
+};
+
 /** One interrupt a paused turn waits on, as its resume snapshot stores it. */
 const pendingInterruptSchema = v.looseObject({
   id: v.pipe(v.string(), v.minLength(1)),
@@ -366,10 +374,10 @@ function ownerOf(
   if (harness.length !== calls.length) {
     return undefined;
   }
-  const target = v.safeParse(localRunTargetSchema, runTarget);
-  return target.success
-    ? { type: "harness", runTarget: target.output }
-    : undefined;
+  const target = localRunTargetOf(runTarget);
+  return target === undefined
+    ? undefined
+    : { type: "harness", runTarget: target };
 }
 
 /**
