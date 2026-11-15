@@ -243,6 +243,7 @@ const READER_ANNOTATION_LOCK_NAMESPACE = 0x0f_10_cc_af;
 // aggregate history, in organization ID order (see lockLegalHoldOrganizations).
 const LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE = 19_054;
 const BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE = 0x0f_10_cc_b6;
+const CORPUS_PROJECTION_OFFLINE_REQUEST_LOCK_NAMESPACE = 0x0f_10_cc_b7;
 
 const chatOwnerStoredContentEgressKey = ({
   organizationId,
@@ -1382,6 +1383,13 @@ const rowStatement = (
     sql`, `,
   )} FROM ${sql.identifier("public")}.${sql.identifier(resource.table)} WHERE ${sql.join(keys, sql` AND `)} ${sql.raw(`FOR ${mode.toUpperCase()}`)} ${wait === "nowait" ? sql`NOWAIT` : sql``}`;
 };
+const corpusProjectionOfflineRequestResource = (
+  requestId: AggregateIdentities["corpusProjectionOfflineRequest"],
+) => ({
+  first: sql`${CORPUS_PROJECTION_OFFLINE_REQUEST_LOCK_NAMESPACE}::integer`,
+  second: sql`hashtext(${requestId})`,
+  order: ["corpusProjectionOfflineRequest", requestId],
+});
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
     case "organizationObjectIntent":
@@ -1577,6 +1585,8 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.month,
         ],
       };
+    case "corpusProjectionOfflineRequest":
+      return corpusProjectionOfflineRequestResource(options.id);
     default:
       options satisfies never;
       return panic("Unknown advisory aggregate");
@@ -3997,6 +4007,29 @@ export const lockCorpusProjectionServingStatesForCleanup = async (
     .for("update", { skipLocked: true });
 
 /**
+ * One generation's states by entity, in entity order, waiting for any another
+ * transaction holds. For an operator pass that reads its page unlocked and
+ * decides under these locks.
+ */
+export const lockCorpusProjectionStatesByEntity = async (
+  tx: Transaction,
+  { family, generation, entityIds }: CorpusProjectionServingStatesOptions,
+) =>
+  await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        inArray(corpusIndexProjectionStates.entityId, [...entityIds]),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionStates.entityId))
+    .limit(entityIds.length)
+    .for("update");
+
+/**
  * Cleanup candidates still pending and still due, after their states,
  * skipping held rows. The page that found them was read without locks, so a
  * row may have been claimed and requeued with a later fence since; such a row
@@ -4022,6 +4055,22 @@ export const lockPendingCorpusProjectionCleanups = async (
     .orderBy(asc(corpusIndexProjectionIntents.id))
     .limit(intentIds.length)
     .for("update", { skipLocked: true });
+
+/**
+ * One offline projection request, before anything else its start transaction
+ * reads or locks: its transactions run one at a time, so each counts what the
+ * earlier ones committed and the request never starts past its plan.
+ */
+export const lockCorpusProjectionOfflineRequest = async (
+  tx: ExecuteTransaction,
+  requestId: AggregateIdentities["corpusProjectionOfflineRequest"],
+): Promise<void> => {
+  await withAggregateLock({
+    aggregate: "corpusProjectionOfflineRequest",
+    id: requestId,
+    tx,
+  });
+};
 
 /** Revisions a desired-state writer retires, after the states it holds. */
 export const lockCorpusProjectionRevisionsAfterStates = async (

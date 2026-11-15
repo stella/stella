@@ -71,11 +71,6 @@ export default {
         reason:
           "Stores what a step produced for the run whose agent token sends it, against that run's storage budget.",
       },
-      {
-        path: "apps/api/src/handlers/chat/local-run-step-output-grant.ts",
-        reason:
-          "Reads the member's own run to grant reading its step outputs on the computer that ran it.",
-      },
     ],
   },
 } as const satisfies OwnershipEntry;

@@ -653,7 +653,6 @@ fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_and_step_outputs_bes
  {
   let place = Place::new();
   let id = run_id();
-  let output_key = "cd".repeat(32);
   // The member's own folder, with their work in it.
   let member = place.fixture.root.join("member");
   let linked = member.join("Smith v Jones");
@@ -668,7 +667,6 @@ fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_and_step_outputs_bes
     let mut connection = connect(&gateway, &[], "ready").await;
     let mut start = run_start(&id, "gpt-test");
     start["linkedFolderId"] = json!(LINKED_FOLDER_ID);
-    start["outputKey"] = json!(output_key);
     connection.send(start).await;
     assert_eq!(
       connection.receive().await,
@@ -684,34 +682,12 @@ fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_and_step_outputs_bes
   let cache = place.workspaces().join(format!("{id}.cache"));
   assert_eq!(start["cacheDir"], cache.to_str().unwrap());
   assert!(cache.is_dir());
-  // The run's outputs and their key are kept in stella's runs folder, where
-  // the bridge looks, and nothing is written in or beside the member's.
+  // The run's step outputs are spooled in stella's runs folder, where the
+  // app drains what a run hands over, and nothing is written in or beside
+  // the member's.
   let store = place.workspaces().join(format!("{id}.step-outputs"));
   assert_eq!(start["stepOutputDir"], store.to_str().unwrap());
-  assert_eq!(
-    std::fs::read_to_string(store.join(&id).join("key")).unwrap(),
-    output_key
-  );
   assert_eq!(tree_of(&member), before);
-  // A step the sidecar keeps where `run.start` named opens through the
-  // bridge for the member's page.
-  let step = "ab".repeat(32);
-  std::fs::write(store.join(&id).join(&step), "{\"bytes\":3}\nok\n").unwrap();
-  run(async {
-    let response = crate::bridge::tests::read_step_at(
-      &place.workspaces(),
-      &output_key,
-      "user-fixture-1",
-      uuid::Uuid::parse_str(&id).unwrap(),
-      &step,
-    )
-    .await;
-    assert_eq!(response.status(), axum::http::StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 4096)
-      .await
-      .unwrap();
-    assert_eq!(&body[..], b"ok\n");
-  });
 }
 
 #[test]

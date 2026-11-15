@@ -2,5 +2,5 @@
   "metric": "no-db-await-in-loop-suppressions",
   "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
   "delta": 2,
-  "reason": "Retiring the copies a desired write leaves unproven takes two statements per generation (queue the revisions, un-name the states), because each generation's publish fence and settlement bound come from its own manifest; a desired write spans at most the family's registered generations."
+  "reason": "Retiring the copies an undone erasure or the one-off legacy pass leaves takes two statements per generation (queue the revisions, un-name the states), because each generation's publish fence and settlement bound come from its own manifest; a call spans at most the family's registered generations."
 }

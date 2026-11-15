@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { LocalRunStepOutputView } from "@stll/api-contract/chat-local-run-step-content-view";
 import fixtures from "@stll/api-contract/chat-local-run-steps.fixtures";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
@@ -12,7 +13,6 @@ import type {
   ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
-import type { LocalRunStepOutputView } from "@/features/chat/local-run-step-output.logic";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });

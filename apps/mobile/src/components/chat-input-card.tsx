@@ -27,6 +27,7 @@ import {
   type ChatLocalRunQuestion,
   EMPTY_LOCAL_RUN_QUESTION_DRAFT,
   localRunAnswersOf,
+  localRunOptionLayout,
   type LocalRunQuestionDraft,
   type LocalRunQuestionPause,
   toggleLocalRunOption,
@@ -687,10 +688,6 @@ const QuestionField = ({
 }) => {
   const t = useTranslations("chat");
   const ownWords = answersInOwnWords(question, draft);
-  const pickedDescriptions = question.options.filter(
-    ({ description, label }) =>
-      description !== "" && draft.picked.includes(label),
-  );
 
   return (
     <View className="gap-2">
@@ -734,22 +731,32 @@ const QuestionField = ({
           ) : null}
         </View>
       ) : (
-        <View className="flex-row flex-wrap gap-2">
+        <View
+          className={
+            localRunOptionLayout(question) === "list"
+              ? "items-start gap-2"
+              : "flex-row flex-wrap gap-2"
+          }
+        >
           {question.options.map((option) => (
-            <Button
-              disabled={busy}
-              key={option.label}
-              onPress={() => {
-                onChange((current) =>
-                  toggleLocalRunOption(question, current, option.label),
-                );
-              }}
-              selected={draft.picked.includes(option.label)}
-              size="sm"
-              variant="outline"
-            >
-              {option.label}
-            </Button>
+            <View className="items-start gap-1" key={option.label}>
+              <Button
+                disabled={busy}
+                onPress={() => {
+                  onChange((current) =>
+                    toggleLocalRunOption(question, current, option.label),
+                  );
+                }}
+                selected={draft.picked.includes(option.label)}
+                size="sm"
+                variant="outline"
+              >
+                {option.label}
+              </Button>
+              {option.description === "" ? null : (
+                <Text variant="caption">{option.description}</Text>
+              )}
+            </View>
           ))}
           {question.allowsFreeText ? (
             <Button
@@ -765,13 +772,6 @@ const QuestionField = ({
           ) : null}
         </View>
       )}
-      {ownWords
-        ? null
-        : pickedDescriptions.map(({ description, label }) => (
-            <Text key={label} variant="caption">
-              {description}
-            </Text>
-          ))}
     </View>
   );
 };

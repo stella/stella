@@ -91,6 +91,8 @@ const commandStep = (
   titleKind: null,
   subtitle: { type: "text", text: `run ${id}` },
   status,
+  // A settled command's output opens from it; one still running has none.
+  contentCallId: status === "running" ? null : id,
 });
 
 describe("a coding agent's steps in an answer on the phone", () => {
@@ -117,6 +119,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
         description: "Task of agent",
         agentType: "Explore",
         status: "done",
+        conversationCallId: "agent",
         stepCount: 2,
         steps: [commandStep("first"), commandStep("second")],
       },
@@ -143,6 +146,8 @@ describe("a coding agent's steps in an answer on the phone", () => {
         description: "Task of agent",
         agentType: "Explore",
         status: "needs_approval",
+        // Its conversation opens once it ended with a result.
+        conversationCallId: null,
         // The waiting step is counted, and shown outside the row.
         stepCount: 2,
         steps: [commandStep("ran")],
@@ -223,7 +228,8 @@ describe("a coding agent's steps in an answer on the phone", () => {
         titleKind: "image",
         subtitle: { type: "text", text: "exhibits/scan-12.png" },
         status: "done",
-        // The image stays on the computer: the phone says where it opens.
+        // The image the step viewed opens from it, as stella stored it.
+        contentCallId: "image",
       },
       {
         type: "local",
@@ -231,6 +237,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
         titleKind: "search",
         subtitle: { type: "search", pattern: "indemnity", path: "drafts" },
         status: "done",
+        contentCallId: null,
       },
       {
         type: "local",
@@ -238,6 +245,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
         titleKind: null,
         subtitle: { type: "text", text: "Skill" },
         status: "done",
+        contentCallId: null,
       },
     ]);
   });

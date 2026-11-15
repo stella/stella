@@ -78,6 +78,7 @@ import {
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_LEASE_MAX_MS,
   CORPUS_PROJECTION_LEASE_MIN_MS,
+  corpusProjectionDeliveredTogether,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { logger } from "@/api/lib/observability/logger";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
@@ -171,9 +172,15 @@ type ClaimCorpusProjectionCleanupOptions<Family extends CorpusFamily> =
  *   may already be gone and holding the cleanup back would only keep the
  *   entity hidden. It settles and the entity is appended again.
  * - `served_unproven`: never claimed, but more than one desired change
- *   separates it from the desired state, so an erasure undone in between
- *   cannot be ruled out and the copy may be the pre-erasure one. Deleting it
- *   is the safe direction; the entity is appended anew.
+ *   separates it from the desired state and its content differs from what
+ *   the state desires, so an erasure undone in between cannot be ruled out
+ *   and the copy may be the pre-erasure one. Deleting it is the safe
+ *   direction; the entity is appended anew. It also takes a never-claimed
+ *   copy whose cleanup an earlier release's erasure or drift repair queued
+ *   (`last_error` set), even when an undo brought the desired content back
+ *   to exactly the copy's: `last_error` is what singles out preparation for
+ *   the restore, so that small class is deleted on purpose rather than
+ *   restored (see `corpusIndexProjectionRevisionIsRestorable`).
  */
 const CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS = [
   "unserved",
@@ -408,11 +415,15 @@ const decideCleanupCandidatesTx = async (
         WHEN ${corpusIndexProjectionRevisionIsRestorable({
           ...served,
           revisionEpoch: corpusIndexProjectionIntents.epoch,
+          revisionFingerprint: corpusIndexProjectionIntents.fingerprint,
+          revisionIndexId: corpusIndexProjectionIntents.indexId,
           cleanupAttempts: corpusIndexProjectionIntents.cleanupAttempts,
           revisionAppliedAt: corpusIndexProjectionIntents.appliedAt,
           lastError: corpusIndexProjectionIntents.lastError,
           appliedEpoch: corpusIndexProjectionStates.appliedEpoch,
           desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
+          desiredFingerprint: corpusIndexProjectionStates.desiredFingerprint,
+          desiredIndexId: corpusIndexProjectionStates.desiredIndexId,
         })}
           THEN ${CLEANUP_CANDIDATE_RESTORE satisfies CorpusProjectionCleanupDisposition}
         WHEN ${corpusIndexProjectionIntents.cleanupAttempts} > 0
@@ -2160,10 +2171,32 @@ const retireExpiredUnknownAppendsTx = async (
         eq(corpusIndexProjectionIntents.status, "append_started"),
       ),
     );
+  // Charged by what each request delivered together: an offline request's
+  // started rows, never its planned total.
+  const delivered = new Map(
+    (
+      await tx
+        .select({
+          id: corpusIndexProjectionIntents.id,
+          deliveredTogether: corpusProjectionDeliveredTogether(),
+        })
+        .from(corpusIndexProjectionIntents)
+        .where(
+          inArray(
+            corpusIndexProjectionIntents.id,
+            rows.map(({ id }) => id),
+          ),
+        )
+    ).map(({ id, deliveredTogether }) => [id, deliveredTogether]),
+  );
   await updateExpiredAppendStatesTx(tx, {
     family,
     generation,
-    targets: rows,
+    targets: rows.map((row) => ({
+      ...row,
+      appendRequestRevisionCount:
+        delivered.get(row.id) ?? row.appendRequestRevisionCount,
+    })),
     transitionAt,
   });
 };

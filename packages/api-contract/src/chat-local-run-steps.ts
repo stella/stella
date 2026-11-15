@@ -218,10 +218,10 @@ export type LocalRunStepOutputKind =
   "command" | "diff" | "conversation" | "image";
 
 /**
- * Whether a step produced something the member can open on the computer
- * that ran it: a command's output, a change's diff, a subagent's own
- * conversation, or the image a step viewed. `null` for any other call, which
- * keeps nothing there.
+ * Whether a step produced something the member can open, as stella stores
+ * it with the conversation (`chat-local-run-step-content`): a command's
+ * output, a change's diff, a subagent's own conversation, or the image a step
+ * viewed. `null` for any other call, which stores nothing.
  */
 export const localRunStepOutputKind = ({
   name,
@@ -255,7 +255,7 @@ export const localRunStepOutputKind = ({
   }
 };
 
-/** What a native step of this kind keeps on the computer, if anything. */
+/** What a native step of this kind stores, if anything. */
 const detailOutputKind = (
   detail: ChatLocalRunToolDetail,
 ): LocalRunStepOutputKind | null => {

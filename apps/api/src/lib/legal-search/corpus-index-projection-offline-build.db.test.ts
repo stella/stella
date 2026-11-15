@@ -50,7 +50,7 @@ import {
   readCorpusProjectionOfflineRequestCapsTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
-import { installCorpusProjectionGuards } from "@/api/tests/helpers/corpus-projection-guards";
+import { corpusProjectionLegacyFixture } from "@/api/tests/helpers/corpus-projection-legacy-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -98,6 +98,13 @@ let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 let shardDirectory: string;
 let nextDocument = 1;
+
+/**
+ * The guard functions and triggers production runs on the projection tables,
+ * from the real migrations: the test database is pushed from the schema,
+ * which carries the checks but no triggers.
+ */
+const { installProjectionDdl } = corpusProjectionLegacyFixture(() => db);
 
 /** A process death at one exact point; nothing after it runs. */
 class SimulatedCrash extends TaggedError("SimulatedCrash")<{
@@ -852,7 +859,7 @@ const drain = async (model: Model) => {
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  await installCorpusProjectionGuards(db);
+  await installProjectionDdl(true);
   await db.insert(corpusIndexGenerations).values({
     ...TARGET,
     cluster: "q09",

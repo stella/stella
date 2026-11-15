@@ -218,8 +218,8 @@ export const readServedCaseLawBacklogTx = async (
   };
 };
 
-/** Rows one index's waiting-replacement count reads, at most. */
-const CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP = 10_000;
+/** Index rows one index's waiting-replacement walk examines, at most. */
+export const CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP = 10_000;
 
 /**
  * Replacements of one served index that are still served at their previous
@@ -227,22 +227,32 @@ const CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP = 10_000;
  * the state names is still `applied`. Nothing appends a replacement before
  * its applied revision settles, and nothing queues a served revision for
  * cleanup, so these wait, visible but stale. A state naming a revision that
- * already left `applied` is not counted. `count` stops at the cap; the oldest
- * is exact however long the queue, since the walk reads it first.
+ * already left `applied` is not counted, but it is examined: the walk stops
+ * after the cap of index rows, counted or not.
  */
 type CaseLawWaitingReplacements = {
   generation: string;
   indexId: string;
-  count: number;
-  /** Since the longest-untouched waiting state was last written. */
-  oldestSeconds: number;
+  /**
+   * Stops at the cap. `null` when the walk reached its bound with uncounted
+   * rows in it, so the window's count is only a lower bound.
+   */
+  count: number | null;
+  /**
+   * Since the longest-untouched waiting state was last written. Exact when
+   * the window holds one, since the walk reads in that order; `null` when the
+   * walk reached its bound without finding any.
+   */
+  oldestSeconds: number | null;
 };
 
 /**
  * One generation's waiting replacements per desired index. The distinct
  * indexes come from a loose scan and each index's window from a bounded walk,
  * both on `corpus_index_projection_states_replacement_route_idx`, whose
- * predicate this one spells out literally so the planner can match it.
+ * predicate this one spells out literally so the planner can match it. The
+ * window limits the index rows examined, not the ones counted, so a long run
+ * of states whose revision already left `applied` cannot unbound the walk.
  */
 export const caseLawWaitingReplacementsQuery = (generation: string) => {
   const waiting = (alias: string) =>
@@ -277,25 +287,34 @@ export const caseLawWaitingReplacementsQuery = (generation: string) => {
       WHERE indexes.index_id IS NOT NULL
     )
     SELECT indexes.index_id AS index_id,
-      window_rows.count AS count,
-      window_rows.age AS age
+      CASE
+        WHEN window_rows.examined <= ${CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP}
+          OR window_rows.served = window_rows.examined
+        THEN least(window_rows.served, ${CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP})::int
+      END AS count,
+      CASE
+        WHEN window_rows.oldest IS NOT NULL
+        THEN extract(epoch FROM clock_timestamp() - window_rows.oldest)::float8
+        WHEN window_rows.examined <= ${CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP}
+        THEN 0::float8
+      END AS age
     FROM indexes
     CROSS JOIN LATERAL (
-      SELECT count(*)::int AS count,
-        coalesce(extract(epoch FROM clock_timestamp() - min(walked.updated_at)), 0)::float8 AS age
+      SELECT count(*) AS examined,
+        count(*) FILTER (WHERE walked.served) AS served,
+        min(walked.updated_at) FILTER (WHERE walked.served) AS oldest
       FROM (
-        SELECT state.updated_at
+        SELECT state.updated_at,
+          coalesce((
+            SELECT named.status = 'applied'
+            FROM ${corpusIndexProjectionIntents} named
+            WHERE named.id = state.applied_revision
+          ), false) AS served
         FROM ${corpusIndexProjectionStates} state
         WHERE state.family = 'case_law'
           AND state.generation = ${generation}
           AND state.desired_index_id = indexes.index_id
           AND ${waiting("state")}
-          AND EXISTS (
-            SELECT 1
-            FROM ${corpusIndexProjectionIntents} named
-            WHERE named.id = state.applied_revision
-              AND named.status = 'applied'
-          )
         ORDER BY state.updated_at, state.entity_id
         LIMIT ${CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP + 1}
       ) AS walked
@@ -312,6 +331,9 @@ const requiredText = (row: unknown, key: string): string => {
   return row[key];
 };
 
+const nullableNumber = (row: unknown, key: string): number | null =>
+  isRecord(row) && row[key] === null ? null : requiredNumber(row, key);
+
 const readCaseLawWaitingReplacementsTx = async (
   tx: Transaction,
   generations: readonly string[],
@@ -323,12 +345,11 @@ const readCaseLawWaitingReplacementsTx = async (
       await tx.execute(caseLawWaitingReplacementsQuery(generation)),
     );
     for (const row of rows) {
-      const count = requiredNumber(row, "count");
       reports.push({
         generation,
         indexId: requiredText(row, "index_id"),
-        count: Math.min(count, CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP),
-        oldestSeconds: requiredNumber(row, "age"),
+        count: nullableNumber(row, "count"),
+        oldestSeconds: nullableNumber(row, "age"),
       });
     }
   }
@@ -452,19 +473,25 @@ export const emitCaseLawFreshnessReport = (
       buildCaseLawProjectionConvergenceMetric(report.convergence),
     );
   }
+  // As with the backlog age, a value the bounded walk could not measure emits
+  // nothing rather than a lower bound under the same metric.
   for (const waiting of report.waitingReplacements) {
     const dimensions = {
       generation: waiting.generation,
       index: waiting.indexId,
     };
-    writeMetricLine(
-      buildCaseLawWaitingReplacementsMetric(dimensions, waiting.count),
-    );
-    writeMetricLine(
-      buildCaseLawWaitingReplacementOldestMetric(
-        dimensions,
-        waiting.oldestSeconds,
-      ),
-    );
+    if (waiting.count !== null) {
+      writeMetricLine(
+        buildCaseLawWaitingReplacementsMetric(dimensions, waiting.count),
+      );
+    }
+    if (waiting.oldestSeconds !== null) {
+      writeMetricLine(
+        buildCaseLawWaitingReplacementOldestMetric(
+          dimensions,
+          waiting.oldestSeconds,
+        ),
+      );
+    }
   }
 };

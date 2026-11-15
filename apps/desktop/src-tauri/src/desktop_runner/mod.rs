@@ -29,7 +29,6 @@ mod sidecar_host_tests;
 )]
 pub(crate) mod stand_in;
 mod state;
-pub(crate) mod step_outputs;
 #[cfg(test)]
 mod tests;
 

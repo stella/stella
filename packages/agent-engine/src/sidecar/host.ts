@@ -431,6 +431,22 @@ const probeOutcome = ({
   };
 };
 
+/**
+ * The runner request id a harness request id was relabelled with
+ * (`HeldRun.requests`), or the harness's own id when it was never relabelled.
+ */
+const runnerRequestIdOf = (
+  requests: ReadonlyMap<string, string>,
+  nativeId: string,
+) => {
+  for (const [requestId, native] of requests) {
+    if (native === nativeId) {
+      return requestId;
+    }
+  }
+  return nativeId;
+};
+
 /** The event stream for a run that ends before its harness starts. */
 const stoppedBeforeStart = (): AsyncIterable<HarnessEvent> => {
   const queue = createEventQueue<HarnessEvent>();
@@ -1369,14 +1385,6 @@ export class SidecarHost {
       run.requests.set(requestId, nativeId);
       return requestId;
     };
-    const runnerIdOf = (nativeId: string) => {
-      for (const [requestId, native] of run.requests) {
-        if (native === nativeId) {
-          return requestId;
-        }
-      }
-      return nativeId;
-    };
 
     /**
      * Hand the member what the turn wrote to its `outputs/` folder, reported
@@ -1454,7 +1462,10 @@ export class SidecarHost {
             break;
           }
           case "interaction.resolved":
-            yield { ...event, requestId: runnerIdOf(event.requestId) };
+            yield {
+              ...event,
+              requestId: runnerRequestIdOf(run.requests, event.requestId),
+            };
             break;
           case "turn.completed":
             outcome.value = "completed";
@@ -1483,6 +1494,7 @@ export class SidecarHost {
           case "reasoning.completed":
           case "tool.started":
           case "retrying":
+          case "model.rerouted":
             yield event;
             break;
           default:

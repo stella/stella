@@ -351,6 +351,12 @@ export const CODEX_NOTIFICATIONS = {
       modelContextWindow: v.nullish(v.number()),
     }),
   }),
+  /** The provider moved the turn to another model; the turn names it. */
+  "model/rerouted": v.object({
+    threadId: v.string(),
+    turnId: v.string(),
+    toModel: v.string(),
+  }),
   /** The harness's working plan changed; only step titles are shown. */
   "turn/plan/updated": v.object({
     threadId: v.string(),

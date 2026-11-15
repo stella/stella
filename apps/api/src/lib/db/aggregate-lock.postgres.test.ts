@@ -140,6 +140,12 @@ const advisoryAcquisitions = () => {
         id: "global",
         tx,
       }),
+    corpusProjectionOfflineRequest: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "corpusProjectionOfflineRequest",
+        id: "0198e331-e578-7000-8000-0000000000b7",
+        tx,
+      }),
     legislationAmendmentWork: async (tx: AggregateAcquireTransaction) =>
       await withAggregateLock({
         aggregate: "legislationAmendmentWork",

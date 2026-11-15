@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { Pressable, Share, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import { MOBILE_REDIRECT_SCHEMES } from "@stll/api-contract/mobile-client";
 import { Text } from "@stll/ui/text";
 
@@ -21,7 +22,8 @@ import { plainText } from "@/state/markdown";
  * under the files they attached, drawn from its markdown so a mention reads
  * as the chip of what it names; the assistant's answer runs the full width
  * as a document, its texts in order with a summary of each run of steps the
- * model took between them. `uploading` marks the files of a message still
+ * model took between them, under what its context left out, if anything.
+ * `uploading` marks the files of a message still
  * going up; `live` an answer still arriving, whose last run says the step it
  * is on.
  */
@@ -57,6 +59,9 @@ export const ChatMessage = ({
   const last = entry.blocks.at(-1);
   return (
     <View className="gap-2.5 py-1">
+      {entry.contextNotice === null ? null : (
+        <ContextNotice notice={entry.contextNotice} />
+      )}
       {entry.blocks.map((block) => {
         switch (block.type) {
           case "text":
@@ -84,6 +89,20 @@ export const ChatMessage = ({
       {live || entry.text === "" ? null : <ShareAnswer text={entry.text} />}
     </View>
   );
+};
+
+/** What the answer's context left out, in the words the web uses. */
+const ContextNotice = ({ notice }: { notice: ChatContextNotice }) => {
+  const t = useTranslations("chat");
+  switch (notice.type) {
+    case "history-trimmed":
+      return <Text variant="caption">{t("historyTrimmed")}</Text>;
+    case "session-not-resumed":
+      return <Text variant="caption">{t("localRun.sessionNotResumed")}</Text>;
+    default:
+      notice satisfies never;
+      return panic("Unhandled context notice");
+  }
 };
 
 /**

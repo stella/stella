@@ -228,7 +228,24 @@
         "running": "Vykdoma",
         "failed": "Nepavyko",
         "interrupted": "Sustabdyta"
-      }
+      },
+      "output": {
+        "command": "Išvestis",
+        "diff": "Failų pakeitimai",
+        "conversation": "Subagento pokalbis",
+        "conversationPrompt": "Užduotis",
+        "conversationReport": "Ataskaita",
+        "cut": "Rodomi pirmieji {kept} iš {total}",
+        "empty": "Išvesties nėra",
+        "arriving": "Vis dar gaunama iš kompiuterio, kuriame buvo vykdomas šis žingsnis",
+        "notCopied": "Į šį pokalbį dar nenukopijuota",
+        "notStored": "Iš šio žingsnio nieko neišsaugota",
+        "runBudgetReached": "Neišsaugota: šis vykdymas jau išsaugojo tiek, kiek leidžiama vienam vykdymui",
+        "imageTooLargeToStore": "Šio paveikslėlio dydis – {total}. Didesni nei {kept} paveikslėliai nesaugomi, todėl jo parodyti negalima.",
+        "loadFailed": "Nepavyko įkelti.",
+        "showMore": "Rodyti daugiau"
+      },
+      "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}",
@@ -237,7 +254,8 @@
       "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}"
     },
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių} many {# žingsnių}}",
-    "reasoning": "Mąstymas"
+    "reasoning": "Mąstymas",
+    "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį."
   },
   "tasks": {
     "emptyTitle": "Atvirų užduočių nėra",
