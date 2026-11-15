@@ -20,6 +20,7 @@ import { panic, Result, TaggedError } from "better-result";
 import type { ResponseCreateParams } from "openai/resources/responses/responses";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
   getModelDefaultReasoningEffort,
   getOutputTokenLimit,
@@ -2502,10 +2503,12 @@ const openAICacheOptions = (
   // GPT-5.6+ accepts request-wide mode; older models only cache implicitly.
   // https://developers.openai.com/api/docs/guides/prompt-caching
   const version = /^gpt-(\d+)(?:\.(\d+))?/u.exec(modelId);
+  const major = parseIntegerToken(version?.[1], { sign: "unsigned" });
+  const minor = parseIntegerToken(version?.[2] ?? "0", { sign: "unsigned" });
   const supportsMode =
-    version !== null &&
-    (Number(version[1]) > 5 ||
-      (Number(version[1]) === 5 && Number(version[2] ?? 0) >= 6));
+    major.isOk() &&
+    minor.isOk() &&
+    (major.value > 5 || (major.value === 5 && minor.value >= 6));
   return {
     // The shared runtime suppresses SDK cache defaults and generated keys.
     // Native model options win over the adapter's explicit-only default:

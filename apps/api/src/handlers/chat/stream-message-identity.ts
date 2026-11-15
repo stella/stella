@@ -140,20 +140,20 @@ export const attachSnapshotMessageOwners = (
     return chunk;
   }
   const marker = "__stellaSnapshotOwner";
+  const modelUI = modelMessagesToUIMessages(
+    context.messages.map((message, index) => {
+      const id = message.id || `snapshot_${context.runId}_${index}`;
+      return {
+        ...message,
+        id,
+        metadata: { ...message.metadata, [marker]: id },
+      };
+    }),
+  );
   const rows = uiMessagesToWire(
-    interleaveActivityRecords(
-      modelMessagesToUIMessages(
-        context.messages.map((message, index) => {
-          const id = message.id || `snapshot_${context.runId}_${index}`;
-          return {
-            ...message,
-            id,
-            metadata: { ...message.metadata, [marker]: id },
-          };
-        }),
-      ),
-      [...(context.activities ?? [])],
-    ),
+    context.activities === undefined
+      ? modelUI
+      : interleaveActivityRecords(modelUI, [...context.activities]),
     { includeSnapshotStructuredOutput: true, includeActivity: true },
   );
   const owners = Object.fromEntries(
