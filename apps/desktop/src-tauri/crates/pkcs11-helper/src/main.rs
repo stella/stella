@@ -18,7 +18,7 @@ use std::io::{Read, Write};
 use std::process::ExitCode;
 
 use stella_desktop_pkcs11::protocol::{
-  MAX_REQUEST_BYTES, Request, Response, decode_request, encode,
+  MAX_REQUEST_BYTES, Request, Response, decode_request, encode_response,
 };
 use stella_desktop_signing_core::SigningErrorCode;
 use zeroize::Zeroizing;
@@ -29,7 +29,7 @@ fn main() -> ExitCode {
     Ok(Request::Sign(request)) => token::sign(&request),
     Err(detail) => Response::failed(SigningErrorCode::SigningFailed, detail),
   };
-  let Ok(encoded) = encode(&response) else {
+  let Ok(encoded) = encode_response(&response) else {
     return ExitCode::FAILURE;
   };
   let mut stdout = std::io::stdout().lock();

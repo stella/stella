@@ -311,13 +311,48 @@ fn decode<T: serde::de::DeserializeOwned>(
     .map_err(|error| ProtocolError::Malformed(error.to_string()))
 }
 
-/// A message as written to the other process, in a buffer wiped on drop
-/// (a sign request carries the PIN).
-pub fn encode<T: Serialize>(message: &T) -> Result<Zeroizing<Vec<u8>>, ProtocolError> {
-  let mut buffer = Zeroizing::new(Vec::new());
-  serde_json::to_writer(&mut *buffer, message)
-    .map_err(|error| ProtocolError::Malformed(error.to_string()))?;
+/// A request as written to the helper, in a buffer wiped on drop (a sign
+/// request carries the PIN). The buffer is allocated once at the protocol's
+/// limit and never grows: a growing `Vec` moves to a new allocation and
+/// releases the old one unwiped, with whatever PIN bytes it already held.
+pub fn encode_request(request: &Request) -> Result<Zeroizing<Vec<u8>>, ProtocolError> {
+  let mut buffer = Zeroizing::new(Vec::with_capacity(MAX_REQUEST_BYTES));
+  serde_json::to_writer(FixedCapacity(&mut buffer), request).map_err(|error| {
+    if error.io_error_kind() == Some(std::io::ErrorKind::WriteZero) {
+      ProtocolError::TooLarge
+    } else {
+      ProtocolError::Malformed(error.to_string())
+    }
+  })?;
   Ok(buffer)
+}
+
+/// A response as written to the desktop. It carries no secret.
+pub fn encode_response(response: &Response) -> Result<Vec<u8>, ProtocolError> {
+  let encoded = serde_json::to_vec(response)
+    .map_err(|error| ProtocolError::Malformed(error.to_string()))?;
+  if encoded.len() > MAX_RESPONSE_BYTES {
+    return Err(ProtocolError::TooLarge);
+  }
+  Ok(encoded)
+}
+
+/// Appends to a buffer only within the capacity it already has, so writing
+/// never reallocates it.
+struct FixedCapacity<'a>(&'a mut Vec<u8>);
+
+impl std::io::Write for FixedCapacity<'_> {
+  fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+    if self.0.capacity() - self.0.len() < bytes.len() {
+      return Err(std::io::ErrorKind::WriteZero.into());
+    }
+    self.0.extend_from_slice(bytes);
+    Ok(bytes.len())
+  }
+
+  fn flush(&mut self) -> std::io::Result<()> {
+    Ok(())
+  }
 }
 
 #[cfg(test)]
@@ -372,11 +407,23 @@ mod tests {
       key_type: KeyType::Rsa,
       pin: Some(Pin::new(Zeroizing::new("0000".to_string()))),
     });
-    let encoded = encode(&request).unwrap();
+    let encoded = encode_request(&request).unwrap();
+    assert_eq!(encoded.capacity(), MAX_REQUEST_BYTES);
     let Request::Sign(decoded) = decode_request(&encoded).unwrap() else {
       panic!("not a sign request");
     };
     assert_eq!(decoded.pin.as_ref().map(Pin::expose), Some("0000"));
+  }
+
+  #[test]
+  fn refuses_a_request_past_the_limit_without_growing() {
+    let request = Request::List {
+      modules: vec![PathBuf::from("m".repeat(MAX_REQUEST_BYTES))],
+    };
+    assert!(matches!(
+      encode_request(&request),
+      Err(ProtocolError::TooLarge)
+    ));
   }
 
   #[test]

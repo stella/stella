@@ -25,7 +25,7 @@ use stella_desktop_pkcs11::drivers::{
 use stella_desktop_pkcs11::macho::ModuleCheck;
 use stella_desktop_pkcs11::protocol::{
   MAX_RESPONSE_BYTES, ModuleOutcome, Pin, PinEntry, PinRetries, ReaderCard, ReaderScan,
-  Request, Response, SignRequest, TokenListing, decode_response, encode,
+  Request, Response, SignRequest, TokenListing, decode_response, encode_request,
 };
 use stella_desktop_signing_core::{
   SigningErrorCode, SigningIdentity, issuer_chain, signing_identity,
@@ -419,8 +419,8 @@ fn helper_path() -> Option<PathBuf> {
 /// the helper.
 async fn run(request: &Request, timeout: Duration) -> Result<Response, HelperFailure> {
   let helper = helper_path().ok_or(HelperFailure::Missing)?;
-  let encoded =
-    encode(request).map_err(|error| HelperFailure::Failed(error.to_string()))?;
+  let encoded = encode_request(request)
+    .map_err(|error| HelperFailure::Failed(error.to_string()))?;
   let mut child = tokio::process::Command::new(helper)
     .stdin(Stdio::piped())
     .stdout(Stdio::piped())
