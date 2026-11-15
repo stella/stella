@@ -16,6 +16,7 @@ import { isUuid } from "@stll/uuid-codec";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
@@ -24,6 +25,7 @@ import {
   corpusProjectionReservationQueue,
   type CorpusProjectionReservationQueueKey,
   lockCorpusProjectionAcceptedRows,
+  lockCorpusProjectionIntentsById,
   lockCorpusProjectionOfflineRequest,
 } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -169,6 +171,7 @@ type ReserveCorpusProjectionRoutePageOptions<Family extends CorpusFamily> =
   };
 
 export type CorpusProjectionRoutePage = {
+  type: "page";
   leases: CorpusProjectionIntentLease[];
   /**
    * The last queue position this page read, whether or not it reserved it;
@@ -200,12 +203,29 @@ export const reserveCorpusProjectionRoutePageTx = async <
     after,
     ...options
   }: ReserveCorpusProjectionRoutePageOptions<Family>,
-): Promise<CorpusProjectionRoutePage> =>
-  await reserveFromQueueTx(
+): Promise<CorpusProjectionRoutePage | { type: "generation_not_building" }> => {
+  // The queue admits a serving generation too; a route build reserves only
+  // while its generation is still building, checked in the reserving
+  // transaction itself.
+  const [generationRow] = await tx
+    .select({ status: corpusIndexGenerations.status })
+    .from(corpusIndexGenerations)
+    .where(
+      and(
+        eq(corpusIndexGenerations.family, options.family),
+        eq(corpusIndexGenerations.generation, options.generation),
+      ),
+    )
+    .limit(1);
+  if (generationRow?.status !== "building") {
+    return { type: "generation_not_building" };
+  }
+  return await reserveFromQueueTx(
     tx,
     { ...options, scope: { type: "route", indexId } },
     { after, batchableOnly: true },
   );
+};
 
 const reserveFromQueueTx = async <Family extends CorpusFamily>(
   tx: Transaction,
@@ -239,7 +259,7 @@ const reserveFromQueueTx = async <Family extends CorpusFamily>(
   const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
   const excludedIndexIds = await unattestedCorpusIndexIdsTx(tx, manifest);
   if (scopedIndexId !== null && excludedIndexIds.includes(scopedIndexId)) {
-    return { leases: [], cursor: after, exhausted: true };
+    return { type: "page", leases: [], cursor: after, exhausted: true };
   }
   const eligibilityAt = testNow ?? (await readPostgresClock(tx));
   const candidates = await corpusProjectionReservationQueue(tx, {
@@ -261,7 +281,7 @@ const reserveFromQueueTx = async <Family extends CorpusFamily>(
       : { runnableAt: last.runnableAt, entityId: last.entityId };
   const exhausted = candidates.length < limit;
   if (candidates.length === 0) {
-    return { leases: [], cursor, exhausted };
+    return { type: "page", leases: [], cursor, exhausted };
   }
   const leaseExpiresAt =
     testNow === undefined
@@ -355,7 +375,7 @@ const reserveFromQueueTx = async <Family extends CorpusFamily>(
       appendMode: reservation.appendMode,
     });
   }
-  return { leases, cursor, exhausted };
+  return { type: "page", leases, cursor, exhausted };
 };
 
 /**
@@ -1862,6 +1882,13 @@ type ProveAcceptedCorpusProjectionAppendsOptions = {
   /** One exact census of committed revisions of `indexId`. */
   census: CorpusProjectionPresenceCensus;
   timing: CorpusProjectionProofTiming;
+  /**
+   * Revisions whose delivery failed for a reason outside their documents (an
+   * indexer killed at its deadline, refused, never run, or a broken engine):
+   * a withdrawal or retirement of one is never charged to its entity, alone
+   * in its request or not.
+   */
+  uncharged?: ReadonlySet<ProjectionIntentId> | undefined;
   testNow?: Date | undefined;
 };
 
@@ -1947,6 +1974,7 @@ type SettleCommittedCorpusProjectionAppendsOptions = {
   proofs: readonly CorpusProjectionPresenceProof[];
   unproven: readonly UnprovenCommittedRevision[];
   timing: CorpusProjectionProofTiming;
+  uncharged?: ReadonlySet<ProjectionIntentId> | undefined;
   testNow?: Date | undefined;
 };
 
@@ -1966,6 +1994,7 @@ const settleCommittedCorpusProjectionAppendsTx = async (
     proofs,
     unproven,
     timing,
+    uncharged = new Set(),
     testNow,
   }: SettleCommittedCorpusProjectionAppendsOptions,
 ): Promise<AcceptedCorpusProjectionAppendProof[]> => {
@@ -1999,6 +2028,7 @@ const settleCommittedCorpusProjectionAppendsTx = async (
     manifest,
     timing,
     transitionAt,
+    uncharged,
     delivered: await readOfflineDeliveredCountsTx(
       tx,
       [...intents.values()].flatMap(({ appendRequestId }) =>
@@ -2049,6 +2079,8 @@ type ProofContext = {
   transitionAt: Date;
   /** Revisions each offline request of the proof delivered together. */
   delivered: ReadonlyMap<string, number>;
+  /** Revisions whose failure is never charged (an infrastructure fault). */
+  uncharged: ReadonlySet<ProjectionIntentId>;
 };
 
 /** Outcomes of a revision this proof can no longer act on, or null. */
@@ -2179,7 +2211,7 @@ const decideUnprovenRevision = (
       appendRequestRevisionCount: deliveredTogether,
       transitionAt,
       rejection,
-      fault,
+      fault: context.uncharged.has(committed.id) ? "engine" : fault,
     });
   // Nothing of the revision reached the index and nothing can any more, so no
   // delete is owed, and no maturity waited for: the entity may be reserved
@@ -2289,6 +2321,7 @@ export const proveAcceptedCorpusProjectionAppendsTx = async (
     indexId,
     census: { proofs, unproven },
     timing,
+    uncharged,
     testNow,
   }: ProveAcceptedCorpusProjectionAppendsOptions,
 ): Promise<AcceptedCorpusProjectionAppendProof[]> =>
@@ -2297,6 +2330,7 @@ export const proveAcceptedCorpusProjectionAppendsTx = async (
     proofs,
     unproven,
     timing,
+    uncharged,
     testNow,
   });
 
@@ -2831,45 +2865,55 @@ const chargeGivenUpRevisionsTx = async (
   }
 };
 
-type CancelCorpusProjectionReservationOptions = {
-  intentId: ProjectionIntentId;
-  leaseToken: string;
-  testNow?: Date;
-  errorMessage?: string;
+type CancelCorpusProjectionReservationsOptions = {
+  /** Reservations of one generation, at most one store batch. */
+  leases: readonly Pick<
+    CorpusProjectionIntentLease,
+    "intentId" | "leaseToken" | "family" | "generation"
+  >[];
+  errorMessage: string;
+  testNow?: Date | undefined;
 };
 
-export const cancelCorpusProjectionReservationTx = async (
+/**
+ * Cancel many reservations of one generation in one statement, under the
+ * same locks the single-row cancel takes: the generation's mutation lock,
+ * then the intent rows in id order. A reservation whose lease moved on is
+ * counted as lost, not touched.
+ */
+export const cancelCorpusProjectionReservationsTx = async (
   tx: Transaction,
-  {
-    intentId,
-    leaseToken,
-    testNow,
-    errorMessage,
-  }: CancelCorpusProjectionReservationOptions,
-): Promise<"cancelled" | "lease_lost"> => {
-  const identities = await tx
-    .select({
-      family: corpusIndexProjectionIntents.family,
-      generation: corpusIndexProjectionIntents.generation,
-    })
-    .from(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.id, intentId))
-    .limit(1);
-  const identity = identities.at(0);
-  if (identity === undefined) {
-    return "lease_lost";
+  { leases, errorMessage, testNow }: CancelCorpusProjectionReservationsOptions,
+): Promise<{ cancelled: number; leaseLost: number }> => {
+  // audit: skip - reservation bookkeeping on the derived public corpus projection
+  const first = leases.at(0);
+  if (first === undefined) {
+    return { cancelled: 0, leaseLost: 0 };
   }
-  await lockCorpusIndexProjectionMutationsTx(tx, [identity]);
-  const locked = await tx
-    .select({ id: corpusIndexProjectionIntents.id })
-    .from(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.id, intentId))
-    .limit(1)
-    .for("update");
-  if (locked.length === 0) {
-    return "lease_lost";
+  if (
+    leases.length > CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE ||
+    leases.some(
+      ({ family, generation }) =>
+        family !== first.family || generation !== first.generation,
+    ) ||
+    new Set(leases.map(({ intentId }) => intentId)).size !== leases.length
+  ) {
+    return panic(
+      "A reservation cancel names one generation's unique leases, at most one store batch",
+    );
   }
+  await lockCorpusIndexProjectionMutationsTx(tx, [first]);
+  await lockCorpusProjectionIntentsById(
+    tx,
+    leases.map(({ intentId }) => intentId),
+  );
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
+  const leased = sql.join(
+    leases.map(
+      ({ intentId, leaseToken }) => sql`(${intentId}::uuid, ${leaseToken})`,
+    ),
+    sql`, `,
+  );
   const rows = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -2877,18 +2921,17 @@ export const cancelCorpusProjectionReservationTx = async (
       leaseToken: null,
       leaseExpiresAt: null,
       cancelledAt: transitionAt,
-      lastError: errorMessage?.slice(0, 2048),
+      lastError: errorMessage.slice(0, 2048),
       updatedAt: transitionAt,
     })
     .where(
       and(
-        eq(corpusIndexProjectionIntents.id, intentId),
         eq(corpusIndexProjectionIntents.status, "reserved"),
-        eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
+        sql`(${corpusIndexProjectionIntents.id}, ${corpusIndexProjectionIntents.leaseToken}) IN (${leased})`,
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
-  return rows.length === 1 ? "cancelled" : "lease_lost";
+  return { cancelled: rows.length, leaseLost: leases.length - rows.length };
 };
 
 export type CorpusProjectionReservationFailure =

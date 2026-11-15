@@ -78,7 +78,17 @@ const MAX_SHARD_REVISIONS = CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS;
 const MIN_FILL_WINDOW_MS = 10_000;
 const MAX_SLOTS = 8;
 const MAX_PROOF_ALLOWANCE_MS = 30 * 60_000;
-const MAX_CONSECUTIVE_DELIVERY_FAILURES = 10;
+
+/**
+ * Passes over a route's queue one run makes at most. A pass from the head
+ * picks up what an earlier pass gave up unstarted (a hand-back, an expired
+ * lease, a row another actor held); a run stops early once a pass reserves
+ * nothing or starts nothing.
+ */
+export const CORPUS_PROJECTION_OFFLINE_MAX_WALK_PASSES = 16;
+
+/** Leases the first page takes, before any block's size is known. */
+const CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS = 8;
 
 /** What a run may choose. Every field is validated against the manifest. */
 export type CorpusProjectionOfflineBuildPolicy = {
@@ -102,8 +112,6 @@ export type CorpusProjectionOfflineBuildPolicy = {
   closeAllowanceMs: number;
   /** Time after the last indexer has certainly ended for its proof. */
   proofAllowanceMs: number;
-  /** Deliveries in a row that did not ingest before the run stops. */
-  maxConsecutiveDeliveryFailures: number;
   payloadReadConcurrency: number;
   retryDelayMs: number;
   payloadRetryLimit: number;
@@ -138,7 +146,6 @@ export type CorpusProjectionOfflinePlan = {
   shardRevisionCap: number;
   /** A run reserves nothing once its deadline is this close. */
   stopReservingBeforeMs: number;
-  maxConsecutiveDeliveryFailures: number;
   payloadReadConcurrency: number;
   retryDelayMs: number;
   payloadRetryLimit: number;
@@ -299,12 +306,6 @@ export const planCorpusProjectionOfflineBuild = (
     // end, and still leave its proof the allowance before the deadline.
     stopReservingBeforeMs:
       fillWindowMs + closeAllowanceMs + endedAfterMs + proofAllowanceMs,
-    maxConsecutiveDeliveryFailures: integerIn(
-      policy.maxConsecutiveDeliveryFailures,
-      1,
-      MAX_CONSECUTIVE_DELIVERY_FAILURES,
-      "consecutive delivery failure limit",
-    ),
     payloadReadConcurrency: policy.payloadReadConcurrency,
     retryDelayMs: policy.retryDelayMs,
     payloadRetryLimit: policy.payloadRetryLimit,
@@ -369,6 +370,58 @@ export const corpusProjectionOfflineBlockJoins = (
 ): boolean =>
   block.shardClass === fill.limit &&
   corpusProjectionOfflineBlockFits(plan, fill, block.bytes);
+
+/**
+ * The shard byte cap after a shard of `killedBytes` was killed at its
+ * deadline without indexing all of it: half that shard, never more than the
+ * cap before. The kill proves the true rate below `killedBytes` over the run
+ * time, so halving is the same rule the delivery layer applies to request
+ * sizes, by bytes instead of revisions. Once half no longer holds the largest
+ * revision, the true rate is below the slowest one the plan accepts, and the
+ * run stops instead of shrinking further.
+ */
+export const corpusProjectionOfflineShardCapAfterKill = (
+  shardByteCap: number,
+  killedBytes: number,
+):
+  | { type: "cap"; shardByteCap: number }
+  | { type: "rate_too_slow"; halvedBytes: number } => {
+  if (!Number.isSafeInteger(killedBytes) || killedBytes < 1) {
+    return panic(`A killed shard holds no bytes: ${killedBytes}`);
+  }
+  const halved = Math.min(shardByteCap, Math.floor(killedBytes / 2));
+  return halved >= CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES
+    ? { type: "cap", shardByteCap: halved }
+    : { type: "rate_too_slow", halvedBytes: halved };
+};
+
+/**
+ * How many leases the next reservation page may take, so the blocks it
+ * builds stay within one shard's bytes: by the average block of the run so
+ * far, and a small first page while no block has been measured. Memory per
+ * page is then bounded by bytes, not only by count; a page whose blocks
+ * still overflow is cut where they do and the rest handed back.
+ */
+export const corpusProjectionOfflinePageLimit = (
+  plan: Pick<CorpusProjectionOfflinePlan, "shardByteCap">,
+  {
+    remainingRevisions,
+    averageBlockBytes,
+  }: { remainingRevisions: number; averageBlockBytes: number | null },
+): number => {
+  const byBytes =
+    averageBlockBytes === null
+      ? CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS
+      : Math.max(1, Math.floor(plan.shardByteCap / averageBlockBytes));
+  return Math.max(
+    1,
+    Math.min(
+      CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
+      remainingRevisions,
+      byBytes,
+    ),
+  );
+};
 
 /** Whether a reservation can still start, with its run's kill inside its lease. */
 export const corpusProjectionOfflineLeaseCanStart = (

@@ -27,7 +27,9 @@ import {
   corpusProjectionOfflineIndexingWindowMs,
   corpusProjectionOfflineLeaseCanStart,
   corpusProjectionOfflineNextShardClass,
+  corpusProjectionOfflinePageLimit,
   corpusProjectionOfflineReserveToStartMs,
+  corpusProjectionOfflineShardCapAfterKill,
   corpusProjectionOfflineShardClass,
   corpusProjectionOfflineShardIsClosed,
   corpusProjectionOfflineShardName,
@@ -59,7 +61,6 @@ const BASE_POLICY = {
   fillWindowMs: 60_000,
   closeAllowanceMs: 30_000,
   proofAllowanceMs: 120_000,
-  maxConsecutiveDeliveryFailures: 3,
   payloadReadConcurrency: 8,
   retryDelayMs: 60_000,
   payloadRetryLimit: 5,
@@ -511,6 +512,108 @@ describe("offline build plan", () => {
     ).toThrow("exceeds the shard byte cap");
   });
 
+  /**
+   * The cap's feedback loop against an indexer of a fixed true rate: a shard
+   * is killed when indexing it takes longer than the run time the start
+   * window leaves, and each kill halves the cap. For any true rate the plan
+   * accepts, the cap settles on shards that fit after at most log2(cap /
+   * largest revision) + 1 kills, never below the largest revision, and every
+   * later shard delivers at least the largest revision's bytes. Below the
+   * slowest accepted rate the loop ends typed, in as few kills.
+   */
+  test("offline-build.cap-feedback", () => {
+    assertProperty(
+      "offline-build.cap-feedback",
+      fc.property(
+        manifestAndPolicy,
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        ({ manifest, policy }, rateFraction) => {
+          const plan = planCorpusProjectionOfflineBuild(manifest, policy);
+          const runMs =
+            corpusProjectionAppendIngestBudgetMs(manifest) -
+            CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS;
+          const slowestAccepted = minIngestBytesPerSecond(manifest);
+          // Rates from a tenth of the slowest accepted one to the policy's.
+          const trueRate =
+            slowestAccepted / 10 +
+            rateFraction * (policy.ingestBytesPerSecond - slowestAccepted / 10);
+          const killedBy = (bytes: number) => (bytes * 1000) / trueRate > runMs;
+          const maxKills =
+            Math.ceil(
+              Math.log2(
+                plan.shardByteCap / CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+              ),
+            ) + 1;
+          let cap = plan.shardByteCap;
+          let kills = 0;
+          let stopped = false;
+          for (let shard = 0; shard < 64 && !stopped; shard += 1) {
+            if (!killedBy(cap)) {
+              continue;
+            }
+            kills += 1;
+            const next = corpusProjectionOfflineShardCapAfterKill(cap, cap);
+            if (next.type === "rate_too_slow") {
+              stopped = true;
+            } else {
+              cap = next.shardByteCap;
+            }
+          }
+          expect(kills).toBeLessThanOrEqual(maxKills);
+          if (trueRate >= slowestAccepted) {
+            // Accepted rates converge and keep making progress.
+            expect(stopped).toBe(false);
+            expect(killedBy(cap)).toBe(false);
+            expect(cap).toBeGreaterThanOrEqual(
+              CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+            );
+          } else {
+            // Below it the run either settles or stops typed, never loops.
+            expect(stopped || !killedBy(cap)).toBe(true);
+          }
+        },
+      ),
+    );
+  });
+
+  test("offline-build.page-bytes", () => {
+    assertProperty(
+      "offline-build.page-bytes",
+      fc.property(
+        manifestAndPolicy,
+        fc.integer({ min: 1, max: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS }),
+        fc.option(
+          fc.integer({
+            min: 1,
+            max: CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+          }),
+          { nil: null },
+        ),
+        ({ manifest, policy }, remainingRevisions, averageBlockBytes) => {
+          const plan = planCorpusProjectionOfflineBuild(manifest, policy);
+          const limit = corpusProjectionOfflinePageLimit(plan, {
+            remainingRevisions,
+            averageBlockBytes,
+          });
+          expect(limit).toBeGreaterThanOrEqual(1);
+          expect(limit).toBeLessThanOrEqual(
+            Math.min(
+              CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
+              remainingRevisions,
+            ),
+          );
+          // A page of average blocks holds at most one shard of bytes, or
+          // one block when a single one is that large.
+          if (averageBlockBytes !== null && limit > 1) {
+            expect(limit * averageBlockBytes).toBeLessThanOrEqual(
+              plan.shardByteCap,
+            );
+          }
+        },
+      ),
+    );
+  });
+
   test("a policy outside its bounds is refused", () => {
     const manifest = CORPUS_INDEX_MANIFESTS.case_law_v10;
     const refused: [Partial<CorpusProjectionOfflineBuildPolicy>, string][] = [
@@ -532,10 +635,6 @@ describe("offline build plan", () => {
         "fill window",
       ],
       [{ proofAllowanceMs: -1 }, "proof allowance"],
-      [
-        { maxConsecutiveDeliveryFailures: 0 },
-        "consecutive delivery failure limit",
-      ],
     ];
     for (const [change, field] of refused) {
       expect(() =>

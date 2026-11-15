@@ -1,6 +1,7 @@
 import { type InferOk, panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -26,12 +27,13 @@ import {
   readReservedCorpusProjectionMaterialsTx,
 } from "@/api/lib/legal-search/corpus-index-projection-materials";
 import {
-  cancelCorpusProjectionReservationTx,
+  cancelCorpusProjectionReservationsTx,
   classifyCorpusProjectionReservationFailureTx,
   CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX,
   CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN,
   CORPUS_PROJECTION_RETRY_MAX_MS,
   CORPUS_PROJECTION_RETRY_MIN_MS,
+  CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
   type CorpusProjectionIntentLease,
   type CorpusProjectionReservationFailure,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
@@ -132,20 +134,32 @@ export const cancelCorpusProjectionReservations = async ({
   if (leases.length === 0) {
     return { cancelled: 0, leaseLost: 0 };
   }
-  return await runInTransaction(async (tx) => {
-    const outcomes = await mapSequentially(leases, async (lease) =>
-      cancelCorpusProjectionReservationTx(tx, {
-        intentId: lease.intentId,
-        leaseToken: lease.leaseToken,
-        errorMessage,
-        ...(testNow === undefined ? {} : { testNow }),
-      }),
+  // One statement per store batch of each generation, each in its own short
+  // transaction, never one statement per row.
+  const batches = [
+    ...Map.groupBy(
+      leases,
+      ({ family, generation }) => `${family}:${generation}`,
+    ).values(),
+  ].flatMap((sameGeneration) =>
+    chunkItems(sameGeneration, CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE),
+  );
+  let cancelled = 0;
+  let leaseLost = 0;
+  for (const batch of batches) {
+    // db-await-in-loop: one bounded cancel statement per store batch
+    const outcome = await runInTransaction(
+      async (tx) =>
+        await cancelCorpusProjectionReservationsTx(tx, {
+          leases: batch,
+          errorMessage,
+          testNow,
+        }),
     );
-    return {
-      cancelled: outcomes.filter((outcome) => outcome === "cancelled").length,
-      leaseLost: outcomes.filter((outcome) => outcome === "lease_lost").length,
-    };
-  });
+    cancelled += outcome.cancelled;
+    leaseLost += outcome.leaseLost;
+  }
+  return { cancelled, leaseLost };
 };
 
 export type CorpusProjectionReservationFailureOfLease = {

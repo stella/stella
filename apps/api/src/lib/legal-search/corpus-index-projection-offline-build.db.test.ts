@@ -46,7 +46,10 @@ import {
   type CorpusProjectionOfflineBuildPolicy,
   planCorpusProjectionOfflineBuild,
 } from "@/api/lib/legal-search/corpus-index-projection-offline-plan";
-import { CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import {
+  CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
+  CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS,
+} from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   type CorpusProjectionIntentLease,
   readCorpusProjectionOfflineRequestCapsTx,
@@ -87,7 +90,6 @@ const POLICY = {
   fillWindowMs: 60_000,
   closeAllowanceMs: 30_000,
   proofAllowanceMs: 60_000,
-  maxConsecutiveDeliveryFailures: 10,
   payloadReadConcurrency: 2,
   retryDelayMs: 1000,
   payloadRetryLimit: 3,
@@ -120,6 +122,9 @@ class SimulatedCrash extends TaggedError("SimulatedCrash")<{
  * - `kill_before_publish` / `kill_after_publish`: killed at the deadline,
  *   with none or all of its split published;
  * - `refuse`: the shard reached the indexer after its kill deadline;
+ * - `empty`: the indexer failed on what the file held and published nothing;
+ * - `broken`: the indexer could not run (an engine outage), published nothing;
+ * - `throw`: the caller's delivery rejected, its indexer possibly running;
  * - `crash_before` / `crash_after_publish`: the batch process dies while
  *   the shard is delivered, before the indexer ran or after it published.
  */
@@ -129,6 +134,9 @@ type Delivery =
   | "kill_before_publish"
   | "kill_after_publish"
   | "refuse"
+  | "empty"
+  | "broken"
+  | "throw"
   | "crash_before"
   | "crash_after_publish";
 
@@ -165,11 +173,24 @@ type Model = {
    */
   switchToSingleAfterReserve: boolean;
   switchedToSingle: string | null;
+  /** The process died: its clock stops, it sleeps no more. */
+  dead: boolean;
+  /** Inside one request's start admission: transactions there are starts. */
+  inStartAdmission: boolean;
+  /** Start transactions of the run so far, across its requests. */
+  startTransactions: number;
+  /** The process dies right before the start transaction of this index. */
+  dieBeforeStartTransaction: number | null;
+  /** The start transaction of this index waits this long first. */
+  holdStartTransaction: { index: number; ms: number } | null;
+  /** When the run let go of its route lock, on the run's clock. */
+  lockReleasedAt: Date | null;
 };
 
 const crashIf = (model: Model, matches: boolean, at: string) => {
   if (matches) {
     model.crash = { type: "none" };
+    model.dead = true;
     throw new SimulatedCrash({ message: `process died at ${at}` });
   }
 };
@@ -184,6 +205,18 @@ const transactionRunner =
     const { crash } = model;
     const dies = crash.type === "transaction" && crash.index === index;
     crashIf(model, dies && crash.phase === "before", `transaction ${index}`);
+    if (model.inStartAdmission) {
+      const start = model.startTransactions;
+      model.startTransactions += 1;
+      crashIf(
+        model,
+        model.dieBeforeStartTransaction === start,
+        `before start transaction ${start}`,
+      );
+      if (model.holdStartTransaction?.index === start) {
+        model.offsetMs += model.holdStartTransaction.ms;
+      }
+    }
     const value = await db.transaction(async (tx) => {
       if (model.repeatableRead) {
         await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
@@ -332,11 +365,16 @@ const advanceTo = (model: Model, at: Date, from: Date) => {
  * was isolated into single requests.
  */
 const deliverer =
-  (model: Model, deliveries: Delivery[]): CorpusProjectionOfflineDelivery =>
+  (
+    model: Model,
+    deliveries: Delivery[],
+    onDelivery?: () => Promise<void>,
+  ): CorpusProjectionOfflineDelivery =>
   async (
     shard: CorpusProjectionOfflineShard,
   ): Promise<CorpusProjectionOfflineDeliveryOutcome> => {
     model.shards.push(shard);
+    await onDelivery?.();
     const behaviour = deliveries.shift() ?? "ingest";
     const lines = await linesOf(shard);
     const revisions = [...new Set(lines)];
@@ -479,11 +517,12 @@ const deliverer =
       };
     model.offsetMs += 1000;
     if (poisoned) {
-      // The run publishes nothing, whatever it exits with.
+      // The run publishes nothing: the indexer failed on what it read.
       model.finishedPaths.add(shard.path);
       return {
         type: "failed",
         exitCode: 1,
+        cause: "indexer",
         startedAt,
         endedAt: await now(model),
       };
@@ -506,7 +545,13 @@ const deliverer =
             startedAt,
             endedAt: await now(model),
           }
-        : { type: "failed", exitCode: 1, startedAt, endedAt: await now(model) };
+        : {
+            type: "failed",
+            exitCode: 1,
+            cause: "indexer",
+            startedAt,
+            endedAt: await now(model),
+          };
     }
     switch (behaviour) {
       case "kill_before_publish":
@@ -517,12 +562,26 @@ const deliverer =
       case "refuse":
         advanceTo(model, shard.killDeadline, startedAt);
         return { type: "deadline_passed", refusedAt: await now(model) };
+      case "empty":
+      case "broken":
+        model.finishedPaths.add(shard.path);
+        return {
+          type: "failed",
+          exitCode: 1,
+          cause: behaviour === "empty" ? "indexer" : "infrastructure",
+          startedAt,
+          endedAt: await now(model),
+        };
+      case "throw":
+        throw new Error("the delivery lost its connection to the indexer host");
       case "crash_before":
+        model.dead = true;
         throw new SimulatedCrash({
           message: "process died before the indexer ran",
         });
       case "crash_after_publish":
         publish(null);
+        model.dead = true;
         throw new SimulatedCrash({
           message: "process died after the indexer published",
         });
@@ -575,10 +634,18 @@ type RunCommand = {
   changeBeforeRecord: boolean;
   /** The run's shard size, when not the model's default. */
   maxShardRevisions?: number;
-  /** The process dies right before the start transaction of this index. */
+  /** The process dies right before the run's start transaction of this index. */
   dieBeforeStartTransaction?: number;
-  /** The start transaction of this index waits this long first. */
+  /** The run's start transaction of this index waits this long first. */
   holdStartTransaction?: { index: number; ms: number };
+  /** The generation starts serving right before this reservation page. */
+  serveBeforeReservePage?: number;
+  /** Every start admission waits this long, as a busy governor does. */
+  holdStartAdmissionMs?: number;
+  /** Collects the revisions of every start admission. */
+  startUnits?: number[];
+  /** Called as each shard reaches the indexer. */
+  onDelivery?: () => Promise<void>;
 };
 
 type Command = RunCommand | { type: "advance"; ms: number };
@@ -615,6 +682,7 @@ const lockOf = (model: Model): CorpusProjectionOfflineBuildLock => ({
       stillHeld: async () => model.lockHeld,
       release: async () => {
         model.lockHeld = false;
+        model.lockReleasedAt = await now(model);
       },
     };
     return hold;
@@ -623,9 +691,9 @@ const lockOf = (model: Model): CorpusProjectionOfflineBuildLock => ({
 
 /**
  * An admission that admits everything at once. It moves one entity's desired
- * state at the first start or record a command asks for, and before the
- * start transaction a command names it can let the process die or hold the
- * transaction back.
+ * state at the first start or record a command asks for, and marks a start
+ * admission so the transaction runner can let the process die before, or
+ * hold back, the start transaction a command names.
  */
 const admissionOf = (
   model: Model,
@@ -633,22 +701,19 @@ const admissionOf = (
 ): CorpusProjectionOfflineAdmission => {
   let changedBeforeStart = !command.changeBeforeStart;
   let changedBeforeRecord = !command.changeBeforeRecord;
-  let startTransactions = 0;
+  let reservePages = 0;
   return async <Value>(
     unit: CorpusProjectionOfflineWorkUnit,
     work: () => Promise<Value>,
   ): Promise<Value> => {
-    if (unit.phase === "start") {
-      const index = startTransactions;
-      startTransactions += 1;
-      crashIf(
-        model,
-        command.dieBeforeStartTransaction === index,
-        `before start transaction ${index}`,
-      );
-      if (command.holdStartTransaction?.index === index) {
-        model.offsetMs += command.holdStartTransaction.ms;
+    if (unit.phase === "reserve") {
+      if (command.serveBeforeReservePage === reservePages) {
+        await db
+          .update(corpusIndexGenerations)
+          .set({ status: "serving" })
+          .where(eq(corpusIndexGenerations.generation, TARGET.generation));
       }
+      reservePages += 1;
     }
     if (unit.phase === "start" && !changedBeforeStart) {
       const entity = await entityIn(model, "reserved");
@@ -664,7 +729,17 @@ const admissionOf = (
         await changeDesired(entity);
       }
     }
-    return await work();
+    if (unit.phase !== "start") {
+      return await work();
+    }
+    command.startUnits?.push(unit.revisions);
+    model.offsetMs += command.holdStartAdmissionMs ?? 0;
+    model.inStartAdmission = true;
+    try {
+      return await work();
+    } finally {
+      model.inStartAdmission = false;
+    }
   };
 };
 
@@ -676,6 +751,12 @@ const runBuild = async (
   model.transactions = 0;
   model.crash = command.crash;
   model.maxShardRevisions = command.maxShardRevisions ?? SHARD_REVISIONS;
+  model.dead = false;
+  model.inStartAdmission = false;
+  model.startTransactions = 0;
+  model.dieBeforeStartTransaction = command.dieBeforeStartTransaction ?? null;
+  model.holdStartTransaction = command.holdStartTransaction ?? null;
+  model.lockReleasedAt = null;
   await expirePassedLeases(model);
   const deadline = new Date((await now(model)).getTime() + RUN_MS);
   const outcome = await Result.tryPromise({
@@ -708,14 +789,17 @@ const runBuild = async (
           slots: command.slots,
           maxShardRevisions: model.maxShardRevisions,
         },
-        deliver: deliverer(model, [...command.deliveries]),
+        deliver: deliverer(model, [...command.deliveries], command.onDelivery),
         lock: lockOf(model),
         admit: admissionOf(model, command),
         resumeAfter,
         testing: {
           clock: async () => await now(model),
           sleep: async (milliseconds) => {
-            model.offsetMs += milliseconds;
+            // A dead process waits for nothing.
+            if (!model.dead) {
+              model.offsetMs += milliseconds;
+            }
           },
           payloadReader: async (_runInTransaction, material) =>
             Result.ok({
@@ -839,6 +923,12 @@ const newModel = async (entities = ENTITIES): Promise<Model> => {
     repeatableRead: false,
     switchToSingleAfterReserve: false,
     switchedToSingle: null,
+    dead: false,
+    inStartAdmission: false,
+    startTransactions: 0,
+    dieBeforeStartTransaction: null,
+    holdStartTransaction: null,
+    lockReleasedAt: null,
   };
 };
 
@@ -1114,7 +1204,16 @@ describe("offline route build", () => {
             await assertStepInvariants(model);
             const { progress, status: ended } =
               outcome ?? panic("A run without crashes did not finish");
-            expect(ended).toBe("drained");
+            // A refusal is an infrastructure failure, and a kill of a shard
+            // this small leaves no smaller cap: both stop the run, typed.
+            expect([
+              "drained",
+              "infrastructure_failed",
+              "rate_too_slow",
+            ]).toContain(ended);
+            if (deliveries.every((delivery) => delivery === "ingest")) {
+              expect(ended).toBe("drained");
+            }
             const states = await readStates(model.entityIds);
             const intents = await readIntents(model.entityIds);
             const { notStarted } = progress;
@@ -1123,7 +1222,8 @@ describe("offline route build", () => {
                 notStarted.cancelled +
                 notStarted.leaseLost +
                 notStarted.retryScheduled +
-                notStarted.blocked,
+                notStarted.blocked +
+                notStarted.handedBack,
             );
             expect(progress.recorded).toBe(progress.started);
             expect(progress.recorded).toBe(
@@ -1235,24 +1335,29 @@ describe("offline route build", () => {
 
   test("revisions capped to one are each delivered alone, and uncapped ones never join them", async () => {
     const model = await newModel();
-    // Shards of three refused: each of their revisions may next start only
-    // in a request of one.
+    // Shards of three that published nothing: each of their revisions may
+    // next start only in a request of one.
     await runBuild(model, {
       ...QUIET_RUN,
-      deliveries: ["refuse", "refuse"],
+      deliveries: ["empty", "empty"],
       maxShardRevisions: 3,
     });
+    expect(model.deliveries.map(({ revisions }) => revisions)).toEqual([
+      3, 3, 1, 1, 1, 1, 1, 1,
+    ]);
     const later = await seedEntities(4);
     model.entityIds.push(...later);
     model.offsetMs += 60_000;
     const run = await runBuild(model, { ...QUIET_RUN, maxShardRevisions: 8 });
-    // The four that never failed share one file; the six capped ones, which
-    // the same page reserved beside them, wait and then go alone.
-    expect(model.deliveries.slice(2).map(({ revisions }) => revisions)).toEqual(
-      [4, 1, 1, 1, 1, 1, 1],
+    // The four that never failed share one file, never joined by a capped one.
+    expect(model.deliveries.slice(8).map(({ revisions }) => revisions)).toEqual(
+      [4],
     );
-    expect(run?.progress.proved).toBe(ENTITIES + 4);
-    expect(run?.progress.shards.capped).toBe(ENTITIES);
+    expect(run?.progress.proved).toBe(4);
+    for (const state of await readStates(model.entityIds)) {
+      expect(state).toMatchObject({ failureAttempts: 0 });
+      expect(state.appliedRevision).not.toBeNull();
+    }
   });
 
   test("a process death between the start transactions of one request converges, and nothing it started is delivered", async () => {
@@ -1295,9 +1400,11 @@ describe("offline route build", () => {
     ).toBeLessThanOrEqual(256);
   });
 
-  test("a request whose later transactions start nothing is delivered with what started, and its accounting holds", async () => {
+  test("a request handed back mid-run by a closed start window is delivered by the same run, which walks again from the head", async () => {
     const entities = 600;
     const model = await newModel(entities);
+    // The request plans all 600: 512 start, then its second start
+    // transaction runs past the start window and starts nothing.
     const run = await runBuild(model, {
       ...QUIET_RUN,
       maxShardRevisions: 8192,
@@ -1306,10 +1413,16 @@ describe("offline route build", () => {
         ms: CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS + 1000,
       },
     });
-    const { progress } = run ?? panic("The run did not finish");
-    expect(model.deliveries.map(({ revisions }) => revisions)).toEqual([512]);
-    expect(progress.started).toBe(512);
+    const { progress, status } = run ?? panic("The run did not finish");
+    expect(status).toBe("drained");
+    // The 88 handed back sit behind the first pass's cursor; the second
+    // pass, from the head, reserves and delivers exactly them.
+    expect(model.deliveries.map(({ revisions }) => revisions)).toEqual([
+      512,
+      entities - 512,
+    ]);
     expect(progress.notStarted.handedBack).toBe(entities - 512);
+    expect(progress.walk.passes).toBeGreaterThanOrEqual(2);
     expect(progress.reserved).toBe(
       progress.started +
         progress.notStarted.cancelled +
@@ -1318,15 +1431,32 @@ describe("offline route build", () => {
         progress.notStarted.blocked +
         progress.notStarted.handedBack,
     );
-    expect(progress.recorded).toBe(512);
-    expect(progress.proved).toBe(512);
-    // The handed-back revisions were cancelled, not left leased: a later
-    // run takes their entities at once.
-    const later = await runBuild(model, {
+    expect(progress.started).toBe(entities);
+    expect(progress.proved).toBe(entities);
+    for (const state of await readStates(model.entityIds)) {
+      expect(state.appliedRevision).not.toBeNull();
+    }
+  });
+
+  test("a start admission covers the whole request, so a governor that waits never splits it across the start window", async () => {
+    const entities = 600;
+    const model = await newModel(entities);
+    const starts: number[] = [];
+    const run = await runBuild(model, {
       ...QUIET_RUN,
       maxShardRevisions: 8192,
+      // As long as a lease allows between a shard's close and its start.
+      holdStartAdmissionMs: POLICY.closeAllowanceMs - 1000,
+      startUnits: starts,
     });
-    expect(later?.progress.proved).toBe(entities - 512);
+    // One admission per request, of the whole request, and the request then
+    // started in full, in one file.
+    expect(starts).toEqual([entities]);
+    expect(model.deliveries.map(({ revisions }) => revisions)).toEqual([
+      entities,
+    ]);
+    expect(run?.progress.notStarted.handedBack).toBe(0);
+    expect(run?.progress.proved).toBe(entities);
   });
 
   // timeout: up to 24 whole offline build runs over 600 entities, each building, delivering and proving against PGlite.
@@ -1481,42 +1611,175 @@ describe("offline route build", () => {
     expect(await readIntents(model.entityIds)).toEqual([]);
   });
 
-  test("a run resumed from a cursor reserves only what the queue holds after it", async () => {
+  test("a pass that reaches the end of the queue does not end the walk: work behind a resumed cursor is delivered by the same run", async () => {
     const model = await newModel();
     const first = await runBuild(model, QUIET_RUN);
     expect(first?.status).toBe("drained");
     expect(first?.progress.proved).toBe(ENTITIES);
-    const cursor = first?.progress.cursor ?? panic("The walk left no cursor");
-    // Work queued after the first walk sorts after its cursor; one of it is
-    // placed behind the cursor, where a resumed walk leaves it to the
-    // per-row path and a walk from the head takes it.
+    // One entity sorts after the cursor the run resumes from, one before it.
     const seeded = await seedEntities(2);
     const ahead = seeded.at(0) ?? panic("Expected two entities");
     const behind = seeded.at(1) ?? panic("Expected two entities");
     model.entityIds.push(ahead, behind);
     await db.execute(
       sql`UPDATE ${corpusIndexProjectionStates}
-        SET updated_at = ${cursor.runnableAt}::timestamptz - interval '1 hour'
+        SET updated_at = clock_timestamp() - interval '2 hours'
         WHERE entity_id = ${behind}`,
     );
+    const [cursorRow] = (
+      await db.execute<{ runnableAt: string }>(
+        sql`SELECT (clock_timestamp() - interval '1 hour')::text AS "runnableAt"`,
+      )
+    ).rows;
+    const cursor = {
+      runnableAt: cursorRow?.runnableAt ?? panic("No cursor instant"),
+      entityId: "00000000-0000-0000-0000-000000000000",
+    };
     const resumed = await runBuild(model, QUIET_RUN, cursor);
-    expect(resumed?.progress.reserved).toBe(1);
-    expect(resumed?.progress.proved).toBe(1);
+    // The first pass, from the cursor, reads only `ahead` and its short page
+    // ends that pass, not the walk: the next pass, from the head, takes
+    // `behind`.
+    expect(resumed?.status).toBe("drained");
+    expect(resumed?.progress.reserved).toBe(2);
+    expect(resumed?.progress.proved).toBe(2);
+    expect(resumed?.progress.walk.passes).toBeGreaterThanOrEqual(2);
+    for (const state of await readStates([ahead, behind])) {
+      expect(state.appliedRevision).not.toBeNull();
+    }
+  });
+
+  test("a delivery that fails outside its documents stops the run and charges nobody, however often the runner relaunches", async () => {
+    const model = await newModel();
+    // Every revision travels alone, where a document fault would be charged.
+    for (let launch = 0; launch < 8; launch += 1) {
+      model.offsetMs += 10 * 60_000;
+      // db-await-in-loop: one whole run per relaunch, each after the last
+      const outcome = await runBuild(model, {
+        ...QUIET_RUN,
+        deliveries: [launch % 2 === 0 ? "broken" : "refuse"],
+        maxShardRevisions: 1,
+      });
+      expect(outcome?.status).toBe("infrastructure_failed");
+      expect(outcome?.progress.shards.infrastructureFailures).toBe(1);
+      expect(outcome?.progress.shards.delivered).toBe(1);
+      await assertStepInvariants(model);
+    }
+    for (const state of await readStates(model.entityIds)) {
+      expect(state.workStatus).not.toBe("blocked");
+      expect(state.failureAttempts).toBe(0);
+      expect(state.appendMode).toBe("batchable");
+    }
+    // Once the engine is back, the next run delivers every entity.
+    model.offsetMs += 10 * 60_000;
+    const healed = await runBuild(model, {
+      ...QUIET_RUN,
+      maxShardRevisions: 8,
+    });
+    expect(healed?.status).toBe("drained");
+    for (const state of await readStates(model.entityIds)) {
+      expect(state.appliedRevision).not.toBeNull();
+    }
+  });
+
+  test("a shard killed too large is never charged, and a cap that cannot shrink further stops the run typed", async () => {
+    const model = await newModel();
+    const outcome = await runBuild(model, {
+      ...QUIET_RUN,
+      deliveries: ["kill_before_publish"],
+      maxShardRevisions: 1,
+    });
+    // A shard this small killed means a rate below the slowest the plan
+    // accepts: half of it cannot hold the largest revision.
+    expect(outcome?.status).toBe("rate_too_slow");
+    expect(outcome?.progress.shards.killedTooLarge).toBe(1);
+    expect(outcome?.progress.withdrawn).toBe(1);
+    for (const state of await readStates(model.entityIds)) {
+      expect(state.failureAttempts).toBe(0);
+      expect(state.workStatus).not.toBe("blocked");
+    }
+  });
+
+  test("a shard killed at its deadline whose census is exact is a merge that ran over, not a failure", async () => {
+    const model = await newModel();
+    const outcome = await runBuild(model, {
+      ...QUIET_RUN,
+      deliveries: ["kill_after_publish"],
+      maxShardRevisions: 2,
+    });
+    expect(outcome?.status).toBe("drained");
+    expect(outcome?.progress.shards.mergeOverruns).toBe(1);
+    expect(outcome?.progress.shards.killedTooLarge).toBe(0);
+    expect(outcome?.progress.shards.shardByteCap).toBe(PLAN.shardByteCap);
+    expect(outcome?.progress.proved).toBe(ENTITIES);
+  });
+
+  test("a new holder delivers only after the indexers an earlier holder started have certainly ended", async () => {
+    const model = await newModel();
+    // The earlier process dies while its indexer may still run.
     expect(
-      (await readStates([ahead, behind])).map(
-        ({ entityId, appliedRevision }) => ({
-          entityId,
-          applied: appliedRevision !== null,
-        }),
-      ),
-    ).toEqual(
-      expect.arrayContaining([
-        { entityId: ahead, applied: true },
-        { entityId: behind, applied: false },
-      ]),
+      await runBuild(model, {
+        ...QUIET_RUN,
+        deliveries: ["crash_before"],
+        maxShardRevisions: 2,
+      }),
+    ).toBeNull();
+    const [latest] = await db
+      .select({
+        startedAt: sql<string>`max(${corpusIndexProjectionIntents.appendStartedAt})::text`,
+      })
+      .from(corpusIndexProjectionIntents)
+      .where(inArray(corpusIndexProjectionIntents.entityId, model.entityIds));
+    const endedAtMs =
+      new Date(latest?.startedAt ?? panic("Nothing started")).getTime() +
+      PLAN.endedAfterMs;
+    const delivered = model.shards.length;
+    const deliveredAt: number[] = [];
+    const outcome = await runBuild(model, {
+      ...QUIET_RUN,
+      maxShardRevisions: 2,
+      onDelivery: async () => {
+        deliveredAt.push((await now(model)).getTime());
+      },
+    });
+    expect(outcome?.status).toBe("drained");
+    expect(model.shards.length).toBeGreaterThan(delivered);
+    expect(Math.min(...deliveredAt)).toBeGreaterThanOrEqual(endedAtMs);
+  });
+
+  test("a run whose delivery rejects keeps the route until that delivery's indexer has certainly ended", async () => {
+    const model = await newModel();
+    const failure = await rejectionOf(
+      runBuild(model, {
+        ...QUIET_RUN,
+        deliveries: ["throw"],
+        maxShardRevisions: 2,
+      }),
     );
-    const fromHead = await runBuild(model, QUIET_RUN);
-    expect(fromHead?.progress.reserved).toBe(1);
-    expect(fromHead?.progress.proved).toBe(1);
+    expect(failure).toMatchObject({
+      message: expect.stringContaining("lost its connection"),
+    });
+    const shard = model.shards.at(0) ?? panic("Nothing was delivered");
+    expect(model.lockHeld).toBe(false);
+    expect(
+      (model.lockReleasedAt ?? panic("The lock was never released")).getTime(),
+    ).toBeGreaterThanOrEqual(
+      shard.killDeadline.getTime() +
+        CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
+    );
+  });
+
+  test("a reservation page re-checks that the generation is still building", async () => {
+    const model = await newModel();
+    const outcome = await runBuild(model, {
+      ...QUIET_RUN,
+      serveBeforeReservePage: 0,
+    });
+    await db
+      .update(corpusIndexGenerations)
+      .set({ status: "building" })
+      .where(eq(corpusIndexGenerations.generation, TARGET.generation));
+    expect(outcome?.status).toBe("generation_not_building");
+    expect(outcome?.progress.reserved).toBe(0);
+    expect(await readIntents(model.entityIds)).toEqual([]);
   });
 });
