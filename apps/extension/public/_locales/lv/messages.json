@@ -68,6 +68,9 @@
   "connectStella": {
     "message": "Savienot stella"
   },
+  "openStella": {
+    "message": "Atvērt stella"
+  },
   "adoptTab": {
     "message": "Izmantot šo cilni ar stella"
   },
