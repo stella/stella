@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/ai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import { panic, Result, TaggedError } from "better-result";
+import type { ResponseCreateParams } from "openai/resources/responses/responses";
 import * as v from "valibot";
 
 import {
@@ -2456,7 +2457,7 @@ export const mergeGenerationOptions = ({
               ),
             }),
         ...temperatureOverride,
-        ...openAICacheOptions(caching),
+        ...openAICacheOptions(caching, model.modelId),
         ...openAIServiceTierOptions(serviceTier),
       };
     case "openrouter":
@@ -2496,12 +2497,29 @@ const isDeferredServiceTier = (serviceTier: AIRequestServiceTier): boolean =>
 // catalogue, not here.
 const openAICacheOptions = (
   caching: CachingDecision,
-): Partial<Pick<OpenAITextProviderOptions, "prompt_cache_key">> => {
-  if (!caching.enabled || caching.scopeKey === null) {
-    return {};
-  }
+  modelId: string,
+): Pick<ResponseCreateParams, "prompt_cache_key" | "prompt_cache_options"> => {
+  // GPT-5.6+ accepts request-wide mode; older models only cache implicitly.
+  // https://developers.openai.com/api/docs/guides/prompt-caching
+  const version = /^gpt-(\d+)(?:\.(\d+))?/u.exec(modelId);
+  const supportsMode =
+    version !== null &&
+    (Number(version[1]) > 5 ||
+      (Number(version[1]) === 5 && Number(version[2] ?? 0) >= 6));
   return {
-    prompt_cache_key: hashCacheScopeKey(caching.scopeKey),
+    // The shared runtime suppresses SDK cache defaults and generated keys.
+    // Native model options win over the adapter's explicit-only default:
+    // enabled requests keep Stella's implicit caching; disabled requests have
+    // no breakpoints, so explicit-only mode creates no cache reads or writes.
+    ...(supportsMode && {
+      prompt_cache_options: {
+        mode: caching.enabled ? "implicit" : "explicit",
+      },
+    }),
+    ...(caching.enabled &&
+      caching.scopeKey !== null && {
+        prompt_cache_key: hashCacheScopeKey(caching.scopeKey),
+      }),
   };
 };
 
