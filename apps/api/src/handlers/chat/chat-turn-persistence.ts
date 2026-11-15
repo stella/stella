@@ -37,7 +37,6 @@ import {
   planChatTurnTransition,
 } from "@/api/handlers/chat/chat-turn-state";
 import type {
-  ChatTurnCancellationReason,
   ChatTurnFailureCode,
   ChatTurnInteractionType,
   ChatTurnState,
@@ -58,7 +57,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { closeChatRunLogOnTx } from "@/api/lib/chat/run-log";
-import { CHAT_TURN_TIMING_ACTIVE_STATUSES } from "@/api/lib/chat/turn-status";
+import {
+  ACTIVE_CHAT_TURN_STATUSES,
+  CHAT_TURN_TIMING_ACTIVE_STATUSES,
+} from "@/api/lib/chat/turn-status";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
 import { holdChatQueueOnTx } from "@/api/lib/db/chat-queue-gate";
@@ -297,14 +299,23 @@ export const createChatTurnAcceptance = ({
 });
 
 /**
- * What a turn's end does to its thread's queue, by how it ended. Total over
- * the outcome union, so a new outcome does not compile until it is decided.
- * `wait`: the turn still owns the thread (it waits on the member), nothing
- * may start. `drain`: the next queued message may go. A hold keeps the queue
- * until the member resumes it or sends a message.
+ * How a turn's owner settled it: an outcome, or released to another task
+ * (`handed-over`), which is not an end of the turn.
+ */
+type ChatTurnSettlementKind = ChatTurnOutcome["type"] | "handed-over";
+
+/**
+ * What a turn's settlement does to its thread's queue, by how it settled.
+ * Total over the outcome union and the release, so a new one does not compile
+ * until it is decided. `wait`: the turn still owns the thread (it waits on
+ * the member, or on another task to adopt it), nothing may start. `drain`:
+ * the next queued message may go. A hold keeps the queue until the member
+ * resumes it or sends a message.
  */
 export const CHAT_QUEUE_AFTER_TURN = {
   "awaiting-user": { type: "wait" },
+  // Released to another task, which goes on with the same turn.
+  "handed-over": { type: "wait" },
   completed: { type: "drain" },
   // A budget pause ends the turn; the queued message is the member's next
   // word and starts the next turn, as a typed one would.
@@ -314,7 +325,7 @@ export const CHAT_QUEUE_AFTER_TURN = {
   failed: { type: "hold", reason: CHAT_QUEUE_HOLD_REASON.turnFailed },
   interrupted: { type: "hold", reason: CHAT_QUEUE_HOLD_REASON.turnInterrupted },
 } as const satisfies Record<
-  ChatTurnOutcome["type"],
+  ChatTurnSettlementKind,
   | { type: "wait" | "drain" }
   | {
       type: "hold";
@@ -332,7 +343,7 @@ export const holdChatQueueAfterTurnOnTx = async ({
   turnId,
   tx,
 }: {
-  outcome: ChatTurnOutcome["type"];
+  outcome: ChatTurnSettlementKind;
   threadId: SafeId<"chatThread">;
   turnId: SafeId<"chatTurn">;
   tx: Transaction;
@@ -538,9 +549,96 @@ const interruptExpiredRunningChatTurnOnTx = async ({
 };
 
 /**
- * End the turn of `threadId` whose owner stopped producing, under the thread
- * lock the owner's own settlement takes too. Idempotent: a thread whose turn
- * is live, already settled, or gone is left as it is.
+ * Under the thread lock, end a handed-over turn nobody adopted by its lease
+ * as `owner-lost`, as an expired running turn ends. Its stored answer so far
+ * is the turn's own message, so the outcome goes on it whether or not it has
+ * open calls; the gateway's sweep then cancels the run.
+ */
+const interruptUnadoptedChatTurnOnTx = async ({
+  pings,
+  threadId,
+  tx,
+}: {
+  pings: ChatRunPings;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  const now = databaseNow();
+  const unadopted = (
+    await tx
+      .select({ id: chatTurns.id })
+      .from(chatTurns)
+      .where(
+        and(
+          eq(chatTurns.threadId, threadId),
+          eq(chatTurns.status, "handed-over"),
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the database clock, never round-tripped through the application
+          lte(chatTurns.leaseExpiresAt, now),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (unadopted === undefined) {
+    return;
+  }
+  await cutShortHeldMessageOnTx({
+    outcome: OWNER_LOST_OUTCOME,
+    status: "handed-over",
+    threadId,
+    turnId: unadopted.id,
+    tx,
+  });
+  // audit: skip — owner-lost terminalization records that nobody adopted a released turn; no user-authored content changes
+  const interrupted = await tx
+    .update(chatTurns)
+    .set({
+      // Nobody ran the turn since its release; do not invent active time.
+      activeDurationMs: null,
+      activeStartedAt: null,
+      assistantMessageId: null,
+      cancellationReason: null,
+      executionId: null,
+      failureCode: null,
+      failureRetryable: null,
+      interactionToolCallId: null,
+      interactionType: null,
+      interruptionReason: OWNER_LOST_OUTCOME.reason,
+      leaseExpiresAt: null,
+      settledAt: now,
+      status: "interrupted",
+    })
+    .where(
+      and(eq(chatTurns.id, unadopted.id), eq(chatTurns.status, "handed-over")),
+    )
+    .returning({
+      ...CHAT_RUN_OWNER_COLUMNS,
+      id: chatTurns.id,
+      runId: chatTurns.runId,
+    });
+  recordChatRunOwners(pings, interrupted);
+  const [interruptedTurn] = interrupted;
+  if (interruptedTurn === undefined) {
+    return panic("A handed-over chat turn changed under its thread lock");
+  }
+  await closeChatRunLogOnTx({
+    organizationId: interruptedTurn.organizationId,
+    runId: interruptedTurn.runId,
+    turnId: interruptedTurn.id,
+    tx,
+  });
+  await holdChatQueueAfterTurnOnTx({
+    outcome: OWNER_LOST_OUTCOME.type,
+    threadId,
+    turnId: interruptedTurn.id,
+    tx,
+  });
+};
+
+/**
+ * End the turn of `threadId` whose owner stopped producing, or that nobody
+ * adopted after its owner released it, under the thread lock the owner's own
+ * settlement takes too. Idempotent: a thread whose turn is live, already
+ * settled, or gone is left as it is.
  */
 export const reapOwnerlessChatTurnOnTx = async ({
   pings,
@@ -555,12 +653,15 @@ export const reapOwnerlessChatTurnOnTx = async ({
     return;
   }
   await interruptExpiredRunningChatTurnOnTx({ pings, threadId, tx });
+  await interruptUnadoptedChatTurnOnTx({ pings, threadId, tx });
 };
 
 /**
  * Lock the thread before a caller writes its new user message. A running turn
- * cannot be superseded while its lease is live. Once its lease expires, end it
- * atomically under the same lock so it cannot block every future message.
+ * cannot be superseded while its lease is live, nor a handed-over one before
+ * its adopt-by time: another task is about to go on with it. Once either
+ * lapses, end the turn atomically under the same lock so it cannot block
+ * every future message.
  */
 export const canAcceptChatTurnOnTx = async ({
   pings,
@@ -575,14 +676,15 @@ export const canAcceptChatTurnOnTx = async ({
     return false;
   }
   await interruptExpiredRunningChatTurnOnTx({ pings, threadId, tx });
-  const running = await tx.query.chatTurns.findFirst({
+  await interruptUnadoptedChatTurnOnTx({ pings, threadId, tx });
+  const live = await tx.query.chatTurns.findFirst({
     where: {
-      status: { eq: "running" },
+      status: { in: ["running", "handed-over"] },
       threadId: { eq: threadId },
     },
     columns: { id: true },
   });
-  return running === undefined;
+  return live === undefined;
 };
 
 /** Why a thread cannot take a new turn. */
@@ -646,19 +748,24 @@ export const cutShortAssistantMessage = ({
     turnOutcome: outcome,
   });
 
-/** Store `cutShortAssistantMessage` for the awaiting turn `turnId`, cancelled. */
-const cancelAssistantMessageOnTx = async ({
-  reason,
+/**
+ * Store `cutShortAssistantMessage` for the message an unowned turn `turnId`
+ * holds (one awaiting the member, or one handed over), ended by `outcome`.
+ */
+const cutShortHeldMessageOnTx = async ({
+  outcome,
+  status,
   threadId,
   turnId,
   tx,
 }: {
-  reason: ChatTurnCancellationReason;
+  outcome: CutShortOutcome;
+  status: "awaiting-user" | "handed-over";
   threadId: SafeId<"chatThread">;
   turnId: SafeId<"chatTurn">;
   tx: Transaction;
 }): Promise<PersistableTerminalAssistantMessage | undefined> => {
-  const awaitingMessage = (
+  const heldMessage = (
     await tx
       .select({
         content: chatMessages.content,
@@ -677,28 +784,28 @@ const cancelAssistantMessageOnTx = async ({
         and(
           eq(chatTurns.id, turnId),
           eq(chatTurns.threadId, threadId),
-          eq(chatTurns.status, "awaiting-user"),
+          eq(chatTurns.status, status),
         ),
       )
       .limit(1)
   ).at(0);
 
-  if (awaitingMessage === undefined) {
+  if (heldMessage === undefined) {
     return undefined;
   }
-  if (awaitingMessage.role !== "assistant") {
-    panic("Awaiting chat turn does not own an assistant message");
+  if (heldMessage.role !== "assistant") {
+    panic(`A ${status} chat turn does not own an assistant message`);
   }
-  const cancelledMessage = cutShortAssistantMessage({
-    message: chatMessageFromPersisted(awaitingMessage),
-    outcome: { reason, type: "cancelled" },
+  const endedMessage = cutShortAssistantMessage({
+    message: chatMessageFromPersisted(heldMessage),
+    outcome,
   });
   await storeServerEndedMessageOnTx({
-    message: cancelledMessage,
+    message: endedMessage,
     threadId,
     tx,
   });
-  return cancelledMessage;
+  return endedMessage;
 };
 
 /**
@@ -749,8 +856,9 @@ export const insertChatTurnAcceptanceOnTx = async ({
   const superseded =
     awaiting === undefined
       ? undefined
-      : await cancelAssistantMessageOnTx({
-          reason: "superseded",
+      : await cutShortHeldMessageOnTx({
+          outcome: { reason: "superseded", type: "cancelled" },
+          status: "awaiting-user",
           threadId: acceptance.threadId,
           turnId: awaiting.id,
           tx,
@@ -879,6 +987,15 @@ const chatTurnStateFromRow = (row: ChatTurnRow): ChatTurnState => {
         threadId: row.threadId,
         userMessageId: row.userMessageId,
       };
+    case "handed-over":
+      return {
+        adoptBy: present(row.leaseExpiresAt, "lease"),
+        assistantMessageId: present(row.assistantMessageId, "message"),
+        id: row.id,
+        status: row.status,
+        threadId: row.threadId,
+        userMessageId: row.userMessageId,
+      };
     case "completed":
       return {
         assistantMessageId: present(row.assistantMessageId, "message"),
@@ -934,9 +1051,11 @@ type ChatTurnStop =
   | { executionId: string; turn: ChatTurnView; type: "requested" };
 
 /**
- * End a turn no execution owns (accepted, or awaiting the user) as the
- * user's stop, message and turn together. Both statuses change only under
- * the thread lock the caller holds, so the compare-and-set cannot lose.
+ * End a turn no execution owns (accepted, awaiting the user, or handed over
+ * and not yet adopted) as the user's stop, message and turn together. These
+ * statuses change only under the thread lock the caller holds, so the
+ * compare-and-set cannot lose. A handed-over turn's run is cancelled by the
+ * gateway's sweep, which finds the turn ended.
  */
 const stopUnownedChatTurnOnTx = async ({
   pings,
@@ -944,7 +1063,10 @@ const stopUnownedChatTurnOnTx = async ({
   tx,
 }: {
   pings: ChatRunPings;
-  state: Extract<ChatTurnState, { status: "accepted" | "awaiting-user" }>;
+  state: Extract<
+    ChatTurnState,
+    { status: "accepted" | "awaiting-user" | "handed-over" }
+  >;
   tx: Transaction;
 }): Promise<ChatTurnView> => {
   const planned = planChatTurnTransition(state, {
@@ -957,9 +1079,10 @@ const stopUnownedChatTurnOnTx = async ({
   if (planned.type === "rejected" || planned.state.status !== "cancelled") {
     return panic(`A stop cannot end a ${state.status} chat turn`);
   }
-  if (state.status === "awaiting-user") {
-    await cancelAssistantMessageOnTx({
-      reason: planned.state.reason,
+  if (state.status !== "accepted") {
+    await cutShortHeldMessageOnTx({
+      outcome: { reason: planned.state.reason, type: "cancelled" },
+      status: state.status,
       threadId: state.threadId,
       turnId: state.id,
       tx,
@@ -1063,6 +1186,7 @@ const stopChatTurnStateOnTx = async ({
   switch (state.status) {
     case "accepted":
     case "awaiting-user":
+    case "handed-over":
       return {
         turn: await stopUnownedChatTurnOnTx({ pings, state, tx }),
         type: "settled",
@@ -1299,7 +1423,7 @@ export const claimChatTurnForExecutionOnTx = async ({
   if (!source) {
     const active = await tx.query.chatTurns.findFirst({
       where: {
-        status: { in: ["accepted", "running", "awaiting-user"] },
+        status: { in: [...ACTIVE_CHAT_TURN_STATUSES] },
         threadId: { eq: threadId },
       },
       columns: { id: true },

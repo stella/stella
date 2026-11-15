@@ -27,6 +27,8 @@ const LIVE_TURN_STATUS = {
   cancelled: false,
   completed: false,
   failed: false,
+  // Released at an event boundary; the task that adopts it goes on writing.
+  "handed-over": true,
   interrupted: false,
   running: true,
 } as const satisfies Record<ChatTurnStatus, boolean>;
@@ -38,6 +40,7 @@ const SETTLED_TURN_OUTCOME = {
   cancelled: "cancelled",
   completed: "completed",
   failed: "failed",
+  "handed-over": "completed",
   interrupted: "interrupted",
   running: "completed",
 } as const satisfies Record<ChatTurnStatus, ChatTurnOutcome["type"]>;
