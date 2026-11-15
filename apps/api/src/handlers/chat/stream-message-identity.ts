@@ -405,33 +405,40 @@ export const ensureAssistantMessageStart = async function* ({
   getOrCreateMessageId,
   source,
 }: EnsureAssistantMessageStartProps): AsyncIterable<PublicStreamChunk> {
-  let hasAssistantMessageStart = false;
+  let binding: "unannounced" | "announced" | "snapshot" = "unannounced";
 
   for await (const chunk of source) {
-    if (
-      chunk.type === EventType.RUN_STARTED ||
-      chunk.type === EventType.MESSAGES_SNAPSHOT
-    ) {
-      // A new model run needs its own routing binding. Snapshots reset the
-      // SDK's routing state; resumed tool results may precede RUN_STARTED.
-      hasAssistantMessageStart = false;
+    if (chunk.type === EventType.RUN_STARTED) {
+      // Resumed tool results may announce the owner before the new run.
+      binding = "unannounced";
+      yield chunk;
+      continue;
+    }
+    if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+      // A snapshot resets SDK routing. Rehydrate an already announced
+      // owner's retained text instead of starting an empty accumulator.
+      if (binding !== "unannounced") {
+        binding = "snapshot";
+      }
       yield chunk;
       continue;
     }
     if (chunk.type === EventType.TEXT_MESSAGE_START) {
-      hasAssistantMessageStart = true;
+      binding = "announced";
       yield chunk;
       continue;
     }
 
-    if (!hasAssistantMessageStart) {
+    if (binding !== "announced") {
       const messageId = getAssistantStartMessageId({
         chunk,
         getOrCreateMessageId,
       });
       if (messageId !== null) {
-        hasAssistantMessageStart = true;
-        yield assistantMessageStartChunk(messageId);
+        yield binding === "snapshot"
+          ? { type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: "" }
+          : assistantMessageStartChunk(messageId);
+        binding = "announced";
       }
     }
 

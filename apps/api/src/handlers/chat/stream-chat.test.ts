@@ -3877,11 +3877,11 @@ describe("outgoing chat stream message ids", () => {
       {
         type: EventType.REASONING_MESSAGE_CONTENT,
         delta: "Checking source law.",
-        messageId,
+        messageId: "openrouter-reasoning-message",
       },
       {
         type: EventType.REASONING_MESSAGE_END,
-        messageId,
+        messageId: "openrouter-reasoning-message",
       },
       {
         type: EventType.RUN_FINISHED,
