@@ -49,16 +49,17 @@ type RecordVariables = {
 type BulkVariables = { workspaceId: string; targetIds: ClaimId[] };
 
 /**
- * Whether a recorded event changes the qualifiers the server reads for the
- * claim. Governing a record conflict moves the verdict onto the chosen fact,
- * whose standing (no source, held) the claim then carries, so the run is
- * read again; every other event leaves what the verdict rests on alone.
+ * Whether a recorded event changes what the server reads for the claim: its
+ * qualifiers, or whether it needs attention. Governing a record conflict
+ * moves the verdict onto the chosen fact, whose standing (no source, held)
+ * the claim then carries, and reopening a set-aside claim makes it checkable,
+ * so the run is read again; every other event leaves both alone.
  */
 const QUALIFIER_READ_AFTER = {
   status: "kept",
   override: "kept",
   note: "kept",
-  reopen: "kept",
+  reopen: "reread",
   "record-conflict": "reread",
   "fact-link": "kept",
 } as const satisfies Record<ClaimReviewEvent["kind"], "kept" | "reread">;

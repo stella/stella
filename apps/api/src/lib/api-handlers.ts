@@ -159,6 +159,8 @@ import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
+import { legalHoldViewerFromContext } from "@/api/lib/workspaces/legal-holds/projection";
+import { legalHoldRefusalForViewer } from "@/api/lib/workspaces/legal-holds/refusal";
 import { recordWriteContract } from "@/api/lib/write-contract/write-contract";
 import type { WriteContract } from "@/api/lib/write-contract/write-contract";
 // Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
@@ -422,10 +424,9 @@ export type UsageMeteringConfig = {
  * (`v.pipe(v.string(), v.description("..."))`), which the same exporter carries
  * into the catalog's `inputSchema`.
  *
- * Optional only until the remaining gaps are closed. Every capability without
- * one is listed by id in `apps/api/capability-description-ledger.json`; a new
- * capability may not join that list, and authoring prose means deleting its
- * line in the same change (see apps/api/scripts/capability-description-guard.ts).
+ * Optional in the type, required by
+ * apps/api/scripts/capability-description-guard.ts, which fails a capability
+ * without one.
  */
 type CapabilityDescription = {
   description?: string;
@@ -1087,7 +1088,15 @@ const runSafeHandlerInDeliveryScope = async <
         telemetry: safeErrorTelemetryDisposition(statusCode, handlerError.code),
       });
 
-      return toErrorStatus(statusCode, safeErrorBody(handlerError));
+      return toErrorStatus(
+        statusCode,
+        safeErrorBody(
+          legalHoldRefusalForViewer(
+            handlerError,
+            legalHoldViewerFromContext(ctx),
+          ),
+        ),
+      );
     }
 
     if (DatabaseError.is(error)) {
@@ -1159,7 +1168,15 @@ const runSafeHandlerInDeliveryScope = async <
           handlerError.code,
         ),
       });
-      return toErrorStatus(handlerError.status, safeErrorBody(handlerError));
+      return toErrorStatus(
+        handlerError.status,
+        safeErrorBody(
+          legalHoldRefusalForViewer(
+            handlerError,
+            legalHoldViewerFromContext(ctx),
+          ),
+        ),
+      );
     }
 
     logAndCaptureSafeError({

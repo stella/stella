@@ -5,23 +5,30 @@ import {
   type ModelMessage,
   normalizeStreamChunk,
   type RunAgentResumeItem,
+  type StreamChunk,
 } from "@tanstack/ai";
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { HARNESS_CONTINUATION_EVENT } from "@stll/agent-engine";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
-import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import {
+  AGENT_HARNESSES,
+  harnessSessionIdEvent,
+} from "@stll/api-contract/agent-harness";
 import {
   CHAT_TOOL_EXECUTOR,
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
 } from "@stll/api-contract/chat";
 import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
+import { chatLocalRunCallId } from "@stll/api-contract/chat-local-run-step-output";
 import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   chatLocalRunApprovalMessage,
   chatLocalRunApprovalReason,
+  chatLocalRunParentCallId,
   chatLocalRunShownText,
   type ChatLocalRunToolName,
   chatLocalRunToolStatusContent,
@@ -53,6 +60,7 @@ import {
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
   desktopRunnerOutputEventSchema,
+  type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 import type {
   StellaMcpAppCall,
@@ -81,6 +89,7 @@ import type {
   QueueCommandOutcome,
 } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
+import { announcedAwaitedSteps } from "@/api/lib/desktop-runner/step-contents";
 import type {
   ChatRunForRequest,
   DesktopRunnerRunView,
@@ -140,7 +149,10 @@ type LocalRunDestination = {
   harness: ChatLocalRunHarness;
   harnessVersion: string;
   model: string;
+  reasoningEffort: DesktopRunnerReasoningEffort | null;
   approvals: DesktopRunnerApprovalMode;
+  /** The folder linked on that computer the run works in, if any. */
+  linkedFolderId: string | null;
 };
 
 export type LocalRunContext = {
@@ -179,8 +191,9 @@ type LocalRunStreamInput = {
    */
   resume: readonly RunAgentResumeItem[] | undefined;
   /**
-   * The turn's own cut: a stop on any API task, its deadline, a lost owner or
-   * a failed production. It interrupts the run on the computer.
+   * The turn's own cut: a stop on any API task, a lost owner or admission,
+   * or a failed production. It interrupts the run on the computer. No
+   * deadline is among them (`ChatTurnRunBound`).
    */
   abortSignal: AbortSignal;
 };
@@ -212,7 +225,8 @@ type LocalRunFailure =
   | typeof AI_FAILURE_CODES.local_runner_turn_too_large
   | typeof AI_FAILURE_CODES.local_runner_not_reached
   | typeof AI_FAILURE_CODES.local_runner_relinked
-  | typeof AI_FAILURE_CODES.local_runner_restoring;
+  | typeof AI_FAILURE_CODES.local_runner_restoring
+  | typeof AI_FAILURE_CODES.local_runner_folder_unavailable;
 
 const FAILURE_MESSAGE = {
   [AI_FAILURE_CODES.local_runner_needs_login]:
@@ -229,6 +243,8 @@ const FAILURE_MESSAGE = {
     "The computer was linked again, so the run of its previous link stopped.",
   [AI_FAILURE_CODES.local_runner_restoring]:
     "The computer is still undoing an earlier turn's file changes.",
+  [AI_FAILURE_CODES.local_runner_folder_unavailable]:
+    "The folder linked to the chat is not available on the computer.",
 } as const satisfies Record<LocalRunFailure, string>;
 
 type StoredOutcome = Extract<
@@ -280,6 +296,13 @@ const LOCAL_RUN_REJECTION = {
   unknown_run: AI_FAILURE_CODES.local_runner_unavailable,
   // The computer is still undoing an earlier turn's file changes.
   folder_busy: AI_FAILURE_CODES.local_runner_restoring,
+  // The linked folder is gone from the computer's list, on a volume that is
+  // not mounted, moved, holds what runs rely on, or cannot be read.
+  folder_unlinked: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_offline: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_moved: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_protected: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_unreadable: AI_FAILURE_CODES.local_runner_folder_unavailable,
 } as const satisfies Record<RejectReason, LocalRunFailure>;
 
 /** A stored chunk as the turn pipeline folds it. */
@@ -305,22 +328,6 @@ export const approvalDecisionOf = (
     return payload["scope"] === "session" ? "approve_for_session" : "approve";
   }
   return "deny";
-};
-
-/**
- * Call ids the harness mints are unique only within its own run, so every id
- * of a local run is prefixed with the run: stable across the turn's pause and
- * resume, and unique across the thread.
- */
-const MAX_CALL_ID_LENGTH = 256;
-
-const localCallId = (runnerRunId: string, toolCallId: string) => {
-  const prefixed = `${runnerRunId.replaceAll("-", "")}_${toolCallId}`;
-  // A harness id too long for the budget keeps its identity as a digest, so
-  // two long ids never collapse into one call.
-  return prefixed.length <= MAX_CALL_ID_LENGTH
-    ? prefixed
-    : `${runnerRunId.replaceAll("-", "")}_${sha256Hex(toolCallId)}`;
 };
 
 type RewriteContext = {
@@ -377,9 +384,25 @@ const LOCAL_RUN_EVENT_DISPOSITION = {
  * only these pass; the rest of what a desktop sends goes no further.
  */
 const LOCAL_RUN_CUSTOM_EVENTS: ReadonlySet<string> = new Set([
-  ...AGENT_HARNESSES.map((harness) => `${harness}.session-id`),
+  ...AGENT_HARNESSES.map(harnessSessionIdEvent),
   HARNESS_CONTINUATION_EVENT,
 ]);
+
+/** The part of a turn's continuation the chat tells the member about. */
+const SessionNotResumedSchema = v.object({
+  type: v.literal("resume_unavailable"),
+});
+
+/**
+ * The harness could not resume the session it ran the chat's earlier turns
+ * in, so this turn started from the chat's messages instead.
+ */
+export const reportsSessionNotResumed = (
+  chunk: PublicStreamChunk | StreamChunk,
+) =>
+  chunk.type === EventType.CUSTOM &&
+  chunk.name === HARNESS_CONTINUATION_EVENT &&
+  v.is(SessionNotResumedSchema, chunk.value);
 
 /** The chunks a stream processor merges metadata from into the message. */
 const MESSAGE_METADATA_EVENTS: ReadonlySet<string> = new Set([
@@ -426,9 +449,23 @@ type LocalRunToolCalls = Map<
   { name: string; argsCarried: boolean; endCarried: boolean }
 >;
 
+type CallId = (id: string) => string;
+
 /** The input chat keeps for a native step, from what the desktop sent. */
 const nativeInput = (name: ChatLocalRunToolName, input: unknown) =>
   parseChatLocalRunToolCall(name, input)?.input ?? {};
+
+/**
+ * The subagent step a call's start names, kept in the call's metadata under
+ * that step's chat call id, as the step itself is kept, so the link holds in
+ * the stored turn. Nothing for a start that names none.
+ */
+const subagentLink = (metadata: unknown, callId: CallId) => {
+  const parent = chatLocalRunParentCallId(metadata);
+  return parent === null
+    ? {}
+    : { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: callId(parent) };
+};
 
 /**
  * What TanStack's normaliser keeps of a chunk beyond the AG-UI spec, under
@@ -450,8 +487,6 @@ const parsedArguments = (delta: string): unknown => {
   const parsed = Result.try((): unknown => JSON.parse(delta));
   return parsed.isOk() ? parsed.value : undefined;
 };
-
-type CallId = (id: string) => string;
 
 /**
  * A call's arguments or end. A native step's input is rebuilt from the
@@ -677,7 +712,7 @@ const asChatChunk = (
   if (LOCAL_RUN_EVENT_DISPOSITION[chunk.type] === "drop") {
     return null;
   }
-  const callId = (id: string) => localCallId(runnerRunId, id);
+  const callId = (id: string) => chatLocalRunCallId(runnerRunId, id, sha256Hex);
   if (chunk.type === EventType.TOOL_CALL_START) {
     // A call's first start names it for good: the chat keeps the first part
     // of an id, so a start naming another tool is not carried.
@@ -693,8 +728,9 @@ const asChatChunk = (
       });
     }
     // A start is rebuilt from the fields it names: its metadata becomes the
-    // call's, so only the model a harness names and the owner the API names
-    // are carried, and nothing else a desktop adds (an input, an output).
+    // call's, so only the model a harness names, the subagent step it names
+    // and the owner the API names are carried, and nothing else a desktop
+    // adds (an input, an output).
     const model = reportedModel(chunk.metadata);
     return {
       type: EventType.TOOL_CALL_START,
@@ -706,6 +742,7 @@ const asChatChunk = (
       ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
       metadata: {
         ...(model.model === undefined ? {} : { tanstack: model }),
+        ...subagentLink(chunk.metadata, callId),
         [CHAT_TOOL_EXECUTOR_METADATA_KEY]: CHAT_TOOL_EXECUTOR.harness,
       },
     };
@@ -1099,9 +1136,9 @@ type ReadRunOptions = {
 };
 
 /**
- * Stop the computer's turn: what a user's stop, a deadline or a lost owner
- * means for a run nobody reads any more. The gateway keeps one interrupt per
- * run, so a repeat is a no-op.
+ * Stop the computer's turn: what a user's stop or a lost owner means for a
+ * run nobody reads any more. The gateway keeps one interrupt per run, so a
+ * repeat is a no-op.
  */
 const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
   const stopped = await context.control.interruptRun({
@@ -1381,9 +1418,11 @@ const storedRunMessage = (stored: unknown): SequencedRunMessage => {
       return message;
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.hello:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.harnessStatus:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.linkedFoldersStatus:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runAccepted:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runRejected:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runBackground:
       return panic(`A run stored an unsequenced ${message.type}`);
     default:
       message satisfies never;
@@ -1497,6 +1536,11 @@ async function* readRunChunks({
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent: {
             if (!isPublicStreamChunk(message.chunk)) {
               panic("A stored desktop runner chunk no longer folds");
+            }
+            // The run's word on the steps it still has to send was recorded
+            // when the event was stored; it is no part of the answer.
+            if (announcedAwaitedSteps(message.chunk) !== null) {
+              continue;
             }
             const output = runOutputReportOf(message.chunk);
             if (output !== null) {
@@ -1657,6 +1701,7 @@ async function* startLocalRun({
     chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
     desktopId: destination.desktopId,
     harness: destination.harness,
+    linkedFolderId: destination.linkedFolderId,
   });
   const rewrite = {
     chatRunId: input.chatRunId,
@@ -1681,6 +1726,7 @@ async function* startLocalRun({
       harness: destination.harness,
       harnessVersion: destination.harnessVersion,
       model: destination.model,
+      reasoningEffort: destination.reasoningEffort,
       approvals: destination.approvals,
       harnessSessionId,
       instructions: input.instructions,
@@ -1689,6 +1735,7 @@ async function* startLocalRun({
       attachments,
       mcp: context.mcp,
       workspaceIds: context.workspaceIds,
+      linkedFolderId: destination.linkedFolderId,
       chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
     });
   const sentAt = new Date(nowMs()).toISOString();
@@ -1736,12 +1783,17 @@ async function* startLocalRun({
       return;
     case "no_computer":
     case "model_unavailable":
+    case "reasoning_effort_unavailable":
     case "approvals_unavailable":
       yield* refuse(AI_FAILURE_CODES.local_runner_unavailable);
       return;
     case "folder_busy":
       // An undo of the chat's files is still running on the computer.
       yield* refuse(AI_FAILURE_CODES.local_runner_restoring);
+      return;
+    case "folder_unavailable":
+      // The linked folder went offline or moved since the turn was routed.
+      yield* refuse(AI_FAILURE_CODES.local_runner_folder_unavailable);
       return;
     case "too_large":
       yield* refuse(AI_FAILURE_CODES.local_runner_turn_too_large);

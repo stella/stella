@@ -32,6 +32,13 @@ the default provider chain (see `getTanStackTextModelById`).
 
 ## Evals
 
+- `graph-tools.ts`: can a model answer a matter question through the graph's
+  query tools (`lists.graph.nodes.list`, `lists.graph.neighbours.list`,
+  `lists.graph.paths.list`) from their schemas and descriptions alone? Calls
+  are parsed by the handlers' own schemas and answered by the handlers over a
+  synthetic case in an in-process database; scores looking up first,
+  navigating by returned ids only, the direct filter, and quoting the exact
+  text. Runs only with an explicit `--models` list.
 - `create-document-drafting.ts`: can a model write legal source the
   docx-core compiler accepts, how much does the compiler normalize, and does
   literal markdown leak into the document?
@@ -105,6 +112,25 @@ the default provider chain (see `getTanStackTextModelById`).
   mock; locally, start the dev stack, seed the test user, then
   `bun run eval:playbook-journey -- --model claude-sonnet-5-5` with
   `ANTHROPIC_API_KEY` set.
+- `avt-verification.ts`: does the verification engine reach the verdict a
+  careful reviewer would? It runs the production readers, paragraph range,
+  claim extraction and grading against the anchor facts, with no database,
+  over labelled sets (`lib/avt-verification-set.ts`): a document, its facts,
+  and each claim's expected verdict, accepted alternatives, the facts it
+  should rest on and its qualifiers. `grade` mode grades the labelled claims
+  as a run grades them; `pipeline` mode extracts claims from the document and
+  scores the claim covering each label, so a claim extraction misses counts
+  as wrong. It reports accuracy, a confusion matrix over the six verdicts,
+  recall and precision per verdict, citation and record-conflict pair
+  correctness, the false "No coverage" rate, qualifiers, accuracy per tag,
+  cost (priced from each call's tokens with the production rates) and
+  latency. Labels marked uncertain are reported, never scored. `--models` is
+  required, `--max-usd` stops a run before its next call once reached, and
+  `--seed` fixes the claim order:
+  `bun run eval:avt-verification run evals/fixtures/avt-verification-sample.json --models anthropic::claude-sonnet-5-5 --mode both --max-usd 1 --out /absolute/path`.
+  `check` validates a set and locates every quote; `text` prints the text a
+  run reads, to copy quotes from. The sample set is synthetic; keep sets
+  built from real material, and every result, outside the repository.
 - `agent-orientation.ts`: given stella's MCP tool list or CLI skill, does a
   model pick the right tool or command and arguments for a natural-language
   task, scored without executing anything?
@@ -170,3 +196,25 @@ checks; they do not execute generated HTML or certify visual quality, citations,
 or treemap semantics. The scorer unit tests use explicitly synthetic records
 and prove scoring only. Production model selection and visual quality remain
 NOT COVERED until separately exercised against a live model.
+
+## Dictation cleanup through local harnesses
+
+`dictation-cleanup-local.ts` emits the production dictation cleanup
+instructions, the transcript message and the structured output schema for
+synthetic Czech, Slovak and English dictations: spoken punctuation, line and
+paragraph breaks, bold, a self-correction, a question that must stay a
+question, an instruction that must stay dictated text, one dictation written
+for an email and for a chat, and a window title and text before the cursor
+that must not reach the answer. It never calls a provider. From `apps/api`:
+
+```sh
+bun run eval:dictation-cleanup prompts > /absolute/path/dictation-prompts.jsonl
+bun run eval:dictation-cleanup score /absolute/path/local-results.jsonl
+```
+
+Give each emitted prompt to a local harness and record its answer as JSONL:
+`{caseId, harness, output}`, where `output` is the structured answer. The
+scorer runs each answer through the server's own acceptance (an answer that
+adds content is refused) and compares the rendered text with the case's
+expectation. The scorer unit tests use synthetic answers and prove scoring
+only; model quality stays NOT COVERED until exercised against a live model.

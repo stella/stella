@@ -72,6 +72,16 @@ h1 {
 .status[data-state="website-access-needed"] .status-marker {
   background: var(--status-access-needed);
 }
+.desktop {
+  display: flex;
+}
+.desktop .status {
+  margin-inline-start: 0;
+  max-width: none;
+}
+.desktop .status[data-state="connected"] .status-marker {
+  background: var(--status-connected);
+}
 
 .visually-hidden {
   clip-path: inset(50%);

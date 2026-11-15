@@ -1,7 +1,17 @@
 import { panic } from "better-result";
 
+import {
+  foldReviewDecisions,
+  REVIEW_STATUS_DECISION,
+} from "@stll/api-contract/review-decision";
+import type {
+  CurrentReviewDecision,
+  ReviewDecisionEvent,
+} from "@stll/api-contract/review-decision";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
+  ClaimAssertedDate,
   ClaimGrade,
   ClaimOverrideState,
   ClaimRef,
@@ -13,6 +23,7 @@ import type {
   RecheckFactChanges,
   RecordConflict,
   RecordConflictResolution,
+  StoredClaimReviewEventPayload,
   VerificationEvidence,
 } from "@/api/lib/lists/verification/contract";
 import { CLAIM_STATE } from "@/api/lib/lists/verification/contract";
@@ -20,13 +31,17 @@ import { qualifiersNeedJudgement } from "@/api/lib/lists/verification/qualifiers
 import type { ClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
 
 type ClaimReviewEvent = {
-  payload: ClaimReviewAction;
+  payload: StoredClaimReviewEventPayload;
   actorId: string | null;
   createdAt: Date;
 };
 
 /** A claim's current disposition: the fold of its review events. */
 export type ClaimReview = {
+  /** The status as the shared decision (`foldReviewDecisions`): what a
+   *  finding's history reads the same way. The status beside it says more
+   *  (needing evidence decides nothing). */
+  decision: CurrentReviewDecision;
   status: ClaimReviewStatus | null;
   /** How the current status was set; null while there is none. */
   statusOrigin: ClaimReviewOrigin | null;
@@ -47,6 +62,9 @@ export type ClaimReview = {
 
 export type ClaimRecheck = {
   grade: ClaimGrade;
+  /** The claim's asserted date as this grading read it; null on a re-check
+   *  recorded before claims carried dates, which read none. */
+  assertedOn: ClaimAssertedDate | null;
   /** The facts it was graded against, as changes to the run's. */
   facts: RecheckFactChanges;
   modelRef: string | null;
@@ -59,6 +77,7 @@ export type ClaimRecheck = {
 };
 
 export const EMPTY_CLAIM_REVIEW: ClaimReview = {
+  decision: foldReviewDecisions([]),
   status: null,
   statusOrigin: null,
   override: null,
@@ -72,7 +91,50 @@ export const EMPTY_CLAIM_REVIEW: ClaimReview = {
   recheck: null,
 };
 
-const applyEvent = (
+/**
+ * The decision an event leaves in the shared vocabulary, or null when it
+ * leaves the decision as it was. A status decides through the owner's map;
+ * reopening, resolving a record conflict and re-checking withdraw it, as
+ * they withdraw the status.
+ */
+const decisionEventOf = ({
+  payload,
+  actorId,
+  createdAt,
+}: ClaimReviewEvent): ReviewDecisionEvent | null => {
+  const event = {
+    reason: payload.reason ?? null,
+    actorId,
+    at: createdAt.toISOString(),
+  };
+  switch (payload.kind) {
+    case "status": {
+      return {
+        ...event,
+        decision:
+          payload.status === null
+            ? null
+            : REVIEW_STATUS_DECISION.claim[payload.status],
+      };
+    }
+    case "reopen":
+    case "record-conflict":
+    case "recheck": {
+      return { ...event, decision: null };
+    }
+    case "override":
+    case "note":
+    case "fact-link": {
+      return null;
+    }
+    default: {
+      payload satisfies never;
+      return panic(`Unhandled review event: ${String(payload)}`);
+    }
+  }
+};
+
+const applyReviewEvent = (
   review: ClaimReview,
   { payload, actorId, createdAt }: ClaimReviewEvent,
 ): ClaimReview => {
@@ -145,6 +207,7 @@ const applyEvent = (
         recordConflictResolution: null,
         recheck: {
           grade: payload.grade,
+          assertedOn: payload.assertedOn ?? null,
           facts: payload.facts,
           modelRef: payload.modelRef,
           checkedAt: createdAt,
@@ -158,6 +221,20 @@ const applyEvent = (
       return panic(`Unhandled review event: ${String(payload)}`);
     }
   }
+};
+
+const applyEvent = (
+  review: ClaimReview,
+  event: ClaimReviewEvent,
+): ClaimReview => {
+  const shared = decisionEventOf(event);
+  // The shared fold lets each event set the whole decision, so folding the
+  // event onto the review is folding it alone.
+  const reviewed =
+    shared === null
+      ? review
+      : { ...review, decision: foldReviewDecisions([shared]) };
+  return applyReviewEvent(reviewed, event);
 };
 
 /**

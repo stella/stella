@@ -55,7 +55,9 @@ const prefillParamsSchema = v.object({
 });
 
 const prefillBodySchema = v.object({
-  file: v.optional(fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document })),
+  file: v.optional(
+    fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
+  ),
   text: v.optional(v.pipe(v.string(), v.maxLength(MAX_PASTED_TEXT_CHARS))),
   entityIds: v.optional(v.pipe(v.string(), v.maxLength(2000))),
   timezone: v.optional(v.pipe(v.string(), v.maxLength(64))),

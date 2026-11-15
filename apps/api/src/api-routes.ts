@@ -22,7 +22,10 @@ import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
 import { chatMcpAppsRoute } from "@/api/handlers/chat/mcp-apps/routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
-import { chatRunOutputsRoute } from "@/api/handlers/chat/run-outputs/routes";
+import {
+  chatRunOutputsRoute,
+  desktopRunnerAwaitedStepsRoute,
+} from "@/api/handlers/chat/run-outputs/routes";
 import {
   clauseCategoriesRoute,
   clausesRoute,
@@ -36,7 +39,10 @@ import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { desktopRunnerRoute } from "@/api/handlers/desktop-runner/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
-import { dictationRoute } from "@/api/handlers/dictation/routes";
+import {
+  desktopDictationRoute,
+  dictationRoute,
+} from "@/api/handlers/dictation/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
@@ -280,6 +286,7 @@ export const apiRoutes = mount([
       chatRoute,
       chatMcpAppsRoute,
       chatRunOutputsRoute,
+      desktopRunnerAwaitedStepsRoute,
       dictationRoute,
       emailAIRoute,
       userFilesRoute,
@@ -314,5 +321,6 @@ export const apiRoutes = mount([
   desktopPresenceRoute,
   desktopFeatureAccessRoute,
   desktopTimeEntriesRoute,
+  desktopDictationRoute,
   desktopRunnerRoute,
 ]);

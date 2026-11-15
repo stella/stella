@@ -65,6 +65,7 @@ import {
   QualifierNotes,
   VerdictChip,
 } from "@/features/avt/claim-qualifiers";
+import { ClaimStaleness } from "@/features/avt/claim-staleness";
 import { readConflictValue } from "@/features/avt/conflict-value.logic";
 import { FactDate, useFactDateText } from "@/features/avt/fact-date";
 import { EvidenceFactSource } from "@/features/avt/fact-source";
@@ -73,11 +74,9 @@ import { FactTierLabel } from "@/features/avt/fact-tier";
 import { avtKeys } from "@/features/avt/queries";
 import { ReasonField } from "@/features/avt/reason-field";
 import { ClaimHistory } from "@/features/avt/review-history";
-import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   ConfBadge,
   InterpNote,
-  MatchStepper,
   RECORD_CONFLICT_BG_VAR,
   RECORD_CONFLICT_FG_VAR,
   RECORD_CONFLICT_VAR,
@@ -102,6 +101,7 @@ import {
   REVIEW_STATUS_META,
   STATE_META,
 } from "@/features/avt/types";
+import type { ClaimRecheckRun } from "@/features/avt/use-bulk-recheck";
 import { useClaimSaveState } from "@/features/avt/use-claim-review-actions";
 import type { DispositionTone, ShownFact } from "@/features/avt/verdict";
 import {
@@ -128,7 +128,9 @@ type ClaimDetailPanelProps = {
   claim: VerificationClaim;
   factsById: ReadonlyMap<FactId, ShownFact>;
   contested: ReadonlySet<FactId>;
-  stepper: MatchStepperState;
+  /** The claim's place in the run's re-check of claims, which its own
+   *  re-check goes through. */
+  recheckRun: ClaimRecheckRun;
   onReviewEvent: (event: ClaimReviewEvent) => void;
 };
 
@@ -138,7 +140,7 @@ export const ClaimDetailPanel = ({
   claim,
   factsById,
   contested,
-  stepper,
+  recheckRun,
   onReviewEvent,
 }: ClaimDetailPanelProps) => {
   const t = useTranslations();
@@ -189,18 +191,17 @@ export const ClaimDetailPanel = ({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="space-y-3 border-b p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <VerdictChip claim={claim} state={state} />
-            <QualifierChips claim={claim} />
-            <TypeChip type={claim.type} />
-            <ReviewMarks
-              override={override}
-              reopened={review?.reopened === true}
-            />
-            <SaveIndicator state={saveState} />
-          </div>
-          <MatchStepper stepper={stepper} />
+        {/* The document pane steps through the filter's matches; the panel
+            shows the claim they land on. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <VerdictChip claim={claim} state={state} />
+          <QualifierChips claim={claim} />
+          <TypeChip type={claim.type} />
+          <ReviewMarks
+            override={override}
+            reopened={review?.reopened === true}
+          />
+          <SaveIndicator state={saveState} />
         </div>
         <blockquote
           className="border-foreground-disabled border-s-2 py-0.5 ps-3 font-serif text-base leading-relaxed"
@@ -230,6 +231,12 @@ export const ClaimDetailPanel = ({
         {claim.recheck !== null && (
           <RecheckSummary recheck={claim.recheck} state={claim.verdict.state} />
         )}
+        <ClaimStaleness
+          {...factScope}
+          claim={claim}
+          disabled={!canReview}
+          recheckRun={recheckRun}
+        />
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
@@ -265,6 +272,7 @@ export const ClaimDetailPanel = ({
             cited={cited}
             claim={claim}
             disabled={!canReview}
+            recheckLocked={recheckRun.state !== "idle"}
           />
 
           <section className="space-y-2.5 border-t pt-3.5">

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
+import type { ChatLocalRunApprovalCeiling } from "@stll/api-contract/chat-run-target";
 import type { TimeZoneId } from "@stll/time";
 
 import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
@@ -73,7 +73,7 @@ type OrganizationSettingsRow = {
   aiInstructions: string;
   managedAIResidency: ManagedAIResidency;
   memoryExtractionEnabled: boolean;
-  localRunMaxApprovalMode: DesktopRunnerApprovalMode;
+  localRunMaxApprovalMode: ChatLocalRunApprovalCeiling;
   timeMinimumUnitMinutes: number;
   timeEditWindowDays: number;
   timeLockedThroughMonth: string | null;

@@ -505,10 +505,9 @@ type CapabilityEntry = {
    * Prose from the handler config's `description`, written for the agent
    * deciding whether to call this capability. Carried verbatim into the
    * committed catalog; the CLI renders it as the generated command's
-   * `--help` brief and MCP renders it in list/describe. Absent only for a
-   * capability that has not been given one yet; each of those is listed by id
-   * in apps/api/capability-description-ledger.json and guarded by
-   * apps/api/scripts/capability-description-guard.ts.
+   * `--help` brief and MCP renders it in list/describe.
+   * apps/api/scripts/capability-description-guard.ts fails a capability
+   * without one.
    */
   description?: string;
   handlerKind: HandlerKind;

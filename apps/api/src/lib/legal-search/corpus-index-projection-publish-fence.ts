@@ -1,8 +1,23 @@
+import { panic } from "better-result";
 import { type SQL, sql } from "drizzle-orm";
 
 import { corpusIndexProjectionIntents } from "@/api/db/schema";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
-import { corpusIndexAppendPublishDelayMs } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  corpusIndexAppendPublishDelayMs,
+  corpusProjectionAppendIngestBudgetMs,
+} from "@/api/lib/legal-search/corpus-index-projection-engine";
+
+type AcceptedAppendBarrierOrigin = { type: "accepted"; acceptedAt: SQL };
+type UnknownAppendBarrierOrigin = { type: "unknown"; appendStartedAt: Date };
+
+/**
+ * Where a revision's barrier counts from. An acceptance in hand owes only the
+ * publish delay. An append whose outcome is unknown counts from its start and
+ * may still be inside its request, so it also owes the request's budget.
+ */
+type CorpusProjectionAppendBarrierOrigin =
+  AcceptedAppendBarrierOrigin | UnknownAppendBarrierOrigin;
 
 /**
  * One owner of the rule that separates "the engine accepted this append"
@@ -18,18 +33,70 @@ import { corpusIndexAppendPublishDelayMs } from "@/api/lib/legal-search/corpus-i
  * splits cross its delete opstamp and a revision query observes zero
  * remaining documents, and a census that inspects a revision too early
  * reports drift, which repairs the entity rather than losing it.
+ *
+ * An acceptance instant lives in PostgreSQL (a column or the transaction
+ * clock), so its barrier is SQL; an unknown append's start has been read
+ * back into the caller, so its barrier is a `Date`.
  */
-const publishBarrierFrom = (
-  acceptedAt: SQL,
+export function corpusProjectionAppendPublishBarrier(
+  origin: AcceptedAppendBarrierOrigin,
   manifest: CorpusIndexManifest,
-): SQL =>
-  sql`(${acceptedAt}::timestamptz + ${corpusIndexAppendPublishDelayMs(manifest)}::double precision * interval '1 millisecond')`;
+): SQL;
+export function corpusProjectionAppendPublishBarrier(
+  origin: UnknownAppendBarrierOrigin,
+  manifest: CorpusIndexManifest,
+): Date;
+export function corpusProjectionAppendPublishBarrier(
+  origin: CorpusProjectionAppendBarrierOrigin,
+  manifest: CorpusIndexManifest,
+): SQL | Date {
+  const publishDelayMs = corpusIndexAppendPublishDelayMs(manifest);
+  switch (origin.type) {
+    case "accepted":
+      return sql`(${origin.acceptedAt}::timestamptz + ${publishDelayMs}::double precision * interval '1 millisecond')`;
+    case "unknown": {
+      const startedAtMs = origin.appendStartedAt.getTime();
+      if (!Number.isFinite(startedAtMs)) {
+        return panic("Corpus projection append barrier contract is invalid");
+      }
+      return new Date(
+        startedAtMs +
+          corpusProjectionAppendIngestBudgetMs(manifest) +
+          publishDelayMs,
+      );
+    }
+    default:
+      origin satisfies never;
+      return panic(`Unhandled append barrier origin: ${String(origin)}`);
+  }
+}
 
 const publishBarrier = (manifest: CorpusIndexManifest): SQL =>
-  publishBarrierFrom(
-    sql`${corpusIndexProjectionIntents.appendCommittedAt}`,
+  corpusProjectionAppendPublishBarrier(
+    {
+      type: "accepted",
+      acceptedAt: sql`${corpusIndexProjectionIntents.appendCommittedAt}`,
+    },
     manifest,
   );
+
+/**
+ * When a committed revision that is still not exactly present counts as
+ * unpublished: its stored barrier plus one more publish delay. A census that
+ * finds it absent, partial or in excess before then retries on a later pass,
+ * so an engine that publishes up to one window late is proven, not cleaned
+ * up. Derived here and never stored.
+ */
+export const corpusProjectionAcceptedAppendProofDeadline = (
+  appendPublishBarrierAt: Date,
+  manifest: CorpusIndexManifest,
+): Date => {
+  const barrierMs = appendPublishBarrierAt.getTime();
+  if (!Number.isFinite(barrierMs)) {
+    return panic("Corpus projection proof deadline contract is invalid");
+  }
+  return new Date(barrierMs + corpusIndexAppendPublishDelayMs(manifest));
+};
 
 /**
  * Whether the engine has certainly published an accepted append. Only a
@@ -67,15 +134,18 @@ export const corpusProjectionAcceptedAppendCleanupFence = (
   cleanupFence(publishBarrier(manifest), transitionAt);
 
 /**
- * The same fence for the one path that retires an acceptance it is still
- * holding, before `append_committed_at` is on the row. The transition is
- * later than the acceptance it stands in for, so the barrier stays sound.
+ * The same fence for the statement that records an acceptance, which cannot
+ * read the `append_committed_at` it is writing. The transition is later than
+ * the acceptance it stands in for, so the barrier stays sound.
  */
 export const corpusProjectionUnrecordedAppendCleanupFence = (
   manifest: CorpusIndexManifest,
   transitionAt: Date | SQL,
 ): CorpusProjectionCleanupFence =>
   cleanupFence(
-    publishBarrierFrom(sql`${transitionAt}`, manifest),
+    corpusProjectionAppendPublishBarrier(
+      { type: "accepted", acceptedAt: sql`${transitionAt}` },
+      manifest,
+    ),
     transitionAt,
   );

@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 2,
-  "reason": "Carrying a document's earlier review to its new run writes the carry outcomes and the copied review events inside the transaction that completes the run, which records the completion audit; both inserts carry the same skip as the run's own block and claim inserts."
-}

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 
+import { DESKTOP_LINK_STATE } from "./desktop-link";
 import {
   connectedOrigin,
   containedTabRows,
+  desktopLinkView,
   handedTabView,
   type PopupActiveTab,
   type PopupController,
@@ -167,6 +169,11 @@ for (const granted of grants) {
 }
 const handed = handedTabView("https://example.com");
 returnedMessageKeys.add(handed.statusMessageKey);
+for (const allowed of grants) {
+  for (const state of Object.values(DESKTOP_LINK_STATE)) {
+    returnedMessageKeys.add(desktopLinkView({ allowed, state }).messageKey);
+  }
+}
 // Shown by the popup outside the view.
 for (const key of [
   "checkingAccess",
@@ -175,6 +182,37 @@ for (const key of [
 ] as const satisfies readonly PopupMessageKey[]) {
   returnedMessageKeys.add(key);
 }
+
+describe("the stella desktop row", () => {
+  test("offers the permission until the member allows it", () => {
+    for (const state of Object.values(DESKTOP_LINK_STATE)) {
+      expect(desktopLinkView({ allowed: false, state })).toEqual({
+        messageKey: "allowDesktop",
+        type: "allow",
+      });
+    }
+  });
+
+  test("says connected only once stella desktop answered", () => {
+    expect(
+      desktopLinkView({ allowed: true, state: DESKTOP_LINK_STATE.connected }),
+    ).toEqual({ messageKey: "desktopConnected", type: "connected" });
+    for (const state of [
+      DESKTOP_LINK_STATE.offline,
+      DESKTOP_LINK_STATE.waiting,
+    ]) {
+      expect(desktopLinkView({ allowed: true, state }).type).toBe(
+        "not-running",
+      );
+    }
+    expect(
+      desktopLinkView({
+        allowed: true,
+        state: DESKTOP_LINK_STATE.incompatible,
+      }),
+    ).toEqual({ messageKey: "desktopUpdateNeeded", type: "update-needed" });
+  });
+});
 
 describe("naming the tabs stella keeps contained", () => {
   test("a tab is named by its title, with its host beside it", () => {

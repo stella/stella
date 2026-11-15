@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Le avisa cuando un documento está listo o una sincronización requiere atención.",
     "permissionAccessibility": "Accesibilidad",
     "permissionAccessibilityDescription": "Permite que la cronología de actividad registre títulos de ventanas.",
+    "permissionMicrophone": "Micrófono",
+    "permissionMicrophoneDescription": "Permite que el dictado le oiga mientras mantiene su atajo.",
     "permissionAllowed": "Permitido",
     "permissionAllow": "Permitir",
     "permissionOpenSettings": "Abrir ajustes",
@@ -294,6 +296,7 @@
     "errorReadHistory": "No se pudo cargar el historial del portapapeles.",
     "errorUpdateHistory": "No se pudo actualizar el historial del portapapeles.",
     "formattedText": "Texto con formato",
+    "dictation": "Dictado",
     "image": "Imagen",
     "imageCleanupPending": "No se pudieron eliminar algunos datos de imágenes borradas. La limpieza se reintentará automáticamente.",
     "imageDimensions": "{width} × {height} px",
@@ -581,7 +584,41 @@
   },
   "dictation": {
     "title": "Dictado",
-    "description": "Mantén pulsado {shortcut} y habla. El texto aparece en la aplicación que estás usando. La voz se transcribe en este ordenador y no se guarda.",
+    "description": "Mantén pulsado {shortcut} y habla. El texto aparece en la aplicación que estás usando. La voz se transcribe en este ordenador y no se guarda. Con la corrección con IA activada, el texto transcrito, no el audio, se envía a través de stella al proveedor de IA de tu organización para corregir errores y formato; stella no lo guarda.",
+    "descriptionCloud": "Mantenga pulsado {shortcut} y hable. El texto aparece en la aplicación que está usando. stella AI transcribe la voz y stella no la guarda.",
+    "cleanup": {
+      "title": "Corregir con IA",
+      "description": "La voz se sigue transcribiendo en este ordenador y el audio nunca sale de él. Con la corrección activada, el texto transcrito se envía a través de stella al proveedor de IA de tu organización para corregir errores de reconocimiento y aplicar la puntuación y el formato dictados, como «nueva línea» o «negrita». stella no lo guarda. La corrección también recibe el tipo de aplicación en la que dictas, como el correo o un chat, para que el texto encaje en ella.",
+      "descriptionCloud": "Con la corrección activada, stella AI también corrige los errores de reconocimiento del texto transcrito y aplica la puntuación y el formato dictados, como «nueva línea» o «negrita». La corrección también recibe el tipo de aplicación en la que dictas, como el correo o un chat, para que el texto encaje en ella."
+    },
+    "context": {
+      "windowTitle": {
+        "title": "Compartir el título de la ventana con la corrección con IA",
+        "description": "La corrección también recibe el título de la ventana en la que dictas, para distinguir, por ejemplo, un contrato de una nota interna. Los títulos de las ventanas pueden contener nombres de clientes o de asuntos. El título se envía a través de stella al proveedor de IA de tu organización, y stella no lo guarda."
+      },
+      "textBeforeCursor": {
+        "title": "Compartir el texto antes del cursor con la corrección con IA",
+        "description": "La corrección también recibe hasta {limit, number} caracteres antes del cursor, para que el dictado continúe el texto que escribes. Así se envía parte del documento en el que estás a través de stella al proveedor de IA de tu organización, y stella no la guarda."
+      }
+    },
+    "keptInHistory": "Cada dictado también se guarda en el historial del portapapeles de este ordenador.",
+    "destination": {
+      "title": "Transcribir con",
+      "local": "Este ordenador",
+      "cloud": "stella AI",
+      "cloudDescription": "El audio sale de este ordenador: se envía a stella y, a través del proveedor de IA de stella, al proveedor del modelo seleccionado para transcribirlo. stella no lo guarda.",
+      "unavailableRegion": "stella AI aún no ofrece transcripción en la región de su organización.",
+      "unavailableProvider": "El proveedor de IA de su organización no ofrece transcripción.",
+      "unavailable": "La transcripción con stella AI no está disponible en este momento.",
+      "model": "Modelo de transcripción"
+    },
+    "language": {
+      "title": "Idioma del dictado",
+      "description": "La voz se reconoce en este idioma y la corrección mantiene el texto en él. Automático usa los idiomas de la interfaz y los teclados de este ordenador.",
+      "automatic": "Automático",
+      "automaticWith": "Automático ({languages})",
+      "noResults": "No se encontraron idiomas"
+    },
     "modelNeeded": "El modelo de voz se ejecuta en este ordenador.",
     "download": "Descargar ({size} MB)",
     "downloading": "Descargando el modelo de voz: {percent} %",
@@ -592,8 +629,13 @@
       "accessibility": "Permite el acceso a Accesibilidad para que stella pueda escribir en otras aplicaciones.",
       "microphone": "stella no oye tu micrófono. Comprueba el acceso al micrófono en Ajustes del Sistema.",
       "modelMissing": "Descarga primero el modelo de voz.",
-      "transcription": "La transcripción ha fallado. Inténtalo de nuevo."
-    }
+      "transcription": "La transcripción ha fallado. Inténtalo de nuevo.",
+      "focusChanged": "Cambió a otra aplicación antes de que el texto estuviera listo, así que no se escribió nada. Inténtelo de nuevo.",
+      "focusUnconfirmed": "stella no pudo confirmar qué aplicación tiene el foco, así que no se escribió nada. Inténtalo de nuevo.",
+      "shortcutHeld": "Suelta las teclas del atajo para escribir. No se escribió nada; inténtalo de nuevo.",
+      "cloudTranscription": "stella AI no pudo transcribir este dictado y el modelo de voz no está en este ordenador. Vuelve a intentarlo o, en «Transcribir con», elige «Este ordenador» y descarga el modelo."
+    },
+    "failureKeptInHistory": "El texto está en el historial del portapapeles."
   },
   "shortcut": {
     "title": "Atajo del portapapeles",
@@ -710,6 +752,18 @@
     "introduceActivityTitle": "Novedad: cronología de actividad",
     "introduceActivityBody": "La actividad ya está disponible para su cuenta. No se registra nada hasta que la inicie en la ventana de actividad.",
     "openActivity": "Abrir actividad",
+    "dictationModel": "El modelo de voz ({size} MB) se descarga una vez y funciona en este ordenador.",
+    "dictationTurnOn": "Activar y descargar",
+    "dictationDownloadContinues": "Puede continuar. La descarga sigue en segundo plano.",
+    "dictationReady": "El dictado está activado y listo.",
+    "dictationTryLabel": "Dicte aquí",
+    "dictationTryPlaceholder": "Haga clic aquí, mantenga {shortcut} y diga una frase.",
+    "dictationListening": "Escuchando…",
+    "dictationTranscribing": "Escribiendo lo que ha dicho…",
+    "dictationMicrophone": "Permite que stella le oiga mientras mantiene el atajo.",
+    "dictationAccessibility": "Permite que stella escriba lo que ha dicho en la app que está usando.",
+    "dictationFailed": "stella desktop no pudo activar el dictado. Inténtelo de nuevo.",
+    "introduceDictationTitle": "Novedad: dictado",
     "guideWaiting": "Active stella desktop en la lista de arriba para permitir Accesibilidad.",
     "guideAllowed": "stella desktop tiene permiso",
     "never": {
@@ -816,6 +870,27 @@
       "runs_can_write": "Las ejecuciones locales pueden escribir en esta carpeta, así que no puede contener una habilidad.",
       "network_folder": "Esta carpeta está en una unidad de red. Las habilidades deben estar en el disco de este ordenador.",
       "path_changed": "Ha cambiado una carpeta superior. Quite esta carpeta y añádala de nuevo."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Carpetas vinculadas",
+    "description": "Carpetas de este ordenador en las que puede trabajar el agente de un chat. El chat solo ve el nombre de la carpeta; su ruta se queda en este ordenador.",
+    "add": "Vincular carpeta",
+    "remove": "Desvincular",
+    "removeFolder": "Desvincular {name}",
+    "state": {
+      "offline": "La unidad en la que está esta carpeta no está conectada.",
+      "moved": "Esta carpeta se ha movido, renombrado o eliminado. Desvincúlela y vuelva a vincularla.",
+      "protected": "Esta carpeta contiene datos propios de stella o una carpeta de habilidades, así que el agente no puede trabajar en ella.",
+      "unreadable": "No se ha podido leer esta carpeta."
+    },
+    "notice": {
+      "action_failed": "No ha funcionado. Inténtelo de nuevo.",
+      "too_many": "Este ordenador ya tiene todas las carpetas vinculadas que puede guardar. Desvincule una primero.",
+      "not_a_folder": "Elija una carpeta.",
+      "network_folder": "Esta carpeta está en una unidad de red. Vincule una carpeta del disco de este ordenador.",
+      "protected": "Esta carpeta contiene datos propios de stella o una carpeta de habilidades, así que el agente no puede trabajar en ella.",
+      "unreadable": "No se ha podido leer esta carpeta."
     }
   }
 }

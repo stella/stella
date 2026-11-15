@@ -18,6 +18,8 @@
 # misc
 .DS_Store
 *.pem
+# Public certificates only: the shipped timestamp trust anchors.
+!/src/lib/files/pdf-signing/trust/*.pem
 
 # debug
 npm-debug.log*

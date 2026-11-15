@@ -222,6 +222,8 @@
     "ci.yml/ci-result": "pr-fast",
     "security-txt-guard.yml/check": "pr-fast",
     "api-served-mcp.yml/journeys": "pr-fast",
+    "local-run-e2e.yml/stand-in": "pr-fast",
+    "local-run-e2e.yml/local-runs": "pr-fast",
     "dependency-audit.yml/audit": "main",
     "dependency-audit.yml/remediate": "main",
     "dependency-audit.yml/cargo-advisories": "main",
@@ -241,7 +243,6 @@
     "manual-checks.yml/install-cache-linux": "main",
     "type-cost-measurement.yml/prepare": "main",
     "type-cost-measurement.yml/measure": "main",
-    "queue-admission.yml/admission": "dispatch-only",
     "playbook-clause-eval.yml/playbook-clause-eval": "dispatch-only",
     "playbook-journey.yml/playbook-journey": "main",
     "ci-runner-loss-retry.yml/retry": "pr-fast",
@@ -267,6 +268,10 @@
       "cancelInProgress": false
     },
     "main-heavy.yml": {
+      "role": "analysis",
+      "cancelInProgress": true
+    },
+    "local-run-e2e.yml": {
       "role": "analysis",
       "cancelInProgress": true
     },

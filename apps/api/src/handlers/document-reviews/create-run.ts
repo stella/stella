@@ -49,6 +49,11 @@ import { enqueueDocumentReviewRun } from "@/api/lib/document-review/run-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
+import {
+  ModelRunCapError,
+  modelRunCapRefusal,
+  startModelRun,
+} from "@/api/lib/usage/model-run-caps/caps";
 import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { findDuplicatePositionSourceId } from "@/api/lib/workflow/playbook-positions-validation";
@@ -362,8 +367,14 @@ const createDocumentReviewRun = createSafeHandler(
               ? null
               : checked.playbook.definitionSnapshot.name;
           const runId = createSafeId<"documentReviewRun">();
-          const inserted = yield* Result.await(
-            checked.safeDb(async (tx) => {
+          // A review a person starts counts against the organization's
+          // document review caps: the insert trigger charges the counter and
+          // refuses a run past either cap, rolling the run back with it.
+          const started = await startModelRun({
+            safeDb: checked.safeDb,
+            kind: "document-review",
+            operation: "document-reviews.runs.create",
+            start: async (tx) => {
               // One unfinished review per document: a second one would spend twice
               // and race the first to the same findings. The partial unique index
               // backs this up if two requests pass the check together.
@@ -402,6 +413,7 @@ const createDocumentReviewRun = createSafeHandler(
                 // the proposal left uncompared is part of what this run covered.
                 skipped: checked.skipped,
                 status: "queued",
+                orgCapped: true,
                 total: checked.plan.expectedFindingCount,
                 requestedBy: checked.userId,
               });
@@ -425,7 +437,10 @@ const createDocumentReviewRun = createSafeHandler(
                 },
               });
               return true;
-            }),
+            },
+          });
+          const inserted = yield* started.mapError((error) =>
+            ModelRunCapError.is(error) ? modelRunCapRefusal(error) : error,
           );
 
           if (!inserted) {

@@ -430,6 +430,7 @@ test("a thread that runs on the member's computer gets no follow-ups from a clou
       harness: "codex",
       model: "gpt-5-codex",
       approvals: "ask",
+      reasoningEffort: null,
     },
     { kind: "local", harness: "opencode", model: "gpt-5-codex" },
   ]) {

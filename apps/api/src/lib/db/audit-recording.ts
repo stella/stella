@@ -287,6 +287,7 @@ type AuditActivityCategoryResolver =
   AuditActivityCategory | ((event: AuditEvent) => AuditActivityCategory);
 
 const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
+  legal_hold: "matter",
   service_oauth_client: "team",
   legal_resolve: "court",
   entity: entityActivityCategory,
@@ -324,6 +325,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   chat_tool_execution: "other",
   chat_tool_grant: "other",
   chat_browser_site_grant: "other",
+  chat_local_folder_approval: "other",
   clause: "other",
   clause_category: "other",
   clause_template_link: "other",

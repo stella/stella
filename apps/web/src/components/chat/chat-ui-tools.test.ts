@@ -17,6 +17,7 @@ import {
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
   getChatToolTitleKey,
+  getChatWorkAwaitedAtOpen,
   getCurrentApprovalPendingMessageId,
   getToolApprovalGrant,
   getUserMessageHistory,
@@ -31,7 +32,6 @@ import {
   isRunningToolPart,
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
-  isUserInputChatToolName,
   projectCanonicalChatUIMessages,
   resolveChatAssistantTurnOutcome,
   sanitizeRunningToolCalls,
@@ -47,12 +47,6 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-
-test("inherited object keys are not user-input tool names", () => {
-  for (const name of ["constructor", "toString", "__proto__"]) {
-    expect(isUserInputChatToolName(name)).toBe(false);
-  }
-});
 
 describe("playbook save consumption", () => {
   test("a reverse completion refreshes caches without following the older call", () => {
@@ -922,6 +916,11 @@ describe("isUnresolvedFolioAgentDocToolCallPart", () => {
   });
 });
 
+const NOTHING_AWAITED_AT_OPEN = {
+  approvalIds: new Set<string>(),
+  clientToolCallIds: new Set<string>(),
+};
+
 describe("selectUnresolvedFolioAgentDocToolCallParts", () => {
   // Core decision loop behind the file overlay's folio-agents doc-tool
   // auto-run watcher (`file-chat-overlay.tsx`): given the latest
@@ -980,6 +979,7 @@ describe("selectUnresolvedFolioAgentDocToolCallParts", () => {
     ).toBe(true);
 
     const result = selectIdleFolioAgentDocToolCallParts({
+      awaitedAtOpen: NOTHING_AWAITED_AT_OPEN,
       clientStatus: "ready",
       executedIds: new Set(),
       messageParts: [findTextPart],
@@ -988,8 +988,53 @@ describe("selectUnresolvedFolioAgentDocToolCallParts", () => {
     expect(result.map((part) => part.id)).toEqual(["tool-call-find"]);
   });
 
+  test("a thread opened with a document read waiting runs nothing until the user acts", () => {
+    // The page opens the thread as a turn left it: find_text waits on the
+    // browser's result.
+    const opened = [
+      {
+        id: "assistant-1",
+        parts: [findTextPart],
+        role: "assistant",
+      },
+    ] satisfies PersistedChatMessage[];
+    const awaitedAtOpen = getChatWorkAwaitedAtOpen(opened);
+    // The fixture must reach the fault: the read is one the overlay would run.
+    expect(
+      selectIdleFolioAgentDocToolCallParts({
+        awaitedAtOpen: NOTHING_AWAITED_AT_OPEN,
+        clientStatus: "ready",
+        executedIds: new Set(),
+        messageParts: [findTextPart],
+      }).map((part) => part.id),
+    ).toEqual(["tool-call-find"]);
+
+    expect(awaitedAtOpen.clientToolCallIds).toEqual(
+      new Set(["tool-call-find"]),
+    );
+    expect(
+      selectIdleFolioAgentDocToolCallParts({
+        awaitedAtOpen,
+        clientStatus: "ready",
+        executedIds: new Set(),
+        messageParts: [findTextPart],
+      }),
+    ).toEqual([]);
+
+    // A read the server asks for while the page is open still runs.
+    expect(
+      selectIdleFolioAgentDocToolCallParts({
+        awaitedAtOpen,
+        clientStatus: "ready",
+        executedIds: new Set(),
+        messageParts: [findTextPart, readDocumentPart],
+      }).map((part) => part.id),
+    ).toEqual(["tool-call-read"]);
+  });
+
   test("waits while the response stream can still claim the tool", () => {
     const result = selectIdleFolioAgentDocToolCallParts({
+      awaitedAtOpen: NOTHING_AWAITED_AT_OPEN,
       clientStatus: "streaming",
       executedIds: new Set(),
       messageParts: [findTextPart],

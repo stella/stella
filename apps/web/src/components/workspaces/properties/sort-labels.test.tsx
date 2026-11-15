@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "bun:test";
 import { createTranslator } from "use-intl/core";
 
+import { PROPERTY_SORT_KINDS } from "@stll/api-contract";
 import {
   COLUMN_SORT_KINDS,
   SORT_DIRECTIONS,
@@ -13,7 +14,6 @@ import {
   SORT_DIRECTION_LABEL_KEYS,
   sortDirectionLabels,
 } from "@/components/workspaces/properties/sort-property.logic";
-import { PROPERTY_SORT_KINDS } from "@/components/workspaces/property-utils";
 import en from "@/i18n/langs/en.json";
 
 const t = createTranslator({ locale: "en", messages: en });

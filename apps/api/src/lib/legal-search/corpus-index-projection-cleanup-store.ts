@@ -39,9 +39,9 @@ import {
 import { lockRegisteredCorpusProjectionManifestForMutation } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-  corpusIndexUnknownAppendBarrierAt,
   countCorpusProjectionRevisions,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   lockCorpusIndexProjectionIntentMutationsTx,
   lockCorpusIndexProjectionMutationsTx,
@@ -1572,8 +1572,8 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
       }
       return {
         id: row.id,
-        barrier: corpusIndexUnknownAppendBarrierAt(
-          row.appendStartedAt,
+        barrier: corpusProjectionAppendPublishBarrier(
+          { type: "unknown", appendStartedAt: row.appendStartedAt },
           manifest,
         ),
       };

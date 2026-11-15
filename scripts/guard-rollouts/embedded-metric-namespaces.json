@@ -1,7 +1,6 @@
 {
   "id": "embedded-metric-namespaces",
-  "type": "changed-lines",
-  "expiresAt": "2026-11-06T00:00:00.000Z",
+  "type": "full",
   "check": [
     "bun",
     "--cwd=packages/scripts",

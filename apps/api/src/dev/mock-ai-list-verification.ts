@@ -222,7 +222,7 @@ export const mockClaimGrades = (request: string) => {
   const factsWith = (word: string) =>
     facts.filter((fact) => fact.words.has(word)).length;
   const pointed = pointedFacts(request);
-  return promptItems(request, "C").map((claim) => {
+  const grades = promptItems(request, "C").map((claim) => {
     // A word capitalised after the sentence start is taken for a name.
     const weights = new Map(
       tokens(claim.text).map((token, index) => [
@@ -315,4 +315,7 @@ export const mockClaimGrades = (request: string) => {
       qualifiers: [],
     };
   });
+  // The claim's own words date it (`claim-date.ts`); the mock never
+  // supplies a date they do not give.
+  return grades.map((grade) => ({ ...grade, statedDate: null }));
 };

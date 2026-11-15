@@ -3,7 +3,9 @@ import { lazy, Suspense } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
+import * as v from "valibot";
 
+import { AVT_MODES } from "@/features/avt/avt-mode";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { loadCallerFeature } from "@/lib/organization/feature-access/access";
@@ -65,9 +67,11 @@ const isFilesystemView = (
 const isCalendarView = (view: WorkspaceView): view is CalendarWorkspaceView =>
   view.layout.type === "calendar";
 
-// `run` opens one verification in an AVT view.
+// `run` opens one verification in an AVT view; `mode` shows the list as a
+// graph or a chronology instead of its review.
 const searchSchema = routeSearchSchema({
   run: optionalSearchStringSchema(),
+  mode: v.fallback(v.optional(v.picklist(AVT_MODES)), undefined),
 });
 
 export const Route = createFileRoute(
@@ -210,6 +214,7 @@ function RouteComponent() {
     select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
   });
   const runId = Route.useSearch({ select: (search) => search.run });
+  const mode = Route.useSearch({ select: (search) => search.mode });
   const navigate = Route.useNavigate();
   const { data: activeView } = useSuspenseQuery({
     ...viewsOptions(workspaceId),
@@ -249,6 +254,10 @@ function RouteComponent() {
       return (
         <Suspense fallback={null}>
           <AvtRoute
+            mode={mode}
+            onModeChange={(next) => {
+              detached(navigate({ search: { mode: next } }), "avt-view.mode");
+            }}
             onRunChange={(run) => {
               detached(navigate({ search: { run } }), "avt-view.open-run");
             }}

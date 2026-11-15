@@ -118,6 +118,7 @@ const startHost = (at: Place): Host => {
       FAKE_HARNESS_LOG: at.fakeLog,
     },
     processGrantTimeoutMs: 10_000,
+    browser: null,
   });
   let stopped: Promise<void> | null = null;
   const stop = async () => {
@@ -159,12 +160,15 @@ const runStart = (at: Place): SidecarRunStart => ({
   launch: PLAIN_LAUNCH,
   workspaceDir: at.workspaceDir,
   cacheDir: path.join(at.root, "agent-package-cache"),
+  stepOutputDir: path.join(at.root, "runs", "chat.step-outputs"),
   model: "gpt-test",
+  reasoningEffort: null,
   instructions: "Use the stella MCP server.",
   messages: [{ role: "user", content: "Revise the brief." }],
   attachments: [],
   skillFolders: [],
   toolPath: [],
+  unreadablePaths: [],
   harnessSessionId: null,
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {

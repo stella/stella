@@ -55,6 +55,16 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  // Setting a limit reminder again is a no-op and cancelling one removes
+  // whatever is set, so a repeat answers the current state.
+  "DELETE /v1/chat/threads/:threadId/limit-reminder": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/chat/threads/:threadId/limit-reminder": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/clause-categories/:categoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -885,6 +895,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "authorization-in-handler",
   },
+  "POST /v1/skills/from-chat": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/skills/generate-draft": {
     type: "non-replay",
     reason: "external-effect",
@@ -896,6 +910,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "POST /v1/skills/import-urls": {
     type: "non-replay",
     reason: "external-effect",
+  },
+  "POST /v1/skills/save-draft": {
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/skills/upload": {
     type: "non-replay",
@@ -1057,6 +1075,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PUT /v1/chat/local-runners/:desktopId/folders/:linkId/approval": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PUT /v1/clause-categories": {
     type: "non-replay",
     reason: "authorization-in-handler",
@@ -1172,6 +1194,11 @@ const CREATE_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason:
       "Money movement keeps its current payment transaction and is never replayed.",
+  },
+  "src/handlers/lists/verifications/claim-rechecks/bulk/create.ts": {
+    type: "non-replay",
+    reason:
+      "Each claim's receipt is the request key recorded on its review event and checked under the claim's lock, so a repeat reports that claim replayed; the model calls run between two transactions, outside one scoped request receipt.",
   },
   "src/handlers/lists/verifications/claim-rechecks/create.ts": {
     type: "non-replay",

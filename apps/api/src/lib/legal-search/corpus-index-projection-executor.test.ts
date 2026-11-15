@@ -416,6 +416,19 @@ test("an append starts only with lease left for its whole ingest", () => {
   );
 });
 
+test("the append start margin covers the ingest budget, census and margin", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    // wait_for budget (commit window + 60 s upload), four 10 s census
+    // aggregates for a full 512-revision request, and the 5 s margin.
+    expect(corpusProjectionAppendStartMarginMs(manifest)).toBe(
+      manifest.engine.indexConfig.indexing_settings.commit_timeout_secs * 1000 +
+        60_000 +
+        4 * 10_000 +
+        5000,
+    );
+  }
+});
+
 /**
  * A cycle's lease is its generation's start margin plus a fill window, so no
  * generation can be reserved already inside its margin: that state appended

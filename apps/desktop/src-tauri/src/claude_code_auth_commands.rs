@@ -150,6 +150,7 @@ pub fn manage(app: &AppHandle) {
           changed.emit(CHANGED_EVENT, ()),
           "Claude Code connection change was not announced",
         );
+        crate::desktop_runner::harness_sign_in_changed();
       }),
     },
   );

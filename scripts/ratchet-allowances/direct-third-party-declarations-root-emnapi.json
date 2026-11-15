@@ -1,5 +1,0 @@
-{
-  "metric": "direct-third-party-declarations",
-  "delta": 2,
-  "reason": "@astrojs/astro2tsx declares @emnapi/core but reads @emnapi/runtime from the root, and the two must match. The root declares both at 1.11.3 now that no resolution forces one version on every package; the search engines keep their own 2.0.0-beta.2."
-}

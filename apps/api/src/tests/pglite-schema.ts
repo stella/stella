@@ -13,6 +13,10 @@ import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 
 import { parseMigrationStatements } from "../../../../scripts/check-migration-safety";
 import { readDecisionDocketFilingYearMigration } from "./decision-docket-filing-year-migration";
+import {
+  findingDecisionHistoryMigrationPath,
+  findingDecisionHistoryMigrations,
+} from "./finding-decision-history-migrations";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
@@ -88,6 +92,11 @@ const CONFLICT_CHECKS_MIGRATION_PATH = nodePath.join(
 const STORED_KEYS_ORGANIZATION_SCOPE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261020000100_stored_keys_organization_scope",
+  "migration.sql",
+);
+const CHAT_TURN_ORDINALS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261114200000_chat_turn_ordinals",
   "migration.sql",
 );
 const SEARCH_HISTORY_COUNTRY_MIGRATION_PATH = nodePath.join(
@@ -203,6 +212,21 @@ export const installPgliteSearchHistoryClearFence = async (
         "CREATE FUNCTION public.search_history_entries_clear_cutoff_fence",
       ) ||
       source.startsWith("CREATE TRIGGER search_history_entries_clear_cutoff_")
+    ) {
+      await db.execute(sql.raw(statement));
+    }
+  }
+};
+
+/** Install the trigger that gives every inserted chat turn its position. */
+export const installPgliteChatTurnOrdinal = async (db: PgliteSchemaDb) => {
+  for (const statement of readMigrationStatements(
+    CHAT_TURN_ORDINALS_MIGRATION_PATH,
+  )) {
+    const source = executableSql(statement);
+    if (
+      source.startsWith("CREATE FUNCTION public.assign_chat_turn_ordinal") ||
+      source.startsWith("CREATE TRIGGER chat_turns_assign_ordinal")
     ) {
       await db.execute(sql.raw(statement));
     }
@@ -328,7 +352,7 @@ export const installPgliteSchemaPrerequisites = async (
   await db.execute(
     sql.raw(
       latestMigrationStatementContaining(
-        "CREATE FUNCTION stella_list_verification_day",
+        "CREATE FUNCTION stella_model_run_day",
       ),
     ),
   );
@@ -1407,11 +1431,19 @@ export const installPgliteCaseLawSitemapChanges = async (
           'CREATE TRIGGER "case_law_decisions_sitemap_update"',
         )
           ? latestMigrationStatementContaining(
-              'CREATE TRIGGER "case_law_decisions_sitemap_update"',
+              'TRIGGER "case_law_decisions_sitemap_update"\nAFTER UPDATE',
             )
           : statement,
       ),
     );
+  }
+  // A later updated_at alone is queued as a touch, not as a month.
+  for (const fragment of [
+    'CREATE FUNCTION "log_case_law_sitemap_decision_touch"',
+    'CREATE TRIGGER "case_law_decisions_sitemap_touch"',
+  ]) {
+    // db-await-in-loop: the function precedes the trigger that executes it
+    await db.execute(sql.raw(latestMigrationStatementContaining(fragment)));
   }
 };
 
@@ -1538,6 +1570,27 @@ export const installPgliteOrganizationMemberCapacity = async (
       executableSql(statement).startsWith(prefix),
     ),
   );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install the legal-hold delete backstop on matters, items and matter contacts. */
+export const installPgliteLegalHoldDeleteBackstop = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(DRIZZLE_DIR, "20261114235900_legal_holds", "migration.sql"),
+  ).filter((statement) =>
+    /^(?:CREATE FUNCTION|CREATE TRIGGER|REVOKE ALL ON FUNCTION)\s/u.test(
+      executableSql(statement),
+    ),
+  );
+  if (statements.length !== 5) {
+    panic(
+      "Expected the legal-hold backstop function, its revoke and three triggers",
+    );
+  }
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }
@@ -1733,41 +1786,45 @@ export const installPgliteDecisionCitationStats = async (
   }
 };
 
-/** Install the migration-owned verification counter and Prague day function,
- *  and the triggers that charge fact extraction runs to the same counter. */
-export const installPgliteListVerificationBudgets = async (
+/** Install the migration-owned model run counter function and the triggers
+ *  that charge list verifications, fact extractions and capped document
+ *  reviews to it; the Prague day function is installed before the push. */
+export const installPgliteModelRunBudgets = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
+  // The verification error-code domain the caps migration widened.
+  const runConstraints = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
       "20261005120400_list_verification_run_caps",
       "migration.sql",
     ),
-  ).filter((statement) => {
-    const source = executableSql(statement);
-    if (source.startsWith("CREATE FUNCTION stella_list_verification_day")) {
-      return false;
-    }
-    return [
-      "CREATE FUNCTION",
-      "CREATE TRIGGER",
-      "REVOKE ALL ON FUNCTION",
-      "ALTER TABLE",
-    ].some((prefix) => source.startsWith(prefix));
-  });
-  const generationTriggers = readMigrationStatements(
+  ).filter((statement) =>
+    executableSql(statement).startsWith(
+      "ALTER TABLE legal_list_verification_runs",
+    ),
+  );
+  const counter = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261109190000_list_fact_extraction_runs",
+      "20261112203235_model_run_caps_owner",
       "migration.sql",
     ),
-  ).filter((statement) =>
-    executableSql(statement).startsWith("CREATE TRIGGER"),
-  );
-  for (const statement of [...statements, ...generationTriggers]) {
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION maintain_model_run_budget") ||
+      source.startsWith("REVOKE ALL ON FUNCTION maintain_model_run_budget") ||
+      source.startsWith("CREATE TRIGGER")
+    );
+  });
+  for (const statement of [...runConstraints, ...counter]) {
     await db.execute(sql.raw(statement));
   }
+  // The counter took over the forced list counter's table in place.
+  await db.execute(
+    sql.raw('ALTER TABLE "model_run_budgets" FORCE ROW LEVEL SECURITY'),
+  );
 };
 
 /** Install invoice authorization and guards from the production migration after schema push. */
@@ -1847,12 +1904,10 @@ export const installPgliteCaseLawPopulationCounts = async (
 export const installPgliteFindingDecisionHistory = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  await installPgliteMigration({
-    db,
-    migrationPath: nodePath.join(
-      DRIZZLE_DIR,
-      "20261111230000_document_review_finding_decision_trigger",
-      "migration.sql",
-    ),
-  });
+  for (const folder of findingDecisionHistoryMigrations()) {
+    await installPgliteMigration({
+      db,
+      migrationPath: findingDecisionHistoryMigrationPath(folder),
+    });
+  }
 };

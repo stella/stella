@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The landing app declares js-yaml 4, the major Starlight is written against, so Starlight's bundled routes resolve it from the landing workspace instead of the hoisted js-yaml 5 that another workspace's dependency pulls in; the docs build otherwise fails on a missing default export."
+}

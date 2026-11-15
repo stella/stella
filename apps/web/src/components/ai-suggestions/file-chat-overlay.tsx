@@ -142,6 +142,7 @@ import type {
   RegisteredFolioAgentToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
 import {
   type CreateDocumentDraftPersistence,
   getCreateDocumentDraftPersistence,
@@ -169,6 +170,10 @@ import {
   fileChatThreadOptions,
   materializeFileChatThread,
 } from "@/features/chat/queries";
+import {
+  useMakeSkillFromChat,
+  useSaveDraftedSkill,
+} from "@/features/chat/use-make-skill-from-chat";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getTranslator } from "@/i18n/i18n-store";
@@ -1170,6 +1175,8 @@ const FileChatOverlayInner = ({
   presets,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
+  const saveDraftedSkill = useSaveDraftedSkill();
+  const makeSkillFromChat = useMakeSkillFromChat(saveDraftedSkill);
   const queryClient = useQueryClient();
   const capturePromptSubmitError = useCallback(
     (error: unknown): void => {
@@ -1531,12 +1538,16 @@ const FileChatOverlayInner = ({
     isLoadingOlder,
     loadOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
+    workAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     turnAbandoned,
@@ -1583,6 +1594,14 @@ const FileChatOverlayInner = ({
     activeDraft !== undefined &&
     getCreateDocumentDraftPersistence(activeDraft.toolCallId).status ===
       "saving";
+  const handleContinuePausedTurn = useLatestCallback(async () => {
+    await continuePausedTurnWhenReady({
+      draftSaving: isDraftChatFrozen(),
+      ensureAIAvailable,
+      awaitPendingSelection: composer.awaitPendingSelection,
+      continueTurn: continuePausedTurn,
+    });
+  });
   const handlePromptSubmit = useLatestCallback(
     async ({
       prompt,
@@ -2047,6 +2066,7 @@ const FileChatOverlayInner = ({
     }
 
     const partsToRun = selectIdleFolioAgentDocToolCallParts({
+      awaitedAtOpen: workAwaitedAtOpen,
       clientStatus,
       executedIds,
       messageParts: message.parts,
@@ -2058,7 +2078,13 @@ const FileChatOverlayInner = ({
         "file-chat-overlay.run-folio-agent-doc-tool-call",
       );
     }
-  }, [clientStatus, messages, runFolioAgentDocToolCall]);
+  }, [
+    chat,
+    clientStatus,
+    messages,
+    runFolioAgentDocToolCall,
+    workAwaitedAtOpen,
+  ]);
 
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
@@ -2487,6 +2513,17 @@ const FileChatOverlayInner = ({
             title: args.length > 0 ? args : null,
           });
         },
+        "make-skill": (args) => {
+          editorController.setContent(composerText(""));
+          if (!hasMessages) {
+            stellaToast.add({
+              title: t("chat.makeSkill.emptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          makeSkillFromChat({ intent: args, threadRef });
+        },
       });
       if (!handledReserved) {
         return await handlePromptSubmit({ prompt, files });
@@ -2596,6 +2633,7 @@ const FileChatOverlayInner = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,
@@ -2651,6 +2689,7 @@ const FileChatOverlayInner = ({
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
               onOpenPlaybook={handleOpenPlaybook}
+              onContinuePausedTurn={handleContinuePausedTurn}
               onResend={resendLatestMessage}
               queuedMessageActions={{
                 remove: removeQueuedMessage,
@@ -2776,6 +2815,7 @@ const FileChatOverlayInner = ({
           onStop={() => {
             stop();
           }}
+          stopping={stopPending}
           onSubmit={handleComposerSubmit}
           pendingCount={0}
           presets={presets}

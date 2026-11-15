@@ -27,6 +27,10 @@ export const AUDIT_ACTION_PROJECTIONS = {
   [AUDIT_ACTION.REVIEW]: "settings.organization.auditLogsSentenceReview",
   [AUDIT_ACTION.SYNTHETIC_SESSION_MINTED]:
     "settings.organization.auditLogsSentenceSessionCreated",
+  [AUDIT_ACTION.LEGAL_HOLD_PLACED]:
+    "settings.organization.auditLogsSentenceLegalHoldPlaced",
+  [AUDIT_ACTION.LEGAL_HOLD_RELEASED]:
+    "settings.organization.auditLogsSentenceLegalHoldReleased",
 } as const satisfies Record<AuditAction, TranslationKey>;
 
 export const AUDIT_RESOURCE_PROJECTIONS = {
@@ -73,6 +77,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.chat_tool_grant",
   [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]:
     "settings.organization.auditResourceKinds.chat_browser_site_grant",
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]:
+    "settings.organization.auditResourceKinds.chat_local_folder_approval",
   [AUDIT_RESOURCE_TYPE.CLAUSE]:
     "settings.organization.auditResourceKinds.clause",
   [AUDIT_RESOURCE_TYPE.CLAUSE_CATEGORY]:
@@ -134,6 +140,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.personal_api_key",
   [AUDIT_RESOURCE_TYPE.MACHINE_API_KEY]:
     "settings.organization.auditResourceKinds.machine_api_key",
+  [AUDIT_RESOURCE_TYPE.LEGAL_HOLD]:
+    "settings.organization.auditResourceKinds.legal_hold",
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST]:
     "settings.organization.auditResourceKinds.legal_list",
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION]:

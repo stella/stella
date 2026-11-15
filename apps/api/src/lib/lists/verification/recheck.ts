@@ -1,6 +1,6 @@
 /**
- * Re-check one claim: grade it again against its list's facts as they stand
- * now, with the facts a reviewer pointed it at.
+ * Re-check claims of one run: grade them again against their list's facts
+ * as they stand now, each with the facts a reviewer pointed it at.
  *
  * Claims are immutable once their run writes them, so a re-check is a
  * reviewer event: it records who asked, the grade it got, and the facts the
@@ -8,13 +8,21 @@
  * The claim is read with its latest re-check's grade from then on
  * (`gradeOf`); its run's grade stays on the row and in the history.
  *
- * The model call runs between two short transactions, never inside one. The
- * claim's row lock serializes the write, so a repeated request key finds the
- * event the first request wrote and nothing is graded twice once it landed.
+ * One claim and many go through the same path: one read of what grading
+ * needs, the grader in batches (`gradeClaims`, one model call per batch, so
+ * a batch that fails fails only its own claims), and one write that locks
+ * every graded claim in id order. The model calls run between the two short
+ * transactions, never inside one. The claims' row locks serialize the
+ * write, so a repeated request key finds the event the first request wrote
+ * and nothing is graded twice once it landed.
  */
 
-import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, inArray } from "drizzle-orm";
+
+import { VERIFICATION_RECHECKS_PER_REQUEST_MAX } from "@stll/api-contract/verification-rechecks";
+import { mapWithConcurrency } from "@stll/concurrency";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -28,11 +36,18 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import { resolveListVerificationAccess } from "@/api/lib/lists/verification/access-context";
-import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
+import {
+  gradeClaims,
+  GRADING_BATCH_SIZE,
+  GRADING_CONCURRENCY,
+} from "@/api/lib/lists/verification/claim-grade";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type {
+  ClaimAssertedDate,
   ClaimGrade,
   ClaimReviewEventPayload,
+  ClaimState,
+  RecordConflict,
   VerificationEvidenceFact,
 } from "@/api/lib/lists/verification/contract";
 import { readVerificationEvidence } from "@/api/lib/lists/verification/evidence";
@@ -42,74 +57,113 @@ import {
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import {
-  readClaimForReview,
   readClaimReviews,
-  readRecheckTarget,
+  readClaimsForBulkReview,
+  readRecheckTargets,
 } from "@/api/lib/lists/verification/read-run";
 import { factChangesFrom } from "@/api/lib/lists/verification/recheck-facts";
 import {
   EMPTY_CLAIM_REVIEW,
   rejectRecheck,
 } from "@/api/lib/lists/verification/review-fold";
-import type { VerificationRunCaps } from "@/api/lib/lists/verification/run-cap-config";
-import {
-  checkVerificationRecheckBudget,
-  ListVerificationRunCapError,
-} from "@/api/lib/lists/verification/run-caps";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   formatModelRef,
   getTanStackTextModelInfoForTask,
 } from "@/api/lib/tanstack-ai-models";
+import {
+  checkModelRunCaps,
+  ModelRunCapError,
+} from "@/api/lib/usage/model-run-caps/caps";
+import type { ModelRunCaps } from "@/api/lib/usage/model-run-caps/config";
 
-/** One claim is one grading call, and one repair round at most. */
+/** One round of grading calls: a request re-checks at most as many claims
+ *  as the grader takes in its batches at once, so it waits for one call. */
+export const RECHECKS_PER_REQUEST_MAX = VERIFICATION_RECHECKS_PER_REQUEST_MAX;
+
+/** One round of grading calls, and one repair round at most. */
 const RECHECK_TIMEOUT_MS = 90_000;
 const SERVICE_TIER = "standard" as const satisfies AIRequestServiceTier;
 
-type RecheckRef = {
+/** A re-check is no run of its own: it is refused once the list counter is
+ *  at either cap, and takes no slot or start. */
+const RECHECK_CAPS = {
+  kind: "list-run",
+  operation: "lists.verifications.claim-rechecks.create",
+  phase: "start",
+} as const;
+
+type RecheckScope = {
   workspaceId: SafeId<"workspace">;
   runId: SafeId<"legalListVerificationRun">;
-  claimId: SafeId<"legalListClaim">;
 };
 
-/** The recheck event a request key already wrote for this claim, if any.
- *  Bounded by the claim's action cap and served by its claim index. */
-const findRecheckByKey = async (
-  tx: Pick<Transaction, "select">,
-  { workspaceId, runId, claimId }: RecheckRef,
-  requestKey: string,
-) =>
-  (
-    await tx
-      .select({ id: legalListClaimReviewEvents.id })
-      .from(legalListClaimReviewEvents)
-      .where(
-        and(
-          eq(legalListClaimReviewEvents.workspaceId, workspaceId),
-          eq(legalListClaimReviewEvents.claimId, claimId),
-          eq(legalListClaimReviewEvents.runId, runId),
-          eq(legalListClaimReviewEvents.kind, "recheck"),
-          sql`${legalListClaimReviewEvents.payload} ->> 'requestKey' = ${requestKey}`,
-        ),
-      )
-      .limit(1)
-  ).at(0);
+/** One claim to grade again, under the key its request is repeated with. */
+export type RecheckRequest = {
+  claimId: SafeId<"legalListClaim">;
+  requestKey: string;
+};
 
-export type RecheckClaimArgs = RecheckRef & {
+/** The claims among `requests` whose key already wrote a re-check. Bounded
+ *  by the claims' action caps and served by the claim index. */
+const findReplayed = async (
+  tx: Pick<Transaction, "select">,
+  { workspaceId, runId }: RecheckScope,
+  requests: readonly RecheckRequest[],
+): Promise<Set<SafeId<"legalListClaim">>> => {
+  if (requests.length === 0) {
+    return new Set();
+  }
+  const keyOf = new Map(
+    requests.map((request) => [request.claimId, request.requestKey]),
+  );
+  const events = await tx
+    .select({
+      claimId: legalListClaimReviewEvents.claimId,
+      payload: legalListClaimReviewEvents.payload,
+    })
+    .from(legalListClaimReviewEvents)
+    .where(
+      and(
+        eq(legalListClaimReviewEvents.workspaceId, workspaceId),
+        eq(legalListClaimReviewEvents.runId, runId),
+        inArray(legalListClaimReviewEvents.claimId, [...keyOf.keys()]),
+        eq(legalListClaimReviewEvents.kind, "recheck"),
+      ),
+    )
+    .limit(requests.length * VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX);
+  return new Set(
+    events
+      .filter(
+        ({ claimId, payload }) =>
+          payload.kind === "recheck" &&
+          payload.requestKey === keyOf.get(claimId),
+      )
+      .map(({ claimId }) => claimId),
+  );
+};
+
+type RecheckCommon = RecheckScope & {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  requestKey: string;
   admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
   signal: AbortSignal;
-  caps?: VerificationRunCaps;
+  caps?: ModelRunCaps;
   /** External model-dispatch boundary; supplied by focused tests. */
   generateObjectForTask?: VerificationModelDeps["generateObjectForTask"];
 };
+
+export type RecheckClaimsArgs = RecheckCommon & {
+  /** Distinct claims, at most `RECHECKS_PER_REQUEST_MAX`. */
+  requests: readonly RecheckRequest[];
+};
+
+export type RecheckClaimArgs = RecheckCommon & RecheckRequest;
 
 /** Why a re-check was not recorded, when the request itself was sound. */
 export type RecheckRefusal =
@@ -119,17 +173,39 @@ export type RecheckRefusal =
   | { type: "superseded" }
   | { type: "too-many-facts" }
   | { type: "access-revoked" }
-  | { type: "run-limit"; error: ListVerificationRunCapError }
+  | { type: "run-limit"; error: ModelRunCapError }
   | { type: "grading-failed"; cause: unknown };
 
 export type RecheckOutcome =
   { type: "rechecked"; replayed: boolean } | RecheckRefusal;
 
-/** What grading the claim reads, gathered before any model call. */
-type RecheckInput = {
-  pinned: readonly VerificationEvidenceFact[];
-  current: readonly VerificationEvidenceFact[];
-  entityVersionId: SafeId<"entityVersion">;
+type ReviewTarget = {
+  state: ClaimState;
+  recordConflict: RecordConflict | null;
+};
+
+type ReviewRecords = Awaited<ReturnType<typeof readClaimReviews>>;
+
+/** Whether the claim can take one more review action now, or why not. */
+const reviewAdmits = (
+  claimId: SafeId<"legalListClaim">,
+  claim: ReviewTarget,
+  records: ReviewRecords,
+) => {
+  const record = records.get(claimId);
+  const eventCount = record?.eventCount ?? 0;
+  if (eventCount >= VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX) {
+    return { type: "too-many-actions" } as const;
+  }
+  const review = record?.review ?? EMPTY_CLAIM_REVIEW;
+  const rejection = rejectRecheck(claim, review);
+  return rejection === null
+    ? ({ type: "admitted", review, eventCount } as const)
+    : ({ type: rejection } as const);
+};
+
+/** One claim ready to grade: what the grader reads of it. */
+type ReadyClaim = RecheckRequest & {
   text: string;
   /** The claim's block as the run's grading read it, cut to its range. */
   context: { text: string; anchor: { start: number; end: number } };
@@ -139,92 +215,125 @@ type RecheckInput = {
   eventCount: number;
 };
 
-/** Whether the claim can take one more review action now, or why not. */
-const reviewAdmits = async (
-  tx: Pick<Transaction, "select">,
-  ref: RecheckRef,
-  claim: Parameters<typeof rejectRecheck>[0],
-) => {
-  const record = (
-    await readClaimReviews({ ...ref, tx, claimIds: [ref.claimId] })
-  ).get(ref.claimId);
-  if (
-    (record?.eventCount ?? 0) >= VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX
-  ) {
-    return { type: "too-many-actions" } as const;
-  }
-  const review = record?.review ?? EMPTY_CLAIM_REVIEW;
-  const rejection = rejectRecheck(claim, review);
-  return rejection === null
-    ? ({
-        type: "admitted",
-        review,
-        eventCount: record?.eventCount ?? 0,
-      } as const)
-    : ({ type: rejection } as const);
+/** What grading reads, gathered before any model call, with the outcome of
+ *  every claim that needs none. */
+type Prepared = {
+  outcomes: Map<SafeId<"legalListClaim">, RecheckOutcome>;
+  ready: ReadyClaim[];
+  pinned: readonly VerificationEvidenceFact[];
+  current: readonly VerificationEvidenceFact[];
+  entityVersionId: SafeId<"entityVersion"> | null;
 };
 
-/** Read what grading needs, or the outcome that makes grading unneeded. */
-const prepareRecheck = async (
-  args: RecheckClaimArgs,
-): Promise<
-  Result<{ type: "ready"; input: RecheckInput } | RecheckOutcome, SafeDbError>
-> => {
-  const ref = {
-    workspaceId: args.workspaceId,
-    runId: args.runId,
-    claimId: args.claimId,
-  };
-  return await args.safeDb(async (tx) => {
-    if ((await findRecheckByKey(tx, ref, args.requestKey)) !== undefined) {
-      return { type: "rechecked", replayed: true } as const;
+const prepareRechecks = async (
+  args: RecheckClaimsArgs,
+): Promise<Result<Prepared, SafeDbError>> => {
+  const scope = { workspaceId: args.workspaceId, runId: args.runId };
+  return await args.safeDb(async (tx): Promise<Prepared> => {
+    const outcomes = new Map<SafeId<"legalListClaim">, RecheckOutcome>();
+    const replayed = await findReplayed(tx, scope, args.requests);
+    for (const claimId of replayed) {
+      outcomes.set(claimId, { type: "rechecked", replayed: true });
     }
-    const target = await readRecheckTarget({ ...ref, tx });
-    if (target === null) {
-      return { type: "not-found" } as const;
+    const asked = args.requests.filter(
+      (request) => !replayed.has(request.claimId),
+    );
+    const targets = await readRecheckTargets({
+      ...scope,
+      tx,
+      claimIds: asked.map((request) => request.claimId),
+    });
+    const records = await readClaimReviews({
+      ...scope,
+      tx,
+      claimIds: asked.map((request) => request.claimId),
+    });
+    const admitted: ReadyClaim[] = [];
+    for (const request of asked) {
+      const target = targets?.claims.get(request.claimId);
+      if (target === undefined) {
+        outcomes.set(request.claimId, { type: "not-found" });
+        continue;
+      }
+      const decision = reviewAdmits(request.claimId, target, records);
+      if (decision.type !== "admitted") {
+        outcomes.set(request.claimId, decision);
+        continue;
+      }
+      admitted.push({
+        ...request,
+        text: target.text,
+        context: target.context,
+        linkedFactIds: decision.review.linkedFactIds,
+        eventCount: decision.eventCount,
+      });
     }
-    const admitted = await reviewAdmits(tx, ref, target.claim);
-    if (admitted.type !== "admitted") {
-      return admitted;
+    if (targets === null || admitted.length === 0) {
+      return {
+        outcomes,
+        ready: [],
+        pinned: [],
+        current: [],
+        entityVersionId: null,
+      };
     }
     const evidence = await readVerificationEvidence({
       tx,
       workspaceId: args.workspaceId,
-      listId: target.evidence.listId,
+      listId: targets.evidence.listId,
     });
     if (evidence.type === "too-many-facts") {
-      return { type: "too-many-facts" } as const;
+      for (const claim of admitted) {
+        outcomes.set(claim.claimId, { type: "too-many-facts" });
+      }
+      return {
+        outcomes,
+        ready: [],
+        pinned: [],
+        current: [],
+        entityVersionId: null,
+      };
     }
     return {
-      type: "ready",
-      input: {
-        pinned: target.evidence.facts,
-        current: evidence.evidence.facts,
-        entityVersionId: target.entityVersionId,
-        text: target.claim.text,
-        context: target.context,
-        linkedFactIds: admitted.review.linkedFactIds,
-        eventCount: admitted.eventCount,
-      },
-    } as const;
+      outcomes,
+      ready: admitted,
+      pinned: targets.evidence.facts,
+      current: evidence.evidence.facts,
+      entityVersionId: targets.entityVersionId,
+    };
   });
 };
 
-type GradeRecheckArgs = {
-  args: RecheckClaimArgs;
-  input: RecheckInput;
+type GradeRechecksArgs = {
+  args: RecheckClaimsArgs;
+  prepared: Prepared & { entityVersionId: SafeId<"entityVersion"> };
   accessProof: ListVerificationAccessProof;
   resolveAccess: () => Promise<ListVerificationAccessProof | null>;
 };
 
-/** Grade the one claim, through the same call and budget a run uses. */
-const gradeRecheck = async ({
+/** A claim's new grade and the date its grading read. */
+type RecheckGrading = { grade: ClaimGrade; assertedOn: ClaimAssertedDate };
+
+/** Why a batch's grading failed, as each of its claims reports it. */
+const gradingRefusal = (cause: unknown): RecheckRefusal => {
+  if (cause instanceof ModelRunCapError) {
+    return { type: "run-limit", error: cause };
+  }
+  if (cause instanceof ListVerificationAccessRevokedError) {
+    return { type: "access-revoked" };
+  }
+  return { type: "grading-failed", cause };
+};
+
+/** Grade the ready claims through the same call and budget a run uses, one
+ *  model call per batch; a claim gets its grade or why it has none. */
+const gradeRechecks = async ({
   args,
-  input,
+  prepared,
   accessProof,
   resolveAccess,
-}: GradeRecheckArgs): Promise<
-  { type: "graded"; grade: ClaimGrade } | RecheckRefusal
+}: GradeRechecksArgs): Promise<
+  Map<SafeId<"legalListClaim">, RecheckGrading | RecheckRefusal>
 > => {
   const { safeDb, organizationId, workspaceId, userId } = args;
   const deps: VerificationModelDeps = {
@@ -236,16 +345,17 @@ const gradeRecheck = async ({
       (
         await safeDb(
           async (tx) =>
-            await checkVerificationRecheckBudget({
+            await checkModelRunCaps({
               tx,
               organizationId,
+              ...RECHECK_CAPS,
               ...(args.caps === undefined ? {} : { caps: args.caps }),
             }),
         )
       ).unwrap("The verification budget could not be read."),
     organizationId,
     workspaceId,
-    entityVersionId: input.entityVersionId,
+    entityVersionId: prepared.entityVersionId,
     orgAIConfig: args.orgAIConfig,
     managedAIResidency: args.managedAIResidency,
     promptCachingEnabled: args.promptCachingEnabled,
@@ -266,75 +376,113 @@ const gradeRecheck = async ({
       ? {}
       : { generateObjectForTask: args.generateObjectForTask }),
   };
-  const graded = await gradeClaims({
-    claims: [
-      {
-        key: args.claimId,
-        text: input.text,
-        context: input.context,
-        linkedFactIds: input.linkedFactIds,
-      },
-    ],
-    facts: input.current,
-    deps,
+  const perBatch = await mapWithConcurrency({
+    items: chunkItems(prepared.ready, GRADING_BATCH_SIZE),
+    limit: GRADING_CONCURRENCY,
+    operation: async (batch) => ({
+      batch,
+      graded: await gradeClaims({
+        claims: batch.map((claim) => ({
+          key: claim.claimId,
+          text: claim.text,
+          context: claim.context,
+          linkedFactIds: claim.linkedFactIds,
+        })),
+        facts: prepared.current,
+        deps,
+      }),
+    }),
   });
-  if (Result.isError(graded)) {
-    const cause: unknown = graded.error.cause;
-    if (cause instanceof ListVerificationRunCapError) {
-      return { type: "run-limit", error: cause };
+  const results = new Map<
+    SafeId<"legalListClaim">,
+    RecheckGrading | RecheckRefusal
+  >();
+  for (const { batch, graded } of perBatch) {
+    for (const claim of batch) {
+      if (Result.isError(graded)) {
+        results.set(claim.claimId, gradingRefusal(graded.error.cause));
+        continue;
+      }
+      // A claim the grader left unanswered, even after its repair round,
+      // fails alone; the batch's answered claims keep their grades.
+      const grade = graded.value.grades.get(claim.claimId);
+      const assertedOn = graded.value.assertedDates.get(claim.claimId);
+      results.set(
+        claim.claimId,
+        grade === undefined || assertedOn === undefined
+          ? { type: "grading-failed", cause: graded.value }
+          : { grade, assertedOn },
+      );
     }
-    if (cause instanceof ListVerificationAccessRevokedError) {
-      return { type: "access-revoked" };
-    }
-    return { type: "grading-failed", cause };
   }
-  const grade =
-    graded.value.type === "graded"
-      ? graded.value.grades.get(args.claimId)
-      : undefined;
-  return grade === undefined
-    ? { type: "grading-failed", cause: graded.value }
-    : { type: "graded", grade };
+  return results;
 };
 
-type RecordRecheckArgs = {
-  args: RecheckClaimArgs;
-  input: RecheckInput;
-  grade: ClaimGrade;
+type GradedClaim = { claim: ReadyClaim } & RecheckGrading;
+
+type RecordRechecksArgs = {
+  args: RecheckClaimsArgs;
+  prepared: Prepared;
+  graded: readonly GradedClaim[];
   modelRef: string | null;
 };
 
-/** Append the re-check, unless the claim changed under the grading. */
-const recordRecheck = async ({
+/** Append each graded claim's re-check, unless the claim changed under its
+ *  grading; the outcome of every claim it was given. */
+const recordRechecks = async ({
   args,
-  input,
-  grade,
+  prepared,
+  graded,
   modelRef,
-}: RecordRecheckArgs): Promise<Result<RecheckOutcome, SafeDbError>> => {
-  const ref = {
-    workspaceId: args.workspaceId,
-    runId: args.runId,
-    claimId: args.claimId,
-  };
-  return await args.safeDb(async (tx): Promise<RecheckOutcome> => {
-    // Locking the claim serializes every writer of its events, so the key
-    // and the cap checked here are the ones the insert lands against.
-    const claim = await readClaimForReview({ ...ref, tx });
-    if (claim === undefined) {
-      return { type: "not-found" };
+}: RecordRechecksArgs): Promise<
+  Result<Map<SafeId<"legalListClaim">, RecheckOutcome>, SafeDbError>
+> => {
+  const scope = { workspaceId: args.workspaceId, runId: args.runId };
+  return await args.safeDb(async (tx) => {
+    const outcomes = new Map<SafeId<"legalListClaim">, RecheckOutcome>();
+    const claimIds = graded.map(({ claim }) => claim.claimId);
+    // Locking the claims, in the id order every bulk writer shares,
+    // serializes every writer of their events, so the keys and caps checked
+    // here are the ones the inserts land against.
+    const locked = new Map(
+      (await readClaimsForBulkReview({ ...scope, tx, claimIds })).map(
+        (claim) => [claim.id, claim],
+      ),
+    );
+    const replayed = await findReplayed(
+      tx,
+      scope,
+      graded.map(({ claim }) => claim),
+    );
+    const records = await readClaimReviews({ ...scope, tx, claimIds });
+    const writable: GradedClaim[] = [];
+    for (const entry of graded) {
+      const { claimId } = entry.claim;
+      const row = locked.get(claimId);
+      if (row === undefined) {
+        outcomes.set(claimId, { type: "not-found" });
+        continue;
+      }
+      if (replayed.has(claimId)) {
+        outcomes.set(claimId, { type: "rechecked", replayed: true });
+        continue;
+      }
+      const decision = reviewAdmits(claimId, row, records);
+      if (decision.type !== "admitted") {
+        outcomes.set(claimId, decision);
+        continue;
+      }
+      if (decision.eventCount !== entry.claim.eventCount) {
+        outcomes.set(claimId, { type: "superseded" });
+        continue;
+      }
+      writable.push(entry);
     }
-    if ((await findRecheckByKey(tx, ref, args.requestKey)) !== undefined) {
-      return { type: "rechecked", replayed: true };
-    }
-    const admitted = await reviewAdmits(tx, ref, claim);
-    if (admitted.type !== "admitted") {
-      return admitted;
-    }
-    if (admitted.eventCount !== input.eventCount) {
-      return { type: "superseded" };
+    if (writable.length === 0) {
+      return outcomes;
     }
     // Access is read again with the write: a grant withdrawn while the
-    // claim was graded records nothing and withdraws no decision.
+    // claims were graded records nothing and withdraws no decision.
     const access = await resolveListVerificationAccess({
       tx,
       organizationId: args.organizationId,
@@ -342,57 +490,86 @@ const recordRecheck = async ({
       userId: args.userId,
     });
     if (access.status === "unavailable") {
-      return { type: "access-revoked" };
+      for (const { claim } of writable) {
+        outcomes.set(claim.claimId, { type: "access-revoked" });
+      }
+      return outcomes;
     }
-    const payload = {
-      kind: "recheck",
-      requestKey: args.requestKey,
-      grade,
-      facts: factChangesFrom(input.pinned, input.current),
-      modelRef,
-    } as const satisfies ClaimReviewEventPayload;
-    const eventId = createSafeId<"legalListClaimReviewEvent">();
-    await tx.insert(legalListClaimReviewEvents).values({
-      ...ref,
-      id: eventId,
-      kind: payload.kind,
-      payload,
-      actorId: args.userId,
+    const facts = factChangesFrom(prepared.pinned, prepared.current);
+    const events = writable.map(({ claim, grade, assertedOn }) => {
+      const payload = {
+        kind: "recheck",
+        requestKey: claim.requestKey,
+        grade,
+        facts,
+        modelRef,
+        assertedOn,
+      } as const satisfies ClaimReviewEventPayload;
+      return {
+        ...scope,
+        claimId: claim.claimId,
+        id: createSafeId<"legalListClaimReviewEvent">(),
+        kind: payload.kind,
+        payload,
+        actorId: args.userId,
+      };
     });
-    await writeGraphEdges(tx, args.workspaceId, { type: "recheck", eventId });
+    await tx.insert(legalListClaimReviewEvents).values(events);
+    await writeGraphEdges(tx, args.workspaceId, {
+      type: "recheck",
+      eventIds: events.map((event) => event.id),
+    });
     await args.recordAuditEvent(tx, {
       action: AUDIT_ACTION.REVIEW,
       resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
       resourceId: args.runId,
       metadata: {
-        claimId: args.claimId,
-        eventId,
-        kind: payload.kind,
-        state: grade.state,
-        factCount: input.current.length,
+        kind: "recheck",
+        factCount: prepared.current.length,
+        claims: events.map((event) => ({
+          claimId: event.claimId,
+          eventId: event.id,
+          state: event.payload.grade.state,
+        })),
       },
     });
-    return { type: "rechecked", replayed: false };
+    for (const { claim } of writable) {
+      outcomes.set(claim.claimId, { type: "rechecked", replayed: false });
+    }
+    return outcomes;
   });
 };
 
-/** Re-check one claim, or say why it was not. */
-export const recheckClaim = async (
-  args: RecheckClaimArgs,
-): Promise<Result<RecheckOutcome, SafeDbError>> => {
-  const prepared = await prepareRecheck(args);
+/**
+ * Re-check claims of one run, or say per claim why one was not. Every
+ * requested claim has an outcome. An organization at its verification
+ * limit is refused before any model call, each claim with `run-limit`.
+ */
+export const recheckClaims = async (
+  args: RecheckClaimsArgs,
+): Promise<
+  Result<Map<SafeId<"legalListClaim">, RecheckOutcome>, SafeDbError>
+> => {
+  const prepared = await prepareRechecks(args);
   if (Result.isError(prepared)) {
     return prepared;
   }
-  if (prepared.value.type !== "ready") {
-    return Result.ok(prepared.value);
+  const { outcomes, ready, current, entityVersionId } = prepared.value;
+  if (ready.length === 0 || entityVersionId === null) {
+    return Result.ok(outcomes);
   }
-  const { input } = prepared.value;
+  const refuseReady = (refusal: RecheckRefusal) => {
+    for (const claim of ready) {
+      outcomes.set(claim.claimId, refusal);
+    }
+    return Result.ok(outcomes);
+  };
+
   // The model resolves before any call, as a run's does: an organization
-  // that cannot run it is refused before grading, and the event names the
-  // model the grade came from. None is called without facts to check.
+  // that cannot run it is refused before grading, and the events name the
+  // model the grades came from. None is called without facts to check.
   const modelRef =
-    input.current.length === 0
+    current.length === 0
       ? null
       : formatModelRef(
           getTanStackTextModelInfoForTask(
@@ -421,12 +598,31 @@ export const recheckClaim = async (
     return access;
   }
   if (access.value.status === "unavailable") {
-    return Result.ok({ type: "access-revoked" });
+    return refuseReady({ type: "access-revoked" });
+  }
+  // One read of the budget refuses the whole request before any model call;
+  // every call checks it again, as a run's do.
+  if (current.length > 0) {
+    const budget = await args.safeDb(
+      async (tx) =>
+        await checkModelRunCaps({
+          tx,
+          organizationId: args.organizationId,
+          ...RECHECK_CAPS,
+          ...(args.caps === undefined ? {} : { caps: args.caps }),
+        }),
+    );
+    if (Result.isError(budget)) {
+      return budget;
+    }
+    if (Result.isError(budget.value)) {
+      return refuseReady({ type: "run-limit", error: budget.value.error });
+    }
   }
 
-  const graded = await gradeRecheck({
+  const grades = await gradeRechecks({
     args,
-    input,
+    prepared: { ...prepared.value, entityVersionId },
     accessProof: access.value.proof,
     // Read again before each model call; one that cannot be read stops the
     // grading as revoked access would.
@@ -437,8 +633,46 @@ export const recheckClaim = async (
         : null;
     },
   });
-  if (graded.type !== "graded") {
-    return Result.ok(graded);
+  const graded: GradedClaim[] = [];
+  for (const claim of ready) {
+    const result =
+      grades.get(claim.claimId) ?? panic("A ready claim has no grading result");
+    if ("type" in result) {
+      outcomes.set(claim.claimId, result);
+    } else {
+      graded.push({ claim, ...result });
+    }
   }
-  return await recordRecheck({ args, input, grade: graded.grade, modelRef });
+  if (graded.length === 0) {
+    return Result.ok(outcomes);
+  }
+  const recorded = await recordRechecks({
+    args,
+    prepared: prepared.value,
+    graded,
+    modelRef,
+  });
+  if (Result.isError(recorded)) {
+    return recorded;
+  }
+  for (const [claimId, outcome] of recorded.value) {
+    outcomes.set(claimId, outcome);
+  }
+  return Result.ok(outcomes);
+};
+
+/** Re-check one claim, or say why it was not. */
+export const recheckClaim = async ({
+  claimId,
+  requestKey,
+  ...common
+}: RecheckClaimArgs): Promise<Result<RecheckOutcome, SafeDbError>> => {
+  const outcomes = await recheckClaims({
+    ...common,
+    requests: [{ claimId, requestKey }],
+  });
+  return outcomes.map(
+    (byClaim) =>
+      byClaim.get(claimId) ?? panic("A requested claim has no outcome"),
+  );
 };

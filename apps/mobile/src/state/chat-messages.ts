@@ -5,14 +5,18 @@ import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
+import { answerBlocks, messageText } from "@/state/chat-answer";
+import type { AnswerBlock } from "@/state/chat-answer";
 import type { ChatDraft, SentFile } from "@/state/chat-attachments";
+import { draftDocumentsOf } from "@/state/chat-documents";
+import type { ChatDraftDocument } from "@/state/chat-documents";
 import { pendingInputOf } from "@/state/chat-pending-input";
 import type { PendingInput } from "@/state/chat-pending-input";
 
 /**
- * A stored message part. Text, tool calls and attached files are drawn;
- * every other kind (reasoning, results) passes the schema and is skipped,
- * so a part this build has never seen does not fail the thread.
+ * A stored message part. Text, reasoning, tool calls and attached files are
+ * drawn (`./chat-answer.ts`); every other kind passes the schema and is
+ * skipped, so a part this build has never seen does not fail the thread.
  */
 const partSchema = v.looseObject({
   type: v.string(),
@@ -48,16 +52,20 @@ const messagesPageSchema = v.object({
 });
 
 /**
- * A message as the thread shows it: its text, the tools the assistant used
- * on the way, and the files the person attached.
+ * A message as the thread shows it: its text, an answer's texts and the
+ * steps between them in order, the files the person attached, and the
+ * drafts the assistant wrote.
  */
 export type ChatEntry = {
   readonly id: string;
   readonly role: "user" | "assistant";
   readonly createdAt: string;
+  /** The message's text, as copying it gives it. */
   readonly text: string;
-  readonly tools: readonly string[];
+  /** An answer as it is drawn; a person's own message draws its `text`. */
+  readonly blocks: readonly AnswerBlock[];
   readonly files: readonly SentFile[];
+  readonly drafts: readonly ChatDraftDocument[];
 };
 
 /**
@@ -84,19 +92,9 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
   if (message.role !== "user" && message.role !== "assistant") {
     return undefined;
   }
-  const text = message.parts
-    .flatMap((part) =>
-      part.type === "text" && typeof part.content === "string"
-        ? [part.content.trim()]
-        : [],
-    )
-    .filter((content) => content !== "")
-    .join("\n\n");
-  const tools = message.parts.flatMap((part) =>
-    part.type === "tool-call" && typeof part.name === "string"
-      ? [part.name]
-      : [],
-  );
+  const text = messageText(message.parts);
+  const blocks =
+    message.role === "assistant" ? answerBlocks(message.parts) : [];
   const files = message.parts.flatMap((part): SentFile[] => {
     const file = v.safeParse(filePartSchema, part);
     return file.success
@@ -108,7 +106,13 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
         ]
       : [];
   });
-  if (text === "" && tools.length === 0 && files.length === 0) {
+  const drafts = draftDocumentsOf(message.parts);
+  if (
+    text === "" &&
+    blocks.length === 0 &&
+    files.length === 0 &&
+    drafts.length === 0
+  ) {
     return undefined;
   }
   return {
@@ -116,8 +120,9 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     role: message.role,
     createdAt: message.createdAt,
     text,
-    tools,
+    blocks,
     files,
+    drafts,
   };
 };
 
@@ -135,9 +140,10 @@ export const sentEntry = ({
   role: "user",
   createdAt,
   text,
-  tools: [],
+  blocks: [],
   // The thread names each file; its bytes have gone with the message.
   files: files.map(({ mimeType, name }) => ({ mimeType, name })),
+  drafts: [],
 });
 
 /**

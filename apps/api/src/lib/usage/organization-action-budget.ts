@@ -90,6 +90,7 @@ export const actionDrawsServiceBudget = ({
  */
 export const FREE_WITHOUT_OWN_KEY = {
   "dictation.transcribe": "counts",
+  "dictation.cleanup": "counts",
   "chat.send": "counts",
   "chat.span-edit": "counts",
   // The automatic title of a counted chat send rides on that send.
@@ -112,6 +113,7 @@ export const FREE_WITHOUT_OWN_KEY = {
   "templates.fill": "counts",
   "skills.rewrite-resource": "counts",
   "skills.generate-draft": "counts",
+  "skills.draft-from-chat": "counts",
   "skills.propose-from-comments": "counts",
   "time-entries.polish-narrative": "counts",
   "billing.activity-drafts": "counts",

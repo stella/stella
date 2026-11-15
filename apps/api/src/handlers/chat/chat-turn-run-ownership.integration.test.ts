@@ -196,7 +196,7 @@ const produceUntilCut = ({
 }) => {
   const run = new ChatTurnRun({
     connectors: undefined,
-    deadlineMs: 60_000,
+    bound: { type: "provider-deadline", deadlineMs: 60_000 },
     mode: "raw",
     heartbeat,
     ownership,
@@ -300,7 +300,7 @@ describe("a producing run", () => {
     const closed = Promise.withResolvers<undefined>();
     const run = new ChatTurnRun({
       connectors: undefined,
-      deadlineMs: 60_000,
+      bound: { type: "provider-deadline", deadlineMs: 60_000 },
       mode: "raw",
       owner: {
         indexThread: async () => await Promise.resolve(),
@@ -656,7 +656,7 @@ describe("a producing run", () => {
     const { execution, threadId } = await seedRunningTurn();
     const run = new ChatTurnRun({
       connectors: undefined,
-      deadlineMs: 60_000,
+      bound: { type: "provider-deadline", deadlineMs: 60_000 },
       mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1 },
       owner: {
@@ -828,7 +828,7 @@ describe("a producing run", () => {
     };
     const run = new ChatTurnRun({
       connectors: undefined,
-      deadlineMs: 60_000,
+      bound: { type: "provider-deadline", deadlineMs: 60_000 },
       mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1000 },
       ownership,

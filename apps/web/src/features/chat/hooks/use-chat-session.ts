@@ -19,6 +19,7 @@ import type {
   ConnectConnectorDecision,
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
@@ -47,10 +48,12 @@ import {
   consumePlaybookSaveToolCalls,
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
+  getChatWorkAwaitedAtOpen,
   getCurrentApprovalPendingMessageId,
   isChatClientRequestActive,
   isNonPersistentGrantChatToolName,
   isSuggestChangesApplyOutput,
+  openMemberWaitKeys,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
@@ -66,7 +69,6 @@ import {
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
 import {
-  buildCreateDocumentDownloadFileName,
   buildCreateDocumentDraftPayload,
   CREATE_DOCUMENT_DRAFT_VIEW,
   type CreateDocumentDraft,
@@ -104,7 +106,10 @@ import {
   sendThreadChatMessage,
   sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
-import { showStoredChatThread } from "@/features/chat/chat-runtime-registry";
+import {
+  resendLatestChatMessage,
+  showStoredChatThread,
+} from "@/features/chat/chat-runtime-registry";
 import {
   chatToolGrantsOptions,
   projectChatToolGrants,
@@ -379,6 +384,13 @@ export const useChatSession = ({
     chat.getSnapshot,
     chat.getSnapshot,
   );
+  // What the thread already waits on when this page opens it: it resumes only
+  // once the user acts. Read per page open, not per runtime, because the
+  // registry keeps a waiting thread's runtime across a reopen.
+  const workAwaitedAtOpen = useMemo(
+    () => getChatWorkAwaitedAtOpen(chat.getSnapshot().messages),
+    [chat],
+  );
   const {
     error: runtimeError,
     isLoading: clientLoading,
@@ -389,6 +401,7 @@ export const useChatSession = ({
     turnAbandoned,
     computerWait,
     turnSentAt,
+    turnsStarted,
   } = snapshot;
   const notifyError = useLatestCallback((nextError: Error) => {
     onError?.(nextError);
@@ -861,6 +874,15 @@ export const useChatSession = ({
     ],
   );
 
+  // A turn paused on its budget runs its next step only on the user's word:
+  // Continue sends that word as their next message, which opens a new budget.
+  const continuePausedTurn = useCallback(async () => {
+    await sendMessage({
+      content: t("chat.turnPaused.continue"),
+      id: toSafeId<"chatMessage">(createUuid()),
+    });
+  }, [sendMessage, t]);
+
   const removeQueuedMessage = useCallback(
     (id: string) => {
       applySendQueueEvent({ type: "queued-message-removed", id });
@@ -905,7 +927,8 @@ export const useChatSession = ({
         return;
       }
 
-      await chat.reload(
+      await resendLatestChatMessage(
+        chat,
         sendMode === undefined ? undefined : { body: { sendMode } },
       );
     },
@@ -1732,11 +1755,12 @@ export const useChatSession = ({
   // ended: TanStack can report a turn ready while it still loads, and a send
   // then would be refused as busy with no later turn end to retry it on.
   const queueTurnRunning = isGenerating || clientLoading;
-  // A turn paused on the member (an approval or question card, or a
-  // question from the computer) holds the queue until the wait is over.
+  // A turn paused on the member holds the queue until the wait is over.
   const turnAwaitsMember =
-    getAwaitedAssistantMessageId(messages) !== null ||
-    snapshot.localRunQuestion !== null;
+    openMemberWaitKeys({
+      localRunQuestion: snapshot.localRunQuestion,
+      messages,
+    }).length > 0;
   useExternalSyncEffect(() => {
     applySendQueueEvent({
       type: "generation-status-synced",
@@ -1840,6 +1864,8 @@ export const useChatSession = ({
 
   return {
     activitySession: chat,
+    approvalIdsAwaitedAtOpen: workAwaitedAtOpen.approvalIds,
+    workAwaitedAtOpen,
     clientStatus: status,
     reconnecting,
     refreshAnswers,
@@ -1851,15 +1877,19 @@ export const useChatSession = ({
     loadOlderError,
     resendLatestMessage,
     sendMessage,
+    continuePausedTurn,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
+    /** A stop was asked for and the turn has not ended yet. */
+    stopPending: stopState.status === "pending",
     turnAbandoned,
     computerWait,
     turnSentAt,
+    turnsStarted,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,

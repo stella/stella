@@ -35,12 +35,15 @@ import {
   type ProviderValue,
 } from "@/components/ai-config-role-models.logic";
 import { AIProviderIcon } from "@/components/ai-provider-icons";
-import { getModelPickerView } from "@/components/chat/chat-model-options-menu.logic";
+import {
+  EFFORT_LABEL_KEY,
+  getModelPickerView,
+} from "@/components/chat/chat-model-options-menu.logic";
 import type {
   ModelPickerEntry,
   ModelRecommendation,
 } from "@/components/chat/chat-model-options-menu.logic";
-import { ChatRunTargetMenu } from "@/components/chat/chat-run-target-menu";
+import { LocalModelOptions } from "@/components/chat/chat-run-target-menu";
 import {
   ComposerSubmenuSearch,
   useFocusSearchOnOpen,
@@ -49,22 +52,11 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { modelOptionsOptions } from "@/features/chat/queries";
 import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { TranslationKey } from "@/i18n/types";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { queryView } from "@/lib/query-view.logic";
 
 export const CHAT_MODEL_MENU_POPUP_CLASS_NAME =
   "w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)";
-
-export const EFFORT_LABEL_KEY = {
-  none: "chat.modelSelector.effortValues.none",
-  minimal: "chat.modelSelector.effortValues.minimal",
-  low: "chat.modelSelector.effortValues.low",
-  medium: "chat.modelSelector.effortValues.medium",
-  high: "chat.modelSelector.effortValues.high",
-  xhigh: "chat.modelSelector.effortValues.xhigh",
-  max: "chat.modelSelector.effortValues.max",
-} as const satisfies Record<ReasoningEffort, TranslationKey>;
 
 export type ComposerModelsMenuProps = {
   activeOrganizationId: string;
@@ -143,30 +135,29 @@ type ChatModelOptionsMenuProps = {
 };
 
 /**
- * The single model-picker body shared by the composer (+) menu and dock. A
- * thread that runs on the member's computer uses the model its harness
- * offers, chosen under Run on, so stella's own models are not offered as if
- * they applied; choosing stella cloud brings them back.
+ * The single model-picker body shared by the composer (+) menu and the model
+ * chip: the models of the place the chat runs, which the where chip picks.
+ * In the cloud, Auto or one of stella's models; on the member's computer,
+ * the models its coding agent offers.
  */
 export const ChatModelOptionsMenu = ({
   enabled,
   models,
   open,
-}: ChatModelOptionsMenuProps) => (
-  <>
-    {models.runTarget.type === "choice" && (
-      <ChatRunTargetMenu
+}: ChatModelOptionsMenuProps) => {
+  const { runTarget } = models;
+  if (runTarget.type === "choice" && runTarget.selected.kind === "local") {
+    return (
+      <LocalModelOptions
         activeOrganizationId={models.activeOrganizationId}
         enabled={enabled}
-        onSelect={models.runTarget.select}
-        selected={models.runTarget.selected}
+        onSelect={runTarget.select}
+        selected={runTarget.selected}
       />
-    )}
-    {chatRunOnTarget(models.runTarget).kind !== "local" && (
-      <CloudModelOptions enabled={enabled} models={models} open={open} />
-    )}
-  </>
-);
+    );
+  }
+  return <CloudModelOptions enabled={enabled} models={models} open={open} />;
+};
 
 /** stella's own models: Auto routing or an explicit model and effort. */
 const CloudModelOptions = ({

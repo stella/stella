@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Vous prévient lorsqu'un document est prêt ou qu'une synchronisation demande votre attention.",
     "permissionAccessibility": "Accessibilité",
     "permissionAccessibilityDescription": "Permet à la chronologie d'activité d'enregistrer les titres de fenêtres.",
+    "permissionMicrophone": "Microphone",
+    "permissionMicrophoneDescription": "Permet à la dictée de vous entendre tant que vous maintenez son raccourci.",
     "permissionAllowed": "Autorisé",
     "permissionAllow": "Autoriser",
     "permissionOpenSettings": "Ouvrir les réglages",
@@ -294,6 +296,7 @@
     "errorReadHistory": "Impossible de charger l’historique du presse-papiers.",
     "errorUpdateHistory": "Impossible de mettre à jour l’historique du presse-papiers.",
     "formattedText": "Texte mis en forme",
+    "dictation": "Dictée",
     "image": "Image",
     "imageCleanupPending": "Certaines données d’image supprimées n’ont pas pu être effacées. Le nettoyage sera retenté automatiquement.",
     "imageDimensions": "{width} × {height} px",
@@ -581,7 +584,41 @@
   },
   "dictation": {
     "title": "Dictée",
-    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée.",
+    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée. Lorsque la correction par IA est activée, le texte transcrit, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs et la mise en forme ; stella ne le conserve pas.",
+    "descriptionCloud": "Maintenez {shortcut} et parlez. Le texte apparaît dans l’application que vous utilisez. La parole est transcrite par stella AI et n’est pas conservée par stella.",
+    "cleanup": {
+      "title": "Corriger avec l’IA",
+      "description": "La parole est toujours transcrite sur cet ordinateur et l’audio ne le quitte jamais. Lorsque la correction est activée, le texte transcrit est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs de reconnaissance et appliquer la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras ». stella ne le conserve pas. La correction reçoit aussi le type d’application dans laquelle vous dictez, comme un e-mail ou une messagerie, pour que le texte s’y prête.",
+      "descriptionCloud": "Lorsque la correction est activée, stella AI corrige aussi les erreurs de reconnaissance du texte transcrit et applique la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras ». La correction reçoit aussi le type d’application dans laquelle vous dictez, comme un e-mail ou une messagerie, pour que le texte s’y prête."
+    },
+    "context": {
+      "windowTitle": {
+        "title": "Partager le titre de la fenêtre avec la correction par l’IA",
+        "description": "La correction reçoit aussi le titre de la fenêtre dans laquelle vous dictez, pour distinguer par exemple un contrat d’une note interne. Les titres de fenêtre peuvent contenir des noms de clients ou de dossiers. Le titre est envoyé via stella au fournisseur d’IA de votre organisation, et stella ne le conserve pas."
+      },
+      "textBeforeCursor": {
+        "title": "Partager le texte avant le curseur avec la correction par l’IA",
+        "description": "La correction reçoit aussi jusqu’à {limit, number} caractères avant le curseur, pour que la dictée prolonge le texte que vous rédigez. Une partie du document dans lequel vous êtes est ainsi envoyée via stella au fournisseur d’IA de votre organisation, et stella ne la conserve pas."
+      }
+    },
+    "keptInHistory": "Chaque dictée est aussi conservée dans l’historique du presse-papiers de cet ordinateur.",
+    "destination": {
+      "title": "Transcrire avec",
+      "local": "Cet ordinateur",
+      "cloud": "stella AI",
+      "cloudDescription": "L’audio quitte cet ordinateur : il est envoyé à stella puis, via le fournisseur d’IA de stella, au fournisseur du modèle choisi pour être transcrit. stella ne le conserve pas.",
+      "unavailableRegion": "stella AI ne propose pas encore de transcription dans la région de votre organisation.",
+      "unavailableProvider": "Le fournisseur d’IA de votre organisation ne propose pas de transcription.",
+      "unavailable": "La transcription par stella AI n’est pas disponible pour le moment.",
+      "model": "Modèle de transcription"
+    },
+    "language": {
+      "title": "Langue de dictée",
+      "description": "La parole est reconnue dans cette langue et la correction y conserve le texte. Automatique utilise les langues de l’affichage et des claviers de cet ordinateur.",
+      "automatic": "Automatique",
+      "automaticWith": "Automatique ({languages})",
+      "noResults": "Aucune langue trouvée"
+    },
     "modelNeeded": "Le modèle vocal s'exécute sur cet ordinateur.",
     "download": "Télécharger ({size} Mo)",
     "downloading": "Téléchargement du modèle vocal : {percent} %",
@@ -592,8 +629,13 @@
       "accessibility": "Autorisez l'accès Accessibilité pour que stella puisse écrire dans d'autres applications.",
       "microphone": "stella n'entend pas votre micro. Vérifiez l'accès au micro dans les Réglages Système.",
       "modelMissing": "Téléchargez d'abord le modèle vocal.",
-      "transcription": "La transcription a échoué. Réessayez."
-    }
+      "transcription": "La transcription a échoué. Réessayez.",
+      "focusChanged": "Vous êtes passé à une autre application avant que le texte soit prêt, rien n’a donc été saisi. Réessayez.",
+      "focusUnconfirmed": "stella n’a pas pu confirmer quelle application est au premier plan, rien n’a donc été saisi. Réessayez.",
+      "shortcutHeld": "Relâchez les touches du raccourci pour saisir le texte. Rien n’a été saisi ; réessayez.",
+      "cloudTranscription": "stella AI n’a pas pu transcrire cette dictée et le modèle vocal n’est pas sur cet ordinateur. Réessayez, ou choisissez « Cet ordinateur » pour « Transcrire avec » et téléchargez le modèle."
+    },
+    "failureKeptInHistory": "Le texte se trouve dans l’historique du presse-papiers."
   },
   "shortcut": {
     "title": "Raccourci du presse-papiers",
@@ -710,6 +752,18 @@
     "introduceActivityTitle": "Nouveau : chronologie d'activité",
     "introduceActivityBody": "L'activité est maintenant disponible pour votre compte. Rien n'est enregistré tant que vous ne la lancez pas dans la fenêtre d'activité.",
     "openActivity": "Ouvrir l'activité",
+    "dictationModel": "Le modèle vocal ({size} Mo) est téléchargé une fois et fonctionne sur cet ordinateur.",
+    "dictationTurnOn": "Activer et télécharger",
+    "dictationDownloadContinues": "Vous pouvez continuer. Le téléchargement se poursuit en arrière-plan.",
+    "dictationReady": "La dictée est activée et prête.",
+    "dictationTryLabel": "Dictez ici",
+    "dictationTryPlaceholder": "Cliquez ici, maintenez {shortcut} et dites une phrase.",
+    "dictationListening": "À l'écoute…",
+    "dictationTranscribing": "Transcription de vos paroles…",
+    "dictationMicrophone": "Permet à stella de vous entendre tant que vous maintenez le raccourci.",
+    "dictationAccessibility": "Permet à stella de saisir vos paroles dans l'application que vous utilisez.",
+    "dictationFailed": "stella desktop n'a pas pu activer la dictée. Réessayez.",
+    "introduceDictationTitle": "Nouveau : dictée",
     "guideWaiting": "Activez stella desktop dans la liste ci-dessus pour autoriser l'Accessibilité.",
     "guideAllowed": "stella desktop est autorisé",
     "never": {
@@ -816,6 +870,27 @@
       "runs_can_write": "Les exécutions locales peuvent écrire dans ce dossier, il ne peut donc pas contenir de compétence.",
       "network_folder": "Ce dossier se trouve sur un partage réseau. Les compétences doivent être sur le disque de cet ordinateur.",
       "path_changed": "Un dossier parent a changé. Retirez ce dossier et ajoutez-le de nouveau."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Dossiers liés",
+    "description": "Dossiers de cet ordinateur dans lesquels l'agent d'une conversation peut travailler. La conversation ne voit que le nom du dossier ; son chemin reste sur cet ordinateur.",
+    "add": "Lier un dossier",
+    "remove": "Délier",
+    "removeFolder": "Délier {name}",
+    "state": {
+      "offline": "Le disque qui contient ce dossier n'est pas connecté.",
+      "moved": "Ce dossier a été déplacé, renommé ou supprimé. Déliez-le puis liez-le à nouveau.",
+      "protected": "Ce dossier contient les données de stella ou un dossier de compétences : l'agent ne peut donc pas y travailler.",
+      "unreadable": "Ce dossier n'a pas pu être lu."
+    },
+    "notice": {
+      "action_failed": "Cela n'a pas fonctionné. Réessayez.",
+      "too_many": "Cet ordinateur a déjà autant de dossiers liés qu'il peut en garder. Déliez-en un d'abord.",
+      "not_a_folder": "Choisissez un dossier.",
+      "network_folder": "Ce dossier se trouve sur un partage réseau. Liez un dossier du disque de cet ordinateur.",
+      "protected": "Ce dossier contient les données de stella ou un dossier de compétences : l'agent ne peut donc pas y travailler.",
+      "unreadable": "Ce dossier n'a pas pu être lu."
     }
   }
 }

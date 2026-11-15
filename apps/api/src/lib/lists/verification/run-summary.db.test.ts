@@ -89,6 +89,7 @@ const SEEDED: readonly SeededEvent[] = [
       },
       facts: { changed: [], removed: [] },
       modelRef: "test:model",
+      assertedOn: { type: "none" },
     },
   },
   {

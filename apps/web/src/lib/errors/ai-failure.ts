@@ -23,6 +23,7 @@ export const AI_FAILURE_ERROR_KEYS = {
   [AI_FAILURE_CODES.deadline_exceeded]: "errors.apiCodes.aiDeadlineExceeded",
   [AI_FAILURE_CODES.loop_detected]: "chat.sendErrorLoopDetected",
   [AI_FAILURE_CODES.empty_completion]: "chat.sendErrorEmptyCompletion",
+  [AI_FAILURE_CODES.turn_too_large]: "chat.sendErrorTurnTooLarge",
   [AI_FAILURE_CODES.local_runner_needs_login]: "chat.localRun.errorNeedsLogin",
   [AI_FAILURE_CODES.local_runner_limit_reached]:
     "chat.localRun.errorLimitReached",
@@ -33,6 +34,8 @@ export const AI_FAILURE_ERROR_KEYS = {
   [AI_FAILURE_CODES.local_runner_not_reached]: "chat.localRun.errorNotReached",
   [AI_FAILURE_CODES.local_runner_relinked]: "chat.localRun.errorRelinked",
   [AI_FAILURE_CODES.local_runner_restoring]: "chat.localRun.errorRestoring",
+  [AI_FAILURE_CODES.local_runner_folder_unavailable]:
+    "chat.localRun.errorFolderUnavailable",
   [AI_FAILURE_CODES.unknown]: "errors.apiCodes.aiUnknown",
   [AI_FAILURE_CODES.role_not_configured]: "capabilityActions.aiMissing",
   [AI_FAILURE_CODES.own_key_required]: "capabilityActions.aiMissing",

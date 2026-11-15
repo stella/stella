@@ -320,6 +320,14 @@
       "reason": "Runs under published_exports_required in ci-checks-generated; package sources, manifests and packing inputs select that scope."
     },
     {
+      "path": "scripts/check-tailwind-sources.test.ts",
+      "reason": "Runs as the Tailwind sources root check in ci-checks-rest; its declared inputs in scripts/ci-root-check-inputs.json, which include this script, select it."
+    },
+    {
+      "path": "scripts/check-tailwind-sources.ts",
+      "reason": "Runs as the Tailwind sources root check in ci-checks-rest; its declared inputs in scripts/ci-root-check-inputs.json, which include this script, select it."
+    },
+    {
       "path": "scripts/fork-contributor-commands.sh",
       "reason": "Runs as the fork contributor commands root check in ci-checks-rest; its declared inputs in scripts/ci-root-check-inputs.json, which include this script, select it."
     },

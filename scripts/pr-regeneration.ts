@@ -25,7 +25,6 @@ export const PR_GENERATORS = {
     outputs: [
       "apps/api/drizzle/**",
       "apps/api/src/lib/db/migration-alias-inventory.json",
-      "scripts/sha256-migration-ledger.json",
       "scripts/migration-lock-baseline.ts",
       "scripts/migration-lock-allowances/**",
     ],

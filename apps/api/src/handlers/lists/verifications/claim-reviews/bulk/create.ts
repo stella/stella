@@ -19,18 +19,12 @@ import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry"
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type { ClaimReviewEventPayload } from "@/api/lib/lists/verification/contract";
 import {
-  contestedFactIdsOfClaim,
-  qualifiersOfClaim,
+  claimNeedsAttention,
   readClaimReviews,
   readClaimsForBulkReview,
   readRunAttentionInputs,
   serializeClaimReview,
 } from "@/api/lib/lists/verification/read-run";
-import {
-  EMPTY_CLAIM_REVIEW,
-  needsAttention,
-  reviewedView,
-} from "@/api/lib/lists/verification/review-fold";
 
 const bodySchema = v.object({
   runId: resourceIdSchema("legalListVerificationRun"),
@@ -115,16 +109,14 @@ const createBulkClaimReviews = createSafeHandler(
               VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX
           );
         });
-        const attention = toMark.filter((claim) => {
-          const review = before.get(claim.id)?.review ?? EMPTY_CLAIM_REVIEW;
-          return needsAttention(
-            {
-              ...reviewedView(claim, review),
-              qualifiers: qualifiersOfClaim(claim, review, inputs.standings),
-            },
-            contestedFactIdsOfClaim(inputs, review),
-          );
-        });
+        // The same reading the run read serves on each claim.
+        const attention = toMark.filter((claim) =>
+          claimNeedsAttention(
+            claim,
+            before.get(claim.id)?.review ?? null,
+            inputs,
+          ),
+        );
         if (attention.length > 0) {
           return {
             type: "needs-attention",

@@ -399,6 +399,10 @@ export const ENUM_COLUMN_ROLES = {
     stance: ATTRIBUTE,
     to_kind: ATTRIBUTE,
   },
+  // Whether a hold covers a matter or one item: fixed when it is placed.
+  legal_holds: {
+    scope_type: ATTRIBUTE,
+  },
   legal_list_claim_carry_outcomes: {
     entity_feature_gate: ATTRIBUTE,
     outcome: ATTRIBUTE,
@@ -408,6 +412,10 @@ export const ENUM_COLUMN_ROLES = {
     kind: ATTRIBUTE,
   },
   legal_list_claims: {
+    asserted_on_precision: ATTRIBUTE,
+    // Where a claim's date came from; `pending` only marks a row the backfill
+    // has yet to read, not a step a claim moves through.
+    asserted_on_source: ATTRIBUTE,
     entity_feature_gate: ATTRIBUTE,
     framing: ATTRIBUTE,
     type: ATTRIBUTE,
@@ -505,6 +513,9 @@ export const ENUM_COLUMN_ROLES = {
   },
   mcp_web_handoff: {
     kind: ATTRIBUTE,
+  },
+  model_run_budgets: {
+    run_kind: ATTRIBUTE,
   },
   notifications: {
     entity_type: ATTRIBUTE,

@@ -1,5 +1,0 @@
-{
-  "metric": "throw-outside-boundary",
-  "delta": 1,
-  "reason": "read-skill-resource refuses a cursor that does not continue the resource as it is now; chat tools report a refusal to the model by throwing ChatToolError, like the tool's not-found refusal beside it."
-}

@@ -59,7 +59,7 @@ use tokio::sync::{mpsc, oneshot};
 pub(crate) use endpoint::EndpointError;
 use endpoint::Endpoints;
 pub(crate) use protocol::{
-  CHECKPOINT_STORE_SUFFIX, FolderRestore as SidecarFolderRestore,
+  BackgroundTasks, CHECKPOINT_STORE_SUFFIX, FolderRestore as SidecarFolderRestore,
   HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
   RestoreOutcome, SidecarRunStart, SkillFolderRef,
 };
@@ -70,9 +70,9 @@ use protocol::{
 
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessModel, HarnessReport,
-  HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, RejectReason,
-  RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
-  UnavailableHarness, UnsupportedHarness,
+  HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, ReasoningEffort,
+  RejectReason, RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh,
+  SignedOutHarness, UnavailableHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -312,6 +312,7 @@ enum Control {
   },
   Ack(Ack),
   WatchProcesses(mpsc::Sender<HarnessProcess>),
+  WatchBackground(mpsc::UnboundedSender<BackgroundTasks>),
   GrantProcess(String),
   #[cfg_attr(
     not(all(test, unix)),
@@ -358,6 +359,8 @@ impl HarnessSidecar {
         probes: HashMap::new(),
         restores: HashMap::new(),
         processes: None,
+        background: None,
+        background_counts: HashMap::new(),
       }
       .run(),
     );
@@ -371,6 +374,18 @@ impl HarnessSidecar {
   ) -> Result<mpsc::Receiver<HarnessProcess>, SidecarUnavailable> {
     let (reports, receiver) = mpsc::channel(PROCESS_QUEUE);
     self.control(Control::WatchProcesses(reports))?;
+    Ok(receiver)
+  }
+
+  /// What each kept harness process runs in the background, from now on; a
+  /// later call replaces the earlier watcher. Unbounded: the watcher keeps
+  /// only the latest count of a run, so a dropped report (a 0 above all)
+  /// would leave it showing work that ended.
+  pub(crate) fn watch_background(
+    &self,
+  ) -> Result<mpsc::UnboundedReceiver<BackgroundTasks>, SidecarUnavailable> {
+    let (reports, receiver) = mpsc::unbounded_channel();
+    self.control(Control::WatchBackground(reports))?;
     Ok(receiver)
   }
 
@@ -588,6 +603,13 @@ pub(crate) fn harness_report(
         .map(|model| HarnessModel {
           id: model.id.clone(),
           label: model.label.clone(),
+          is_default: model.is_default,
+          // Each effort once, in the contract's order.
+          reasoning_efforts: ReasoningEffort::ALL
+            .iter()
+            .copied()
+            .filter(|effort| model.reasoning_efforts.contains(effort))
+            .collect(),
         })
         .collect();
       if models.is_empty() {
@@ -936,6 +958,12 @@ struct Supervisor {
   restores: HashMap<String, PendingRestore>,
   /// Where reported harness processes go.
   processes: Option<mpsc::Sender<HarnessProcess>>,
+  /// Where background task counts go.
+  background: Option<mpsc::UnboundedSender<BackgroundTasks>>,
+  /// Each count above 0 and the holder it came from, by run id: a watcher
+  /// that comes later hears them, and a holder that is lost takes its kept
+  /// processes with it.
+  background_counts: HashMap<String, (PathBuf, u32)>,
 }
 
 impl Supervisor {
@@ -972,6 +1000,7 @@ impl Supervisor {
           }
           Some(Control::Ack(ack)) => self.ack(ack).await,
           Some(Control::WatchProcesses(reports)) => self.processes = Some(reports),
+          Some(Control::WatchBackground(reports)) => self.watch_background(reports),
           Some(Control::GrantProcess(id)) => self.grant_process(id).await,
         },
         Some(event) = self.events.recv() => self.event(event).await,
@@ -1408,7 +1437,7 @@ impl Supervisor {
       return;
     }
     match event {
-      LinkEvent::Message(message) => self.dispatch(message),
+      LinkEvent::Message(message) => self.dispatch(&dir, message),
       LinkEvent::Broken(error) => {
         // The kind only: a line may carry run data.
         let kind = match error {
@@ -1481,7 +1510,7 @@ impl Supervisor {
     }
   }
 
-  fn dispatch(&mut self, message: SidecarMessage) {
+  fn dispatch(&mut self, dir: &Path, message: SidecarMessage) {
     match message {
       SidecarMessage::Hello(_) => {
         tracing::warn!(target: LOG_TARGET, "harness holder repeated its hello");
@@ -1541,6 +1570,16 @@ impl Supervisor {
             );
           }
         }
+      }
+      SidecarMessage::BackgroundTasks(tasks) => {
+        if tasks.count == 0 {
+          self.background_counts.remove(&tasks.run_id);
+        } else {
+          self
+            .background_counts
+            .insert(tasks.run_id.clone(), (dir.to_path_buf(), tasks.count));
+        }
+        self.report_background(tasks);
       }
       SidecarMessage::Rejected(rejected) => {
         tracing::warn!(
@@ -1655,6 +1694,49 @@ impl Supervisor {
       self.fail_run(&run_id);
     }
     self.fail_probes(dir);
+    self.end_background(dir);
+  }
+
+  /// The holder's kept processes went with it: each count it reported above
+  /// 0 is reported as 0, so no chat keeps showing work that no longer runs.
+  fn end_background(&mut self, dir: &Path) {
+    let ended: Vec<String> = self
+      .background_counts
+      .iter()
+      .filter(|(_run_id, (holder, _count))| holder.as_path() == dir)
+      .map(|(run_id, _count)| run_id.clone())
+      .collect();
+    for run_id in ended {
+      self.background_counts.remove(&run_id);
+      self.report_background(BackgroundTasks { run_id, count: 0 });
+    }
+  }
+
+  /// A new watcher hears every count above 0 a holder reported before it
+  /// came: a holder reports a count when it changes, and on hello.
+  fn watch_background(&mut self, reports: mpsc::UnboundedSender<BackgroundTasks>) {
+    self.background = Some(reports);
+    let held: Vec<BackgroundTasks> = self
+      .background_counts
+      .iter()
+      .map(|(run_id, (_holder, count))| BackgroundTasks {
+        run_id: run_id.clone(),
+        count: *count,
+      })
+      .collect();
+    for tasks in held {
+      self.report_background(tasks);
+    }
+  }
+
+  fn report_background(&self, tasks: BackgroundTasks) {
+    let watched = self
+      .background
+      .as_ref()
+      .is_some_and(|reports| reports.send(tasks).is_ok());
+    if !watched {
+      tracing::warn!(target: LOG_TARGET, "a background task count had no watcher");
+    }
   }
 
   fn fail_probes(&mut self, dir: &Path) {
@@ -1705,7 +1787,7 @@ impl Supervisor {
         continue;
       }
       match event {
-        LinkEvent::Message(message) => self.dispatch(message),
+        LinkEvent::Message(message) => self.dispatch(&dir, message),
         LinkEvent::Broken(_) | LinkEvent::Closed => {
           self.links.remove(&dir);
         }

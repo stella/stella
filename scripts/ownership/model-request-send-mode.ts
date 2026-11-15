@@ -13,6 +13,7 @@ const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
   "apps/api/src/handlers/case-law/polarity/llm-classifier.ts",
   "apps/api/src/handlers/clauses/rewrite.ts",
   "apps/api/src/handlers/contacts/extract-procuracao.ts",
+  "apps/api/src/handlers/dictation/cleanup.ts",
   "apps/api/src/handlers/document-reviews/reference-positions.ts",
   "apps/api/src/handlers/entities/placements/suggest.ts",
   "apps/api/src/handlers/playbooks/derive-ask.ts",
@@ -108,6 +109,11 @@ export default {
         path: "apps/api/src/handlers/chat/thread-recap.ts",
         reason:
           "Recaps the window `loadRecapMessageWindow` returns, which reads the send mode after the messages.",
+      },
+      {
+        path: "apps/api/src/handlers/skills/from-chat/draft.ts",
+        reason:
+          "Drafts a skill from the window `loadRecapMessageWindow` returns, which reads the send mode after the messages, and refuses an anonymized thread.",
       },
       {
         path: "apps/api/src/handlers/chat/improve-prompt.ts",

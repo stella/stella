@@ -75,8 +75,6 @@ export const BASELINE_PATHS = {
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
   /** scripts/render-phase-update-baseline.ts */
   renderPhaseUpdate: ".oxlint-plugins/no-render-phase-update-baseline.json",
-  /** apps/api/scripts/mcp-coverage-guard.ts */
-  mcpCoverage: "apps/api/mcp-coverage-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
   mcpSurface: "apps/api/mcp-surface-baseline.json",
   /** apps/api/scripts/deployment-feature-guard.ts */

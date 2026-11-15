@@ -38,7 +38,7 @@
               "runId": "run-recorded-1",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 6,
+                "protocolVersion": 7,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -58,7 +58,7 @@
               "runId": "run-recorded-1",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 6,
+                "protocolVersion": 7,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -109,6 +109,9 @@
                   "turnModel": {
                     "model": "gpt-5.4-mini",
                     "provider": "openai"
+                  },
+                  "turnSpend": {
+                    "promptTokens": 2
                   },
                   "refContext": {
                     "refs": [
@@ -415,7 +418,7 @@
               "runId": "run-recorded-2",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 6,
+                "protocolVersion": 7,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -538,7 +541,7 @@
               "runId": "run-recorded-2",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 6,
+                "protocolVersion": 7,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -702,6 +705,9 @@
                   "turnModel": {
                     "model": "gpt-5.4-mini",
                     "provider": "openai"
+                  },
+                  "turnSpend": {
+                    "promptTokens": 4
                   },
                   "refContext": {
                     "refs": [

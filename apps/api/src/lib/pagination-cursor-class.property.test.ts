@@ -6,9 +6,9 @@
  *
  * So the encoders are exercised here rather than the predicate restated: each
  * one is given the values it actually emits for, and its output has to be
- * recognizable. `encodeGlobalSearchCursor` is the reason the predicate carries
- * no length rule: it concatenates two base64 payloads around `==`, so no
- * single base64 length class covers it.
+ * recognizable. The global search cursor is the reason the predicate carries
+ * no length rule: one issued behind an offset prefix is two base64 payloads
+ * around `==`, so no single base64 length class covers it.
  *
  * `search_boe_legislation` is deliberately absent: the BOE numbers its own
  * pages, so a decimal offset is what a continuation echoes. That property
@@ -104,19 +104,21 @@ describe("every cursor encoder emits a cursor the surface recognizes", () => {
     );
   });
 
-  test("encodeGlobalSearchCursor, whose dual form carries an inner ==", () => {
+  test("encodeGlobalSearchCursor, alone and behind an offset prefix", () => {
     assertProperty(
-      "encodeGlobalSearchCursor, whose dual form carries an inner ==",
+      "encodeGlobalSearchCursor, alone and behind an offset prefix",
       fc.property(
         scoreArbitrary,
         globalHitIdArbitrary,
         fc.integer({ min: 1, max: 999 }),
-        (score, id, seen) =>
-          expect(
-            isIssuablePaginationCursor(
-              encodeGlobalSearchCursor({ tier: 2, score, id, seen }),
-            ),
-          ).toBe(true),
+        (score, id, seen) => {
+          const cursor = encodeGlobalSearchCursor({ tier: 2, score, id, seen });
+          // The form still read from the release that prefixed the payload:
+          // an unpadded offset cursor, `==`, then the payload.
+          const offset = encodeCursor(seen, "global").replace(/[=]+$/u, "");
+          expect(isIssuablePaginationCursor(cursor)).toBe(true);
+          expect(isIssuablePaginationCursor(`${offset}==${cursor}`)).toBe(true);
+        },
       ),
       { numRuns: 300 },
     );

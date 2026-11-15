@@ -1,3 +1,7 @@
+// parser-output-unchanged: [pl-kio] only adds the common-court reader with its paragraph numbering, which the procurement chamber's reader does not call.
+// parser-output-unchanged: [pl-kis] only adds the common-court reader with its paragraph numbering, which the tax-ruling reader does not call.
+// parser-output-unchanged: [pl-sn] only adds the common-court reader with its paragraph numbering, which the Supreme Court's reader does not call.
+// parser-output-unchanged: [pl-uokik] only adds the common-court reader with its paragraph numbering, which the competition authority's reader does not call.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: footnoteIds is supplied only by the PL-SN and UOKIK PDF readers; other callers retain sanitizeUrl and their existing link output.
 // parser-output-unchanged: [cz-nss] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
@@ -76,12 +80,14 @@ import {
   isPlNumberedReasonsHeading,
   isPlOpeningRecital,
   isPlReasonsHeading,
+  isPlRecitalLine,
   isPlRemedyFilingLine,
   isPlSignatureBlank,
   isPlSignatureLine,
   namesPlDocumentType,
   opensPlRuling,
   plRulingClauseStart,
+  statesPlAuthorityRuling,
 } from "@stll/legal-ast/polish-document-roles";
 // parser-output-unchanged: the subheading outline number moved unchanged into the printed-label grammar.
 import { SUBHEADING_OUTLINE_NUMBER_RE } from "@stll/legal-ast/printed-paragraph-labels";
@@ -93,6 +99,7 @@ import {
   renderHtmlWhiteSpace,
 } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
@@ -152,10 +159,32 @@ type ParsePlDecisionInput = {
    * any publisher's.
    */
   markup?: PlDecisionMarkup | undefined;
+  /**
+   * How the document sets out its parts, where its headings alone do not
+   * say. Omitted, the document is read as a court's decision.
+   */
+  layout?: PlDecisionLayout | undefined;
 };
 
+// parser-output-unchanged: the `layout` input is opt-in; only the tax administration's reader passes it, with its version bump, and every other caller reads its document as before.
 /**
- * `COMMON_COURT`: the courts' own editor, which SAOS copies and the courts'
+ * `SECTIONED_LETTER`: an authority's letter set out by its template under
+ * headings (the tax administration's interpretations, opinions and rulings).
+ * The heading it opens with, before any text, is its title; the authority
+ * states its ruling in the letter's opening in its own voice (`stwierdzam,
+ * że …`, `Dyrektor … odmawia …`, `Szef … wydał opinię …`); and a heading
+ * after the opening opens the body, which sets out the request, the
+ * assessment and the reasons under headings of their own.
+ */
+export const PL_DECISION_LAYOUT = {
+  SECTIONED_LETTER: "sectioned-letter",
+} as const;
+
+type PlDecisionLayout =
+  (typeof PL_DECISION_LAYOUT)[keyof typeof PL_DECISION_LAYOUT];
+
+/**
+ * `COMMON_COURT`:the courts' own editor, which SAOS copies and the courts'
  * portal serves. SAOS's serializer opens every inline element with a
  * newline, a line break inside a running sentence wraps it (see
  * `readCommonCourtInlines`), a list item is its marker and its text, text
@@ -257,6 +286,7 @@ type ParserState = {
   superscripts: boolean;
   boldSubheadings: boolean;
   markup: PlDecisionMarkup | undefined;
+  layout: PlDecisionLayout | undefined;
   /**
    * How the list a recital announced numbers its points (`… o zbadanie:`
    * then `1)`, `2)`, `a)`): its points, and the points nested under them,
@@ -317,6 +347,7 @@ type CreateStateOptions = {
   superscripts: boolean;
   boldSubheadings: boolean;
   markup: PlDecisionMarkup | undefined;
+  layout: PlDecisionLayout | undefined;
   caseNumber: string;
   fallbackDecisionTitle: string | undefined;
   declaredType: string | undefined;
@@ -328,6 +359,7 @@ const createState = ({
   superscripts,
   boldSubheadings,
   markup,
+  layout,
   caseNumber,
   fallbackDecisionTitle,
   declaredType,
@@ -349,6 +381,7 @@ const createState = ({
   superscripts,
   boldSubheadings,
   markup,
+  layout,
   recitalList: undefined,
   pendingMarker: undefined,
   listMarkers: new WeakMap(),
@@ -857,6 +890,40 @@ const opensStructuredHolding = (
   opensPlRuling(normalizedText) ||
   isPlLegalBasisRuling(normalizedText.replace(DECISION_ITEM_PREFIX_RE, ""));
 
+/**
+ * Whether a line of a sectioned letter's opening states its ruling in the
+ * authority's voice. The recital and the legal basis it rules on stay the
+ * head matter.
+ */
+const statesLetterRuling = (state: ParserState, text: string): boolean =>
+  state.layout === PL_DECISION_LAYOUT.SECTIONED_LETTER &&
+  statesPlAuthorityRuling(text) &&
+  !isPlRecitalLine(text);
+
+/**
+ * A sectioned letter's heading: the title, where the letter opens on it, or
+ * a section; a section after the opening opens the letter's body.
+ */
+const handleLetterHeading = (
+  state: ParserState,
+  plainText: string,
+  inlines: Inline[],
+): boolean => {
+  if (state.layout !== PL_DECISION_LAYOUT.SECTIONED_LETTER) {
+    return false;
+  }
+  if (!state.sawDecisionTitle && state.blocks.length === 0) {
+    pushHeading(state, 1, plainText, "decision-title", inlines);
+    state.sawDecisionTitle = true;
+    state.decisionTitle = plainText;
+    return true;
+  }
+  if (state.blocks.some((block) => block.type === "paragraph")) {
+    state.section = "reasoning";
+  }
+  return false;
+};
+
 const inferParagraphRole = (
   state: ParserState,
   plainText: string,
@@ -917,7 +984,11 @@ const inferParagraphRole = (
     case "preamble":
     case "composition":
     case "recital":
-      return isStructuredHolding || isUnnumberedOperative ? "holding" : "intro";
+      return isStructuredHolding ||
+        isUnnumberedOperative ||
+        statesLetterRuling(state, normalizedText)
+        ? "holding"
+        : "intro";
     default:
       state.section satisfies never;
       return panic("Unknown Polish decision region");
@@ -1490,6 +1561,10 @@ const parseHeadingElement = (
     return;
   }
 
+  if (handleLetterHeading(state, plainText, inlines)) {
+    return;
+  }
+
   pushHeading(
     state,
     tag === "h1" || tag === "h2" ? 2 : 3,
@@ -1986,6 +2061,7 @@ export const parsePlDecisionContent = (
     superscripts: input.superscripts === true,
     boldSubheadings: input.boldSubheadings === true,
     markup: input.markup,
+    layout: input.layout,
     caseNumber: input.caseNumber,
     fallbackDecisionTitle: normalizeDecisionTitle(input.decisionType),
     declaredType: input.decisionType,
@@ -2090,5 +2166,35 @@ export const parsePlDecisionContent = (
   return {
     documentAst,
     fulltext,
+  };
+};
+
+/**
+ * A common court's decision, as SAOS and the courts' own portal publish it.
+ * Neither marks the court's paragraph numbers as structure: the portal's
+ * numbered units are its ruling's points and the lists inside a paragraph,
+ * and the court prints the numbers of its reasons as text (`1. Pozwana
+ * podniosła …`). So the printed numbers move into the blocks through the
+ * one court-numbering reading, which takes them only where the reasons read
+ * as one numbering.
+ */
+export const parsePlCommonCourtDecision = (
+  input: Omit<ParsePlDecisionInput, "markup">,
+  parser: "pl-courts" | "pl-ncourt",
+): ParsePlDecisionOutput => {
+  const parsed = parsePlDecisionContent({
+    ...input,
+    markup: PL_DECISION_MARKUP.COMMON_COURT,
+  });
+  const blocks = courtParagraphNumbers(parsed.documentAst.blocks, {
+    parser,
+    caseNumber: input.caseNumber,
+    url: input.sourceUrl,
+  });
+  return {
+    documentAst: { ...parsed.documentAst, blocks },
+    fulltext: blocks
+      .flatMap((block) => (block.plainText ? [block.plainText] : []))
+      .join("\n\n"),
   };
 };

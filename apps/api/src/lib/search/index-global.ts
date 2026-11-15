@@ -674,23 +674,14 @@ const readGlobalSearch = async (
       case "initial":
         return {
           isFirstPage: true,
-          legacyOffset: null,
           searchCursor: null,
           seen: 0,
         };
       case "keyset":
         return {
           isFirstPage: false,
-          legacyOffset: null,
           searchCursor: parsedCursor.cursor,
           seen: parsedCursor.cursor.seen,
-        };
-      case "legacy":
-        return {
-          isFirstPage: false,
-          legacyOffset: parsedCursor.offset,
-          searchCursor: null,
-          seen: parsedCursor.offset,
         };
       case "invalid":
         return panic("searchGlobal received an invalid cursor");
@@ -700,9 +691,9 @@ const readGlobalSearch = async (
       }
     }
   })();
-  const { isFirstPage, legacyOffset, searchCursor, seen } = pagination;
+  const { isFirstPage, searchCursor, seen } = pagination;
   const pageLimit = Math.min(limit, GLOBAL_SEARCH_RESULT_LIMIT - seen);
-  const fetchLimit = (legacyOffset ?? 0) + pageLimit + 1;
+  const fetchLimit = pageLimit + 1;
   // Counts and facets are computed only on the first page. Subsequent
   // pages reuse the values the client already has, saving ~7 of the
   // 15 SQL round-trips per request.
@@ -1253,8 +1244,7 @@ const readGlobalSearch = async (
   ].toSorted(compareScoredSearchHits);
 
   const page = paginateScoredSearchHits({
-    scoredHits:
-      legacyOffset === null ? scoredHits : scoredHits.slice(legacyOffset),
+    scoredHits,
     limit: pageLimit,
     seen,
   });

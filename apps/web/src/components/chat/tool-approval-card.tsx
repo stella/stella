@@ -7,12 +7,17 @@ import { useTranslations } from "use-intl";
 import {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_TOOL_NAME,
+  BROWSER_FIND_TYPE,
   isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 import { browserSiteGrantHost } from "@stll/api-contract/browser-site-grants";
 import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
+import {
+  localRunProposedPlan,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
 import {
   requiresPerCallChatApproval,
   USE_CONNECTOR_SECRET_TOOL_NAME,
@@ -39,9 +44,11 @@ import {
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { MessageResponse } from "@/components/ai-elements/message";
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
@@ -53,6 +60,7 @@ import {
   isNonPersistentGrantChatToolName,
   isRegistryWriteSummaryToolName,
   isSuggestChangesApplyOutput,
+  LOCAL_RUN_TITLE_KEYS,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
@@ -61,6 +69,7 @@ import type {
   PendingApprovalToolPart,
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
+import { useLocalRunSubtitleText } from "@/components/chat/local-run-subtitle";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import {
   describeProposedDocxEdits,
@@ -540,6 +549,32 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
   return null;
 };
 
+/**
+ * The card's title. A step a coding agent asks about on the member's computer
+ * is named by its kind, as its row names it.
+ */
+const approvalTitleKey = (name: ApprovalToolName, part: ApprovalToolPart) => {
+  const titleKind =
+    localRunToolView({
+      name,
+      input: getApprovalPartInput(part),
+      output: part.output,
+    })?.titleKind ?? null;
+  return titleKind === null
+    ? getChatToolTitleKey(name)
+    : LOCAL_RUN_TITLE_KEYS[titleKind];
+};
+
+/**
+ * A card the thread already waited on when the page opened is the user's to
+ * answer: answering it on its own would resume tool work on a reopened thread
+ * with no one asking.
+ */
+const awaitedAtOpen = (
+  approvalId: string | null,
+  approvalIdsAwaitedAtOpen: ReadonlySet<string>,
+) => approvalId !== null && approvalIdsAwaitedAtOpen.has(approvalId);
+
 export const ToolApprovalCard = ({
   action,
   activeFileName,
@@ -549,6 +584,7 @@ export const ToolApprovalCard = ({
 }: ToolApprovalCardProps) => {
   const {
     activeOrganizationId,
+    approvalIdsAwaitedAtOpen,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -582,7 +618,7 @@ export const ToolApprovalCard = ({
     showsExternalInput,
   } = getToolApprovalState({
     blockedApprovalTools,
-    defaultLabel: t(getChatToolTitleKey(name)),
+    defaultLabel: t(approvalTitleKey(name, part)),
     name,
     part,
     isTurnActive,
@@ -593,7 +629,7 @@ export const ToolApprovalCard = ({
     ? getToolOutputError(part.output)
     : undefined;
   const failureLabelKey = isFailed
-    ? toolFailureLabelKey(rawErrorDetails, part.state)
+    ? toolFailureLabelKey({ name, output: part.output, state: part.state })
     : undefined;
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
@@ -622,6 +658,7 @@ export const ToolApprovalCard = ({
       : async () => await browserApproval.confirmSiteGrant(part.id);
   const shouldAutoApprove =
     !isBlocked &&
+    !awaitedAtOpen(approvalId, approvalIdsAwaitedAtOpen) &&
     !requiresPerCallChatApproval(name) &&
     (isGrantAutoApproval ||
       browserApproval.isReadsAutoApproval ||
@@ -870,8 +907,10 @@ const ToolApprovalSummary = ({
 
   const name = getApprovalToolName(part);
   const input = getApprovalPartInput(part);
+  const proposedPlan = localRunProposedPlan({ name, input });
   return (
     <>
+      {proposedPlan !== null && <LocalRunPlanSummary plan={proposedPlan} />}
       {part.name === "update-entity-fields" && part.input !== undefined && (
         <UpdateSummary input={part.input} />
       )}
@@ -914,9 +953,50 @@ const ToolApprovalSummary = ({
       {isRegistryWriteSummaryToolName(name) && input !== undefined && (
         <RegistryWriteSummary input={input} toolName={name} />
       )}
+      <LocalRunToolSummary input={input} name={name} />
     </>
   );
 };
+
+/**
+ * What a coding agent on the member's computer asks to do, as its step row
+ * names it (a command, file names, a web search's query, the key a browser
+ * step presses on which element of which page), so the member approves the
+ * step itself rather than a tool name. Nothing for any other tool.
+ */
+const LocalRunToolSummary = ({
+  input,
+  name,
+}: {
+  input: unknown;
+  name: string;
+}) => {
+  const localRunSubtitleText = useLocalRunSubtitleText();
+  const view = localRunToolView({ name, input, output: undefined });
+  const subtitle = view === null ? null : localRunSubtitleText(view.subtitle);
+  if (subtitle === null || subtitle === "") {
+    return null;
+  }
+  return (
+    <div className="border-border/50 border-t px-3 py-2">
+      <p className="text-xs wrap-break-word">{subtitle}</p>
+    </div>
+  );
+};
+
+/**
+ * The plan a coding agent proposes before it acts, read whole so the member
+ * knows what approving it lets the agent do.
+ */
+const LocalRunPlanSummary = ({ plan }: { plan: string }) => (
+  <div className="border-border/50 border-t">
+    <ScrollArea axis="vertical" className="max-h-96">
+      <div className="px-3 py-2 text-sm">
+        <MessageResponse mode="static">{plan}</MessageResponse>
+      </div>
+    </ScrollArea>
+  </div>
+);
 
 type SummaryMatter = { color: string | null; id: string; name: string };
 
@@ -1252,9 +1332,13 @@ const browserActionTranslationKey = (command: BrowserControlCommand) => {
     case BROWSER_CONTROL_ACTION.select:
       return "chat.approval.browser.actions.select";
     case BROWSER_CONTROL_ACTION.snapshot:
-      return (command.textOffset ?? 0) > 0
-        ? "chat.approval.browser.actions.snapshotContinue"
-        : "chat.approval.browser.actions.snapshot";
+      return command.cursor === undefined
+        ? "chat.approval.browser.actions.snapshot"
+        : "chat.approval.browser.actions.snapshotContinue";
+    case BROWSER_CONTROL_ACTION.find:
+      return command.search.type === BROWSER_FIND_TYPE.headings
+        ? "chat.approval.browser.actions.findHeadings"
+        : "chat.approval.browser.actions.find";
     case BROWSER_CONTROL_ACTION.switchTab:
       return "chat.approval.browser.actions.switchTab";
     default:

@@ -99,6 +99,11 @@ const BENIGN: readonly RegExp[] = [
   // "KU", which no court registry does, and the reference is not a court
   // docket the corpus can hold.
   /^[čc]\.\s{0,3}j\.:?\s{0,3}KU\p{Lu}{2,4}\s{1,3}\d{1,7}\/\d{4}(?![\p{L}\d/-])/u,
+  // Prague City Hall file number ("č. j. MHMP 123456/2020", its "S-MHMP"
+  // file-register spelling, optionally closed by the clerk's initials): the
+  // municipal authority's code opens the reference where a court docket
+  // carries a chamber number, and the file is not a court decision.
+  /^[čc]\.\s{0,3}j\.:?\s{0,3}(?:S-)?MHMP\s{1,3}\d{1,7}\/\d{4}(?:\/\p{L}{1,8})?(?![\p{L}\d/-])/u,
   // Slovak enforcement-officer ("sp. zn. EX 1234/23") and arbitration-court
   // ("sp. zn. SR 01234/08") file numbers: the registry code opens the
   // reference with no chamber number, which every court docket carries, and
