@@ -11,6 +11,7 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { rootKeys } from "@/lib/auth-query-options";
 import { STALE_TIME } from "@/lib/consts";
+import type { toAuthClientError } from "@/lib/errors/auth";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
@@ -27,6 +28,19 @@ export { rootKeys, sessionOptions } from "@/lib/auth-query-options";
  */
 const BOOT_QUERY_RETRY = false;
 
+type AuthClientResult<T> =
+  | { data: T; error: null }
+  | { data: null; error: Parameters<typeof toAuthClientError>[0] };
+
+/** The data of an auth client call, or its error as an `AuthClientError`. */
+const authClientData = async <T>(result: AuthClientResult<T>): Promise<T> => {
+  if (result.error) {
+    const errors = await import("@/lib/errors/auth");
+    throw errors.toAuthClientError(result.error);
+  }
+  return result.data;
+};
+
 /**
  * Reads the session. `bypassCookieCache` asks the server past its session
  * cookie cache, so a change made in another tab (e.g. the active
@@ -35,19 +49,12 @@ const BOOT_QUERY_RETRY = false;
 export const fetchSession = async ({
   bypassCookieCache = false,
 }: { bypassCookieCache?: boolean } = {}) => {
-  const [{ authClient }, { toAuthClientError }] = await Promise.all([
-    import("@/lib/auth-client"),
-    import("@/lib/errors/auth"),
-  ]);
-  const result = await authClient.getSession(
-    bypassCookieCache ? { query: { disableCookieCache: true } } : undefined,
+  const { authClient } = await import("@/lib/auth-client");
+  return await authClientData(
+    await authClient.getSession(
+      bypassCookieCache ? { query: { disableCookieCache: true } } : undefined,
+    ),
   );
-
-  if (result.error) {
-    throw toAuthClientError(result.error);
-  }
-
-  return result.data;
 };
 
 export const roleOptions = resourceQueryOptions(
@@ -55,17 +62,11 @@ export const roleOptions = resourceQueryOptions(
     retry: BOOT_QUERY_RETRY,
     queryKey: rootKeys.role,
     queryFn: async () => {
-      const [{ authClient }, { toAuthClientError }] = await Promise.all([
-        import("@/lib/auth-client"),
-        import("@/lib/errors/auth"),
-      ]);
-      const result = await authClient.organization.getActiveMemberRole();
-
-      if (result.error) {
-        throw toAuthClientError(result.error);
-      }
-
-      return result.data.role;
+      const { authClient } = await import("@/lib/auth-client");
+      const { role } = await authClientData(
+        await authClient.organization.getActiveMemberRole(),
+      );
+      return role;
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   }),
@@ -81,15 +82,10 @@ export const activeMemberOptions = resourceQueryOptions(
     queryKey: ["active-organization-member"],
     retry: BOOT_QUERY_RETRY,
     queryFn: async () => {
-      const [{ authClient }, { toAuthClientError }] = await Promise.all([
-        import("@/lib/auth-client"),
-        import("@/lib/errors/auth"),
-      ]);
-      const result = await authClient.organization.getActiveMember();
-      if (result.error) {
-        throw toAuthClientError(result.error);
-      }
-      return result.data;
+      const { authClient } = await import("@/lib/auth-client");
+      return await authClientData(
+        await authClient.organization.getActiveMember(),
+      );
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   }),
