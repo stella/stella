@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 
 import "@/api/tests/setup-env";
@@ -6,6 +7,7 @@ import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { reportCaseLawFreshnessTask } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -80,12 +82,14 @@ test("the scheduler task reads and emits one report per run", async () => {
   setMetricLineSinkForTesting((line) => {
     lines.push(line);
   });
-  // The freshness read first, then the served generations the split census
-  // counts; none are served here, so the census reads no corpus index.
-  const reads: unknown[] = [report, []];
+  // The freshness read first, then the unserved gauge and the served
+  // generations the split census counts; none are served here, so neither
+  // emits a record and the census reads no corpus index.
+  const reads: unknown[] = [report, Result.ok([]), []];
   let transactions = 0;
   await reportCaseLawFreshnessTask(
     asTestRaw<SchedulerTaskContext>({
+      dueAt: DueSlot.of({ nextRunAt: new Date("2026-11-14T12:00:00Z") }),
       db: asTestRaw({
         transaction: async () => {
           const read = reads[transactions];
@@ -95,7 +99,7 @@ test("the scheduler task reads and emits one report per run", async () => {
       }),
     }),
   );
-  expect(transactions).toBe(2);
+  expect(transactions).toBe(3);
   expect(lines).toHaveLength(6);
 });
 
@@ -107,6 +111,7 @@ test("a failed split census read leaves the freshness task successful", async ()
   let transactions = 0;
   const run = reportCaseLawFreshnessTask(
     asTestRaw<SchedulerTaskContext>({
+      dueAt: DueSlot.of({ nextRunAt: new Date("2026-11-14T12:00:00Z") }),
       db: asTestRaw({
         transaction: async () => {
           transactions += 1;
@@ -120,6 +125,6 @@ test("a failed split census read leaves the freshness task successful", async ()
   );
 
   expect(await run).toBeUndefined();
-  expect(transactions).toBe(2);
+  expect(transactions).toBe(3);
   expect(lines).toHaveLength(6);
 });
