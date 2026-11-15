@@ -9,6 +9,7 @@ import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import { providerRequestIdFrom } from "@/api/lib/errors/provider-call-failure";
 import { isTransientProviderFailure } from "@/api/lib/errors/provider-retry-policy";
 import { withRecoveredProviderStatus } from "@/api/lib/tanstack-ai-generate";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
@@ -107,6 +108,33 @@ describe("each provider client sends a failed request once", () => {
         }
       });
     }
+  }
+});
+
+// A per-call fetch wrapper makes the OpenRouter adapter send through a
+// client of its own for that call; the failed response's request id still
+// reaches the run error's evidence.
+describe("a failed response's request id reaches the run error", () => {
+  const withRequestId = cassettes.filter(
+    (cassette) => cassette.variant === "request-id",
+  );
+
+  test("the corpus has request-id failures", () => {
+    expect(withRequestId.length).toBeGreaterThan(0);
+  });
+
+  for (const cassette of withRequestId) {
+    test(`${cassette.provider}: ${cassette.scenario}`, async () => {
+      const requestId = cassette.exchanges[0]?.response.headers["x-request-id"];
+      expect(requestId).toBeDefined();
+      const { run } = await replayWireScenario({
+        cassette,
+        replay: replay(),
+      });
+      expect(providerRequestIdFrom(runErrorEvidence(run.chunks))).toBe(
+        requestId,
+      );
+    });
   }
 });
 

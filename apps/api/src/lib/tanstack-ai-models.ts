@@ -97,6 +97,7 @@ import {
 import {
   providerTransportCode,
   recordProviderSends,
+  withRecordedResponse,
   withSendEvidence,
 } from "@/api/lib/errors/provider-retry-evidence";
 import type { ProviderSendRecord } from "@/api/lib/errors/provider-retry-evidence";
@@ -738,8 +739,11 @@ const recordedOptions = (
 
 /**
  * A `RUN_ERROR`'s evidence with what its last request recorded: the retry
- * hints join the provider's body, and a request that got no response, which
- * has no body, is its socket code.
+ * hints and the request id join the provider's body, and a request that got
+ * no response, which has no body, is its socket code. A per-call `wrapFetch`
+ * makes some adapters (OpenRouter) send through a client of their own for
+ * that call, which skips any projection installed on the adapter's client,
+ * so the record is what keeps the request id.
  */
 const runErrorEvidence = (
   chunk: AdapterRunError,
@@ -750,15 +754,7 @@ const runErrorEvidence = (
     return isRecord(chunk.rawEvent) ? chunk.rawEvent : undefined;
   }
   if (isRecord(chunk.rawEvent)) {
-    return recorded.headers === undefined
-      ? chunk.rawEvent
-      : {
-          ...chunk.rawEvent,
-          headers: recorded.headers,
-          ...(recorded.isRetryable === undefined
-            ? {}
-            : { isRetryable: recorded.isRetryable }),
-        };
+    return withRecordedResponse(chunk.rawEvent, recorded);
   }
   if (chunk.rawEvent !== undefined) {
     return undefined;

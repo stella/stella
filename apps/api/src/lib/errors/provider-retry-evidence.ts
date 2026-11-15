@@ -66,11 +66,40 @@ const isAbortShaped = (error: unknown): boolean =>
   (error["name"] === "AbortError" || error["name"] === "TimeoutError");
 
 /**
- * What the last request of one adapter call left for the retry decision:
- * the retry hints of a failed response, or the socket code of a request that
- * got no response. Neither carries request content.
+ * What the last request of one adapter call left for the retry decision and
+ * the failure report: the retry hints and request id of a failed response,
+ * or the socket code of a request that got no response. None carries
+ * request content.
  */
-type ProviderSendEvidence = RetryHintEvidence & { code?: string };
+type ProviderSendEvidence = RetryHintEvidence & {
+  code?: string;
+  requestId?: string;
+};
+
+/** The request id a failed response names in its headers, if any. */
+const responseRequestId = (headers: Headers): string | undefined => {
+  const value = headers.get("x-request-id") ?? headers.get("request-id");
+  return value === null || value === "" ? undefined : value;
+};
+
+/**
+ * `evidence`, a failure's provider evidence, with what its last response
+ * recorded: the retry hints join it, and the request id fills in where the
+ * evidence names none of its own.
+ */
+export const withRecordedResponse = (
+  evidence: Record<string, unknown>,
+  recorded: ProviderSendEvidence,
+): Record<string, unknown> => ({
+  ...(recorded.requestId === undefined
+    ? {}
+    : { requestId: recorded.requestId }),
+  ...evidence,
+  ...(recorded.headers === undefined ? {} : { headers: recorded.headers }),
+  ...(recorded.isRetryable === undefined
+    ? {}
+    : { isRetryable: recorded.isRetryable }),
+});
 
 /** Filled by {@link recordProviderSends} while one adapter call runs. */
 export type ProviderSendRecord = { evidence: ProviderSendEvidence | undefined };
@@ -116,7 +145,11 @@ export const recordProviderSends =
         const response = sent.value;
         if (!response.ok) {
           const hints = retryHintEvidence(response.headers);
-          record.evidence = hints.headers === undefined ? undefined : hints;
+          const requestId = responseRequestId(response.headers);
+          record.evidence =
+            hints.headers === undefined && requestId === undefined
+              ? undefined
+              : { ...hints, ...(requestId === undefined ? {} : { requestId }) };
         }
         return response;
       },
@@ -125,11 +158,14 @@ export const recordProviderSends =
     return outer === undefined ? recording : outer(recording);
   };
 
+const evidenceBody = (body: unknown): Record<string, unknown> =>
+  isRecord(body) ? body : {};
+
 /**
- * `error`, a failure an adapter call threw, with the retry hints its last
- * response carried as its evidence (`rawEvent`, what a `RUN_ERROR` reads
- * first). The body stays the evidence it was; the hints join it. An error
- * the record holds no hint for is returned as it is.
+ * `error`, a failure an adapter call threw, with the retry hints and request
+ * id its last response carried joined to its evidence (`rawEvent`, what a
+ * `RUN_ERROR` reads first, else its body). An error the record holds no
+ * hint for is returned as it is.
  */
 export const withSendEvidence = <TError>(
   error: TError,
@@ -138,23 +174,19 @@ export const withSendEvidence = <TError>(
   const hints = record.evidence;
   if (
     hints === undefined ||
-    hints.headers === undefined ||
+    (hints.headers === undefined && hints.requestId === undefined) ||
     typeof error !== "object" ||
     error === null ||
     !Object.isExtensible(error)
   ) {
     return error;
   }
+  const own: unknown = Reflect.get(error, "rawEvent");
   const body: unknown = Reflect.get(error, "error");
+  const evidence = isRecord(own) ? own : evidenceBody(body);
   Object.defineProperty(error, "rawEvent", {
     configurable: true,
-    value: {
-      ...(isRecord(body) ? body : {}),
-      headers: hints.headers,
-      ...(hints.isRetryable === undefined
-        ? {}
-        : { isRetryable: hints.isRetryable }),
-    },
+    value: withRecordedResponse(evidence, hints),
   });
   return error;
 };
