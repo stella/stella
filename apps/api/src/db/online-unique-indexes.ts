@@ -287,7 +287,7 @@ export const LEGISLATION_UNIQUE_INDEXES = [
  *  retires in the contract release. */
 export const FALLBACK_DECISION_UNIQUE_INDEXES = [
   {
-    introducedBy: "20261114200000_case_law_fallback_identity",
+    introducedBy: "20261115150000_case_law_fallback_identity",
     createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_fallback_identity_idx" ON public."case_law_decisions" USING btree ("source_id", "fallback_identity_key") WHERE "source_document_id" IS NULL AND "fallback_identity_key" IS NOT NULL',
     definitionBody:
@@ -297,7 +297,7 @@ export const FALLBACK_DECISION_UNIQUE_INDEXES = [
     tableName: "case_law_decisions",
   },
   {
-    introducedBy: "20261114200000_case_law_fallback_identity",
+    introducedBy: "20261115150000_case_law_fallback_identity",
     createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_fallback_content_idx" ON public."case_law_decisions" USING btree ("source_id", "fallback_content_hash") WHERE "source_document_id" IS NULL AND "fallback_content_hash" IS NOT NULL',
     definitionBody:
