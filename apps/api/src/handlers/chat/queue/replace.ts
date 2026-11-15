@@ -8,6 +8,7 @@ import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import {
   hasOnlyStoredAttachments,
   lockOwnQueueThreadOnTx,
+  readQueuedChatMessageRevisionOnTx,
   replaceQueuedChatMessageOnTx,
 } from "@/api/handlers/chat/queue/chat-queue-store";
 import {
@@ -23,15 +24,18 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { enforceWritePrecondition } from "@/api/lib/write-contract/write-contract";
 
 const config = {
-  contract: "replace",
-  precondition: { type: "revision", fields: ["revision"] },
+  // `send` is the one field and is replaced whole; `revision` is checked
+  // against the stored one under the thread lock, as billing drafts check
+  // theirs.
+  contract: "patch",
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   description:
-    "Replace a queued message, only at the revision you last read: 409 " +
+    "Rewrite a queued message, only at the revision you last read: 409 " +
     "`queued_message_changed` when it changed since, `queued_message_sent` " +
     "once it was sent. The message keeps its place in the queue.",
   params: chatQueuedMessageParams,
@@ -73,6 +77,25 @@ const replaceQueuedChatMessage = createSafeRootHandler(
         });
         if (thread === undefined) {
           return undefined;
+        }
+        // The thread lock holds the queue still: a revision read here is the
+        // one the replacement writes over.
+        const storedRevision = await readQueuedChatMessageRevisionOnTx({
+          id: messageId,
+          threadId,
+          tx,
+        });
+        if (
+          storedRevision !== undefined &&
+          enforceWritePrecondition({
+            type: "revision",
+            field: "revision",
+            storedRevision,
+            expectedRevision: revision,
+            resource: "Queued message",
+          }) !== null
+        ) {
+          return { type: "stale" } as const;
         }
         const replaced = await replaceQueuedChatMessageOnTx({
           expectedRevision: revision,

@@ -231,6 +231,29 @@ export type QueuedMessageChange =
   | { type: "stale" }
   | { type: "not-found" };
 
+/** The stored revision of queued message `id`, or none when it is not queued. */
+export const readQueuedChatMessageRevisionOnTx = async ({
+  id,
+  threadId,
+  tx,
+}: {
+  id: SafeId<"chatMessage">;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<number | undefined> =>
+  (
+    await tx
+      .select({ revision: chatQueuedMessages.revision })
+      .from(chatQueuedMessages)
+      .where(
+        and(
+          eq(chatQueuedMessages.id, id),
+          eq(chatQueuedMessages.threadId, threadId),
+        ),
+      )
+      .limit(1)
+  ).at(0)?.revision;
+
 /**
  * Replace a queued message's send, only at the revision the member last saw.
  * The caller holds the thread lock.
