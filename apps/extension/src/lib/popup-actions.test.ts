@@ -34,6 +34,9 @@ const createDependencies = () => {
       calls.push("adopt");
       adoptedTabs.push(tab);
     },
+    openStella: async () => {
+      calls.push("openStella");
+    },
     disconnect: async () => {
       calls.push("disconnect");
     },
@@ -102,6 +105,23 @@ for (const action of ["connect", "adopt"] as const) {
     expect(adoptedTabs).toEqual(action === "adopt" ? [currentTab] : []);
   });
 }
+
+test("open-stella brings stella forward, then shows what that tab offers", async () => {
+  const { adoptedTabs, calls, deps, pairedTabs } = createDependencies();
+  const opening = Promise.withResolvers<undefined>();
+  deps.openStella = async () => {
+    calls.push("openStella");
+    return opening.promise;
+  };
+  const completion = runPopupAction("open-stella", deps);
+  expect(calls).toEqual(["openStella"]);
+  opening.resolve(undefined);
+  await completion;
+  // Connecting stays a separate step on the stella tab.
+  expect(calls).toEqual(["openStella", "render"]);
+  expect(pairedTabs).toEqual([]);
+  expect(adoptedTabs).toEqual([]);
+});
 
 for (const action of ["disconnect", "revoke"] as const) {
   test(`${action} refreshes the popup after completing`, async () => {

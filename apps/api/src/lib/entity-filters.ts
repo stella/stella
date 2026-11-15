@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { ENTITY_FIND_TERM_MIN_LENGTH, isEntityKind } from "@stll/api-contract";
@@ -642,7 +642,7 @@ const conditionFoldHandlers: FoldHandlers<SQL> = {
     if (!combined) {
       return null;
     }
-    return node.negated ? not(combined) : combined;
+    return node.negated ? sql`not (${combined})` : combined;
   },
 };
 

@@ -469,6 +469,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
           <DocxEditor
             key={`docx-${previewIdentity}-${collaborationSession?.roomId ?? "local"}`}
             ref={attachEditor}
+            accessibleName={previewFile.fileName}
             autoOpenReviewSidebar={false}
             // Docked, the pane has a find bar of its own and no Folio binding
             // may answer beside it. Full view keeps Folio's bindings for a

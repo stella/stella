@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
 import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
+import { CHAT_QUEUE_HOLD_REASONS } from "@stll/api-contract/chat-queue";
 import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 
 import { chatContentJsonb } from "@/api/db/columns";
@@ -37,6 +38,8 @@ import {
   chatMessagePolicies,
   chatMessageRevisionPolicies,
   chatMessageSearchDocumentPolicies,
+  chatQueuedMessagePolicies,
+  chatQueueHoldPolicies,
   chatThreadCompactionPolicies,
   chatThreadNamePolicies,
   chatThreadPolicies,
@@ -304,6 +307,13 @@ export const chatThreads = p.pgTable(
     lastReadAt: timestamptz("last_read_at").defaultNow(),
     /** When the reader pinned the chat to the top of their list; null when it is not pinned. */
     pinnedAt: timestamptz("pinned_at"),
+    /**
+     * The largest `chat_turns.ordinal` the thread has given out; null until
+     * it gives out its first. Written only by the insert trigger on
+     * `chat_turns` and the `chat-turn-ordinals` repair, never by a handler
+     * (`no-chat-turn-ordinal-write`).
+     */
+    lastTurnOrdinal: p.integer("last_turn_ordinal"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -609,6 +619,17 @@ export const chatTurns = p.pgTable(
      * starts and kept once the turn settles. Unique in the organization.
      */
     runId: p.text("run_id"),
+    /**
+     * The turn's position in its thread by acceptance: unique in the thread,
+     * larger for a later turn, never given out twice. The database assigns it
+     * as the row is inserted (`assign_chat_turn_ordinal`), under the thread's
+     * lock. Application code never supplies one
+     * (`no-chat-turn-ordinal-write`); a row copied with its number, as a
+     * restore does, keeps it. Null only on a turn stored before the column,
+     * until the `chat-turn-ordinals` repair numbers it. Read turn order
+     * through `lib/chat/turn-order.ts`.
+     */
+    ordinal: p.integer("ordinal"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -761,6 +782,11 @@ export const chatTurns = p.pgTable(
       sql`${table.settledAt} IS NULL OR ${table.settledAt} >= ${table.createdAt}`,
     ),
     p.index("chat_turns_thread_id_idx").on(table.threadId),
+    // A thread's turns by position, newest first on a backward scan with
+    // unnumbered turns last. Built online (indexes-chat-turns-thread-ordinal-uidx).
+    p
+      .uniqueIndex("chat_turns_thread_ordinal_uidx")
+      .on(table.threadId, table.ordinal.asc().nullsFirst()),
     p
       .uniqueIndex("chat_turns_active_thread_uidx")
       .on(table.threadId)
@@ -794,6 +820,142 @@ export const chatTurns = p.pgTable(
         sql`${table.status} IN (${sql.join(CHAT_TURN_TIMING_ACTIVE_SQL_VALUES, sql`, `)})`,
       ),
     ...chatTurnPolicies(),
+  ],
+);
+
+const CHAT_QUEUE_HOLD_REASON_SQL_VALUES = CHAT_QUEUE_HOLD_REASONS.map(
+  (reason) => sql.raw(`'${reason}'`),
+);
+
+/**
+ * A message a member queued in a thread, waiting to be sent. It is not part
+ * of the conversation until the server sends it: sending deletes this row and
+ * stores the message and its turn in one transaction, under `id`.
+ */
+export const chatQueuedMessages = p.pgTable(
+  "chat_queued_messages",
+  {
+    /** The id the message is stored under once sent; minted by the client. */
+    id: pUuid<"chatMessage">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "restrict" },
+    ),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    threadId: safeUuid<"chatThread">("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    /** Order in the thread's queue, 1..n, rewritten under the thread lock. */
+    position: p.integer("position").notNull(),
+    /** The send the member queued, without its thread and run (validated on read). */
+    request: jsonb("request").notNull(),
+    /** Raised by every edit; a send and an edit name the revision they read. */
+    revision: p.integer("revision").notNull().default(0),
+    /** When a queue sweep last tried this thread's queue; the next sweep tries the oldest first. */
+    sweptAt: timestamptz("swept_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "chat_queued_messages_workspace_organization_fk",
+      })
+      .onDelete("restrict"),
+    p.check("chat_queued_messages_position_check", sql`${table.position} >= 1`),
+    p.check("chat_queued_messages_revision_check", sql`${table.revision} >= 0`),
+    p
+      .index("chat_queued_messages_org_user_thread_position_idx")
+      .on(table.organizationId, table.userId, table.threadId, table.position),
+    p.index("chat_queued_messages_thread_id_idx").on(table.threadId),
+    // The owner connection (the queue's sender, the turn reaper) is held to
+    // RLS too (FORCE), so it is admitted by name.
+    p.pgPolicy("chat_queued_messages_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queued_messages'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queued_messages'::regclass)`,
+    }),
+    ...chatQueuedMessagePolicies(),
+  ],
+);
+
+/**
+ * Why a thread's queue waits although its turn ended. One row at most per
+ * thread, and only while the thread has a queued message.
+ */
+export const chatQueueHolds = p.pgTable(
+  "chat_queue_holds",
+  {
+    threadId: safeUuid<"chatThread">("thread_id")
+      .primaryKey()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "restrict" },
+    ),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    reason: p.text("reason", { enum: CHAT_QUEUE_HOLD_REASONS }).notNull(),
+    /** The turn whose end held the queue (`turn-failed`, `turn-interrupted`). */
+    turnId: safeUuid<"chatTurn">("turn_id").references(() => chatTurns.id, {
+      onDelete: "set null",
+    }),
+    /** The queued message whose send was refused (`send-refused`). */
+    queuedMessageId: safeUuid<"chatMessage">("queued_message_id"),
+    /** Why that send was refused, as the send's error code. */
+    refusalCode: p.text("refusal_code"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "chat_queue_holds_workspace_organization_fk",
+      })
+      .onDelete("restrict"),
+    p.check(
+      "chat_queue_holds_reason_values_check",
+      sql`${table.reason} IN (${sql.join(CHAT_QUEUE_HOLD_REASON_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "chat_queue_holds_reason_payload_check",
+      sql`CASE ${table.reason}
+        WHEN 'send-refused' THEN
+          ${table.queuedMessageId} IS NOT NULL AND ${table.refusalCode} IS NOT NULL
+        ELSE
+          ${table.queuedMessageId} IS NULL AND ${table.refusalCode} IS NULL
+      END`,
+    ),
+    p
+      .index("chat_queue_holds_org_user_idx")
+      .on(table.organizationId, table.userId),
+    // The owner connection (the queue's sender, the turn reaper) is held to
+    // RLS too (FORCE), so it is admitted by name.
+    p.pgPolicy("chat_queue_holds_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queue_holds'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queue_holds'::regclass)`,
+    }),
+    ...chatQueueHoldPolicies(),
   ],
 );
 

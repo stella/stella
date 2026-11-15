@@ -139,11 +139,9 @@ const mount = (
         React.createElement(
           QueryClientProvider,
           { client },
-          React.createElement(IntlProvider, {
-            locale: "en",
-            messages: englishMessages,
-            children: React.createElement(AuthenticatedUserProvider, {
-              user: {
+          <IntlProvider locale="en" messages={englishMessages}>
+            <AuthenticatedUserProvider
+              user={{
                 activeOrganizationId: "org",
                 id: "user",
                 email: "rename@example.test",
@@ -152,10 +150,11 @@ const mount = (
                 preferredName: null,
                 timezoneId: "UTC",
                 wordEditShortcut: null,
-              },
-              children,
-            }),
-          }),
+              }}
+            >
+              {children}
+            </AuthenticatedUserProvider>
+          </IntlProvider>,
         ),
     },
   );

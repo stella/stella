@@ -1,4 +1,3 @@
-import { EventType } from "@tanstack/ai";
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import {
   chmodSync,
@@ -9,10 +8,8 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import * as v from "valibot";
 
 import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
 import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
@@ -25,11 +22,11 @@ import {
   startFixtureLibrary,
 } from "../../../scripts/fake-browser";
 import {
-  SIDECAR_PROTOCOL,
-  type sidecarHostMessageSchema,
-  type SidecarMessage,
-  sidecarMessageSchema,
-} from "../protocol";
+  connectDesktop,
+  startApiStandIn,
+  toolCalls,
+  toolResults,
+} from "../../../scripts/fake-desktop";
 import { browserEndpointFor } from "./holder-browser";
 
 /**
@@ -73,113 +70,6 @@ afterEach(async () => {
   }
 });
 
-/** The stand-in for stella's API: records every request it receives. */
-const startApi = () => {
-  const received: string[] = [];
-  const server = Bun.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    fetch: async (request) => {
-      const body = await request.text();
-      received.push(
-        [
-          request.method,
-          request.url,
-          JSON.stringify([...request.headers.entries()]),
-          body,
-        ].join("\n"),
-      );
-      const message: unknown = body === "" ? null : JSON.parse(body);
-      const id =
-        typeof message === "object" && message !== null
-          ? Reflect.get(message, "id")
-          : undefined;
-      if (id === undefined) {
-        return new Response(null, { status: 202 });
-      }
-      const method = Reflect.get(message ?? {}, "method");
-      return Response.json({
-        id,
-        jsonrpc: "2.0",
-        result:
-          method === "initialize"
-            ? {
-                capabilities: { tools: {} },
-                protocolVersion: "2025-06-18",
-                serverInfo: { name: "stella", version: "0" },
-              }
-            : {
-                content: [
-                  { type: "text", text: JSON.stringify({ results: [] }) },
-                ],
-              },
-      });
-    },
-  });
-  cleanups.push(async () => {
-    await server.stop(true);
-  });
-  return { origin: `http://127.0.0.1:${String(server.port)}`, received };
-};
-
-type Desktop = { lines: string[]; messages: SidecarMessage[] };
-
-/** A message as the schema reads it, so a field it gains fails the build here. */
-type HostMessage = v.InferInput<typeof sidecarHostMessageSchema>;
-
-/** Connect to the holder and authenticate as the desktop. */
-const connectDesktop = async (
-  endpoint: string,
-  secret: string,
-  apiOrigin: string,
-): Promise<Desktop & { send: (message: HostMessage) => void }> => {
-  const socket = net.createConnection({ path: endpoint });
-  cleanups.push(() => {
-    socket.destroy();
-  });
-  const desktop: Desktop = { lines: [], messages: [] };
-  const decoder = new TextDecoder();
-  let buffer = "";
-  socket.on("data", (bytes: Uint8Array) => {
-    buffer += decoder.decode(bytes, { stream: true });
-    let newline = buffer.indexOf("\n");
-    while (newline !== -1) {
-      const line = buffer.slice(0, newline);
-      buffer = buffer.slice(newline + 1);
-      newline = buffer.indexOf("\n");
-      desktop.lines.push(line);
-      const message = v.parse(sidecarMessageSchema, JSON.parse(line));
-      desktop.messages.push(message);
-      // The member allows every step they are asked about.
-      if (message.type === "run.approval_request") {
-        send({
-          type: "run.approval",
-          runId: message.runId,
-          requestId: message.requestId,
-          decision: "approve",
-        });
-      }
-    }
-  });
-  const send = (message: HostMessage) => {
-    socket.write(`${JSON.stringify(message)}\n`);
-  };
-  send({
-    type: "hello",
-    protocol: SIDECAR_PROTOCOL,
-    secret,
-    appVersion: "1.4.0",
-    apiOrigin,
-    resume: [],
-  });
-  await waitFor(
-    () =>
-      desktop.messages.some(({ type }) => type === "hello") ? true : undefined,
-    { ...WAIT, description: "the holder's hello" },
-  );
-  return { ...desktop, send };
-};
-
 const browse = async (
   harness: keyof typeof FAKES,
   approvals: DesktopRunnerApprovalMode,
@@ -190,7 +80,10 @@ const browse = async (
   });
   const dir = path.join(root, "1.4.0");
   const endpoint = path.join(root, "stella-holder-1.4.0.sock");
-  const api = startApi();
+  const register = (cleanup: (typeof cleanups)[number]) => {
+    cleanups.push(cleanup);
+  };
+  const api = startApiStandIn(register);
   const library = startFixtureLibrary();
   // A home folder with a Chrome profile, where the holder registers the
   // native host: without one it offers no browser tools.
@@ -254,9 +147,12 @@ const browse = async (
   await chrome.connected;
 
   const desktop = await connectDesktop(
-    endpoint,
-    readFileSync(secretFile, "utf-8"),
-    api.origin,
+    {
+      apiOrigin: api.origin,
+      endpoint,
+      secret: readFileSync(secretFile, "utf-8"),
+    },
+    register,
   );
   const executable = path.join(root, `${harness}-browse`);
   writeFileSync(
@@ -288,7 +184,7 @@ const browse = async (
     stepOutputDir: path.join(root, "runs", "chat.step-outputs"),
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the notice period decision." }],
-    harnessSessionId: null,
+    session: { type: "fresh" },
     policy: { network: "open", fs: "workspace", approvals },
     mcp: {
       serverName: "stella",
@@ -320,43 +216,6 @@ const browse = async (
     .map((line): unknown => JSON.parse(line));
   return { api, chrome, chunks, desktop, finished, harnessLog, library };
 };
-
-/** Each tool call as the run reported it: its name and the input it kept. */
-const toolCalls = (chunks: readonly Record<string, unknown>[]) => {
-  const args = new Map(
-    chunks.flatMap((chunk) =>
-      chunk["type"] === EventType.TOOL_CALL_ARGS &&
-      typeof chunk["toolCallId"] === "string" &&
-      typeof chunk["delta"] === "string"
-        ? [[chunk["toolCallId"], chunk["delta"]] as const]
-        : [],
-    ),
-  );
-  return chunks.flatMap((chunk) => {
-    if (
-      chunk["type"] !== EventType.TOOL_CALL_START ||
-      typeof chunk["toolCallId"] !== "string"
-    ) {
-      return [];
-    }
-    const input = args.get(chunk["toolCallId"]);
-    return [
-      {
-        id: chunk["toolCallId"],
-        name: chunk["toolCallName"],
-        input: input === undefined ? undefined : JSON.parse(input),
-      },
-    ];
-  });
-};
-
-const toolResults = (chunks: readonly Record<string, unknown>[]) =>
-  chunks.flatMap((chunk) =>
-    chunk["type"] === EventType.TOOL_CALL_RESULT &&
-    typeof chunk["content"] === "string"
-      ? [JSON.parse(chunk["content"])]
-      : [],
-  );
 
 /**
  * The steps the member is asked about, by approval mode: the agent clicks
@@ -408,8 +267,9 @@ describe.each(
       "open",
     ]);
     const calls = toolCalls(chunks);
-    // The member was asked exactly about the steps the mode holds back,
-    // with the step's kind and never the page's content.
+    // The member was asked exactly about the steps the mode holds back:
+    // the step's kind and what it acts on (the element's role and name and
+    // the page's address), never the page's text.
     expect(
       desktop.messages.filter(
         (message) => message.type === "run.approval_request",
@@ -419,10 +279,17 @@ describe.each(
       calls
         .filter(({ id }) => id.startsWith(APPROVAL_STEP_PREFIX))
         .map(({ input, name }) => ({ input, name })),
-    ).toEqual(
+    ).toMatchObject(
       ASKED[approvals].map((action) => ({
         name: "local_browser",
-        input: { action },
+        input: {
+          action,
+          asked: {
+            name: expect.any(String),
+            role: expect.any(String),
+            url: expect.stringContaining(library.origin),
+          },
+        },
       })),
     );
     expect(

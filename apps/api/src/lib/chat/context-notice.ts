@@ -1,21 +1,11 @@
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 
-/**
- * What the server tells the reader about the context an answer was given.
- *
- * `history-trimmed`: the thread's earlier history could not be summarized
- * for this answer, so the model saw only the newest messages that fit its
- * window. The answer carries the notice live and after reload, so the reader
- * knows why it may not account for earlier messages.
- *
- * `session-not-resumed`: the coding agent on the member's computer could not
- * resume its own session of the chat (the session was gone or the agent
- * refused it), so it started over from the chat's messages, without the tool
- * results and files of its earlier turns.
- */
-export type ChatContextNotice =
-  { type: "history-trimmed" } | { type: "session-not-resumed" };
+import {
+  CHAT_CONTEXT_NOTICE_EVENTS,
+  CHAT_CONTEXT_NOTICE_METADATA_KEY,
+  type ChatContextNotice,
+} from "@stll/api-contract/chat-context-notice";
 
 export const HISTORY_TRIMMED_NOTICE = {
   type: "history-trimmed",
@@ -24,9 +14,6 @@ export const HISTORY_TRIMMED_NOTICE = {
 export const SESSION_NOT_RESUMED_NOTICE = {
   type: "session-not-resumed",
 } as const satisfies ChatContextNotice;
-
-/** The metadata key an answer carries its context notice under. */
-const CONTEXT_NOTICE_METADATA_KEY = "contextNotice";
 
 /** An answer's context notice: recorded once known, carried by the answer. */
 export type ContextNoticeStamp = {
@@ -40,7 +27,7 @@ export type ContextNoticeStamp = {
    */
   beginAttempt: () => void;
   /** The answer's stored metadata for the notice, if there is one. */
-  metadata: () => { contextNotice?: ChatContextNotice };
+  metadata: () => { [CHAT_CONTEXT_NOTICE_METADATA_KEY]?: ChatContextNotice };
   /**
    * `chunk`, carrying the notice when it is the first event since the notice
    * changed that the browser's stream processor merges into the answer's
@@ -53,12 +40,9 @@ export type ContextNoticeStamp = {
   stamp: (chunk: StreamChunk) => readonly StreamChunk[];
 };
 
-const MESSAGE_METADATA_EVENTS: ReadonlySet<StreamChunk["type"]> = new Set([
-  EventType.TEXT_MESSAGE_START,
-  EventType.TEXT_MESSAGE_CONTENT,
-  EventType.TEXT_MESSAGE_END,
-  EventType.REASONING_MESSAGE_CONTENT,
-]);
+const MESSAGE_METADATA_EVENTS: ReadonlySet<string> = new Set(
+  CHAT_CONTEXT_NOTICE_EVENTS satisfies readonly `${EventType}`[],
+);
 
 export const createContextNoticeStamp = (
   initial: ChatContextNotice | null,
@@ -76,12 +60,12 @@ export const createContextNoticeStamp = (
       notice = initial;
     },
     metadata: () =>
-      notice === null ? {} : { [CONTEXT_NOTICE_METADATA_KEY]: notice },
+      notice === null ? {} : { [CHAT_CONTEXT_NOTICE_METADATA_KEY]: notice },
     stamp: (chunk) => {
       if (notice?.type === shown?.type) {
         return [chunk];
       }
-      const metadata = { [CONTEXT_NOTICE_METADATA_KEY]: notice };
+      const metadata = { [CHAT_CONTEXT_NOTICE_METADATA_KEY]: notice };
       if (MESSAGE_METADATA_EVENTS.has(chunk.type)) {
         shown = notice;
         return [{ ...chunk, metadata: { ...chunk.metadata, ...metadata } }];

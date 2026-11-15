@@ -30,6 +30,9 @@ export const WRITER_EVENT_KINDS = ["commit", "refused"] as const;
 export type WriterEventKind = (typeof WRITER_EVENT_KINDS)[number];
 
 type RawTransaction = { execute: (query: string) => Promise<unknown> };
+type ContendedUpdate =
+  | string
+  | { readonly parameters: readonly string[]; readonly statement: string };
 
 /**
  * One session's `BEGIN`/`COMMIT` pair as the lane helper's database. A lane
@@ -66,7 +69,7 @@ export type ContendSessionOptions = {
   /** A client of its own with one connection: one session. */
   connection: SQL;
   /** Statements run in each transaction, while it holds the lane shared. */
-  updates: readonly string[];
+  updates: readonly ContendedUpdate[];
   holdMs: number;
   /** Fires once, after the first transaction's updates hold their locks. */
   onHeld: (() => void) | null;
@@ -99,7 +102,13 @@ export const contendSession = async ({
       onEvent("refused", Date.now());
     }),
     work: async () => {
-      await connection.unsafe(updates.join("; "));
+      for (const update of updates) {
+        if (typeof update === "string") {
+          await connection.unsafe(update);
+          continue;
+        }
+        await connection.unsafe(update.statement, [...update.parameters]);
+      }
       onHeld?.();
       await Bun.sleep(holdMs);
     },

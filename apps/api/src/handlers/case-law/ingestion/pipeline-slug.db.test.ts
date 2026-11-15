@@ -148,7 +148,8 @@ describe("case-law decision slug allocation", () => {
     await ingest(decisionAt("0T/42/2019", "golden-1"));
     await ingest(decisionAt("0T/42/2019", "golden-2"));
     await ingest(decisionAt("0T/42/2019", "golden-3"));
-    // No publisher id: the identity is the docket and language.
+    // No publisher id: the identity is the decision's fallback state, so
+    // decisions sharing a docket draw different candidate ladders.
     await ingest(decisionAt("0T/42/2019", undefined, "cs"));
     await ingest(decisionAt("Nds 12/2021 – č. 4", "golden-4"));
     await ingest(decisionAt("NDS-12-2021-C-4", "golden-5"));
@@ -169,7 +170,7 @@ describe("case-law decision slug allocation", () => {
       "golden-1": "0t-42-2019",
       "golden-2": "0t-42-2019-482dd3cda1eb1de8",
       "golden-3": "0t-42-2019-31499a06d7f572d0",
-      "cs-docket": "0t-42-2019-5246e47db421409f",
+      "cs-docket": "0t-42-2019-f8ac15e663613342",
       "golden-4": "nds-12-2021-c-4",
       "golden-5": "nds-12-2021-c-4-311d08e9361bdc6e",
     });

@@ -17,6 +17,7 @@
     "loadFailed": "No se pudieron cargar sus conversaciones.",
     "runsLoadFailed": "No se pudo comprobar qué conversaciones esperan su respuesta.",
     "retry": "Reintentar",
+    "resend": "Reenviar",
     "untitled": "Conversación sin título",
     "loadMoreFailed": "Cargar más",
     "loadOlderFailed": "Cargar mensajes anteriores",
@@ -219,13 +220,33 @@
       },
       "patternInPath": "{pattern} en {path}",
       "commandExited": "{command} (código de salida {code})",
-      "opensOnComputer": "Ábrelo en el ordenador que lo ejecutó",
+      "browserClick": "Hacer clic en «{target}» en {url}",
+      "browserPressKey": "Pulsar la tecla {key} en «{target}» en {url}",
+      "browserSelect": "Seleccionar «{option}» en «{target}» en {url}",
+      "browserType": "Introducir texto en «{target}» en {url}",
       "status": {
         "needs_approval": "Esperando aprobación",
         "running": "En curso",
         "failed": "Falló",
         "interrupted": "Detenido"
-      }
+      },
+      "output": {
+        "command": "Salida",
+        "diff": "Cambios en archivos",
+        "conversation": "Conversación del subagente",
+        "conversationPrompt": "Tarea",
+        "conversationReport": "Informe",
+        "cut": "Se muestran los primeros {kept} de {total}",
+        "empty": "Sin salida",
+        "arriving": "Todavía está llegando desde el ordenador que ejecutó este paso",
+        "notCopied": "Aún no se ha copiado a este chat",
+        "notStored": "No se guardó nada de este paso",
+        "runBudgetReached": "No se guardó: esta ejecución ya había guardado todo lo que puede guardar una ejecución",
+        "imageTooLargeToStore": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan, por lo que no se puede mostrar.",
+        "loadFailed": "No se ha podido cargar.",
+        "showMore": "Mostrar más"
+      },
+      "sessionNotResumed": "El agente de programación de tu ordenador no pudo retomar donde lo había dejado, así que continuó a partir de los mensajes de este chat."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas} many {# fuentes consultadas}}",
@@ -234,7 +255,37 @@
       "analyses": "{count, plural, one {# análisis} other {# análisis} many {# análisis}}"
     },
     "stepCount": "{count, plural, one {# paso} other {# pasos} many {# pasos}}",
-    "reasoning": "Razonamiento"
+    "reasoning": "Razonamiento",
+    "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación.",
+    "failure": {
+      "aiDeadlineExceeded": "La IA no respondió a tiempo. Inténtalo de nuevo en un momento.",
+      "aiOutputInvalid": "La respuesta de IA tenía un formato inesperado. Inténtalo de nuevo.",
+      "aiOutputModerated": "El proveedor de IA moderó la respuesta. Reformula la solicitud o elige otro modelo.",
+      "aiUnknown": "La solicitud de IA ha fallado. Inténtalo de nuevo.",
+      "errorFolderUnavailable": "La carpeta vinculada a este chat no está disponible en tu ordenador. Revísala en stella desktop y vuelve a enviarlo.",
+      "errorLimitReached": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Vuelve a intentarlo cuando se restablezca el límite.",
+      "errorNeedsLogin": "El agente de programación de tu ordenador necesita que vuelvas a iniciar sesión. Inicia sesión desde stella desktop y vuelve a intentarlo.",
+      "errorNotReached": "Tu ordenador no recibió esta respuesta. Comprueba que stella desktop esté abierto y conectado, y vuelve a intentarlo.",
+      "errorRelinked": "stella desktop se volvió a vincular en tu ordenador, así que esta respuesta se detuvo. Vuelve a enviarla.",
+      "errorRestoring": "Tu ordenador aún está deshaciendo cambios en archivos. Vuelve a enviarlo en un momento.",
+      "errorUnavailable": "Tu ordenador dejó de procesar esta respuesta. Comprueba que stella desktop esté abierto y conectado, y vuelve a intentarlo.",
+      "refusalFolderNotApproved": "Primero permite que el agente de programación trabaje en la carpeta vinculada a este chat.",
+      "refusalHarnessUnavailable": "El agente de programación de tu ordenador no puede atender esta solicitud ahora. Revísalo en stella desktop.",
+      "refusalModelUnavailable": "El agente de programación de tu ordenador ya no ofrece este modelo. Elige otro en Ejecutar en.",
+      "refusalNoComputer": "Ninguno de tus ordenadores está conectado.",
+      "refusalPermissionUnavailable": "El agente de programación de tu ordenador no puede ejecutarse con estos permisos. Elige otra opción en Permisos.",
+      "refusalReasoningEffortUnavailable": "El agente de programación de tu ordenador no ofrece este nivel de razonamiento para el modelo. Elige otro en Nivel de razonamiento.",
+      "refusalTooLarge": "Esta conversación es demasiado larga para pasarla a tu ordenador. Empieza un chat nuevo para ejecutarla allí.",
+      "sendErrorEmptyCompletion": "La IA devolvió una respuesta vacía. Inténtalo de nuevo o reformula tu mensaje.",
+      "sendErrorLoopDetected": "La respuesta de IA se repitió demasiadas veces. Inténtalo de nuevo con una solicitud más concreta.",
+      "sendErrorModelUnavailable": "El modelo de IA configurado ya no está disponible. Pídele al administrador del espacio de trabajo que actualice el modelo en la configuración de la organización.",
+      "sendErrorProviderBilling": "El proveedor de IA informó de un problema de facturación. Contacta con el administrador del espacio de trabajo.",
+      "sendErrorProviderCredentialsRejected": "El proveedor de IA rechazó las credenciales configuradas. Pídele al administrador del espacio de trabajo que revise la clave de API en la configuración de la organización.",
+      "sendErrorProviderUnavailable": "El proveedor de IA no está disponible temporalmente. Inténtalo de nuevo en un momento.",
+      "sendErrorQuotaExhausted": "Se agotó la cuota del proveedor de IA. Inténtalo de nuevo en un minuto o contacta con el administrador del espacio de trabajo.",
+      "sendErrorStreamIncomplete": "La respuesta de la IA se cortó antes de terminar. Inténtalo de nuevo.",
+      "sendErrorTurnTooLarge": "Esta respuesta se hizo demasiado grande para entregarla completa. Envía un mensaje nuevo para continuar."
+    }
   },
   "tasks": {
     "emptyTitle": "No hay tareas abiertas",
@@ -263,7 +314,8 @@
       "tomorrow": "Mañana",
       "week": "Esta semana",
       "later": "Más adelante",
-      "none": "Sin vencimiento"
+      "none": "Sin vencimiento",
+      "closed": "Hechas o canceladas"
     },
     "markDone": "Marcar como hecha",
     "reopen": "Reabrir",
@@ -277,7 +329,43 @@
     "doneAssigning": "Hecho",
     "someone": "Alguien",
     "membersFailed": "No se pudieron cargar los miembros del asunto.",
-    "assignFailed": "No se pudo asignar la tarea. Inténtelo de nuevo."
+    "assignFailed": "No se pudo asignar la tarea. Inténtelo de nuevo.",
+    "statusTitle": "Estado",
+    "priorityTitle": "Prioridad",
+    "priority": {
+      "none": "Ninguna",
+      "urgent": "Urgente",
+      "high": "Alta",
+      "medium": "Media",
+      "low": "Baja"
+    },
+    "subtasks": "Subtareas",
+    "linked": "Elementos vinculados",
+    "delete": "Eliminar tarea",
+    "deleteTitle": "¿Eliminar la tarea?",
+    "deleteMessage": "¿Está seguro de que desea eliminar «{name}»? Esta acción no se puede deshacer.",
+    "cancel": "Cancelar",
+    "saveFailed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
+    "readOnly": "Esta tarea procede de un calendario conectado y no se puede cambiar aquí.",
+    "untitled": "Tarea sin título",
+    "loadOneFailed": "No se pudo cargar esta tarea.",
+    "filter": "Filtrar",
+    "whoseTitle": "Asignadas a",
+    "whose": {
+      "mine": "Mí",
+      "everyone": "Cualquiera",
+      "unassigned": "Nadie"
+    },
+    "showTitle": "Mostrar",
+    "show": {
+      "open": "Abiertas",
+      "overdue": "Vencidas",
+      "all": "Todas, también las hechas"
+    },
+    "emptyFilteredTitle": "No hay tareas",
+    "emptyFilteredDescription": "Las tareas que coincidan con este filtro aparecerán aquí.",
+    "loadMore": "Cargar más",
+    "loadMoreFailed": "No se pudieron cargar más tareas."
   },
   "matters": {
     "emptyTitle": "Aún no hay asuntos",

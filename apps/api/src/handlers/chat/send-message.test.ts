@@ -9,6 +9,10 @@ import {
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
+import {
+  LEGAL_HOLD_ACTIVE,
+  LEGAL_HOLD_REASON_ISSUE_CODE,
+} from "@stll/api-contract/legal-holds";
 import { roles } from "@stll/permissions";
 import { createTestState } from "@stll/test-state";
 
@@ -16,6 +20,7 @@ import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   chatMessages,
+  chatQueueHolds,
   chatRunLogEntries,
   chatRunLogs,
   chatThreadNames,
@@ -57,6 +62,10 @@ import {
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
+import {
+  LegalHoldActiveError,
+  LegalHoldRecord,
+} from "@/api/lib/workspaces/legal-holds/errors";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
@@ -111,7 +120,7 @@ const uploadMessageFilesWithRollbackDefault = async ({
 }): Promise<
   Result<
     { message: PersistableChatMessage; uploadedFiles: UploadedChatFile[] },
-    never
+    LegalHoldActiveError
   >
 > => Result.ok({ message, uploadedFiles: [] });
 const uploadMessageFilesWithRollbackMock = mock(
@@ -239,6 +248,16 @@ const selectChatMessages = () => ({
     })),
 });
 
+/**
+ * A turn that fails holds its thread's queue in its settlement; these
+ * threads queue nothing, so the hold's statement is not a run-id lookup.
+ */
+const withoutQueueHolds =
+  (execute: (statement: SQL) => Promise<unknown>) => async (statement: SQL) =>
+    new PgDialect().sqlToQuery(statement).sql.includes("chat_queue_holds")
+      ? { rows: [] }
+      : await execute(statement);
+
 const withThreadNameReads = (select: () => { from: () => unknown }) => () => ({
   from: (table: unknown) => fromSharedReads(table, () => select().from()),
 });
@@ -262,12 +281,20 @@ const withRegistryCredentialQuery = (transaction: unknown): unknown => {
   }
   const query = "query" in transaction ? transaction.query : undefined;
   return {
+    // A member's send releases the thread's queue in its acceptance.
+    delete: (table: unknown) => {
+      if (table !== chatQueueHolds) {
+        throw new Error("Unexpected delete in chat send test");
+      }
+      return { where: async () => await Promise.resolve([]) };
+    },
     execute: async (statement: SQL) => {
-      if (
-        !new PgDialect()
-          .sqlToQuery(statement)
-          .sql.includes("chat_turn_run_id_taken")
-      ) {
+      const text = new PgDialect().sqlToQuery(statement).sql;
+      // A turn that fails holds its thread's queue; these threads have none.
+      if (text.includes("chat_queue_holds")) {
+        return await Promise.resolve({ rows: [] });
+      }
+      if (!text.includes("chat_turn_run_id_taken")) {
         throw new Error("Unexpected SQL execution in chat send test");
       }
       return { rows: [{ taken: false }] };
@@ -371,6 +398,7 @@ const createContext = ({
     route: "/v1/chat" satisfies ApiRoutePath,
     safeDb: observedSafeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
   });
@@ -633,6 +661,7 @@ describe("send message disconnect handling", () => {
         return Result.ok("owned");
       });
       const lifecycle = new ChatSendLifecycle({
+        organizationId,
         ownership,
         mode: "raw",
         indexThread: upsertChatThreadSearchDocumentMock,
@@ -1420,7 +1449,7 @@ describe("send message disconnect handling", () => {
       createContext({
         contextMatterIds: [],
         transaction: {
-          execute: lookup,
+          execute: withoutQueueHolds(lookup),
           insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
@@ -1621,7 +1650,7 @@ describe("send message disconnect handling", () => {
           createContext({
             contextMatterIds: [],
             transaction: {
-              execute: lookup,
+              execute: withoutQueueHolds(lookup),
               insert: withRunLogInsert((table) => {
                 const original = insert(table);
                 return {
@@ -1819,6 +1848,75 @@ describe("send message disconnect handling", () => {
 });
 
 describe("send message turn persistence", () => {
+  test("preserves legal-hold details when attachment rollback is refused", async () => {
+    const holdId = toSafeId<"legalHold">(
+      "00000000-0000-0000-0000-000000000010",
+    );
+    uploadMessageFilesWithRollbackMock.mockImplementationOnce(async () =>
+      Result.err(
+        new LegalHoldActiveError({
+          code: LEGAL_HOLD_ACTIVE,
+          message: "An active legal hold prevents attachment rollback.",
+          holds: [
+            new LegalHoldRecord({
+              id: holdId,
+              placedAt: new Date("2026-01-01T00:00:00Z"),
+              placedBy: "another-member",
+              reason: "Preserve the supplier dispute record",
+              scope: "matter",
+              workspaceId: activeWorkspaceId,
+              entityId: null,
+            }),
+          ],
+        }),
+      ),
+    );
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        transaction: {
+          query: {
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                chatReasoningEffort: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectChatMessages,
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      code: 409,
+      response: {
+        code: LEGAL_HOLD_ACTIVE,
+        // The requesting owner reads the reason; see projection.test.ts for
+        // the members who do not.
+        issues: [
+          { path: holdId, code: "matter" },
+          {
+            path: `${holdId}.reason`,
+            code: LEGAL_HOLD_REASON_ISSUE_CODE,
+            message: "Preserve the supplier dispute record",
+          },
+        ],
+      },
+    });
+  });
+
   test("rolls back an uploaded attachment before rejecting an invalid replay", async () => {
     const uploadedFile = {
       id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000009"),

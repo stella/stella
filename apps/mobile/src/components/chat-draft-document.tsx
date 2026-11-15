@@ -117,6 +117,7 @@ const DraftPages = ({
           draftSource={draft.source}
           draftTitle={draftTitleFallback(draft.name)}
           editable={false}
+          fileName={draft.fileName}
           kind="docx"
           locale={locale}
           onEditRequest={IGNORED}

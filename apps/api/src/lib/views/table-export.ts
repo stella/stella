@@ -184,13 +184,21 @@ const buildTextExportCell = (
   return cell;
 };
 
-const buildNumberExportCell = (
-  value: number,
-  displayValue: string,
-  currency: string | null,
-  style: ExportCellStyle = "default",
-  comment?: string,
-): ExportNumberCell => {
+type BuildNumberExportCellOptions = {
+  value: number;
+  displayValue: string;
+  currency: string | null;
+  style?: ExportCellStyle | undefined;
+  comment?: string | undefined;
+};
+
+const buildNumberExportCell = ({
+  value,
+  displayValue,
+  currency,
+  style = "default",
+  comment,
+}: BuildNumberExportCellOptions): ExportNumberCell => {
   const cell: ExportNumberCell = {
     type: "number",
     value,
@@ -323,13 +331,13 @@ const buildPropertyCell = ({
   }
 
   if (content?.type === "int") {
-    return buildNumberExportCell(
-      content.value,
-      formatFieldContent(content, locale),
-      content.currency,
+    return buildNumberExportCell({
+      value: content.value,
+      displayValue: formatFieldContent(content, locale),
+      currency: content.currency,
       style,
-      commentOption,
-    );
+      comment: commentOption,
+    });
   }
 
   return buildTextExportCell(formatFieldContent(content, locale), style, {
@@ -343,7 +351,11 @@ const buildMetadataExportCell = (
   locale: string,
 ): ExportCell => {
   if (column.id === "_version") {
-    return buildNumberExportCell(entity.version, String(entity.version), null);
+    return buildNumberExportCell({
+      value: entity.version,
+      displayValue: String(entity.version),
+      currency: null,
+    });
   }
 
   return buildTextExportCell(formatMetadataColumn(column, entity, locale));

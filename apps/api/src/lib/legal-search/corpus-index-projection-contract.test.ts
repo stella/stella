@@ -25,6 +25,7 @@ test("every intent lifecycle state has its required launch disposition", () => {
     cleanup_stalled: "blocking",
     settled: "terminal",
     cancelled: "terminal",
+    withdrawn: "terminal",
   } as const satisfies Record<
     CorpusIndexIntentStatus,
     "blocking" | "census_required" | "terminal"
@@ -69,6 +70,7 @@ test("cleanup retries until one retired revision settles", () => {
   expect(CORPUS_INDEX_INTENT_TRANSITIONS.applied).toEqual(["cleanup_pending"]);
   expect(CORPUS_INDEX_INTENT_TRANSITIONS.cleanup_pending).toEqual([
     "cleanup_started",
+    "applied",
   ]);
   expect(CORPUS_INDEX_INTENT_TRANSITIONS.cleanup_started).toEqual([
     "cleanup_pending",
@@ -86,6 +88,15 @@ test("cleanup retries until one retired revision settles", () => {
   expect(CORPUS_INDEX_INTENT_TRANSITIONS.cancelled).toEqual([]);
 });
 
+test("only a committed revision is withdrawn, and only a census reopens it", () => {
+  const into = CORPUS_INDEX_INTENT_STATUSES.filter((from) =>
+    canTransitionCorpusIndexIntent(from, "withdrawn"),
+  );
+  expect(into).toEqual(["append_committed"]);
+  expect(CORPUS_INDEX_INTENT_TRANSITIONS.withdrawn).toEqual([
+    "cleanup_pending",
+  ]);
+});
 test("an applied intent is quiet only when authoritative state references it", () => {
   const revision = "0198e331-e578-7000-8000-000000000001";
   expect(

@@ -103,8 +103,9 @@ const CHAT_PATH_BUDGETS = {
   /** One older page. */
   olderPage: { measured: { pageBytes: 14_365, statements: 6 } },
   /** A send up to its first delivery-log append: the thread and history
-   *  reads, the turn's acceptance and claim, the run's setup. */
-  sendUntilStream: { measured: { statements: 63 } },
+   *  reads, the turn's acceptance (which releases a held queue) and claim,
+   *  the run's setup. */
+  sendUntilStream: { measured: { statements: 64 } },
   /** The streamed answer: delivery-log appends batch deltas, so a delta
    *  costs a share of one append, and its SSE event a fixed frame. */
   streamedText: {
@@ -116,7 +117,7 @@ const CHAT_PATH_BUDGETS = {
   },
   /** The turn's settlement after its last append: the assistant message,
    *  the turn row, the closed log. */
-  settleTurn: { measured: { statements: 10 } },
+  settleTurn: { measured: { statements: 11 } },
   /** The rejoin probe of a running turn. */
   rejoinProbe: { measured: { bytes: 117, statements: 2 } },
   /** Joining a running turn from its start, up to its current tail. */
@@ -124,15 +125,21 @@ const CHAT_PATH_BUDGETS = {
     measured: {
       replayedBytes: 15_166,
       replayedStatements: 9,
-      snapshotBytes: 3672,
+      // Native source metadata adds 151 bytes to the compacted snapshot.
+      snapshotBytes: 3823,
       snapshotStatements: 13,
     },
+    // Preserve the pre-migration ceiling: ceil(3672 * 1.15).
+    limits: { snapshotBytes: 4223 },
   },
   /** The Stop route on a running turn. */
   stop: { measured: { statements: 6 } },
 } as const satisfies Record<
   string,
-  { measured: Readonly<Record<string, number>> }
+  {
+    measured: Readonly<Record<string, number>>;
+    limits?: Readonly<Record<string, number>>;
+  }
 >;
 
 /**
@@ -201,12 +208,14 @@ const withHeadroom = (name: string, value: number): number => {
   return panic(`No headroom rule for ${name}`);
 };
 
-/** A path's budget getter: each measurement plus its headroom. */
+/** Explicit ceilings stay fixed; other measurements retain their headroom. */
 const budgetOf = <TPath extends keyof typeof CHAT_PATH_BUDGETS>(
   path: TPath,
 ) => {
-  const measured: Readonly<Record<string, number>> =
-    CHAT_PATH_BUDGETS[path].measured;
+  const budget = CHAT_PATH_BUDGETS[path];
+  const measured: Readonly<Record<string, number>> = budget.measured;
+  const limits: Readonly<Record<string, number>> =
+    "limits" in budget ? budget.limits : {};
   return (
     name: Extract<keyof (typeof CHAT_PATH_BUDGETS)[TPath]["measured"], string>,
   ) => {
@@ -214,7 +223,7 @@ const budgetOf = <TPath extends keyof typeof CHAT_PATH_BUDGETS>(
     if (value === undefined) {
       return panic(`No ${name} measurement for ${path}`);
     }
-    return withHeadroom(name, value);
+    return limits[name] ?? withHeadroom(name, value);
   };
 };
 

@@ -66,6 +66,7 @@ const { ContactOwnersEditor } =
 const { RateManagementDialog } =
   await import("@/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog");
 const { toSafeId } = await import("@/lib/safe-id");
+const { roleOptions } = await import("@/lib/auth-queries");
 const { DeletionTaskReassignments } =
   await import("@/routes/_protected.settings/-components/account/deletion-task-reassignments");
 
@@ -344,6 +345,54 @@ describe("member pickers save the chosen member", () => {
       taskId: TASK,
       userId: DVORAK.id,
     });
+  });
+
+  /**
+   * Shows the role the query cache holds. It renders in the same commit as
+   * the picker's permission check, so finding the role proves the picker has
+   * seen it rather than a pending role, which also hides the controls.
+   */
+  const AppliedRole = () => (
+    <span>{`role: ${query.useQuery(roleOptions).data ?? "pending"}`}</span>
+  );
+  const mountAssigneesAs = async (role: string) => {
+    reads = [{ ...roleRead, body: { role } }, matterMembersRead(PEOPLE)];
+    await mount(() => (
+      <>
+        <AppliedRole />
+        <AssigneePicker
+          assignees={[{ user: DVORAK }]}
+          taskId={TASK}
+          workspaceId={WORKSPACE}
+        />
+      </>
+    ));
+    await testing.screen.findByText(DVORAK.name);
+    await testing.screen.findByText(`role: ${role}`);
+  };
+
+  test("task assignee: a role that can update entities changes assignees", async () => {
+    await mountAssigneesAs("member");
+
+    expect(
+      testing.screen.getByRole("button", { name: messages.tasks.addAssignee }),
+    ).toBeTruthy();
+    expect(
+      testing.screen.getByRole("button", { name: messages.common.remove }),
+    ).toBeTruthy();
+  });
+
+  test("task assignee: a role without entity update cannot change assignees", async () => {
+    await mountAssigneesAs("intern");
+
+    expect(
+      testing.screen.queryByRole("button", {
+        name: messages.tasks.addAssignee,
+      }),
+    ).toBeNull();
+    expect(
+      testing.screen.queryByRole("button", { name: messages.common.remove }),
+    ).toBeNull();
   });
 
   test("correspondence assignee, and the unassigned row", async () => {

@@ -26,12 +26,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { censusAppliedCorpusProjections } from "@/api/lib/legal-search/corpus-index-projection-census";
-import {
-  readAppliedCorpusProjectionCensusPageTx,
-  readSettledCorpusProjectionCensusPageTx,
-  repairAppliedCorpusProjectionDriftTx,
-  revalidateAppliedCorpusProjectionCensusTx,
-} from "@/api/lib/legal-search/corpus-index-projection-census-store";
+import { repairAppliedCorpusProjectionDriftTx } from "@/api/lib/legal-search/corpus-index-projection-census-store";
 import {
   claimCorpusProjectionCleanupSettlementTx,
   claimCorpusProjectionCleanupTx,
@@ -58,8 +53,8 @@ import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/cor
 import {
   abandonCorpusProjectionAppendTx,
   classifyCorpusProjectionReservationFailureTx,
-  commitCorpusProjectionAppendTx,
-  prepareCorpusProjectionReplacementsTx,
+  proveAcceptedCorpusProjectionAppendsTx,
+  recordAcceptedCorpusProjectionAppendsTx,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendBatchTx,
   startCorpusProjectionAppendTx,
@@ -117,8 +112,8 @@ const FIRST_FINGERPRINT = "a".repeat(64);
 const SECOND_FINGERPRINT = "b".repeat(64);
 const INDEX_ID = "case_law_v5_cs_sk";
 
-/** Presence evidence from the real census over one exact engine bucket. */
-const appendPresenceProof = async ({
+/** The real census over one exact engine bucket for one revision. */
+const appendPresenceCensus = async ({
   intentId,
   indexId,
 }: {
@@ -139,10 +134,53 @@ const appendPresenceProof = async ({
     indexId,
     expected: [{ revision: intentId, documentCount: 1 }],
   });
-  if (census.isErr() || census.value.status !== "proven") {
+  if (census.isErr() || census.value.proofs.length !== 1) {
     return panic("Expected an exact census to prove presence");
   }
-  return census.value.proofs.at(0) ?? panic("Expected one presence proof");
+  return census.value;
+};
+
+/** The executor's sequence after a waited request: record, then prove at once. */
+const acceptAndProveAppend = async (
+  tx: Transaction,
+  {
+    lease,
+    testNow,
+  }: {
+    lease: {
+      intentId: SafeId<"corpusIndexProjectionIntent">;
+      indexId: string;
+      leaseToken: string;
+    };
+    testNow?: Date;
+  },
+) => {
+  const recorded = (
+    await recordAcceptedCorpusProjectionAppendsTx(tx, {
+      accepted: [
+        {
+          intentId: lease.intentId,
+          leaseToken: lease.leaseToken,
+          documentCount: 1,
+        },
+      ],
+      testNow,
+    })
+  ).at(0);
+  if (recorded?.status !== "accepted") {
+    return recorded;
+  }
+  return (
+    await proveAcceptedCorpusProjectionAppendsTx(tx, {
+      indexId: lease.indexId,
+      census: await appendPresenceCensus(lease),
+      timing: {
+        type: "request_waited",
+        failureMessage: "projection append is not fully searchable",
+      },
+      testNow,
+    })
+  ).at(0);
 };
 const POL_INDEX_ID = "case_law_v5_pol";
 const INITIAL_RUNNABLE_AT = new Date("2026-08-25T00:00:00.000Z");
@@ -685,15 +723,17 @@ test("subject-scoped cleanup and settlement cannot claim another revision", asyn
 
   const cleanup = await db.transaction(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        indexId: INDEX_ID,
-        scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+        })
+      ).leases,
   );
   expect(cleanup.map(({ intentId }) => intentId)).toEqual([SECOND_INTENT_ID]);
   await db.transaction(
@@ -815,182 +855,6 @@ test("subject-scoped recovery cannot cancel another expired reservation", async 
     { id: FIRST_INTENT_ID, status: "reserved" },
     { id: SECOND_INTENT_ID, status: "cancelled" },
   ]);
-});
-
-test("subject-scoped replacement cannot retire another applied revision", async () => {
-  const appliedAt = new Date("2026-08-25T00:00:00.000Z");
-  await db.insert(caseLawDecisions).values({
-    id: ERASE_DECISION_ID,
-    sourceId: SOURCE_ID,
-    caseNumber: "2 A 2/2026",
-    court: "Test court",
-    country: "CZE",
-    language: "cs",
-    contentHash: "d".repeat(64),
-    projectionEpoch: 2n,
-  });
-  await db.execute(
-    sql`ALTER TABLE corpus_index_projection_intents DISABLE TRIGGER corpus_index_projection_intents_insert_guard`,
-  );
-  await db.insert(corpusIndexProjectionIntents).values([
-    {
-      id: FIRST_INTENT_ID,
-      family: "case_law",
-      generation: "case_law_v5",
-      entityId: DECISION_ID,
-      epoch: 1n,
-      fingerprint: FIRST_FINGERPRINT,
-      indexId: INDEX_ID,
-      status: "applied",
-      appendStartedAt: appliedAt,
-      appendCommittedAt: appliedAt,
-      expectedDocumentCount: 1,
-      appliedAt,
-    },
-    {
-      id: SECOND_INTENT_ID,
-      family: "case_law",
-      generation: "case_law_v5",
-      entityId: ERASE_DECISION_ID,
-      epoch: 1n,
-      fingerprint: FIRST_FINGERPRINT,
-      indexId: INDEX_ID,
-      status: "applied",
-      appendStartedAt: appliedAt,
-      appendCommittedAt: appliedAt,
-      expectedDocumentCount: 1,
-      appliedAt,
-    },
-  ]);
-  await db.execute(
-    sql`ALTER TABLE corpus_index_projection_intents ENABLE TRIGGER corpus_index_projection_intents_insert_guard`,
-  );
-  await db
-    .update(caseLawDecisions)
-    .set({ projectionEpoch: 2n })
-    .where(eq(caseLawDecisions.id, DECISION_ID));
-  await db
-    .update(corpusIndexProjectionStates)
-    .set({
-      desiredEpoch: 2n,
-      desiredFingerprint: SECOND_FINGERPRINT,
-      appliedAction: "upsert",
-      appliedEpoch: 1n,
-      appliedRevision: FIRST_INTENT_ID,
-      appliedFingerprint: FIRST_FINGERPRINT,
-      appliedIndexId: INDEX_ID,
-      appliedAt,
-    })
-    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
-  await db.insert(corpusIndexProjectionStates).values({
-    family: "case_law",
-    generation: "case_law_v5",
-    entityId: ERASE_DECISION_ID,
-    desiredAction: "upsert",
-    desiredEpoch: 2n,
-    desiredFingerprint: SECOND_FINGERPRINT,
-    desiredIndexId: INDEX_ID,
-    appliedAction: "upsert",
-    appliedEpoch: 1n,
-    appliedRevision: SECOND_INTENT_ID,
-    appliedFingerprint: FIRST_FINGERPRINT,
-    appliedIndexId: INDEX_ID,
-    appliedAt,
-    updatedAt: INITIAL_RUNNABLE_AT,
-  });
-
-  const replacements = await db.transaction(
-    async (tx) =>
-      await prepareCorpusProjectionReplacementsTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
-        limit: 10,
-      }),
-  );
-
-  expect(replacements.map(({ intentId }) => intentId)).toEqual([
-    SECOND_INTENT_ID,
-  ]);
-  expect(
-    await db
-      .select({
-        id: corpusIndexProjectionIntents.id,
-        status: corpusIndexProjectionIntents.status,
-      })
-      .from(corpusIndexProjectionIntents)
-      .orderBy(corpusIndexProjectionIntents.id),
-  ).toEqual([
-    { id: FIRST_INTENT_ID, status: "applied" },
-    { id: SECOND_INTENT_ID, status: "cleanup_pending" },
-  ]);
-});
-
-test("a rerouted replacement is owned by its desired route", async () => {
-  const appliedAt = new Date("2026-08-25T00:00:00.000Z");
-  await db.execute(
-    sql`ALTER TABLE corpus_index_projection_intents DISABLE TRIGGER corpus_index_projection_intents_insert_guard`,
-  );
-  await db.insert(corpusIndexProjectionIntents).values({
-    id: FIRST_INTENT_ID,
-    family: "case_law",
-    generation: "case_law_v5",
-    entityId: DECISION_ID,
-    epoch: 1n,
-    fingerprint: FIRST_FINGERPRINT,
-    indexId: INDEX_ID,
-    status: "applied",
-    appendStartedAt: appliedAt,
-    appendCommittedAt: appliedAt,
-    expectedDocumentCount: 1,
-    appliedAt,
-  });
-  await db.execute(
-    sql`ALTER TABLE corpus_index_projection_intents ENABLE TRIGGER corpus_index_projection_intents_insert_guard`,
-  );
-  await db
-    .update(caseLawDecisions)
-    .set({ projectionEpoch: 2n })
-    .where(eq(caseLawDecisions.id, DECISION_ID));
-  await db
-    .update(corpusIndexProjectionStates)
-    .set({
-      desiredEpoch: 2n,
-      desiredFingerprint: SECOND_FINGERPRINT,
-      desiredIndexId: POL_INDEX_ID,
-      appliedAction: "upsert",
-      appliedEpoch: 1n,
-      appliedRevision: FIRST_INTENT_ID,
-      appliedFingerprint: FIRST_FINGERPRINT,
-      appliedIndexId: INDEX_ID,
-      appliedAt,
-    })
-    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
-
-  const replacements = await db.transaction(
-    async (tx) =>
-      await prepareCorpusProjectionReplacementsTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        scope: { type: "route", indexId: POL_INDEX_ID },
-        limit: 10,
-      }),
-  );
-
-  expect(replacements).toEqual([
-    {
-      intentId: FIRST_INTENT_ID,
-      family: "case_law",
-      generation: "case_law_v5",
-      entityId: DECISION_ID,
-      indexId: INDEX_ID,
-    },
-  ]);
-  expect(
-    await db
-      .select({ status: corpusIndexProjectionIntents.status })
-      .from(corpusIndexProjectionIntents),
-  ).toEqual([{ status: "cleanup_pending" }]);
 });
 
 test("retry classification defers poison work, then blocks the exhausted desired state", async () => {
@@ -1996,9 +1860,8 @@ test("applied census rejects an incomplete multi-document revision", async () =>
   expect(
     await db.transaction(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          proof: await appendPresenceProof(lease),
-          leaseToken: lease.leaseToken,
+        await acceptAndProveAppend(asTestRaw<Transaction>(tx), {
+          lease,
           testNow: appliedAt,
         }),
     ),
@@ -2074,9 +1937,10 @@ test("applied census rejects an incomplete multi-document revision", async () =>
     .select({ status: corpusIndexProjectionIntents.status })
     .from(corpusIndexProjectionIntents)
     .where(eq(corpusIndexProjectionIntents.id, FIRST_INTENT_ID));
+  // The drifted copy is no longer served: the entity is a first append again.
   expect(repairedState).toEqual([
     {
-      appliedRevision: FIRST_INTENT_ID,
+      appliedRevision: null,
       failureAttempts: 0,
       lastFailureKind: null,
       lastFailureMessage: null,
@@ -2293,468 +2157,6 @@ test("a rejected append start reads one clock, so a later expiry cannot take the
   ]);
 });
 
-test("replacement deletes and settles the old revision before reserving the new append", async () => {
-  const first = await db.transaction(
-    async (tx) =>
-      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        limit: 10,
-        leaseMs: 60_000,
-        newIntentId: () => FIRST_INTENT_ID,
-        newLeaseToken: () => FIRST_LEASE_TOKEN,
-      }),
-  );
-  expect(first).toHaveLength(1);
-  const firstLease = first.at(0) ?? panic("Expected first projection lease");
-  // The census and the cleanup below both observe the index, and neither may
-  // run inside the engine's commit window, so this append is accepted far
-  // enough in the past to be published. The fence itself is proven in the
-  // publish-fence test.
-  const acceptedAt = new Date(
-    Date.now() -
-      corpusIndexAppendPublishDelayMs(CORPUS_INDEX_MANIFESTS.case_law_v5) -
-      1000,
-  );
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          intentId: firstLease.intentId,
-          leaseToken: firstLease.leaseToken,
-          testNow: acceptedAt,
-        }),
-    ),
-  ).toBe("started");
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          proof: await appendPresenceProof(firstLease),
-          leaseToken: firstLease.leaseToken,
-          testNow: acceptedAt,
-        }),
-    ),
-  ).toMatchObject({ status: "applied", entityId: DECISION_ID });
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await readAppliedCorpusProjectionCensusPageTx(
-          asTestRaw<Transaction>(tx),
-          {
-            family: "case_law",
-            generation: "case_law_v5",
-            indexId: INDEX_ID,
-            after: null,
-            limit: 1,
-          },
-        ),
-    ),
-  ).toEqual({
-    candidates: [
-      {
-        entityId: DECISION_ID,
-        revision: FIRST_INTENT_ID,
-        expectedDocumentCount: 1,
-      },
-    ],
-    nextCursor: DECISION_ID,
-    complete: false,
-  });
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await revalidateAppliedCorpusProjectionCensusTx(
-          asTestRaw<Transaction>(tx),
-          {
-            family: "case_law",
-            generation: "case_law_v5",
-            indexId: INDEX_ID,
-            revisions: [FIRST_INTENT_ID],
-          },
-        ),
-    ),
-  ).toEqual([
-    {
-      entityId: DECISION_ID,
-      revision: FIRST_INTENT_ID,
-      expectedDocumentCount: 1,
-    },
-  ]);
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(caseLawDecisions)
-      .set({ projectionEpoch: 2n })
-      .where(eq(caseLawDecisions.id, DECISION_ID));
-    await tx
-      .update(corpusIndexProjectionStates)
-      .set({
-        desiredEpoch: 2n,
-        desiredFingerprint: SECOND_FINGERPRINT,
-      })
-      .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
-  });
-
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
-          family: "case_law",
-          generation: "case_law_v5",
-          limit: 10,
-          leaseMs: 60_000,
-        }),
-    ),
-  ).toEqual([]);
-
-  const prepared = await db.transaction(
-    async (tx) =>
-      await prepareCorpusProjectionReplacementsTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        limit: 10,
-      }),
-  );
-  expect(prepared.map(({ intentId }) => intentId)).toEqual([
-    firstLease.intentId,
-  ]);
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await revalidateAppliedCorpusProjectionCensusTx(
-          asTestRaw<Transaction>(tx),
-          {
-            family: "case_law",
-            generation: "case_law_v5",
-            indexId: INDEX_ID,
-            revisions: [FIRST_INTENT_ID],
-          },
-        ),
-    ),
-  ).toEqual([]);
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await prepareCorpusProjectionReplacementsTx(
-          asTestRaw<Transaction>(tx),
-          {
-            family: "case_law",
-            generation: "case_law_v5",
-            limit: 10,
-          },
-        ),
-    ),
-  ).toEqual([]);
-
-  const cleanup = await db.transaction(
-    async (tx) =>
-      await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        indexId: INDEX_ID,
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-      }),
-  );
-  expect(cleanup).toHaveLength(1);
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await recordCorpusProjectionDeleteTx(asTestRaw<Transaction>(tx), {
-          intentIds: [firstLease.intentId],
-          indexId: INDEX_ID,
-          leaseToken: CLEANUP_LEASE_TOKEN,
-          deleteOpstamp: 42,
-          deleteTaskCreatedAt: DELETE_TASK_CREATED_AT,
-        }),
-    ),
-  ).toBe(1);
-  const releasedSettlementLease = await db.transaction(
-    async (tx) =>
-      await claimCorpusProjectionCleanupSettlementTx(
-        asTestRaw<Transaction>(tx),
-        {
-          family: "case_law",
-          generation: "case_law_v5",
-          indexId: INDEX_ID,
-          limit: 10,
-          taskLimit: 1,
-          leaseMs: 60_000,
-        },
-      ),
-  );
-  const releasedLease = releasedSettlementLease.at(0);
-  if (releasedLease === undefined) {
-    panic("Expected a releasable projection settlement lease");
-  }
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await releaseCorpusProjectionCleanupSettlementTx(
-          asTestRaw<Transaction>(tx),
-          { lease: releasedLease },
-        ),
-    ),
-  ).toBe(1);
-  const firstSettlementProof = await verifySettlement({
-    intentIds: [firstLease.intentId],
-    deleteOpstamp: 42,
-  });
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await settleCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-          proof: firstSettlementProof,
-        }),
-    ),
-  ).toBe(1);
-
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await readSettledCorpusProjectionCensusPageTx(
-          asTestRaw<Transaction>(tx),
-          {
-            family: "case_law",
-            generation: "case_law_v5",
-            indexId: INDEX_ID,
-            after: null,
-            limit: 2,
-          },
-        ),
-    ),
-  ).toEqual({
-    candidates: [{ revision: FIRST_INTENT_ID }],
-    nextCursor: FIRST_INTENT_ID,
-    complete: true,
-  });
-
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await reopenCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-          intentIds: [firstLease.intentId],
-          indexId: INDEX_ID,
-          errorMessage: "orphan census observed the settled revision again",
-        }),
-    ),
-  ).toBe(1);
-  const reopened = await db
-    .select({
-      status: corpusIndexProjectionIntents.status,
-      deleteOpstamp: corpusIndexProjectionIntents.deleteOpstamp,
-      settledAt: corpusIndexProjectionIntents.settledAt,
-    })
-    .from(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.id, firstLease.intentId));
-  expect(reopened).toEqual([
-    { status: "cleanup_pending", deleteOpstamp: null, settledAt: null },
-  ]);
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await reopenCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-          intentIds: [firstLease.intentId],
-          indexId: INDEX_ID,
-          errorMessage: "duplicate orphan census observation",
-        }),
-    ),
-  ).toBe(0);
-  const reclaimed = await db.transaction(
-    async (tx) =>
-      await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        indexId: INDEX_ID,
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => REOPEN_CLEANUP_LEASE_TOKEN,
-      }),
-  );
-  expect(reclaimed.map(({ intentId }) => intentId)).toEqual([
-    firstLease.intentId,
-  ]);
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await recordCorpusProjectionDeleteTx(asTestRaw<Transaction>(tx), {
-          intentIds: [firstLease.intentId],
-          indexId: INDEX_ID,
-          leaseToken: REOPEN_CLEANUP_LEASE_TOKEN,
-          deleteOpstamp: 43,
-          deleteTaskCreatedAt: DELETE_TASK_CREATED_AT,
-        }),
-    ),
-  ).toBe(1);
-  const reopenedSettlementProof = await verifySettlement({
-    intentIds: [firstLease.intentId],
-    deleteOpstamp: 43,
-  });
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await settleCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-          proof: reopenedSettlementProof,
-        }),
-    ),
-  ).toBe(1);
-
-  const second = await db.transaction(
-    async (tx) =>
-      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        limit: 10,
-        leaseMs: 60_000,
-        newIntentId: () => SECOND_INTENT_ID,
-        newLeaseToken: () => SECOND_LEASE_TOKEN,
-      }),
-  );
-  expect(second).toMatchObject([
-    {
-      intentId: SECOND_INTENT_ID,
-      entityId: DECISION_ID,
-      epoch: 2n,
-      fingerprint: SECOND_FINGERPRINT,
-    },
-  ]);
-
-  const statuses = await db
-    .select({ status: corpusIndexProjectionIntents.status })
-    .from(corpusIndexProjectionIntents)
-    .orderBy(corpusIndexProjectionIntents.epoch)
-    .limit(2);
-  expect(statuses).toEqual([{ status: "settled" }, { status: "reserved" }]);
-});
-
-test("cleanup-owned replacement work rotates behind a bounded queue window", async () => {
-  await db.insert(caseLawDecisions).values({
-    id: ERASE_READY_DECISION_ID,
-    sourceId: SOURCE_ID,
-    caseNumber: "1 A 5/2026",
-    court: "Test court",
-    country: "CZE",
-    language: "cs",
-    contentHash: "1".repeat(64),
-    projectionEpoch: 1n,
-  });
-  await db.insert(corpusIndexProjectionStates).values({
-    family: "case_law",
-    generation: "case_law_v5",
-    entityId: ERASE_READY_DECISION_ID,
-    desiredAction: "upsert",
-    desiredEpoch: 1n,
-    desiredFingerprint: FIRST_FINGERPRINT,
-    desiredIndexId: INDEX_ID,
-  });
-  const intentIds = [FIRST_INTENT_ID, SECOND_INTENT_ID][Symbol.iterator]();
-  const leaseTokens = [FIRST_LEASE_TOKEN, SECOND_LEASE_TOKEN][
-    Symbol.iterator
-  ]();
-  const leases = await db.transaction(
-    async (tx) =>
-      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        limit: 2,
-        leaseMs: 60_000,
-        testNow: new Date(),
-        newIntentId: () =>
-          intentIds.next().value ?? panic("Expected replacement intent id"),
-        newLeaseToken: () =>
-          leaseTokens.next().value ?? panic("Expected replacement lease token"),
-      }),
-  );
-  expect(leases).toHaveLength(2);
-  const blockedLease =
-    leases.find(({ entityId }) => entityId === DECISION_ID) ??
-    panic("Expected blocked replacement lease");
-  const readyLease =
-    leases.find(({ entityId }) => entityId === ERASE_READY_DECISION_ID) ??
-    panic("Expected ready replacement lease");
-  const applyLeases = async (index: number): Promise<void> => {
-    const lease = leases.at(index);
-    if (lease === undefined) {
-      return;
-    }
-    expect(
-      await db.transaction(
-        async (tx) =>
-          await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-            intentId: lease.intentId,
-            leaseToken: lease.leaseToken,
-          }),
-      ),
-    ).toBe("started");
-    expect(
-      await db.transaction(
-        async (tx) =>
-          await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-            proof: await appendPresenceProof(lease),
-            leaseToken: lease.leaseToken,
-          }),
-      ),
-    ).toMatchObject({ status: "applied" });
-    await applyLeases(index + 1);
-  };
-  await applyLeases(0);
-
-  const blockedAt = new Date(Date.now() - 2 * 60_000);
-  const readyAt = new Date(Date.now() - 60_000);
-  const rotatedAt = new Date();
-  await db.transaction(async (tx) => {
-    await tx
-      .update(caseLawDecisions)
-      .set({ projectionEpoch: 2n })
-      .where(eq(caseLawDecisions.id, DECISION_ID));
-    await tx
-      .update(caseLawDecisions)
-      .set({ projectionEpoch: 2n })
-      .where(eq(caseLawDecisions.id, ERASE_READY_DECISION_ID));
-    await tx
-      .update(corpusIndexProjectionStates)
-      .set({
-        desiredEpoch: 2n,
-        desiredFingerprint: SECOND_FINGERPRINT,
-        updatedAt: blockedAt,
-      })
-      .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
-    await tx
-      .update(corpusIndexProjectionStates)
-      .set({
-        desiredEpoch: 2n,
-        desiredFingerprint: SECOND_FINGERPRINT,
-        updatedAt: readyAt,
-      })
-      .where(eq(corpusIndexProjectionStates.entityId, ERASE_READY_DECISION_ID));
-  });
-
-  const first = await db.transaction(
-    async (tx) =>
-      await prepareCorpusProjectionReplacementsTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        limit: 1,
-        testNow: rotatedAt,
-      }),
-  );
-  expect(first.map(({ intentId }) => intentId)).toEqual([
-    blockedLease.intentId,
-  ]);
-  const second = await db.transaction(
-    async (tx) =>
-      await prepareCorpusProjectionReplacementsTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        limit: 1,
-        testNow: rotatedAt,
-      }),
-  );
-  expect(second.map(({ intentId }) => intentId)).toEqual([readyLease.intentId]);
-});
-
 test("production transitions preserve PostgreSQL clock ordering under process skew", async () => {
   const databaseNow = new Date("2031-02-03T04:05:06.000Z");
   expect(databaseNow.getTime()).toBeGreaterThan(Date.now());
@@ -2786,36 +2188,24 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
   expect(
     await withDatabaseClock(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(tx, {
-          proof: await appendPresenceProof(lease),
-          leaseToken: lease.leaseToken,
+        await acceptAndProveAppend(tx, {
+          lease,
         }),
     ),
   ).toMatchObject({ status: "applied" });
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(caseLawDecisions)
-      .set({ projectionEpoch: 2n })
-      .where(eq(caseLawDecisions.id, DECISION_ID));
-    await tx
-      .update(corpusIndexProjectionStates)
-      .set({
-        desiredEpoch: 2n,
-        desiredFingerprint: SECOND_FINGERPRINT,
-      })
-      .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
-  });
+  // Drift repair is the transition that retires a served revision now.
   expect(
     await withDatabaseClock(
       async (tx) =>
-        await prepareCorpusProjectionReplacementsTx(tx, {
+        await repairAppliedCorpusProjectionDriftTx(tx, {
           family: "case_law",
           generation: "case_law_v5",
-          limit: 1,
+          indexId: INDEX_ID,
+          revisions: [FIRST_INTENT_ID],
         }),
     ),
-  ).toMatchObject([{ intentId: FIRST_INTENT_ID }]);
+  ).toBe(1);
   expect(
     await db.transaction(async (tx) => {
       await tx
@@ -2827,7 +2217,7 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
         { family: "case_law", entityId: DECISION_ID },
       );
     }),
-  ).toEqual({ epoch: 3n, generationCount: 1 });
+  ).toEqual({ epoch: 2n, generationCount: 1 });
   // Cleanup deletes by query, so it starts only once the engine has
   // certainly published what it is deleting.
   const publishedAt = new Date(
@@ -2838,14 +2228,16 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
   await setDatabaseClock(cleanupNow);
   const cleanup = await withDatabaseClock(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(tx, {
-        family: "case_law",
-        generation: "case_law_v5",
-        indexId: INDEX_ID,
-        limit: 1,
-        leaseMs: 60_000,
-        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(tx, {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 1,
+          leaseMs: 60_000,
+          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+        })
+      ).leases,
   );
   expect(cleanup.map(({ intentId }) => intentId)).toEqual([FIRST_INTENT_ID]);
   expect(
@@ -2859,7 +2251,7 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
         { family: "case_law", entityId: DECISION_ID },
       );
     }),
-  ).toEqual({ epoch: 4n, generationCount: 1 });
+  ).toEqual({ epoch: 3n, generationCount: 1 });
   expect(
     await withDatabaseClock(
       async (tx) =>
@@ -2944,14 +2336,16 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
   expect(
     await withDatabaseClock(
       async (tx) =>
-        await claimCorpusProjectionCleanupTx(tx, {
-          family: "case_law",
-          generation: "case_law_v5",
-          indexId: INDEX_ID,
-          limit: 1,
-          leaseMs: 60_000,
-          newLeaseToken: () => ERASE_CLEANUP_TOKEN,
-        }),
+        (
+          await claimCorpusProjectionCleanupTx(tx, {
+            family: "case_law",
+            generation: "case_law_v5",
+            indexId: INDEX_ID,
+            limit: 1,
+            leaseMs: 60_000,
+            newLeaseToken: () => ERASE_CLEANUP_TOKEN,
+          })
+        ).leases,
     ),
   ).toHaveLength(1);
 
@@ -3000,7 +2394,7 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
     .select({ appliedAt: corpusIndexProjectionStates.appliedAt })
     .from(corpusIndexProjectionStates)
     .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
-  expect(state).toEqual([{ appliedAt: databaseNow }]);
+  expect(state).toEqual([{ appliedAt: null }]);
 });
 
 test("a settled same-epoch attempt reopens after its retry is applied", async () => {
@@ -3041,14 +2435,16 @@ test("a settled same-epoch attempt reopens after its retry is applied", async ()
   ).toEqual({ status: "cleanup_pending" });
   const firstCleanup = await db.transaction(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        indexId: INDEX_ID,
-        limit: 1,
-        leaseMs: 60_000,
-        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 1,
+          leaseMs: 60_000,
+          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+        })
+      ).leases,
   );
   expect(firstCleanup.map(({ intentId }) => intentId)).toEqual([
     FIRST_INTENT_ID,
@@ -3099,9 +2495,8 @@ test("a settled same-epoch attempt reopens after its retry is applied", async ()
   expect(
     await db.transaction(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          proof: await appendPresenceProof(retryLease),
-          leaseToken: retryLease.leaseToken,
+        await acceptAndProveAppend(asTestRaw<Transaction>(tx), {
+          lease: retryLease,
         }),
     ),
   ).toMatchObject({ status: "applied" });
@@ -3236,14 +2631,16 @@ test("erasure fences an unknown append and applies only after cleanup settlement
 
   const cleanup = await db.transaction(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        indexId: INDEX_ID,
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => ERASE_CLEANUP_TOKEN,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => ERASE_CLEANUP_TOKEN,
+        })
+      ).leases,
   );
   expect(cleanup.map(({ intentId }) => intentId)).toContain(lease.intentId);
   expect(
@@ -3558,14 +2955,16 @@ const seedCommittedCleanupPair = async (): Promise<void> => {
   );
   await db.transaction(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        indexId: INDEX_ID,
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+        })
+      ).leases,
   );
   // Two delete tasks, one per revision, as cleanup issues them: one task per
   // turn per index.
@@ -4380,9 +3779,8 @@ test("an orphaned erasure applies only after its applied upsert settles", async 
   expect(
     await db.transaction(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          proof: await appendPresenceProof(lease),
-          leaseToken: lease.leaseToken,
+        await acceptAndProveAppend(asTestRaw<Transaction>(tx), {
+          lease,
           testNow: acceptedAt,
         }),
     ),
@@ -4427,14 +3825,16 @@ test("an orphaned erasure applies only after its applied upsert settles", async 
 
   const cleanup = await db.transaction(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        indexId: INDEX_ID,
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+        })
+      ).leases,
   );
   expect(cleanup.map(({ intentId }) => intentId)).toEqual([FIRST_INTENT_ID]);
   expect(

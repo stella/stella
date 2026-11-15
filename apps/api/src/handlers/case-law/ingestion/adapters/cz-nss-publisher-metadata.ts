@@ -1,4 +1,3 @@
-// parser-output-unchanged: source-fields-shared-contract: Closing inventory migration policies and field audit states leaves parsed decisions unchanged.
 import { load } from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
 
@@ -99,10 +98,11 @@ export const extractNssPublisherMetadata = (
     ({ field, occurrence, references }) =>
       references.map((reference) => ({ field, occurrence, ...reference })),
   );
+  // Only values set in a table row form tuples; every value, in a row or
+  // not, is already kept in `publisherFields`.
   const valuesByRow = new Map<AnyNode, typeof values>();
   for (const value of values) {
     const row = $(value.element).closest("tr").get(0);
-    // Scalar values remain in publisherFields and have no table association.
     if (row !== undefined) {
       const existing = valuesByRow.get(row);
       if (existing === undefined) {

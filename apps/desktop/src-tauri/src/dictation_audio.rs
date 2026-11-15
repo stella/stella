@@ -11,6 +11,20 @@ pub const MODEL_SAMPLE_RATE: u32 = 16_000;
 const MIN_SPEECH_SAMPLES: usize = MODEL_SAMPLE_RATE as usize * 3 / 10;
 /// Quieter audio is silence, on which speech models invent closing phrases.
 const SILENCE_RMS: f32 = 0.002;
+/// Loudness is judged over frames this long while recording.
+pub const FRAME_MILLIS: usize = 20;
+/// This much silence after speech ends a stretch, which is then transcribed
+/// while the speaker goes on.
+pub const PAUSE_MILLIS: usize = 500;
+/// A stretch shorter than this waits for the next pause, so the model never
+/// gets a lone word without its sentence.
+pub const MIN_STRETCH_MILLIS: usize = 1_000;
+/// Silence kept before speech; longer silence is dropped as it arrives.
+pub const LEAD_MILLIS: usize = PAUSE_MILLIS / 2;
+// Whole frames make up a pause, and a stretch outlasts the pause ending it.
+const _: () = assert!(
+  PAUSE_MILLIS.is_multiple_of(FRAME_MILLIS) && MIN_STRETCH_MILLIS > PAUSE_MILLIS
+);
 /// Filter half-width in input samples at the lowered cutoff.
 const SINC_ZERO_CROSSINGS: f64 = 16.0;
 
@@ -57,6 +71,11 @@ pub fn resample(input: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
     .collect()
 }
 
+/// Samples in `millis` milliseconds at `rate`.
+pub const fn samples_in(millis: usize, rate: u32) -> usize {
+  millis * rate as usize / 1_000
+}
+
 fn sinc(x: f64) -> f64 {
   if x.abs() < 1e-9 {
     1.0
@@ -71,16 +90,21 @@ fn hann(position: f64) -> f64 {
   0.5 * (1.0 + (std::f64::consts::PI * position).cos())
 }
 
-/// Whether 16 kHz audio is long and loud enough to be worth transcribing.
-pub fn holds_speech(samples: &[f32]) -> bool {
-  if samples.len() < MIN_SPEECH_SAMPLES {
-    return false;
+/// Whether audio is below the silence level, at any rate. Nothing is quiet.
+pub fn quiet(samples: &[f32]) -> bool {
+  if samples.is_empty() {
+    return true;
   }
   let energy = samples
     .iter()
     .map(|sample| f64::from(*sample).powi(2))
     .sum::<f64>();
-  (energy / samples.len() as f64).sqrt() >= f64::from(SILENCE_RMS)
+  (energy / samples.len() as f64).sqrt() < f64::from(SILENCE_RMS)
+}
+
+/// Whether 16 kHz audio is long and loud enough to be worth transcribing.
+pub fn holds_speech(samples: &[f32]) -> bool {
+  samples.len() >= MIN_SPEECH_SAMPLES && !quiet(samples)
 }
 
 #[cfg(test)]
@@ -173,5 +197,15 @@ mod tests {
   #[test]
   fn audible_audio_is_speech() {
     assert!(holds_speech(&sine(440.0, MODEL_SAMPLE_RATE, 1.0)));
+  }
+
+  #[test]
+  fn quiet_is_the_same_level_speech_is_measured_against() {
+    let level = |amplitude: f32| vec![amplitude; MODEL_SAMPLE_RATE as usize];
+    assert!(quiet(&level(SILENCE_RMS * 0.9)));
+    assert!(!quiet(&level(SILENCE_RMS * 1.1)));
+    assert!(!holds_speech(&level(SILENCE_RMS * 0.9)));
+    assert!(holds_speech(&level(SILENCE_RMS * 1.1)));
+    assert!(quiet(&[]));
   }
 }

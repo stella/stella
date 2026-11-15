@@ -43,6 +43,17 @@ export const buttonLabelBenches = {
   "wrap-layout": "wrap",
 } as const;
 
+/** Menu benches, each differing from `plain` in one thing, keyed to what it
+ * isolates of a menu's commits. */
+export const menuCommitBenches = {
+  primitive: "the menu primitive alone",
+  plain: "the shared menu",
+  tooltip: "a tooltip on the trigger",
+  "tooltip-quiet-on-focus": "a tooltip on the trigger that focus does not open",
+  radio: "radio rows",
+  many: "twenty-four rows",
+} as const;
+
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
   "mcp-reconnect": { label: "MCP reconnect notice", layout: "plain" },
@@ -67,6 +78,7 @@ export const visualRegistry = {
   },
   "chat-status": { label: "Chat status motion", layout: "plain" },
   "button-label": { label: "Button labels", layout: "plain" },
+  "menu-commits": { label: "Menu commits", layout: "plain" },
   "chat-continuation-error": {
     label: "Chat continuation recovery",
     layout: "plain",

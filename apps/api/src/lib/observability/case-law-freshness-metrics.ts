@@ -2,7 +2,11 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { caseLawSources, corpusIndexProjectionStates } from "@/api/db/schema";
+import {
+  caseLawSources,
+  corpusIndexProjectionIntents,
+  corpusIndexProjectionStates,
+} from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { readServedCorpusIndexGenerationsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -19,6 +23,8 @@ import {
   buildCaseLawProjectionBacklogMetric,
   buildCaseLawProjectionConvergenceMetric,
   buildCaseLawSourceSyncAgeMetric,
+  buildCaseLawWaitingReplacementOldestMetric,
+  buildCaseLawWaitingReplacementsMetric,
   writeMetricLine,
 } from "@/api/lib/observability/request-metrics";
 import { isRecord } from "@/api/lib/type-guards";
@@ -59,6 +65,7 @@ type CaseLawFreshnessReport = {
     repairs: number;
     ageSeconds: number;
   } | null;
+  waitingReplacements: readonly CaseLawWaitingReplacements[];
 };
 const requiredNumber = (row: unknown, key: string): number => {
   if (!isRecord(row) || typeof row[key] !== "number") {
@@ -211,6 +218,144 @@ export const readServedCaseLawBacklogTx = async (
   };
 };
 
+/** Index rows one index's waiting-replacement walk examines, at most. */
+export const CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP = 10_000;
+
+/**
+ * Replacements of one served index that are still served at their previous
+ * revision: the desired epoch moved past the applied one, and the revision
+ * the state names is still `applied`. Nothing appends a replacement before
+ * its applied revision settles, and nothing queues a served revision for
+ * cleanup, so these wait, visible but stale. A state naming a revision that
+ * already left `applied` is not counted, but it is examined: the walk stops
+ * after the cap of index rows, counted or not.
+ */
+type CaseLawWaitingReplacements = {
+  generation: string;
+  indexId: string;
+  /**
+   * Stops at the cap. `null` when the walk reached its bound with uncounted
+   * rows in it, so the window's count is only a lower bound.
+   */
+  count: number | null;
+  /**
+   * Since the longest-untouched waiting state was last written. Exact when
+   * the window holds one, since the walk reads in that order; `null` when the
+   * walk reached its bound without finding any.
+   */
+  oldestSeconds: number | null;
+};
+
+/**
+ * One generation's waiting replacements per desired index. The distinct
+ * indexes come from a loose scan and each index's window from a bounded walk,
+ * both on `corpus_index_projection_states_replacement_route_idx`, whose
+ * predicate this one spells out literally so the planner can match it. The
+ * window limits the index rows examined, not the ones counted, so a long run
+ * of states whose revision already left `applied` cannot unbound the walk.
+ */
+export const caseLawWaitingReplacementsQuery = (generation: string) => {
+  const waiting = (alias: string) =>
+    sql.raw(`${alias}.desired_action = 'upsert'
+        AND ${alias}.applied_action = 'upsert'
+        AND ${alias}.applied_revision IS NOT NULL
+        AND ${alias}.applied_index_id IS NOT NULL
+        AND ${alias}.desired_epoch > ${alias}.applied_epoch`);
+  return sql`
+    WITH RECURSIVE indexes(index_id) AS (
+      (
+        SELECT first.desired_index_id
+        FROM ${corpusIndexProjectionStates} first
+        WHERE first.family = 'case_law'
+          AND first.generation = ${generation}
+          AND ${waiting("first")}
+        ORDER BY first.desired_index_id
+        LIMIT 1
+      )
+      UNION ALL
+      SELECT (
+        SELECT following.desired_index_id
+        FROM ${corpusIndexProjectionStates} following
+        WHERE following.family = 'case_law'
+          AND following.generation = ${generation}
+          AND ${waiting("following")}
+          AND following.desired_index_id > indexes.index_id
+        ORDER BY following.desired_index_id
+        LIMIT 1
+      )
+      FROM indexes
+      WHERE indexes.index_id IS NOT NULL
+    )
+    SELECT indexes.index_id AS index_id,
+      CASE
+        WHEN window_rows.examined <= ${CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP}
+          OR window_rows.served = window_rows.examined
+        THEN least(window_rows.served, ${CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP})::int
+      END AS count,
+      CASE
+        WHEN window_rows.oldest IS NOT NULL
+        THEN extract(epoch FROM clock_timestamp() - window_rows.oldest)::float8
+        WHEN window_rows.examined <= ${CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP}
+        THEN 0::float8
+      END AS age
+    FROM indexes
+    CROSS JOIN LATERAL (
+      SELECT count(*) AS examined,
+        count(*) FILTER (WHERE walked.served) AS served,
+        min(walked.updated_at) FILTER (WHERE walked.served) AS oldest
+      FROM (
+        SELECT state.updated_at,
+          coalesce((
+            SELECT named.status = 'applied'
+            FROM ${corpusIndexProjectionIntents} named
+            WHERE named.id = state.applied_revision
+          ), false) AS served
+        FROM ${corpusIndexProjectionStates} state
+        WHERE state.family = 'case_law'
+          AND state.generation = ${generation}
+          AND state.desired_index_id = indexes.index_id
+          AND ${waiting("state")}
+        ORDER BY state.updated_at, state.entity_id
+        LIMIT ${CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP + 1}
+      ) AS walked
+    ) AS window_rows
+    WHERE indexes.index_id IS NOT NULL
+    ORDER BY indexes.index_id
+  `;
+};
+
+const requiredText = (row: unknown, key: string): string => {
+  if (!isRecord(row) || typeof row[key] !== "string") {
+    return panic(`Malformed case-law freshness query result: ${key}`);
+  }
+  return row[key];
+};
+
+const nullableNumber = (row: unknown, key: string): number | null =>
+  isRecord(row) && row[key] === null ? null : requiredNumber(row, key);
+
+const readCaseLawWaitingReplacementsTx = async (
+  tx: Transaction,
+  generations: readonly string[],
+): Promise<CaseLawWaitingReplacements[]> => {
+  const reports: CaseLawWaitingReplacements[] = [];
+  for (const generation of generations) {
+    const rows = executedRows(
+      // db-await-in-loop: one bounded read per served generation, a handful at most
+      await tx.execute(caseLawWaitingReplacementsQuery(generation)),
+    );
+    for (const row of rows) {
+      reports.push({
+        generation,
+        indexId: requiredText(row, "index_id"),
+        count: nullableNumber(row, "count"),
+        oldestSeconds: nullableNumber(row, "age"),
+      });
+    }
+  }
+  return reports;
+};
+
 const oldestUnpublishedAgeOf = (
   backlog: { age: number; ageSource: PendingSinceSource | "none" },
   capped: boolean,
@@ -248,15 +393,19 @@ export const readCaseLawFreshnessReportTx = async (
     `),
   ]);
   const served = Result.isOk(serving) ? serving.value : null;
-  const backlog =
+  const servedGenerations =
     served === null
-      ? { ...NO_BACKLOG, capped: false }
-      : await readServedCaseLawBacklogTx(tx, [
+      ? []
+      : [
           ...new Set([
             served.serving.generation,
             ...served.flipped.map(([, generation]) => generation),
           ]),
-        ]);
+        ];
+  const backlog =
+    served === null
+      ? { ...NO_BACKLOG, capped: false }
+      : await readServedCaseLawBacklogTx(tx, servedGenerations);
   const convergence =
     served === null
       ? null
@@ -271,6 +420,10 @@ export const readCaseLawFreshnessReportTx = async (
     sourceAges: sourceRows,
     convergence,
     lastCompletedIdentifierPass,
+    waitingReplacements: await readCaseLawWaitingReplacementsTx(
+      tx,
+      servedGenerations,
+    ),
   };
 };
 
@@ -319,5 +472,26 @@ export const emitCaseLawFreshnessReport = (
     writeMetricLine(
       buildCaseLawProjectionConvergenceMetric(report.convergence),
     );
+  }
+  // As with the backlog age, a value the bounded walk could not measure emits
+  // nothing rather than a lower bound under the same metric.
+  for (const waiting of report.waitingReplacements) {
+    const dimensions = {
+      generation: waiting.generation,
+      index: waiting.indexId,
+    };
+    if (waiting.count !== null) {
+      writeMetricLine(
+        buildCaseLawWaitingReplacementsMetric(dimensions, waiting.count),
+      );
+    }
+    if (waiting.oldestSeconds !== null) {
+      writeMetricLine(
+        buildCaseLawWaitingReplacementOldestMetric(
+          dimensions,
+          waiting.oldestSeconds,
+        ),
+      );
+    }
   }
 };

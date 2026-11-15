@@ -259,8 +259,11 @@ checks:
       BASE_REF: ${{ github.base_ref || 'main' }}
     run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
 
+  # Advisory: the script warns and exits 0; the release gate runs it with
+  # --require. A failure of its own (a crash, its time budget) never blocks.
   - name: Release queue history guard
     if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+    continue-on-error: true
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Reads base history and current GitHub release state."

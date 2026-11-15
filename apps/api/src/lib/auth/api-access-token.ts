@@ -195,6 +195,12 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/tasks/update.ts",
   },
+  // Deleting a task opens at the tasks consent, as `delete_task` does; the
+  // matter's entity delete beside it, which reaches documents, stays closed.
+  "DELETE /v1/tasks/:workspaceId/:taskId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/delete.ts",
+  },
   // Who works on a task: the people it can go to are the matter's members.
   "GET /v1/workspaces/:workspaceId/members": {
     scope: "stella:read",
@@ -284,6 +290,20 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/older-messages/list.ts",
   },
+  // What a coding agent's step on the person's computer produced, as stella
+  // stores it with the conversation, and a chat file such as the image a
+  // step viewed. Both read only the caller's own threads: the step's row
+  // joins its thread, the file its thread and owner.
+  "GET /v1/chat/threads/:threadId/local-run-steps/:callId/content": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/local-run-step-content.ts",
+    uncataloged: "chat_thread_ui",
+  },
+  "GET /v1/user-files/:fileId/content": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/user-files/read-content.ts",
+    uncataloged: "upload_mechanics",
+  },
   // A message goes up with the files attached to it, as the web sends them:
   // each file rides in the message as a data URL part, and the handler scans
   // and stores it (`uploadMessageFiles`) under the thread, matter and
@@ -309,6 +329,11 @@ export const API_OAUTH_ROUTES = {
   "POST /v1/chat/threads/:threadId/turns/:turnId/cancel": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/turns/cancel.ts",
+    uncataloged: "realtime_stream",
+  },
+  "POST /v1/chat/threads/:threadId/turns/:turnId/steer": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/turns/steer.ts",
     uncataloged: "realtime_stream",
   },
   // Which chats are working or waiting on the person, for the chats list.

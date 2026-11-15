@@ -165,6 +165,10 @@ export const ENUM_COLUMN_ROLES = {
     outcome: ATTRIBUTE,
     source: ATTRIBUTE,
   },
+  // Why a queue waits; any reason may replace another.
+  chat_queue_holds: {
+    reason: ATTRIBUTE,
+  },
   chat_secrets: {
     decision: ATTRIBUTE,
   },
@@ -213,6 +217,7 @@ export const ENUM_COLUMN_ROLES = {
     family: ATTRIBUTE,
   },
   corpus_index_projection_intents: {
+    append_delivery: ATTRIBUTE,
     family: ATTRIBUTE,
   },
   corpus_index_projection_revisions: {
@@ -398,6 +403,10 @@ export const ENUM_COLUMN_ROLES = {
     producer_kind: ATTRIBUTE,
     stance: ATTRIBUTE,
     to_kind: ATTRIBUTE,
+  },
+  // Whether a hold covers a matter or one item: fixed when it is placed.
+  legal_holds: {
+    scope_type: ATTRIBUTE,
   },
   legal_list_claim_carry_outcomes: {
     entity_feature_gate: ATTRIBUTE,

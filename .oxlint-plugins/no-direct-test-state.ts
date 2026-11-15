@@ -371,6 +371,12 @@ export default eslintCompatPlugin({
             if (!TEST_FILE.test(filename)) {
               return;
             }
+            if (context.settings.testDeterminismCensus === true) {
+              for (const mutation of mutations) {
+                context.report({ node: mutation, messageId: "mutation" });
+              }
+              return;
+            }
             const baseline = counts.get(filename) ?? 0;
             if (mutations.length < baseline) {
               context.report({

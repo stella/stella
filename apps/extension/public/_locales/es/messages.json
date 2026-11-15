@@ -68,6 +68,9 @@
   "connectStella": {
     "message": "Conectar stella"
   },
+  "openStella": {
+    "message": "Abrir stella"
+  },
   "adoptTab": {
     "message": "Usar esta pestaña con stella"
   },

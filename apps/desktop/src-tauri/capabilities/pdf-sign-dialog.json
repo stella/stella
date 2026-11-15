@@ -4,7 +4,9 @@
   "windows": ["pdf-sign-dialog"],
   "permissions": [
     "allow-pdf-sign-respond",
+    "allow-pdf-sign-open-driver-download",
     "allow-pdf-sign-identities",
+    "allow-pdf-sign-rescan-cards",
     "allow-fit-static-dialog",
     "core:window:allow-start-dragging"
   ]

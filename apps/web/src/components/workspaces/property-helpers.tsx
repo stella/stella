@@ -1,5 +1,3 @@
-import type { ComponentProps } from "react";
-
 import { useTranslations } from "use-intl";
 
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";
@@ -20,10 +18,6 @@ type PropertyHelperProps = {
   type: PropertyIconType;
   className?: string;
 };
-
-export const PropertyPopoverLabel = (props: ComponentProps<"span">) => (
-  <span className="text-sm font-semibold" {...props} />
-);
 
 export const PropertyName = ({ type }: PropertyHelperProps) => {
   const t = useTranslations();

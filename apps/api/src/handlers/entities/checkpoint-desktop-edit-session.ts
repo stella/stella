@@ -50,7 +50,7 @@ export const checkpointDesktopEditSessionParamsSchema = v.object({
 });
 
 export const checkpointDesktopEditSessionBodySchema = v.object({
-  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
   sessionToken: v.pipe(v.string(), v.minLength(64), v.maxLength(64)),
 });
 

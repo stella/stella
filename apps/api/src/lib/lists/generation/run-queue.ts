@@ -510,7 +510,12 @@ const setRunFailed = async ({
 type PinnedSource = {
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
-  file: { fileId: string; mimeType: string; pdfFileId: string | null };
+  file: {
+    fileId: string;
+    mimeType: string;
+    pdfFileId: string | null;
+    sizeBytes: number;
+  };
 };
 
 /**
@@ -628,6 +633,7 @@ const resolvePinnedSources = async (
         fileId: field.content.id,
         mimeType: field.content.mimeType,
         pdfFileId: field.content.pdfFileId,
+        sizeBytes: field.content.sizeBytes,
       },
     });
   }
@@ -701,9 +707,14 @@ const executeRun = async ({
       workspaceId: actor.workspaceId,
       file: source.file,
       signal: abortSignal,
+      // A run may wait out its own timeout for the document byte budget.
+      admissionWaitMs: RUN_TIMEOUT_MS,
     });
     if (document.type === "unsupported-format") {
       return "unsupported_format";
+    }
+    if (document.type === "busy") {
+      return "extraction_failed";
     }
     if (document.type === "no-text") {
       return "no_text";

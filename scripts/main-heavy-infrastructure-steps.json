@@ -282,6 +282,7 @@
       "Setup Bun",
       "Test .claude/mcp",
       "Test API or rest",
+      "Test the stella browser host",
       "Test web",
       "Turbo remote cache",
       "Upload API test timings",
@@ -719,13 +720,11 @@
       "Resolve e2e shard budget",
       "Run API browser checks",
       "Run Playwright shard",
-      "Run route-smoke Playwright shard",
       "Setup Bun",
       "Setup production browser stack",
       "Upload Playwright blob report",
       "Upload browser test timings",
       "Upload network baseline blob report",
-      "Upload route-smoke Playwright blob report",
       "Upload server logs"
     ],
     "steps": [
