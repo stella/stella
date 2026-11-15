@@ -1052,7 +1052,7 @@ version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "625cf4599c43d69a16996ce2573fc80745a0b0300c962f0bfa11d55b6cab2b2d"
 dependencies = [
- "bitflags 2.13.1",
+ "bitflags 2.13.2",
  "cryptoki-sys",
  "libloading 0.8.9",
  "log",
@@ -3856,7 +3856,7 @@ version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dd833ecf8967e65934c49d3521a175929839bf6d0e497f3bd0d3a2ca08943da"
 dependencies = [
- "bitflags 2.13.1",
+ "bitflags 2.13.2",
  "pcsc-sys",
 ]
 
