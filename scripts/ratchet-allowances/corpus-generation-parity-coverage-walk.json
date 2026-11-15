@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/scripts/corpus-generation.ts",
+  "delta": 1,
+  "reason": "The operator parity coverage walk is a keyset walk over a generation's applied copies: each page's cursor is the previous page's last entity, so the pages cannot be issued together. Each page is its own short read-only transaction on purpose, so a walk over millions of copies never holds one snapshot open, and each page is bounded by PARITY_COVERAGE_PAGE."
+}
