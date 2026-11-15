@@ -151,7 +151,7 @@ export const canQueueMessage = (message: ChatUserMessageInput): boolean =>
  * steer hands the text to the computer's harness as is). `null` for any
  * other, which only goes as a message of its own.
  */
-export const queuedSteerText = (item: ChatQueueItem): string | null => {
+const queuedSteerText = (item: ChatQueueItem): string | null => {
   const text = item.preview.trim();
   return item.attachmentCount === 0 &&
     text !== "" &&

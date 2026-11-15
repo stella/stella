@@ -36,7 +36,7 @@ export type ChatQueue = NonNullable<
   Awaited<ReturnType<typeof fetchChatQueue>>["data"]
 >;
 export type ChatQueueItem = ChatQueue["items"][number];
-export type ChatQueueHold = NonNullable<ChatQueue["hold"]>;
+type ChatQueueHold = NonNullable<ChatQueue["hold"]>;
 
 /** A thread the server does not store yet (a new chat before its first
  *  message is accepted) has nothing queued. */
@@ -153,7 +153,7 @@ export const updateCachedChatQueue = ({
 };
 
 /** What a member can do with the chat's queue and each queued message. */
-export type ChatQueueActions = {
+type ChatQueueActions = {
   /** Take a message back into the composer to write it again. */
   edit: (id: string) => void;
   move: (id: string, direction: "down" | "up") => void;
