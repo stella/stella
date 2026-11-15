@@ -1,5 +1,15 @@
 # @stll/workspace-ui
 
+## 0.18.2
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+- Updated dependencies [[`c115c6c`](https://github.com/stella/stella/commit/c115c6cf21780277c98908cbd26a8bb5f279591f), [`7b112d3`](https://github.com/stella/stella/commit/7b112d309728e72aa60d00c8c5d120f83aff698c), [`7600aee`](https://github.com/stella/stella/commit/7600aee38e07fc7f5956849dd6619e547f3fe400), [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f), [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f), [`617b308`](https://github.com/stella/stella/commit/617b308dc6d81b9d5cfb15395de717419afcff99), [`f6326a3`](https://github.com/stella/stella/commit/f6326a3fbfbbdadaa8839b122e162249ea42ec54)]:
+  - @stll/ui@0.72.0
+  - @stll/calculations@0.1.5
+  - @stll/conditions@0.4.1
+
 ## 0.18.1
 
 ### Patch Changes
