@@ -5,7 +5,7 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 /**
  * The delivery checks migration
- * 20261115120000_corpus_projection_offline_delivery adds NOT VALID: the table
+ * 20261115130000_corpus_projection_offline_delivery adds NOT VALID: the table
  * grows with the corpus, and a validating scan does not fit the migration's
  * statement budget. Every existing row carries the column default, which both
  * checks admit, so there is no data work, only the validation. The status
@@ -16,12 +16,12 @@ export const CORPUS_PROJECTION_OFFLINE_DELIVERY_CONSTRAINTS = [
   {
     tableName: "corpus_index_projection_intents",
     constraintName: "corpus_index_projection_intents_append_delivery_values",
-    introducedBy: "20261115120000_corpus_projection_offline_delivery",
+    introducedBy: "20261115130000_corpus_projection_offline_delivery",
   },
   {
     tableName: "corpus_index_projection_intents",
     constraintName: "corpus_index_projection_intents_append_delivery_shape",
-    introducedBy: "20261115120000_corpus_projection_offline_delivery",
+    introducedBy: "20261115130000_corpus_projection_offline_delivery",
   },
 ] as const satisfies readonly (OnlineConstraintValidation & {
   introducedBy: string;

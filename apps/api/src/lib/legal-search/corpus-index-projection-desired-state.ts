@@ -1,5 +1,5 @@
 import { panic, TaggedError } from "better-result";
-import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
@@ -46,6 +46,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import { corpusIndexProjectionNamedCopyTrailsTwoChanges } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
@@ -870,7 +871,7 @@ export const buildCorpusIndexProjectionDesiredStateValues = ({
   desiredIndexId: descriptor.action === "upsert" ? descriptor.indexId : null,
 });
 
-type DesiredStateKey = Pick<
+export type DesiredStateKey = Pick<
   typeof corpusIndexProjectionStates.$inferSelect,
   "family" | "generation" | "entityId"
 >;
@@ -918,59 +919,20 @@ const readUndoneErasuresTx = async (
     );
 };
 
-/**
- * States this write left naming a copy that more than one desired change
- * separates from what they now desire, holding other content. An erasure and
- * its undo take two changes, and an earlier release undid erasures without
- * retiring the copy, so such a copy may be the pre-erasure one. Read after the
- * write, which holds these state rows.
- */
-const readUnprovenServedCopiesTx = async (
-  tx: Transaction,
-  values: readonly (typeof corpusIndexProjectionStates.$inferInsert)[],
-): Promise<DesiredStateKey[]> => {
-  const keys = desiredStateKeys(
-    values.filter(({ desiredAction }) => desiredAction === "upsert"),
-  );
-  if (keys === undefined) {
-    return [];
-  }
-  return await tx
-    .select({
-      family: corpusIndexProjectionStates.family,
-      generation: corpusIndexProjectionStates.generation,
-      entityId: corpusIndexProjectionStates.entityId,
-    })
-    .from(corpusIndexProjectionStates)
-    .where(
-      and(
-        keys,
-        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
-        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
-        isNotNull(corpusIndexProjectionStates.appliedRevision),
-        sql`${corpusIndexProjectionStates.desiredEpoch} >= ${corpusIndexProjectionStates.appliedEpoch} + 2`,
-        sql`(${corpusIndexProjectionStates.desiredFingerprint}, ${corpusIndexProjectionStates.desiredIndexId})
-          IS DISTINCT FROM
-          (${corpusIndexProjectionStates.appliedFingerprint}, ${corpusIndexProjectionStates.appliedIndexId})`,
-      ),
-    );
-};
-
-const SERVED_COPY_RETIREMENT_REASONS = {
+export const SERVED_COPY_RETIREMENT_REASONS = {
   undoneErasure: "projection revision retired by an undone erasure",
-  unproven: "projection revision retired as not provably current",
+  legacyUnproven: "projection revision retired as not provably current",
 } as const;
 
 /**
  * Retire the copy these states name and stop naming it, so the entity is
- * appended anew and never served the retired copy again: an undone erasure,
- * and a copy `readUnprovenServedCopiesTx` found. The copy is queued for
- * cleanup if it is still `applied`. Runs after the desired write, which holds
- * these state rows; the revisions are locked after them, in the projection
- * lock order. Each state is then queued for the append walk at the instant
- * its retired copy can have settled.
+ * appended anew and never served the retired copy again. The copy is queued
+ * for cleanup if it is still `applied`. The caller holds these state rows;
+ * the revisions are locked after them, in the projection lock order. Each
+ * state is then queued for the append walk at the instant its retired copy
+ * can have settled.
  */
-const retireServedCopiesTx = async (
+export const retireServedCopiesTx = async (
   tx: Transaction,
   retired: readonly DesiredStateKey[],
   reason: (typeof SERVED_COPY_RETIREMENT_REASONS)[keyof typeof SERVED_COPY_RETIREMENT_REASONS],
@@ -1077,6 +1039,23 @@ export const writeDesiredStates = async (
     return;
   }
   const undone = await readUndoneErasuresTx(tx, values);
+  const states = corpusIndexProjectionStates;
+  // Judged on the row before this write: once its named copy trails by two
+  // changes with other content, `desired_at` keeps the instant that happened,
+  // so the legacy pass can tell a copy an earlier release left behind from one
+  // this release's own writes moved past (see the predicate).
+  const namedCopyTrailsTwoChanges =
+    corpusIndexProjectionNamedCopyTrailsTwoChanges({
+      desiredAction: states.desiredAction,
+      appliedAction: states.appliedAction,
+      appliedRevision: states.appliedRevision,
+      appliedEpoch: states.appliedEpoch,
+      desiredEpoch: states.desiredEpoch,
+      appliedFingerprint: states.appliedFingerprint,
+      desiredFingerprint: states.desiredFingerprint,
+      appliedIndexId: states.appliedIndexId,
+      desiredIndexId: states.desiredIndexId,
+    });
   const desiredStateUnchanged = sql`(
     ${corpusIndexProjectionStates.desiredAction},
     ${corpusIndexProjectionStates.desiredEpoch},
@@ -1102,7 +1081,7 @@ export const writeDesiredStates = async (
         {
           desiredAction: sql`excluded.desired_action`,
           desiredEpoch: sql`excluded.desired_epoch`,
-          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
+          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} OR ${namedCopyTrailsTwoChanges} THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
           desiredFingerprint: sql`excluded.desired_fingerprint`,
           desiredIndexId: sql`excluded.desired_index_id`,
           workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
@@ -1126,11 +1105,6 @@ export const writeDesiredStates = async (
     tx,
     undone,
     SERVED_COPY_RETIREMENT_REASONS.undoneErasure,
-  );
-  await retireServedCopiesTx(
-    tx,
-    await readUnprovenServedCopiesTx(tx, values),
-    SERVED_COPY_RETIREMENT_REASONS.unproven,
   );
 };
 

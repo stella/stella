@@ -1,6 +1,6 @@
 import type { OnlineMigrationEntry } from "../online-migration-entry";
 
-const INTRODUCED_BY = "20261115120000_corpus_projection_offline_delivery";
+const INTRODUCED_BY = "20261115130000_corpus_projection_offline_delivery";
 
 export default {
   id: "indexes-corpus-projection-offline-request",

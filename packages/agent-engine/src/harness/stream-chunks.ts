@@ -140,9 +140,12 @@ class ChunkMapper {
   private readonly texts = new Map<string, TextState>();
 
   private readonly context: HarnessChunkContext;
+  /** The model the turn runs on: the one asked for until a reroute. */
+  private model: string;
 
   constructor(context: HarnessChunkContext) {
     this.context = context;
+    this.model = context.model;
   }
 
   map(event: HarnessEvent): AdapterYieldChunk[] {
@@ -208,6 +211,9 @@ class ChunkMapper {
       case "question.requested":
         this.question(event.request);
         return;
+      case "model.rerouted":
+        this.model = event.model;
+        return;
       case "interaction.resolved":
       case "retrying":
         // The harness continues on its own; its next output opens a new
@@ -252,12 +258,15 @@ class ChunkMapper {
     }
   }
 
-  /** Stamp the model and time every chunk carries, as the cloud engine does. */
+  /**
+   * Stamp the model and time every chunk carries, as the cloud engine does:
+   * the model that ran, which a reroute changes.
+   */
   private push(...chunks: AdapterYieldChunk[]) {
     for (const chunk of chunks) {
       this.out.push({
         ...chunk,
-        model: this.context.model,
+        model: this.model,
         timestamp: this.context.now(),
       });
     }
@@ -299,7 +308,7 @@ class ChunkMapper {
       type: EventType.RUN_FINISHED,
       runId: this.segmentRunId(),
       threadId: this.context.threadId,
-      model: this.context.model,
+      model: this.model,
       timestamp: this.context.now(),
       ...fields,
     };
@@ -311,7 +320,7 @@ class ChunkMapper {
       type: EventType.RUN_ERROR,
       runId: this.segmentRunId(),
       threadId: this.context.threadId,
-      model: this.context.model,
+      model: this.model,
       timestamp: this.context.now(),
       message: failure.message,
       code,

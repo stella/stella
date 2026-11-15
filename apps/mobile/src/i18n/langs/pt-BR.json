@@ -228,7 +228,24 @@
         "running": "Em andamento",
         "failed": "Falhou",
         "interrupted": "Interrompido"
-      }
+      },
+      "output": {
+        "command": "Saída",
+        "diff": "Alterações nos arquivos",
+        "conversation": "Conversa do subagente",
+        "conversationPrompt": "Tarefa",
+        "conversationReport": "Relatório",
+        "cut": "Mostrando os primeiros {kept} de {total}",
+        "empty": "Sem saída",
+        "arriving": "Ainda chegando do computador que executou esta etapa",
+        "notCopied": "Ainda não copiado para este chat",
+        "notStored": "Nada desta etapa foi guardado",
+        "runBudgetReached": "Não guardado: esta execução já tinha guardado o máximo permitido para uma execução",
+        "imageTooLargeToStore": "Esta imagem tem {total}. Imagens com mais de {kept} não são guardadas, por isso ela não pode ser exibida.",
+        "loadFailed": "Não foi possível carregar.",
+        "showMore": "Mostrar mais"
+      },
+      "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas} many {# fontes consultadas}}",
@@ -237,7 +254,8 @@
       "analyses": "{count, plural, one {# análise} other {# análises} many {# análises}}"
     },
     "stepCount": "{count, plural, one {# etapa} other {# etapas} many {# etapas}}",
-    "reasoning": "Raciocínio"
+    "reasoning": "Raciocínio",
+    "historyTrimmed": "Não foi possível resumir as mensagens anteriores, então esta resposta considera apenas a parte mais recente da conversa."
   },
   "tasks": {
     "emptyTitle": "Nenhuma tarefa em aberto",

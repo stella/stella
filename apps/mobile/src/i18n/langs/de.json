@@ -228,7 +228,24 @@
         "running": "In Bearbeitung",
         "failed": "Fehlgeschlagen",
         "interrupted": "Gestoppt"
-      }
+      },
+      "output": {
+        "command": "Ausgabe",
+        "diff": "Dateiänderungen",
+        "conversation": "Unterhaltung des Subagenten",
+        "conversationPrompt": "Aufgabe",
+        "conversationReport": "Bericht",
+        "cut": "Die ersten {kept} von {total} werden angezeigt",
+        "empty": "Keine Ausgabe",
+        "arriving": "Wird noch vom Computer übertragen, auf dem der Schritt lief",
+        "notCopied": "Noch nicht in diesen Chat kopiert",
+        "notStored": "Von diesem Schritt wurde nichts gespeichert",
+        "runBudgetReached": "Nicht gespeichert: Dieser Lauf hatte bereits so viel gespeichert, wie ein Lauf darf",
+        "imageTooLargeToStore": "Dieses Bild ist {total} groß. Bilder über {kept} werden nicht gespeichert, daher kann es nicht angezeigt werden.",
+        "loadFailed": "Konnte nicht geladen werden.",
+        "showMore": "Mehr anzeigen"
+      },
+      "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",
@@ -237,7 +254,8 @@
       "analyses": "{count, plural, one {# Analyse} other {# Analysen}}"
     },
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
-    "reasoning": "Argumentation"
+    "reasoning": "Argumentation",
+    "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung."
   },
   "tasks": {
     "emptyTitle": "Keine offenen Aufgaben",

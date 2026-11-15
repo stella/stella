@@ -1,7 +1,12 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import {
+  CHAT_CONTEXT_NOTICE_EVENTS,
+  CHAT_CONTEXT_NOTICE_METADATA_KEY,
+} from "@stll/api-contract/chat-context-notice";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import {
   SSE_HEARTBEAT_FRAME,
@@ -158,6 +163,61 @@ describe("reading server-sent events", () => {
   });
 });
 
+describe("an answer's context notice", () => {
+  const NOTICE = {
+    type: "session-not-resumed",
+  } as const satisfies ChatContextNotice;
+  /** One event of each kind the server stamps the notice on. */
+  const STAMPED = {
+    TEXT_MESSAGE_START: {
+      type: "TEXT_MESSAGE_START",
+      messageId: ANSWER_ID,
+      role: "assistant",
+    },
+    TEXT_MESSAGE_CONTENT: {
+      type: "TEXT_MESSAGE_CONTENT",
+      messageId: ANSWER_ID,
+      delta: "Done.",
+    },
+    TEXT_MESSAGE_END: { type: "TEXT_MESSAGE_END", messageId: ANSWER_ID },
+    REASONING_MESSAGE_CONTENT: {
+      type: "REASONING_MESSAGE_CONTENT",
+      messageId: "reasoning-1",
+      delta: "Check the register.",
+    },
+  } as const satisfies Record<
+    (typeof CHAT_CONTEXT_NOTICE_EVENTS)[number],
+    Readonly<Record<string, string>>
+  >;
+  const parsed = (event: object): ChatEvent =>
+    parseChatEvent(JSON.stringify(event)) ??
+    panic("A stamped event must be one an answer is drawn from");
+
+  test("is read from every event the server stamps it on, kept, and withdrawn by null", () => {
+    for (const type of CHAT_CONTEXT_NOTICE_EVENTS) {
+      const shown = reduce([
+        parsed({
+          ...STAMPED[type],
+          metadata: { [CHAT_CONTEXT_NOTICE_METADATA_KEY]: NOTICE },
+        }),
+        // A later event without the notice leaves it standing.
+        parsed(STAMPED.TEXT_MESSAGE_CONTENT),
+      ]);
+      expect(
+        answerEntry(shown, "2026-10-20T10:00:00.000Z").contextNotice,
+      ).toEqual(NOTICE);
+      const withdrawn = applyChatEvent(
+        shown,
+        parsed({
+          ...STAMPED[type],
+          metadata: { [CHAT_CONTEXT_NOTICE_METADATA_KEY]: null },
+        }),
+      );
+      expect(withdrawn.contextNotice).toBeNull();
+    }
+  });
+});
+
 describe("drawing an answer from its events", () => {
   const events = RUN_EVENTS.flatMap(
     (event) => parseChatEvent(JSON.stringify(event)) ?? [],
@@ -179,6 +239,7 @@ describe("drawing an answer from its events", () => {
         { type: "text", content: "Two found." },
       ],
       status: "finished",
+      contextNotice: null,
     });
     expect(answerEntry(answer, "2026-10-20T10:00:00.000Z")).toEqual({
       id: ANSWER_ID,
@@ -197,12 +258,18 @@ describe("drawing an answer from its events", () => {
       ],
       files: [],
       drafts: [],
+      contextNotice: null,
     });
   });
 
   test("a step is running until its result comes back, and failed when the result says so", () => {
     // Up to the tool call's start: no result yet.
-    const started = reduce(events.slice(0, 4));
+    const started = reduce(
+      events.slice(
+        0,
+        events.findIndex(({ type }) => type === "TOOL_CALL_START") + 1,
+      ),
+    );
     expect(answerEntry(started, "2026-10-20T10:00:00.000Z").blocks[1]).toEqual({
       type: "steps",
       key: "1",
@@ -339,6 +406,7 @@ describe("drawing an answer from its events", () => {
         description: "Check the lease",
         agentType: null,
         status: "done",
+        conversationCallId: "agent",
         stepCount: 1,
         steps: [
           {
@@ -347,6 +415,7 @@ describe("drawing an answer from its events", () => {
             titleKind: null,
             subtitle: { type: "text", text: "rg lease" },
             status: "done",
+            contentCallId: "step",
           },
         ],
       },
@@ -360,6 +429,7 @@ describe("drawing an answer from its events", () => {
             titleKind: null,
             subtitle: { type: "text", text: "ls" },
             status: "done",
+            contentCallId: "loose",
           },
           { type: "tool", label: "list_templates", status: "running" },
         ],

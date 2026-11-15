@@ -16,7 +16,6 @@ import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
 import approveLocalFolder from "@/api/handlers/chat/local-folder-approval";
 import getLocalRunStepContent from "@/api/handlers/chat/local-run-step-content";
-import getLocalRunStepOutputGrant from "@/api/handlers/chat/local-run-step-output-grant";
 import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
@@ -84,9 +83,6 @@ export const chatRoute = routes(
     "/decision-threads/:decisionId": { GET: getDecisionChatThread },
     "/model-options": { GET: getModelOptions },
     "/local-runners": { GET: getLocalRunners },
-    "/local-runs/:runId/step-output-grant": {
-      GET: getLocalRunStepOutputGrant,
-    },
     "/local-runners/:desktopId/folders/:linkId/approval": {
       PUT: approveLocalFolder,
     },

@@ -215,7 +215,12 @@ by the RC run.
    Stable npm publication checks out the exact RC-proved release SHA, builds
    and packs the CLI using the unchanged version-codegen and trusted-publishing
    workflow, then runs the plain-Node smoke and production compatibility canary
-   on that tarball. Package versions remain Changesets-owned. Desktop reruns
+   on that tarball. It also packs every workspace dependency of the CLI whose
+   version at that SHA npm does not serve yet: the smoke and canary install
+   those from this release's tarballs, and they publish before the CLI, in
+   dependency order. Dependencies npm already serves come from the registry,
+   so a rerun after a partial publish resumes with what is left.
+   Package versions remain Changesets-owned. Desktop reruns
    resume the build or carry-forward path and its publication steps. GitHub
    Latest advances only after the desktop assets are ready.
 10. Squash-merge the release pull request through the ordinary queue once its

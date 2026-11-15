@@ -58,6 +58,7 @@ import {
   startCorpusProjectionOfflineRequestChunkTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
+import { corpusProjectionLegacyFixture } from "@/api/tests/helpers/corpus-projection-legacy-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -86,31 +87,17 @@ const EPOCH = 3n;
 const ENTITIES_PER_RUN = 4;
 const PAYLOAD_FINGERPRINT = "c".repeat(64);
 
-/**
- * The guard functions and triggers production runs on the two projection
- * tables, from the migrations that last define each. The test database is
- * pushed from the schema, which carries the checks but no triggers, so the
- * model runs against both, as production does.
- */
-const GUARD_MIGRATION_URLS = [
-  "20260825142000_corpus_index_projection_intents",
-  "20260826003700_corpus_projection_work_schedule",
-  "20261115120000_corpus_projection_offline_delivery",
-].map(
-  (name) => new URL(`../../../drizzle/${name}/migration.sql`, import.meta.url),
-);
-const GUARDED_FUNCTIONS = [
-  "guard_corpus_index_projection_intent_insert",
-  "guard_corpus_index_projection_intent_update",
-  "corpus_index_projection_intent_transition_allowed",
-  "guard_corpus_index_projection_state",
-  "guard_corpus_index_projection_expected_document_count",
-  "guard_corpus_index_projection_work_state",
-] as const;
-
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 let nextDocument = 1;
+
+/**
+ * The guard functions and triggers production runs on the projection tables,
+ * from the real migrations. The test database is pushed from the schema,
+ * which carries the checks but no triggers, so the model runs against both,
+ * as production does.
+ */
+const { installProjectionDdl } = corpusProjectionLegacyFixture(() => db);
 
 type IntentId = SafeId<"corpusIndexProjectionIntent">;
 
@@ -118,26 +105,6 @@ type IntentId = SafeId<"corpusIndexProjectionIntent">;
 class SimulatedCrash extends TaggedError("SimulatedCrash")<{
   message: string;
 }> {}
-
-const installGuards = async () => {
-  for (const url of GUARD_MIGRATION_URLS) {
-    const migration = await Bun.file(url).text();
-    for (const statement of migration.split("--> statement-breakpoint")) {
-      const ddl = statement
-        .trim()
-        .replace(/^(?:--[^\n]*(?:\n|$)\s*)+/u, "")
-        .trim();
-      const guardsProjection =
-        GUARDED_FUNCTIONS.some((name) => ddl.includes(`"${name}"`)) &&
-        (ddl.startsWith("CREATE FUNCTION") ||
-          ddl.startsWith("CREATE OR REPLACE FUNCTION") ||
-          ddl.startsWith("CREATE TRIGGER"));
-      if (guardsProjection) {
-        await db.execute(sql.raw(ddl));
-      }
-    }
-  }
-};
 
 const seedEntities = async (count: number) => {
   const rows = Array.from({ length: count }, () => {
@@ -1095,7 +1062,7 @@ const runCommands = async (model: Model, commands: readonly Command[]) => {
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  await installGuards();
+  await installProjectionDdl(true);
   await db.insert(corpusIndexGenerations).values({
     ...TARGET,
     cluster: "q09",

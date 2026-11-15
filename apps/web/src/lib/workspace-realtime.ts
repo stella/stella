@@ -225,6 +225,18 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       RESOURCE_TYPE.MCP_CONNECTOR,
     ],
   },
+  // An administrator turns the decision model on or off for verification
+  // verdicts; the organization's AI configuration read shows the switch.
+  updateVerificationDecisionModel: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/verification-decision-model",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   // A skill drafted from a chat is stored as a new private, disabled skill;
   // the skills lists refresh. Drafting it is a read and stores nothing.
   saveSkillDraft: {

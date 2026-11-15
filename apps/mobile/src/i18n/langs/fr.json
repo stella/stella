@@ -228,7 +228,24 @@
         "running": "En cours",
         "failed": "Échec",
         "interrupted": "Arrêté"
-      }
+      },
+      "output": {
+        "command": "Résultat",
+        "diff": "Modifications des fichiers",
+        "conversation": "Conversation du sous-agent",
+        "conversationPrompt": "Tâche",
+        "conversationReport": "Rapport",
+        "cut": "Affichage des {kept} premiers sur {total}",
+        "empty": "Aucun résultat",
+        "arriving": "Toujours en cours de réception depuis l’ordinateur qui a exécuté cette étape",
+        "notCopied": "Pas encore copié dans cette conversation",
+        "notStored": "Rien de cette étape n’a été enregistré",
+        "runBudgetReached": "Non enregistré : cette exécution avait déjà enregistré tout ce qu’une exécution peut enregistrer",
+        "imageTooLargeToStore": "Cette image fait {total}. Les images de plus de {kept} ne sont pas enregistrées ; elle ne peut donc pas être affichée.",
+        "loadFailed": "Échec du chargement.",
+        "showMore": "Afficher plus"
+      },
+      "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées} many {# sources vérifiées}}",
@@ -237,7 +254,8 @@
       "analyses": "{count, plural, one {# analyse} other {# analyses} many {# analyses}}"
     },
     "stepCount": "{count, plural, one {# étape} other {# étapes} many {# étapes}}",
-    "reasoning": "Raisonnement"
+    "reasoning": "Raisonnement",
+    "historyTrimmed": "Les messages précédents n'ont pas pu être résumés : cette réponse ne tient compte que de la partie la plus récente de la conversation."
   },
   "tasks": {
     "emptyTitle": "Aucune tâche en cours",
