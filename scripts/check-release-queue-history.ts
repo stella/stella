@@ -33,6 +33,16 @@ const MAX_CHECK_SUITE_PAGES = 20;
 const GITHUB_ACTIONS_APP_ID = 15_368;
 const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 const FULL_SHA = /^[0-9a-f]{40}$/u;
+const STABLE_VERSION = /^(\d+)\.(\d+)\.(\d+)$/u;
+const FINAL_RELEASE_TAG = /^v(\d+)\.(\d+)\.(\d+)$/u;
+/**
+ * The most first-parent commits one check reads: COMMIT_BATCH_SIZE commits
+ * answer in about 5 s, so the cap keeps a check near two minutes, inside the
+ * pooled check's five minute floor. A longer history fails closed with a
+ * message instead of a timeout; releases ship more often than this many
+ * merges.
+ */
+export const MAX_RELEASE_HISTORY_COMMITS = 500;
 const CHECK_SUITE_FIELDS = `
   pageInfo { hasNextPage endCursor }
   nodes { conclusion workflowRun { event file { path } } }
@@ -103,8 +113,8 @@ type MergedPullRequest = PullRequest & {
 
 type QueueHistoryOptions = {
   baseSha: string;
-  // Omitted: the nearest release tag reachable from the base's parent. VERSION
-  // never names it, because a version commit can be superseded untagged.
+  // The commit the history starts after. Omitted: where the base's previous
+  // release last took main (see previousRelease).
   previousTag?: string;
   // Strict mode answers only whether the merge queue validated every commit;
   // a green main heavy run on the base does not count, because the release
@@ -153,24 +163,114 @@ export const releaseCommitHistoryQuery = (shas: readonly string[]): string => {
 ${RELEASE_COMMIT_FRAGMENT}`;
 };
 
+type ReleaseVersion = readonly [number, number, number];
+
+const releaseVersion = (
+  match: RegExpExecArray | null,
+): ReleaseVersion | undefined =>
+  match === null
+    ? undefined
+    : [Number(match[1]), Number(match[2]), Number(match[3])];
+
+const compareVersions = (left: ReleaseVersion, right: ReleaseVersion) =>
+  left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
+
+export type PreviousRelease = {
+  /** The previous release's final tag. */
+  tag: string;
+  /** The last commit of the base's history that release holds. */
+  anchor: string;
+};
+
 /**
- * The previous release is the nearest release tag the base's parent reaches,
- * the rule check-release-receipt-coverage.sh applies at the tag gate. It is
- * never `v` + VERSION: a later version commit supersedes an untagged VERSION.
+ * The previous release of a commit, as that commit's history knows it. Final
+ * tags sit on release-branch commits, and release pull requests are
+ * squash-merged, so main reaches no recent tag: `git describe` from main
+ * names a release from before squash merging, and its history grows without
+ * bound. Owned here for every history check (the receipt coverage gate reads
+ * it through `--previous-release`).
+ *
+ * The previous release is the highest final tag whose version is at most the
+ * base's VERSION, other than a tag on the base itself. On main that is the
+ * newest release whose pull request main has merged; a version commit that was
+ * never tagged names no release, so its changes stay in the history. On a
+ * release head it is the release before the one the head carries. Bounding by
+ * VERSION also leaves out the abandoned v2 line, which predates v0.9.x.
+ *
+ * The history starts at the merge base of that tag and the base: the last main
+ * commit the release took. A change main merged while that release was being
+ * proved is not in it, so it stays in the history.
  */
-export const previousReleaseTag = (
+export const previousRelease = (
   baseSha: string,
   command: CommandRunner,
-): string =>
-  command([
+): PreviousRelease => {
+  const versionText = command(["git", "show", `${baseSha}:VERSION`]).trim();
+  const version = releaseVersion(STABLE_VERSION.exec(versionText));
+  if (version === undefined) {
+    throw new ReleaseQueueHistoryError(
+      `VERSION at ${baseSha} is not a stable version: ${versionText}`,
+    );
+  }
+  const onBase = new Set(
+    command(["git", "tag", "--list", "v*", "--points-at", baseSha]).split("\n"),
+  );
+  let newest: { tag: string; version: ReleaseVersion } | undefined;
+  for (const tag of command(["git", "tag", "--list", "v*"]).split("\n")) {
+    const tagVersion = releaseVersion(FINAL_RELEASE_TAG.exec(tag));
+    if (
+      tagVersion === undefined ||
+      onBase.has(tag) ||
+      compareVersions(tagVersion, version) > 0 ||
+      (newest !== undefined && compareVersions(tagVersion, newest.version) <= 0)
+    ) {
+      continue;
+    }
+    newest = { tag, version: tagVersion };
+  }
+  if (newest === undefined) {
+    throw new ReleaseQueueHistoryError(
+      `No previous release for ${baseSha}: no final tag at or below VERSION ${versionText} other than one on the base`,
+    );
+  }
+  return {
+    tag: newest.tag,
+    anchor: command([
+      "git",
+      "merge-base",
+      `${newest.tag}^{commit}`,
+      baseSha,
+    ]).trim(),
+  };
+};
+
+/**
+ * First-parent commits after `from` up to the base, oldest first. More than
+ * MAX_RELEASE_HISTORY_COMMITS fails closed before any GitHub read.
+ */
+const releaseHistoryCommits = (
+  from: string,
+  baseSha: string,
+  command: CommandRunner,
+): string[] => {
+  // The count limits before --reverse orders the commits it chose.
+  const commits = command([
     "git",
-    "describe",
-    "--tags",
-    "--abbrev=0",
-    "--match",
-    "v*",
-    `${baseSha}^`,
-  ]).trim();
+    "rev-list",
+    "--reverse",
+    "--first-parent",
+    `--max-count=${String(MAX_RELEASE_HISTORY_COMMITS + 1)}`,
+    `${from}..${baseSha}`,
+  ])
+    .split("\n")
+    .filter(Boolean);
+  if (commits.length > MAX_RELEASE_HISTORY_COMMITS) {
+    throw new ReleaseQueueHistoryError(
+      `Release history ${from}..${baseSha} holds more than ${String(MAX_RELEASE_HISTORY_COMMITS)} first-parent commits, more than one check reads; it was not checked`,
+    );
+  }
+  return commits;
+};
 
 const commandRunner =
   (cwd: string): CommandRunner =>
@@ -627,15 +727,11 @@ export const assertReleaseQueueHistory = ({
       commitsWithoutPullRequest: [],
     };
   }
-  const commits = command([
-    "git",
-    "rev-list",
-    "--reverse",
-    "--first-parent",
-    `${previousTag ?? previousReleaseTag(resolvedBaseSha, command)}..${resolvedBaseSha}`,
-  ])
-    .split("\n")
-    .filter(Boolean);
+  const commits = releaseHistoryCommits(
+    previousTag ?? previousRelease(resolvedBaseSha, command).anchor,
+    resolvedBaseSha,
+    command,
+  );
   const mergedPullRequests: MergedPullRequest[] = [];
   const commitsWithoutPullRequests: string[] = [];
   const pullRequestByCommit = new Map<string, MergedPullRequest>();
@@ -752,7 +848,7 @@ export const formatReleaseQueueHistoryNotice = (
   ].join("\n");
 
 const USAGE =
-  "Usage: check-release-queue-history.ts --base <sha> [--from <tag>] [--require] [--repo-dir <path>]";
+  "Usage: check-release-queue-history.ts --base <sha> [--from <commit>] [--require] [--repo-dir <path>]";
 const VALUE_OPTIONS = new Set(["--from", "--base", "--repo-dir"]);
 
 export const parseOptions = (args: readonly string[]): QueueHistoryOptions => {
@@ -829,6 +925,49 @@ export const runReleaseQueueHistoryCli = (
   return strict ? 1 : 0;
 };
 
+const PREVIOUS_RELEASE_USAGE =
+  "Usage: check-release-queue-history.ts --previous-release --base <sha> [--repo-dir <path>]";
+
+/**
+ * Prints the commit the base's history starts after (previousRelease's
+ * anchor), so shell gates share this rule. Exits 1 with the reason when there
+ * is none or the arguments are unusable.
+ */
+export const runPreviousReleaseCli = (
+  args: readonly string[],
+  writeOutput = (message: string) => process.stdout.write(`${message}\n`),
+  writeError = (message: string) => process.stderr.write(`${message}\n`),
+  commandFor = commandRunner,
+): number => {
+  try {
+    const rest = args.filter((arg) => arg !== "--previous-release");
+    const options =
+      rest.length === args.length - 1 ? parseOptions(rest) : undefined;
+    if (
+      options === undefined ||
+      options.strict === true ||
+      options.previousTag !== undefined
+    ) {
+      throw new ReleaseQueueHistoryError(PREVIOUS_RELEASE_USAGE);
+    }
+    const command = commandFor(options.repoDir ?? ROOT_DIR);
+    const baseSha = command([
+      "git",
+      "rev-parse",
+      "--verify",
+      `${options.baseSha}^{commit}`,
+    ]).trim();
+    writeOutput(previousRelease(baseSha, command).anchor);
+    return 0;
+  } catch (error) {
+    writeError(error instanceof Error ? error.message : String(error));
+    return 1;
+  }
+};
+
 if (import.meta.main) {
-  process.exitCode = runReleaseQueueHistoryCli(process.argv.slice(2));
+  const args = process.argv.slice(2);
+  process.exitCode = args.includes("--previous-release")
+    ? runPreviousReleaseCli(args)
+    : runReleaseQueueHistoryCli(args);
 }
