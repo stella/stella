@@ -84,7 +84,7 @@ const PAYLOAD_FINGERPRINT = "c".repeat(64);
 const GUARD_MIGRATION_URLS = [
   "20260825142000_corpus_index_projection_intents",
   "20260826003700_corpus_projection_work_schedule",
-  "20261115090000_corpus_projection_offline_delivery",
+  "20261115120000_corpus_projection_offline_delivery",
 ].map(
   (name) => new URL(`../../../drizzle/${name}/migration.sql`, import.meta.url),
 );

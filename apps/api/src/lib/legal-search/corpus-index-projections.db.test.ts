@@ -29,7 +29,7 @@ const MIGRATION_URLS = [
  * describe, and the function they call is the one production runs.
  */
 const LATEST_TRANSITION_MIGRATION_URL = new URL(
-  "../../../drizzle/20261115090000_corpus_projection_offline_delivery/migration.sql",
+  "../../../drizzle/20261115120000_corpus_projection_offline_delivery/migration.sql",
   import.meta.url,
 );
 const SOURCE_ID = "0198e331-e578-7000-8000-000000000001";
