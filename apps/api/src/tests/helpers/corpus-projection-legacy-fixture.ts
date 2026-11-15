@@ -112,7 +112,11 @@ export const corpusProjectionLegacyFixture = (
   const fingerprint = (index: number) =>
     FINGERPRINTS.at(index) ?? panic("No such test fingerprint");
 
-  /** The projection guards and triggers, up to (and maybe with) this release's. */
+  /**
+   * The projection guards and triggers: every migration's when
+   * `withServedCopyGuard`, the ones production runs; otherwise only those of
+   * the migrations before the served-copy guard.
+   */
   const installProjectionDdl = async (
     withServedCopyGuard: boolean,
   ): Promise<void> => {
@@ -123,8 +127,7 @@ export const corpusProjectionLegacyFixture = (
     ]
       .filter((migration) => !migration.includes("projection_revision"))
       .filter(
-        (migration) =>
-          withServedCopyGuard || !migration.startsWith(SERVED_COPY_MIGRATION),
+        (migration) => withServedCopyGuard || migration < SERVED_COPY_MIGRATION,
       )
       .toSorted();
     for (const migration of migrations) {
