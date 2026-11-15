@@ -294,6 +294,8 @@
       "reopened": "Reaberta, verificação pendente",
       "reopenedTooltip": "Um revisor reclassificou isto como um fato verificável; uma verificação ativa contra o registro ainda está pendente.",
       "sourceCount": "{count, plural, one {# fonte} other {# fontes} many {# fontes}}",
+      "verdictBy": "Veredito de {model}",
+      "verdictByGenerativeModel": "Veredito do modelo generativo; o modelo de decisão não o definiu",
       "whyVerdict": "Por que este veredito: fatos-âncora"
     },
     "claimTypes": {
@@ -2348,17 +2350,17 @@
       "input": "Entrada",
       "interrupted": "Interrompido antes de concluir",
       "localOutput": {
+        "arriving": "Ainda chegando do computador que executou esta etapa",
         "conversation": "Conversa do subagente",
         "conversationPrompt": "Tarefa",
         "conversationReport": "Relatório",
         "cut": "Mostrando os primeiros {kept} de {total}",
         "diff": "Alterações nos arquivos",
-        "elsewhere": "Abra no computador que executou",
         "empty": "Sem saída",
-        "failed": "O aplicativo de desktop do stella neste computador não conseguiu mostrar isto.",
-        "imageTooLarge": "Esta imagem tem {total}. Imagens com mais de {kept} não são guardadas neste computador, por isso ela não pode ser exibida aqui.",
-        "notKept": "Nada desta etapa está guardado neste computador",
-        "reading": "Lendo deste computador"
+        "imageTooLargeToStore": "Esta imagem tem {total}. Imagens com mais de {kept} não são guardadas, por isso ela não pode ser exibida.",
+        "notCopied": "Ainda não copiado para este chat",
+        "notStored": "Nada desta etapa foi guardado",
+        "runBudgetReached": "Não guardado: esta execução já tinha guardado o máximo permitido para uma execução"
       },
       "output": "Saída",
       "patternInPath": "{pattern} em {path}",
@@ -2381,6 +2383,10 @@
       "needsInputTitle": "A stella precisa de você",
       "replyReadyBody": "A stella terminou de responder no seu chat.",
       "replyReadyTitle": "Resposta pronta"
+    },
+    "turnPaused": {
+      "continue": "Continuar",
+      "status": "Pausado após {count, plural, one {# chamada de ferramenta} many {# chamadas de ferramentas} other {# chamadas de ferramentas}}"
     },
     "turnStatus": {
       "answerFailed": "Não foi possível concluir a resposta",
@@ -3413,6 +3419,7 @@
       "invitationRoleNotAllowed": "Você não pode convidar alguém com esta função. Escolha outra função.",
       "invoiceNumberSeriesMissing": "Configure uma série de numeração padrão para faturas em Séries de numeração, nas configurações da organização, e depois emita a fatura.",
       "invoiceSellerProfileMissing": "Adicione um perfil de vendedor em Perfis de faturamento, nas configurações da organização, e depois emita a fatura.",
+      "legalHoldActive": "A exclusão está bloqueada porque esses registros devem ser preservados.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",
       "matterContactCapacityExceeded": "Este caso tem mais contatos do que é possível exibir. Remova vínculos visíveis com contatos para exibir os contatos restantes.",
@@ -5893,6 +5900,8 @@
       "auditLogsSentenceDownload": "{resource} foi baixado.",
       "auditLogsSentenceExecute": "{resource} foi executado.",
       "auditLogsSentenceIssued": "{resource} foi emitido.",
+      "auditLogsSentenceLegalHoldPlaced": "{resource} foi aplicada.",
+      "auditLogsSentenceLegalHoldReleased": "{resource} foi liberada.",
       "auditLogsSentenceRedeemed": "{resource} foi resgatado.",
       "auditLogsSentenceRefused": "{resource} foi recusado.",
       "auditLogsSentenceReview": "{resource} foi revisado.",
@@ -5944,6 +5953,7 @@
         "flow_run": "execução do fluxo de trabalho",
         "folio_collab_room": "sala de colaboração do Folio",
         "invoice": "fatura",
+        "legal_hold": "retenção legal",
         "legal_list": "lista jurídica",
         "legal_list_generation": "geração de lista jurídica",
         "legal_list_item": "entrada da lista jurídica",
@@ -6103,7 +6113,13 @@
       "usageStatusTrialing": "Em avaliação",
       "usageUnitCount": "{count, plural, one {# unidade} many {# unidades} other {# unidades}}",
       "usageUnitsBalanceTemplate": "{remaining} unidades disponíveis",
-      "usageUnitsThisPeriod": "Unidades de uso neste período"
+      "usageUnitsThisPeriod": "Unidades de uso neste período",
+      "verificationDecisionModel": {
+        "description": "Ao verificar um documento com base nos fatos de uma lista, o modelo de decisão escolhe o veredito de cada afirmação. O modelo generativo continua encontrando e citando os fatos. Se o modelo de decisão não tiver confiança suficiente, prevalece o veredito do modelo generativo.",
+        "title": "Vereditos da verificação de documentos",
+        "unavailable": "Nenhum modelo de decisão está disponível para esta organização.",
+        "updated": "Configuração de verificação atualizada"
+      }
     }
   },
   "sharepoint": {
@@ -6344,6 +6360,7 @@
       "previewBody5": "Antes da conversão, uma venda ou listagem dá ao Investidor direito ao maior valor entre o valor de compra e os recursos pagáveis com base na conversão.",
       "previewBody6": "A Sociedade está devidamente constituída, tem autoridade para celebrar este contrato e obterá todas as aprovações necessárias para cumpri-lo.",
       "previewBody7": "Este contrato contém o acordo integral entre as partes e somente poderá ser alterado por escrito, com o consentimento exigido.",
+      "previewDocument": "Visualização do conjunto de estilos",
       "previewFailed": "Não foi possível gerar a visualização.",
       "previewIntroduction": "Este contrato é celebrado entre a Example Labs Ltd. (a “Sociedade”) e o investidor identificado na página de assinaturas (o “Investidor”).",
       "previewLevel1": "Investimento",

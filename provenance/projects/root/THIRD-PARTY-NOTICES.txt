@@ -84,7 +84,7 @@ Project: root
 - @tanstack/charts 1.1.0 — MIT
 - @tanstack/react-devtools 0.10.14 — MIT
 - @tanstack/react-form 1.33.5 — MIT
-- @tanstack/react-hotkeys 0.17.0 — MIT
+- @tanstack/react-hotkeys 0.22.0 — MIT
 - @tanstack/react-query 5.105.3 — MIT
 - @tanstack/react-query-devtools 5.105.3 — MIT
 - @tanstack/react-router 1.170.46 — MIT

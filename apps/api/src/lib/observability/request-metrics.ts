@@ -420,6 +420,9 @@ export const CASE_LAW_FRESHNESS_METRIC = {
   projectionConvergence: "CaseLawProjectionConvergence",
   decisionIdentifierRepairs: "CaseLawDecisionIdentifierRepairs",
   decisionIdentifierPassAgeSeconds: "CaseLawDecisionIdentifierPassAgeSeconds",
+  waitingReplacements: "CaseLawProjectionWaitingReplacements",
+  waitingReplacementOldestSeconds:
+    "CaseLawProjectionWaitingReplacementOldestSeconds",
 } as const satisfies Record<string, string>;
 
 const buildCaseLawMetricRecord = ({
@@ -455,6 +458,36 @@ export const buildCaseLawSourceSyncAgeMetric = (
   source,
 });
 
+type CaseLawWaitingReplacementDimensions = {
+  generation: string;
+  index: string;
+};
+
+/** Replacements of one index still served at their previous revision. */
+export const buildCaseLawWaitingReplacementsMetric = (
+  { generation, index }: CaseLawWaitingReplacementDimensions,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.waitingReplacements,
+    value,
+  }),
+  generation,
+  index,
+});
+
+export const buildCaseLawWaitingReplacementOldestMetric = (
+  { generation, index }: CaseLawWaitingReplacementDimensions,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.waitingReplacementOldestSeconds,
+    value,
+  }),
+  generation,
+  index,
+});
+
 export const buildCaseLawDecisionIdentifierRepairMetric = (value: number) =>
   buildCaseLawMetricRecord({
     name: CASE_LAW_FRESHNESS_METRIC.decisionIdentifierRepairs,
@@ -473,6 +506,78 @@ export const buildCaseLawProjectionConvergenceMetric = (status: string) => ({
     value: 1,
   }),
   status,
+});
+
+export const CORPUS_PROJECTION_UNSERVED_METRIC = {
+  entities: "CorpusProjectionUnservedEntities",
+  oldestAgeSeconds: "CorpusProjectionUnservedOldestAgeSeconds",
+} as const;
+
+/** `at_least` when the count stopped at its cap. */
+type CorpusProjectionUnservedCountBound = "exact" | "at_least";
+
+/** A generation's record sums its indexes; an index record names one. */
+type CorpusProjectionUnservedMetricScope =
+  { type: "generation" } | { type: "index"; indexId: string };
+
+/** An unknown age emits no age field: a lower bound would read as the age. */
+type CorpusProjectionUnservedMetricAge =
+  { type: "measured"; seconds: number } | { type: "unknown" };
+
+type CorpusProjectionUnservedMetricInput = {
+  family: string;
+  generation: string;
+  kind: "at_risk" | "absent";
+  scope: CorpusProjectionUnservedMetricScope;
+  entities: number;
+  countBound: CorpusProjectionUnservedCountBound;
+  oldestAge: CorpusProjectionUnservedMetricAge;
+};
+
+const unservedMetricScopeFields = (
+  scope: CorpusProjectionUnservedMetricScope,
+) => {
+  switch (scope.type) {
+    case "generation":
+      return { scope: scope.type };
+    case "index":
+      return { scope: scope.type, indexId: scope.indexId };
+    default:
+      scope satisfies never;
+      return panic("Unhandled unserved metric scope");
+  }
+};
+
+const unservedMetricAgeFields = (age: CorpusProjectionUnservedMetricAge) => {
+  switch (age.type) {
+    case "measured":
+      return {
+        [CORPUS_PROJECTION_UNSERVED_METRIC.oldestAgeSeconds]: age.seconds,
+      };
+    case "unknown":
+      return {};
+    default:
+      age satisfies never;
+      return panic("Unhandled unserved metric age");
+  }
+};
+
+export const buildCorpusProjectionUnservedMetric = ({
+  family,
+  generation,
+  kind,
+  scope,
+  entities,
+  countBound,
+  oldestAge,
+}: CorpusProjectionUnservedMetricInput) => ({
+  [CORPUS_PROJECTION_UNSERVED_METRIC.entities]: entities,
+  ...unservedMetricAgeFields(oldestAge),
+  family,
+  generation,
+  kind,
+  ...unservedMetricScopeFields(scope),
+  countBound,
 });
 
 export const REQUEST_CLASSES = [

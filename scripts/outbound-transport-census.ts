@@ -1040,6 +1040,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/step-uploads.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Puts what a step of a local run produced to the configured stella API origin with the run's agent token, under a bounded deadline and refusing redirects.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/api-client/src/index.ts",
     class: "package-owned-client",
     reason:

@@ -1839,11 +1839,16 @@ const persistedToolInputFromChatPart = (
   if (part.input === undefined) {
     return { rawArguments: part.arguments, status: "raw" };
   }
-  // Keep the argument text only when the parsed input cannot reproduce it.
+  // Successful inputs are canonicalized by their schema. Failed calls keep
+  // the model's exact rejected text, alongside the parsed preview shown live.
+  const preserveFailedArguments =
+    part.state === "error" && JSON.stringify(part.input) !== part.arguments;
   const reproduced = Result.try((): unknown => JSON.parse(part.arguments));
   return proveParsedToolInput(
     part.input,
-    reproduced.isOk() && deepEquals(reproduced.value, part.input)
+    !preserveFailedArguments &&
+      reproduced.isOk() &&
+      deepEquals(reproduced.value, part.input)
       ? undefined
       : part.arguments,
   );
@@ -1958,6 +1963,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
+  metadata.turnSpend === undefined &&
   metadata.turnTiming === undefined &&
   metadata.turnModel === undefined &&
   metadata.usage === undefined;

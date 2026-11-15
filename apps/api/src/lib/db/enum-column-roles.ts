@@ -399,6 +399,10 @@ export const ENUM_COLUMN_ROLES = {
     stance: ATTRIBUTE,
     to_kind: ATTRIBUTE,
   },
+  // Whether a hold covers a matter or one item: fixed when it is placed.
+  legal_holds: {
+    scope_type: ATTRIBUTE,
+  },
   legal_list_claim_carry_outcomes: {
     entity_feature_gate: ATTRIBUTE,
     outcome: ATTRIBUTE,

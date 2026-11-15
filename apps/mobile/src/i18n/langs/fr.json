@@ -223,13 +223,29 @@
       "browserPressKey": "Appuyer sur la touche {key} dans « {target} » sur {url}",
       "browserSelect": "Sélectionner « {option} » dans « {target} » sur {url}",
       "browserType": "Saisir du texte dans « {target} » sur {url}",
-      "opensOnComputer": "Ouvrez-le sur l’ordinateur qui l’a exécuté",
       "status": {
         "needs_approval": "En attente d’approbation",
         "running": "En cours",
         "failed": "Échec",
         "interrupted": "Arrêté"
-      }
+      },
+      "output": {
+        "command": "Résultat",
+        "diff": "Modifications des fichiers",
+        "conversation": "Conversation du sous-agent",
+        "conversationPrompt": "Tâche",
+        "conversationReport": "Rapport",
+        "cut": "Affichage des {kept} premiers sur {total}",
+        "empty": "Aucun résultat",
+        "arriving": "Toujours en cours de réception depuis l’ordinateur qui a exécuté cette étape",
+        "notCopied": "Pas encore copié dans cette conversation",
+        "notStored": "Rien de cette étape n’a été enregistré",
+        "runBudgetReached": "Non enregistré : cette exécution avait déjà enregistré tout ce qu’une exécution peut enregistrer",
+        "imageTooLargeToStore": "Cette image fait {total}. Les images de plus de {kept} ne sont pas enregistrées ; elle ne peut donc pas être affichée.",
+        "loadFailed": "Échec du chargement.",
+        "showMore": "Afficher plus"
+      },
+      "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées} many {# sources vérifiées}}",
@@ -238,7 +254,8 @@
       "analyses": "{count, plural, one {# analyse} other {# analyses} many {# analyses}}"
     },
     "stepCount": "{count, plural, one {# étape} other {# étapes} many {# étapes}}",
-    "reasoning": "Raisonnement"
+    "reasoning": "Raisonnement",
+    "historyTrimmed": "Les messages précédents n'ont pas pu être résumés : cette réponse ne tient compte que de la partie la plus récente de la conversation."
   },
   "tasks": {
     "emptyTitle": "Aucune tâche en cours",
@@ -267,7 +284,8 @@
       "tomorrow": "Demain",
       "week": "Cette semaine",
       "later": "Plus tard",
-      "none": "Sans échéance"
+      "none": "Sans échéance",
+      "closed": "Terminées ou annulées"
     },
     "markDone": "Marquer comme terminée",
     "reopen": "Rouvrir",
@@ -281,7 +299,43 @@
     "doneAssigning": "Terminé",
     "someone": "Quelqu’un",
     "membersFailed": "Les membres du dossier n’ont pas pu être chargés.",
-    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez."
+    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez.",
+    "statusTitle": "Statut",
+    "priorityTitle": "Priorité",
+    "priority": {
+      "none": "Aucune",
+      "urgent": "Urgente",
+      "high": "Haute",
+      "medium": "Moyenne",
+      "low": "Basse"
+    },
+    "subtasks": "Sous-tâches",
+    "linked": "Éléments liés",
+    "delete": "Supprimer la tâche",
+    "deleteTitle": "Supprimer la tâche ?",
+    "deleteMessage": "Voulez-vous vraiment supprimer « {name} » ? Cette action est irréversible.",
+    "cancel": "Annuler",
+    "saveFailed": "La modification n’a pas pu être enregistrée. Réessayez.",
+    "readOnly": "Cette tâche provient d’un calendrier connecté et ne peut pas être modifiée ici.",
+    "untitled": "Tâche sans titre",
+    "loadOneFailed": "Cette tâche n’a pas pu être chargée.",
+    "filter": "Filtrer",
+    "whoseTitle": "Assignées à",
+    "whose": {
+      "mine": "Moi",
+      "everyone": "N’importe qui",
+      "unassigned": "Personne"
+    },
+    "showTitle": "Afficher",
+    "show": {
+      "open": "Ouvertes",
+      "overdue": "En retard",
+      "all": "Toutes, terminées comprises"
+    },
+    "emptyFilteredTitle": "Aucune tâche",
+    "emptyFilteredDescription": "Les tâches correspondant à ce filtre apparaîtront ici.",
+    "loadMore": "Charger plus",
+    "loadMoreFailed": "Les tâches suivantes n’ont pas pu être chargées."
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",

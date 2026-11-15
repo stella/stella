@@ -23,7 +23,6 @@ import {
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
 import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
-import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
 import {
   countProcessWork,
   groupProcessParts,
@@ -112,6 +111,7 @@ import type {
 import {
   getAwaitedAssistantMessageId,
   getChatToolTitleKey,
+  getPausedChatTurn,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
   isPendingApprovalPart,
@@ -133,10 +133,7 @@ import {
 import { LocalRunLimitReminder } from "@/components/chat/local-run-limit-reminder";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
-import {
-  LocalRunStepOutputDetails,
-  localRunStepOutputKindOf,
-} from "@/components/chat/local-run-step-output";
+import { localRunSubagentConversation } from "@/components/chat/local-run-step-output";
 import { LocalRunSubagentGroup } from "@/components/chat/local-run-subagent-card";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
@@ -436,6 +433,7 @@ export const ChatThreadMessages = ({
   onAskUserSubmit,
   onAskUserEditAndRerun,
   onAskUserEditingChange,
+  onContinuePausedTurn,
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
@@ -469,11 +467,10 @@ export const ChatThreadMessages = ({
     () => getRetryableAssistantMessageId(messages),
     [messages],
   );
+  const continuePaused = generationActive ? undefined : onContinuePausedTurn;
   const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
   const turns = buildMessageTurns(messages);
-  const activeTurnMessageIds = new Set(
-    generationActive ? turns.at(-1)?.body.map(({ message }) => message.id) : [],
-  );
+  const activeTurnMessageIds = activeTurnMessageIdsOf(turns, generationActive);
   // Null when this list renders outside a `Conversation` (the file-chat
   // overlay uses its own scroll container and never wires load-older).
   const stick = useMaybeStickToBottomContext();
@@ -574,10 +571,10 @@ export const ChatThreadMessages = ({
                             workspaceId={workspaceId}
                             threadRef={threadRef}
                           />
-                          <div
-                            className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-                            data-chat-answer-footer
-                            data-chat-copy-exclude
+                          <AnswerFooter
+                            message={message}
+                            latestMessageId={retryableAssistantMessageId}
+                            onContinue={continuePaused}
                           >
                             <AssistantMessageActions
                               canFork={canFork}
@@ -605,7 +602,7 @@ export const ChatThreadMessages = ({
                               }
                               onAnswerEdited={onAnswerEdited}
                             />
-                          </div>
+                          </AnswerFooter>
                         </ChatAnswerDecisionProvider>
                       );
                     case "text":
@@ -1362,11 +1359,12 @@ const LocalRunLimitResetMessage = ({ resetsAt }: { resetsAt: string }) => {
 };
 
 /**
- * For a turn refused because none of the member's computers is connected:
- * opens stella desktop on this click, waits for a computer to connect, and
- * then sends the turn again by itself, unless something superseded this
- * refusal meanwhile (`holdResend`'s signal). One click opens the desktop
- * once; while it opens the button says so and takes no other click.
+ * For a turn that failed because none of the member's computers was
+ * connected: opens stella desktop on this click, waits for a computer to
+ * connect, and then sends the turn again by itself, unless something
+ * superseded this failure meanwhile (`holdResend`'s signal). One click
+ * opens the desktop once; while it opens the button says so and takes no
+ * other click.
  */
 const OpenDesktopAndResendButton = ({
   disabled,
@@ -1450,10 +1448,14 @@ export const ChatErrorMessage = ({
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
   }
+  const failureKind = aiErrorKindFromMessage(error.message);
   const limitResetsAt =
-    aiErrorKindFromMessage(error.message) === "local_runner_limit_reached"
+    failureKind === "local_runner_limit_reached"
       ? localRunLimitResetsAtFromThrown(error)
       : null;
+  // The turn was stored and failed because none of the member's computers
+  // was connected: opening stella desktop is the fix, then a resend.
+  const noComputerConnected = failureKind === "local_runner_no_computer";
   // The resend an "Open stella desktop" click holds until a computer
   // connects belongs to this refusal: Resend, another refusal in its place,
   // or the card leaving the page (a new send, another thread) drops it.
@@ -1524,7 +1526,7 @@ export const ChatErrorMessage = ({
               threadRef={threadRef}
             />
           )}
-          {onResend && refusal?.code === CHAT_LOCAL_RUN_REFUSAL.noComputer && (
+          {onResend && noComputerConnected && (
             <OpenDesktopAndResendButton
               disabled={isGenerating}
               holdResend={holdDesktopResend}
@@ -1559,6 +1561,76 @@ const getMessageText = (message: PersistedChatMessage) => {
   }
 
   return textParts.join("\n\n").trim();
+};
+
+/**
+ * A turn that reached its budget says so where it stopped, live and after a
+ * reload alike (both read the stored outcome), and offers Continue on the
+ * latest answer: nothing runs until the user sends it.
+ */
+/** The messages of the turn being generated, none while nothing runs. */
+const activeTurnMessageIdsOf = (
+  turns: ReturnType<typeof buildMessageTurns>,
+  generationActive: boolean,
+) =>
+  new Set(
+    generationActive ? turns.at(-1)?.body.map(({ message }) => message.id) : [],
+  );
+
+type PausedTurnNoticeProps = {
+  message: PersistedChatMessage;
+  /** The answer Continue is offered on: the latest one only. */
+  latestMessageId: string | null | undefined;
+  /** Absent while a turn generates. */
+  onContinue: (() => void | PromiseLike<void>) | undefined;
+};
+
+/** The row under an answer: where a paused turn stopped, then `children`. */
+const AnswerFooter = ({
+  children,
+  ...notice
+}: PausedTurnNoticeProps & { children: ReactNode }) => (
+  <div
+    className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+    data-chat-answer-footer
+    data-chat-copy-exclude
+  >
+    <PausedTurnNotice {...notice} />
+    {children}
+  </div>
+);
+
+/** Where a paused answer stopped, with Continue on the latest answer. */
+const PausedTurnNotice = ({
+  message,
+  latestMessageId,
+  onContinue: continueTurn,
+}: PausedTurnNoticeProps) => {
+  const t = useTranslations();
+  const paused = getPausedChatTurn(message);
+  if (paused === null) {
+    return null;
+  }
+  const onContinue = message.id === latestMessageId ? continueTurn : undefined;
+
+  return (
+    <div className="flex items-center gap-1" data-chat-turn-paused>
+      <span className="text-muted-foreground px-1.5 text-xs" role="status">
+        {t("chat.turnPaused.status", { count: paused.toolCalls })}
+      </span>
+      {onContinue !== undefined && (
+        <Button
+          onClick={() => {
+            detached(onContinue(), "chat-thread-messages.continue-paused-turn");
+          }}
+          size="xs"
+          variant="outline"
+        >
+          {t("chat.turnPaused.continue")}
+        </Button>
+      )}
+    </div>
+  );
 };
 
 const AssistantMessageActions = ({
@@ -1681,6 +1753,11 @@ type ChatThreadMessagesProps = {
   onResend?:
     ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
+  /**
+   * Sends the message that continues a turn paused on its budget. Surfaces
+   * that omit it show the pause without the Continue action.
+   */
+  onContinuePausedTurn?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
     output: AskUserOutput,
@@ -1760,7 +1837,7 @@ type ChatResendOptions = {
   messageId?: string | undefined;
 };
 
-export type QueuedMessageActions = {
+type QueuedMessageActions = {
   remove: (id: string) => void;
   sendNow: (id: string) => void;
 };
@@ -2311,6 +2388,7 @@ const AssistantMessageParts = ({
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
+          threadId={threadRef?.threadId}
         />
       );
     }
@@ -2417,6 +2495,7 @@ const AssistantMessageParts = ({
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
+          threadId={threadRef?.threadId}
         />
       );
     }
@@ -2453,14 +2532,11 @@ const AssistantMessageParts = ({
           );
           return (
             <LocalRunSubagentGroup
-              conversation={
-                localRunStepOutputKindOf(subagent.part) === null ? null : (
-                  <LocalRunStepOutputDetails
-                    activeOrganizationId={activeOrganizationId}
-                    part={subagent.part}
-                  />
-                )
-              }
+              conversation={localRunSubagentConversation({
+                activeOrganizationId,
+                part: subagent.part,
+                threadId: threadRef?.threadId,
+              })}
               key={subagent.part.id}
               part={subagent.part}
               rows={steps

@@ -5,6 +5,10 @@ import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import {
+  CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
+  CHAT_LOCAL_RUN_STEPS_AWAITED_MAX,
+} from "@stll/api-contract/chat-local-run-step-content";
 import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import type {
   DESKTOP_RUNNER_RUN_OUTCOMES,
@@ -83,7 +87,8 @@ import {
   type SidecarRestoreOutcome,
   type SidecarRunStart,
 } from "./protocol";
-import { keepStepOutput } from "./step-outputs";
+import { keepStepOutput, stepOutputRunDir } from "./step-outputs";
+import { createStepUploads, stepContentUploader } from "./step-uploads";
 
 /**
  * The sidecar's command loop: any number of concurrent runs, one harness
@@ -426,6 +431,22 @@ const probeOutcome = ({
   };
 };
 
+/**
+ * The runner request id a harness request id was relabelled with
+ * (`HeldRun.requests`), or the harness's own id when it was never relabelled.
+ */
+const runnerRequestIdOf = (
+  requests: ReadonlyMap<string, string>,
+  nativeId: string,
+) => {
+  for (const [requestId, native] of requests) {
+    if (native === nativeId) {
+      return requestId;
+    }
+  }
+  return nativeId;
+};
+
 /** The event stream for a run that ends before its harness starts. */
 const stoppedBeforeStart = (): AsyncIterable<HarnessEvent> => {
   const queue = createEventQueue<HarnessEvent>();
@@ -434,32 +455,132 @@ const stoppedBeforeStart = (): AsyncIterable<HarnessEvent> => {
   return queue.items;
 };
 
-type KeepRunStepOutputOptions = {
-  stepOutputDir: string;
-  workspaceDir: string;
+/**
+ * How long a step's event waits for its content to be sent: a healthy
+ * connection stores the content before the step's result is shown, and a slow
+ * or absent one holds no event longer than this.
+ */
+const STEP_UPLOAD_WAIT_MS = 3000;
+/** How long a turn's end pauses before it tries again to send what waits. */
+const STEP_UPLOAD_RETRY_MS = 2000;
+/** How long a turn's end waits for what its steps still have to send. */
+const STEP_UPLOAD_END_WAIT_MS = {
+  completed: 2 * 60_000,
+  stopped: 20_000,
+} as const;
+
+/**
+ * Beside a run's kept steps, the folder of the steps still to send: the
+ * sidecar's while the run goes, and under the second name the desktop app's
+ * once the run announced them at its end.
+ */
+const STEP_PENDING_SUFFIX = ".pending";
+const STEP_AWAITED_SUFFIX = ".awaited";
+
+type RunStepsOptions = {
+  /** The API the run's steps are sent to, and the proxy holding its token. */
+  config: Pick<Config, "apiOrigin" | "proxy">;
+  /** Where the run keeps its steps, and the folder it works in. */
+  message: { stepOutputDir: string; workspaceDir: string };
   runId: string;
-  toolCallId: string;
-  output: HarnessStepOutput | undefined;
-  options: Pick<SidecarHostOptions, "log">;
+  log: SidecarHostOptions["log"];
+  /**
+   * Hands one of the run's messages to the holder, which keeps it for the
+   * desktop app; `false` when the holder did not take it.
+   */
+  send: (message: SidecarHostOutput) => boolean;
 };
 
 /**
- * Keep what a step produced on this computer, for the member to open here.
- * The run goes on without it: the step's row then says its output is not on
- * this computer.
+ * What a run's steps produce: kept on this computer and sent to stella,
+ * where it is stored with the conversation. The run goes on without either:
+ * a step then says its content was not stored.
  */
-const keepRunStepOutput = async ({
-  options,
-  output,
-  ...step
-}: KeepRunStepOutputOptions) => {
-  if (output === undefined) {
-    return;
-  }
-  const kept = await keepStepOutput({ ...step, output });
-  if (Result.isError(kept)) {
-    options.log("a step's output was not kept on this computer");
-  }
+const openRunSteps = ({
+  config: { apiOrigin, proxy },
+  message: { stepOutputDir, workspaceDir },
+  runId,
+  log,
+  send,
+}: RunStepsOptions) => {
+  const runDir = stepOutputRunDir(stepOutputDir, runId);
+  const uploads = createStepUploads({
+    pendingDir: `${runDir}${STEP_PENDING_SUFFIX}`,
+    awaitedDir: `${runDir}${STEP_AWAITED_SUFFIX}`,
+    keptFile: (stepKey) => path.join(runDir, stepKey),
+    upload: stepContentUploader({
+      apiOrigin,
+      runId,
+      token: () => proxy.tokenOf(runId),
+    }),
+    log,
+  });
+  return {
+    /** Keep a step's output and send it, before the step's event goes on. */
+    keep: async (toolCallId: string, output: HarnessStepOutput | undefined) => {
+      if (output === undefined) {
+        return;
+      }
+      const kept = await keepStepOutput({
+        stepOutputDir,
+        workspaceDir,
+        runId,
+        toolCallId,
+        output,
+      });
+      if (Result.isError(kept)) {
+        log("a step's output was not kept on this computer");
+        return;
+      }
+      if (kept.value !== null) {
+        await uploads.send(kept.value, STEP_UPLOAD_WAIT_MS);
+      }
+    },
+    /**
+     * The turn ends. Before its last event: send what the steps still have
+     * to send (`signal` ends the wait), then stop sending and announce the
+     * steps this computer still holds. A run that finished takes nothing
+     * more, except the steps it named before its finish.
+     */
+    end: async (
+      end: keyof typeof STEP_UPLOAD_END_WAIT_MS,
+      signal?: AbortSignal,
+    ) => {
+      await uploads.drain({
+        waitMs: STEP_UPLOAD_END_WAIT_MS[end],
+        retryEveryMs: STEP_UPLOAD_RETRY_MS,
+        ...(signal === undefined ? {} : { signal }),
+      });
+      const left = await uploads.leave(CHAT_LOCAL_RUN_STEPS_AWAITED_MAX);
+      if (Result.isError(left)) {
+        // What cannot be listed is not named, so it is not sent later.
+        log("a run's unsent step content could not be listed");
+        return;
+      }
+      if (left.value.stepKeys.length === 0 && left.value.more === 0) {
+        return;
+      }
+      // The folder is handed over before it is announced, so no stop of
+      // this process leaves announced steps where nobody sends them from: a
+      // folder handed over and never announced is refused by the API and
+      // removed. An announcement the holder did not take awaits nothing.
+      const announced = send({
+        type: "run.event",
+        runId,
+        chunk: {
+          type: EventType.CUSTOM,
+          name: CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
+          value: left.value,
+          timestamp: Temporal.Now.instant().epochMilliseconds,
+        },
+      });
+      if (!announced) {
+        await uploads.withdraw();
+      }
+    },
+    /** The run is over: what waited and was not announced is dropped. */
+    close: uploads.close,
+  };
 };
 
 const failedBeforeStart = (
@@ -1255,27 +1376,19 @@ export class SidecarHost {
      */
     const delivery = { broken: false };
     const send = (runMessage: SidecarHostOutput) => {
-      if (delivery.broken || this.options.send(runMessage)) {
-        return;
+      if (!delivery.broken && !this.options.send(runMessage)) {
+        delivery.broken = true;
+        this.options.log(
+          `a run's ${runMessage.type} message could not be written; stopping the run`,
+        );
+        this.stop(run, RUN_STOP.interrupt);
       }
-      delivery.broken = true;
-      this.options.log(
-        `a run's ${runMessage.type} message could not be written; stopping the run`,
-      );
-      this.stop(run, RUN_STOP.interrupt);
+      return !delivery.broken;
     };
     const relabel = (nativeId: string) => {
       const requestId = crypto.randomUUID();
       run.requests.set(requestId, nativeId);
       return requestId;
-    };
-    const runnerIdOf = (nativeId: string) => {
-      for (const [requestId, native] of run.requests) {
-        if (native === nativeId) {
-          return requestId;
-        }
-      }
-      return nativeId;
     };
 
     /**
@@ -1313,6 +1426,13 @@ export class SidecarHost {
     };
 
     const { options } = this;
+    const steps = openRunSteps({
+      config,
+      message,
+      runId,
+      log: options.log,
+      send,
+    });
     /**
      * The adapter's events with harness request ids replaced by runner UUIDs.
      * An approval request is announced after the chunks of its event: the
@@ -1347,31 +1467,31 @@ export class SidecarHost {
             break;
           }
           case "interaction.resolved":
-            yield { ...event, requestId: runnerIdOf(event.requestId) };
+            yield {
+              ...event,
+              requestId: runnerRequestIdOf(run.requests, event.requestId),
+            };
             break;
           case "turn.completed":
             outcome.value = "completed";
+            // A stop ends the wait: a stopped run does not wait to send.
+            await steps.end("completed", run.outputSharing.signal);
             await shareRunOutputs();
             yield event;
             break;
           case "turn.interrupted":
             outcome.value =
               run.stop === RUN_STOP.cancel ? "cancelled" : "interrupted";
+            await steps.end("stopped");
             yield event;
             break;
           case "turn.failed":
             outcome.value = HARNESS_FAILURE_OUTCOME[event.failure.type];
+            await steps.end("stopped");
             yield event;
             break;
           case "tool.completed":
-            await keepRunStepOutput({
-              stepOutputDir: message.stepOutputDir,
-              workspaceDir: message.workspaceDir,
-              runId,
-              toolCallId: event.toolCall.id,
-              output: event.result.localOutput,
-              options,
-            });
+            await steps.keep(event.toolCall.id, event.result.localOutput);
             yield event;
             break;
           case "text.delta":
@@ -1379,6 +1499,7 @@ export class SidecarHost {
           case "reasoning.completed":
           case "tool.started":
           case "retrying":
+          case "model.rerouted":
             yield event;
             break;
           default:
@@ -1433,6 +1554,7 @@ export class SidecarHost {
       }
     }
     coalescer.flush();
+    await steps.close();
     const kept = (await run.turn?.release()) ?? null;
     if (kept !== null && (delivery.broken || isStopped(run))) {
       // The run fails, or was stopped after its turn completed (while its

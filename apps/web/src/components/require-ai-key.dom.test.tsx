@@ -93,6 +93,7 @@ globalThis.fetch = Object.assign(
             configured: false,
             instanceProvisioned: false,
             decisionInstanceProvisioned: false,
+            verificationDecisionModel: { enabled: false, available: false },
             providerDefaultModels: [],
             defaultModels: {
               chat: null,

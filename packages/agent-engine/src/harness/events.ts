@@ -82,8 +82,8 @@ export type HarnessToolResult = {
   status: "succeeded" | "failed" | "cancelled";
   /**
    * What a native step produced (a command's output, a change's diff). It
-   * stays on this computer: the sidecar keeps it for the member to open
-   * here, and it is not part of what a turn reports.
+   * is the step's content: the sidecar keeps it and sends it to stella beside
+   * the turn's events, and it is not part of what a turn reports.
    */
   localOutput?: HarnessStepOutput;
 };
@@ -111,7 +111,7 @@ export type HarnessApprovalRequest = {
  * What an approval asks the user to allow, from what chat keeps of the call
  * (`chatLocalRunApprovalMessage`): a command's shown command line, else the
  * harness's shown reason, or the tool's name. Never more of a step than its
- * call shows, so a heredoc's text stays here.
+ * call shows, so a heredoc's text is never in it.
  */
 export const approvalMessage = (request: HarnessApprovalRequest): string =>
   chatLocalRunApprovalMessage({
@@ -226,6 +226,12 @@ export type HarnessEvent =
   | { type: "interaction.resolved"; requestId: string }
   /** A transient provider error the harness is retrying on its own. */
   | { type: "retrying"; message: string }
+  /**
+   * The provider runs the turn on another model than the one asked for:
+   * Codex rerouted it, or Claude Code retried it on its fallback model after
+   * a refusal. What the turn reports from here on names this model.
+   */
+  | { type: "model.rerouted"; model: string }
   | { type: "turn.completed"; usage: HarnessUsage | null }
   | { type: "turn.interrupted" }
   | { type: "turn.failed"; failure: HarnessFailure };

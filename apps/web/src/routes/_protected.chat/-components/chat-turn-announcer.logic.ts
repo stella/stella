@@ -88,6 +88,8 @@ const outcomeAnnouncement = (
             interaction: outcome.interaction satisfies never,
           });
       }
+    // A paused turn ended at its budget; its answer offers Continue.
+    case "paused":
     case "completed":
       return { subject: answerId, announcement: "done" };
     case "cancelled":

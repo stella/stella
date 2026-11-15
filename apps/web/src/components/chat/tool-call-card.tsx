@@ -474,6 +474,7 @@ const ToolCallCardComponent = ({
   turnStatus = "finished",
   part,
   showDetails,
+  threadId,
 }: {
   action?: ToolCallAction | undefined;
   activeOrganizationId: string;
@@ -483,6 +484,8 @@ const ToolCallCardComponent = ({
   part: ToolPart;
   /** Open rich tool details initially in development surfaces. */
   showDetails?: boolean;
+  /** The thread the call belongs to; a local run's step reads its content by it. */
+  threadId?: string | undefined;
 }) => {
   const t = useTranslations();
   const localRunSubtitleText = useLocalRunSubtitleText();
@@ -764,6 +767,7 @@ const ToolCallCardComponent = ({
           <LocalRunStepOutputDetails
             activeOrganizationId={activeOrganizationId}
             part={part}
+            threadId={threadId}
           />
         </div>
       )}

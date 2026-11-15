@@ -2,6 +2,7 @@ import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
 import { classifyFailure, readFailureBrand } from "@stll/errors";
 
@@ -38,7 +39,6 @@ import {
   truncateForCompaction,
 } from "@/api/lib/chat/compaction-tokens";
 import { HISTORY_TRIMMED_NOTICE } from "@/api/lib/chat/context-notice";
-import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import { createSkillSummaryProjection } from "@/api/lib/chat/skill-summary-projection";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";

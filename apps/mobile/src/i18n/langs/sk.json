@@ -223,13 +223,29 @@
       "browserPressKey": "Stlačiť kláves {key} v „{target}“ na stránke {url}",
       "browserSelect": "Vybrať „{option}“ v „{target}“ na stránke {url}",
       "browserType": "Zadať text do „{target}“ na stránke {url}",
-      "opensOnComputer": "Otvorte na počítači, kde krok bežal",
       "status": {
         "needs_approval": "Čakanie na schválenie",
         "running": "Rozpracovaná",
         "failed": "Zlyhalo",
         "interrupted": "Zastavené"
-      }
+      },
+      "output": {
+        "command": "Výstup",
+        "diff": "Zmeny súborov",
+        "conversation": "Konverzácia čiastkového agenta",
+        "conversationPrompt": "Zadanie",
+        "conversationReport": "Správa",
+        "cut": "Zobrazuje sa prvých {kept} z {total}",
+        "empty": "Žiadny výstup",
+        "arriving": "Stále sa prenáša z počítača, na ktorom krok bežal",
+        "notCopied": "Do tohto chatu zatiaľ nebolo skopírované",
+        "notStored": "Z tohto kroku nebolo nič uložené",
+        "runBudgetReached": "Neuložené: tento beh už uložil toľko, koľko smie jeden beh",
+        "imageTooLargeToStore": "Tento obrázok má {total}. Obrázky väčšie ako {kept} sa neukladajú, preto ho nemožno zobraziť.",
+        "loadFailed": "Nepodarilo sa načítať.",
+        "showMore": "Zobraziť viac"
+      },
+      "sessionNotResumed": "Programovací agent vo vašom počítači nemohol nadviazať tam, kde skončil, preto pokračoval podľa správ v tomto chate."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}",
@@ -238,7 +254,8 @@
       "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
-    "reasoning": "Uvažovanie"
+    "reasoning": "Uvažovanie",
+    "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie."
   },
   "tasks": {
     "emptyTitle": "Žiadne otvorené úlohy",
@@ -267,7 +284,8 @@
       "tomorrow": "Zajtra",
       "week": "Tento týždeň",
       "later": "Neskôr",
-      "none": "Bez termínu"
+      "none": "Bez termínu",
+      "closed": "Hotové alebo zrušené"
     },
     "markDone": "Označiť ako hotové",
     "reopen": "Znova otvoriť",
@@ -281,7 +299,43 @@
     "doneAssigning": "Hotovo",
     "someone": "Niekto",
     "membersFailed": "Členov spisu sa nepodarilo načítať.",
-    "assignFailed": "Úlohu sa nepodarilo prideliť. Skúste to znova."
+    "assignFailed": "Úlohu sa nepodarilo prideliť. Skúste to znova.",
+    "statusTitle": "Stav",
+    "priorityTitle": "Priorita",
+    "priority": {
+      "none": "Žiadna",
+      "urgent": "Urgentná",
+      "high": "Vysoká",
+      "medium": "Stredná",
+      "low": "Nízka"
+    },
+    "subtasks": "Podúlohy",
+    "linked": "Prepojené položky",
+    "delete": "Vymazať úlohu",
+    "deleteTitle": "Vymazať úlohu?",
+    "deleteMessage": "Naozaj chcete vymazať „{name}“? Túto akciu nie je možné vrátiť.",
+    "cancel": "Zrušiť",
+    "saveFailed": "Zmenu sa nepodarilo uložiť. Skúste to znova.",
+    "readOnly": "Táto úloha pochádza z prepojeného kalendára a tu ju nemožno meniť.",
+    "untitled": "Úloha bez názvu",
+    "loadOneFailed": "Túto úlohu sa nepodarilo načítať.",
+    "filter": "Filter",
+    "whoseTitle": "Priradené",
+    "whose": {
+      "mine": "Mne",
+      "everyone": "Komukoľvek",
+      "unassigned": "Nikomu"
+    },
+    "showTitle": "Zobraziť",
+    "show": {
+      "open": "Otvorené",
+      "overdue": "Po termíne",
+      "all": "Všetky, aj hotové"
+    },
+    "emptyFilteredTitle": "Žiadne úlohy",
+    "emptyFilteredDescription": "Úlohy zodpovedajúce tomuto filtru sa zobrazia tu.",
+    "loadMore": "Načítať ďalšie",
+    "loadMoreFailed": "Ďalšie úlohy sa nepodarilo načítať."
   },
   "matters": {
     "emptyTitle": "Zatiaľ žiadne spisy",

@@ -2,6 +2,7 @@ import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import type { AIErrorKind } from "@stll/api-contract";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 
 import {
   buildEmailSummaryMessage,
@@ -22,7 +23,6 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { toSafeId } from "@/api/lib/branded-types";
 import { compactionGenerationRequest } from "@/api/lib/chat/compaction-tokens";
 import { HISTORY_TRIMMED_NOTICE } from "@/api/lib/chat/context-notice";
-import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";

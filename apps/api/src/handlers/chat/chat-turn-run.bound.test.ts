@@ -131,6 +131,23 @@ const createComputer = () => {
     return event;
   };
   const control: LocalRunContext["control"] = {
+    pickDesktop: async () =>
+      Result.ok({
+        type: "available",
+        desktopId: DESTINATION.desktopId,
+        harness: {
+          id: DESTINATION.harness,
+          state: "ready",
+          version: DESTINATION.harnessVersion,
+          capabilities: [],
+          approvalModes: [DESTINATION.approvals],
+          models: [
+            { id: DESTINATION.model, label: "Local", reasoningEfforts: [] },
+          ],
+        },
+        linkedFolders: [],
+        approvedFolderIds: [],
+      }),
     readChatRunSession: async () => Result.ok(null),
     startRun: async () => Result.ok({ type: "assigned", runId: RUNNER_RUN_ID }),
     readEvents: async ({ afterSeq }) =>
@@ -334,7 +351,16 @@ const localSource =
     createLocalChatRun(
       computer.context,
       resume === undefined
-        ? { type: "start", destination: DESTINATION }
+        ? {
+            type: "start",
+            target: {
+              kind: "local",
+              harness: DESTINATION.harness,
+              model: DESTINATION.model,
+              approvals: DESTINATION.approvals,
+              reasoningEffort: DESTINATION.reasoningEffort,
+            },
+          }
         : { type: "resume", harness: DESTINATION.harness },
     ).stream({
       chatRunId: "chat-run-bound",

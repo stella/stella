@@ -223,13 +223,29 @@
       "browserPressKey": "Vajuta klahvi {key} elemendis „{target}“ lehel {url}",
       "browserSelect": "Vali „{option}“ elemendis „{target}“ lehel {url}",
       "browserType": "Sisesta tekst väljale „{target}“ lehel {url}",
-      "opensOnComputer": "Avage arvutis, kus see käivitati",
       "status": {
         "needs_approval": "Kinnituse ootamine",
         "running": "Töös",
         "failed": "Ebaõnnestus",
         "interrupted": "Peatatud"
-      }
+      },
+      "output": {
+        "command": "Väljund",
+        "diff": "Failimuudatused",
+        "conversation": "Alamagendi vestlus",
+        "conversationPrompt": "Ülesanne",
+        "conversationReport": "Aruanne",
+        "cut": "Kuvatakse esimesed {kept} (kokku {total})",
+        "empty": "Väljund puudub",
+        "arriving": "Saabub endiselt arvutist, kus see samm käivitati",
+        "notCopied": "Sellesse vestlusesse pole veel kopeeritud",
+        "notStored": "Sellest sammust ei salvestatud midagi",
+        "runBudgetReached": "Ei salvestatud: see käivitus oli juba salvestanud nii palju, kui üks käivitus tohib",
+        "imageTooLargeToStore": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte ei salvestata, seega ei saa seda kuvada.",
+        "loadFailed": "Laadimine ebaõnnestus.",
+        "showMore": "Näita rohkem"
+      },
+      "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}",
@@ -238,7 +254,8 @@
       "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}"
     },
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
-    "reasoning": "Arutlus"
+    "reasoning": "Arutlus",
+    "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa."
   },
   "tasks": {
     "emptyTitle": "Avatud ülesandeid pole",
@@ -267,7 +284,8 @@
       "tomorrow": "Homme",
       "week": "Sel nädalal",
       "later": "Hiljem",
-      "none": "Tähtajata"
+      "none": "Tähtajata",
+      "closed": "Tehtud või tühistatud"
     },
     "markDone": "Märgi tehtuks",
     "reopen": "Ava uuesti",
@@ -281,7 +299,43 @@
     "doneAssigning": "Valmis",
     "someone": "Keegi",
     "membersFailed": "Asja liikmeid ei õnnestunud laadida.",
-    "assignFailed": "Ülesannet ei õnnestunud määrata. Proovige uuesti."
+    "assignFailed": "Ülesannet ei õnnestunud määrata. Proovige uuesti.",
+    "statusTitle": "Staatus",
+    "priorityTitle": "Prioriteet",
+    "priority": {
+      "none": "Puudub",
+      "urgent": "Kiire",
+      "high": "Kõrge",
+      "medium": "Keskmine",
+      "low": "Madal"
+    },
+    "subtasks": "Alamülesanded",
+    "linked": "Seotud üksused",
+    "delete": "Kustuta ülesanne",
+    "deleteTitle": "Kas kustutada ülesanne?",
+    "deleteMessage": "Kas olete kindel, et soovite kustutada „{name}“? Seda toimingut ei saa tagasi võtta.",
+    "cancel": "Tühista",
+    "saveFailed": "Muudatust ei õnnestunud salvestada. Proovige uuesti.",
+    "readOnly": "See ülesanne pärineb ühendatud kalendrist ja seda ei saa siin muuta.",
+    "untitled": "Pealkirjata ülesanne",
+    "loadOneFailed": "Seda ülesannet ei õnnestunud laadida.",
+    "filter": "Filter",
+    "whoseTitle": "Määratud",
+    "whose": {
+      "mine": "Mulle",
+      "everyone": "Kellele tahes",
+      "unassigned": "Mitte kellelegi"
+    },
+    "showTitle": "Näita",
+    "show": {
+      "open": "Avatud",
+      "overdue": "Tähtaja ületanud",
+      "all": "Kõik, ka tehtud"
+    },
+    "emptyFilteredTitle": "Ülesandeid pole",
+    "emptyFilteredDescription": "Sellele filtrile vastavad ülesanded kuvatakse siin.",
+    "loadMore": "Laadi rohkem",
+    "loadMoreFailed": "Rohkem ülesandeid ei õnnestunud laadida."
   },
   "matters": {
     "emptyTitle": "Toimikuid veel pole",
