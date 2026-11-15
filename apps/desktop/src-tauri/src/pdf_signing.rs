@@ -1003,7 +1003,7 @@ pub async fn redeem_and_sign(
       (Err(SigningStop::Cancelled), outcome_sender)
     }
     Provider::Pkcs11(source) => {
-      sign_on_token(TokenSigning {
+      let (signed, outcome_sender) = sign_on_token(TokenSigning {
         session: &session,
         source,
         identity: &offered.identity,
@@ -1011,7 +1011,16 @@ pub async fn redeem_and_sign(
         pin,
         outcome_sender,
       })
-      .await
+      .await;
+      // The token signs outside the window's hold (a PIN pad can wait a
+      // while), so a dialog closed meanwhile is a user who walked away: the
+      // signature is not submitted, as a closed PIN prompt would not be.
+      match signed {
+        Ok(_) if prompt_owner.while_open(|_| Ok(())).is_err() => {
+          (Err(SigningStop::Cancelled), outcome_sender)
+        }
+        signed => (signed, outcome_sender),
+      }
     }
   };
   let signature = match signed {
