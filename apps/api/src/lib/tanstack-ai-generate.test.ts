@@ -528,7 +528,7 @@ describe("TanStack AI structured output generation", () => {
             return;
           default:
             path satisfies never;
-            return;
+            break;
         }
       })().then(
         () => undefined,

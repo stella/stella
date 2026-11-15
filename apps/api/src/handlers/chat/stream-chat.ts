@@ -2142,7 +2142,7 @@ const createChatRuntimeMiddleware = ({
           state,
           threadId,
         });
-        return;
+        break;
       case "aborted":
       case "failed":
         return;
