@@ -2,6 +2,7 @@ import { sql, type SQLWrapper } from "drizzle-orm";
 
 import {
   CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
+  CORPUS_INDEX_OUTSTANDING_INDEX_QUIESCENT_STATUSES,
   CORPUS_INDEX_QUIESCENT_INTENT_STATUSES,
   type CorpusIndexDesiredAction,
   corpusIndexIntentStatusesWithCopy,
@@ -156,13 +157,20 @@ export const corpusIndexProjectionProducesAppend = (status: SQLWrapper) =>
 
 /**
  * One source of truth for "this entity still owes the index an exact action",
- * shared by the append and erasure anti-joins and by the partial index that
- * answers them. The index predicate and the query predicate are the same
- * expression, so PostgreSQL can prove the implication and the probe never
- * walks an entity's quiescent revision history, however long it grows.
+ * shared by the append and erasure anti-joins. The partial index that answers
+ * them leaves out a subset of these statuses
+ * (`corpusIndexProjectionOutstandingIndexPredicate`), so PostgreSQL proves
+ * this predicate implies the index's and the probe never walks an entity's
+ * settled or cancelled history, however long it grows.
  */
 export const corpusIndexProjectionIntentIsOutstanding = (status: SQLWrapper) =>
   sql`${status} NOT IN (${sqlLiteralValues(CORPUS_INDEX_QUIESCENT_INTENT_STATUSES)})`;
+
+/** The outstanding-intent partial index's own predicate, as it was built. */
+export const corpusIndexProjectionOutstandingIndexPredicate = (
+  status: SQLWrapper,
+) =>
+  sql`${status} NOT IN (${sqlLiteralValues(CORPUS_INDEX_OUTSTANDING_INDEX_QUIESCENT_STATUSES)})`;
 
 const ERASE_ACTION: CorpusIndexDesiredAction = "erase";
 const ERASE_ACTION_LITERAL = sql.raw(`'${ERASE_ACTION}'`);

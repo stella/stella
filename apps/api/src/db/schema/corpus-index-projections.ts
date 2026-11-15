@@ -5,6 +5,7 @@ import {
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
 } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  CORPUS_INDEX_APPEND_DELIVERIES,
   CORPUS_INDEX_DESIRED_ACTIONS,
   CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES,
   CORPUS_INDEX_INTENT_STATUSES,
@@ -16,10 +17,10 @@ import {
 import {
   corpusIndexProjectionAppendIsUnblocked,
   corpusIndexProjectionErasureIsPending,
-  corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionIsAbsent,
   corpusIndexProjectionIsBlocked,
   corpusIndexProjectionNeedsWork,
+  corpusIndexProjectionOutstandingIndexPredicate,
   corpusIndexProjectionProducesAppend,
   corpusIndexProjectionRevisionDeleteIsUnproven,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
@@ -63,6 +64,15 @@ export const corpusIndexProjectionIntents = p.pgTable(
     leaseToken: p.uuid("lease_token"),
     leaseExpiresAt: timestamptz("lease_expires_at"),
     appendStartedAt: timestamptz("append_started_at"),
+    /**
+     * How the started revision travels to the engine
+     * (`CORPUS_INDEX_APPEND_DELIVERIES`). Set with the start and immutable
+     * from then on; a reservation carries the default until it starts.
+     */
+    appendDelivery: p
+      .text("append_delivery", { enum: CORPUS_INDEX_APPEND_DELIVERIES })
+      .default("ingest_api")
+      .notNull(),
     appendRequestRevisionCount: p.integer("append_request_revision_count"),
     appendCommittedAt: timestamptz("append_committed_at"),
     expectedDocumentCount: p.integer("expected_document_count"),
@@ -139,7 +149,7 @@ export const corpusIndexProjectionIntents = p.pgTable(
     p
       .index("corpus_index_projection_intents_outstanding_idx")
       .on(t.family, t.generation, t.entityId, t.epoch)
-      .where(corpusIndexProjectionIntentIsOutstanding(t.status)),
+      .where(corpusIndexProjectionOutstandingIndexPredicate(t.status)),
     p
       .index("corpus_index_projection_intents_expired_lease_idx")
       .on(t.family, t.generation, t.status, t.leaseExpiresAt)
@@ -183,6 +193,12 @@ export const corpusIndexProjectionIntents = p.pgTable(
       .index("corpus_index_projection_intents_settled_census_idx")
       .on(t.family, t.generation, t.indexId, t.id)
       .where(sql`${t.status} = 'settled'`),
+    // The absent census's other half: withdrawn revisions the engine must not
+    // hold either, read beside the settled ones by the same page.
+    p
+      .index("corpus_index_projection_intents_withdrawn_census_idx")
+      .on(t.family, t.generation, t.indexId, t.id)
+      .where(sql`${t.status} = 'withdrawn'`),
     // The prover's claim: committed revisions of one index whose stored
     // barrier has passed, oldest barrier first.
     p
@@ -209,6 +225,22 @@ export const corpusIndexProjectionIntents = p.pgTable(
     p.check(
       "corpus_index_projection_intents_status_values",
       sql`${t.status} IN (${sqlValues(CORPUS_INDEX_INTENT_STATUSES)})`,
+    ),
+    p.check(
+      "corpus_index_projection_intents_append_delivery_values",
+      sql`${t.appendDelivery} IN (${sqlValues(CORPUS_INDEX_APPEND_DELIVERIES)})`,
+    ),
+    // An offline delivery is chosen at the start, with the document count the
+    // indexer's file holds for the revision, so an expired start can be proven
+    // instead of cleaned up. It never holds its lease past the acceptance: its
+    // committed form always carries the barrier it is proven after.
+    p.check(
+      "corpus_index_projection_intents_append_delivery_shape",
+      sql`${t.appendDelivery} = 'ingest_api' OR (
+        ${t.appendStartedAt} IS NOT NULL
+        AND ${t.expectedDocumentCount} IS NOT NULL
+        AND (${t.appendCommittedAt} IS NULL OR ${t.appendPublishBarrierAt} IS NOT NULL)
+      )`,
     ),
     p.check(
       "corpus_index_projection_intents_epoch_positive",
@@ -361,6 +393,19 @@ export const corpusIndexProjectionIntents = p.pgTable(
           AND ${t.deleteOpstamp} IS NULL
           AND ${t.settledAt} IS NULL
           AND ${t.cancelledAt} IS NOT NULL
+        WHEN 'withdrawn' THEN
+          ${t.leaseToken} IS NULL
+          AND ${t.appendDelivery} = 'offline_indexer'
+          AND ${t.appendStartedAt} IS NOT NULL
+          AND ${t.appendCommittedAt} IS NOT NULL
+          AND ${t.appendPublishBarrierAt} IS NOT NULL
+          AND ${t.expectedDocumentCount} IS NOT NULL
+          AND ${t.appliedAt} IS NULL
+          AND ${t.cleanupNotBefore} IS NULL
+          AND ${t.cleanupStartedAt} IS NULL
+          AND ${t.deleteOpstamp} IS NULL
+          AND ${t.settledAt} IS NULL
+          AND ${t.cancelledAt} IS NULL
         ELSE false
       END`,
     ),
