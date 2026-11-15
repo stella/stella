@@ -17,6 +17,17 @@ class LockThenWriteRaceOrder extends TaggedError("LockThenWriteRaceOrder")<{
   message: string;
 }> {}
 
+/** Names of the race's bounded waits; each becomes a timeout label. */
+const RACE_WAIT_LABELS = {
+  reachPause: "Tx A reaching pause() after its lock",
+  settleWithoutPause: "Tx A settling without a pause",
+  commitB: "Tx B commit while tx A holds its locks",
+  rollbackAAfterStall: "Tx A rollback after tx B stalled",
+  settleBAfterRollback: "Tx B settling after tx A rolled back",
+  rollbackAAfterFailure: "Tx A rollback after tx B failed",
+  writeA: "Tx A write after tx B committed",
+} as const;
+
 type LockThenWriteRaceOptions<A, B> = {
   /** One transaction runner per actor; each must use its own connection. */
   transactions: Record<"a" | "b", TransactionRunner>;
@@ -58,17 +69,23 @@ export const withLockThenWriteRace = async <A, B>({
   };
   // Every wait is bounded and named, so a misordered race fails instead of
   // hanging the suite.
-  const bounded = async <T>(label: string, work: Promise<T>) =>
+  const bounded = async <T>(
+    wait: keyof typeof RACE_WAIT_LABELS,
+    work: Promise<T>,
+  ) =>
     await Result.tryPromise(
       async () =>
-        await withTimeout(async () => await work, { label, timeoutMs }),
+        await withTimeout(async () => await work, {
+          label: RACE_WAIT_LABELS[wait],
+          timeoutMs,
+        }),
     );
   const first = Result.tryPromise(
     async () => await transactions.a(async (tx) => await a(tx, pause)),
   );
   // A that finishes without pausing never wrote after a concurrent commit.
   const reachedPause = await bounded(
-    "Tx A reaching pause() after its lock",
+    "reachPause",
     Promise.race([locked.promise.then(() => true), first.then(() => false)]),
   );
   if (reachedPause.isErr()) {
@@ -76,10 +93,10 @@ export const withLockThenWriteRace = async <A, B>({
     committed.reject(
       new LockThenWriteRaceOrder({ message: "Tx A paused after the deadline" }),
     );
-    return panic(`Tx A did not reach pause(): ${String(reachedPause.error)}`);
+    return panic(`Tx A did not reach pause(): ${reachedPause.error.message}`);
   }
   if (!reachedPause.value) {
-    const outcome = await bounded("Tx A settling without a pause", first);
+    const outcome = await bounded("settleWithoutPause", first);
     if (outcome.isOk() && outcome.value.isErr()) {
       return panic(
         `Tx A failed before it paused: ${String(outcome.value.error.cause)}`,
@@ -90,10 +107,7 @@ export const withLockThenWriteRace = async <A, B>({
     );
   }
   const secondRun = Result.tryPromise(async () => await transactions.b(b));
-  const second = await bounded(
-    "Tx B commit while tx A holds its locks",
-    secondRun,
-  );
+  const second = await bounded("commitB", secondRun);
   if (second.isErr()) {
     // B still runs. Release A so it rolls back and frees whatever B waits on,
     // then wait for both to settle before failing, so neither commits after
@@ -103,13 +117,10 @@ export const withLockThenWriteRace = async <A, B>({
         message: "Tx B did not commit while tx A held its locks",
       }),
     );
-    const rolledBack = await bounded("Tx A rollback after tx B stalled", first);
-    const settled = await bounded(
-      "Tx B settling after tx A rolled back",
-      secondRun,
-    );
+    const rolledBack = await bounded("rollbackAAfterStall", first);
+    const settled = await bounded("settleBAfterRollback", secondRun);
     return panic(
-      `Tx B did not commit while tx A held its locks; it must change rows tx A did not lock (${String(second.error)}; tx A ${rolledBack.isOk() ? "settled" : "did not settle"}, tx B ${settled.isOk() ? "settled" : "did not settle"})`,
+      `Tx B did not commit while tx A held its locks; it must change rows tx A did not lock (${second.error.message}; tx A ${rolledBack.isOk() ? "settled" : "did not settle"}, tx B ${settled.isOk() ? "settled" : "did not settle"})`,
     );
   }
   const committedB = second.value;
@@ -117,13 +128,13 @@ export const withLockThenWriteRace = async <A, B>({
     committed.reject(
       new LockThenWriteRaceOrder({ message: "Tx B failed before committing" }),
     );
-    await bounded("Tx A rollback after tx B failed", first);
+    await bounded("rollbackAAfterFailure", first);
     return panic(`Tx B failed: ${String(committedB.error.cause)}`);
   }
   committed.resolve(undefined);
-  const outcome = await bounded("Tx A write after tx B committed", first);
+  const outcome = await bounded("writeA", first);
   if (outcome.isErr()) {
-    return panic(`Tx A did not finish its write: ${String(outcome.error)}`);
+    return panic(`Tx A did not finish its write: ${outcome.error.message}`);
   }
   return { a: outcome.value.unwrap(), b: committedB.value };
 };
@@ -158,7 +169,11 @@ export const pauseBeforeWrite = (
                 return reject(resumed.error.cause);
               }
             }
-            return Reflect.apply(value, target, [resolve, reject]);
+            const settled: unknown = Reflect.apply(value, target, [
+              resolve,
+              reject,
+            ]);
+            return settled;
           };
         }
         return (...args: unknown[]) => {
@@ -186,7 +201,11 @@ export const pauseBeforeWrite = (
             : builder;
         };
       }
-      return typeof value === "function" ? value.bind(target) : value;
+      if (typeof value !== "function") {
+        return value;
+      }
+      const bound: unknown = value.bind(target);
+      return bound;
     },
   });
 };
