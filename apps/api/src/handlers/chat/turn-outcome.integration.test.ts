@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { desc, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
@@ -34,6 +34,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import { CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
@@ -613,7 +614,7 @@ const runTurn = async (combination: TurnCombination): Promise<TurnResult> =>
         })
         .from(chatTurns)
         .where(eq(chatTurns.threadId, threadId))
-        .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+        .orderBy(...NEWEST_CHAT_TURN_FIRST)
         .limit(1);
       const stored = await harness.readThreadMessages(threadId);
       return {
@@ -909,7 +910,7 @@ const checkPinnedContinuationFallback = async (
       .select({ status: chatTurns.status })
       .from(chatTurns)
       .where(eq(chatTurns.threadId, threadId))
-      .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+      .orderBy(...NEWEST_CHAT_TURN_FIRST)
       .limit(1);
     expect(turn?.status).toBe(
       selection === "automatic" ? "completed" : "failed",

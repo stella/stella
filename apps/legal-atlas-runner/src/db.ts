@@ -29,6 +29,11 @@ const backfillTransactionTimeoutMs =
 const TRANSACTION_TIMEOUT_GRACE_MS = 30_000;
 const rootQueryTimeoutMs = LEGAL_ATLAS_RUNNER_ENV.dbRootQueryTimeoutMs;
 const statementTimeoutCapMs = LEGAL_ATLAS_RUNNER_ENV.dbStatementTimeoutMs;
+type IngestionDbKind = "backfill" | "ingestion";
+const INGESTION_DB_TIMEOUT_LABEL = {
+  backfill: "backfill-db-transaction",
+  ingestion: "ingestion-db-transaction",
+} as const satisfies Record<IngestionDbKind, string>;
 
 /**
  * Build a `stella_ingestion`-scoped transaction runner with a per-transaction
@@ -40,7 +45,7 @@ const statementTimeoutCapMs = LEGAL_ATLAS_RUNNER_ENV.dbStatementTimeoutMs;
  * suspended forever.
  */
 const createBoundedIngestionDb = (
-  label: string,
+  kind: IngestionDbKind,
   timeoutMs: number,
 ): ScopedDb => {
   // The lane wait shares the transaction budget: a batch that cannot enter
@@ -68,7 +73,7 @@ const createBoundedIngestionDb = (
       });
 
     return await withTimeout(operation, {
-      label,
+      label: INGESTION_DB_TIMEOUT_LABEL[kind],
       timeoutMs: timeoutMs === 0 ? 0 : timeoutMs + TRANSACTION_TIMEOUT_GRACE_MS,
     });
   };
@@ -76,7 +81,7 @@ const createBoundedIngestionDb = (
 
 /** Transaction runner for adapter ingest cycles (long pipeline writes). */
 export const ingestionDb: ScopedDb = createBoundedIngestionDb(
-  "ingestion-db-transaction",
+  "ingestion",
   transactionTimeoutMs,
 );
 
@@ -90,7 +95,7 @@ export const ingestionDb: ScopedDb = createBoundedIngestionDb(
  * holding its loop for the full ingest ceiling.
  */
 export const backfillDb: ScopedDb = createBoundedIngestionDb(
-  "backfill-db-transaction",
+  "backfill",
   backfillTransactionTimeoutMs,
 );
 

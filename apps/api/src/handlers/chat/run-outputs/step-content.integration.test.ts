@@ -1,0 +1,691 @@
+import { panic, Result } from "better-result";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+import { eq } from "drizzle-orm";
+import * as v from "valibot";
+
+import {
+  CHAT_LOCAL_RUN_STEP_AWAITED_MS,
+  CHAT_LOCAL_RUN_STEP_CONTENT_CONFLICT_CODE,
+  chatLocalRunAwaitedStepContentPath,
+  type ChatLocalRunStepContentKind,
+  chatLocalRunStepContentUploadedSchema,
+  chatLocalRunStepContentUploadPath,
+} from "@stll/api-contract/chat-local-run-step-content";
+import stepContentFixtures from "@stll/api-contract/chat-local-run-step-content.fixtures";
+import { CHAT_LOCAL_RUN_STEP_MAX_BYTES } from "@stll/api-contract/chat-local-run-step-output";
+import {
+  DESKTOP_RUNNER_DESKTOP_ID_HEADER,
+  DESKTOP_RUNNER_PROTOCOL,
+} from "@stll/api-contract/desktop-runner";
+
+import type { SafeDb } from "@/api/db/safe-db";
+import {
+  chatLocalRunStepContents,
+  chatMessages,
+  chatThreads,
+  chatTurns,
+  desktopRunnerRuns,
+  desktopRunners,
+  userFiles,
+} from "@/api/db/schema";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import type { UploadUserFileDependencies } from "@/api/handlers/chat/upload-files";
+import { routes } from "@/api/http/route";
+import { createAuditRecorder } from "@/api/lib/audit-log";
+import { createSafeId, type SafeId, toSafeId } from "@/api/lib/branded-types";
+import type { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
+import {
+  openStepImage,
+  readVisibleStepContent,
+  recordAwaitedSteps,
+  recordStepTooLarge,
+  storeStepImage,
+  storeStepText,
+} from "@/api/lib/desktop-runner/step-contents";
+import {
+  type DesktopRunnerDb,
+  readOpenRunChatThread,
+} from "@/api/lib/desktop-runner/store";
+import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/constants";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+import type { TestServer } from "@/api/tests/helpers/test-server";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
+import type { TestIds } from "@/api/tests/security/rls-helpers";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+import { createStoreAwaitedStepContent } from "./awaited-step-content";
+import { createStoreRunStepContent } from "./step-content";
+import type { StepContentControl } from "./step-content-write";
+
+// timeout: an image goes through the real security scan and a fake object store.
+setDefaultTimeout(120_000);
+
+let testDb: TestDatabase;
+let ids: TestIds;
+let fake: FakeS3;
+let server: TestServer;
+
+type Claims = {
+  sub: string;
+  org_id: string;
+  run_id?: string;
+  purpose?: string;
+  scope?: string;
+  workspace_ids?: string[];
+};
+
+/** Tokens the fake verifier knows; anything else is refused as forged. */
+const tokens = new Map<string, Claims>();
+
+const tokenFor = (runId: string) => {
+  const token = `token-${Bun.randomUUIDv7()}`;
+  tokens.set(token, {
+    sub: ids.userA1,
+    org_id: ids.orgA,
+    purpose: AGENT_RUN_TOKEN_PURPOSE,
+    scope: "stella:read stella:chat",
+    workspace_ids: [],
+    run_id: runId,
+  });
+  return token;
+};
+
+// SAFETY: the test database exposes the same Drizzle query and transaction
+// APIs as the owner connection the store runs on.
+const runnerDb = () => asTestRaw<DesktopRunnerDb>(testDb);
+
+type SeededRun = {
+  runId: string;
+  threadId: SafeId<"chatThread">;
+  /** The installation and device key the run ran on. */
+  desktopId: string;
+  deviceJkt: string;
+};
+
+/** A local run of member A1, bound to a turn of a thread of theirs. */
+const seedRun = async (
+  state: "running" | "finished" = "running",
+): Promise<SeededRun> => {
+  const seen = new Date("2026-01-01T00:00:00.000Z");
+  const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  await testDb.insert(chatThreads).values({
+    id: threadId,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    title: "A turn on this computer",
+  });
+  const userMessageId = createSafeId<"chatMessage">();
+  await testDb.insert(chatMessages).values({
+    id: userMessageId,
+    threadId,
+    userId: ids.userA1,
+    role: "user",
+    content: toPersistedChatMessageContentV3({
+      data: [{ type: "text", content: "Work on the matter" }],
+    }),
+  });
+  const turnId = createSafeId<"chatTurn">();
+  await testDb.insert(chatTurns).values({
+    id: turnId,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    threadId,
+    userMessageId,
+    status: "running",
+    executionId: Bun.randomUUIDv7(),
+    leaseExpiresAt: new Date("2099-01-01T00:00:00.000Z"),
+  });
+  const desktopId = Bun.randomUUIDv7();
+  const deviceJkt = `jkt-${desktopId}`;
+  await testDb.insert(desktopRunners).values({
+    userId: ids.userA1,
+    organizationId: ids.orgA,
+    desktopId,
+    deviceJkt,
+    keyId: `key-${desktopId}`,
+    sessionId: Bun.randomUUIDv7(),
+    instanceId: "api-elsewhere",
+    connection: "connected",
+    protocol: DESKTOP_RUNNER_PROTOCOL.current,
+    appVersion: "1.4.0",
+    sidecarVersion: "1.4.0",
+    harnesses: [],
+    connectedAt: seen,
+    lastSeenAt: seen,
+  });
+  const runId = Bun.randomUUIDv7();
+  await testDb.insert(desktopRunnerRuns).values({
+    runId,
+    userId: ids.userA1,
+    organizationId: ids.orgA,
+    desktopId,
+    deviceJkt,
+    harness: "codex",
+    harnessVersion: "1.0.0",
+    workspaceIds: [],
+    state,
+    ...(state === "finished" ? { outcome: "completed" as const } : {}),
+    leaseExpiresAt: new Date("2099-01-01T00:00:00.000Z"),
+    chatThreadId: threadId,
+    chatTurnId: turnId,
+  });
+  return { runId, threadId, desktopId, deviceJkt };
+};
+
+let stepSeq = 0;
+/** A step key no other test uses. */
+const stepKey = () => {
+  stepSeq += 1;
+  return stepSeq.toString(16).padStart(64, "f");
+};
+
+type PutOptions = {
+  token: string | null;
+  kind: ChatLocalRunStepContentKind;
+  totalBytes: number;
+  content?: File;
+};
+
+const put = async (
+  runId: string,
+  key: string,
+  { token, kind, totalBytes, content }: PutOptions,
+) => {
+  const body = new FormData();
+  if (content !== undefined) {
+    body.set("content", content);
+  }
+  const url = new URL(
+    chatLocalRunStepContentUploadPath(runId, key),
+    server.url,
+  );
+  url.searchParams.set("kind", kind);
+  url.searchParams.set("totalBytes", String(totalBytes));
+  return await fetch(url, {
+    method: "PUT",
+    headers: token === null ? {} : { authorization: `Bearer ${token}` },
+    body,
+  });
+};
+
+/** How the desktop sends a step after its run's end, and reads the answer. */
+const { late: LATE_REQUEST } = stepContentFixtures;
+
+const stateOf = async (response: Response) => {
+  expect(response.status).toBe(200);
+  const answer: unknown = await response.json();
+  return v.parse(chatLocalRunStepContentUploadedSchema, answer).state;
+};
+
+const read = async (run: SeededRun, key: string) => {
+  const owner = { userId: ids.userA1, organizationId: ids.orgA };
+  return (
+    await readVisibleStepContent(
+      // SAFETY: the test database exposes the same Drizzle query and
+      // transaction APIs as the request connection the scope wraps.
+      asTestRaw<SafeDb>(
+        createSafeDb(testDb, [], owner.organizationId, owner.userId),
+      ),
+      { owner, threadId: run.threadId, stepKey: key },
+    )
+  ).unwrap();
+};
+
+const threadFiles = async (threadId: SafeId<"chatThread">) =>
+  await testDb
+    .select({ id: userFiles.id, thumbnailFileId: userFiles.thumbnailFileId })
+    .from(userFiles)
+    .where(eq(userFiles.threadId, threadId));
+
+/** The smallest PNG there is: one transparent pixel. */
+const PNG = new Uint8Array(
+  Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    "base64",
+  ),
+);
+
+const text = (value: string) => new File([value], "content");
+
+const stepControl = (): StepContentControl => ({
+  storeStepText: async (options) =>
+    Result.ok(await storeStepText(runnerDb(), options)),
+  recordStepTooLarge: async (options) =>
+    Result.ok(await recordStepTooLarge(runnerDb(), options)),
+  openStepImage: async (options) =>
+    Result.ok(await openStepImage(runnerDb(), options)),
+  storeStepImage: async (options) =>
+    Result.ok(await storeStepImage(runnerDb(), options)),
+});
+
+/** The computer a late request claims to be, and the moment it is judged at. */
+const late = {
+  computer: { userId: "", desktopId: "", deviceJkt: "" },
+  now: new Date("2026-01-01T00:00:00.000Z"),
+};
+
+beforeAll(async () => {
+  fake = startFakeS3();
+  const fixture = await getRlsFixture();
+  testDb = fixture.testDb;
+  ids = fixture.ids;
+  const store = createStoreRunStepContent({
+    verifyToken: async (token) => {
+      const claims = token === undefined ? undefined : tokens.get(token);
+      if (claims === undefined) {
+        // What the provider's verifier raises for a token it rejects.
+        throw Object.assign(new Error("Invalid token"), {
+          name: "APIError",
+          status: "UNAUTHORIZED",
+        });
+      }
+      return await Promise.resolve(claims);
+    },
+    resolveContext: async (session, { request }) => {
+      const organizationId = toSafeId<"organization">(session.organizationId);
+      const userId = toSafeId<"user">(session.userId);
+      return await Promise.resolve({
+        safeDb: asTestRaw<SafeDb>(
+          createSafeDb(testDb, [], organizationId, userId),
+        ),
+        recordAuditEvent: createAuditRecorder({
+          organizationId,
+          workspaceId: null,
+          userId,
+          request,
+          server: null,
+        }),
+      });
+    },
+    readRunThread: async (options) =>
+      Result.ok(await readOpenRunChatThread(testDb, options)),
+    control: stepControl,
+    uploads: {
+      organizationFileUsageDb:
+        asTestRaw<UploadUserFileDependencies["organizationFileUsageDb"]>(
+          testDb,
+        ),
+    },
+  });
+  const storeAwaited = createStoreAwaitedStepContent({
+    // The desktop's credential and device proof, as the account authorizer
+    // answers them: here whatever computer the test says is calling.
+    authorizeAccount: async () => {
+      const organizationId = ids.orgA;
+      const userId = toSafeId<"user">(late.computer.userId);
+      return await Promise.resolve(
+        // SAFETY: the fields the route reads of an authorized desktop account.
+        asTestRaw<Awaited<ReturnType<typeof authorizeDesktopAccount>>>(
+          Result.ok({
+            organizationId,
+            userId,
+            scopedDb: createScopedDb(testDb, [], organizationId, userId),
+            consumedProof: { proof: { thumbprint: late.computer.deviceJkt } },
+          }),
+        ),
+      );
+    },
+    control: stepControl,
+    now: () => late.now,
+    uploads: {
+      organizationFileUsageDb:
+        asTestRaw<UploadUserFileDependencies["organizationFileUsageDb"]>(
+          testDb,
+        ),
+    },
+  });
+  server = serveRoutesForTest([
+    ...routes(
+      { "/:runId/steps/:stepKey/content": { PUT: store } },
+      { prefix: "/v1/chat/local-runs" },
+    ),
+    ...routes(
+      { "/:runId/steps/:stepKey/content": { PUT: storeAwaited } },
+      { prefix: "/v1/desktop/runner/runs" },
+    ),
+  ]);
+});
+
+afterAll(async () => {
+  await server.stop();
+  fake.stop();
+  await releaseRlsFixture();
+});
+
+describe("a run sending what a step produced", () => {
+  test("stores a step's text for the run's thread", async () => {
+    const run = await seedRun();
+    const key = stepKey();
+    const output = "$ bun test\n3 pass ✓\n";
+    expect(
+      await stateOf(
+        await put(run.runId, key, {
+          token: tokenFor(run.runId),
+          kind: "command",
+          totalBytes: Buffer.byteLength(output) + 100,
+          content: text(output),
+        }),
+      ),
+    ).toBe("stored");
+    expect(await read(run, key)).toEqual({
+      type: "text",
+      kind: "command",
+      totalBytes: Buffer.byteLength(output) + 100,
+      storedBytes: Buffer.byteLength(output),
+      text: output,
+    });
+  });
+
+  test("a step is written once: a retry answers as stored, other text is refused", async () => {
+    const run = await seedRun();
+    const key = stepKey();
+    const token = tokenFor(run.runId);
+    const send = async (value: string) =>
+      await put(run.runId, key, {
+        token,
+        kind: "command",
+        totalBytes: Buffer.byteLength(value),
+        content: text(value),
+      });
+    expect(await stateOf(await send("first"))).toBe("stored");
+    expect(await stateOf(await send("first"))).toBe("stored");
+    const rewrite = await send("other");
+    expect(rewrite.status).toBe(409);
+    const refusal: unknown = await rewrite.json();
+    expect(refusal).toMatchObject({
+      code: CHAT_LOCAL_RUN_STEP_CONTENT_CONFLICT_CODE,
+    });
+    expect(await read(run, key)).toMatchObject({ text: "first" });
+  });
+
+  test("refuses text that is not UTF-8, or more than its step produced", async () => {
+    const run = await seedRun();
+    const token = tokenFor(run.runId);
+    const notUtf8 = await put(run.runId, stepKey(), {
+      token,
+      kind: "diff",
+      totalBytes: 2,
+      content: new File([Uint8Array.of(0xff, 0xfe)], "content"),
+    });
+    expect(notUtf8.status).toBe(422);
+    const tooMuch = await put(run.runId, stepKey(), {
+      token,
+      kind: "diff",
+      totalBytes: 2,
+      content: text("abc"),
+    });
+    expect(tooMuch.status).toBe(422);
+  });
+
+  test("stores an image as a chat file of the thread, once per step", async () => {
+    const run = await seedRun();
+    const key = stepKey();
+    const token = tokenFor(run.runId);
+    const send = async () =>
+      await put(run.runId, key, {
+        token,
+        kind: "image",
+        totalBytes: PNG.byteLength,
+        content: new File([PNG], "shot.png"),
+      });
+    expect(await stateOf(await send())).toBe("stored");
+    const stored = await read(run, key);
+    expect(stored).toMatchObject({
+      type: "image",
+      totalBytes: PNG.byteLength,
+      file: { fileName: "shot.png", mimeType: "image/png" },
+    });
+    // Stored with its thumbnail: the image and the thumbnail are reserved in
+    // one statement, as this measured request requires.
+    expect(await threadFiles(run.threadId)).toEqual([
+      { id: expect.any(String), thumbnailFileId: expect.any(String) },
+    ]);
+    // The step sent again keeps its image, and the second copy is removed.
+    expect(await stateOf(await send())).toBe("stored");
+    expect(await read(run, key)).toEqual(stored);
+    expect(await threadFiles(run.threadId)).toHaveLength(1);
+  });
+
+  test("an image is what its bytes are, whatever it is called", async () => {
+    const run = await seedRun();
+    const response = await put(run.runId, stepKey(), {
+      token: tokenFor(run.runId),
+      kind: "image",
+      totalBytes: 5,
+      content: new File(["hello"], "shot.png"),
+    });
+    expect(response.status).toBe(422);
+    // Nor is a real image stored under a size that is not its own.
+    const missized = await put(run.runId, stepKey(), {
+      token: tokenFor(run.runId),
+      kind: "image",
+      totalBytes: PNG.byteLength + 1,
+      content: new File([PNG], "shot.png"),
+    });
+    expect(missized.status).toBe(422);
+    expect(await threadFiles(run.threadId)).toEqual([]);
+  });
+
+  test("an image past its cap sends only its size", async () => {
+    const run = await seedRun();
+    const key = stepKey();
+    const token = tokenFor(run.runId);
+    const totalBytes = CHAT_LOCAL_RUN_STEP_MAX_BYTES.image + 1;
+    expect(
+      await stateOf(
+        await put(run.runId, key, { token, kind: "image", totalBytes }),
+      ),
+    ).toBe("too_large");
+    expect(await read(run, key)).toEqual({
+      type: "unstored",
+      state: "too_large",
+      kind: "image",
+      totalBytes,
+    });
+    // Nothing else is sent without content.
+    const empty = await put(run.runId, stepKey(), {
+      token,
+      kind: "command",
+      totalBytes: 10,
+    });
+    expect(empty.status).toBe(422);
+  });
+
+  test("only the run's own token writes, and only while the run goes", async () => {
+    const run = await seedRun();
+    const other = await seedRun();
+    const options = {
+      kind: "command",
+      totalBytes: 2,
+      content: text("ok"),
+    } as const;
+    expect(
+      (await put(run.runId, stepKey(), { ...options, token: null })).status,
+    ).toBe(401);
+    expect(
+      (
+        await put(run.runId, stepKey(), {
+          ...options,
+          token: tokenFor(other.runId),
+        })
+      ).status,
+    ).toBe(403);
+    const ended = await seedRun("finished");
+    const key = stepKey();
+    expect(
+      (
+        await put(ended.runId, key, {
+          ...options,
+          token: tokenFor(ended.runId),
+        })
+      ).status,
+    ).toBe(404);
+    expect(await read(ended, key)).toEqual({ type: "none" });
+  });
+});
+
+describe("a computer sending what a finished run still had to send", () => {
+  /** End the run the way a turn's finish does, having announced `keys`. */
+  const endAnnouncing = async (run: SeededRun, keys: string[]) => {
+    await testDb
+      .update(desktopRunnerRuns)
+      .set({ state: "finished", outcome: "completed" })
+      .where(eq(desktopRunnerRuns.runId, run.runId));
+    await recordAwaitedSteps(runnerDb(), {
+      owner: { userId: ids.userA1, organizationId: ids.orgA },
+      runId: run.runId,
+      stepKeys: keys,
+    });
+    late.computer = {
+      userId: ids.userA1,
+      desktopId: run.desktopId,
+      deviceJkt: run.deviceJkt,
+    };
+    // Judged at the moment the announcement was recorded, which the
+    // database stamped.
+    const [announced] = await testDb
+      .select({ at: chatLocalRunStepContents.createdAt })
+      .from(chatLocalRunStepContents)
+      .where(eq(chatLocalRunStepContents.runId, run.runId))
+      .limit(1);
+    late.now = announced?.at ?? panic("the run announced no step");
+  };
+
+  const putLate = async (
+    run: SeededRun,
+    key: string,
+    value: string,
+    desktopId: string | null = late.computer.desktopId,
+  ) => {
+    // Spelled as the desktop spells it: both read the same fixture.
+    const body = new FormData();
+    body.set(LATE_REQUEST.contentPart, text(value));
+    const url = new URL(
+      chatLocalRunAwaitedStepContentPath(run.runId, key),
+      server.url,
+    );
+    url.searchParams.set(LATE_REQUEST.query.kind, "command");
+    url.searchParams.set(
+      LATE_REQUEST.query.totalBytes,
+      String(Buffer.byteLength(value)),
+    );
+    return await fetch(url, {
+      method: "PUT",
+      headers:
+        desktopId === null
+          ? {}
+          : { [DESKTOP_RUNNER_DESKTOP_ID_HEADER]: desktopId },
+      body,
+    });
+  };
+
+  /** A refusal's code, answered with the status the desktop judges it by. */
+  const refusalOf = async (response: Response) => {
+    const refusal = v.parse(
+      v.object({ code: v.string() }),
+      await response.json(),
+    );
+    const answer =
+      [...LATE_REQUEST.refused, ...LATE_REQUEST.notThisAccount].find(
+        ({ code }) => code === refusal.code,
+      ) ?? panic(`The desktop's fixture names no answer ${refusal.code}`);
+    expect(response.status).toBe(answer.status);
+    return refusal;
+  };
+
+  test("content the API could not be reached for at the end arrives later", async () => {
+    const run = await seedRun();
+    const key = stepKey();
+    await endAnnouncing(run, [key]);
+    // The run is over: its own token writes nothing any more.
+    const byRun = await put(run.runId, key, {
+      token: tokenFor(run.runId),
+      kind: "command",
+      totalBytes: 2,
+      content: text("ok"),
+    });
+    expect(byRun.status).toBe(404);
+    expect(await read(run, key)).toMatchObject({ type: "awaited" });
+    expect(await stateOf(await putLate(run, key, "arrived later"))).toBe(
+      "stored",
+    );
+    expect(await read(run, key)).toMatchObject({
+      type: "text",
+      text: "arrived later",
+    });
+    // Sent again after it arrived, it is awaited no more.
+    expect(
+      await refusalOf(await putLate(run, key, "arrived later")),
+    ).toMatchObject({ code: "step_not_awaited" });
+  });
+
+  test("a step the run did not announce is refused", async () => {
+    const run = await seedRun();
+    await endAnnouncing(run, [stepKey()]);
+    const key = stepKey();
+    expect(await refusalOf(await putLate(run, key, "x"))).toMatchObject({
+      code: "step_not_awaited",
+    });
+    expect(await read(run, key)).toEqual({ type: "none" });
+  });
+
+  test("an awaited step is refused once its time has passed", async () => {
+    const run = await seedRun();
+    const key = stepKey();
+    await endAnnouncing(run, [key]);
+    late.now = new Date(
+      late.now.getTime() + CHAT_LOCAL_RUN_STEP_AWAITED_MS + 60_000,
+    );
+    expect(await refusalOf(await putLate(run, key, "x"))).toMatchObject({
+      code: "step_window_closed",
+    });
+    expect(await read(run, key)).toMatchObject({ type: "awaited" });
+  });
+
+  test("another computer of the same member, a relinked one and another member are refused", async () => {
+    const run = await seedRun();
+    const elsewhere = await seedRun();
+    const key = stepKey();
+    await endAnnouncing(run, [key]);
+    const own = { ...late.computer };
+    // Another installation of the same member, proving its own key.
+    late.computer = {
+      userId: ids.userA1,
+      desktopId: elsewhere.desktopId,
+      deviceJkt: elsewhere.deviceJkt,
+    };
+    expect(await refusalOf(await putLate(run, key, "x"))).toMatchObject({
+      code: "run_on_another_computer",
+    });
+    // The run's installation, linked again under a new key.
+    late.computer = { ...own, deviceJkt: "jkt-relinked" };
+    expect(await refusalOf(await putLate(run, key, "x"))).toMatchObject({
+      code: "run_on_another_computer",
+    });
+    // Another member, even naming the run's own installation and key.
+    late.computer = { ...own, userId: ids.userA2 };
+    expect(await refusalOf(await putLate(run, key, "x"))).toMatchObject({
+      code: "not_found",
+    });
+    // A request that names no installation is not looked at further.
+    late.computer = own;
+    expect(await refusalOf(await putLate(run, key, "x", null))).toMatchObject({
+      code: "validation_error",
+    });
+    expect(await read(run, key)).toMatchObject({ type: "awaited" });
+  });
+});

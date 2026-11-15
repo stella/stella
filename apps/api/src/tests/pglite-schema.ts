@@ -94,6 +94,11 @@ const STORED_KEYS_ORGANIZATION_SCOPE_MIGRATION_PATH = nodePath.join(
   "20261020000100_stored_keys_organization_scope",
   "migration.sql",
 );
+const CHAT_TURN_ORDINALS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261114200000_chat_turn_ordinals",
+  "migration.sql",
+);
 const SEARCH_HISTORY_COUNTRY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261111230200_search_history_country_expand",
@@ -207,6 +212,21 @@ export const installPgliteSearchHistoryClearFence = async (
         "CREATE FUNCTION public.search_history_entries_clear_cutoff_fence",
       ) ||
       source.startsWith("CREATE TRIGGER search_history_entries_clear_cutoff_")
+    ) {
+      await db.execute(sql.raw(statement));
+    }
+  }
+};
+
+/** Install the trigger that gives every inserted chat turn its position. */
+export const installPgliteChatTurnOrdinal = async (db: PgliteSchemaDb) => {
+  for (const statement of readMigrationStatements(
+    CHAT_TURN_ORDINALS_MIGRATION_PATH,
+  )) {
+    const source = executableSql(statement);
+    if (
+      source.startsWith("CREATE FUNCTION public.assign_chat_turn_ordinal") ||
+      source.startsWith("CREATE TRIGGER chat_turns_assign_ordinal")
     ) {
       await db.execute(sql.raw(statement));
     }
@@ -1411,11 +1431,19 @@ export const installPgliteCaseLawSitemapChanges = async (
           'CREATE TRIGGER "case_law_decisions_sitemap_update"',
         )
           ? latestMigrationStatementContaining(
-              'CREATE TRIGGER "case_law_decisions_sitemap_update"',
+              'TRIGGER "case_law_decisions_sitemap_update"\nAFTER UPDATE',
             )
           : statement,
       ),
     );
+  }
+  // A later updated_at alone is queued as a touch, not as a month.
+  for (const fragment of [
+    'CREATE FUNCTION "log_case_law_sitemap_decision_touch"',
+    'CREATE TRIGGER "case_law_decisions_sitemap_touch"',
+  ]) {
+    // db-await-in-loop: the function precedes the trigger that executes it
+    await db.execute(sql.raw(latestMigrationStatementContaining(fragment)));
   }
 };
 
@@ -1542,6 +1570,27 @@ export const installPgliteOrganizationMemberCapacity = async (
       executableSql(statement).startsWith(prefix),
     ),
   );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install the legal-hold delete backstop on matters, items and matter contacts. */
+export const installPgliteLegalHoldDeleteBackstop = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(DRIZZLE_DIR, "20261114235900_legal_holds", "migration.sql"),
+  ).filter((statement) =>
+    /^(?:CREATE FUNCTION|CREATE TRIGGER|REVOKE ALL ON FUNCTION)\s/u.test(
+      executableSql(statement),
+    ),
+  );
+  if (statements.length !== 5) {
+    panic(
+      "Expected the legal-hold backstop function, its revoke and three triggers",
+    );
+  }
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }

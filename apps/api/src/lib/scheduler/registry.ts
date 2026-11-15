@@ -72,6 +72,10 @@ import {
   refreshCaseLawSitemapShardsTask,
 } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import {
+  FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK,
+  foldCaseLawSitemapTouchesTask,
+} from "@/api/lib/scheduler/tasks/case-law-sitemap-touch-fold";
+import {
   REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK,
   refreshCaseLawSourceArrivalsTask,
 } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
@@ -301,6 +305,7 @@ const SCHEDULER_TASKS = {
   [RECONCILE_CASE_LAW_RAW_ROWS_TASK]: reconcileCaseLawRawRowsTask,
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
+  [FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK]: foldCaseLawSitemapTouchesTask,
   [FOLD_CASE_LAW_POPULATION_COUNTS_TASK]: foldCaseLawPopulationCountsTask,
   [SEED_CASE_LAW_POPULATION_COUNTS_TASK]: seedCaseLawPopulationCountsTask,
   [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,

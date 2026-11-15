@@ -13,6 +13,7 @@ import {
   type LocalRunSubagentStatus,
   localRunSubagentStatus,
   localRunSubagentType,
+  localRunToolSubtitleText,
   localRunToolView,
 } from "./chat-local-run-steps";
 import fixtures from "./chat-local-run-steps.fixtures.json";
@@ -169,6 +170,67 @@ describe("a browser step on the member's computer", () => {
       titleKind: null,
       subtitle: null,
     });
+  });
+
+  test("a step the member was asked about names what it does, to which element, on which page", () => {
+    const url = "https://fixture-library.test/search";
+    const asked = { url, role: "select", name: "Court" };
+    const browserView = (input: unknown) => {
+      const shown = view("local_browser", input);
+      if (shown === null) {
+        throw new Error("Expected a browser step's row");
+      }
+      return shown.subtitle;
+    };
+    expect(browserView({ action: "click", asked })).toEqual({
+      type: "browser_click",
+      target: "Court",
+      url,
+    });
+    expect(
+      browserView({
+        action: "press_key",
+        asked: { ...asked, role: "searchbox", name: "", key: "Enter" },
+      }),
+    ).toEqual({
+      type: "browser_press_key",
+      key: "Enter",
+      // An element without a name is named by its role.
+      target: "searchbox",
+      url,
+    });
+    expect(
+      browserView({
+        action: "select",
+        asked: { ...asked, option: "Supreme Court" },
+      }),
+    ).toEqual({
+      type: "browser_select",
+      option: "Supreme Court",
+      target: "Court",
+      url,
+    });
+    // A question without its key or option names nothing it cannot show.
+    expect(browserView({ action: "select", asked })).toBeNull();
+    expect(browserView({ action: "go_back" })).toBeNull();
+    const phrases = {
+      patternInPath: () => "",
+      commandExited: () => "",
+      browserClick: ({ target }: { target: string }) => `click ${target}`,
+      browserType: ({ target }: { target: string }) => `type ${target}`,
+      browserPressKey: ({ key, target }: { key: string; target: string }) =>
+        `press ${key} in ${target}`,
+      browserSelect: ({ option }: { option: string }) => `choose ${option}`,
+    };
+    expect(
+      localRunToolSubtitleText(
+        browserView({
+          action: "press_key",
+          asked: { ...asked, key: "Escape" },
+        }),
+        phrases,
+      ),
+    ).toBe("press Escape in Court");
   });
 
   test("a step that stopped at a sign-in asks the member to sign in", () => {

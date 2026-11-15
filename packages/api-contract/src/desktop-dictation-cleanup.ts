@@ -13,7 +13,41 @@ export const DESKTOP_DICTATION_CLEANUP_LIMITS = {
   localeLength: contract.maxLocaleLength,
   languages: contract.maxLanguages,
   segments: contract.maxSegments,
+  windowTitleLength: contract.maxWindowTitleLength,
+  textBeforeCursorLength: contract.maxTextBeforeCursorLength,
 } as const;
+
+/** The kind of app a dictation goes to, which sets the register cleanup
+ *  writes in. Webmail and online documents cannot be told apart from other
+ *  pages, so they are `browser`. `appKinds` in the JSON file lists the same
+ *  values for the native client. */
+export const DESKTOP_DICTATION_APP_KINDS = [
+  "email",
+  "chat",
+  "document",
+  "browser",
+  "code",
+  "terminal",
+  "other",
+] as const;
+export type DesktopDictationAppKind =
+  (typeof DESKTOP_DICTATION_APP_KINDS)[number];
+
+/** Code points, the way the desktop counts them (Rust `chars().count()`),
+ *  so both sides hold a text to the same bound. */
+export const countDictationCodePoints = (text: string): number => {
+  let count = 0;
+  for (const _codePoint of text) {
+    count += 1;
+  }
+  return count;
+};
+
+const maxCodePoints = (limit: number) =>
+  v.check(
+    (text: string) => countDictationCodePoints(text) <= limit,
+    `Text is longer than ${limit} characters`,
+  );
 
 /** How far a cleaned answer may shrink from what was dictated. Cleanup
  *  replaces spoken `formattingCommands` by marks, breaks or bold, so the
@@ -47,6 +81,35 @@ const languageTagSchema = v.pipe(
   v.regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/u),
 );
 
+/** What cleanup may know about where the text goes. The kind of app comes
+ *  with every cleanup; the window title and the text before the cursor only
+ *  when the speaker turned each on. */
+export const desktopDictationCleanupContextSchema = v.strictObject({
+  appKind: v.picklist(DESKTOP_DICTATION_APP_KINDS),
+  /** The focused window's title, which can name a client or a matter. */
+  windowTitle: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      maxCodePoints(DESKTOP_DICTATION_CLEANUP_LIMITS.windowTitleLength),
+      v.regex(/^\P{Cc}*$/u),
+    ),
+  ),
+  /** The end of the text right before the cursor: part of the document the
+   *  speaker is in. */
+  textBeforeCursor: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      maxCodePoints(DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength),
+      v.regex(/^[\P{Cc}\n\t]*$/u),
+    ),
+  ),
+});
+export type DesktopDictationCleanupContext = v.InferOutput<
+  typeof desktopDictationCleanupContextSchema
+>;
+
 export const desktopDictationCleanupRequestSchema = v.strictObject({
   /** The text the computer transcribed. Never the audio. */
   transcript: v.pipe(
@@ -64,6 +127,10 @@ export const desktopDictationCleanupRequestSchema = v.strictObject({
       v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.languages),
     ),
   ),
+  /** Where the text goes, so cleanup writes in that app's register. Data
+   *  for the model, never instructions and never part of the answer; it is
+   *  neither logged nor stored. */
+  context: v.optional(desktopDictationCleanupContextSchema),
 });
 export type DesktopDictationCleanupRequest = v.InferOutput<
   typeof desktopDictationCleanupRequestSchema

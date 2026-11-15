@@ -8,7 +8,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { harnessEventsToChunks } from "@stll/agent-engine";
 import type { HarnessEvent } from "@stll/agent-engine";
@@ -18,7 +18,7 @@ import {
 } from "@stll/api-contract/desktop-runner";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatThreads, userFiles } from "@/api/db/schema";
+import { chatThreads, chatTurns, userFiles } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
   createLocalChatRun,
@@ -28,6 +28,7 @@ import {
 } from "@/api/handlers/chat/local-run-chunks";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import type { PickedDesktop } from "@/api/lib/desktop-runner/control";
 import { createLocalRunBell } from "@/api/lib/desktop-runner/doorbell";
 import { readRunOutputFile } from "@/api/lib/desktop-runner/store";
 import { createUserFileKey } from "@/api/lib/file-key";
@@ -94,7 +95,7 @@ const textTurn = (text: string): HarnessEvent[] => [
   ...(text === ""
     ? []
     : [{ type: "text.completed", messageId: "msg_1", text } as const]),
-  { type: "turn.completed", usage: null },
+  { type: "turn.completed", usage: null, boundary: null },
 ];
 
 const asStored = async (
@@ -140,15 +141,33 @@ const localRunFor = ({
   reports,
   text,
   onStart,
+  picked = {
+    type: "available",
+    desktopId: Bun.randomUUIDv7(),
+    harness: {
+      id: "codex",
+      state: "ready",
+      version: "1.0.0",
+      capabilities: [],
+      approvalModes: ["ask"],
+      models: [{ id: "gpt-test", label: "Test", reasoningEfforts: [] }],
+    },
+    linkedFolders: [],
+    approvedFolderIds: [],
+  },
 }: {
   threadId: SafeId<"chatThread">;
   reports: () => readonly RunReport[];
   text: string;
   onStart: (instructions: string) => void;
+  /** What the member's computers report when the run picks one. */
+  picked?: PickedDesktop;
 }): LocalChatRun => {
   const runId = Bun.randomUUIDv7();
   const control: LocalRunContext["control"] = asTestRaw({
-    readChatRunSession: async () => await Promise.resolve(Result.ok(null)),
+    pickDesktop: async () => await Promise.resolve(Result.ok(picked)),
+    readChatRunSession: async () =>
+      await Promise.resolve(Result.ok({ type: "fresh" })),
     startRun: async ({ instructions }: { instructions: string }) => {
       onStart(instructions);
       return await Promise.resolve(Result.ok({ type: "assigned", runId }));
@@ -202,14 +221,12 @@ const localRunFor = ({
     },
     {
       type: "start",
-      destination: {
-        desktopId: Bun.randomUUIDv7(),
+      target: {
+        kind: "local",
         harness: "codex",
-        harnessVersion: "1.0.0",
         model: "gpt-test",
         reasoningEffort: null,
         approvals: "ask",
-        linkedFolderId: null,
       },
     },
   );
@@ -560,6 +577,89 @@ describe("a file a turn on the computer hands back", () => {
       for (const fileId of stored) {
         expect(JSON.stringify(file)).toContain(toUserFileUrl(fileId));
       }
+    } finally {
+      client.dispose();
+      await harness.close();
+    }
+  });
+});
+
+describe("a turn accepted while no computer can take it", () => {
+  type Stored = {
+    id: string;
+    role: string;
+    parts: readonly unknown[];
+    metadata?: unknown;
+  };
+  const outcomeOf = (messages: readonly Stored[]) =>
+    asTestRaw<{ turnOutcome?: { type: string; error?: string } } | undefined>(
+      messages.findLast(({ role }) => role === "assistant")?.metadata,
+    )?.turnOutcome;
+  const turnStatuses = async (threadId: SafeId<"chatThread">) =>
+    (
+      await testDb
+        .select({ status: chatTurns.status })
+        .from(chatTurns)
+        .where(eq(chatTurns.threadId, threadId))
+    ).map(({ status }) => status);
+
+  test("stores the member's message with a failed answer that says why, and a resend regenerates that message", async () => {
+    const { client, harness, local, threadId } = await openThread();
+    try {
+      const started: string[] = [];
+      local.run = localRunFor({
+        threadId,
+        text: "",
+        onStart: (sent) => {
+          started.push(sent);
+        },
+        reports: () => [],
+        picked: { type: "no_computer" },
+      });
+      const messageId = Bun.randomUUIDv7();
+      await client.sendUserMessage(messageId, "Write the report");
+      await client.settle();
+
+      // Nothing was asked of a computer, and the thread holds the message
+      // with a failed turn whose reason every client reads.
+      expect(started).toEqual([]);
+      const stored = asTestRaw<Stored[]>(await harness.reloadView(threadId));
+      expect(stored.map(({ id, role }) => ({ id, role }))).toEqual([
+        { id: messageId, role: "user" },
+        expect.objectContaining({ role: "assistant" }),
+      ]);
+      expect(outcomeOf(stored)).toMatchObject({
+        type: "failed",
+        error: "local_runner_no_computer",
+      });
+      expect(await turnStatuses(threadId)).toEqual(["failed"]);
+
+      // A computer connects; Resend answers the stored message again.
+      local.run = localRunFor({
+        threadId,
+        text: "The report is ready.",
+        onStart: (sent) => {
+          started.push(sent);
+        },
+        reports: () => [],
+      });
+      await client.resend();
+      await client.settle();
+
+      expect(started).toHaveLength(1);
+      const answered = asTestRaw<Stored[]>(await harness.reloadView(threadId));
+      expect(answered.map(({ id, role }) => ({ id, role }))).toEqual([
+        { id: messageId, role: "user" },
+        expect.objectContaining({ role: "assistant" }),
+      ]);
+      expect(outcomeOf(answered)).toMatchObject({ type: "completed" });
+      expect(lastAnswerParts(answered)).toContainEqual(
+        expect.objectContaining({
+          type: "text",
+          content: "The report is ready.",
+        }),
+      );
+      expect(await turnStatuses(threadId)).toEqual(["completed"]);
     } finally {
       client.dispose();
       await harness.close();

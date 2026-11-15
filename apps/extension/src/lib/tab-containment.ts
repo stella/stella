@@ -1,5 +1,12 @@
+import { panic } from "better-result";
+
 import { BROWSER_CONTROL_LIMITS } from "@stll/api-contract/browser-control";
 
+import {
+  CONTROL_TRANSPORT,
+  type ControlTransport,
+  readControlHolder,
+} from "./control-holder";
 import { NON_PUBLIC_SECURE_URL_PATTERNS } from "./origin-policy";
 import { BROWSER_CONTAINED_TABS_STORAGE_KEY } from "./storage-keys";
 import { STELLA_HOSTNAMES } from "./trusted-origin";
@@ -84,13 +91,44 @@ const RENDERED_DOCUMENT_TYPES = [
   "multipart/x-mixed-replace*",
 ];
 
+/** A response that says it is a PDF, by its type or by its file name. */
+const PDF_RESPONSE_HEADERS: chrome.declarativeNetRequest.HeaderInfo[] = [
+  { header: "content-type", values: ["application/pdf*"] },
+  { header: "content-disposition", values: ["*.pdf*"] },
+];
+
+/**
+ * The responses that may become a download in chat's tabs. Under the web
+ * connection none may. A desktop chat's tab may download a PDF: the
+ * download check stops anything else, and stella desktop checks the saved
+ * file's bytes before it moves it into the chat's folder.
+ */
+const downloadExemptions = (
+  transport: ControlTransport,
+): Pick<
+  chrome.declarativeNetRequest.RuleCondition,
+  "excludedResponseHeaders"
+> => {
+  switch (transport) {
+    case CONTROL_TRANSPORT.web:
+      return {};
+    case CONTROL_TRANSPORT.desktop:
+      return { excludedResponseHeaders: PDF_RESPONSE_HEADERS };
+    default:
+      transport satisfies never;
+      return panic("Unhandled control transport");
+  }
+};
+
 /** Rules for every tab except `excludedTabIds`, the user's own. */
 const containmentRules = (
   excludedTabIds: number[],
+  transport: ControlTransport,
 ): chrome.declarativeNetRequest.Rule[] => [
   // Attachment responses are blocked before Chrome creates a download, so an
-  // approved click can never write a file to the user's disk. Response-header
-  // conditions need Chrome 128, which the manifest requires.
+  // approved click can never write a file to the user's disk unless the
+  // holder takes it (`downloadExemptions`). Response-header conditions need
+  // Chrome 128, which the manifest requires.
   {
     action: { type: "block" },
     condition: {
@@ -98,6 +136,7 @@ const containmentRules = (
       responseHeaders: [
         { header: "content-disposition", values: ["attachment*"] },
       ],
+      ...downloadExemptions(transport),
       excludedTabIds,
     },
     id: DOWNLOAD_BLOCK_RULE_ID,
@@ -112,6 +151,7 @@ const containmentRules = (
       responseHeaders: [
         { excludedValues: RENDERED_DOCUMENT_TYPES, header: "content-type" },
       ],
+      ...downloadExemptions(transport),
       excludedTabIds,
     },
     id: UNRENDERED_DOCUMENT_BLOCK_RULE_ID,
@@ -385,8 +425,12 @@ const updateContainedTabs = async <T>(
         removeRuleIds: CONTROLLED_TAB_RULE_IDS,
       });
     } else {
+      const holder = await readControlHolder();
       await chrome.declarativeNetRequest.updateSessionRules({
-        addRules: containmentRules([...next.userTabIds, NO_TAB_ID]),
+        addRules: containmentRules(
+          [...next.userTabIds, NO_TAB_ID],
+          holder.transport,
+        ),
         removeRuleIds: CONTROLLED_TAB_RULE_IDS,
       });
       await chrome.storage.session.set({

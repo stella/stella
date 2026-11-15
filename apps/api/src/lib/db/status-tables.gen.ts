@@ -365,7 +365,7 @@ export const ENUM_COLUMNS = {
   corpus_index_group_enrollments: ["contract_version", "family"],
   corpus_index_group_withdrawals: ["family"],
   corpus_index_jurisdiction_serving: ["family"],
-  corpus_index_projection_intents: ["family"],
+  corpus_index_projection_intents: ["append_delivery", "family"],
   corpus_index_projection_revisions: ["family"],
   corpus_index_projection_states: [
     "append_mode",
@@ -449,6 +449,7 @@ export const ENUM_COLUMNS = {
     "stance",
     "to_kind",
   ],
+  legal_holds: ["scope_type"],
   legal_list_claim_carry_outcomes: ["entity_feature_gate", "outcome"],
   legal_list_claim_review_events: ["entity_feature_gate", "kind"],
   legal_list_claims: [

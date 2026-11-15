@@ -7,12 +7,13 @@ import {
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
+import { CONTROL_TRANSPORT } from "./control-holder";
 import {
   admitControl,
   CONTROL_ADMISSION,
-  CONTROL_TRANSPORT,
   takeOverControl,
 } from "./control-owner";
+import type { ShownPdf } from "./shown-document";
 import { SIGN_IN_POLICY, type SignInPolicy } from "./sign-in-policy";
 import { releaseToUser } from "./tab-containment";
 import {
@@ -46,12 +47,26 @@ const CONTROLLED_TAB_ID = 2;
 const PAGE_URL = "https://example.com/";
 const WINDOW_ID = 1;
 
+/** A frame's read as the page script returns it: one window holding `title`. */
 const frameSnapshot = (title: string, url = PAGE_URL) => ({
-  elements: [],
   origin: new URL(url).origin,
-  text: title,
+  pageControls: [],
+  pageControlsLeftOut: false,
   title,
   url,
+  window: {
+    controls: [],
+    controlsLeftOut: false,
+    end: { type: "end" },
+    fromPercent: 0,
+    hasAfter: false,
+    hasBefore: false,
+    links: [],
+    linksLeftOut: false,
+    start: { type: "start" },
+    text: title,
+    toPercent: 100,
+  },
 });
 
 const createFakeChrome = () => {
@@ -134,6 +149,18 @@ const createFakeChrome = () => {
 
   const chrome = {
     webNavigation: {
+      // The top frame only: a read injects into it by its document id.
+      getAllFrames: async ({ tabId }: { tabId: number }) => {
+        const tab = tabs.get(tabId);
+        if (tab === undefined) {
+          return null;
+        }
+        const frame = probe.frames.get(tabId) ?? {
+          documentId: `document-tab-${String(tabId)}`,
+          errorOccurred: false,
+        };
+        return [{ ...frame, frameId: 0, parentFrameId: -1, url: tab.url }];
+      },
       getFrame: async ({ tabId }: { frameId: number; tabId: number }) => {
         if (probe.failing) {
           throw new TypeError("No frame with id 0.");
@@ -272,6 +299,10 @@ const installFakeChrome = () => {
   fake.handlers["locate"] = () => [
     { frameId: 0, result: { origin: "https://example.com", url: PAGE_URL } },
   ];
+  // Every page is a web page unless a test says it shows a PDF.
+  fake.handlers["document-type"] = () => [
+    { frameId: 0, result: { contentType: "text/html", url: PAGE_URL } },
+  ];
   return fake;
 };
 
@@ -347,12 +378,14 @@ const run = async (
   {
     budget = createBudget().budget,
     observedTab = OBSERVED_TAB,
+    onPdfShown = async () => undefined,
     signal = new AbortController().signal,
     signIn = SIGN_IN_POLICY.withholdSecrets,
     takeOver = null,
   }: {
     budget?: ReturnType<typeof createBudget>["budget"];
     observedTab?: typeof OBSERVED_TAB | null;
+    onPdfShown?: (shown: ShownPdf) => Promise<void>;
     signal?: AbortSignal;
     signIn?: SignInPolicy;
     takeOver?: (() => Promise<void>) | null;
@@ -361,6 +394,7 @@ const run = async (
   await executeBrowserCommand(CONTROLLER_ID, command, {
     budget,
     observedTab,
+    onPdfShown,
     signal,
     signIn,
     takeOver,
@@ -923,6 +957,124 @@ describe("outcome of a dispatched action", () => {
   });
 });
 
+describe("a tab showing a PDF", () => {
+  const PDF_URL = "https://example.com/decisions/42.pdf";
+
+  /** Chrome's viewer page around a PDF: a title and no text of its own. */
+  const showPdf = (
+    handlers: ReturnType<typeof installFakeChrome>["handlers"],
+  ) => {
+    const targets: Injection["target"][] = [];
+    handlers["document-type"] = (injection) => {
+      targets.push(injection.target);
+      return [
+        {
+          frameId: 0,
+          result: { contentType: "application/pdf", url: PDF_URL },
+        },
+      ];
+    };
+    handlers["snapshot"] = () => [
+      {
+        frameId: 0,
+        result: {
+          ...frameSnapshot("Judgment 42", PDF_URL),
+          window: frameSnapshot("", PDF_URL).window,
+        },
+      },
+    ];
+    return targets;
+  };
+
+  const recordShown = () => {
+    const shown: ShownPdf[] = [];
+    return {
+      onPdfShown: async (pdf: ShownPdf) => {
+        shown.push(pdf);
+      },
+      shown,
+    };
+  };
+
+  test("a read says the tab shows a PDF, with no text, and hands the PDF on", async () => {
+    const { handlers } = installFakeChrome();
+    const targets = showPdf(handlers);
+    const { onPdfShown, shown } = recordShown();
+
+    const result = await run({ action: "snapshot" }, { onPdfShown });
+
+    expect(result).toMatchObject({
+      snapshot: { document: { type: "pdf" }, text: "", url: PDF_URL },
+      status: "success",
+    });
+    expect(shown).toEqual([
+      { tabId: CONTROLLED_TAB_ID, title: "Judgment 42", url: PDF_URL },
+    ]);
+    // The type is asked of the very document the read read.
+    expect(targets).toEqual([
+      { documentIds: ["document-top"], tabId: CONTROLLED_TAB_ID },
+    ]);
+  });
+
+  test("a web page is no PDF, and nothing is handed on", async () => {
+    const { handlers } = installFakeChrome();
+    handlers["snapshot"] = () => [
+      { frameId: 0, result: frameSnapshot("Home") },
+    ];
+    const { onPdfShown, shown } = recordShown();
+
+    const result = await run({ action: "snapshot" }, { onPdfShown });
+
+    expect(result.status).toBe("success");
+    expect(result.status === "success" && result.snapshot.document).toBe(
+      undefined,
+    );
+    expect(shown).toEqual([]);
+  });
+
+  test("a click that lands on a PDF returns the PDF, not an unknown outcome", async () => {
+    const { handlers } = installFakeChrome();
+    handlers["action"] = () => [{ frameId: 0, result: { ok: true } }];
+    showPdf(handlers);
+    const { onPdfShown, shown } = recordShown();
+
+    expect(await run(click(), { onPdfShown })).toMatchObject({
+      snapshot: { document: { type: "pdf" }, url: PDF_URL },
+      status: "success",
+    });
+    expect(shown.map(({ url }) => url)).toEqual([PDF_URL]);
+  });
+
+  test("going back onto a PDF reads it as a PDF and hands nothing on", async () => {
+    const { handlers } = installFakeChrome();
+    handlers["back"] = () => [{ frameId: 0, result: undefined }];
+    showPdf(handlers);
+    const { onPdfShown, shown } = recordShown();
+
+    expect(await run({ action: "go-back" }, { onPdfShown })).toMatchObject({
+      snapshot: { document: { type: "pdf" }, url: PDF_URL },
+      status: "success",
+    });
+    // A page reached by going back was saved by the read that read it, or
+    // was never read by the chat: nothing starts a save.
+    expect(shown).toEqual([]);
+  });
+
+  test("a read that fails hands nothing on", async () => {
+    const { handlers } = installFakeChrome();
+    showPdf(handlers);
+    handlers["snapshot"] = () => {
+      throw new TypeError("Frame with ID 0 was removed.");
+    };
+    const { onPdfShown, shown } = recordShown();
+
+    expect(await run({ action: "snapshot" }, { onPdfShown })).toMatchObject({
+      status: "error",
+    });
+    expect(shown).toEqual([]);
+  });
+});
+
 describe("frame policy for actions", () => {
   test("refuses a ref in a frame outside the policy without dispatching", async () => {
     const { handlers, log } = installFakeChrome();
@@ -1387,8 +1539,13 @@ describe("chat's tabs", () => {
   });
 
   test("switches to a tab chat's page opened and reads it", async () => {
-    const { handlers, log, session, tabs } = installChatTabs({
+    const { handlers, log, probe, session, tabs } = installChatTabs({
       opened: [RESULTS_TAB_ID, 6],
+    });
+    // The document Chrome's frame list names, and the one the read runs in.
+    probe.frames.set(RESULTS_TAB_ID, {
+      documentId: "document-results",
+      errorOccurred: false,
     });
     // A tab showing a page chat may not operate is not offered.
     tabs.set(6, {

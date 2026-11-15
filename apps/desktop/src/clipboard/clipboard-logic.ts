@@ -98,14 +98,22 @@ export const refreshClipboardEditorName = (
 ): ClipboardEditorNameDraft =>
   draft.type === "edited" ? draft : { type: "unchanged", value: name ?? "" };
 
+/** Whether stella kept this clip from a dictation rather than a copy. */
+export const isClipboardDictation = (item: ClipboardItem) =>
+  item.type === "text" && item.origin === "dictation";
+
 /**
- * What an unnamed clip is called: the page a browser copy came from, else the
- * host a link points to, else its kind.
+ * What an unnamed clip is called: a dictation is labelled as one, else the
+ * page a browser copy came from, else the host a link points to, else its
+ * kind.
  */
 export const clipboardUntitledName = (
   item: ClipboardItem,
-  kindLabels: { image: string; text: string },
+  kindLabels: { dictation: string; image: string; text: string },
 ) => {
+  if (isClipboardDictation(item)) {
+    return kindLabels.dictation;
+  }
   const pageLabel = item.sourceApp?.page
     ? clipboardSourceLabel(item.sourceApp)
     : "";

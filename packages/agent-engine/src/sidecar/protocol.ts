@@ -11,11 +11,13 @@ import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
+  DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DESKTOP_RUNNER_REASONING_EFFORTS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
   desktopRunnerAttachmentSchema,
   desktopRunnerQuestionAnswersSchema,
+  harnessBoundarySchema,
   MAX_RUN_ATTACHMENTS,
 } from "@stll/api-contract/desktop-runner";
 
@@ -65,7 +67,20 @@ import {
  * `protocol.fixtures.json` holds valid and rejected examples of every message;
  * the desktop's serde types round-trip the same file.
  */
-export const SIDECAR_PROTOCOL = 6;
+export const SIDECAR_PROTOCOL = 7;
+
+/** How a run's turn continues the chat's native session (`run.start`). */
+export const SIDECAR_RUN_SESSION = {
+  fresh: "fresh",
+  resume: "resume",
+  fork: "fork",
+} as const;
+
+const harnessSessionIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(256),
+);
 
 /** Most background tasks one count reports; a larger count is capped. */
 export const SIDECAR_MAX_BACKGROUND_TASKS = 1000;
@@ -80,6 +95,7 @@ export const SIDECAR_HOST_MESSAGE = {
   hello: "hello",
   harnessProbe: "harness.probe",
   runStart: "run.start",
+  runInput: "run.input",
   runApproval: "run.approval",
   runAnswer: "run.answer",
   runInterrupt: "run.interrupt",
@@ -373,10 +389,22 @@ export const sidecarHostMessageSchema = v.variant("type", [
       v.array(absolutePathSchema),
       v.maxLength(MAX_RUN_TOOL_DIRECTORIES),
     ),
-    /** The native session to resume; `null` starts fresh. */
-    harnessSessionId: v.nullable(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-    ),
+    /**
+     * The native session the run's turn continues: none, the session whole,
+     * or a new session holding what it held through `boundary`.
+     */
+    session: v.variant("type", [
+      v.object({ type: v.literal(SIDECAR_RUN_SESSION.fresh) }),
+      v.object({
+        type: v.literal(SIDECAR_RUN_SESSION.resume),
+        sessionId: harnessSessionIdSchema,
+      }),
+      v.object({
+        type: v.literal(SIDECAR_RUN_SESSION.fork),
+        sessionId: harnessSessionIdSchema,
+        boundary: harnessBoundarySchema,
+      }),
+    ]),
     policy: v.object({
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: v.picklist(DESKTOP_RUNNER_FS_POLICIES),
@@ -387,6 +415,24 @@ export const sidecarHostMessageSchema = v.variant("type", [
       url: v.pipe(v.string(), v.maxLength(2048), v.url()),
       token: tokenSchema,
       expiresAt: instantSchema,
+    }),
+  }),
+  /**
+   * A user message for the run's running turn, as the runner protocol's
+   * `run.input` carries it. The holder answers with one
+   * `DESKTOP_RUNNER_INPUT_EVENT` chunk on the run's stream.
+   */
+  v.object({
+    type: v.literal(SIDECAR_HOST_MESSAGE.runInput),
+    runId: runIdSchema,
+    inputId: v.pipe(v.string(), v.uuid()),
+    message: v.object({
+      role: v.literal("user"),
+      content: v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH),
+      ),
     }),
   }),
   v.object({
@@ -461,6 +507,11 @@ export type SidecarRunStart = Extract<
   SidecarHostMessage,
   { type: "run.start" }
 >;
+export type SidecarRunInput = Extract<
+  SidecarHostMessage,
+  { type: "run.input" }
+>;
+
 export type SidecarFolderRestore = Extract<
   SidecarHostMessage,
   { type: "folder.restore" }
@@ -571,9 +622,9 @@ export const sidecarMessageSchema = v.variant("type", [
     runId: runIdSchema,
     seq: seqSchema,
     outcome: v.picklist(DESKTOP_RUNNER_RUN_OUTCOMES),
-    harnessSessionId: v.nullable(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-    ),
+    harnessSessionId: v.nullable(harnessSessionIdSchema),
+    /** Where a completed turn ended in that session; `null` otherwise. */
+    harnessBoundary: v.nullable(harnessBoundarySchema),
   }),
   /** The answer to `folder.restore`; it names no file. */
   v.object({

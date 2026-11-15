@@ -119,7 +119,7 @@ export const startHolderBrowser = async ({
   // The loopback listener can fail to start; the holder goes on without
   // browser tools then.
   const started = Result.try(() =>
-    startLocalBrowserMcp({ bridge: bridge.value, version }),
+    startLocalBrowserMcp({ bridge: bridge.value, home, version }),
   );
   if (Result.isError(started)) {
     await bridge.value.stop();

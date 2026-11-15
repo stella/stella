@@ -26,7 +26,7 @@ import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createTemplateBodySchema = v.object({
-  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
   name: withDescription(displayNameSchema(), "Template display name"),
   categoryId: v.exactOptional(resourceIdSchema("templateCategory")),
 });

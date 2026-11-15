@@ -2605,7 +2605,7 @@ describe("chat runtime", () => {
   }: Awaited<ReturnType<typeof sendWhileInterruptPending>>) => {
     expect(requests).toHaveLength(2);
     expect(requests.at(1)).toMatchObject({
-      data: { message: { id: followUpMessageId } },
+      forwardedProps: { message: { id: followUpMessageId } },
     });
     expect(requests.at(1)).not.toHaveProperty("resume");
     expect(requests.at(1)).not.toHaveProperty("parentRunId");

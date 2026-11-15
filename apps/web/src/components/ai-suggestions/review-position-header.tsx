@@ -13,18 +13,6 @@ import type { ReactNode } from "react";
 
 import { cn } from "@stll/ui/utils";
 
-import type { ReferenceStandard } from "@/lib/knowledge/playbook-types";
-
-/**
- * How the proposal classified the term a reference-derived position compares.
- *
- * Internal: the grader reads it, no surface prints it. "Parameter" and
- * "enumeration" are the schema's vocabulary for its own dispatch, not words a
- * lawyer reads about their own contract, and the header row is worth more to
- * the issue than to a taxonomy.
- */
-export type PositionTermKind = ReferenceStandard["termKind"];
-
 /** Secondary words in the header row: the judgment, a badge. */
 export const POSITION_HEADER_META_CLASS =
   "text-muted-foreground shrink-0 text-xs";

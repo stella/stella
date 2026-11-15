@@ -18,6 +18,8 @@ const success = {
   snapshot: {
     contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
     elements: [],
+    elementsLeftOut: false,
+    facts: { meta: [] },
     revision: "revision-1",
     tabId: 7,
     tabs: [
@@ -28,10 +30,9 @@ const success = {
       },
     ],
     text: "Ready",
-    textOffset: 0,
-    textTotalChars: 5,
     title: "Example",
     url: "https://example.com/",
+    window: { cursor: "r1.window", fromPercent: 0, toPercent: 100 },
   },
   status: "success",
 } satisfies BrowserControlResult;
@@ -189,6 +190,47 @@ describe("commands a website approval answered", () => {
       await cache.executeOnce("call-1", { action: "snapshot" }, RUN),
     ).toEqual(landedOn("https://example.com/results"));
     expect(store.lastCommandSucceeded()).toBe(true);
+  });
+
+  test("find results follow the same rule as a page", async () => {
+    const foundOn = (url: string): BrowserControlResult => ({
+      found: {
+        contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+        matches: [{ cursor: "r1.match", snippet: "notice period" }],
+        tabId: 7,
+        title: "Example",
+        total: 1,
+        totalCapped: false,
+        type: "text",
+        url,
+      },
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "found",
+    });
+    const store = sessionStore();
+    const results = [
+      foundOn("https://example.com/doc"),
+      foundOn("https://other.test/doc"),
+    ];
+    const cache = createBrowserToolExecutionCache(
+      async () => results.shift() ?? success,
+      store.beginCommand,
+      allowed,
+    );
+    const find = {
+      action: "find",
+      search: { query: "notice", type: "text" },
+    } as const;
+
+    expect(await cache.executeOnce("call-1", find, RUN)).toEqual(
+      foundOn("https://example.com/doc"),
+    );
+    expect(store.lastCommandSucceeded()).toBe(true);
+    expect(await cache.executeOnce("call-2", find, RUN)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.redirected,
+      status: "error",
+    });
+    expect(store.lastCommandSucceeded()).toBe(false);
   });
 
   test("a page elsewhere is withheld and the next command asks", async () => {

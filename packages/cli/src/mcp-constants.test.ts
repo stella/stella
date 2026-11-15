@@ -2,6 +2,12 @@ import { expect, test } from "bun:test";
 
 import { EXIT_CODES, resolveMcpErrorCodeExit } from "./mcp-constants.js";
 
+test("an active legal hold uses the conflict exit class", () => {
+  expect(resolveMcpErrorCodeExit("legal_hold_active")).toBe(
+    EXIT_CODES.conflict,
+  );
+});
+
 test.each([
   "upstream_unavailable",
   "public_read_timeout",

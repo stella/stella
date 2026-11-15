@@ -518,13 +518,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/chat/threads/delete.ts",
-    "function": "module/deleteThread/createSafeRootHandler[1]",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/clauses/export.ts",
     "function": "module/exportHandler",
     "kind": "constant-limit",
@@ -564,13 +557,6 @@
     "function": "module/listDocumentTypes/createSafeRootHandler[1]",
     "kind": "constant-limit",
     "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/handlers/entities/delete.ts",
-    "function": "module/deleteEntitiesHandler",
-    "kind": "constant-limit",
-    "count": 2,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
@@ -1942,13 +1928,6 @@
     "file": "apps/web/src/features/case-law/queries/decision-analysis.ts",
     "function": "module/decisionAnalysisOptions",
     "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/features/chat/chat-fetch.ts",
-    "function": "module/chatFetchClient/assign[0]",
-    "kind": "numeric-timeout",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },

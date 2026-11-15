@@ -7,6 +7,7 @@
 // parser-output-unchanged: registering desktop dictation access leaves ingestion features and parsed records unchanged.
 // parser-output-unchanged: registering conflict-check access leaves ingestion features and parsed records unchanged.
 // parser-output-unchanged: gating desktop dictation cleanup on its access leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: registering desktop cloud dictation access leaves ingestion features and parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -142,10 +143,18 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     enrolment: "self-serve",
   },
   // Desktop-gated too: the desktop offers dictation only while this decision
-  // is enabled. Speech stays on the computer; only the optional text cleanup
-  // reaches the API, and `handlers/dictation/cleanup.ts` refuses it without
-  // this decision.
+  // is enabled. It covers transcription on the computer plus the optional
+  // text cleanup, the only part that reaches the API:
+  // `handlers/dictation/cleanup.ts` refuses it without this decision.
   "desktop-dictation": {
+    enrolment: "invitation",
+  },
+  // Transcription by stella AI, a grant of its own because the audio leaves
+  // the computer. The desktop offers it, and uploads audio, only while this
+  // decision is enabled; `handlers/dictation/desktop-transcription.ts`
+  // refuses both of its routes without it.
+  "desktop-dictation-cloud": {
+    prerequisites: ["desktop-dictation"],
     enrolment: "invitation",
   },
   // Table columns that carry a legal analysis end to end (money extraction,

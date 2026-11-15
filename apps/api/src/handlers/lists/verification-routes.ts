@@ -1,4 +1,7 @@
 import createFactExtraction from "@/api/handlers/lists/fact-extractions/create";
+import listGraphNeighbours from "@/api/handlers/lists/graph/neighbours/list";
+import listGraphNodes from "@/api/handlers/lists/graph/nodes/list";
+import listGraphPaths from "@/api/handlers/lists/graph/paths/list";
 import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import verifyItemSource from "@/api/handlers/lists/items/sources/verification/update";
 import createSampleCase from "@/api/handlers/lists/sample-case/create";
@@ -43,6 +46,9 @@ export const createListVerificationRoutes = (
       },
       "/sample-case": { POST: createSampleCase },
       "/fact-extractions": { POST: createFactExtraction },
+      "/graph/nodes": { GET: listGraphNodes },
+      "/graph/neighbours": { GET: listGraphNeighbours },
+      "/graph/paths": { GET: listGraphPaths },
       "/verifications": {
         GET: readVerifications,
         POST: createVerification,

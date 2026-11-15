@@ -13,12 +13,12 @@ import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  getAwaitingUserInteractions,
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -339,7 +339,7 @@ describe("a turn's settlement count", () => {
         type: "approval",
         toolCallId: "approval-race",
       } as const;
-      expect(getAwaitingUserInteractions(checkpoint)).toEqual([interaction]);
+      expect(memberWaitsOf(checkpoint)).toEqual([interaction]);
       expect(await turnStatusesOf(threadId)).toEqual([
         { failureCode: null, status: "awaiting-user" },
       ]);
@@ -376,6 +376,7 @@ describe("a turn's settlement count", () => {
         return await safeDb(work, retry);
       };
       lifecycle = new ChatSendLifecycle({
+        organizationId: ids.orgA,
         scopedDb,
         startAdmission: async () =>
           Result.ok({
@@ -449,9 +450,9 @@ describe("a turn's settlement count", () => {
         interactionType: interaction.type,
         interactionToolCallId: interaction.toolCallId,
       });
-      expect(
-        getAwaitingUserInteractions(await harness.lastAssistant(threadId)),
-      ).toEqual([interaction]);
+      expect(memberWaitsOf(await harness.lastAssistant(threadId))).toEqual([
+        interaction,
+      ]);
       expect(harness.executions).toEqual([]);
       expect(settlementsOf(lines)).toEqual([]);
     } finally {
@@ -637,6 +638,7 @@ describe("a turn's settlement count", () => {
           return await work(tx);
         }, retry);
       const lifecycle = new ChatSendLifecycle({
+        organizationId: ids.orgA,
         scopedDb,
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(
           async () => await Promise.reject(new Error("No connectors expected")),

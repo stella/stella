@@ -13,6 +13,8 @@ import {
   type BrowserControlErrorCode,
   type BrowserControlResult,
   type BrowserDesktopRequest,
+  type BrowserDesktopResponse,
+  type BrowserDownload,
   type BrowserObservedTab,
   parseBrowserDesktopResponse,
 } from "@stll/api-contract/browser-control";
@@ -73,8 +75,35 @@ export type BrowserBridge = {
   ) => Promise<LocalBrowserResult>;
   /** Stops the run's queued or running command in the extension. */
   cancel: (run: BrowserBridgeCancel) => void;
+  /** Hands each download the extension reports to `listener`, the last one set. */
+  onDownload: (listener: BrowserDownloadListener) => void;
   stop: () => Promise<void>;
 };
+
+/**
+ * A download a chat takes, reported by the extension unasked: when Chrome
+ * starts saving it, and once it settles. Both carry the same delivery id;
+ * a download stopped before it started is only reported settled.
+ */
+export type BrowserBridgeDownload =
+  | {
+      type: "started";
+      /** The chat it belongs to, as the chat's commands named it. */
+      controllerId: string;
+      deliveryId: string;
+      /** The address of the PDF the tab showed, when this saves one; else null. */
+      shownDocument: string | null;
+    }
+  | {
+      type: "settled";
+      controllerId: string;
+      deliveryId: string;
+      download: BrowserDownload;
+      /** The address of the PDF the tab showed, when this saved one; else null. */
+      shownDocument: string | null;
+    };
+
+type BrowserDownloadListener = (report: BrowserBridgeDownload) => void;
 
 export const browserBridgeError = (
   code: BrowserControlErrorCode,
@@ -260,6 +289,41 @@ const write = (socket: net.Socket, message: BrowserDesktopRequest) => {
   socket.write(`${JSON.stringify(message)}\n`);
 };
 
+/** Hands each download report to the listener set last; none drops it. */
+const downloadRelay = () => {
+  let listener: BrowserDownloadListener = () => undefined;
+  return {
+    set: (next: BrowserDownloadListener) => {
+      listener = next;
+    },
+    emit: (report: BrowserBridgeDownload) => {
+      listener(report);
+    },
+  };
+};
+
+/** A download message from the extension, as the listener gets it. */
+const downloadReport = (
+  response: Extract<
+    BrowserDesktopResponse,
+    { type: "download" | "download-started" }
+  >,
+): BrowserBridgeDownload =>
+  response.type === "download"
+    ? {
+        controllerId: response.controllerId,
+        deliveryId: response.deliveryId,
+        download: response.download,
+        shownDocument: response.shownDocument,
+        type: "settled",
+      }
+    : {
+        controllerId: response.controllerId,
+        deliveryId: response.deliveryId,
+        shownDocument: response.shownDocument,
+        type: "started",
+      };
+
 const hostStatus = (host: Host | null): BrowserBridgeStatus => {
   if (host === null) {
     return { type: "absent" };
@@ -296,6 +360,7 @@ export const startBrowserBridge = async ({
   }
 
   let host: Host | null = null;
+  const downloads = downloadRelay();
   /** Every accepted connection, authenticated or not, until it closes. */
   const sockets = new Set<net.Socket>();
   /** Each command's settle, by request id, until its result arrives. */
@@ -346,6 +411,10 @@ export const startBrowserBridge = async ({
         pending.get(response.requestId)?.(response.result);
         return;
       }
+      case "download-started":
+      case "download":
+        downloads.emit(downloadReport(response));
+        return;
       default:
         response satisfies never;
         panic("Unhandled browser host response");
@@ -462,6 +531,7 @@ export const startBrowserBridge = async ({
     request: async (request, signal) =>
       localBrowserResult(await send(request, signal)),
     cancel,
+    onDownload: downloads.set,
     stop: async () => {
       failAll(
         browserBridgeError(

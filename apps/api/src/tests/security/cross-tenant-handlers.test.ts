@@ -89,6 +89,7 @@ import readChatThreadTitle from "@/api/handlers/chat/get-thread-title";
 import cancelChatLimitReminder from "@/api/handlers/chat/limit-reminder/cancel";
 import getChatLimitReminder from "@/api/handlers/chat/limit-reminder/get";
 import setChatLimitReminder from "@/api/handlers/chat/limit-reminder/set";
+import { createLocalRunStepContent } from "@/api/handlers/chat/local-run-step-content";
 import { encodeMessagePageCursor } from "@/api/handlers/chat/message-page";
 import getChatMessage from "@/api/handlers/chat/messages/get";
 import listChatMessages from "@/api/handlers/chat/messages/list";
@@ -132,6 +133,7 @@ import {
   createUndoLocalFiles,
 } from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
+import steerChatTurn from "@/api/handlers/chat/turns/steer";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import createClientInvoice from "@/api/handlers/client-invoices/create";
 import prefillClientInvoice from "@/api/handlers/client-invoices/prefill";
@@ -818,6 +820,11 @@ const undoControl = () =>
 const readLocalFilesUndo = createReadLocalFilesUndo({ control: undoControl });
 const undoLocalFiles = createUndoLocalFiles({ control: undoControl });
 const readBackgroundTasks = createReadBackgroundTasks({ control: undoControl });
+const readLocalRunStepContent = createLocalRunStepContent({
+  control: undoControl,
+});
+/** A step's chat call id, naming a run that never existed. */
+const UNSENT_STEP_CALL_ID = `${"0".repeat(32)}_call-1`;
 
 const folderRestoresOfTurn = async (turnId: SafeId<"chatTurn">) =>
   await testDb
@@ -2914,6 +2921,27 @@ const isolationCases: IsolationCase[] = [
       expect(result).toEqual({ type: "preparing", turnId: chatTurnB }),
   },
   {
+    // B's turn is not running, so its own steer is declined; A's never finds
+    // the turn at all.
+    name: "chat turn steer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(steerChatTurn, workspaceA, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        body: { inputId: Bun.randomUUIDv7(), text: "Also check the annex." },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(steerChatTurn, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        body: { inputId: Bun.randomUUIDv7(), text: "Also check the annex." },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) => {
+      expect(result).toEqual({ steer: "unavailable" });
+    },
+  },
+  {
     name: "chat turn cancel",
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(cancelChatTurn, workspaceA, {
@@ -2987,6 +3015,25 @@ const isolationCases: IsolationCase[] = [
       expect(getStatusCode(result)).toBe(404);
     },
     expectPositive: (result) => expect(result).toEqual({ count: 0 }),
+  },
+  {
+    // A step of another member's chat reads as missing with its chat; its
+    // own member reads that nothing was stored for a step no run sent.
+    name: "chat local run step content",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readLocalRunStepContent, workspaceA, {
+        params: { threadId: chatTurnThreadB, callId: UNSENT_STEP_CALL_ID },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readLocalRunStepContent, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, callId: UNSENT_STEP_CALL_ID },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) => expect(result).toEqual({ state: "not_stored" }),
   },
   {
     // Another firm's caller reads the chat as missing; its own member reads

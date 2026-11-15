@@ -106,6 +106,7 @@ const tool = {
 } satisfies Tool;
 
 const providerOptions = {
+  threadId: "provider-null-normalization.property-thread",
   logger: resolveDebugOption(false),
   messages: [{ role: "user" as const, content: "Normalize the input." }],
   tools: [tool],

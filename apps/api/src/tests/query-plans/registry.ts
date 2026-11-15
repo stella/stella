@@ -67,6 +67,10 @@ import { sitemapMonthCountSql } from "@/api/lib/case-law/sitemap-shard-refresh";
 import { SITEMAP_SHARD_BUCKET_COUNT } from "@/api/lib/case-law/sitemap-shard-sql";
 import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
+import {
+  corpusProjectionUnservedCountQuery,
+  corpusProjectionUnservedPageQuery,
+} from "@/api/lib/legal-search/corpus-index-projection-unserved";
 import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";
 import { legislationFacetRefreshQuery } from "@/api/lib/legal-search/legislation-facet-refresh";
 import {
@@ -813,6 +817,63 @@ export const QUERY_PLAN_REGISTRY = [
       }),
     seed: "case-law",
     contract: planContracts["case-law.freshness-pending-states"],
+  },
+  {
+    // Scheduler gauge: a bounded walk of the unproven-delete revision index,
+    // each joined to the state naming it by primary key.
+    id: "corpus-index.projection-unserved-at-risk-count",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusProjectionUnservedCountQuery("at_risk", {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-at-risk-count"],
+  },
+  {
+    // Scheduler gauge: a bounded walk of the absent-state index.
+    id: "corpus-index.projection-unserved-absent-count",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusProjectionUnservedCountQuery("absent", {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-absent-count"],
+  },
+  {
+    id: "corpus-index.projection-unserved-at-risk-page",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      corpusProjectionUnservedPageQuery(tx, {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        kind: "at_risk",
+        limit: 100,
+        after: null,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-at-risk-page"],
+  },
+  {
+    id: "corpus-index.projection-unserved-absent-page",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      corpusProjectionUnservedPageQuery(tx, {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        kind: "absent",
+        limit: 100,
+        after: null,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-absent-page"],
   },
 ] as const satisfies readonly QueryPlanEntry[];
 

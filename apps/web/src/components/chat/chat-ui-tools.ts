@@ -13,6 +13,8 @@ import {
 } from "@stll/api-contract/chat";
 import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
 import type { LocalRunToolTitleKind } from "@stll/api-contract/chat-local-run-steps";
+import { isMemberAnsweredPart } from "@stll/api-contract/chat-member-wait";
+import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import {
   chatToolLabel,
   isKnownChatToolName,
@@ -432,9 +434,18 @@ export const isRegistryWriteSummaryToolName = (toolName: string): boolean =>
   isRegistryWriteSummaryEligibleToolName(toolName) &&
   REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES[toolName];
 
+/**
+ * A message the member steered the running turn with, shown as theirs. Its
+ * tool name is the API's, not a registered tool: it is never approved, so it
+ * stays out of the shared tool names and the approval tool names.
+ */
+const STEERED_MESSAGE_TITLE_KEY =
+  "chat.tool.user_message" as const satisfies TranslationKey;
+
 export type ChatToolTitleKey =
   | (typeof SHARED_CHAT_TOOL_TITLE_KEYS)[keyof typeof SHARED_CHAT_TOOL_TITLE_KEYS]
-  | ReturnType<typeof toolTitleKey>;
+  | ReturnType<typeof toolTitleKey>
+  | typeof STEERED_MESSAGE_TITLE_KEY;
 
 export const isApprovalToolName = (
   toolName: string,
@@ -471,6 +482,9 @@ export const LOCAL_RUN_TITLE_KEYS = {
 } as const satisfies Record<LocalRunToolTitleKind, TranslationKey>;
 
 export const getChatToolTitleKey = (toolName: string): ChatToolTitleKey => {
+  if (toolName === CHAT_LOCAL_RUN_STEER_TOOL) {
+    return STEERED_MESSAGE_TITLE_KEY;
+  }
   const label = chatToolLabel(toolName);
   return isOwnKey(SHARED_CHAT_TOOL_TITLE_KEYS, label)
     ? SHARED_CHAT_TOOL_TITLE_KEYS[label]
@@ -661,14 +675,6 @@ type PersistedChatPart = PersistedChatMessage["parts"][number];
 export const isApprovalRequestPart = (part: PersistedChatPart): boolean =>
   part.type === "tool-call" && part.state === "approval-requested";
 
-/** A part only the user can answer: an approval request, or a user-input
- *  card whose questions have fully arrived. */
-export const isUserAnswerablePart = (part: PersistedChatPart): boolean =>
-  isApprovalRequestPart(part) ||
-  (part.type === "tool-call" &&
-    part.state === "input-complete" &&
-    isUserInputChatToolName(part.name));
-
 /**
  * The latest assistant message, if it holds a part `isAwaitedPart` accepts
  * and no later user message supersedes its turn: the runtime appends that
@@ -705,7 +711,7 @@ export const getCurrentApprovalPendingMessageId = (
 export const getAwaitedAssistantMessageId = (
   messages: readonly PersistedChatMessage[],
 ): string | null =>
-  findAwaitedAssistantMessage(messages, isUserAnswerablePart)?.id ?? null;
+  findAwaitedAssistantMessage(messages, isMemberAnsweredPart)?.id ?? null;
 
 /**
  * Everything a conversation has open for the member to answer, one key per
@@ -713,11 +719,11 @@ export const getAwaitedAssistantMessageId = (
  * approval, a question or another user-input card) and the question a run on
  * their computer paused the turn on. Empty when the turn waits on nothing.
  *
- * This is the one definition of "the member has something open here". The
- * send queue holds on it and the runtime registry keeps a runtime for it, so
- * a new kind of wait added here (or a new user-input tool) is held and kept
- * alike. The same keys read from a runtime and from the stored thread name
- * the same items.
+ * Which parts wait on the member is `isMemberAnsweredPart`, the definition
+ * the API stores a waiting turn by and the phone reads too. The send queue
+ * holds on these keys and the runtime registry keeps a runtime for them. The
+ * same keys read from a runtime and from the stored thread name the same
+ * items.
  */
 export const openMemberWaitKeys = ({
   localRunQuestion,
@@ -726,12 +732,12 @@ export const openMemberWaitKeys = ({
   localRunQuestion: LocalRunQuestionPause | null;
   messages: readonly PersistedChatMessage[];
 }): readonly string[] => {
-  const awaited = findAwaitedAssistantMessage(messages, isUserAnswerablePart);
+  const awaited = findAwaitedAssistantMessage(messages, isMemberAnsweredPart);
   return [
     ...(awaited === null
       ? []
       : awaited.parts.flatMap((part) =>
-          part.type === "tool-call" && isUserAnswerablePart(part)
+          part.type === "tool-call" && isMemberAnsweredPart(part)
             ? [`part:${part.id}`]
             : [],
         )),
@@ -739,6 +745,41 @@ export const openMemberWaitKeys = ({
       ? []
       : [`interrupt:${localRunQuestion.interruptId}`]),
   ];
+};
+
+/**
+ * The tool work a thread already waits on when a page opens it: approval
+ * cards, and client-run document tools no result answers yet. The page
+ * resumes none of it on its own (no grant or page policy answers such a
+ * card, the file overlay runs no such call): a reopened thread continues
+ * tool work only once the user acts. Work that arrives while the page is
+ * open is not in it.
+ */
+export type ChatWorkAwaitedAtOpen = {
+  approvalIds: ReadonlySet<string>;
+  clientToolCallIds: ReadonlySet<string>;
+};
+
+export const getChatWorkAwaitedAtOpen = (
+  messages: readonly PersistedChatMessage[],
+): ChatWorkAwaitedAtOpen => {
+  const parts = messages.flatMap((message) =>
+    message.role === "assistant" ? message.parts : [],
+  );
+  return {
+    approvalIds: new Set(
+      parts.flatMap((part) =>
+        isApprovalPart(part) && part.state === "approval-requested"
+          ? [part.approval.id]
+          : [],
+      ),
+    ),
+    clientToolCallIds: new Set(
+      parts.flatMap((part) =>
+        isUnresolvedFolioAgentDocToolCallPart(part) ? [part.id] : [],
+      ),
+    ),
+  };
 };
 
 /**
@@ -942,6 +983,8 @@ export const isChatClientRequestActive = (status: ChatClientState): boolean => {
 };
 
 type SelectIdleFolioAgentDocToolCallPartsOptions = {
+  /** What the thread waited on when the page opened it: never run here. */
+  awaitedAtOpen: ChatWorkAwaitedAtOpen;
   clientStatus: ChatClientState;
   executedIds: ReadonlySet<string>;
   messageParts: readonly ChatPart[];
@@ -958,13 +1001,17 @@ type SelectIdleFolioAgentDocToolCallPartsOptions = {
  * `suggest_changes` input state.
  */
 export const selectIdleFolioAgentDocToolCallParts = ({
+  awaitedAtOpen,
   clientStatus,
   executedIds,
   messageParts,
 }: SelectIdleFolioAgentDocToolCallPartsOptions): UnresolvedFolioAgentDocToolCallPart[] =>
   isChatClientRequestActive(clientStatus)
     ? []
-    : selectUnresolvedFolioAgentDocToolCallParts(messageParts, executedIds);
+    : selectUnresolvedFolioAgentDocToolCallParts(
+        messageParts,
+        executedIds,
+      ).filter(({ id }) => !awaitedAtOpen.clientToolCallIds.has(id));
 
 type ServerChatTurnOutcome = NonNullable<
   NonNullable<ChatMessage["metadata"]>["turnOutcome"]
@@ -1002,11 +1049,24 @@ export const resolveChatAssistantTurnOutcome = (
     case "completed":
     case "failed":
     case "interrupted":
+    case "paused":
       return outcome;
     default:
       outcome satisfies never;
       return panic(`Unhandled outcome: ${String(outcome)}`);
   }
+};
+
+/**
+ * The pause a stored answer ended on: its turn reached its budget, and the
+ * user's next message (Continue sends one) runs the next step. Null for any
+ * other answer.
+ */
+export const getPausedChatTurn = (
+  message: ChatAssistantTurnMessage | null,
+): Extract<ServerChatTurnOutcome, { type: "paused" }> | null => {
+  const outcome = resolveChatAssistantTurnOutcome(message);
+  return outcome.type === "paused" ? outcome : null;
 };
 
 export const getChatAssistantTurnError = (
@@ -1033,6 +1093,7 @@ export const getChatAssistantTurnError = (
     case "incomplete":
     case "interrupted":
     case "legacy-completed":
+    case "paused":
       return undefined;
     default:
       outcome satisfies never;

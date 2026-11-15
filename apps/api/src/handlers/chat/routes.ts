@@ -15,7 +15,7 @@ import setChatLimitReminder from "@/api/handlers/chat/limit-reminder/set";
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
 import approveLocalFolder from "@/api/handlers/chat/local-folder-approval";
-import getLocalRunStepOutputGrant from "@/api/handlers/chat/local-run-step-output-grant";
+import getLocalRunStepContent from "@/api/handlers/chat/local-run-step-content";
 import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
@@ -53,6 +53,7 @@ import {
   undoLocalFiles,
 } from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
+import steerTurn from "@/api/handlers/chat/turns/steer";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { routes } from "@/api/http/route";
 
@@ -83,9 +84,6 @@ export const chatRoute = routes(
     "/decision-threads/:decisionId": { GET: getDecisionChatThread },
     "/model-options": { GET: getModelOptions },
     "/local-runners": { GET: getLocalRunners },
-    "/local-runs/:runId/step-output-grant": {
-      GET: getLocalRunStepOutputGrant,
-    },
     "/local-runners/:desktopId/folders/:linkId/approval": {
       PUT: approveLocalFolder,
     },
@@ -93,6 +91,9 @@ export const chatRoute = routes(
     "/table-chart": { POST: tableChart },
     "/improve-prompt": { POST: improvePrompt },
     "/threads/:threadId": { DELETE: deleteThread, PATCH: updateThread },
+    "/threads/:threadId/local-run-steps/:callId/content": {
+      GET: getLocalRunStepContent,
+    },
     "/threads/:threadId/model": { PATCH: updateThreadModel },
     "/threads/:threadId/limit-reminder": {
       GET: getChatLimitReminder,
@@ -121,6 +122,7 @@ export const chatRoute = routes(
     "/threads/:threadId/turns/:turnId/resume": { GET: probeChatTurn },
     "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
     "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
+    "/threads/:threadId/turns/:turnId/steer": { POST: steerTurn },
     "/threads/:threadId/turns/:turnId/local-files/undo": {
       GET: readLocalFilesUndo,
       POST: undoLocalFiles,

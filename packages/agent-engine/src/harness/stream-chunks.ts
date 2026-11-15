@@ -25,6 +25,10 @@ import {
   type ChatLocalRunContext,
   type ChatLocalRunLimit,
 } from "@stll/api-contract/chat-run-target";
+import {
+  DESKTOP_RUNNER_INPUT_EVENT,
+  type DesktopRunnerInputEvent,
+} from "@stll/api-contract/desktop-runner";
 
 import {
   approvalMessage,
@@ -140,9 +144,12 @@ class ChunkMapper {
   private readonly texts = new Map<string, TextState>();
 
   private readonly context: HarnessChunkContext;
+  /** The model the turn runs on: the one asked for until a reroute. */
+  private model: string;
 
   constructor(context: HarnessChunkContext) {
     this.context = context;
+    this.model = context.model;
   }
 
   map(event: HarnessEvent): AdapterYieldChunk[] {
@@ -208,10 +215,26 @@ class ChunkMapper {
       case "question.requested":
         this.question(event.request);
         return;
+      case "model.rerouted":
+        this.model = event.model;
+        return;
       case "interaction.resolved":
       case "retrying":
         // The harness continues on its own; its next output opens a new
         // segment. A transient retry leaves nothing to persist.
+        return;
+      case "input.settled":
+        // Where the turn took (or refused) a steering message. It names the
+        // input only: the API holds the text it sent.
+        this.ensureSegment();
+        this.push({
+          type: EventType.CUSTOM,
+          name: DESKTOP_RUNNER_INPUT_EVENT,
+          value: {
+            inputId: event.inputId,
+            status: event.status,
+          } satisfies DesktopRunnerInputEvent,
+        });
         return;
       case "turn.completed": {
         // How full the context is, for the chat's meter.
@@ -252,12 +275,15 @@ class ChunkMapper {
     }
   }
 
-  /** Stamp the model and time every chunk carries, as the cloud engine does. */
+  /**
+   * Stamp the model and time every chunk carries, as the cloud engine does:
+   * the model that ran, which a reroute changes.
+   */
   private push(...chunks: AdapterYieldChunk[]) {
     for (const chunk of chunks) {
       this.out.push({
         ...chunk,
-        model: this.context.model,
+        model: this.model,
         timestamp: this.context.now(),
       });
     }
@@ -299,7 +325,7 @@ class ChunkMapper {
       type: EventType.RUN_FINISHED,
       runId: this.segmentRunId(),
       threadId: this.context.threadId,
-      model: this.context.model,
+      model: this.model,
       timestamp: this.context.now(),
       ...fields,
     };
@@ -311,7 +337,7 @@ class ChunkMapper {
       type: EventType.RUN_ERROR,
       runId: this.segmentRunId(),
       threadId: this.context.threadId,
-      model: this.context.model,
+      model: this.model,
       timestamp: this.context.now(),
       message: failure.message,
       code,
@@ -342,7 +368,6 @@ class ChunkMapper {
         type: EventType.TOOL_CALL_START,
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
-        toolName: toolCall.name,
         // The subagent step that made the call, beside it: the API keeps
         // the link under that step's chat call id.
         ...(toolCall.parentCallId === undefined
@@ -364,7 +389,6 @@ class ChunkMapper {
         type: EventType.TOOL_CALL_END,
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
-        toolName: toolCall.name,
         input,
       },
     );
