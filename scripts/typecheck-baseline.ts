@@ -30,11 +30,10 @@
 // outside the lint/pre-commit loop. CI owns a separate baseline job.
 
 import { panic } from "better-result";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
-import { typecheckProfilePath } from "./typecheck-profile";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -152,24 +151,9 @@ type RunResult =
   { ok: true; diagnostics: string } | { ok: false; error: string };
 
 const runProject = (project: string, repoRoot: string): RunResult => {
-  const profilePath = typecheckProfilePath(
-    project,
-    process.env["TYPECHECK_COST_PROFILE_DIR"],
-  );
-  if (profilePath !== undefined) {
-    mkdirSync(path.dirname(profilePath), { recursive: true });
-  }
   const proc = Bun.spawnSync(
     [process.execPath, TSC_NATIVE, "-p", project, ...MEASUREMENT_FLAGS],
-    {
-      cwd: repoRoot,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        ...(profilePath === undefined ? {} : { TSRS_FILE_TIMES: profilePath }),
-      },
-    },
+    { cwd: repoRoot, stdout: "pipe", stderr: "pipe" },
   );
   const stdout = proc.stdout.toString();
   if (proc.exitCode !== 0) {
