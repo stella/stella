@@ -26,6 +26,7 @@ import {
   chatToolExecutor,
 } from "@stll/api-contract/chat";
 import {
+  CHAT_LOCAL_RUN_INTERRUPT_REASONS,
   CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   chatLocalRunParentCallId,
 } from "@stll/api-contract/chat-local-run-tool";
@@ -5282,7 +5283,7 @@ describe("chat turns on a computer", () => {
       threadId: chatThreadId,
       connection: {
         async *connect(messages, _data, _signal, runContext) {
-          if (runContext?.resume !== undefined) {
+          if (runContext.resume !== undefined) {
             continued.resolve({
               message: messages.at(-1),
               resume: runContext.resume,
@@ -5304,10 +5305,36 @@ describe("chat turns on a computer", () => {
     // The member approves on the page; the send validates the continuation
     // as the harness's, and a cloud turn could not answer it.
     const approval = client.getInterrupts().at(0);
-    expect(approval?.kind).toBe("generic");
-    if (approval?.kind === "generic") {
-      approval.resolveInterrupt({ approved: true });
+    expect(approval?.kind).toBe("unbound");
+    if (approval?.kind !== "unbound") {
+      panic("The local approval must remain an unbound interrupt");
     }
+    expect(approval.reason).toBe(CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval);
+    // The local protocol has no tool binding. Mirror the page's public
+    // message update before resuming so server validation sees the decision.
+    client.setMessagesManually(
+      client.getMessages().map((message) => ({
+        ...message,
+        parts: message.parts.map((part) =>
+          part.type === "tool-call" &&
+          "approval" in part &&
+          part.approval.id === approval.interruptId
+            ? {
+                ...part,
+                approval: { ...part.approval, approved: true },
+                state: "approval-responded",
+              }
+            : part,
+        ),
+      })),
+    );
+    const submitted = client.resumeInterruptsUnsafe([
+      {
+        interruptId: approval.interruptId,
+        payload: { approved: true },
+        status: "resolved",
+      },
+    ]);
     const request = await continued.promise;
     const answered = assistantOf(request.message);
     const continuation = async (ownership: ChatToolCallOwnership) =>
@@ -5341,6 +5368,7 @@ describe("chat turns on a computer", () => {
     expect(resumed.finish.outcome).toMatchObject({ type: "completed" });
     const finished = persistTurn(resumed.finish, "harness").unwrap();
     resumedChunks.resolve(resumed.emitted);
+    expect(await submitted).toBe(true);
     await waitForExternalState({
       description: "the page shows the finished turn",
       read: () =>
@@ -6514,7 +6542,7 @@ describe("chat turns on a computer", () => {
       threadId: served.chatThreadId,
       connection: {
         async *connect(messages, _data, _signal, runContext) {
-          if (runContext?.resume !== undefined) {
+          if (runContext.resume !== undefined) {
             continued.resolve({
               message: messages.at(-1),
               resume: runContext.resume,
