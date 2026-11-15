@@ -228,6 +228,22 @@
         "running": "In progress",
         "failed": "Failed",
         "interrupted": "Stopped"
+      },
+      "output": {
+        "command": "Output",
+        "diff": "File changes",
+        "conversation": "Subagent conversation",
+        "conversationPrompt": "Task given",
+        "conversationReport": "Report",
+        "cut": "Showing the first {kept} of {total}",
+        "empty": "No output",
+        "arriving": "Still arriving from the computer that ran this step",
+        "notCopied": "Not copied to this chat yet",
+        "notStored": "Nothing from this step was stored",
+        "runBudgetReached": "Not stored: this run had already stored as much as one run may",
+        "imageTooLargeToStore": "This image is {total}. Images over {kept} are not stored, so it cannot be shown.",
+        "loadFailed": "Couldn't load.",
+        "showMore": "Show more"
       }
     },
     "processSummary": {

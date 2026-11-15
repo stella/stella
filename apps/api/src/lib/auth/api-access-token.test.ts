@@ -422,6 +422,7 @@ describe("which routes an API access token opens", () => {
       "PATCH /v1/chat/threads/:threadId/pin-state",
       "GET /v1/chat/threads/:threadId/messages",
       "GET /v1/chat/threads/:threadId/messages/older",
+      "GET /v1/chat/threads/:threadId/local-run-steps/:callId/content",
       "POST /v1/chat",
       "GET /v1/chat/threads/:threadId/turns/:turnId/resume",
       "GET /v1/chat/threads/:threadId/turns/:turnId/join",
@@ -429,6 +430,41 @@ describe("which routes an API access token opens", () => {
       "GET /v1/chat/runs/active",
       "POST /v1/chat/tool-grants",
     ]);
+  });
+
+  test("a coding agent's step content and the image it viewed open at the chat scope only", () => {
+    for (const route of [
+      "/v1/chat/threads/:threadId/local-run-steps/:callId/content",
+      "/v1/user-files/:fileId/content",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "GET",
+          route,
+          scopes: MOBILE_SCOPES,
+        }),
+      ).toEqual({ admitted: true });
+      expect(
+        admitApiAccessTokenRoute({
+          method: "GET",
+          route,
+          scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+    }
+    // A chat file's preview and thumbnail stay with signed-in browsers.
+    for (const route of [
+      "/v1/user-files/:fileId/visual",
+      "/v1/user-files/:fileId/thumbnail",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "GET",
+          route,
+          scopes: MOBILE_SCOPES,
+        }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
   });
 
   test("a standing approval given in a conversation is stored at the chat scope", () => {

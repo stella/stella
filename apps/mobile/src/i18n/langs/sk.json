@@ -228,6 +228,22 @@
         "running": "Rozpracovaná",
         "failed": "Zlyhalo",
         "interrupted": "Zastavené"
+      },
+      "output": {
+        "command": "Výstup",
+        "diff": "Zmeny súborov",
+        "conversation": "Konverzácia čiastkového agenta",
+        "conversationPrompt": "Zadanie",
+        "conversationReport": "Správa",
+        "cut": "Zobrazuje sa prvých {kept} z {total}",
+        "empty": "Žiadny výstup",
+        "arriving": "Stále sa prenáša z počítača, na ktorom krok bežal",
+        "notCopied": "Do tohto chatu zatiaľ nebolo skopírované",
+        "notStored": "Z tohto kroku nebolo nič uložené",
+        "runBudgetReached": "Neuložené: tento beh už uložil toľko, koľko smie jeden beh",
+        "imageTooLargeToStore": "Tento obrázok má {total}. Obrázky väčšie ako {kept} sa neukladajú, preto ho nemožno zobraziť.",
+        "loadFailed": "Nepodarilo sa načítať.",
+        "showMore": "Zobraziť viac"
       }
     },
     "processSummary": {
