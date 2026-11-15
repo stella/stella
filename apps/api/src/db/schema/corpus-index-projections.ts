@@ -438,7 +438,11 @@ export const corpusIndexProjectionStates = p.pgTable(
       .text("desired_action", { enum: CORPUS_INDEX_DESIRED_ACTIONS })
       .notNull(),
     desiredEpoch: p.bigint("desired_epoch", { mode: "bigint" }).notNull(),
-    /** When the current desired projection state was established. */
+    /**
+     * When the current desired projection state was established; once the
+     * named copy trails it by two changes with other content, when that
+     * happened (`corpusIndexProjectionNamedCopyTrailsTwoChanges`).
+     */
     desiredAt: timestamptz("desired_at").defaultNow(),
     desiredFingerprint: p.varchar("desired_fingerprint", { length: 64 }),
     desiredIndexId: p.varchar("desired_index_id", { length: 64 }),

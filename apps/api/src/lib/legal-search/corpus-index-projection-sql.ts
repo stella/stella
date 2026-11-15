@@ -69,6 +69,157 @@ export const corpusIndexProjectionAppendIsUnblocked = ({
 export const corpusIndexProjectionIsBlocked = (workStatus: SQLWrapper) =>
   sql`${workStatus} = 'blocked'`;
 
+type CorpusProjectionServedColumns = {
+  revisionId: SQLWrapper;
+  appliedRevision: SQLWrapper;
+  desiredAction: SQLWrapper;
+  appliedAction: SQLWrapper;
+};
+
+/** Readers are served this revision: an upsert state names it as applied. */
+export const corpusIndexProjectionStateServesRevision = ({
+  revisionId,
+  appliedRevision,
+  desiredAction,
+  appliedAction,
+}: CorpusProjectionServedColumns) => sql`(
+  ${appliedRevision} = ${revisionId}
+  AND ${desiredAction} = 'upsert'
+  AND ${appliedAction} = 'upsert'
+)`;
+
+type CorpusProjectionRestoreColumns = CorpusProjectionServedColumns & {
+  revisionEpoch: SQLWrapper;
+  revisionFingerprint: SQLWrapper;
+  revisionIndexId: SQLWrapper;
+  cleanupAttempts: SQLWrapper;
+  revisionAppliedAt: SQLWrapper;
+  lastError: SQLWrapper;
+  appliedEpoch: SQLWrapper;
+  desiredEpoch: SQLWrapper;
+  desiredFingerprint: SQLWrapper;
+  desiredIndexId: SQLWrapper;
+};
+
+/**
+ * A `cleanup_pending` revision that may return to `applied`: its state still
+ * serves it, and the copy readers are served is provably the one it held.
+ *
+ * - `cleanup_attempts = 0`: no claim ever took it, and only a claim leads to
+ *   an engine delete (the claim counts the attempt before the delete is sent,
+ *   and the count never decreases).
+ * - `last_error IS NULL` and `applied_at IS NOT NULL`: replacement
+ *   preparation queued it from `applied`; erasure, drift repair and every
+ *   other cleanup writer record why.
+ * - and either of:
+ *   - `desired_epoch = epoch + 1`: exactly one desired change separates the
+ *     revision from the desired state. The state guard admits a change of the
+ *     desired action, fingerprint or index only at a strictly newer epoch, so
+ *     an erasure and its undo take two epochs, and preparation queued the
+ *     revision only once the desired epoch had passed it, so no change came
+ *     after the queueing;
+ *   - the desired fingerprint and index equal the revision's: the copy holds
+ *     exactly what the state desires, whatever came in between.
+ *
+ * Anything else is not restored. That includes a revision with
+ * `last_error` set whose content equals the desired value (an earlier
+ * release's erasure fence or drift repair, followed by an undo back to the
+ * same content): the claim deletes it as `served_unproven` and the entity is
+ * appended anew after settlement. Restoring it would need `last_error` to
+ * stop singling out preparation, so the small class is left to the
+ * conservative direction on purpose. The database guard on
+ * `cleanup_pending -> applied` repeats this predicate.
+ */
+export const corpusIndexProjectionRevisionIsRestorable = ({
+  revisionEpoch,
+  revisionFingerprint,
+  revisionIndexId,
+  cleanupAttempts,
+  revisionAppliedAt,
+  lastError,
+  appliedEpoch,
+  desiredEpoch,
+  desiredFingerprint,
+  desiredIndexId,
+  ...served
+}: CorpusProjectionRestoreColumns) => sql`(
+  ${corpusIndexProjectionStateServesRevision(served)}
+  AND ${cleanupAttempts} = 0
+  AND ${revisionAppliedAt} IS NOT NULL
+  AND ${lastError} IS NULL
+  AND ${appliedEpoch} = ${revisionEpoch}
+  AND ${desiredEpoch} > ${revisionEpoch}
+  AND (
+    ${desiredEpoch} = ${revisionEpoch} + 1
+    OR (
+      ${desiredFingerprint} = ${revisionFingerprint}
+      AND ${desiredIndexId} = ${revisionIndexId}
+    )
+  )
+)`;
+
+type CorpusProjectionNamedCopyColumns = {
+  desiredAction: SQLWrapper;
+  appliedAction: SQLWrapper;
+  appliedRevision: SQLWrapper;
+  appliedEpoch: SQLWrapper;
+  desiredEpoch: SQLWrapper;
+  appliedFingerprint: SQLWrapper;
+  desiredFingerprint: SQLWrapper;
+  appliedIndexId: SQLWrapper;
+  desiredIndexId: SQLWrapper;
+};
+
+/**
+ * An upsert state names an upsert copy that two or more desired changes
+ * separate from the desired state, and the copy holds other content than the
+ * state desires. An erasure and its undo take two changes, so such a copy may
+ * be the pre-erasure one unless the writer that undid the erasure retired it,
+ * which only this release's writer does.
+ *
+ * The desired writer stops moving `desired_at` once a state is in this shape,
+ * so from then on it records when the copy fell this far behind and no later
+ * write (an epoch-only reconciliation, a ranking-signal re-projection, another
+ * content change) can move it past the legacy pass's cutover. The one-off
+ * pass (`retireLegacyUnprovenServedCopiesTx`) retires such a copy when that
+ * instant precedes the cutover. Both go together once the pass has run.
+ */
+export const corpusIndexProjectionNamedCopyTrailsTwoChanges = ({
+  desiredAction,
+  appliedAction,
+  appliedRevision,
+  appliedEpoch,
+  desiredEpoch,
+  appliedFingerprint,
+  desiredFingerprint,
+  appliedIndexId,
+  desiredIndexId,
+}: CorpusProjectionNamedCopyColumns) => sql`(
+  ${desiredAction} = 'upsert'
+  AND ${appliedAction} = 'upsert'
+  AND ${appliedRevision} IS NOT NULL
+  AND ${desiredEpoch} >= ${appliedEpoch} + 2
+  AND (${desiredFingerprint}, ${desiredIndexId})
+    IS DISTINCT FROM (${appliedFingerprint}, ${appliedIndexId})
+)`;
+
+/**
+ * One source of truth for "a queued cleanup may be claimed now": its fence has
+ * passed and no lease holds it. Shared by the claim's unlocked page and the row
+ * lock that follows it, because a row can leave the queue and return with a
+ * later fence in between, and the lock must not claim it early.
+ */
+export const corpusIndexProjectionCleanupIsDue = ({
+  cleanupNotBefore,
+  leaseExpiresAt,
+}: {
+  cleanupNotBefore: SQLWrapper;
+  leaseExpiresAt: SQLWrapper;
+}) => sql`(
+  ${cleanupNotBefore} <= clock_timestamp()
+  AND (${leaseExpiresAt} IS NULL OR ${leaseExpiresAt} <= clock_timestamp())
+)`;
+
 /** One source of truth for the partial append-epoch uniqueness boundary. */
 export const corpusIndexProjectionProducesAppend = (status: SQLWrapper) =>
   sql`${status} IN (${sqlLiteralValues(CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES)})`;
