@@ -2200,6 +2200,15 @@
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",
     "sources": "Źródła:",
+    "steerRefused": {
+      "cannotSteer": "Ten agent nie przyjmuje wiadomości w trakcie pracy.",
+      "noRun": "Agent nie działa teraz na Twoim komputerze.",
+      "notPlain": "W trakcie pracy agenta możesz wysłać mu tylko wiadomość tekstową bez plików, wysłaną poza trybem anonimizacji.",
+      "notTaken": "Agent nie mógł teraz przyjąć twojej wiadomości.",
+      "runFull": "Agent nie przyjmie teraz kolejnych wiadomości.",
+      "title": "Twoja wiadomość czeka w kolejce, aż agent skończy",
+      "turnNotRunning": "Agent w tej chwili nie pracuje."
+    },
     "stopFailed": "Nie udało się zatrzymać odpowiedzi. Spróbuj ponownie.",
     "stopResponse": "Zatrzymaj",
     "stopped": "Zatrzymano",

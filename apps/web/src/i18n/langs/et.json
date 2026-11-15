@@ -2200,6 +2200,15 @@
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
     "sources": "Allikad:",
+    "steerRefused": {
+      "cannotSteer": "See agent ei võta töö ajal sõnumeid vastu.",
+      "noRun": "Agent ei tööta praegu sinu arvutis.",
+      "notPlain": "Töö ajal saad agendile saata ainult failideta tekstisõnumi, mida ei saadeta anonüümitud režiimis.",
+      "notTaken": "Agent ei saanud sinu sõnumit praegu vastu võtta.",
+      "runFull": "Agent ei saa praegu rohkem sõnumeid vastu võtta.",
+      "title": "Sinu sõnum ootab järjekorras, kuni agent lõpetab",
+      "turnNotRunning": "Agent praegu ei tööta."
+    },
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",

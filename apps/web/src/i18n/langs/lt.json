@@ -2200,6 +2200,15 @@
     "sourcePlaceholder": "Kalbėtis apie {title}",
     "sourcePlaceholderAction": "Kalbėtis apie",
     "sources": "Šaltiniai:",
+    "steerRefused": {
+      "cannotSteer": "Šis agentas darbo metu nepriima žinučių.",
+      "noRun": "Agentas dabar neveikia jūsų kompiuteryje.",
+      "notPlain": "Agentui dirbant galima siųsti tik tekstinę žinutę be failų, išsiųstą ne anonimizuotu režimu.",
+      "notTaken": "Agentas šiuo metu negalėjo priimti jūsų žinutės.",
+      "runFull": "Agentas šiuo metu negali priimti daugiau žinučių.",
+      "title": "Jūsų žinutė laukia eilėje, kol agentas baigs",
+      "turnNotRunning": "Agentas šiuo metu nedirba."
+    },
     "stopFailed": "Nepavyko sustabdyti atsakymo. Bandykite dar kartą.",
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
