@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import type { SQLWrapper } from "drizzle-orm";
 import * as v from "valibot";
 
 import { createSha256 } from "@stll/sha256/bun";
@@ -277,7 +278,9 @@ export const exportCorpusSliceFromDatabase = async (
     return await executeCorpusSliceExport({
       ...options,
       database: {
-        execute: async (query) => await tx.execute(query),
+        execute: async <TRow extends Record<string, unknown>>(
+          query: SQLWrapper | string,
+        ) => await tx.execute<TRow>(query, "objects"),
         transaction: options.database.transaction,
       },
     });

@@ -74,6 +74,7 @@ import {
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
+import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-decision-identity-index";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   publishedCaseLawDecisionFor,
@@ -806,10 +807,21 @@ export const caseLawDecisions = p.pgTable(
      * makes two unrelated decisions the same row. The publisher's id is
      * unique across the whole source by construction.
      *
-     * Null only for sources that expose no such id; those keep the older
-     * case-number key, which is sound for a source holding one court.
+     * Null for sources without a publisher document id; their fallback
+     * identity uses court-qualified evidence or normalized content.
      */
     sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
+    /** Canonical court and decision evidence for rows without a publisher document id. */
+    fallbackIdentityKey: p.varchar("fallback_identity_key", { length: 320 }),
+    /** Weak source cohort; individual members are identified by normalized content. */
+    fallbackCohortKey: p.varchar("fallback_cohort_key", { length: 320 }),
+    /** Nonunique court/docket publication scope; compatible stated fields disambiguate enrichment. */
+    fallbackPublicationHash: p.varchar("fallback_publication_hash", {
+      length: 64,
+    }),
+    fallbackContentHash: p.varchar("fallback_content_hash", { length: 64 }),
+    /** Canonical document proof shared by weak and strong observations, independent of corpus mode. */
+    fallbackDocumentHash: p.varchar("fallback_document_hash", { length: 64 }),
     /**
      * Sheet number within the court file (číslo listu), where the source
      * appends one to the docket: `11 C 153/2025-28` is sheet 28 of case
@@ -912,9 +924,9 @@ export const caseLawDecisions = p.pgTable(
     indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
     /**
-     * Monotonic fence captured by final-generation projection intents. Any
-     * desired-state transaction increments it before changing the projection,
-     * so a worker leased against an older value cannot publish stale content.
+     * Monotonic order of the decision's projection desired-state changes. No
+     * generation's desired epoch exceeds it; leases are fenced by their own
+     * generation's desired state. Bookkeeping: writing it keeps `updated_at`.
      */
     projectionEpoch: p
       .bigint("projection_epoch", { mode: "bigint" })
@@ -995,14 +1007,13 @@ export const caseLawDecisions = p.pgTable(
         languageGroupKey: t.languageGroupKey,
       }),
     ),
-    // Identity, in two halves that together cover every row exactly once.
-    // Where the publisher states an id, that is the key. Where it does not,
-    // the case number still serves, because such a source holds one court
-    // and its numbering is unique within it.
+    // Publisher ids identify documents; fallback keys include court and decision
+    // evidence. The obsolete docket-only index is removed by the contract migration.
     p
       .uniqueIndex("case_law_decisions_source_document_idx")
       .on(t.sourceId, t.sourceDocumentId)
       .where(isNotNull(t.sourceDocumentId)),
+    ...fallbackDecisionIdentityIndexes(t),
     p
       .uniqueIndex("case_law_decisions_source_case_lang_null_idx")
       .on(t.sourceId, t.caseNumber, t.language)
@@ -1590,6 +1601,39 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
     p
       .index("case_law_decision_source_identities_decision_idx")
       .on(t.decisionId),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/** Exact court-qualified fallback keys survive enrichment and retired decision UUIDs. */
+export const caseLawDecisionFallbackIdentities = p.pgTable(
+  "case_law_decision_fallback_identities",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    identityKey: p.varchar("identity_key", { length: 320 }).notNull(),
+    // Canonical aliases resolve retired UUIDs, as for publisher identity reservations.
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.sourceId, t.identityKey],
+      name: "case_law_decision_fallback_identities_pk",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_decision_fallback_identities_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("case_law_decision_fallback_identities_decision_idx")
+      .on(t.decisionId),
+    p.check(
+      "case_law_decision_fallback_identities_strong_key",
+      sql`left(${t.identityKey}, length('case-number:v2:["decision",')) = 'case-number:v2:["decision",'`,
+    ),
     ...caseLawIngestionOnlyPolicies(),
   ],
 );
@@ -2903,6 +2947,31 @@ export const caseLawSitemapChanges = p.pgTable(
       .unique("case_law_sitemap_changes_month_xact_key")
       .on(t.country, t.year, t.month, t.xact),
     p.pgPolicy("case_law_sitemap_change_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+  ],
+);
+
+/**
+ * Decisions whose newer `updated_at` is the only sitemap-relevant change of a
+ * write, appended by an owner-run trigger (migration
+ * `20261115100000_case_law_sitemap_touches`). Such a write keeps every
+ * decision in its shard, so a fold raises the shard's last modification
+ * instead of recounting the month. One row per decision until its fold; a
+ * queue, not a watermark.
+ */
+export const caseLawSitemapTouches = p.pgTable(
+  "case_law_sitemap_touches",
+  {
+    id: p.bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+  },
+  (t) => [
+    p.unique("case_law_sitemap_touches_decision_key").on(t.decisionId),
+    p.pgPolicy("case_law_sitemap_touch_owner_access", {
       for: "all",
       to: "public",
       using: sql`true`,

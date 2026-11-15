@@ -1212,6 +1212,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   ),
   "check-saved-private-input": READS_ONLY,
   "check-stored-grant": READS_ONLY,
+  "continue-paused-turn": notModelled(
+    "The harness's turns stay far below the turn budget; the recorded paused-turn conversation covers the pause and its Continue.",
+  ),
   "continue-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
   ),
@@ -1244,6 +1247,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
     "Opening the editor only stops a running turn, through the same stop the harness models as its own command.",
   ),
   "open-playbook": READS_ONLY,
+  queue: notModelled(
+    "The send queue lives in the session hook, which the harness does not render.",
+  ),
   "refresh-edited-answer": READS_ONLY,
   "remove-queued-message": notModelled(
     "The send queue lives in the session hook, which the harness does not render.",

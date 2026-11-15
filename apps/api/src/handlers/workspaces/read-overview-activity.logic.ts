@@ -233,6 +233,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   usage_provider_event: null,
   view: null,
   pdf_signing_session: null,
+  legal_hold: null,
   view_template: null,
 } as const satisfies Record<AuditResourceType, ActivityTargetSource | null>;
 
@@ -281,6 +282,8 @@ export const VISIBLE_ACTIVITY_ACTION_BY_ACTION = {
   [AUDIT_ACTION.MCP_WEB_HANDOFF_REFUSED]: null,
   access: null,
   [AUDIT_ACTION.SYNTHETIC_SESSION_MINTED]: null,
+  [AUDIT_ACTION.LEGAL_HOLD_PLACED]: null,
+  [AUDIT_ACTION.LEGAL_HOLD_RELEASED]: null,
   cancel: AUDIT_ACTION.CANCEL,
   create: AUDIT_ACTION.CREATE,
   delete: AUDIT_ACTION.DELETE,

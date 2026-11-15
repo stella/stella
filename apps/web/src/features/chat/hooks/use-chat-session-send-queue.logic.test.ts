@@ -10,8 +10,10 @@ import {
   describeQueuedMessage,
   type QueuedChatEntry,
   reduceSendQueue,
+  sendNowRoute,
   type SendQueueState,
   snapshotChatRequestOptions,
+  steerFallback,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -256,12 +258,14 @@ describe("reduceSendQueue", () => {
       heldForMember: true,
       isGenerating: true,
       queue: [makeEntry("a"), makeEntry("b")],
+      steeringIds: ["b"],
       wasGenerating: true,
     };
 
     const result = reduceSendQueue(state, {
       type: "conversation-switched",
       conversationId: "conversation-2",
+      isGenerating: false,
     });
 
     expect(result.state).toEqual({
@@ -271,9 +275,29 @@ describe("reduceSendQueue", () => {
       heldForMember: false,
       isGenerating: false,
       queue: [],
+      steeringIds: [],
       wasGenerating: false,
     });
     expect(result.dispatchedEntry).toBeNull();
+  });
+
+  test("a conversation opened mid-turn queues a send and drains it at the turn's end", () => {
+    const switched = reduceSendQueue(
+      createInitialSendQueueState(CONVERSATION_ID),
+      {
+        type: "conversation-switched",
+        conversationId: "conversation-2",
+        isGenerating: true,
+      },
+    ).state;
+    expect(canSendWithoutQueueing(switched)).toBe(false);
+
+    const queued = reduceSendQueue(switched, {
+      type: "message-enqueued",
+      entry: makeEntry("a"),
+    }).state;
+    const { dispatchedEntry } = applyRenderTick(queued, false, "ready");
+    expect(dispatchedEntry?.id).toBe("a");
   });
 
   test("two generation-finished events in a row dispatch only once", () => {
@@ -545,4 +569,147 @@ test("queued pasted text stays collapsed with the other attachments", () => {
       ],
     }),
   ).toEqual({ text: "<p>Review this</p>", fileCount: 1 });
+});
+
+describe("send now while a turn runs", () => {
+  const running = (ids: readonly string[]): SendQueueState => ({
+    ...createInitialSendQueueState(CONVERSATION_ID),
+    isGenerating: true,
+    queue: ids.map(makeEntry),
+    wasGenerating: true,
+  });
+  const promotedSecond = () =>
+    reduceSendQueue(running(["a", "b"]), {
+      type: "queued-message-promoted",
+      id: "b",
+    }).state;
+
+  test("text steers the running turn, more than text stops it, and with no turn it is sent", () => {
+    const withPastedText = describeQueuedMessage({
+      id: toSafeId<"chatMessage">("f"),
+      content: [
+        { type: "text", content: "See the clause" },
+        createChatPastedTextPart("pasted"),
+      ],
+    });
+    expect(sendNowRoute(running([]), makeEntry("a"))).toEqual({
+      type: "steer",
+      text: "message a",
+    });
+    expect(sendNowRoute(running([]), withPastedText)).toEqual({
+      type: "stop_and_send",
+    });
+    expect(sendNowRoute(running([]), { text: "  \n ", fileCount: 0 })).toEqual({
+      type: "stop_and_send",
+    });
+    expect(
+      sendNowRoute(running([]), {
+        ...makeEntry("a"),
+        options: { body: { sendMode: "anonymized" } },
+      }),
+    ).toEqual({ type: "stop_and_send" });
+    expect(
+      sendNowRoute(running([]), {
+        ...makeEntry("a"),
+        options: { body: { sendMode: "rawOverride" } },
+      }),
+    ).toEqual({ type: "steer", text: "message a" });
+    expect(
+      sendNowRoute(
+        createInitialSendQueueState(CONVERSATION_ID),
+        makeEntry("a"),
+      ),
+    ).toEqual({ type: "send" });
+  });
+
+  test("a steered message leaves the queue, so the turn's end sends the next one", () => {
+    expect(steerFallback("steered", "send_now")).toBe("remove");
+    expect(steerFallback("steered", "steer")).toBe("remove");
+    const steered = reduceSendQueue(promotedSecond(), {
+      type: "queued-message-removed",
+      id: "b",
+    }).state;
+
+    const { dispatchedEntry, state } = applyRenderTick(steered, false, "ready");
+    expect(dispatchedEntry?.id).toBe("a");
+    expect(state.queue).toEqual([]);
+  });
+
+  test("a steer the turn ended without answering keeps the message first, sent at the turn's end", () => {
+    expect(steerFallback("unsettled", "send_now")).toBe("keep");
+    expect(steerFallback("unsettled", "steer")).toBe("keep");
+
+    const { dispatchedEntry, state } = applyRenderTick(
+      promotedSecond(),
+      false,
+      "ready",
+    );
+    expect(dispatchedEntry?.id).toBe("b");
+    expect(state.queue.map(({ id }) => id)).toEqual(["a"]);
+  });
+
+  test("a refused steer stops the turn only after Send now; a plain send's steer keeps the message queued", () => {
+    expect(steerFallback("refused", "send_now")).toBe("stop");
+    expect(steerFallback("refused", "steer")).toBe("keep");
+
+    const steering = reduceSendQueue(promotedSecond(), {
+      type: "steer-started",
+      id: "b",
+    }).state;
+    const kept = reduceSendQueue(steering, {
+      type: "steer-settled",
+      id: "b",
+      next: steerFallback("refused", "steer"),
+    });
+    // The turn runs on; the message waits first in the queue for its end.
+    expect(kept.dispatchedEntry).toBeNull();
+    expect(kept.state.queue.map(({ id }) => id)).toEqual(["b", "a"]);
+    const { dispatchedEntry } = applyRenderTick(kept.state, false, "ready");
+    expect(dispatchedEntry?.id).toBe("b");
+  });
+
+  test("a turn that ends while its steer is open sends nothing until the steer settles", () => {
+    const steering = reduceSendQueue(promotedSecond(), {
+      type: "steer-started",
+      id: "b",
+    }).state;
+
+    const ended = applyRenderTick(steering, false, "ready");
+    expect(ended.dispatchedEntry).toBeNull();
+    expect(ended.state.drainHeld).toBe(true);
+
+    const taken = reduceSendQueue(ended.state, {
+      type: "steer-settled",
+      id: "b",
+      next: "remove",
+    });
+    expect(taken.dispatchedEntry?.id).toBe("a");
+    expect(taken.state.queue).toEqual([]);
+    expect(taken.state.steeringIds).toEqual([]);
+
+    const unanswered = reduceSendQueue(ended.state, {
+      type: "steer-settled",
+      id: "b",
+      next: "keep",
+    });
+    expect(unanswered.dispatchedEntry?.id).toBe("b");
+    expect(unanswered.state.queue.map(({ id }) => id)).toEqual(["a"]);
+  });
+
+  test("a steer that settles while the turn runs leaves the drain to the turn's end", () => {
+    const steering = reduceSendQueue(promotedSecond(), {
+      type: "steer-started",
+      id: "b",
+    }).state;
+    const refused = reduceSendQueue(steering, {
+      type: "steer-settled",
+      id: "b",
+      next: "stop",
+    });
+    expect(refused.dispatchedEntry).toBeNull();
+    expect(refused.state.steeringIds).toEqual([]);
+
+    const { dispatchedEntry } = applyRenderTick(refused.state, false, "ready");
+    expect(dispatchedEntry?.id).toBe("b");
+  });
 });

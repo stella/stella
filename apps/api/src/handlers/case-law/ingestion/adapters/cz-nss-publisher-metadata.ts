@@ -98,17 +98,18 @@ export const extractNssPublisherMetadata = (
     ({ field, occurrence, references }) =>
       references.map((reference) => ({ field, occurrence, ...reference })),
   );
+  // Only values set in a table row form tuples; every value, in a row or
+  // not, is already kept in `publisherFields`.
   const valuesByRow = new Map<AnyNode, typeof values>();
   for (const value of values) {
     const row = $(value.element).closest("tr").get(0);
-    if (row === undefined) {
-      continue;
-    }
-    const existing = valuesByRow.get(row);
-    if (existing === undefined) {
-      valuesByRow.set(row, [value]);
-    } else {
-      existing.push(value);
+    if (row !== undefined) {
+      const existing = valuesByRow.get(row);
+      if (existing === undefined) {
+        valuesByRow.set(row, [value]);
+      } else {
+        existing.push(value);
+      }
     }
   }
   const publisherTables = $("table")

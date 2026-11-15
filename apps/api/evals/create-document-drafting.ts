@@ -270,6 +270,7 @@ const runModelTurn = async (
     timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
     chat: (abortController) =>
       streamChatChunks({
+        threadId: Bun.randomUUIDv7(),
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: prompt }],
@@ -423,6 +424,8 @@ const collectParagraphs = (
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "commentRangeStart":
+      case "commentRangeEnd":
       case "moveFromRangeStart":
       case "moveFromRangeEnd":
       case "moveToRangeStart":

@@ -20,7 +20,7 @@ const lawCountrySchema = countryInputSchema(
   "Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable.",
 );
 const decisionCountrySchema = countryInputSchema(
-  "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable.",
+  "Court country: alpha-2/alpha-3/name. Unknown or unsupported: country_unavailable.",
 );
 export const resolveDecisionArgsSchema = nullAsAbsent(
   v.strictObject({
@@ -28,7 +28,7 @@ export const resolveDecisionArgsSchema = nullAsAbsent(
     identifier: v.pipe(
       citationText,
       v.description(
-        "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions.",
+        "Docket (sheet if known) or ECLI; CZ/SK court name/alias constrains it. For descriptions: search_case_law.",
       ),
     ),
   }),

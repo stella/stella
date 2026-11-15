@@ -140,7 +140,7 @@ const censusOf = (buckets: readonly { key: string; doc_count: number }[]) => ({
     }),
 });
 
-test("presence is proven only when every revision counts exactly what it wrote", async () => {
+test("presence is proven per revision only when it counts exactly what it wrote", async () => {
   const expected = [
     { revision: FIRST_REVISION, documentCount: 3 },
     { revision: SECOND_REVISION, documentCount: 2 },
@@ -153,12 +153,12 @@ test("presence is proven only when every revision counts exactly what it wrote",
     indexId: "case_law_v5_cs_sk",
     expected,
   });
-  const proofs =
-    proven.isOk() && proven.value.status === "proven"
-      ? proven.value.proofs
-      : panic("Expected an exact census to prove presence");
+  const census = proven.isOk()
+    ? proven.value
+    : panic("Expected an exact census to prove presence");
+  expect(census.unproven).toEqual([]);
   expect(
-    proofs.map(({ indexId, revision, documentCount }) => ({
+    census.proofs.map(({ indexId, revision, documentCount }) => ({
       indexId,
       revision,
       documentCount,
@@ -170,31 +170,48 @@ test("presence is proven only when every revision counts exactly what it wrote",
     })),
   );
 
-  for (const [label, buckets] of [
-    ["absent", [{ key: FIRST_REVISION, doc_count: 3 }]],
+  for (const [label, buckets, observedDocumentCount] of [
+    ["absent", [{ key: FIRST_REVISION, doc_count: 3 }], 0],
     [
       "partial",
       [
         { key: FIRST_REVISION, doc_count: 3 },
         { key: SECOND_REVISION, doc_count: 1 },
       ],
+      1,
     ],
     [
       "excess",
       [
-        { key: FIRST_REVISION, doc_count: 4 },
-        { key: SECOND_REVISION, doc_count: 2 },
+        { key: FIRST_REVISION, doc_count: 3 },
+        { key: SECOND_REVISION, doc_count: 3 },
       ],
+      3,
     ],
   ] as const) {
+    const partial = await proveCorpusProjectionRevisionsPresent({
+      client: censusOf(buckets),
+      indexId: "case_law_v5_cs_sk",
+      expected,
+    });
+    const outcome = partial.isOk()
+      ? partial.value
+      : panic(`Expected an exact ${label} census`);
     expect({
       label,
-      census: await proveCorpusProjectionRevisionsPresent({
-        client: censusOf(buckets),
-        indexId: "case_law_v5_cs_sk",
-        expected,
-      }),
-    }).toEqual({ label, census: Result.ok({ status: "unproven" }) });
+      proven: outcome.proofs.map(({ revision }) => revision),
+      unproven: outcome.unproven,
+    }).toEqual({
+      label,
+      proven: [FIRST_REVISION],
+      unproven: [
+        {
+          revision: SECOND_REVISION,
+          expectedDocumentCount: 2,
+          observedDocumentCount,
+        },
+      ],
+    });
   }
 });
 

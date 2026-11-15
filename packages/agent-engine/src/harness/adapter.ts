@@ -11,7 +11,7 @@ import type {
 } from "@stll/api-contract/desktop-runner";
 
 import type { StellaSandboxMcpBinding } from "../sandbox";
-import type { HarnessEvent, HarnessSessionId } from "./events";
+import type { HarnessBoundary, HarnessEvent, HarnessSessionId } from "./events";
 import type { HarnessTranscriptMessage } from "./transcript-handoff";
 
 /**
@@ -52,6 +52,13 @@ export type HarnessInputFileType = HarnessInputFile["type"];
 export type HarnessContinuationRequest =
   | { type: "fresh" }
   | { type: "resume"; sessionId: HarnessSessionId }
+  /**
+   * A new native session holding what `sessionId` held through `boundary`
+   * (an earlier completed turn's `turn.completed`), for a chat whose history
+   * after that turn was replaced. `sessionId` itself is never changed, so a
+   * retried start forks the same prefix again.
+   */
+  | { type: "fork"; sessionId: HarnessSessionId; boundary: HarnessBoundary }
   /**
    * The next turn in the process a completed turn left running (see
    * `HarnessLiveSession`): the agent sees what it started in the background.
@@ -185,6 +192,19 @@ export class HarnessRespondError extends TaggedError("HarnessRespondError")<{
   message: string;
 }> {}
 
+/** A user message that steers a running turn. */
+export type HarnessSteerInput = {
+  /** The runner's input id; `input.settled` names it. */
+  inputId: string;
+  /** What the user wrote; never empty. */
+  text: string;
+};
+
+export class HarnessSteerError extends TaggedError("HarnessSteerError")<{
+  reason: "turn_ended";
+  message: string;
+}> {}
+
 /**
  * One running turn. `events` has a single consumer and ends after exactly one
  * terminal event (`turn.completed`, `turn.interrupted` or `turn.failed`).
@@ -194,6 +214,15 @@ export type HarnessTurn = {
   respond: (
     response: HarnessInteractionResponse,
   ) => Promise<Result<void, HarnessRespondError>>;
+  /**
+   * Hand the running turn a user message without stopping it. Once this
+   * returns `Ok`, `events` carries exactly one `input.settled` for the input
+   * before its terminal event: `accepted` when the harness took the message
+   * into this turn, `rejected` when it did not (it takes no steering, the
+   * turn is ending or between attempts). `turn_ended`: the terminal event
+   * is already out, so nothing more is emitted.
+   */
+  steer: (input: HarnessSteerInput) => Promise<Result<void, HarnessSteerError>>;
   /** Stops the turn; `events` then ends with `turn.interrupted`. */
   interrupt: () => Promise<void>;
   /**

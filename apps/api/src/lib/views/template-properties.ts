@@ -328,13 +328,13 @@ export const resolveTemplateProperties = async ({
       );
     }
 
-    const existingByShape = findUniquePropertyByShape(
+    const existingByShape = findUniquePropertyByShape({
       existingProperties,
       templateProperty,
       consumedExistingPropertyIds,
       propertyIdsWithDependencies,
       roleResolution,
-    );
+    });
     if (existingByShape) {
       propertyIdBySourceId.set(templateProperty.sourceId, existingByShape.id);
       consumedExistingPropertyIds.add(existingByShape.id);
@@ -964,19 +964,27 @@ const canReusePropertyByExactId = ({
   );
 };
 
-const findUniquePropertyByShape = (
+type FindUniquePropertyByShapeOptions = {
   existingProperties: readonly {
     id: string;
     name: string;
     content: typeof properties.$inferSelect.content;
     tool: typeof properties.$inferSelect.tool;
     role: typeof properties.$inferSelect.role;
-  }[],
-  templateProperty: ViewTemplateProperty,
-  consumedExistingPropertyIds: ReadonlySet<string>,
-  propertyIdsWithDependencies: ReadonlySet<string>,
-  roleResolution: TemplateRoleResolution,
-) => {
+  }[];
+  templateProperty: ViewTemplateProperty;
+  consumedExistingPropertyIds: ReadonlySet<string>;
+  propertyIdsWithDependencies: ReadonlySet<string>;
+  roleResolution: TemplateRoleResolution;
+};
+
+const findUniquePropertyByShape = ({
+  existingProperties,
+  templateProperty,
+  consumedExistingPropertyIds,
+  propertyIdsWithDependencies,
+  roleResolution,
+}: FindUniquePropertyByShapeOptions) => {
   // Reusing an AI column would silently inherit its existing dependency
   // graph, so only fall back when neither side carries dependencies.
   const templateHasDependencies =

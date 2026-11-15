@@ -39,6 +39,7 @@ import type {
 } from "@/api/lib/lists/verification/contract";
 import {
   gradedClaimType,
+  verdictProvenanceOf,
   VERIFICATION_LIMITS,
 } from "@/api/lib/lists/verification/contract";
 import { verificationBlockId } from "@/api/lib/lists/verification/document-text";
@@ -741,6 +742,9 @@ const presentClaim = ({
     type: recheck === null ? claim.type : gradedClaimType(recheck.grade),
     framing: claim.framing,
     verdict: toClaimVerdict(graded),
+    // Who decided the verdict the claim is read with: the language model or
+    // the decision model, and why the language model's stood if it was asked.
+    decider: verdictProvenanceOf(graded),
     qualifiers: qualifiersOfClaim(claim, review, standings),
     needsAttention: claimNeedsAttention(claim, review, inputs),
     // Only a suggestion: the conflict stays open until a person names the
@@ -1010,6 +1014,8 @@ export const readVerificationRun = async ({
     })),
     status: run.status,
     errorCode: run.errorCode,
+    // Text a completed run could not read; empty when it read everything.
+    unreadParts: run.unreadParts,
     pipelineVersion: run.pipelineVersion,
     modelRef: run.modelRef,
     requestedBy: run.requestedBy,

@@ -65,6 +65,37 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  // A queued message's id is its client-minted idempotency key: a repeated
+  // enqueue answers the stored row or "already sent". A replacement names the
+  // revision it read, and the queue's other changes answer its current state.
+  "POST /v1/chat/threads/:threadId/queue": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/chat/threads/:threadId/queue/:messageId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/chat/threads/:threadId/queue/:messageId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/chat/threads/:threadId/queue/:messageId/move": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/chat/threads/:threadId/queue/:messageId/send-now": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/chat/threads/:threadId/queue/hold": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/chat/threads/:threadId/queue/hold": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/clause-categories/:categoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -479,6 +510,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  "POST /v1/chat/threads/:threadId/turns/:turnId/steer": {
+    type: "non-replay",
+    reason: "stream",
+  },
   // A repeat answers the turn's undo that is queued, sent or done.
   "POST /v1/chat/threads/:threadId/turns/:turnId/local-files/undo": {
     type: "non-replay",
@@ -726,6 +761,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/organization-settings/verification-decision-model": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/web-search-key": {
     type: "non-replay",
     reason: "current-state",
@@ -895,6 +934,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "authorization-in-handler",
   },
+  "POST /v1/skills/from-chat": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/skills/generate-draft": {
     type: "non-replay",
     reason: "external-effect",
@@ -906,6 +949,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "POST /v1/skills/import-urls": {
     type: "non-replay",
     reason: "external-effect",
+  },
+  "POST /v1/skills/save-draft": {
+    type: "non-replay",
+    reason: "authorization-in-handler",
   },
   "POST /v1/skills/upload": {
     type: "non-replay",

@@ -1,0 +1,64 @@
+# Verify a case-law quotation
+
+Call `verify_quote({ decision_id, text })` after obtaining a decision ID from
+`search_case_law` or `resolve_case_law_decision`. The CLI command is
+`stella case-law verify-quote --decision-id <uuid> --text '<quotation>'`.
+The tool requires `stella:read` and the public-law feature.
+
+Only `status: "exact", verified: true` confirms that the supplied text occurs.
+It does not establish that a truncated quote fairly represents the decision.
+`fuzzy` always has `verified: false`: report it as an altered quote, never as
+confirmed. `not_found` also has `verified: false` and may return a closest
+passage for inspection; `closest` is null once the remaining text is exhausted. `cannot_verify` identifies pending, unavailable, failed,
+licence-withheld or empty text; it is never evidence that the quote is absent.
+An unknown or restricted decision ID returns the standard `not_found` error
+envelope rather than a quotation verdict.
+
+Exact comparison is case-sensitive and preserves diacritics, letters and
+punctuation. It normalizes Unicode whitespace (including non-breaking spaces),
+curly quotation marks and guillemets, dash variants, soft hyphens, hyphenated
+line endings, and spacing in `č. j.`. Literal substrings remain exact at
+normalization boundaries. Double and single quotation marks remain distinct.
+Ellipses `...`, `…`, `[…]` and `(...)` split the quote into ordered, nonempty
+segments; a leading or trailing ellipsis only marks a cut. A match must stop at
+the edges of the words it quotes, so `ne` does not match inside `nesplnil`. Each
+segment reports `occurrenceCount`, the occurrences that can participate in an
+ordered match, and returns the first 20 of them.
+
+Each passage carries original UTF-16 `start` (inclusive) and `end` (exclusive)
+offsets, its text, and the covering paragraph positions, canonical labels,
+heading paths and available reader deep links. Positions count served blocks
+from one; a publisher label can differ from that position. AST text takes
+precedence, matching `read_case_law_decision`; otherwise stored full text is
+used. Plain-text fallback paragraphs have no invented anchors.
+
+Fuzzy comparison minimizes word/punctuation-token edit distance over a passage,
+scanning each remaining document suffix in segment order. The similarity is
+`1 - edits / max(quoteTokens, passageTokens)`. Scores at least `0.75` are
+`fuzzy`; lower scores are `not_found`. Differences run from stored passage to
+supplied quote: `dropped` words were omitted by the quote, `added` words were
+inserted, and adjacent dropped/added groups express replacements. An exhausted
+suffix has `closest: null`. This heuristic is not semantic verification.
+
+Input is bounded to 4,000 characters, 128 total word/punctuation tokens and 16
+segments. Comparison costs are bounded by document length times that fixed
+token budget, plus at most 20 returned occurrences per segment. The tool reads
+one gated decision without fetching a publisher document. Chat's bounded reader
+projection does not expose this occurrence list.
+
+Answers are bounded too. A passage reports at most 32 paragraphs and the 8
+deepest heading levels of each; its text and a segment's text stop at 16,384
+UTF-8 bytes, and a difference word at 1,024. A passage cut this way keeps the
+offsets of the whole stored span.
+
+`POST /v1/case/decisions/quotes/verify` answers the same check without an
+account. It reads through the public decision gate, so a missing, redacted,
+listing-only or restricted decision, and one outside the public page countries,
+all answer `404`. It spends the public search budget of its address, its
+admission slots and the global search budget, and answers `429` or `503` when
+those run out.
+
+Run the deterministic calibration with
+`bun --preload ./src/tests/setup-env.ts evals/verify-quote-local.ts` from
+`apps/api`. It uses captured public court texts and reports scores and a large
+decision benchmark. It does not measure model tool selection or interpretation.

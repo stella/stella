@@ -15,12 +15,14 @@ import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
   WORKSPACE_DELETION_RETAINED_STAGES,
   WORKSPACE_DELETION_RETAINED_TABLES,
 } from "@/api/lib/organization-storage-teardown";
 import { inOrder } from "@/api/lib/review-organization/in-order";
 import { isRecord } from "@/api/lib/type-guards";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
 
 /**
  * Organization-scoped tables the reset leaves in place, each with its reason.
@@ -85,6 +87,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   business_registry_credentials:
     "Integration credentials: never touched by the reset.",
   feedback_reports: "Product feedback the operators read.",
+  legal_holds:
+    "Audited preservation records: an active hold refuses the reset, and a released hold goes with its matter or item.",
   chat_content_v3_backfill_receipts:
     "Repair receipts the operators read; identifiers only, never chat content.",
   sanctions_organization_marks:
@@ -116,6 +120,8 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "case_law_research_columns",
   "chat_run_log_entries",
   "chat_run_logs",
+  "chat_queue_holds",
+  "chat_queued_messages",
   "chat_secrets",
   "chat_threads",
   "chat_browser_site_grants",
@@ -235,6 +241,14 @@ export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_R
     // for tools, and usage limit reminders, all keyed on the same member and
     // organization.
     ["chat_browser_site_grants", "chat_limit_reminders", "chat_tool_grants"],
+    // A chat's run logs and its queue: rows of the organization's chats that
+    // the owner removes directly, in one statement.
+    [
+      "chat_run_log_entries",
+      "chat_run_logs",
+      "chat_queue_holds",
+      "chat_queued_messages",
+    ],
     // Independent search history deletion barriers under one owner policy.
     ["search_history_country_clears", "search_history_tombstones"],
   ];
@@ -351,6 +365,14 @@ export const sweepReviewOrganization = async (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
 ): Promise<Map<string, number>> => {
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "organization" },
+  });
+  if (hold.isErr()) {
+    abortTransaction(hold.error);
+  }
   // audit: skip - the reset sweep; the run's totals go to the system audit
   const removed = new Map<string, number>();
   // Chat attachments name no organization; their rows hold their threads

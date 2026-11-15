@@ -295,6 +295,27 @@ const chatTurnScopeCheck = sql`(
   )
 )`;
 
+// Queue rows mirror the turn rows' ownership columns and prove they match
+// the owning thread, with the thread's embedded-data scope, as turns do.
+const chatQueueScopeCheck = (
+  table: "chat_queued_messages" | "chat_queue_holds",
+) => sql`(
+  ${userCheck} AND
+  ${organizationCheck} AND
+  (workspace_id IS NULL OR ${workspaceCheck}) AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = ${sql.raw(table)}.thread_id
+      AND ct.user_id = ${sql.raw(table)}.user_id
+      AND ct.organization_id = ${sql.raw(table)}.organization_id
+      AND ct.workspace_id IS NOT DISTINCT FROM ${sql.raw(table)}.workspace_id
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR ${workspaceArrayCheck(sql`ct.data_workspace_ids`)}
+      )
+  )
+)`;
+
 const fileChatThreadScopeCheck = sql`(
   ${userCheck} AND
   ${organizationCheck} AND
@@ -1830,6 +1851,58 @@ export const chatTurnPolicies = () => [
   }),
 ];
 
+const queuedMessageScopeCheck = chatQueueScopeCheck("chat_queued_messages");
+
+export const chatQueuedMessagePolicies = () => [
+  p.pgPolicy("chat_queued_message_select", {
+    for: "select",
+    to: stella,
+    using: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_update", {
+    for: "update",
+    to: stella,
+    using: queuedMessageScopeCheck,
+    withCheck: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_delete", {
+    for: "delete",
+    to: stella,
+    using: queuedMessageScopeCheck,
+  }),
+];
+
+const queueHoldScopeCheck = chatQueueScopeCheck("chat_queue_holds");
+
+export const chatQueueHoldPolicies = () => [
+  p.pgPolicy("chat_queue_hold_select", {
+    for: "select",
+    to: stella,
+    using: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_update", {
+    for: "update",
+    to: stella,
+    using: queueHoldScopeCheck,
+    withCheck: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_delete", {
+    for: "delete",
+    to: stella,
+    using: queueHoldScopeCheck,
+  }),
+];
+
 const chatSecretScopeCheck = sql`(
   ${userCheck} AND ${organizationCheck} AND
   EXISTS (
@@ -1869,6 +1942,28 @@ export const chatSecretPolicies = () => [
     for: "delete",
     to: stella,
     using: chatSecretScopeCheck,
+  }),
+];
+
+const chatLocalRunStepContentOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_local_run_step_contents'::regclass)`;
+
+// What a local run's steps produced is thread content: a member reads a step
+// only with its thread, under the thread's own scope. Nothing but the
+// gateway's owner connection writes it, settled against the run that sends
+// it, so the application role gets no write policy.
+export const chatLocalRunStepContentPolicies = () => [
+  p.pgPolicy("chat_local_run_step_contents_owner_access", {
+    for: "all",
+    to: "public",
+    using: chatLocalRunStepContentOwnerCheck,
+    withCheck: chatLocalRunStepContentOwnerCheck,
+  }),
+  p.pgPolicy("chat_local_run_step_content_select", {
+    for: "select",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(
+      sql`chat_local_run_step_contents.thread_id`,
+    ),
   }),
 ];
 

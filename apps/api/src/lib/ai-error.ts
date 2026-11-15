@@ -103,6 +103,27 @@ const RUNTIME_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
     AI_FAILURE_CODES.local_runner_folder_unavailable,
     "local_runner_folder_unavailable",
   ],
+  [AI_FAILURE_CODES.local_runner_no_computer, "local_runner_no_computer"],
+  [
+    AI_FAILURE_CODES.local_runner_harness_unavailable,
+    "local_runner_harness_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_model_unavailable,
+    "local_runner_model_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_reasoning_effort_unavailable,
+    "local_runner_reasoning_effort_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_approvals_unavailable,
+    "local_runner_approvals_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_folder_not_approved,
+    "local_runner_folder_not_approved",
+  ],
   [AI_FAILURE_CODES.provider_unavailable, "provider_unavailable"],
 ]);
 
@@ -611,6 +632,55 @@ export const isAnticipatedAIFailure = (
   isCancelledGeneration(error) ||
   (HandlerError.is(error) && error.status < HTTP_SERVER_ERROR_MIN);
 
+// Whether the same request could succeed a moment later. A retry resends the
+// whole request, so it is wasted on a failure only a person can fix.
+const AI_FAILURE_CAN_CLEAR_ON_RETRY = {
+  quota_exhausted: true,
+  provider_billing: false,
+  provider_credentials_rejected: false,
+  model_unavailable: false,
+  provider_unavailable: true,
+  provider_stream_incomplete: true,
+  output_incomplete: true,
+  output_moderated: true,
+  output_invalid: true,
+  deadline_exceeded: true,
+  loop_detected: true,
+  empty_completion: true,
+  local_runner_needs_login: false,
+  local_runner_limit_reached: false,
+  local_runner_unavailable: true,
+  local_runner_turn_too_large: false,
+  turn_too_large: false,
+  local_runner_not_reached: true,
+  local_runner_relinked: true,
+  local_runner_restoring: true,
+  local_runner_folder_unavailable: false,
+  local_runner_no_computer: false,
+  local_runner_harness_unavailable: false,
+  local_runner_model_unavailable: false,
+  local_runner_reasoning_effort_unavailable: false,
+  local_runner_approvals_unavailable: false,
+  local_runner_folder_not_approved: false,
+  unknown: true,
+} as const satisfies Record<AIErrorKind, boolean>;
+
+// The provider refused this request as built, for example because it overflows
+// the model's context window. No failure kind names these.
+const REJECTED_REQUEST_STATUSES: ReadonlySet<number> = new Set([400, 413]);
+
+/**
+ * Whether a failed model request could succeed if sent again unchanged: the
+ * one rule every caller that retries a model request applies.
+ */
+export const aiFailureCanClearOnRetry = (error: unknown): boolean => {
+  const status = providerStatusCode(error);
+  if (status !== null && REJECTED_REQUEST_STATUSES.has(status)) {
+    return false;
+  }
+  return AI_FAILURE_CAN_CLEAR_ON_RETRY[classifyAIError(error)];
+};
+
 /**
  * The same judgement for a sink that holds no classified kind of its own.
  *
@@ -782,6 +852,12 @@ const aiKindHandlerError = (
     case "local_runner_relinked":
     case "local_runner_restoring":
     case "local_runner_folder_unavailable":
+    case "local_runner_no_computer":
+    case "local_runner_harness_unavailable":
+    case "local_runner_model_unavailable":
+    case "local_runner_reasoning_effort_unavailable":
+    case "local_runner_approvals_unavailable":
+    case "local_runner_folder_not_approved":
     case "unknown":
       return new HandlerError({ ...fallback, code, cause: error });
     default: {

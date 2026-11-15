@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -17,11 +17,6 @@ import { czNssFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 import { extractNssPublisherMetadata } from "./cz-nss-publisher-metadata";
 import { CZ_NSS_PUBLISHER_METADATA_URL_SCHEMA } from "./cz-nss.metadata-urls";
-
-const originalFetch = globalThis.fetch;
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-});
 
 const capture = async (id: number) =>
   new TextDecoder().decode(
@@ -93,7 +88,7 @@ test.each([641_750, 641_220])(
 
 test("NSS review tuples retain their occurrences under arbitrary repeated proceedings", () => {
   assertProperty(
-    "nss-publisher-review-tuples",
+    "NSS review tuples retain their occurrences under arbitrary repeated proceedings",
     fc.property(
       fc.array(
         fc.tuple(

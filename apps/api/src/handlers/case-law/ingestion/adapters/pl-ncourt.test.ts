@@ -8,7 +8,14 @@
  */
 
 import { panic, Result } from "better-result";
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterEach,
+  describe,
+  expect,
+  mock,
+  setSystemTime,
+  test,
+} from "bun:test";
 
 import {
   DECISION_DOCUMENT_ROLE,
@@ -176,6 +183,7 @@ const xml = (body: string, status = 200): Response =>
 
 afterEach(() => {
   testFetchState.restore();
+  setSystemTime();
 });
 
 /** A record for any id, in the API's own shape, as the stubbed walks need. */
@@ -2196,15 +2204,19 @@ describe("the tip", () => {
     );
 
   test("a lap lists closed days only, from where the walk stopped to today", async () => {
+    setSystemTime(new Date("2026-09-25T12:00:00.000Z"));
+    const lapStartedOn = new Date().toISOString().slice(0, 10);
     const body = await tipPage();
     const requests: URL[] = [];
     testFetchState.set(
       asFetchMock(async (input: string | URL | Request) => {
         requests.push(urlOf(input));
+        // The request URL was built before the fetch crossed UTC midnight.
+        setSystemTime(new Date("2026-09-26T00:00:00.000Z"));
         return await Promise.resolve(
           urlOf(input).pathname.endsWith("/judgements")
             ? xml(body)
-            : new Response("", { status: 503 }),
+            : new Response("", { status: 404 }),
         );
       }),
     );
@@ -2221,9 +2233,7 @@ describe("the tip", () => {
     );
     const listing = requests[0] ?? panic("no request");
     expect(listing.searchParams.get("publicationDateFrom")).toBe("2026-09-20");
-    expect(listing.searchParams.get("publicationDateTo")).toBe(
-      new Date().toISOString().slice(0, 10),
-    );
+    expect(listing.searchParams.get("publicationDateTo")).toBe(lapStartedOn);
   });
 
   test("the walk hands over at the day it began, and waits for it to close", async () => {

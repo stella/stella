@@ -190,6 +190,19 @@ describe("local run question card", () => {
     );
   });
 
+  test("describes each option under it before anything is picked", () => {
+    mountCard();
+    for (const { label, description } of governingLaw.options) {
+      const { id } = screen.getByText(description);
+      expect(id).not.toBe("");
+      expect(button(label).getAttribute("aria-describedby")).toBe(id);
+    }
+    // Options without a description have nothing to point at.
+    for (const { label } of signatories.options) {
+      expect(button(label).getAttribute("aria-describedby")).toBeNull();
+    }
+  });
+
   test("offers Submit only once every question is answered as the agent accepts", () => {
     const { answers } = mountCard();
     expect(isDisabled(submitButton())).toBe(true);
@@ -197,8 +210,6 @@ describe("local run question card", () => {
     fireEvent.click(button("Slovak"));
     expect(button("Czech").getAttribute("aria-pressed")).toBe("false");
     expect(button("Slovak").getAttribute("aria-pressed")).toBe("true");
-    // The picked option's description shows beside it.
-    expect(screen.getByText("Slovak Civil Code")).not.toBeNull();
     fireEvent.click(button("Lessor"));
     fireEvent.click(button("Lessee"));
     expect(isDisabled(submitButton())).toBe(true);

@@ -51,18 +51,25 @@ const pageResult = (index: number): BrowserControlResult =>
           type: BROWSER_CONTROL_TARGET_METADATA.present,
           value: `https://example.cz/${index}/${element}`,
         },
+        id: `L${element + 1}`,
         name: `Odkaz ${index}.${element} ${"x".repeat(200)}`,
         ref: `e:0:${element}`,
         role: "link",
       })),
+      elementsLeftOut: false,
+      facts: { meta: [] },
       revision: `rev-${index}`,
       tabId: 7,
       tabs: [{ active: true, tabId: 7, url: `https://example.cz/${index}` }],
       text: `Komentář k § 88 ${"ž".repeat(BROWSER_CONTROL_LIMITS.pageTextChars - 20)}`,
-      textOffset: 0,
-      textTotalChars: 120_000,
       title: `Page ${index}`,
       url: `https://example.cz/${index}`,
+      window: {
+        cursor: `r1.window${index}`,
+        fromPercent: 0,
+        next: `r1.next${index}`,
+        toPercent: 40,
+      },
     },
     status: "success",
   });
@@ -125,8 +132,8 @@ describe("retainToolResultsForModel", () => {
         note: SUPERSEDED_BROWSER_SNAPSHOT_NOTE,
         page: {
           contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+          cursor: `r1.window${index / 2}`,
           tabId: 7,
-          textTotalChars: 120_000,
           title: `Page ${index / 2}`,
           url: `https://example.cz/${index / 2}`,
         },
@@ -353,7 +360,24 @@ describe("a browsing turn's stored and streamed parts", () => {
     if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
       throw new TypeError("Expected a messages snapshot");
     }
-    const [streamed, ...toolMessages] = chunk.messages;
+    const [streamed] = chunk.messages;
+    // v1 preserves result boundaries as separate assistant anchors.
+    expect(chunk.messages.map(({ role }) => role)).toEqual([
+      "assistant",
+      "tool",
+      "assistant",
+      "tool",
+      "assistant",
+      "tool",
+      "assistant",
+      "tool",
+    ]);
+    expect(new Set(chunk.messages.map(({ id }) => id)).size).toBe(
+      chunk.messages.length,
+    );
+    const toolMessages = chunk.messages.filter(
+      (message) => message.role === "tool",
+    );
     const streamedParts: unknown =
       streamed !== undefined && "parts" in streamed ? streamed.parts : null;
     if (!Array.isArray(streamedParts)) {
@@ -366,7 +390,7 @@ describe("a browsing turn's stored and streamed parts", () => {
     // The engine's own `tool` rows beside the parts shrink the same way.
     expect(
       toolMessages.map((message) =>
-        message.role === "tool" && typeof message.content === "string"
+        typeof message.content === "string"
           ? isRawPage(JSON.parse(message.content))
           : null,
       ),

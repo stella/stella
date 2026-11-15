@@ -1411,6 +1411,7 @@ const FullscreenDocxViewer = ({
   return (
     <ReadOnlyDocxDocumentViewer
       documentBuffer={fileQuery.data.buffer}
+      fileName={fileQuery.data.fileName}
       scaleOffset={scaleOffset}
     />
   );
@@ -1418,9 +1419,11 @@ const FullscreenDocxViewer = ({
 
 const ReadOnlyDocxDocumentViewer = ({
   documentBuffer,
+  fileName,
   scaleOffset,
 }: {
   documentBuffer: ArrayBuffer;
+  fileName: string;
   scaleOffset: number;
 }) => {
   const editorRef = useRef<DocxEditorRef>(null);
@@ -1445,6 +1448,7 @@ const ReadOnlyDocxDocumentViewer = ({
     <div ref={composedContainerRef} className="h-full overflow-auto">
       <ReadOnlyDocxViewer
         ref={editorRef}
+        accessibleName={fileName}
         className="folio-docx-preview h-full"
         autoOpenReviewSidebar={false}
         documentBuffer={documentBuffer}

@@ -41,6 +41,7 @@ import {
   installPgliteChatRunLogRls,
   installPgliteChatSecretRls,
   installPgliteChatStoredContentEgress,
+  installPgliteChatTurnOrdinal,
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
   installPgliteConflictCheckRoutines,
@@ -54,6 +55,7 @@ import {
   installPgliteFindingDecisionHistory,
   installPgliteFlowTransitions,
   installPgliteInvoiceObjects,
+  installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteModelRunBudgets,
@@ -89,7 +91,7 @@ import {
 // costs a ~2.2 GB peak (drizzle-kit's push diffing plus PGlite WASM churn);
 // loading a snapshot skips drizzle-kit entirely and keeps the process near
 // PGlite's runtime floor.
-export const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
+const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
 
 const allSchema = {
   ...schema,
@@ -494,6 +496,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_corpus_pack_refs",
       "case_law_corpus_tombstones",
       "case_law_decision_source_identities",
+      "case_law_decision_fallback_identities",
       "case_law_decision_supplements",
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
@@ -918,11 +921,13 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPgliteSearchHistoryClearFence(db);
+  await installPgliteChatTurnOrdinal(db);
   await installPglitePlaybookDocumentTypeKey(db);
   await installPgliteFindingDecisionHistory(db);
   await db.transaction(async (tx) => {
     await installPgliteCorrespondenceSources(tx);
   });
+  await installPgliteLegalHoldDeleteBackstop(db);
 
   return client;
 };

@@ -3,7 +3,7 @@ import {
   type StreamChunk,
   StreamProcessor,
 } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -31,6 +31,7 @@ import {
   FAKE_CLAUDE_CONTEXT_WINDOW,
   FAKE_CLAUDE_VERSION,
   FAKE_ESCAPE_COMMAND,
+  FAKE_FORK_BOUNDARY,
   FAKE_LONG_COMMAND,
   FAKE_LONG_PLAN,
   FAKE_MCP_CALL,
@@ -56,7 +57,11 @@ import {
   bundledHarnessCompatibility,
   resolveHarnessCompatibility,
 } from "../compatibility";
-import { type HarnessEvent, harnessSessionId } from "../events";
+import {
+  harnessBoundary,
+  type HarnessEvent,
+  harnessSessionId,
+} from "../events";
 import { packageCacheEnvironment } from "../package-cache";
 import { harnessEventsToChunks } from "../stream-chunks";
 import { createClaudeCodeHarnessAdapter } from "./adapter";
@@ -361,6 +366,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
       "--setting-sources",
       "",
       "--strict-mcp-config",
+      "--replay-user-messages",
       "--include-partial-messages",
       "--permission-mode",
       "acceptEdits",
@@ -413,6 +419,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
           windowTokens: FAKE_CLAUDE_CONTEXT_WINDOW,
         },
       },
+      boundary: harnessBoundary("msg-3-uuid"),
     });
   });
 
@@ -456,8 +463,8 @@ describe("Claude Code adapter over stream-json stdio", () => {
           name: "command_execution",
           input: { command: "ls" },
         },
-        // The command's output stays on the computer: kept for the member to
-        // open there, never in what the turn reports.
+        // The command's output is the step's content: kept and sent beside the
+        // turn's events, never in what the turn reports.
         result: {
           content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
@@ -549,7 +556,11 @@ describe("Claude Code adapter over stream-json stdio", () => {
     for (const native of ["never forwarded", "+x", "subagent text"]) {
       expect(stored).not.toContain(native);
     }
-    expect(terminal(events)).toEqual({ type: "turn.completed", usage: null });
+    expect(terminal(events)).toEqual({
+      type: "turn.completed",
+      usage: null,
+      boundary: harnessBoundary("msg-7-uuid"),
+    });
   });
 
   test("a built-in tool's call shows its command, file names, search or plan, and never the text it carries", async () => {
@@ -651,6 +662,24 @@ describe("Claude Code adapter over stream-json stdio", () => {
       expect(storedText).not.toContain(returned);
     }
     expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+  });
+
+  test("a completed turn ends at the main thread's last assistant message, never a subagent's", async () => {
+    const { events } = await run("subagent", {
+      onEvent: async (event, turn) => {
+        if (event.type === "approval.requested") {
+          await turn.respond({
+            type: "approval",
+            requestId: event.request.requestId,
+            decision: "approve",
+          });
+        }
+      },
+    });
+    expect(terminal(events)).toMatchObject({
+      type: "turn.completed",
+      boundary: harnessBoundary("msg-2-uuid"),
+    });
   });
 
   test("a subagent is a step, the steps it takes are its steps, and what it was told, wrote and reported stays on the computer", async () => {
@@ -1069,6 +1098,86 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(terminal(events)).toEqual({ type: "turn.interrupted" });
   });
 
+  test("a steer sent with a declined approval joins the turn that asked", async () => {
+    const inputId = crypto.randomUUID();
+    const { events } = await run("steered_over_approval", {
+      onEvent: async (event, turn) => {
+        if (event.type !== "approval.requested") {
+          return;
+        }
+        const declined = await turn.respond({
+          type: "approval",
+          requestId: event.request.requestId,
+          decision: "deny",
+        });
+        expect(Result.isOk(declined)).toBe(true);
+        expect(
+          await turn.steer({ inputId, text: "Also check the annex." }),
+        ).toEqual(Result.ok());
+      },
+    });
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId, status: "accepted" },
+    ]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a steer is written to the running turn and settled accepted where the CLI echoes it", async () => {
+    const inputId = crypto.randomUUID();
+    const { events, received } = await run("steered", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          expect(
+            await turn.steer({ inputId, text: "Also check the annex." }),
+          ).toEqual(Result.ok());
+        }
+      },
+    });
+    const users = received().filter(({ type }) => type === "user");
+    // The turn's prompt, then the steer, each with the session it belongs to.
+    expect(users).toHaveLength(2);
+    expect(users[1]).toMatchObject({
+      message: { role: "user", content: "Also check the annex." },
+      parent_tool_use_id: null,
+      session_id: users[0]?.["session_id"],
+      uuid: expect.any(String),
+      // Taken at the agent's next step; the CLI's default would hold it to
+      // the turn's end.
+      priority: "next",
+    });
+    const settled = events.findIndex(({ type }) => type === "input.settled");
+    expect(events[settled]).toEqual({
+      type: "input.settled",
+      inputId,
+      status: "accepted",
+    });
+    // The echo is not output: the tool's result and the answer follow it.
+    expect(toolCompletions(events)).toHaveLength(1);
+    expect(
+      events.findIndex(
+        (event) =>
+          event.type === "text.completed" &&
+          event.text === "Checked the annex as well.",
+      ),
+    ).toBeGreaterThan(settled);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a steer the turn's result arrives before is settled rejected ahead of the turn's end", async () => {
+    const inputId = crypto.randomUUID();
+    const { events } = await run("steer_too_late", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId, text: "Also check the annex." });
+        }
+      },
+    });
+    expect(events.slice(-2)).toEqual([
+      { type: "input.settled", inputId, status: "rejected" },
+      expect.objectContaining({ type: "turn.completed" }),
+    ]);
+  });
+
   test("resuming a missing session falls back to the transcript and says so", async () => {
     const { events, startups, received } = await run("resume_missing", {
       overrides: {
@@ -1158,6 +1267,76 @@ describe("Claude Code adapter over stream-json stdio", () => {
     ).toEqual([
       { role: "user", content: [{ type: "text", text: "Search both." }] },
     ]);
+  });
+
+  const forkRequest = {
+    type: "fork",
+    sessionId: harnessSessionId(FAKE_RESUMED_SESSION_ID),
+    boundary:
+      harnessBoundary(FAKE_FORK_BOUNDARY) ??
+      panic("the fake's boundary is one the protocol carries"),
+  } as const;
+
+  test("a fork copies the session through the boundary entry into a new session the turn names", async () => {
+    const { events, startups, received } = await run("resume_ok", {
+      overrides: { continuation: forkRequest },
+    });
+    const [startup, ...again] = startups();
+    expect(again).toEqual([]);
+    const args = startup?.args ?? [];
+    const forkedId = args[args.indexOf("--session-id") + 1] ?? "";
+    expect(forkedId).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(forkedId).not.toBe(FAKE_RESUMED_SESSION_ID);
+    // The source is only read: never resumed in place, never truncated.
+    expect(
+      args.slice(args.indexOf("--session-id"), args.indexOf("--model")),
+    ).toEqual([
+      "--session-id",
+      forkedId,
+      "--fork-session",
+      "--resume",
+      FAKE_RESUMED_SESSION_ID,
+      "--resume-session-at",
+      FAKE_FORK_BOUNDARY,
+    ]);
+    expect(events[0]).toEqual({
+      type: "session.started",
+      sessionId: harnessSessionId(forkedId),
+      continuation: { type: "forked" },
+    });
+    // The fork holds the history: the prompt is the new message alone.
+    expect(
+      received()
+        .filter(({ type }) => type === "user")
+        .map(({ message }) => message),
+    ).toEqual([
+      { role: "user", content: [{ type: "text", text: "Search both." }] },
+    ]);
+  });
+
+  test("a fork whose boundary the session does not hold falls back to the transcript and says so", async () => {
+    const { events, startups, received } = await run("fork_missing", {
+      overrides: { continuation: forkRequest },
+    });
+    const [refused, fresh] = startups();
+    expect(refused?.args).toContain("--fork-session");
+    const args = fresh?.args ?? [];
+    expect(args).not.toContain("--resume");
+    expect(args).not.toContain("--fork-session");
+    const sessionId = args[args.indexOf("--session-id") + 1] ?? "";
+    expect(events[0]).toEqual({
+      type: "session.started",
+      sessionId: harnessSessionId(sessionId),
+      continuation: {
+        type: "resume_unavailable",
+        reason: "session_not_found",
+        message: `No message found with message.uuid of: ${FAKE_FORK_BOUNDARY}`,
+      },
+    });
+    const prompt = promptOf(received());
+    expect(prompt).toContain("Find the leases.");
+    expect(prompt).toContain("Search both.");
+    expect(terminal(events)?.type).toBe("turn.completed");
   });
 
   test("a signed-out harness, or one that would bill an API key, refuses the turn before any server or prompt", async () => {
@@ -1281,7 +1460,14 @@ describe("Claude Code adapter over stream-json stdio", () => {
           inputModalities: ["text"],
         },
       ],
-      capabilities: ["approvals", "interrupt", "resume", "image_input"],
+      capabilities: [
+        "approvals",
+        "interrupt",
+        "resume",
+        "image_input",
+        "steer",
+        "fork",
+      ],
       approvalModes: ["plan", "ask", "auto", "full_auto"],
       // The exhausted model-specific window does not count.
       usageLimit: { resetsAt: "2099-10-28T14:00:00Z" },
@@ -2291,8 +2477,8 @@ describe("Claude Code skill folders", () => {
       }),
       expect.objectContaining({
         toolCall: expect.objectContaining({ input: { command: "ls" } }),
-        // The command's output stays on the computer; a step on the skill
-        // keeps none, even there.
+        // The command's output is the step's content; a step on the skill
+        // keeps none.
         result: {
           content: JSON.stringify({ status: "completed" }),
           status: "succeeded",

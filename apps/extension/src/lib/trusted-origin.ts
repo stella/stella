@@ -1,16 +1,12 @@
 import { panic } from "better-result";
 
 import { PRODUCTION_STELLA_ORIGINS } from "@stll/api-contract/browser-control";
+import {
+  HOSTED_STELLA_ORIGINS,
+  STAGING_STELLA_ORIGINS,
+} from "@stll/browser-page/stella-origins";
 
 import { buildMode, rawStellaOrigins } from "./env";
-
-/** Hosted staging stella; only the `staging` build trusts it by default. */
-export const STAGING_STELLA_ORIGINS = ["https://staging.stll.app"] as const;
-
-const HOSTED_STELLA_ORIGINS = [
-  ...PRODUCTION_STELLA_ORIGINS,
-  ...STAGING_STELLA_ORIGINS,
-];
 
 const STAGING_BUILD_MODE = "staging";
 
@@ -100,10 +96,15 @@ export const createStellaOriginTrust = ({
   };
 };
 
+const trustedOrigins = parseTrustedOriginList(rawStellaOrigins, buildMode);
+
 const stellaOriginTrust = createStellaOriginTrust({
-  hostedOrigins: parseTrustedOriginList(rawStellaOrigins, buildMode),
+  hostedOrigins: trustedOrigins,
   trustLoopback: buildTrustsLoopback(buildMode),
 });
+
+/** The configured stella the popup opens when no stella tab is open. */
+export const STELLA_START_ORIGIN: string | undefined = trustedOrigins.at(0);
 
 export const STELLA_CONTENT_SCRIPT_MATCHES =
   stellaOriginTrust.contentScriptMatches;

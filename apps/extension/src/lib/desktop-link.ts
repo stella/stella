@@ -11,9 +11,9 @@ import {
   parseBrowserDesktopRequest,
   STELLA_DESKTOP_NATIVE_HOST,
 } from "@stll/api-contract/browser-control";
+import { browserControlError } from "@stll/browser-page/browser-control-result";
 
 import { hasDesktopLinkAccess } from "./access";
-import { browserControlError } from "./browser-control-result";
 import { BROWSER_DESKTOP_LINK_STORAGE_KEY } from "./storage-keys";
 
 /**
@@ -249,20 +249,52 @@ export const createDesktopLink = ({
 
   return {
     /**
-     * Tells stella desktop about a download of a chat's tab, unasked;
-     * dropped while stella desktop is not connected.
+     * Tells stella desktop about a download a chat takes, unasked: when it
+     * starts and once it settles. Dropped while stella desktop is not
+     * connected.
      */
-    reportDownload: (chatId: string, download: BrowserDownload) => {
-      if (current === null) {
-        return;
-      }
-      send(current, {
-        controllerId: chatId,
+    downloadReporter: {
+      settled: ({
+        chatId,
+        deliveryId,
         download,
-        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-        source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
-        type: "download",
-      });
+        shownDocument,
+      }: {
+        chatId: string;
+        deliveryId: string;
+        download: BrowserDownload;
+        shownDocument: string | null;
+      }) => {
+        if (current === null) {
+          return;
+        }
+        send(current, {
+          controllerId: chatId,
+          deliveryId,
+          download,
+          shownDocument,
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "download",
+        });
+      },
+      started: (
+        chatId: string,
+        deliveryId: string,
+        shownDocument: string | null,
+      ) => {
+        if (current === null) {
+          return;
+        }
+        send(current, {
+          controllerId: chatId,
+          deliveryId,
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          shownDocument,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "download-started",
+        });
+      },
     },
     /** Connects unless connected; safe to call on every worker start. */
     connect,

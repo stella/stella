@@ -150,7 +150,14 @@ test("Stop ends a computer turn mid-answer and the agent is interrupted", async 
 
 test("new chats start on the last Run on choice, and on Ask whatever permission was chosen before", async ({
   page,
+  browserErrors,
 }) => {
+  browserErrors.tolerate({
+    pattern: /\[render-storm\] sustained render storm detected/u,
+    reason:
+      "Six menus open and close here within two seconds, and each open or close of the shared menu component is some fifteen commits (budgeted in composer-commits.spec.ts), which on some runs is a sustained storm to the dev canary.",
+    removedBy: "The menu component committing less (#8487).",
+  });
   await openNewChat(page);
   await chooseRunOn(page, {
     place: "computer",

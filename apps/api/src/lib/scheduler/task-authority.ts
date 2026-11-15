@@ -133,6 +133,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-population-seed.ts",
     "Seeds public legal corpus population counts under the load governor.",
   ),
+  "caseLaw.foldSitemapTouches": platform(
+    "case-law-sitemap-touch-fold.ts",
+    "Folds public legal corpus sitemap touches under the load governor.",
+  ),
   "caseLaw.refreshSitemapShards": platform(
     "case-law-sitemap-shard-refresh.ts",
     "Public legal corpus sitemap.",
