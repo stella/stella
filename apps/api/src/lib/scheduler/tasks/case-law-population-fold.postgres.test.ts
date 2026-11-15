@@ -58,9 +58,12 @@ class PopulationFoldFixtureRollback extends TaggedError(
 
 const drainPopulationDeltas = async (db: Pick<SchedulerDb, "execute">) => {
   for (let batch = 0; batch < 16; batch += 1) {
-    const [row] = await db.execute(sql`
+    const [row] = await db.execute(
+      sql`
       SELECT done FROM public.fold_case_law_population_counts(${CASE_LAW_POPULATION_FOLD_BATCH_LIMIT})
-    `);
+    `,
+      "objects",
+    );
     if (row?.["done"] === true) {
       return;
     }
@@ -331,6 +334,7 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
         expect(higher?.id).toBeGreaterThan(lowerId);
         const [first] = await observer.execute(
           sql`SELECT * FROM public.fold_case_law_population_counts(2048)`,
+          "objects",
         );
         expect(first).toMatchObject({ folded: 1, done: true });
         expect(
@@ -356,6 +360,7 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
         ).toEqual([{ total: 2 }]);
         const [second] = await observer.execute(
           sql`SELECT * FROM public.fold_case_law_population_counts(2048)`,
+          "objects",
         );
         expect(second).toMatchObject({ folded: 1, done: true });
         expect(
