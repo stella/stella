@@ -95,7 +95,7 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           "20261112134328_legal_list_claim_asserted_dates",
           "20261114103100_legal_list_claims_paragraph_number",
           "20261114103200_legal_list_verification_run_unread_parts",
-          "20261114111001_legal_list_claim_verdict_decider",
+          "20261115100200_legal_list_claim_verdict_decider",
         ]) {
           await applyMigration(name);
         }
