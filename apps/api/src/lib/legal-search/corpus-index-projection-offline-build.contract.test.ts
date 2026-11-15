@@ -91,7 +91,6 @@ const POLICY = {
   fillWindowMs: 60_000,
   closeAllowanceMs: 30_000,
   proofAllowanceMs: 60_000,
-  maxConsecutiveDeliveryFailures: 10,
   payloadReadConcurrency: 2,
   retryDelayMs: 1000,
   payloadRetryLimit: 3,
@@ -411,7 +410,17 @@ const engineDelivery =
     const outcome: CorpusProjectionOfflineDeliveryOutcome =
       exitCode === 0
         ? { type: "ingested", exitCode: 0, startedAt, endedAt }
-        : { type: "failed", exitCode, startedAt, endedAt };
+        : {
+            type: "failed",
+            exitCode,
+            // A shell that could not launch the indexer exits 126 or 127.
+            cause:
+              exitCode === 126 || exitCode === 127
+                ? "infrastructure"
+                : "indexer",
+            startedAt,
+            endedAt,
+          };
     if (exitCode !== 0) {
       process.stderr.write(
         `offline indexer exited ${String(exitCode)}: ${stderr}\n`,
@@ -545,7 +554,7 @@ describe.skipIf(!runEngineTests)(
 
     // timeout: runs offline indexer processes in the engine container, each bounded by its kill deadline.
     test(
-      "a shard killed at its deadline with its publish in flight ends fully applied or fully withdrawn, and the route still converges",
+      "a shard killed at its deadline with its publish in flight is withdrawn with nothing visible, and the next run delivers exactly its entities",
       async () => {
         const markerOf = new Map(
           entityIds.map((entityId, serial) => [entityId, serial]),
@@ -553,51 +562,44 @@ describe.skipIf(!runEngineTests)(
         const delivered: DeliveredShard[] = [];
         const first = await runBuild(
           indexId,
-          ["kill_with_publish_in_flight", "ingest"],
+          ["kill_with_publish_in_flight"],
           delivered,
           markerOf,
         );
-        expect(first.status).toBe("drained");
         const killed =
           delivered.find(
             ({ scenario }) => scenario === "kill_with_publish_in_flight",
           ) ?? panic("No shard was killed");
         expect(killed.outcome.type).toBe("killed_at_deadline");
         expect(killed.revisions.length).toBe(SHARD_REVISIONS);
+        // A shard this small killed leaves no smaller cap: the run stops,
+        // typed, and charges nobody.
+        expect(first.status).toBe("rate_too_slow");
+        expect(first.progress.shards.killedTooLarge).toBe(1);
 
-        // Never half: each killed revision is either all there and applied,
-        // or none of it is and it is withdrawn.
+        // The publish never committed: every killed revision is withdrawn,
+        // and nothing of it is in the index or searchable.
         const afterKill = await readIntents(entityIds);
+        const killedEntities = new Set<string>();
         for (const revision of killed.revisions) {
           const intent =
             afterKill.find(({ id }) => id === revision) ??
             panic(`No row for killed revision ${revision}`);
+          killedEntities.add(intent.entityId);
+          expect(intent.status).toBe("withdrawn");
           const expected =
             intent.expectedDocumentCount ?? panic("Started without a count");
-          const seen = await observed(indexId, revision, expected);
-          expect([
-            { status: "applied", seen: expected },
-            { status: "withdrawn", seen: 0 },
-          ]).toContainEqual({ status: intent.status, seen });
+          expect(await observed(indexId, revision, expected)).toBe(0);
+          const serial =
+            markerOf.get(intent.entityId) ?? panic("No marker for the entity");
+          expect(await searchHits(indexId, `text:${marker(serial)}`)).toBe(0);
         }
 
-        // Later runs deliver what was withdrawn, in smaller requests.
-        for (let round = 0; round < 3; round += 1) {
-          const states = await db
-            .select({
-              appliedRevision: corpusIndexProjectionStates.appliedRevision,
-            })
-            .from(corpusIndexProjectionStates)
-            .where(inArray(corpusIndexProjectionStates.entityId, entityIds));
-          if (states.every(({ appliedRevision }) => appliedRevision !== null)) {
-            break;
-          }
-          offsetMs += PLAN.leaseMs + PLAN.endedAfterMs;
-          // db-await-in-loop: one whole run per round, each after the last settled
-          const later = await runBuild(indexId, [], delivered, markerOf);
-          expect(later.status).toBe("drained");
-        }
-
+        // The next run delivers the killed entities again, each alone after
+        // the halving, and every entity becomes searchable.
+        offsetMs += PLAN.leaseMs + PLAN.endedAfterMs;
+        const second = await runBuild(indexId, [], delivered, markerOf);
+        expect(second.status).toBe("drained");
         const intents = await readIntents(entityIds);
         for (const [serial, entityId] of entityIds.entries()) {
           const applied = intents.filter(
@@ -606,14 +608,22 @@ describe.skipIf(!runEngineTests)(
           );
           expect(applied.length).toBe(1);
           const [intent] = applied;
+          const appliedId = intent?.id ?? panic("No applied revision");
           const expected =
             intent?.expectedDocumentCount ?? panic("Applied without a count");
-          expect(
-            await observed(indexId, intent?.id ?? panic("No intent"), expected),
-          ).toBe(expected);
+          expect(await observed(indexId, appliedId, expected)).toBe(expected);
           expect(await searchHits(indexId, `text:${marker(serial)}`)).toBe(
             expected,
           );
+          if (killedEntities.has(entityId)) {
+            expect(killed.revisions).not.toContain(appliedId);
+            const carrier =
+              delivered.find(({ revisions }) =>
+                revisions.includes(appliedId),
+              ) ?? panic("The applied revision was never delivered");
+            expect(carrier.outcome.type).toBe("ingested");
+            expect(carrier.revisions).toEqual([appliedId]);
+          }
         }
         // Nothing went to cleanup: every revision ended exact or empty.
         expect(
