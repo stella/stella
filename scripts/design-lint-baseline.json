@@ -1388,29 +1388,16 @@
     "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts": 1,
     "apps/api/src/handlers/chat/file-thread-shared.ts": 1,
     "apps/api/src/handlers/clauses/search-vector.ts": 1,
-    "apps/api/src/handlers/document-reviews/reference-position-normalizer.ts": 1,
-    "apps/api/src/lib/docx/block-directives.ts": 1,
     "apps/api/src/lib/legal-search/corpus-index-projection-materials.ts": 2,
-    "apps/api/src/lib/views/table-export.ts": 1,
-    "apps/api/src/lib/views/template-properties.ts": 1,
-    "apps/web/src/lib/pdf/page-editor/page-editor-transform.ts": 1,
     "apps/web/src/lib/render-storm-canary.ts": 2,
-    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-table-schema.ts": 1,
-    "apps/web/src/routes/knowledge/-components/clause-editor-tiptap.ts": 1,
     "apps/web/src/routes/knowledge/-components/template-studio.tsx": 1,
     "packages/cli/src/auth/login.ts": 1,
     "packages/scripts/src/i18n-lint.ts": 2,
     "packages/template-conditions/src/index.ts": 1,
-    "packages/ui/src/components/date-picker-popover.tsx": 1,
-    "scripts/rc-bailouts.ts": 1,
     "scripts/typecheck-baseline.ts": 1
   },
   "react/no-children-prop": {
-    "apps/web/src/components/chat/chat-rich-message-part.test.ts": 1,
-    "apps/web/src/components/inspector/use-file-tab-rename.dom.test.tsx": 2,
-    "apps/web/src/features/workspaces/team-avatars.test.ts": 1,
-    "apps/web/src/hooks/use-time-billing-preview.dom.test.tsx": 1,
-    "apps/web/src/routes/-protected-app/-components/payment-retry-banner.dom.test.tsx": 2
+    "apps/web/src/components/chat/chat-rich-message-part.test.ts": 1
   },
   "eslint/no-unexpected-multiline": {
     "apps/web/src/components/ai-suggestions/document-review-queries.ts": 5,

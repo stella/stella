@@ -28,12 +28,9 @@ describe("team avatar labels", () => {
 
 const renderAvatars = (props: Parameters<typeof TeamAvatars>[0]) =>
   renderToStaticMarkup(
-    createElement(IntlProvider, {
-      locale: "en",
-      messages: en,
-      timeZone: "UTC",
-      children: createElement(TeamAvatars, props),
-    }),
+    <IntlProvider locale="en" messages={en} timeZone="UTC">
+      {createElement(TeamAvatars, props)}
+    </IntlProvider>,
   );
 
 const members = Array.from({ length: 4 }, (_, index) => ({
