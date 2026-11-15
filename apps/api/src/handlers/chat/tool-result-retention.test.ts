@@ -360,7 +360,24 @@ describe("a browsing turn's stored and streamed parts", () => {
     if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
       throw new TypeError("Expected a messages snapshot");
     }
-    const [streamed, ...toolMessages] = chunk.messages;
+    const [streamed] = chunk.messages;
+    // v1 preserves result boundaries as separate assistant anchors.
+    expect(chunk.messages.map(({ role }) => role)).toEqual([
+      "assistant",
+      "tool",
+      "assistant",
+      "tool",
+      "assistant",
+      "tool",
+      "assistant",
+      "tool",
+    ]);
+    expect(new Set(chunk.messages.map(({ id }) => id)).size).toBe(
+      chunk.messages.length,
+    );
+    const toolMessages = chunk.messages.filter(
+      (message) => message.role === "tool",
+    );
     const streamedParts: unknown =
       streamed !== undefined && "parts" in streamed ? streamed.parts : null;
     if (!Array.isArray(streamedParts)) {
@@ -373,7 +390,7 @@ describe("a browsing turn's stored and streamed parts", () => {
     // The engine's own `tool` rows beside the parts shrink the same way.
     expect(
       toolMessages.map((message) =>
-        message.role === "tool" && typeof message.content === "string"
+        typeof message.content === "string"
           ? isRawPage(JSON.parse(message.content))
           : null,
       ),

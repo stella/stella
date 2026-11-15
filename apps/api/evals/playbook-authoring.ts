@@ -671,6 +671,7 @@ const runModelTurn = async ({
     timeoutMs,
     chat: (abortController) =>
       streamChatChunks({
+        threadId: Bun.randomUUIDv7(),
         abortController,
         adapter: model.adapter,
         messages,

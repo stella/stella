@@ -367,9 +367,12 @@ if (!databaseUrl || !runPostgresTests) {
 
           const olderMutation = olderDb.transaction(async (tx) => {
             await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
-            const [row] = await tx.execute(sql<{ transactionId: string }>`
+            const [row] = await tx.execute(
+              sql<{ transactionId: string }>`
             SELECT pg_current_xact_id()::text AS "transactionId"
-          `);
+          `,
+              "objects",
+            );
             const transactionId = Number(row?.["transactionId"]);
             expect(Number.isSafeInteger(transactionId)).toBe(true);
             olderIdAssigned.resolve(transactionId);
@@ -387,9 +390,12 @@ if (!databaseUrl || !runPostgresTests) {
           const olderTransactionId = await olderIdAssigned.promise;
 
           const newerTransactionId = await newerDb.transaction(async (tx) => {
-            const [row] = await tx.execute(sql<{ transactionId: string }>`
+            const [row] = await tx.execute(
+              sql<{ transactionId: string }>`
             SELECT pg_current_xact_id()::text AS "transactionId"
-          `);
+          `,
+              "objects",
+            );
             await tx.insert(corpusIndexProjectionStates).values({
               ...target,
               entityId: entityIds[0],
