@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -50,6 +51,9 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
  * month of one category, so the ledger is also the census per year and per
  * category.
  *
+ * A record with no standard `DT_WYD` value is read in the shared undated
+ * slice, including templates that publish a date under another key. Those
+ * templates also have category-month reconciliation using their declared key.
  * A record that states no issue date is in no month. The listing sorted by
  * issue date serves those first, so the crawl reads that head before the
  * months (`undated|<boundary id>|<page>`) and the ledger holds it as a slice
@@ -90,7 +94,6 @@ import {
   EMPTY_AST,
   encodeSourceRawEnvelope,
   excludedSourceSurface,
-  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -184,7 +187,56 @@ const EVERY_ISSUE_DATE = { from: "1900-01-01", to: "2100-12-31" } as const;
  * Every column the search can state for a row. Requested whole, so the stored
  * row carries every label the service has for the document.
  */
-export const PL_KIS_LISTING_COLUMNS = [
+type PlKisCategoryFields = {
+  signature: "SYG" | "SYGN_ODP" | "SYGNATURA_ORZECZENIA" | null;
+  authority: "AUTOR" | "SADY" | null;
+  date: "DT_WYD" | "DATA_ODP" | "DATA_ORZECZENIA" | "DATA_WYSLANIA_NEWSLETTERA";
+  body: "TRESC_INTERESARIUSZ" | "TRESC_NEWS";
+  headnote: "TEZA" | "TYTUL_NEWS";
+};
+const PL_KIS_FIELD_TEMPLATES = {
+  common: {
+    signature: "SYG",
+    authority: "AUTOR",
+    date: "DT_WYD",
+    body: "TRESC_INTERESARIUSZ",
+    headnote: "TEZA",
+  },
+  reference: {
+    signature: null,
+    authority: "AUTOR",
+    date: "DT_WYD",
+    body: "TRESC_INTERESARIUSZ",
+    headnote: "TEZA",
+  },
+  newsletter: {
+    signature: null,
+    authority: null,
+    date: "DATA_WYSLANIA_NEWSLETTERA",
+    body: "TRESC_NEWS",
+    headnote: "TYTUL_NEWS",
+  },
+  parliamentary: {
+    signature: "SYGN_ODP",
+    authority: "AUTOR",
+    date: "DATA_ODP",
+    body: "TRESC_INTERESARIUSZ",
+    headnote: "TEZA",
+  },
+  court: {
+    signature: "SYGNATURA_ORZECZENIA",
+    authority: "SADY",
+    date: "DATA_ORZECZENIA",
+    body: "TRESC_INTERESARIUSZ",
+    headnote: "TEZA",
+  },
+} as const satisfies Record<string, PlKisCategoryFields>;
+const TEMPLATE_METADATA_FIELDS = Object.values(PL_KIS_FIELD_TEMPLATES).flatMap(
+  ({ signature, authority, date, headnote }) =>
+    [signature, authority, date, headnote].filter((field) => field !== null),
+);
+
+const LISTING_COLUMN_SCHEMA = [
   "ID_INFORMACJI",
   "KATEGORIA_INFORMACJI",
   "SYG",
@@ -210,12 +262,21 @@ export const PL_KIS_LISTING_COLUMNS = [
   "DATA_REJESTRACJI",
   "KOMENTARZE_BIP",
   "KOM_BIP_OPIS",
+  "DATA_INTERP_ZAPYT",
+  "NR_INTERP_ZAPYT",
+  "KATEGORIA_TEMAT_NEWS",
+  ...TEMPLATE_METADATA_FIELDS,
+] as const;
+
+export const PL_KIS_LISTING_COLUMNS = [
+  ...new Set(LISTING_COLUMN_SCHEMA),
 ] as const;
 
 // ── Categories ───────────────────────────────────────────
 
 type IncludedCategory = {
   readonly disposition: "included";
+  readonly fields: PlKisCategoryFields;
   /** The service's dictionary id, which is what its filter takes. */
   readonly id: number;
   /** ASCII, ordered: a reconciliation slice ends in it and slices sort. */
@@ -231,12 +292,6 @@ type IncludedCategory = {
   readonly relation?: "amends" | "revokes";
 };
 
-type ExcludedCategory = {
-  readonly disposition: "excluded";
-  readonly id: number;
-  readonly reason: string;
-};
-
 /**
  * Every category the service's dictionary lists, and whether it is ingested.
  *
@@ -247,12 +302,14 @@ type ExcludedCategory = {
 export const PL_KIS_CATEGORIES = {
   INTERPRETACJA_INDYWIDUALNA: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 1,
     slug: "01-ind",
     decisionType: "interpretacja indywidualna",
   },
   ZMIANA_INTERPRETACJI_INDYWIDUALNEJ: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 2,
     slug: "02-ind-zm",
     decisionType: "zmiana interpretacji indywidualnej",
@@ -260,12 +317,14 @@ export const PL_KIS_CATEGORIES = {
   },
   INTERPRETACJA_OGOLNA: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 3,
     slug: "03-ogol",
     decisionType: "interpretacja ogólna",
   },
   ZMIANA_INTERPRETACJI_OGOLNEJ: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 4,
     slug: "04-ogol-zm",
     decisionType: "zmiana interpretacji ogólnej",
@@ -273,18 +332,21 @@ export const PL_KIS_CATEGORIES = {
   },
   OBJASNIENIA_PODATKOWE: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 11,
     slug: "05-objas",
     decisionType: "objaśnienia podatkowe",
   },
   WIAZACA_INFORMACJA_STAWKOWA: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 18,
     slug: "06-wis",
     decisionType: "wiążąca informacja stawkowa",
   },
   ZMIANA_WIAZACEJ_INFORMACJI_STAWKOWEJ: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 19,
     slug: "07-wis-zm",
     decisionType: "zmiana wiążącej informacji stawkowej",
@@ -292,12 +354,14 @@ export const PL_KIS_CATEGORIES = {
   },
   ODMOWA_WYDANIA_WIS: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 62_913,
     slug: "08-wis-odm",
     decisionType: "odmowa wydania wiążącej informacji stawkowej",
   },
   UCHYLENIE_WIS: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 62_915,
     slug: "09-wis-uch",
     decisionType: "uchylenie wiążącej informacji stawkowej",
@@ -305,6 +369,7 @@ export const PL_KIS_CATEGORIES = {
   },
   UCHYLENIE_ODMOWY_WIS: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 63_540,
     slug: "10-wis-uch-odm",
     decisionType: "uchylenie odmowy wydania wiążącej informacji stawkowej",
@@ -312,12 +377,14 @@ export const PL_KIS_CATEGORIES = {
   },
   WIAZACA_INFORMACJA_AKCYZOWA: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 16,
     slug: "11-wia",
     decisionType: "wiążąca informacja akcyzowa",
   },
   ZMIANA_WIAZACEJ_INFORMACJI_AKCYZOWEJ: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 17,
     slug: "12-wia-zm",
     decisionType: "zmiana wiążącej informacji akcyzowej",
@@ -325,12 +392,14 @@ export const PL_KIS_CATEGORIES = {
   },
   ODMOWA_WYDANIA_WIA: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 62_914,
     slug: "13-wia-odm",
     decisionType: "odmowa wydania wiążącej informacji akcyzowej",
   },
   UCHYLENIE_WIA: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 62_916,
     slug: "14-wia-uch",
     decisionType: "uchylenie wiążącej informacji akcyzowej",
@@ -338,24 +407,28 @@ export const PL_KIS_CATEGORIES = {
   },
   INFORMACJA_O_WYDANIU_OPINII_ZABEZPIECZAJACEJ: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 14,
     slug: "15-opz",
     decisionType: "informacja o wydaniu opinii zabezpieczającej",
   },
   INFORMACJA_O_ODMOWIE_WYDANIA_OPINII: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 15,
     slug: "16-opz-odm",
     decisionType: "informacja o odmowie wydania opinii zabezpieczającej",
   },
   OPINIA_OPODATKOWANIE_WYROWNAWCZE: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 67_890,
     slug: "17-opw",
     decisionType: "opinia w sprawie opodatkowania wyrównawczego",
   },
   ODMOWA_OPINII_OPODATKOWANIE_WYROWNAWCZE: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 74_593,
     slug: "18-opw-odm",
     decisionType:
@@ -365,78 +438,116 @@ export const PL_KIS_CATEGORIES = {
   },
   POSTANOWIENIE_ROZSTRZYGAJACE_SPOR_O_WLASCIWOSC: {
     disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 23,
     slug: "19-spor",
     decisionType: "postanowienie rozstrzygające spór o właściwość",
   },
   BROSZURA_INFORMACYJNA: {
-    disposition: "excluded",
+    disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.reference,
     id: 5,
-    reason: "a leaflet for taxpayers, not a decision in any matter",
+    slug: "20-broszura",
+    decisionType: "broszura informacyjna",
   },
   INFORMACJA_MINISTERSTWA_FINANSOW_DLA_DZIENNIKARZY: {
-    disposition: "excluded",
+    disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.reference,
     id: 10,
-    reason: "an answer to a journalist, not a decision in any matter",
+    slug: "21-media",
+    decisionType:
+      "informacja ministerstwa finansów przekazywana do mediów na zapytania dziennikarzy",
   },
   INFORMACJE_PRASOWE_KIS: {
-    disposition: "excluded",
+    disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.reference,
     id: 64_697,
-    reason: "a press release",
+    slug: "22-prasa",
+    decisionType: "informacje prasowe kis",
   },
   NEWSLETTER: {
-    disposition: "excluded",
+    disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.newsletter,
     id: 34,
-    reason: "a newsletter, with no issue date",
+    slug: "23-newsletter",
+    decisionType: "newsletter",
   },
   ODPOWIEDZ_DLA_SENATOROW: {
-    disposition: "excluded",
+    disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.parliamentary,
     id: 7,
-    reason: "a parliamentary answer, with no issue date",
+    slug: "24-senat",
+    decisionType: "odpowiedź dla senatorów",
   },
   ODPOWIEDZ_NA_ZAPYTANIE_POSELSKIE: {
-    disposition: "excluded",
+    disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.parliamentary,
     id: 6,
-    reason: "a parliamentary answer, with no issue date",
+    slug: "25-sejm",
+    decisionType: "odpowiedź na interpelację/zapytanie poselskie",
   },
   ORZECZENIA_SADOW: {
-    disposition: "excluded",
+    disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.court,
     id: 26,
-    reason:
-      "copies of court judgments, which the court sources publish themselves",
+    slug: "26-orzeczenia",
+    decisionType: "orzeczenia sądów",
   },
   PIGULKA_WIEDZY_UZGODNIENIE: {
-    disposition: "excluded",
+    disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.reference,
     id: 21,
-    reason: "the service's internal guidance note, not addressed to anyone",
+    slug: "27-pigulka",
+    decisionType: "pigułka wiedzy/uzgodnienie",
   },
   PISMO_MINISTERSTWA_FINANSOW: {
-    disposition: "excluded",
+    disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.common,
     id: 9,
-    reason: "correspondence of the ministry, not a decision in any matter",
+    slug: "28-pismo",
+    decisionType: "pismo ministerstwa finansów",
   },
   WYTYCZNE_MINISTERSTWA_FINANSOW: {
-    disposition: "excluded",
+    disposition: "included",
+    fields: PL_KIS_FIELD_TEMPLATES.reference,
     id: 8,
-    reason: "guidance for businesses, whose signature field holds a title",
+    slug: "29-wytyczne",
+    decisionType: "wytyczne/wyjaśnienia ministerstwa finansów",
   },
-} as const satisfies Record<string, IncludedCategory | ExcludedCategory>;
+} as const satisfies Record<string, IncludedCategory>;
 
-const CATEGORY_LIST: readonly (IncludedCategory | ExcludedCategory)[] =
+const CATEGORY_LIST: readonly IncludedCategory[] =
   Object.values(PL_KIS_CATEGORIES);
 
 export const PL_KIS_INCLUDED_CATEGORIES: readonly IncludedCategory[] =
-  CATEGORY_LIST.filter(
-    (category): category is IncludedCategory =>
-      category.disposition === "included",
-  ).toSorted((left, right) => (left.slug < right.slug ? -1 : 1));
+  CATEGORY_LIST.toSorted((left, right) => (left.slug < right.slug ? -1 : 1));
 
 const INCLUDED_IDS = PL_KIS_INCLUDED_CATEGORIES.map(({ id }) => id);
 
-export const plKisCategoryById = (
-  id: number,
-): IncludedCategory | ExcludedCategory | undefined =>
+export const plKisCategoryById = (id: number): IncludedCategory | undefined =>
   CATEGORY_LIST.find((category) => category.id === id);
+
+/** The templates of documents that rule on nothing. */
+const NON_RULING_TEMPLATES: ReadonlySet<PlKisCategoryFields> = new Set([
+  PL_KIS_FIELD_TEMPLATES.reference,
+  PL_KIS_FIELD_TEMPLATES.newsletter,
+  PL_KIS_FIELD_TEMPLATES.parliamentary,
+]);
+
+/**
+ * Whether a document of this type rules: an interpretation, an opinion or
+ * a court's judgment does; a brochure, guidance, a newsletter or an answer
+ * to parliament does not. A type the service has not declared is taken to
+ * rule.
+ */
+export const plKisDocumentRules = (
+  decisionType: string | undefined,
+): boolean => {
+  const category = PL_KIS_INCLUDED_CATEGORIES.find(
+    (candidate) => candidate.decisionType === decisionType,
+  );
+  return category === undefined || !NON_RULING_TEMPLATES.has(category.fields);
+};
 
 /**
  * The category a listing states by label, for a row whose detail never
@@ -476,9 +587,10 @@ const statusOf = (id: string | undefined): PlKisStatus => {
 
 export type PlKisListingQuery = {
   categories: readonly number[];
-  /** Inclusive issue-date bounds, `YYYY-MM-DD`; absent means unbounded. */
-  issuedFrom?: string | undefined;
-  issuedTo?: string | undefined;
+  /** The source template's own date field and inclusive calendar bounds. */
+  issueDateWindow?:
+    | { field: PlKisCategoryFields["date"]; from: string; to: string }
+    | undefined;
   sort: PlKisSort;
   page: number;
   size: number;
@@ -505,14 +617,17 @@ export const plKisListingUrl = ({
  */
 export const plKisListingBody = ({
   categories,
-  issuedFrom,
-  issuedTo,
-}: Pick<PlKisListingQuery, "categories" | "issuedFrom" | "issuedTo">): string =>
+  issueDateWindow,
+}: Pick<PlKisListingQuery, "categories" | "issueDateWindow">): string =>
   JSON.stringify({
     filter: {
       KATEGORIA_INFORMACJI: categories.map(Number),
-      ...(issuedFrom === undefined ? {} : { DT_WYD_start: issuedFrom }),
-      ...(issuedTo === undefined ? {} : { DT_WYD_end: issuedTo }),
+      ...(issueDateWindow === undefined
+        ? {}
+        : {
+            [`${issueDateWindow.field}_start`]: issueDateWindow.from,
+            [`${issueDateWindow.field}_end`]: issueDateWindow.to,
+          }),
     },
     columns: PL_KIS_LISTING_COLUMNS,
     searchInFullPhrase: false,
@@ -735,16 +850,40 @@ const QUARANTINE_ID_PREFIX = "eureka-quarantine:";
  * Built only from fields a row keeps when its id recovers, so the observation
  * that learns the id adopts the audited row rather than adding a second one.
  */
-export const plKisQuarantineId = (row: Record<string, unknown>): string =>
-  `${QUARANTINE_ID_PREFIX}${hashContent(
+const categoryOf = (
+  row: Record<string, unknown>,
+  detail: PlKisDetail | undefined,
+) => {
+  const categoryId = detailString(detail, "KATEGORIA_INFORMACJI");
+  return (
+    (categoryId === undefined
+      ? undefined
+      : plKisCategoryById(Number(categoryId))) ??
+    labelsOf(row["KATEGORIA_INFORMACJI"])
+      .map(categoryByLabel)
+      .find((category) => category !== undefined)
+  );
+};
+
+export const plKisQuarantineId = (row: Record<string, unknown>): string => {
+  const fields =
+    categoryOf(row, undefined)?.fields ?? PL_KIS_FIELD_TEMPLATES.common;
+  return `${QUARANTINE_ID_PREFIX}${hashContent(
     JSON.stringify({
-      signature: row["SYG"] ?? null,
-      issued: row["DT_WYD"] ?? null,
+      // A template without a signature field still tells two rows apart by
+      // the publisher's `SYG` where it states one.
+      signature:
+        fields.signature === null
+          ? (row["SYG"] ?? null)
+          : (row[fields.signature] ?? null),
+      issued: row[fields.date] ?? null,
       category: row["KATEGORIA_INFORMACJI"] ?? null,
-      authority: row["AUTOR"] ?? null,
-      thesis: row["TEZA"] ?? null,
+      authority:
+        fields.authority === null ? null : (row[fields.authority] ?? null),
+      thesis: row[fields.headnote] ?? null,
     }),
   )}`;
+};
 
 /** The identity a listed row is stored under: its id, or its quarantine key. */
 export const plKisStoredIdOf = (row: Record<string, unknown>): string =>
@@ -925,6 +1064,19 @@ const SOURCE_FIELDS = [
   `${TOP_PREFIX}szablonId`,
   `${TOP_PREFIX}wersjaSzablonuId`,
   `${TOP_PREFIX}informacjaTytulDto`,
+  "DATA_INTERP_ZAPYT",
+  "DATA_ODP",
+  "NR_INTERP_ZAPYT",
+  "SYGN_ODP",
+  "TRESC_INTERP_ZAPYT",
+  "DATA_WYSLANIA_NEWSLETTERA",
+  "KATEGORIA_TEMAT_NEWS",
+  "TYTUL_NEWS",
+  "TRESC_NEWS",
+  "DATA_ORZECZENIA",
+  "SADY",
+  "SYGNATURA_ORZECZENIA",
+  ...PL_KIS_LISTING_COLUMNS,
 ] as const;
 
 type PlKisSourceField = (typeof SOURCE_FIELDS)[number];
@@ -953,7 +1105,16 @@ const PL_KIS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "decisionDate" },
   },
-  SYG: { disposition: "stored", target: { type: "result", key: "caseNumber" } },
+  SYG: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["SYG"],
+      reason:
+        "The publisher signature can be a docket, title or placeholder; retain it independently of the normalized decision identity",
+    },
+  },
   SLOWA_KLUCZOWE: metadataField("keywords"),
   PRZEPISY: metadataField("provisions"),
   ZAGADNIENIA: metadataField("issues"),
@@ -973,22 +1134,152 @@ const PL_KIS_SOURCE_FIELDS = {
   DATA_REJESTRACJI: metadataField("registeredAt"),
   KOMENTARZE_BIP: metadataField("bipComments"),
   KOM_BIP_OPIS: metadataField("bipCommentNote"),
-  POZIOM_DOSTEPU_WYBRANEJ_TRESCI: legacyExcludedSourceField(
-    "which of the service's editor groups may see a part of the document; it says nothing about the document",
-  ),
+  POZIOM_DOSTEPU_WYBRANEJ_TRESCI: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original detail response retains the publisher value, including its keyed field collection and empty values",
+    },
+  },
   WYNIK_ANALIZY: metadataField("analysisResultId"),
-  [`${TOP_PREFIX}id`]: legacyExcludedSourceField(
-    "the same id ID_INFORMACJI states, which keys the row",
-  ),
+  [`${TOP_PREFIX}id`]: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["id"],
+      reason:
+        "The original detail response retains the publisher value, including its keyed field collection and empty values",
+    },
+  },
   [`${TOP_PREFIX}versionId`]: metadataField("versionId"),
-  [`${TOP_PREFIX}nazwa`]: legacyExcludedSourceField(
-    "the category's name, which KATEGORIA_INFORMACJI states",
-  ),
+  [`${TOP_PREFIX}nazwa`]: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["nazwa"],
+      reason:
+        "The original detail response retains the publisher value, including its keyed field collection and empty values",
+    },
+  },
   [`${TOP_PREFIX}szablonId`]: metadataField("templateId"),
   [`${TOP_PREFIX}wersjaSzablonuId`]: metadataField("templateVersionId"),
-  [`${TOP_PREFIX}informacjaTytulDto`]: legacyExcludedSourceField(
-    "an empty list on every document observed; the title is TEZA",
-  ),
+  [`${TOP_PREFIX}informacjaTytulDto`]: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["informacjaTytulDto"],
+      reason:
+        "The original detail response retains the publisher value, including its keyed field collection and empty values",
+    },
+  },
+  DATA_INTERP_ZAPYT: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original typed field collection retains this category-specific publisher value exactly",
+    },
+  },
+  DATA_ODP: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original typed field collection retains this category-specific publisher value exactly",
+    },
+  },
+  NR_INTERP_ZAPYT: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original typed field collection retains this category-specific publisher value exactly",
+    },
+  },
+  SYGN_ODP: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original typed field collection retains this category-specific publisher value exactly",
+    },
+  },
+  TRESC_INTERP_ZAPYT: { disposition: "stored", target: { type: "document" } },
+  DATA_WYSLANIA_NEWSLETTERA: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original typed field collection retains this category-specific publisher value exactly",
+    },
+  },
+  KATEGORIA_TEMAT_NEWS: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original typed field collection retains this category-specific publisher value exactly",
+    },
+  },
+  TYTUL_NEWS: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original typed field collection retains this category-specific publisher value exactly",
+    },
+  },
+  TRESC_NEWS: { disposition: "stored", target: { type: "document" } },
+  DATA_ORZECZENIA: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original typed field collection retains this category-specific publisher value exactly",
+    },
+  },
+  SADY: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original typed field collection retains this category-specific publisher value exactly",
+    },
+  },
+  SYGNATURA_ORZECZENIA: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original typed field collection retains this category-specific publisher value exactly",
+    },
+  },
 } as const satisfies Record<keyof PlKisPublisherRecord, SourceFieldDisposition>;
 
 const KNOWN_FIELDS: ReadonlySet<string> = new Set(SOURCE_FIELDS);
@@ -1156,6 +1447,36 @@ const detailProblemOf = (
   return detail === undefined ? "detail-unreadable" : undefined;
 };
 
+/**
+ * Every HTML text a record can state, in reading order: the question a
+ * parliamentary answer replies to, the document's own text, and a
+ * newsletter's text.
+ */
+const PL_KIS_TEXT_FIELDS = [
+  "TRESC_INTERP_ZAPYT",
+  "TRESC_INTERESARIUSZ",
+  "TRESC_NEWS",
+] as const;
+
+/**
+ * The document's HTML: every text field the record states, in reading
+ * order, so a parliamentary answer opens with the question it replies to.
+ * `undefined` when the template's own text field is empty, so the document
+ * is read from its PDF.
+ */
+const documentHtmlOf = (
+  detail: PlKisDetail | undefined,
+  body: PlKisCategoryFields["body"],
+): string | undefined => {
+  if (detailString(detail, body) === undefined) {
+    return undefined;
+  }
+  return PL_KIS_TEXT_FIELDS.flatMap((key) => {
+    const text = detailString(detail, key);
+    return text === undefined ? [] : [text];
+  }).join("\n");
+};
+
 type ParsedDocument = {
   output: ParsePlKisDocumentOutput;
   from: "html" | "pdf";
@@ -1219,18 +1540,17 @@ export const assemblePlKisDecision = async ({
 
   const categoryId = detailString(detail, "KATEGORIA_INFORMACJI");
   const categoryLabels = labelsOf(row["KATEGORIA_INFORMACJI"]);
-  const category =
-    (categoryId === undefined
-      ? undefined
-      : plKisCategoryById(Number(categoryId))) ??
-    categoryLabels.map(categoryByLabel).find((found) => found !== undefined);
-  const includedCategory =
-    category?.disposition === "included" ? category : undefined;
+  const category = categoryOf(row, detail);
+  const fields = category?.fields ?? PL_KIS_FIELD_TEMPLATES.common;
 
   // The service keeps a signature as typed, trailing blank included.
-  const signature = statedString(row, detail, "SYG")?.trim();
+  const signature =
+    fields.signature === null
+      ? undefined
+      : statedString(row, detail, fields.signature)?.trim();
   const caseNumber = signature ?? id;
-  const authorities = labelsOf(row["AUTOR"]);
+  const authorities =
+    fields.authority === null ? [] : labelsOf(row[fields.authority]);
   // The issuing authority is the record's own field and nothing else: the
   // service holds documents of several authorities, so none is assumed.
   const court = authorities[0] ?? "";
@@ -1240,10 +1560,9 @@ export const assemblePlKisDecision = async ({
       sourceDocumentId: id,
     });
   }
-  const decisionDate = statedDay(row, detail, "DT_WYD");
+  const decisionDate = statedDay(row, detail, fields.date);
   const decisionType =
-    includedCategory?.decisionType ??
-    categoryLabels[0]?.toLocaleLowerCase("pl-PL");
+    category?.decisionType ?? categoryLabels[0]?.toLocaleLowerCase("pl-PL");
   const provisions = labelsOf(row["PRZEPISY"]).map(parsePlKisProvision);
   const issues = labelsOf(row["ZAGADNIENIA"]);
   const keywords = labelsOf(row["SLOWA_KLUCZOWE"]);
@@ -1252,7 +1571,7 @@ export const assemblePlKisDecision = async ({
   const documentUrl =
     publisherId === undefined ? undefined : pdfUrl(publisherId);
 
-  const html = detailString(detail, "TRESC_INTERESARIUSZ");
+  const html = documentHtmlOf(detail, fields.body);
   const parseInput = {
     caseNumber,
     court,
@@ -1318,7 +1637,7 @@ export const assemblePlKisDecision = async ({
       ...(documentUrl === undefined ? {} : { documentUrl }),
       textFields: {
         ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        headnote: thesisField(statedString(row, detail, "TEZA")),
+        headnote: thesisField(statedString(row, detail, fields.headnote)),
       },
       metadata: checkedDecisionMetadata(
         {
@@ -1336,7 +1655,10 @@ export const assemblePlKisDecision = async ({
                   disposition: category.disposition,
                 },
           authorities,
-          authorityIds: detailIds(detail, "AUTOR"),
+          authorityIds:
+            fields.authority === null
+              ? []
+              : detailIds(detail, fields.authority),
           status: statusOf(statusId),
           statusId,
           statusLabel: statusLabels[0],
@@ -1356,7 +1678,7 @@ export const assemblePlKisDecision = async ({
               issues.flatMap((label) => issuePathOf(label).slice(0, 1)),
             ),
           ],
-          relatedDocuments: relatedDocumentsOf(row, detail, includedCategory),
+          relatedDocuments: relatedDocumentsOf(row, detail, category),
           ...supplementaryMetadata(row, detail),
           ...(parsed === undefined ? {} : { documentFrom: parsed.from }),
           ...(unmapped.length === 0 ? {} : { unmappedSourceFields: unmapped }),
@@ -1485,7 +1807,10 @@ const buildPlKisDecision = async (
   let pdfBytes: Uint8Array | undefined;
   if (
     detail !== undefined &&
-    detailString(detail, "TRESC_INTERESARIUSZ") === undefined
+    detailString(
+      detail,
+      (categoryOf(row, detail)?.fields ?? PL_KIS_FIELD_TEMPLATES.common).body,
+    ) === undefined
   ) {
     const pdf = await fetchPdf(id, cursor, signal);
     if (Result.isError(pdf)) {
@@ -1722,8 +2047,7 @@ export const listPlKisUndatedPage = async (
   const dated = await search(
     {
       categories: INCLUDED_IDS,
-      issuedFrom: EVERY_ISSUE_DATE.from,
-      issuedTo: EVERY_ISSUE_DATE.to,
+      issueDateWindow: { field: "DT_WYD", ...EVERY_ISSUE_DATE },
       sort: SORT.ID_ASC,
       page: 0,
       size: 1,
@@ -1794,8 +2118,7 @@ const listPlKisSlicePage = async ({
   const listed = await search(
     {
       categories: [parsed.category.id],
-      issuedFrom: bounds.from,
-      issuedTo: bounds.to,
+      issueDateWindow: { field: parsed.category.fields.date, ...bounds },
       sort: SORT.ID_ASC,
       page,
       size: RECONCILIATION_PAGE_SIZE,
@@ -2032,8 +2355,7 @@ const sweepPage = async (
     const listed = await search(
       {
         categories: INCLUDED_IDS,
-        issuedFrom: bounds.from,
-        issuedTo: bounds.to,
+        issueDateWindow: { field: "DT_WYD", ...bounds },
         sort: SORT.ID_ASC,
         page,
         size: CRAWL_PAGE_SIZE,
@@ -2429,33 +2751,9 @@ export const plKisAdapter = defineSourceAdapter({
     // The declared listing columns hold record content, without result coordinates.
     revisionOf: (payload) =>
       isRecord(payload)
-        ? {
-            ID_INFORMACJI: payload["ID_INFORMACJI"],
-            KATEGORIA_INFORMACJI: payload["KATEGORIA_INFORMACJI"],
-            SYG: payload["SYG"],
-            DT_WYD: payload["DT_WYD"],
-            TEZA: payload["TEZA"],
-            STATUS_INFORMACJI: payload["STATUS_INFORMACJI"],
-            DATA_PUBLIKACJI: payload["DATA_PUBLIKACJI"],
-            AUTOR: payload["AUTOR"],
-            SLOWA_KLUCZOWE: payload["SLOWA_KLUCZOWE"],
-            PRZEPISY: payload["PRZEPISY"],
-            ZAGADNIENIA: payload["ZAGADNIENIA"],
-            INFORMACJA_ZMIENIANA: payload["INFORMACJA_ZMIENIANA"],
-            MIEJ_PUB: payload["MIEJ_PUB"],
-            INN_ZROD: payload["INN_ZROD"],
-            RODZAJ_DECYZJI: payload["RODZAJ_DECYZJI"],
-            DAT_WAZ_OD: payload["DAT_WAZ_OD"],
-            DAT_WAZ_DO: payload["DAT_WAZ_DO"],
-            STAN_PRAW: payload["STAN_PRAW"],
-            NOMENKLATURA_SCALONA: payload["NOMENKLATURA_SCALONA"],
-            KLASYFIKACJA_PKWIU: payload["KLASYFIKACJA_PKWIU"],
-            KLASYFIKACJA_PKOB: payload["KLASYFIKACJA_PKOB"],
-            RODZAJ_WYROBU_AKCYZOWEGO: payload["RODZAJ_WYROBU_AKCYZOWEGO"],
-            DATA_REJESTRACJI: payload["DATA_REJESTRACJI"],
-            KOMENTARZE_BIP: payload["KOMENTARZE_BIP"],
-            KOM_BIP_OPIS: payload["KOM_BIP_OPIS"],
-          }
+        ? Object.fromEntries(
+            PL_KIS_LISTING_COLUMNS.map((key) => [key, payload[key]]),
+          )
         : null,
     firstSlice: PL_KIS_FIRST_SLICE,
     sliceOf,
