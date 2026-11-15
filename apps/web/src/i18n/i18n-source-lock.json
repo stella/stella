@@ -1657,7 +1657,6 @@
   "chat.prompts.tryOne": "Try one of these to start",
   "chat.queue.actions": "Queued message actions",
   "chat.queue.editNeedsComposer": "Open this chat to edit a queued message.",
-  "chat.queue.filesNotQueued": "A message with files can't wait in the queue. Send it once the current response finishes.",
   "chat.queue.heldByMember": "Queue paused.",
   "chat.queue.heldComputerAway": "Waiting for your computer: queued messages are sent once it connects.",
   "chat.queue.heldSendRefused": "Queue paused: the first message could not be sent. Edit or remove it, then resume.",

@@ -20,6 +20,10 @@ import type {
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
 import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+import {
+  QUEUED_MESSAGE_FILES_ON_REMOVE,
+  type QueuedMessageFilesOnRemove,
+} from "@stll/api-contract/chat-queue";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import {
@@ -127,7 +131,6 @@ import {
   updateCachedChatQueue,
 } from "@/features/chat/chat-queue";
 import {
-  canQueueMessage,
   CHAT_STEER_REFUSAL_MESSAGES,
   type ChatSteerRefusal,
   composerDraftOfParts,
@@ -818,11 +821,18 @@ export const useChatSession = ({
   /** Remove queued message `id` at the `revision` this page read: one
    *  edited since stays queued (the server refuses the removal). */
   const removeFromQueue = useCallback(
-    async (id: string, revision: number) => {
+    async (
+      id: string,
+      {
+        files,
+        revision,
+      }: { files: QueuedMessageFilesOnRemove; revision: number },
+    ) => {
       removedHereRef.current.add(id);
       const removed = await Result.tryPromise(
         async () =>
           await removeQueuedChatMessage({
+            files,
             messageId: id,
             revision,
             threadId: threadRef.threadId,
@@ -922,10 +932,6 @@ export const useChatSession = ({
       message: ChatUserMessageInput,
       options?: ChatSendMessageOptions,
     ): Promise<ChatSendOutcome> => {
-      if (!canQueueMessage(message)) {
-        stellaToast.warning(t("chat.queue.filesNotQueued"));
-        return CHAT_SEND_KEPT;
-      }
       const send = queuedChatSendOf(
         chat,
         message,
@@ -1196,7 +1202,10 @@ export const useChatSession = ({
               });
               await writeQueue(async () =>
                 outcome.type === "steered"
-                  ? await removeFromQueue(id, item.revision)
+                  ? await removeFromQueue(id, {
+                    files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
+                    revision: item.revision,
+                  })
                   : await sendQueuedChatMessageNow(threadRef.threadId, id),
               );
             })(),
@@ -1255,7 +1264,10 @@ export const useChatSession = ({
         update: (current) => withQueuedMessageRemoved({ id, queue: current }),
       });
       detached(
-        writeQueue(async () => await removeFromQueue(id, item.revision)),
+        writeQueue(async () => await removeFromQueue(id, {
+          files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
+          revision: item.revision,
+        })),
         "use-chat-session.remove-queued-message",
       );
     },
@@ -1279,7 +1291,11 @@ export const useChatSession = ({
       detached(
         (async () => {
           const removed = await Result.tryPromise(
-            async () => await removeFromQueue(id, item.revision),
+            // Its stored files stay: the composer sends them again.
+            async () => await removeFromQueue(id, {
+              files: QUEUED_MESSAGE_FILES_ON_REMOVE.keep,
+              revision: item.revision,
+            }),
           );
           await refreshQueue();
           if (Result.isError(removed)) {
@@ -2357,7 +2373,10 @@ export const useChatSession = ({
         switch (outcome.type) {
           case "steered":
             await writeQueue(
-              async () => await removeFromQueue(steered.id, steered.revision),
+              async () => await removeFromQueue(steered.id, {
+                files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
+                revision: steered.revision,
+              }),
             );
             return;
           case "refused":

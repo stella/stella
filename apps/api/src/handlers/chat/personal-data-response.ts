@@ -284,6 +284,9 @@ const UNEXPORTED_QUEUED_CHAT_MESSAGE_COLUMNS = [
   "userId",
   // When the queue's sweep last tried the thread: internal bookkeeping.
   "sweptAt",
+  // Ids of the chat files the enqueue stored, kept so removing the message
+  // deletes them; the files are exported with the account's chat files.
+  "uploadedFileIds",
 ] as const satisfies readonly (keyof QueuedChatMessageExportRow)[];
 
 type MissingExportedQueuedChatMessageColumn = UnprojectedColumns<

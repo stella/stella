@@ -2099,7 +2099,6 @@
     "queue": {
       "actions": "Akcje wiadomości w kolejce",
       "editNeedsComposer": "Otwórz ten czat, aby edytować wiadomość w kolejce.",
-      "filesNotQueued": "Wiadomość z plikami nie może czekać w kolejce. Wyślij ją, gdy bieżąca odpowiedź się zakończy.",
       "heldByMember": "Kolejka wstrzymana.",
       "heldComputerAway": "Oczekiwanie na Twój komputer: wiadomości z kolejki zostaną wysłane, gdy się połączy.",
       "heldSendRefused": "Kolejka wstrzymana: nie udało się wysłać pierwszej wiadomości. Edytuj ją lub usuń, a potem wznów.",

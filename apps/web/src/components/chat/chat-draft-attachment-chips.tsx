@@ -16,6 +16,7 @@ import { DocumentIcon } from "@/components/document-icon";
 
 type ChatAttachmentChipItem =
   | Omit<Extract<ChatDraftAttachment, { type: "file" }>, "file">
+  | Omit<Extract<ChatDraftAttachment, { type: "stored_file" }>, "url">
   | Extract<ChatDraftAttachment, { type: "pasted_text" }>;
 
 const chipKind = (item: ChatAttachmentChipItem): AttachmentChipKind => {
@@ -46,7 +47,7 @@ export const ChatAttachmentChip = ({
   );
   const contentId = useId();
   const title =
-    item.type === "file"
+    item.type !== "pasted_text"
       ? item.filename
       : (item.text
           .split(/\r\n|\r|\n/u)
@@ -101,7 +102,7 @@ export const ChatAttachmentChip = ({
       <AttachmentChip
         actions={actions}
         icon={({ className }) =>
-          item.type === "file" ? (
+          item.type !== "pasted_text" ? (
             <DocumentIcon className={className} mimeType={item.mimeType} />
           ) : (
             <TextIcon aria-hidden="true" className={className} />

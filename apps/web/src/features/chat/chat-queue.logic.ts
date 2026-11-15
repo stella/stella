@@ -12,8 +12,12 @@ import {
   CHAT_TURN_STEERING,
   type ChatThreadSendState,
 } from "@stll/api-contract/chat-send-intent";
+import { userFileIdFromUrl } from "@stll/api-contract/user-file-url";
 
-import type { ChatMessageDraftHandoff } from "@/components/chat-editor-provider";
+import type {
+  ChatDraftStoredFileAttachment,
+  ChatMessageDraftHandoff,
+} from "@/components/chat-editor-provider";
 import type { ChatQueue, ChatQueueItem } from "@/features/chat/chat-queue";
 import {
   type ChatSendMessageOptions,
@@ -25,6 +29,7 @@ import type {
   ChatEditApplyMode,
   DocxEditRepresentation,
 } from "@/lib/chat-edit-mode";
+import { createUuid } from "@/lib/uuid";
 
 /**
  * The request options a message is queued with: its send mode and DOCX edit
@@ -68,16 +73,62 @@ export const messagePartsOf = (
     : message.content;
 
 /**
- * What of a message the composer can hold again: its markup and its pasted
- * texts. Files are not part of it; a message with files never reaches here.
+ * A file part the server stores, as the composer holds it again: by
+ * reference. `null` for any other part (an inline file was never stored).
+ */
+const storedFileOfPart = (
+  part: unknown,
+): ChatDraftStoredFileAttachment | null => {
+  if (
+    typeof part !== "object" ||
+    part === null ||
+    !("type" in part) ||
+    (part.type !== "image" && part.type !== "document") ||
+    !("source" in part) ||
+    typeof part.source !== "object" ||
+    part.source === null ||
+    !("value" in part.source) ||
+    typeof part.source.value !== "string" ||
+    userFileIdFromUrl(part.source.value) === null
+  ) {
+    return null;
+  }
+  const mimeType =
+    "mimeType" in part.source && typeof part.source.mimeType === "string"
+      ? part.source.mimeType
+      : "application/octet-stream";
+  const filename =
+    "metadata" in part &&
+    typeof part.metadata === "object" &&
+    part.metadata !== null &&
+    "filename" in part.metadata &&
+    typeof part.metadata.filename === "string"
+      ? part.metadata.filename
+      : part.source.value;
+  return {
+    type: "stored_file",
+    filename,
+    id: createUuid(),
+    mimeType,
+    url: part.source.value,
+  };
+};
+
+/**
+ * What of a message the composer can hold again: its markup, its pasted
+ * texts and its stored files (by reference).
  */
 export const composerDraftOfParts = (
   parts: readonly unknown[],
 ): ChatMessageDraftHandoff => {
   const html: string[] = [];
   const pastedTexts: string[] = [];
+  const storedFiles: ChatDraftStoredFileAttachment[] = [];
   for (const part of parts) {
-    if (isChatPastedTextPart(part)) {
+    const storedFile = storedFileOfPart(part);
+    if (storedFile !== null) {
+      storedFiles.push(storedFile);
+    } else if (isChatPastedTextPart(part)) {
       pastedTexts.push(part.content);
     } else if (
       typeof part === "object" &&
@@ -90,7 +141,7 @@ export const composerDraftOfParts = (
       html.push(part.content);
     }
   }
-  return { html: html.join(""), pastedTexts };
+  return { html: html.join(""), pastedTexts, storedFiles };
 };
 
 /**
@@ -109,8 +160,9 @@ export const steerableMessageText = (
   const draft = composerDraftOfParts(parts);
   const text = draft.html.trim();
   return draft.pastedTexts.length === 0 &&
+    draft.storedFiles.length === 0 &&
     parts.length > 0 &&
-    canQueueMessage(message) &&
+    isTextOnlyMessage(message) &&
     text !== ""
     ? text
     : null;
@@ -152,12 +204,8 @@ export const isQueueInsteadRefusal = (error: unknown): boolean =>
     hasChatErrorCode(error, code),
   );
 
-/**
- * Whether a message can wait in the queue: the queue keeps text, and files
- * only once they are stored, which a message from the composer's own files
- * is not yet. Pasted text travels as text.
- */
-export const canQueueMessage = (message: ChatUserMessageInput): boolean =>
+/** Whether a message is text alone (pasted text counts as text). */
+const isTextOnlyMessage = (message: ChatUserMessageInput): boolean =>
   typeof message.content === "string" ||
   message.content.every(
     (part) => part.type === "text" || isChatPastedTextPart(part),

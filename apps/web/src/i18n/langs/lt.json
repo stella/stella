@@ -2099,7 +2099,6 @@
     "queue": {
       "actions": "Eilėje esančios žinutės veiksmai",
       "editNeedsComposer": "Atidarykite šį pokalbį, kad redaguotumėte eilėje esančią žinutę.",
-      "filesNotQueued": "Žinutė su failais negali laukti eilėje. Išsiųskite ją, kai dabartinis atsakymas baigsis.",
       "heldByMember": "Eilė pristabdyta.",
       "heldComputerAway": "Laukiama jūsų kompiuterio: eilėje esančios žinutės bus išsiųstos, kai jis prisijungs.",
       "heldSendRefused": "Eilė pristabdyta: pirmosios žinutės išsiųsti nepavyko. Pakeiskite ją arba pašalinkite, tada tęskite.",

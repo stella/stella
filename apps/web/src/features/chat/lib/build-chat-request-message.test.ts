@@ -44,3 +44,29 @@ test("sends pasted text as a native text attachment without normalizing it", asy
     { type: "text", content: text, metadata: { type: "pasted_text" } },
   ]);
 });
+
+test("sends a file the server already stores by reference, never inline", async () => {
+  const url = "stella://file::00000000-0000-7000-8000-0000000000f1";
+  const message = (
+    await buildChatRequestMessage({
+      files: [
+        {
+          type: "stored_file",
+          filename: "lease.pdf",
+          id: "stored",
+          mimeType: "application/pdf",
+          url,
+        },
+      ],
+      html: "<p>Again</p>",
+    })
+  ).unwrap();
+  expect(message.content).toEqual([
+    { type: "text", content: "<p>Again</p>" },
+    {
+      type: "document",
+      source: { type: "url", value: url, mimeType: "application/pdf" },
+      metadata: { filename: "lease.pdf" },
+    },
+  ]);
+});

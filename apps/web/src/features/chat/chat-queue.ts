@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { CHAT_THREAD_NOT_FOUND_ERROR_CODE } from "@stll/api-contract";
+import type { QueuedMessageFilesOnRemove } from "@stll/api-contract/chat-queue";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { api } from "@/lib/api";
@@ -86,13 +87,16 @@ export const enqueueChatMessage = async (
     unwrapApiResponse(await queueRoutes(threadId).post({ send })),
   );
 
-/** Remove a queued message at the `revision` read; answers it as it was
- *  queued, or `null` once it was no longer queued. */
+/** Remove a queued message at the `revision` read, deleting or keeping the
+ *  files its queueing stored (`files`); answers it as it was queued, or
+ *  `null` once it was no longer queued. */
 export const removeQueuedChatMessage = async ({
+  files,
   messageId,
   revision,
   threadId,
 }: {
+  files: QueuedMessageFilesOnRemove;
   messageId: string;
   revision: number;
   threadId: string;
@@ -100,7 +104,7 @@ export const removeQueuedChatMessage = async ({
   await invokeAppOnlyWrite("chat.queue.delete", async () =>
     unwrapApiResponse(
       await queuedMessageRoutes(threadId, messageId).delete(undefined, {
-        query: { revision },
+        query: { files, revision },
       }),
     ),
   );

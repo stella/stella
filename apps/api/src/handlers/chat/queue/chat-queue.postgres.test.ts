@@ -14,8 +14,10 @@ import {
   chatQueueHolds,
   chatThreads,
   chatTurns,
+  entityDeletionCleanupRequests,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
+  userFiles,
 } from "@/api/db/schema";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import type { QueuedChatSend } from "@/api/handlers/chat/chat-schema";
@@ -32,6 +34,7 @@ import {
   replaceQueuedChatMessageOnTx,
 } from "@/api/handlers/chat/queue/chat-queue-store";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
+import { deleteChatFilesOnTx } from "@/api/handlers/chat/upload-files";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
@@ -44,6 +47,7 @@ import {
   takeQueuedChatMessageOnTx,
 } from "@/api/lib/db/chat-queue-gate";
 import { sweepThreadsWithDueQueueOnTx } from "@/api/lib/db/chat-queue-system";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -490,6 +494,7 @@ const suite = (
               send: sendOf(id, op.text),
               threadId,
               tx,
+              uploadedFileIds: [],
             }),
         );
         if (model.queue.length >= 20) {
@@ -769,6 +774,7 @@ const suite = (
           send: sendOf(id, "next"),
           threadId,
           tx,
+          uploadedFileIds: [],
         });
         await acceptTurnOnTx({
           messageId: createSafeId<"chatMessage">(),
@@ -809,6 +815,7 @@ const suite = (
           send: sendOf(id, "next"),
           threadId,
           tx,
+          uploadedFileIds: [],
         });
       });
       const holdAway = async (revision: number) =>
@@ -861,6 +868,7 @@ const suite = (
             send: sendOf(id, "waiting"),
             threadId,
             tx,
+            uploadedFileIds: [],
           });
         });
       };
@@ -888,6 +896,83 @@ const suite = (
       expect(readScalingViolations({ small: at10, large: at200 })).toEqual([]);
     });
 
+    test("removing a queued message deletes the files its enqueue stored, and only those", async () => {
+      const owner = await seedOwner();
+      const threadId = await seedThread(owner);
+      const seedFile = async () => {
+        const id = createSafeId<"userFile">();
+        await database.insert(userFiles).values({
+          fileName: "lease.pdf",
+          id,
+          mimeType: "application/pdf",
+          s3Key: createUserFileKey({
+            fileId: id,
+            mimeType: "application/pdf",
+            organizationId: owner.organizationId,
+          }),
+          sha256Hex: "0".repeat(64),
+          sizeBytes: 1,
+          threadId,
+          userId: owner.userId,
+        });
+        return id;
+      };
+      // One file the enqueue stored, one stored before (a sent message's).
+      const stored = await seedFile();
+      const earlier = await seedFile();
+      const queuedId = createSafeId<"chatMessage">();
+      await withLock(threadId, owner, async (tx) => {
+        await enqueueChatMessageOnTx({
+          id: queuedId,
+          send: sendOf(queuedId, "with files"),
+          threadId,
+          tx,
+          uploadedFileIds: [stored],
+        });
+      });
+      const deletion = await withLock(threadId, owner, async (tx) => {
+        const removed = await removeQueuedChatMessageOnTx({
+          id: queuedId,
+          threadId,
+          tx,
+        });
+        if (removed.type !== "removed") {
+          return panic("The queued message was not removed");
+        }
+        expect(removed.uploadedFileIds).toEqual([stored]);
+        return await deleteChatFilesOnTx({
+          fileIds: removed.uploadedFileIds,
+          organizationId: owner.organizationId,
+          recordAuditEvent: async () => undefined,
+          threadId,
+          tx,
+          userId: owner.userId,
+          workspaceId: null,
+        });
+      });
+      const left = await database
+        .select({ id: userFiles.id })
+        .from(userFiles)
+        .where(eq(userFiles.threadId, threadId));
+      expect(left.map(({ id }) => id)).toEqual([earlier]);
+      if (deletion.type !== "deleted") {
+        return panic("The thread holds no legal hold, yet nothing was deleted");
+      }
+      const cleanup = deletion.cleanup;
+      expect(cleanup).toHaveLength(1);
+      const [request] = await database
+        .select({ s3Keys: entityDeletionCleanupRequests.s3Keys })
+        .from(entityDeletionCleanupRequests)
+        .where(inArray(entityDeletionCleanupRequests.id, cleanup));
+      expect(request?.s3Keys).toEqual([
+        createUserFileKey({
+          fileId: stored,
+          mimeType: "application/pdf",
+          organizationId: owner.organizationId,
+        }),
+      ]);
+    });
+
     test("a bounded sweep reaches every due queue in turn", async () => {
       const owner = await seedOwner();
       const threads = [await seedThread(owner), await seedThread(owner)];
@@ -900,6 +985,7 @@ const suite = (
             send: sendOf(id, "next"),
             threadId,
             tx,
+            uploadedFileIds: [],
           });
         });
       }

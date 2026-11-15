@@ -92,7 +92,12 @@ const closePositionGapOnTx = async ({
 };
 
 export type QueuedMessageRemoval =
-  | { type: "removed"; request: unknown }
+  | {
+      type: "removed";
+      request: unknown;
+      /** The chat files the enqueue stored for it. */
+      uploadedFileIds: SafeId<"userFile">[];
+    }
   | { type: "changed" }
   | { type: "sent" }
   | { type: "not-found" };
@@ -127,6 +132,7 @@ export const removeQueuedChatMessageOnTx = async ({
     .returning({
       position: chatQueuedMessages.position,
       request: chatQueuedMessages.request,
+      uploadedFileIds: chatQueuedMessages.uploadedFileIds,
     });
   if (removed === undefined) {
     const queued = await tx
@@ -148,7 +154,11 @@ export const removeQueuedChatMessageOnTx = async ({
   }
   await closePositionGapOnTx({ position: removed.position, threadId, tx });
   await dropHoldOfEmptyQueueOnTx({ threadId, tx });
-  return { type: "removed", request: removed.request };
+  return {
+    type: "removed",
+    request: removed.request,
+    uploadedFileIds: removed.uploadedFileIds,
+  };
 };
 
 export type ChatQueueHoldWrite =
