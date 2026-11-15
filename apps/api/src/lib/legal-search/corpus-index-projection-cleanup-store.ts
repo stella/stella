@@ -78,6 +78,7 @@ import {
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_LEASE_MAX_MS,
   CORPUS_PROJECTION_LEASE_MIN_MS,
+  corpusProjectionDeliveredTogether,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { logger } from "@/api/lib/observability/logger";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
@@ -2170,10 +2171,32 @@ const retireExpiredUnknownAppendsTx = async (
         eq(corpusIndexProjectionIntents.status, "append_started"),
       ),
     );
+  // Charged by what each request delivered together: an offline request's
+  // started rows, never its planned total.
+  const delivered = new Map(
+    (
+      await tx
+        .select({
+          id: corpusIndexProjectionIntents.id,
+          deliveredTogether: corpusProjectionDeliveredTogether(),
+        })
+        .from(corpusIndexProjectionIntents)
+        .where(
+          inArray(
+            corpusIndexProjectionIntents.id,
+            rows.map(({ id }) => id),
+          ),
+        )
+    ).map(({ id, deliveredTogether }) => [id, deliveredTogether]),
+  );
   await updateExpiredAppendStatesTx(tx, {
     family,
     generation,
-    targets: rows,
+    targets: rows.map((row) => ({
+      ...row,
+      appendRequestRevisionCount:
+        delivered.get(row.id) ?? row.appendRequestRevisionCount,
+    })),
     transitionAt,
   });
 };

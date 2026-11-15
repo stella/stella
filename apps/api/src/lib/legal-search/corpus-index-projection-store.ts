@@ -23,6 +23,7 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
   corpusProjectionReservationQueue,
   lockCorpusProjectionAcceptedRows,
+  lockCorpusProjectionOfflineRequest,
 } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
@@ -596,6 +597,9 @@ export const startCorpusProjectionOfflineRequestChunkTx = async (
   ) {
     return panic("Projection append document count must be a positive integer");
   }
+  // Start transactions of one request run one at a time, so the count of
+  // what earlier ones started is final while this one starts more.
+  await lockCorpusProjectionOfflineRequest(tx, request.requestId);
   const caps = await readCorpusProjectionOfflineRequestCapsTx(
     tx,
     leases.map(({ lease }) => lease),
@@ -702,6 +706,39 @@ const readOfflineDeliveredCountsTx = async (
     ]),
   );
 };
+
+/**
+ * How many revisions one revision was delivered together with, for a query
+ * over the intents table: an ingest request's own count, or for an offline
+ * request the rows that carry its identity, which are exactly the ones that
+ * started (`readOfflineDeliveredCountsTx`), never its planned total.
+ */
+export const corpusProjectionDeliveredTogether = () => {
+  const intents = corpusIndexProjectionIntents;
+  return sql<number | null>`CASE
+    WHEN ${intents.appendRequestId} IS NULL
+      THEN ${intents.appendRequestRevisionCount}
+    ELSE (
+      SELECT count(*)::integer
+      FROM ${intents} delivered
+      WHERE delivered.append_request_id = ${intents.appendRequestId}
+    )
+  END`;
+};
+
+/** The same count for one locked revision. */
+const deliveredTogetherTx = async (
+  tx: Transaction,
+  intent: Pick<
+    typeof corpusIndexProjectionIntents.$inferSelect,
+    "id" | "appendRequestId" | "appendRequestRevisionCount"
+  >,
+): Promise<number | null> =>
+  intent.appendRequestId === null
+    ? intent.appendRequestRevisionCount
+    : ((await readOfflineDeliveredCountsTx(tx, [intent.appendRequestId])).get(
+        intent.appendRequestId,
+      ) ?? panic(`Offline request has no delivered count: ${intent.id}`));
 
 /**
  * The largest offline request a revision may start in, given the fewest
@@ -1343,7 +1380,7 @@ export const abandonCorpusProjectionAppendTx = async (
   }
   const charge = appendFailureCharge({
     state,
-    appendRequestRevisionCount: intent.appendRequestRevisionCount,
+    appendRequestRevisionCount: await deliveredTogetherTx(tx, intent),
     transitionAt,
     rejection,
     fault,

@@ -46,6 +46,7 @@ import {
   corpusProjectionOfflineIndexerKillDeadline,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
+  abandonCorpusProjectionAppendTx,
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_LEASE_MAX_MS,
   type CorpusProjectionIntentLease,
@@ -90,6 +91,7 @@ const PAYLOAD_FINGERPRINT = "c".repeat(64);
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 let nextDocument = 1;
+type TestTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * The guard functions and triggers production runs on the projection tables,
@@ -98,6 +100,10 @@ let nextDocument = 1;
  * as production does.
  */
 const { installProjectionDdl } = corpusProjectionLegacyFixture(() => db);
+const OFFLINE_DELIVERY_MIGRATION_URL = new URL(
+  "../../../drizzle/20261115130000_corpus_projection_offline_delivery/migration.sql",
+  import.meta.url,
+);
 
 type IntentId = SafeId<"corpusIndexProjectionIntent">;
 
@@ -1493,6 +1499,115 @@ describe("offline request caps", () => {
       expect(String(refused)).toContain("request cap");
     }
   });
+
+  test("a start transaction holds its request until it commits, and a start past the plan is refused", async () => {
+    const model = await newModel();
+    const counts = (await reserve(model, ENTITIES_PER_RUN)).map((lease) => ({
+      lease,
+      expectedDocumentCount: 1,
+    }));
+    const request = {
+      requestId: Bun.randomUUIDv7(),
+      plannedRevisionCount: MODEL_START_CHUNK,
+    };
+    const startedAt = await now(model);
+    const requestLocks = async (tx: TestTransaction) =>
+      (
+        await tx.execute(sql`
+          SELECT count(*)::integer AS held
+          FROM pg_locks
+          WHERE locktype = 'advisory'
+            AND pid = pg_backend_pid()
+            AND classid = ${0x0f_10_cc_b7}::oid
+            AND objid = hashtext(${request.requestId})::oid
+            AND granted
+        `)
+      ).rows;
+    // The lock is taken before the earlier starts are counted, so a second
+    // transaction of the request waits for this one and counts its rows.
+    const held = await db.transaction(async (tx) => {
+      await startCorpusProjectionOfflineRequestChunkTx(
+        asTestRaw<Transaction>(tx),
+        {
+          request,
+          leases: counts.slice(0, MODEL_START_CHUNK),
+          testNow: startedAt,
+        },
+      );
+      return await requestLocks(tx);
+    });
+    expect(held).toEqual([{ held: 1 }]);
+    // A second start of the same request, past its plan, starts nothing.
+    const refused = await rejectionOf(
+      db.transaction(
+        async (tx) =>
+          await startCorpusProjectionOfflineRequestChunkTx(
+            asTestRaw<Transaction>(tx),
+            {
+              request,
+              leases: counts.slice(MODEL_START_CHUNK, MODEL_START_CHUNK + 1),
+              testNow: startedAt,
+            },
+          ),
+      ),
+    );
+    expect(String(refused)).toContain("more revisions than it planned");
+    const started = await db
+      .select({ id: corpusIndexProjectionIntents.id })
+      .from(corpusIndexProjectionIntents)
+      .where(
+        eq(corpusIndexProjectionIntents.appendRequestId, request.requestId),
+      );
+    expect(started).toHaveLength(MODEL_START_CHUNK);
+    for (const { lease } of counts.slice(MODEL_START_CHUNK)) {
+      expect((await intentOf(lease.intentId)).status).toBe("reserved");
+    }
+  });
+
+  test("an abandoned offline revision is charged by what its request started, not by its plan", async () => {
+    const model = await newModel();
+    const [lease] = await reserve(model, 1);
+    if (lease === undefined) {
+      panic("Expected one projection lease");
+    }
+    // Planned with three more that never started: it travelled alone.
+    const request = {
+      requestId: Bun.randomUUIDv7(),
+      plannedRevisionCount: ENTITIES_PER_RUN,
+    };
+    const startedAt = await now(model);
+    await db.transaction(
+      async (tx) =>
+        await startCorpusProjectionOfflineRequestChunkTx(
+          asTestRaw<Transaction>(tx),
+          {
+            request,
+            leases: [{ lease, expectedDocumentCount: 1 }],
+            testNow: startedAt,
+          },
+        ),
+    );
+    expect((await intentOf(lease.intentId)).appendRequestRevisionCount).toBe(
+      ENTITIES_PER_RUN,
+    );
+    const abandonedAt = await now(model);
+    const abandoned = await db.transaction(
+      async (tx) =>
+        await abandonCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+          intentId: lease.intentId,
+          leaseToken: lease.leaseToken,
+          errorMessage: "the indexer refused the document",
+          rejection: "definite",
+          fault: "document",
+          testNow: abandonedAt,
+        }),
+    );
+    expect(abandoned.status).toBe("cleanup_pending");
+    const state = await stateOf(lease.entityId);
+    // Alone in what was delivered, the fault is its own: charged, not split.
+    expect(state.failureAttempts).toBe(1);
+    expect(state.appendMode).toBe("batchable");
+  });
 });
 
 describe("offline settlement", () => {
@@ -1766,6 +1881,65 @@ describe("offline settlement", () => {
 });
 
 describe("offline delivery guards", () => {
+  test("the migration's checks are the ones the schema declares", async () => {
+    // The test database is pushed from the schema; production gets these
+    // checks from the migration. Replace each schema check with the
+    // migration's own clause and compare PostgreSQL's reading of both.
+    const migration = await Bun.file(OFFLINE_DELIVERY_MIGRATION_URL).text();
+    const clauses = [
+      ...migration.matchAll(
+        /ADD CONSTRAINT "([a-z_]+)"\s+(CHECK \([\s\S]*?\)) NOT VALID(?=,\s*(?:ADD|DROP) |;)/gu,
+      ),
+    ].map(([, name, check]) => ({
+      name: name ?? panic("A migration check has no name"),
+      check: check ?? panic("A migration check has no clause"),
+    }));
+    expect(clauses.map(({ name }) => name).toSorted()).toEqual([
+      "corpus_index_projection_intents_append_delivery_shape",
+      "corpus_index_projection_intents_append_delivery_values",
+      "corpus_index_projection_intents_status_shape",
+      "corpus_index_projection_intents_status_values",
+    ]);
+    const definitions = async (tx: TestTransaction) =>
+      new Map(
+        (
+          await tx.execute<{ name: string; definition: string }>(sql`
+            SELECT conname AS name, pg_get_constraintdef(oid) AS definition
+            FROM pg_constraint
+            WHERE conrelid = 'corpus_index_projection_intents'::regclass
+              AND conname IN (${sql.join(
+                clauses.map(({ name }) => sql`${name}`),
+                sql`, `,
+              )})
+          `)
+        ).rows.map(({ name, definition }) => [
+          name,
+          definition.replace(/ NOT VALID$/u, ""),
+        ]),
+      );
+    const compared = await rejectionOf(
+      db.transaction(async (tx) => {
+        const fromSchema = await definitions(tx);
+        await tx.execute(
+          sql.raw(
+            `ALTER TABLE "corpus_index_projection_intents" ${clauses
+              .flatMap(({ name, check }) => [
+                `DROP CONSTRAINT "${name}"`,
+                `ADD CONSTRAINT "${name}" ${check} NOT VALID`,
+              ])
+              .join(", ")}`,
+          ),
+        );
+        const fromMigration = await definitions(tx);
+        expect(fromSchema.size).toBe(clauses.length);
+        expect(fromMigration).toEqual(fromSchema);
+        // Leave the shared database as the schema pushed it.
+        return panic("compared");
+      }),
+    );
+    expect(String(compared)).toContain("compared");
+  });
+
   test("only an offline revision can be withdrawn, and its delivery never changes", async () => {
     const model = await newModel();
     const [lease] = await reserve(model, 1);
