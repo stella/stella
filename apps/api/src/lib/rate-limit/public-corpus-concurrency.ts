@@ -1,6 +1,7 @@
 import { env } from "@/api/env";
 import { toResponse } from "@/api/http/respond";
 import type { Middleware } from "@/api/http/route";
+import { SITEMAP_ADMISSION_WAIT_MS } from "@/api/lib/case-law/sitemap-shard-budget";
 import {
   type RateLimitClientAddressOptions,
   resolveRateLimitClientAddress,
@@ -35,11 +36,12 @@ type PublicCorpusConcurrencyOptions = {
 };
 
 // A page fires its search and facets at once; a short wait lets the second
-// follow the first instead of failing. Crawled sitemaps have no user waiting.
+// follow the first instead of failing. A sitemap file waits as long as the
+// web server's wait for it leaves room (`sitemap-shard-budget.ts`).
 const ADMISSION_WAIT_MS = {
   search: 2000,
   aggregate: 2000,
-  sitemap: 500,
+  sitemap: SITEMAP_ADMISSION_WAIT_MS,
 } as const satisfies Record<AdmissionClass, number>;
 
 const MAX_ADMISSION_WAITERS = 64;

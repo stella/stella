@@ -60,3 +60,13 @@ export const SITEMAP_RANGE_ROWS_CEILING = 2 * SITEMAP_RANGE_ROWS;
  * is never still running when the next request for it arrives.
  */
 export const SITEMAP_SHARD_READ_DEADLINE_MS = SITEMAP_FILE_FETCH_TIMEOUT_MS / 2;
+
+/**
+ * How long a sitemap read may wait for its admission slot: what the web
+ * server's wait leaves after the read's deadline and a second for the rest of
+ * the request. The web server fetches every sitemap file, so a crawler's
+ * concurrent files arrive as one client, which holds one sitemap slot at a
+ * time; they queue for it rather than fail while a bounded read runs.
+ */
+export const SITEMAP_ADMISSION_WAIT_MS =
+  SITEMAP_FILE_FETCH_TIMEOUT_MS - SITEMAP_SHARD_READ_DEADLINE_MS - 1000;

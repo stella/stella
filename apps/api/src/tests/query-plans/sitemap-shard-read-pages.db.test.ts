@@ -27,6 +27,7 @@ import {
 } from "@/api/handlers/case-law/decisions/sitemap";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
+  SITEMAP_ADMISSION_WAIT_MS,
   SITEMAP_RANGE_ROWS,
   SITEMAP_RANGE_ROWS_CEILING,
   SITEMAP_SHARD_READ_DEADLINE_MS,
@@ -103,6 +104,14 @@ test("the sitemap budget's cut, ceiling and deadline fit inside the web server's
   expect(SITEMAP_SHARD_READ_DEADLINE_MS).toBeLessThan(
     SITEMAP_FILE_FETCH_TIMEOUT_MS,
   );
+  // A file that waited out its admission slot and then its whole deadline is
+  // still answered inside the web server's wait.
+  expect(SITEMAP_ADMISSION_WAIT_MS).toBeGreaterThan(
+    sitemapShardColdReadMs(SITEMAP_RANGE_ROWS),
+  );
+  expect(
+    SITEMAP_ADMISSION_WAIT_MS + SITEMAP_SHARD_READ_DEADLINE_MS,
+  ).toBeLessThan(SITEMAP_FILE_FETCH_TIMEOUT_MS);
   // A file never lists more than the protocol allows.
   expect(LIMITS.caseLawSitemapShardUrlLimit).toBe(SITEMAP_RANGE_ROWS_CEILING);
   expect(SITEMAP_RANGE_ROWS_CEILING).toBeLessThan(
