@@ -5,12 +5,14 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
+import { toSafeId } from "@/api/lib/branded-types";
 import { corpusProjectionReservationQueue } from "@/api/lib/db/aggregate-lock";
 import { enrolledCorpusIndexGroupContracts } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { repairAppliedCorpusProjectionDriftTx } from "@/api/lib/legal-search/corpus-index-projection-census-store";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -250,6 +252,7 @@ const intentProbe = ({ lines }: ReservationPlan): string => {
 
 const explainReservation = async (
   scopedIndexId: string | null = null,
+  eligibilityAt: Date = ELIGIBILITY_AT,
 ): Promise<ReservationPlan> =>
   await db.transaction(async (transaction) => {
     const tx = asTestRaw<Transaction>(transaction);
@@ -264,7 +267,7 @@ const explainReservation = async (
       family: "case_law",
       generation: GENERATION,
       limit: LIMIT,
-      eligibilityAt: ELIGIBILITY_AT,
+      eligibilityAt,
       scopedEntityIds: null,
       scopedIndexId,
       // The shape a generation takes before its enrolled groups are attested.
@@ -342,6 +345,73 @@ test("a replacement backlog costs the route's claim nothing", async () => {
   expect(planText(large)).toContain(
     "corpus_index_projection_states_append_route_idx",
   );
+  expect(large.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.25));
+  expect(large.buffers / large.reservedRows).toBeLessThanOrEqual(25);
+}, 600_000);
+
+const REPAIRED_AT = new Date("2026-08-05T00:00:00.000Z");
+/** First appends queued just after the repairs, before anything else runs. */
+const FIRST_APPENDS = 100;
+const FIRST_APPEND_OFFSET = 10_000;
+const REPAIR_BATCH = 100;
+
+/** States a census repair stopped naming, their revisions back in cleanup. */
+const repairConverged = async (first: number, count: number) => {
+  for (let start = first; start < first + count; start += REPAIR_BATCH) {
+    const revisions = Array.from(
+      { length: Math.min(REPAIR_BATCH, first + count - start) },
+      (_, index) =>
+        toSafeId<"corpusIndexProjectionIntent">(
+          `00000000-0000-4000-9000-${(start + index).toString(16).padStart(12, "0")}`,
+        ),
+    );
+    // db-await-in-loop: one repair batch per transaction, as the census issues them
+    await db.transaction(
+      async (tx) =>
+        await repairAppliedCorpusProjectionDriftTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: GENERATION,
+          indexId: INDEX_ID,
+          revisions,
+          testNow: REPAIRED_AT,
+        }),
+    );
+  }
+  await db.execute(sql.raw("VACUUM ANALYZE corpus_index_projection_states"));
+};
+
+const seedFirstAppends = async () => {
+  await db.execute(
+    sql.raw(`
+      INSERT INTO corpus_index_projection_states
+        (family, generation, entity_id, desired_action, desired_epoch,
+         desired_fingerprint, desired_index_id, work_status, created_at, updated_at)
+      SELECT
+        'case_law', '${GENERATION}', ${entity(`i + ${FIRST_APPEND_OFFSET}`)},
+        'upsert', 1, lpad(to_hex(i), 64, 'f'), '${INDEX_ID}', 'eligible',
+        '2026-08-05'::timestamptz,
+        ('2026-08-05T00:30:00Z'::timestamptz + (i || ' seconds')::interval)
+      FROM generate_series(1, ${FIRST_APPENDS}) AS i
+    `),
+  );
+  await db.execute(sql.raw("VACUUM ANALYZE corpus_index_projection_states"));
+};
+
+// timeout: seeds and vacuums thousands of rows in PGlite, with no signal to await.
+test("states a repair stopped naming cost the route's claim nothing while their revisions settle", async () => {
+  await seed(2);
+  await seedFirstAppends();
+  const eligibilityAt = new Date(REPAIRED_AT.getTime() + 60 * 60 * 1000);
+  await repairConverged(1, 50);
+  const small = await explainReservation(INDEX_ID, eligibilityAt);
+  expect(small.reservedRows).toBe(LIMIT);
+  expect(planText(small)).not.toContain("Seq Scan");
+
+  // Ten times the repaired states ahead of the queue, and the walk does not
+  // reach them before their retired revisions can have settled.
+  await repairConverged(51, 450);
+  const large = await explainReservation(INDEX_ID, eligibilityAt);
+  expect(large.reservedRows).toBe(LIMIT);
   expect(large.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.25));
   expect(large.buffers / large.reservedRows).toBeLessThanOrEqual(25);
 }, 600_000);

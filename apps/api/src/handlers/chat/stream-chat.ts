@@ -33,6 +33,11 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
+import {
+  isApprovedClientCallAwaitingResult,
+  memberWaitsOf,
+} from "@stll/api-contract/chat-member-wait";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
@@ -70,11 +75,9 @@ import {
   classifyChatPartForPersistence,
   createChatTextPart,
   getAwaitingUserInteraction,
-  getAwaitingUserInteractions,
   getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
   isAnswerFilePart,
-  isApprovedClientCallAwaitingResult,
   isChatAttachmentPart,
   isChatDocumentPart,
   isChatPart,
@@ -146,6 +149,7 @@ import {
 } from "@/api/handlers/chat/snapshot-reconciliation";
 import {
   assistantMessageStartChunk,
+  attachSnapshotMessageOwners,
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
   findDeniedApprovals,
@@ -222,7 +226,6 @@ import {
   chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
 import {
-  type ChatContextNotice,
   createContextNoticeStamp,
   SESSION_NOT_RESUMED_NOTICE,
 } from "@/api/lib/chat/context-notice";
@@ -2141,7 +2144,7 @@ const createChatRuntimeMiddleware = ({
           state,
           threadId,
         });
-        return;
+        break;
       case "aborted":
       case "failed":
         return;
@@ -2153,8 +2156,9 @@ const createChatRuntimeMiddleware = ({
   return {
     name: "stella-chat-runtime",
     ...terminalHooks,
-    onChunk: (_ctx, chunk) => {
+    onChunk: (ctx, chunk) => {
       state.producedAnswer ||= chunkCarriesAnswer(chunk);
+      return attachSnapshotMessageOwners(ctx, chunk);
     },
     onConfig: async (ctx, config) => {
       if (ctx.phase !== "beforeModel") {
@@ -2654,7 +2658,7 @@ const resolveAdmissionLossOutcome = ({
     processor.processChunk(chunk);
   }
   finalizeResponseProcessor(processor);
-  const interaction = getAwaitingUserInteractions(getResponseMessage()).find(
+  const interaction = memberWaitsOf(getResponseMessage()).find(
     (candidate) =>
       toolCallsWithCompleteInput.has(candidate.toolCallId) &&
       (candidate.type === "approval" || handedOut.has(candidate.toolCallId)),

@@ -379,6 +379,7 @@ const createContext = ({
     route: "/v1/chat" satisfies ApiRoutePath,
     safeDb: observedSafeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
   });

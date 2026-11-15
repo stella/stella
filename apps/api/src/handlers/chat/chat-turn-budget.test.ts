@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import { CHAT_TURN_BUDGET } from "@stll/chat-limits";
 import type { ChatTurnBudget } from "@stll/chat-limits";
 import { createTestClock } from "@stll/test-kit";
@@ -11,7 +12,6 @@ import { createTestClock } from "@stll/test-kit";
 import {
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
-  getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_TURN_LOOP_STRATEGY,
@@ -73,7 +73,7 @@ const searchForeverAdapter = ({
       yield {
         type: EventType.RUN_STARTED,
         runId: runId ?? "run-1",
-        threadId: threadId ?? "thread-1",
+        threadId,
         model,
         timestamp,
       } satisfies AdapterYieldChunk;
@@ -124,7 +124,7 @@ const searchForeverAdapter = ({
       yield {
         type: EventType.RUN_FINISHED,
         runId: runId ?? "run-1",
-        threadId: threadId ?? "thread-1",
+        threadId,
         finishReason: "tool_calls",
         model,
         timestamp,
@@ -343,7 +343,7 @@ describe("an assistant turn's budget", () => {
     expect(reloaded.parts).toEqual(finish.responseMessage.parts);
     // No card or client tool is owed: a reopened page has nothing to answer
     // on its own, so the next step is the user's.
-    expect(getAwaitingUserInteractions(reloaded)).toEqual([]);
+    expect(memberWaitsOf(reloaded)).toEqual([]);
     expect(
       findUnsettledStoredToolCalls({
         outcome: "paused",

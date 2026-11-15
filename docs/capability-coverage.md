@@ -825,7 +825,7 @@ mechanics, and similar), not gaps in coverage.
 | assistant_chat | 19 |
 | auth_plumbing | 43 |
 | billing_ui | 1 |
-| chat_thread_ui | 32 |
+| chat_thread_ui | 31 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 27 |
@@ -835,9 +835,9 @@ mechanics, and similar), not gaps in coverage.
 | native_device | 5 |
 | native_tool_ui | 11 |
 | organization_export | 2 |
-| provider_secret | 33 |
+| provider_secret | 34 |
 | public_indexing | 11 |
-| realtime_stream | 9 |
+| realtime_stream | 10 |
 | search_ui | 21 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |

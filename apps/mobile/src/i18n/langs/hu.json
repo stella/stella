@@ -17,6 +17,7 @@
     "loadFailed": "A beszélgetéseit nem sikerült betölteni.",
     "runsLoadFailed": "Nem sikerült ellenőrizni, mely beszélgetések várnak Önre.",
     "retry": "Újrapróbálás",
+    "resend": "Újraküldés",
     "untitled": "Névtelen beszélgetés",
     "loadMoreFailed": "Továbbiak betöltése",
     "loadOlderFailed": "Korábbi üzenetek betöltése",
@@ -244,7 +245,8 @@
         "imageTooLargeToStore": "Ez a kép {total} méretű. A {kept} méretnél nagyobb képek nem kerülnek mentésre, ezért nem jeleníthető meg.",
         "loadFailed": "Nem sikerült betölteni.",
         "showMore": "Több megjelenítése"
-      }
+      },
+      "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}",
@@ -253,7 +255,37 @@
       "analyses": "{count, plural, one {# elemzés} other {# elemzés}}"
     },
     "stepCount": "{count, plural, one {# lépés} other {# lépés}}",
-    "reasoning": "Érvelés"
+    "reasoning": "Érvelés",
+    "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe.",
+    "failure": {
+      "aiDeadlineExceeded": "Az AI nem válaszolt időben. Próbálja újra egy pillanat múlva.",
+      "aiOutputInvalid": "Az AI válasza váratlan formátumú volt. Próbálja újra.",
+      "aiOutputModerated": "Az AI-szolgáltató moderálta a kimenetet. Fogalmazza át a kérést, vagy válasszon másik modellt.",
+      "aiUnknown": "Az AI-kérés sikertelen volt. Próbálja újra.",
+      "errorFolderUnavailable": "A csevegéshez csatolt mappa nem érhető el a számítógépén. Ellenőrizze a stella desktopban, majd küldje el újra.",
+      "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
+      "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
+      "errorNotReached": "A számítógépe nem vette át ezt a választ. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
+      "errorRelinked": "A stella desktop újra lett kapcsolva a számítógépén, ezért ez a válasz leállt. Küldje el újra.",
+      "errorRestoring": "A számítógépe még visszavonja a fájlmódosításokat. Néhány pillanat múlva küldje el újra.",
+      "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
+      "refusalFolderNotApproved": "Előbb engedélyezze, hogy a kódoló ügynök a csevegéshez csatolt mappában dolgozzon.",
+      "refusalHarnessUnavailable": "A számítógépén futó kódoló ügynök most nem tudja fogadni ezt a kérést. Ellenőrizze a stella desktopban.",
+      "refusalModelUnavailable": "A számítógépén futó kódoló ügynök már nem kínálja ezt a modellt. Válasszon másikat a Futtatás itt menüben.",
+      "refusalNoComputer": "Egyik számítógépe sem csatlakozik.",
+      "refusalPermissionUnavailable": "A számítógépén futó kódoló ügynök nem futhat ezekkel az engedélyekkel. Válasszon másik lehetőséget az Engedélyek menüben.",
+      "refusalReasoningEffortUnavailable": "A számítógépén futó kódoló ügynök nem kínálja ezt a gondolkodási szintet a modellhez. Válasszon másikat a Gondolkodási szint menüben.",
+      "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
+      "sendErrorEmptyCompletion": "Az AI üres választ adott. Próbálja újra, vagy fogalmazza át az üzenetet.",
+      "sendErrorLoopDetected": "Az AI-válasz túl sokszor ismétlődött. Próbálja újra szűkebb kéréssel.",
+      "sendErrorModelUnavailable": "A beállított AI-modell már nem érhető el. Kérje meg a munkaterület adminisztrátorát, hogy frissítse a modellt a szervezet beállításaiban.",
+      "sendErrorProviderBilling": "Az AI-szolgáltató számlázási problémát jelzett. Forduljon a munkaterület adminisztrátorához.",
+      "sendErrorProviderCredentialsRejected": "Az AI-szolgáltató elutasította a beállított hitelesítő adatokat. Kérje meg a munkaterület adminisztrátorát, hogy ellenőrizze az API-kulcsot a szervezet beállításaiban.",
+      "sendErrorProviderUnavailable": "Az AI-szolgáltató átmenetileg nem elérhető. Próbálja újra egy pillanat múlva.",
+      "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbálja újra egy perc múlva, vagy forduljon a munkaterület adminisztrátorához.",
+      "sendErrorStreamIncomplete": "Az AI válasza megszakadt, mielőtt elkészült volna. Próbálja újra.",
+      "sendErrorTurnTooLarge": "Ez a válasz túl nagyra nőtt ahhoz, hogy teljes egészében megérkezzen. A folytatáshoz küldjön új üzenetet."
+    }
   },
   "tasks": {
     "emptyTitle": "Nincsenek nyitott feladatok",

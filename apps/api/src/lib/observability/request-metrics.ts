@@ -420,6 +420,9 @@ export const CASE_LAW_FRESHNESS_METRIC = {
   projectionConvergence: "CaseLawProjectionConvergence",
   decisionIdentifierRepairs: "CaseLawDecisionIdentifierRepairs",
   decisionIdentifierPassAgeSeconds: "CaseLawDecisionIdentifierPassAgeSeconds",
+  waitingReplacements: "CaseLawProjectionWaitingReplacements",
+  waitingReplacementOldestSeconds:
+    "CaseLawProjectionWaitingReplacementOldestSeconds",
 } as const satisfies Record<string, string>;
 
 const buildCaseLawMetricRecord = ({
@@ -453,6 +456,36 @@ export const buildCaseLawSourceSyncAgeMetric = (
     value,
   }),
   source,
+});
+
+type CaseLawWaitingReplacementDimensions = {
+  generation: string;
+  index: string;
+};
+
+/** Replacements of one index still served at their previous revision. */
+export const buildCaseLawWaitingReplacementsMetric = (
+  { generation, index }: CaseLawWaitingReplacementDimensions,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.waitingReplacements,
+    value,
+  }),
+  generation,
+  index,
+});
+
+export const buildCaseLawWaitingReplacementOldestMetric = (
+  { generation, index }: CaseLawWaitingReplacementDimensions,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.waitingReplacementOldestSeconds,
+    value,
+  }),
+  generation,
+  index,
 });
 
 export const buildCaseLawDecisionIdentifierRepairMetric = (value: number) =>

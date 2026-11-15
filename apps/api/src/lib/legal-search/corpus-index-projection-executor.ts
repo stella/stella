@@ -67,7 +67,6 @@ import {
   type CorpusProjectionAppendAbandonResult,
   type CorpusProjectionIntentLease,
   type CorpusProjectionReservationFailure,
-  prepareCorpusProjectionReplacementsTx,
   proveAcceptedCorpusProjectionAppendsTx,
   recordAcceptedCorpusProjectionAppendsTx,
   reserveCorpusProjectionIntentsTx,
@@ -220,7 +219,6 @@ export type CorpusProjectionAppendCycleResult = {
     | "append_blocked"
     | "engine_unavailable";
   cycleRetryDelayMs: number | null;
-  replacementCleanupScheduled: number;
   reserved: number;
   applied: number;
   staleCleanupPending: number;
@@ -237,19 +235,16 @@ export type CorpusProjectionAppendCycleResult = {
 };
 
 type EmptyResultOptions = {
-  replacementCleanupScheduled: number;
   proof: CorpusProjectionProofCycleResult;
   timing: CorpusProjectionAppendCycleTiming;
 };
 
 const emptyResult = ({
-  replacementCleanupScheduled,
   proof,
   timing,
 }: EmptyResultOptions): CorpusProjectionAppendCycleResult => ({
   status: "idle",
   cycleRetryDelayMs: null,
-  replacementCleanupScheduled,
   proof,
   timing,
   reserved: 0,
@@ -1079,6 +1074,10 @@ const acceptAndProveProjectionAppend = async ({
           break;
         case "awaiting_publication":
           return panic(`A waited request left ${outcome.intentId} unproven`);
+        // Only an offline revision censused after its indexer ended is
+        // withdrawn, and a waited request is never offline.
+        case "withdrawn":
+          return panic(`A waited request withdrew ${outcome.intentId}`);
         default:
           outcome satisfies never;
           return panic(`Unhandled inline proof: ${String(outcome)}`);
@@ -1808,43 +1807,27 @@ export const executeCorpusProjectionAppendCycle = async <
   if (family === "case_law") {
     await drainCaseLawRankingSignalChanges({ runInTransaction });
   }
-  const { replacements, leases } = await measured(
+  const leases = await measured(
     async () =>
-      await runInTransaction(async (tx) => ({
-        replacements: await prepareCorpusProjectionReplacementsTx(tx, {
-          family,
-          generation,
-          scope,
-          limit,
-        }),
-        leases: await reserveCorpusProjectionIntentsTx(tx, {
-          family,
-          generation,
-          scope,
-          limit,
-          leaseMs,
-        }),
-      })),
+      await runInTransaction(
+        async (tx) =>
+          await reserveCorpusProjectionIntentsTx(tx, {
+            family,
+            generation,
+            scope,
+            limit,
+            leaseMs,
+          }),
+      ),
     (elapsedMs) => {
       timing.reservationMs += elapsedMs;
     },
   );
   if (leases.length === 0) {
-    return withProofFailure(
-      emptyResult({
-        replacementCleanupScheduled: replacements.length,
-        proof,
-        timing,
-      }),
-      proofFailure,
-    );
+    return withProofFailure(emptyResult({ proof, timing }), proofFailure);
   }
   const result: CorpusProjectionAppendCycleResult = {
-    ...emptyResult({
-      replacementCleanupScheduled: replacements.length,
-      proof,
-      timing,
-    }),
+    ...emptyResult({ proof, timing }),
     status: "completed",
     reserved: leases.length,
   };

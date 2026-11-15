@@ -101,7 +101,7 @@ case_law_decisions.content_hash                    varchar          null        
 case_law_decisions.indexed_hash                    varchar          null              case-law.ts:911  Markers of the retired index projection.
 case_law_decisions.indexed_generation              varchar          null              case-law.ts:912
 case_law_decisions.indexed_at                      timestamptz      null              case-law.ts:913
-case_law_decisions.projection_epoch                bigint           default,not null  case-law.ts:919  Monotonic fence captured by final-generation projection intents.
+case_law_decisions.projection_epoch                bigint           default,not null  case-law.ts:919  Monotonic order of the decision's projection desired-state changes.
 case_law_decisions.created_at                      timestamptz      default,not null  case-law.ts:923
 case_law_decisions.updated_at                      timestamptz      default,not null  case-law.ts:926
 case_law_decisions.nss_reporter_number             text             null              case-law.ts:931  NSS reporter entry number as published.
@@ -175,7 +175,7 @@ case_law_published_decisions.content_hash                    varchar          nu
 case_law_published_decisions.indexed_hash                    varchar          null              case-law.ts:911  Markers of the retired index projection.
 case_law_published_decisions.indexed_generation              varchar          null              case-law.ts:912
 case_law_published_decisions.indexed_at                      timestamptz      null              case-law.ts:913
-case_law_published_decisions.projection_epoch                bigint           default,not null  case-law.ts:919  Monotonic fence captured by final-generation projection intents.
+case_law_published_decisions.projection_epoch                bigint           default,not null  case-law.ts:919  Monotonic order of the decision's projection desired-state changes.
 case_law_published_decisions.created_at                      timestamptz      default,not null  case-law.ts:923
 case_law_published_decisions.updated_at                      timestamptz      default,not null  case-law.ts:926
 case_law_published_decisions.nss_reporter_number             text             null              case-law.ts:931  NSS reporter entry number as published.
@@ -249,7 +249,7 @@ case_law_unredacted_decisions.content_hash                    varchar          n
 case_law_unredacted_decisions.indexed_hash                    varchar          null              case-law.ts:911  Markers of the retired index projection.
 case_law_unredacted_decisions.indexed_generation              varchar          null              case-law.ts:912
 case_law_unredacted_decisions.indexed_at                      timestamptz      null              case-law.ts:913
-case_law_unredacted_decisions.projection_epoch                bigint           default,not null  case-law.ts:919  Monotonic fence captured by final-generation projection intents.
+case_law_unredacted_decisions.projection_epoch                bigint           default,not null  case-law.ts:919  Monotonic order of the decision's projection desired-state changes.
 case_law_unredacted_decisions.created_at                      timestamptz      default,not null  case-law.ts:923
 case_law_unredacted_decisions.updated_at                      timestamptz      default,not null  case-law.ts:926
 case_law_unredacted_decisions.nss_reporter_number             text             null              case-law.ts:931  NSS reporter entry number as published.

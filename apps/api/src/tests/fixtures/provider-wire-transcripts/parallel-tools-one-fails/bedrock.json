@@ -155,7 +155,7 @@
                         "text": "{\"error\":\"The external service could not delete memo\"}"
                       }
                     ],
-                    "status": "success"
+                    "status": "error"
                   }
                 }
               ]

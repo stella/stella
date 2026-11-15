@@ -158,7 +158,13 @@ by the RC run.
    `release/vX.Y.Z`, and opens `chore: release vX.Y.Z` into `main`. An earlier
    open release pull request blocks another cut. The command runs the existing
    pre-cut heavy, dependency-audit, npm-publish-lag, deploy-env-contract and
-   desktop-support-floor gates before writing.
+   desktop-support-floor gates before writing. The heavy gate passes when
+   `main/heavy` and `main/pr-depth` are green on the base commit. When neither
+   has failed there, it also accepts the proof the release health check applies
+   to `main` commits that carry no release-candidate tag: a merge-group receipt
+   that `scripts/check-release-receipt-coverage.sh` reports as covering them.
+   Any other answer keeps both statuses required. This proof is for the cut
+   only; finalization still requires both statuses on the RC commit (step 5).
    The npm gate checks that same newest final tag, regardless of main's
    `VERSION`. When `VERSION` is ahead of every final tag, a release pull request
    merged before its final tag; the cut then takes the next patch after
@@ -215,7 +221,12 @@ by the RC run.
    Stable npm publication checks out the exact RC-proved release SHA, builds
    and packs the CLI using the unchanged version-codegen and trusted-publishing
    workflow, then runs the plain-Node smoke and production compatibility canary
-   on that tarball. Package versions remain Changesets-owned. Desktop reruns
+   on that tarball. It also packs every workspace dependency of the CLI whose
+   version at that SHA npm does not serve yet: the smoke and canary install
+   those from this release's tarballs, and they publish before the CLI, in
+   dependency order. Dependencies npm already serves come from the registry,
+   so a rerun after a partial publish resumes with what is left.
+   Package versions remain Changesets-owned. Desktop reruns
    resume the build or carry-forward path and its publication steps. GitHub
    Latest advances only after the desktop assets are ready.
 10. Squash-merge the release pull request through the ordinary queue once its

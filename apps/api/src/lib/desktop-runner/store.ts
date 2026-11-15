@@ -16,21 +16,26 @@ import {
   or,
   type SQL,
   sql,
+  type SQLWrapper,
 } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_MAX_BACKGROUND_TASKS,
+  DESKTOP_RUNNER_SERVER_MESSAGE,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
+  type DesktopRunnerHarnessCapability,
   type DesktopRunnerHarnessReport,
   desktopRunnerHarnessReportSchema,
   type DesktopRunnerLimits,
   type DesktopRunnerLinkedFolder,
   desktopRunnerLinkedFolderSchema,
   type DesktopRunnerReasoningEffort,
+  desktopRunnerServerMessageSchema,
 } from "@stll/api-contract/desktop-runner";
 
 import type { RootDatabase, Transaction } from "@/api/db/root";
@@ -73,12 +78,6 @@ import {
   hasUnnotedFolderRestore,
   markFolderRestoreNotesTold,
 } from "@/api/lib/desktop-runner/folder-restores";
-import {
-  mintRunOutputKey,
-  type SealedRunOutputKey,
-  sealRunOutputKey,
-  storedRunOutputKey,
-} from "@/api/lib/desktop-runner/output-keys";
 import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
 import {
   DESKTOP_RUNNER_LEASED_RUN_STATES,
@@ -1109,6 +1108,10 @@ const advanceRun = async ({
           // reported opening.
           harnessSessionId:
             message.harnessSessionId ?? sql`${runs.harnessSessionId}`,
+          // A boundary is a point in the session the finish names; the
+          // contract lets only a completed run send one.
+          harnessBoundary:
+            message.harnessSessionId === null ? null : message.harnessBoundary,
         },
         recordTransitionAuditEvent: skipRunAudit,
       });
@@ -1511,8 +1514,6 @@ export type PendingCommand = {
   readonly kind: DesktopRunnerCommandKind;
   readonly payload: unknown;
   readonly workspaceIds: readonly SafeId<"workspace">[];
-  /** The run's output key, which a `run.start` carries; never logged. */
-  readonly sealedOutputKey: SealedRunOutputKey | null;
 };
 
 type PendingCommandsOptions = SessionOptions & {
@@ -1547,8 +1548,6 @@ export const readPendingCommands = async (
       kind: desktopRunnerCommands.kind,
       payload: desktopRunnerCommands.payload,
       workspaceIds: runs.workspaceIds,
-      outputKeyEncrypted: runs.outputKeyEncrypted,
-      outputKeyIv: runs.outputKeyIv,
     })
     .from(desktopRunnerCommands)
     .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
@@ -1576,13 +1575,10 @@ export const readPendingCommands = async (
   }
   return {
     type: "current",
-    commands: rows.map(
-      ({ outputKeyEncrypted, outputKeyIv, workspaceIds, ...row }) => ({
-        ...row,
-        workspaceIds: workspaceIds.map(brandPersistedWorkspaceId),
-        sealedOutputKey: storedRunOutputKey(outputKeyEncrypted, outputKeyIv),
-      }),
-    ),
+    commands: rows.map(({ workspaceIds, ...row }) => ({
+      ...row,
+      workspaceIds: workspaceIds.map(brandPersistedWorkspaceId),
+    })),
   };
 };
 
@@ -1864,18 +1860,13 @@ export type InsertedRun =
  * Bind a new run to a connected runner and queue its `run.start`, both or
  * neither. The runner must report the harness ready at the requested version
  * with the requested model and approval mode. The caller mints the run id, so nothing here
- * answers for a run id another tenant holds. The run gets its own output key
- * (`output-keys.ts`), stored encrypted for its organization.
+ * answers for a run id another tenant holds.
  */
 export const insertAssignedRun = async (
   db: DesktopRunnerDb,
   options: InsertRunOptions,
-): Promise<InsertedRun> => {
-  const sealedOutputKey = await sealRunOutputKey(
-    options.owner.organizationId,
-    mintRunOutputKey(),
-  );
-  return await withAggregateTransaction(db, async (tx) => {
+): Promise<InsertedRun> =>
+  await withAggregateTransaction(db, async (tx) => {
     const { owner, runId, desktopId, harness, harnessVersion, now } = options;
     // Serialized with the account's restore requests and settlements, so a
     // restore is either pending here (refused below) or settled and noted.
@@ -1972,8 +1963,6 @@ export const insertAssignedRun = async (
       chatTurnId: options.chat?.turnId ?? null,
       state: "assigned",
       leaseExpiresAt: leaseUntil(now, options.leaseMs),
-      outputKeyEncrypted: sealedOutputKey.ciphertext,
-      outputKeyIv: sealedOutputKey.iv,
       createdAt: now,
       updatedAt: now,
     });
@@ -1995,7 +1984,6 @@ export const insertAssignedRun = async (
       holder: { sessionId: target.sessionId, instanceId: target.instanceId },
     };
   });
-};
 
 type InsertCommandOptions = {
   owner: RunOwner;
@@ -2196,41 +2184,6 @@ export const readRun = async (
       )
       .limit(1)
   ).at(0) ?? null;
-
-/**
- * The stored output key of one run of `owner`: `null` when it has no run by
- * that id, a `null` key when the run keeps none. Read apart from `readRun`,
- * so no view of a run carries it.
- */
-export const readRunOutputKey = async (
-  db: Pick<DesktopRunnerDb, "select">,
-  { owner, runId }: ReadRunOptions,
-): Promise<{ readonly sealedOutputKey: SealedRunOutputKey | null } | null> => {
-  const row = (
-    await db
-      .select({
-        outputKeyEncrypted: runs.outputKeyEncrypted,
-        outputKeyIv: runs.outputKeyIv,
-      })
-      .from(runs)
-      .where(
-        and(
-          eq(runs.runId, runId),
-          eq(runs.userId, owner.userId),
-          eq(runs.organizationId, owner.organizationId),
-        ),
-      )
-      .limit(1)
-  ).at(0);
-  return row === undefined
-    ? null
-    : {
-        sealedOutputKey: storedRunOutputKey(
-          row.outputKeyEncrypted,
-          row.outputKeyIv,
-        ),
-      };
-};
 
 /**
  * The chat thread of the owner's run that is still going; `null` for a run of
@@ -2438,6 +2391,8 @@ type ChatRunSessionOptions = {
   chat: ChatRunBinding;
   desktopId: string;
   harness: AgentHarness;
+  /** What that harness on that computer reports it can do now. */
+  capabilities: readonly DesktopRunnerHarnessCapability[];
   /**
    * The linked folder the turn works in, `null` for the chat's own: a
    * harness keeps its sessions per working folder, so a session from
@@ -2447,25 +2402,60 @@ type ChatRunSessionOptions = {
 };
 
 /**
- * The harness session turn `chat.turnId` resumes on this computer and
- * harness, or `null` when the turn starts a fresh one and hands the harness
- * the chat's own history.
+ * How a turn continues the harness session the chat's earlier turns ran in
+ * on its computer: not at all (it hands the harness the chat's own history),
+ * the session whole, or a new session holding what the session held through
+ * an earlier run's boundary.
+ */
+export type ChatRunSession =
+  | { type: "fresh" }
+  | { type: "resume"; sessionId: string }
+  | { type: "fork"; sessionId: string; boundary: string };
+
+/**
+ * The harness session turn `chat.turnId` continues on this computer and
+ * harness, and how.
  *
  * A session holds every turn the runs that continued it were given and
- * answered, so it is resumed only while the chat still holds exactly those:
- * the newest run of the thread on this computer and harness left it, and its
- * turn's answer is still the message right before the one this turn answers.
- * An edit or a regeneration deletes that answer and every later message, and
- * an answer from the cloud or from another computer or harness takes its
- * place, so any of them starts fresh; a revision of any message of the thread
- * since that run's turn began does too, because the session holds the text
- * it replaced (no revision is accepted while a turn runs). A fork is another
- * thread and holds no run, so it starts fresh.
+ * answered, so it is continued only while the chat still holds exactly those.
+ * - Resume: the newest run of the thread on this computer and harness left
+ *   the session, and its turn's answer is still the message right before the
+ *   one this turn answers.
+ * - Fork: an edit or a regeneration deleted later messages, and the message
+ *   right before the one this turn answers is the answer of an earlier run
+ *   whose turn completed at a recorded boundary. A session only grows (a
+ *   resume appends, a fork writes a new one) and is never cut in place, so
+ *   what it held through that boundary is still what that run left, and the
+ *   new session holds exactly the chat up to that answer. The session itself
+ *   is not changed, so a retried start forks the same prefix again.
+ * - Fresh, for anything else: an answer from the cloud or from another
+ *   computer, harness or folder in its place, or a harness that cannot fork.
+ *   A revision since the continued run's turn began of any message before
+ *   the one this turn answers starts fresh too, because the session holds
+ *   the text it replaced (no revision is accepted while a turn runs). An
+ *   edit or a regeneration writes no revision, and the revisions of the
+ *   messages it deletes go with them. A fork is another thread and holds no
+ *   run, so it starts fresh.
  */
 export const readChatRunSession = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { owner, chat, desktopId, harness, linkedFolderId }: ChatRunSessionOptions,
-): Promise<string | null> => {
+  {
+    owner,
+    chat,
+    desktopId,
+    harness,
+    capabilities,
+    linkedFolderId,
+  }: ChatRunSessionOptions,
+): Promise<ChatRunSession> => {
+  const sameSessions = and(
+    eq(runs.chatThreadId, chat.threadId),
+    eq(runs.desktopId, desktopId),
+    eq(runs.harness, harness),
+    eq(runs.userId, owner.userId),
+    eq(runs.organizationId, owner.organizationId),
+    sql`${runs.linkedFolderId} IS NOT DISTINCT FROM ${linkedFolderId}::uuid`,
+  );
   // The run that last wrote the session: a later one resumed it or replaced
   // it, whatever state it ended in. A run records its session id once the
   // session takes its prompt. A run without one is passed over only when it
@@ -2482,12 +2472,7 @@ export const readChatRunSession = async (
     .from(runs)
     .where(
       and(
-        eq(runs.chatThreadId, chat.threadId),
-        eq(runs.desktopId, desktopId),
-        eq(runs.harness, harness),
-        eq(runs.userId, owner.userId),
-        eq(runs.organizationId, owner.organizationId),
-        sql`${runs.linkedFolderId} IS NOT DISTINCT FROM ${linkedFolderId}::uuid`,
+        sameSessions,
         or(
           isNotNull(runs.harnessSessionId),
           and(
@@ -2501,46 +2486,95 @@ export const readChatRunSession = async (
     .orderBy(desc(runs.createdAt), desc(runs.runId))
     .limit(1)
     .as("newest_run");
-  // The message right before the one this turn answers, in the thread's
-  // order: the answer this turn continues. The boundary is the asking
-  // message's own row, read in the database by id.
+  // The thread's messages before the one this turn answers, in the
+  // thread's order: what a continued session holds. The boundary is the
+  // asking message's own row, read in the database by id.
+  const beforeAsking = sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select m.created_at, m.id from chat_messages m join chat_turns t on t.user_message_id = m.id and t.thread_id = m.thread_id where t.id = ${chat.turnId} and t.thread_id = ${chat.threadId})`;
+  // The message right before the one this turn answers: the answer this
+  // turn continues.
   const continued = db
     .select({ id: chatMessages.id })
     .from(chatMessages)
-    .where(
-      and(
-        eq(chatMessages.threadId, chat.threadId),
-        sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select m.created_at, m.id from chat_messages m join chat_turns t on t.user_message_id = m.id and t.thread_id = m.thread_id where t.id = ${chat.turnId} and t.thread_id = ${chat.threadId})`,
-      ),
-    )
+    .where(and(eq(chatMessages.threadId, chat.threadId), beforeAsking))
     .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
     .limit(1);
-  const rows = await db
-    .select({ harnessSessionId: newest.harnessSessionId })
-    .from(newest)
-    .innerJoin(chatTurns, eq(chatTurns.id, newest.chatTurnId))
-    .where(
-      and(
-        eq(newest.state, "finished"),
-        isNotNull(newest.harnessSessionId),
-        eq(chatTurns.threadId, chat.threadId),
-        eq(chatTurns.assistantMessageId, sql`(${continued})`),
-        // Both times are the database's own: the turn's start, read by id.
-        notExists(
-          db
-            .select({ id: chatMessageRevisions.id })
-            .from(chatMessageRevisions)
-            .where(
-              and(
-                eq(chatMessageRevisions.threadId, chat.threadId),
-                sql`${chatMessageRevisions.createdAt} >= (select t.created_at from chat_turns t where t.id = ${newest.chatTurnId})`,
-              ),
-            ),
+  // No message the session holds was revised since the continued turn
+  // began; a revision of a message an edit replaced is not in it. Both
+  // times are the database's own: the turn's start, read by id.
+  const unrevisedSince = (turnId: SQLWrapper) =>
+    notExists(
+      db
+        .select({ id: chatMessageRevisions.id })
+        .from(chatMessageRevisions)
+        .innerJoin(
+          chatMessages,
+          and(
+            eq(chatMessages.id, chatMessageRevisions.messageId),
+            eq(chatMessages.threadId, chatMessageRevisions.threadId),
+          ),
+        )
+        .where(
+          and(
+            eq(chatMessageRevisions.threadId, chat.threadId),
+            beforeAsking,
+            sql`${chatMessageRevisions.createdAt} >= (select t.created_at from chat_turns t where t.id = ${turnId})`,
+          ),
         ),
-      ),
-    )
-    .limit(1);
-  return rows.at(0)?.harnessSessionId ?? null;
+    );
+  const resumed = (
+    await db
+      .select({ harnessSessionId: newest.harnessSessionId })
+      .from(newest)
+      .innerJoin(chatTurns, eq(chatTurns.id, newest.chatTurnId))
+      .where(
+        and(
+          eq(newest.state, "finished"),
+          isNotNull(newest.harnessSessionId),
+          eq(chatTurns.threadId, chat.threadId),
+          eq(chatTurns.assistantMessageId, sql`(${continued})`),
+          unrevisedSince(newest.chatTurnId),
+        ),
+      )
+      .limit(1)
+  ).at(0)?.harnessSessionId;
+  if (resumed !== undefined && resumed !== null) {
+    return { type: "resume", sessionId: resumed };
+  }
+  if (!capabilities.includes("fork")) {
+    return { type: "fresh" };
+  }
+  // The run whose completed turn answered that message, at the point its
+  // turn ended in its session.
+  const forked = (
+    await db
+      .select({
+        sessionId: runs.harnessSessionId,
+        boundary: runs.harnessBoundary,
+      })
+      .from(runs)
+      .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
+      .where(
+        and(
+          sameSessions,
+          eq(runs.state, "finished"),
+          eq(runs.outcome, "completed"),
+          isNotNull(runs.harnessSessionId),
+          isNotNull(runs.harnessBoundary),
+          eq(chatTurns.threadId, chat.threadId),
+          eq(chatTurns.assistantMessageId, sql`(${continued})`),
+          unrevisedSince(chatTurns.id),
+        ),
+      )
+      .orderBy(desc(runs.createdAt), desc(runs.runId))
+      .limit(1)
+  ).at(0);
+  if (forked === undefined) {
+    return { type: "fresh" };
+  }
+  const { sessionId, boundary } = forked;
+  return sessionId === null || boundary === null
+    ? { type: "fresh" }
+    : { type: "fork", sessionId, boundary };
 };
 
 type ChatRunForRequestOptions = {
@@ -2598,6 +2632,103 @@ export const readChatRunForRequest = async (
       )
       .limit(1)
   ).at(0) ?? null;
+
+type ChatTurnRunOptions = { owner: RunOwner; chat: ChatRunBinding };
+
+/** A chat turn's run that is still going, and whether it can be steered. */
+export type SteerableChatRun = {
+  readonly runId: string;
+  /** The run's harness, on its computer, reports `steer`. */
+  readonly steerable: boolean;
+};
+
+/**
+ * The open run of chat turn `chat.turnId`, with what its harness on the
+ * computer running it last reported; `null` when the turn has no run still
+ * going for this member.
+ */
+export const readSteerableChatRun = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, chat }: ChatTurnRunOptions,
+): Promise<SteerableChatRun | null> => {
+  const row = (
+    await db
+      .select({
+        runId: runs.runId,
+        harness: runs.harness,
+        harnesses: runner.harnesses,
+      })
+      .from(runs)
+      .innerJoin(
+        runner,
+        and(
+          eq(runner.userId, runs.userId),
+          eq(runner.organizationId, runs.organizationId),
+          eq(runner.desktopId, runs.desktopId),
+          eq(runner.deviceJkt, runs.deviceJkt),
+        ),
+      )
+      .where(
+        and(
+          eq(runs.chatThreadId, chat.threadId),
+          eq(runs.chatTurnId, chat.turnId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        ),
+      )
+      // A turn starts one run; a paused one is answered on the same run.
+      .limit(1)
+  ).at(0);
+  if (row === undefined) {
+    return null;
+  }
+  const report = storedHarnessReports(row.harnesses).find(
+    ({ id }) => id === row.harness,
+  );
+  return {
+    runId: row.runId,
+    steerable:
+      report?.state === DESKTOP_RUNNER_HARNESS_STATE.ready &&
+      report.capabilities.includes("steer"),
+  };
+};
+
+type RunInputOptions = { owner: RunOwner; runId: string; inputId: string };
+
+/**
+ * The text the owner's `run.input` `inputId` handed run `runId`, as the API
+ * queued it; `null` when no such input was queued for that run.
+ */
+export const readRunInputText = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, runId, inputId }: RunInputOptions,
+): Promise<string | null> => {
+  const row = (
+    await db
+      .select({ payload: desktopRunnerCommands.payload })
+      .from(desktopRunnerCommands)
+      .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
+      .where(
+        and(
+          eq(desktopRunnerCommands.runId, runId),
+          eq(desktopRunnerCommands.kind, "run.input"),
+          eq(desktopRunnerCommands.commandKey, inputId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (row === undefined) {
+    return null;
+  }
+  const parsed = v.safeParse(desktopRunnerServerMessageSchema, row.payload);
+  return parsed.success &&
+    parsed.output.type === DESKTOP_RUNNER_SERVER_MESSAGE.runInput
+    ? parsed.output.message.content
+    : panic("A stored run.input no longer validates");
+};
 
 type ChatReadSeqOptions = { owner: RunOwner; runId: string; seq: number };
 

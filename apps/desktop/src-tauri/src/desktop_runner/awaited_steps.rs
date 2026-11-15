@@ -35,12 +35,22 @@ use uuid::Uuid;
 use super::client::{Authorized, RunnerAuth};
 use super::run_folders::STEP_OUTPUT_STORE_SUFFIX;
 use super::state::{Backoff, RunnerState};
-use super::step_outputs::is_hex_key;
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 use crate::local_store::{self, OpenMode};
 use crate::runner_protocol::DESKTOP_ID_HEADER;
 
 const LOG_TARGET: &str = "desktop_runner::awaited_steps";
+
+/// A step's key: the SHA-256 hex of its chat call id, 64 lowercase hex
+/// characters.
+const STEP_KEY_HEX_LENGTH: usize = 64;
+
+fn is_hex_key(value: &str) -> bool {
+  value.len() == STEP_KEY_HEX_LENGTH
+    && value
+      .bytes()
+      .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
 
 /// Beside a run's kept steps, the folder the sidecar hands over at the run's
 /// end: the name the sidecar renames `<runId>.pending` to.

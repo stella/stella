@@ -30,7 +30,7 @@ import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
   cleanupObjectAfterWriter,
   lockObjectCleanupIntentsForWriter,
-  reserveObjectCleanupIntents,
+  reserveObjectCleanupIntentsForKey,
   retirePublishedObjectCleanupIntentsInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
@@ -127,7 +127,7 @@ const prepareTemplateWrite = async ({
     const templateId = createSafeId<"template">();
     const s3Key = buildTemplateS3Key(organizationId, templateId);
     const intentIds = yield* Result.await(
-      reserveObjectCleanupIntents({
+      reserveObjectCleanupIntentsForKey({
         safeDb,
         organizationId,
         objectKey: s3Key,

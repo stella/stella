@@ -50,6 +50,7 @@ type MakeClaimArgs = {
   recheck?: VerificationClaim["recheck"];
   staleness?: VerificationClaim["staleness"];
   assertedOn?: VerificationClaim["assertedOn"];
+  decider?: VerificationClaim["decider"];
   /** The server's answer. By default a conflict needs attention and every
    *  other verdict does not; a test with a contested fact or a judgement
    *  qualifier says so itself. */
@@ -81,6 +82,7 @@ export const makeClaim = ({
   recheck = null,
   staleness = [],
   assertedOn = { type: "none" },
+  decider = { kind: "llm", fallback: null },
   needsAttention = CONFLICT_VERDICTS.has(verdict.state),
 }: MakeClaimArgs): VerificationClaim => ({
   id: claimId(suffix),
@@ -88,6 +90,7 @@ export const makeClaim = ({
   type,
   framing: "asserted",
   verdict,
+  decider,
   qualifiers,
   needsAttention,
   suggestedGoverningFactId,

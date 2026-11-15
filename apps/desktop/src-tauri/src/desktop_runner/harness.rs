@@ -130,6 +130,8 @@ pub(crate) enum RunOutput {
   Finished {
     outcome: RunOutcome,
     harness_session_id: Option<String>,
+    /// Where a completed turn ended in that session; `None` otherwise.
+    harness_boundary: Option<String>,
   },
 }
 

@@ -155,6 +155,12 @@ export const ANALYSIS_FAILURE_CODE_BY_KIND = {
   local_runner_relinked: "provider_unavailable",
   local_runner_restoring: "provider_unavailable",
   local_runner_folder_unavailable: "provider_unavailable",
+  local_runner_no_computer: "provider_unavailable",
+  local_runner_harness_unavailable: "provider_unavailable",
+  local_runner_model_unavailable: "provider_unavailable",
+  local_runner_reasoning_effort_unavailable: "provider_unavailable",
+  local_runner_approvals_unavailable: "provider_unavailable",
+  local_runner_folder_not_approved: "provider_unavailable",
   unknown: "failed",
 } as const satisfies Record<AIErrorKind, AnalysisFailureCode>;
 
@@ -181,6 +187,12 @@ const ANALYSIS_INCOMPLETE_REASON_BY_KIND = {
   local_runner_relinked: null,
   local_runner_restoring: null,
   local_runner_folder_unavailable: null,
+  local_runner_no_computer: null,
+  local_runner_harness_unavailable: null,
+  local_runner_model_unavailable: null,
+  local_runner_reasoning_effort_unavailable: null,
+  local_runner_approvals_unavailable: null,
+  local_runner_folder_not_approved: null,
   unknown: null,
 } as const satisfies Record<
   AIErrorKind,

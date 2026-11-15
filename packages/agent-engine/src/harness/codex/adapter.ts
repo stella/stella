@@ -23,7 +23,7 @@ import {
   type HarnessTurnInput,
   type HarnessUsageLimit,
 } from "../adapter";
-import type { HarnessContinuation } from "../events";
+import { type HarnessContinuation, sessionHoldsHistory } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
 import { redactingSkillPaths } from "../skill-redaction";
 import { toolPathEnvironment } from "../tool-path";
@@ -130,6 +130,10 @@ const CODEX_CAPABILITIES: Readonly<Record<HarnessCapability, boolean>> = {
   resume: true,
   // The turn's images open `turn/start` as image items.
   image_input: true,
+  // `turn/steer` adds a message to the running turn.
+  steer: true,
+  // `thread/fork` with `lastTurnId` copies the thread through one turn.
+  fork: true,
 };
 
 /** Codex takes images as input; a PDF stays a path the agent opens. */
@@ -649,10 +653,9 @@ const startTurn = async (
   }
   const { threadId, continuation } = opened.value;
   appServer.threadId = threadId;
-  const prompt =
-    continuation.type === "resumed"
-      ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
-      : standalone;
+  const prompt = sessionHoldsHistory(continuation)
+    ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
+    : standalone;
   if (Result.isError(prompt)) {
     return fail(prompt.error);
   }

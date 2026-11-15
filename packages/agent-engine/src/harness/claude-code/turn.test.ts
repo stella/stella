@@ -167,6 +167,7 @@ describe("a Claude Code subagent's messages", () => {
           expect(events.at(-1)).toEqual({
             type: "turn.completed",
             usage: null,
+            boundary: null,
           });
           // Exactly what the adapter cannot read is shown as unsupported, as
           // a step of the subagent; none is dropped.
@@ -207,5 +208,37 @@ describe("a Claude Code subagent's messages", () => {
       type: "turn.failed",
       failure: { type: "protocol_violation" },
     });
+  });
+});
+
+describe("the model a Claude Code turn ran on", () => {
+  /** The notice the pinned CLI writes when it retries on its fallback model. */
+  const fallbackNotice = (scope: "session" | "local" | null) => ({
+    type: "system",
+    subtype: "model_refusal_fallback",
+    trigger: "refusal",
+    direction: "retry",
+    ...(scope === null ? {} : { scope }),
+    original_model: "claude-asked",
+    fallback_model: "claude-fallback",
+    request_id: "request-1",
+    content: "The model declined; retrying on the fallback model.",
+    uuid: "00000000-0000-4000-8000-000000000001",
+    session_id: "session-1",
+  });
+  const reroutes = async (scope: "session" | "local" | null) =>
+    (await eventsOf([fallbackNotice(scope)])).filter(
+      ({ type }) => type === "model.rerouted",
+    );
+
+  test("a fallback after a refusal names the fallback model, unless only a subagent fell back", async () => {
+    expect(await reroutes("session")).toEqual([
+      { type: "model.rerouted", model: "claude-fallback" },
+    ]);
+    // An older CLI leaves the scope out: the main thread fell back.
+    expect(await reroutes(null)).toEqual([
+      { type: "model.rerouted", model: "claude-fallback" },
+    ]);
+    expect(await reroutes("local")).toEqual([]);
   });
 });
