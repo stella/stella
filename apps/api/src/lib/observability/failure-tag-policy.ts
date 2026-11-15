@@ -304,6 +304,7 @@ export const TAGGED_FAILURE_REASON = {
   KsefError: "tagged_failure",
   LatestDecisionsError: "tagged_failure",
   LegacyChatContentError: "tagged_failure",
+  LegacyServedCopyRetireCutoverMismatchError: "tagged_failure",
   LegacyWordParseError: "tagged_failure",
   LegalBrowseFacetsError: "tagged_failure",
   LegalHoldActiveError: "conflict",
