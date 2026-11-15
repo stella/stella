@@ -4,6 +4,7 @@ import {
   CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
   CORPUS_INDEX_QUIESCENT_INTENT_STATUSES,
   type CorpusIndexDesiredAction,
+  corpusIndexIntentStatusesWithCopy,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 
 const sqlLiteralValues = (values: readonly string[]) =>
@@ -84,6 +85,126 @@ export const corpusIndexProjectionIntentIsOutstanding = (status: SQLWrapper) =>
 
 const ERASE_ACTION: CorpusIndexDesiredAction = "erase";
 const ERASE_ACTION_LITERAL = sql.raw(`'${ERASE_ACTION}'`);
+const UPSERT_ACTION: CorpusIndexDesiredAction = "upsert";
+const UPSERT_ACTION_LITERAL = sql.raw(`'${UPSERT_ACTION}'`);
+
+type CorpusProjectionRevisionCopyColumns = {
+  status: SQLWrapper;
+  cleanupAttempts: SQLWrapper;
+};
+
+const statusHasCopy = (
+  status: SQLWrapper,
+  copy: Parameters<typeof corpusIndexIntentStatusesWithCopy>[0],
+) =>
+  sql`${status} IN (${sqlLiteralValues(corpusIndexIntentStatusesWithCopy(copy))})`;
+
+/**
+ * A delete of this revision may have been issued and is not proven yet: it is
+ * at or past the cleanup claim (`CORPUS_INDEX_NAMED_REVISION_COPY`), short of
+ * settlement. One source of truth for the at-risk branch and the partial
+ * intent index that answers it.
+ */
+export const corpusIndexProjectionRevisionDeleteIsUnproven = ({
+  status,
+  cleanupAttempts,
+}: CorpusProjectionRevisionCopyColumns) => sql`(
+  ${statusHasCopy(status, "delete_unproven")}
+  OR (${statusHasCopy(status, "intact_until_claimed")} AND ${cleanupAttempts} > 0)
+)`;
+
+const revisionCopyIsIntact = ({
+  status,
+  cleanupAttempts,
+}: CorpusProjectionRevisionCopyColumns) => sql`(
+  ${statusHasCopy(status, "intact")}
+  OR (${statusHasCopy(status, "intact_until_claimed")} AND ${cleanupAttempts} = 0)
+)`;
+
+type CorpusProjectionServingStateColumns = {
+  desiredAction: SQLWrapper;
+  appliedAction: SQLWrapper;
+  appliedRevision: SQLWrapper;
+  appliedRevisionSettled: SQLWrapper;
+};
+
+type CorpusProjectionServingColumns = {
+  state: CorpusProjectionServingStateColumns;
+  /** The revision `applied_revision` names, joined by its primary key. */
+  revision: CorpusProjectionRevisionCopyColumns;
+};
+
+const wantsUpsert = (desiredAction: SQLWrapper) =>
+  sql`${desiredAction} = ${UPSERT_ACTION_LITERAL}`;
+
+/**
+ * A named revision means an applied upsert (the states table's `applied_shape`
+ * check), so the predicate does not restate the action: restating it would
+ * match the partial census index and steer a lookup off the primary key.
+ */
+const namesLiveRevision = ({
+  appliedRevision,
+  appliedRevisionSettled,
+}: CorpusProjectionServingStateColumns) =>
+  sql`${appliedRevision} IS NOT NULL AND NOT ${appliedRevisionSettled}`;
+
+/** The absent branch on the state row alone, shared with its partial index. */
+export const corpusIndexProjectionIsAbsent = ({
+  desiredAction,
+  appliedAction,
+  appliedRevisionSettled,
+}: Omit<CorpusProjectionServingStateColumns, "appliedRevision">) => sql`(
+  ${wantsUpsert(desiredAction)}
+  AND (${appliedAction} = ${ERASE_ACTION_LITERAL} OR ${appliedRevisionSettled})
+)`;
+
+/**
+ * Whether readers can reach a copy of the entity. Readers address the revision
+ * `applied_revision` names, whatever its status, so the entity is served
+ * exactly while that revision's copy is whole.
+ *
+ * - `served`: an upsert is wanted and the named copy is whole: applied, or
+ *   queued for cleanup with no delete issued. A newer upsert may be queued;
+ *   the old copy answers.
+ * - `at_risk`: an upsert is wanted and a delete of the named copy may have
+ *   been issued, not yet proven. The copy vanishes once the engine applies
+ *   the delete.
+ * - `absent`: an upsert is wanted and nothing answers: the named revision's
+ *   delete settled, or an erasure applied before the upsert came back.
+ * - `never_applied`: an upsert is wanted and nothing was ever applied: a new
+ *   entity on its first append. Expected lag, not a defect.
+ * - `erased`: an erasure is wanted, so nothing should be served.
+ *
+ * The branches are disjoint and together total over the states table's
+ * checks, so each stands alone. `absent` reads the state row alone
+ * (`applied_revision_settled` is trigger-kept equal to the named revision
+ * having settled), so a partial index can carry it; `at_risk` needs the named
+ * revision, whose own partial index carries it. Actions are literals for the
+ * reason `corpusIndexProjectionErasureIsPending` gives.
+ */
+export const CORPUS_INDEX_PROJECTION_SERVING = {
+  served: ({ state, revision }: CorpusProjectionServingColumns) => sql`(
+    ${wantsUpsert(state.desiredAction)}
+    AND ${namesLiveRevision(state)}
+    AND ${revisionCopyIsIntact(revision)}
+  )`,
+  at_risk: ({ state, revision }: CorpusProjectionServingColumns) => sql`(
+    ${wantsUpsert(state.desiredAction)}
+    AND ${namesLiveRevision(state)}
+    AND ${corpusIndexProjectionRevisionDeleteIsUnproven(revision)}
+  )`,
+  absent: ({ state }: CorpusProjectionServingColumns) =>
+    corpusIndexProjectionIsAbsent(state),
+  never_applied: ({ state }: CorpusProjectionServingColumns) => sql`(
+    ${wantsUpsert(state.desiredAction)}
+    AND ${state.appliedAction} IS NULL
+  )`,
+  erased: ({ state }: CorpusProjectionServingColumns) =>
+    sql`(${state.desiredAction} = ${ERASE_ACTION_LITERAL})`,
+} as const;
+
+export type CorpusIndexProjectionServing =
+  keyof typeof CORPUS_INDEX_PROJECTION_SERVING;
 
 type CorpusProjectionErasureColumns = {
   appliedAction: SQLWrapper;

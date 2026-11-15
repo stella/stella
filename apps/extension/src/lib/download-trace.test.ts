@@ -469,3 +469,62 @@ describe("the navigation window", () => {
     expect(session["browserRecentNavigations"]).toBe(undefined);
   });
 });
+
+describe("frames of tabs that close", () => {
+  const CLOSING_TAB = 5;
+
+  /**
+   * Chrome lists the closing tab, then answers its frame lookup with null,
+   * as it does for a tab id that is no longer valid. `stillOpen` says
+   * whether the tab is in fact still there when asked again.
+   */
+  const installClosingTab = ({ stillOpen }: { stillOpen: boolean }): void => {
+    Object.defineProperty(globalThis, "chrome", {
+      configurable: true,
+      value: {
+        runtime: { id: "stella-extension" },
+        storage: { session: { get: async () => ({}) } },
+        tabs: {
+          query: async () => [
+            { id: USER_TAB },
+            { id: CONTROLLED_TAB },
+            { id: CLOSING_TAB },
+          ],
+          get: async (tabId: number) => {
+            if (tabId === CLOSING_TAB && !stillOpen) {
+              throw new Error(`No tab with id: ${String(tabId)}.`);
+            }
+            return { id: tabId };
+          },
+        },
+        webNavigation: {
+          getAllFrames: async ({ tabId }: { tabId: number }) => {
+            if (tabId === CLOSING_TAB) {
+              return null;
+            }
+            return [
+              {
+                frameId: 0,
+                url:
+                  tabId === CONTROLLED_TAB
+                    ? "https://portal.example.com/"
+                    : "https://drive.google.com/",
+              },
+            ];
+          },
+        },
+      },
+    });
+  };
+
+  const userBlob = download("blob:https://drive.google.com/7f3c");
+  test("a tab closed while a download starts leaves the user's own download theirs", async () => {
+    installClosingTab({ stillOpen: false });
+    expect(await tracedOwnerOf(userBlob, owners, clock)).toBe("user");
+  });
+
+  test("an open tab whose frames Chrome cannot list still leaves the download unexplained", async () => {
+    installClosingTab({ stillOpen: true });
+    expect(await tracedOwnerOf(userBlob, owners, clock)).toBe("unexplained");
+  });
+});

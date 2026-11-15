@@ -105,6 +105,7 @@ requires (request it at `stella auth login --scopes`).
 | case-law | `stella case-law read` | read |  |
 | case-law | `stella case-law resolve` | law_read |  |
 | case-law | `stella case-law search` | search | paginated |
+| case-law | `stella case-law verify-quote` | read |  |
 | clause | `stella clause delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | clause | `stella clause list` | read | paginated |
 | clause | `stella clause save` | knowledge_write | destructive (needs `--yes` off a TTY) |
@@ -202,7 +203,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - via `--input` only: input
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
-  - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
+  - `--direction` — cites: decisions this decision cites; cited_by: its citers. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
   - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified), --detail (full|compact), --passage-query
 - `stella case-law coverage`
   - optional: --country
@@ -210,14 +211,17 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--decision-id` — Decision ID from search_case_law results or resolve_case_law_decision document.decisionId. (string)
   - optional: --paragraphs
 - `stella case-law read`
-  - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
+  - `--decision-ids` — Decisions, max 20/call; each id answered independently, including unknown ids. (string-array, repeatable)
   - optional: --max-chars, --page, --full, --text-version, --preferred-language, --query, --resume-after, --section (court_reasoning), --include (details|metadata|textFields|source|citations|outline)
 - `stella case-law resolve`
-  - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - `--identifier` — Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions. (string)
+  - `--country` — Court country: alpha-2/alpha-3/name. Unknown or unsupported: country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--identifier` — Docket (sheet if known) or ECLI; CZ/SK court name/alias constrains it. For descriptions: search_case_law. (string)
 - `stella case-law search`
   - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --continuation-token, --court, --courts, --category, --docket-registers, --senate, --provision, --has-legal-sentence, --language, --preferred-language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
+- `stella case-law verify-quote`
+  - `--decision-id` — ID from search_case_law or resolve_case_law_decision. (string)
+  - `--text` — Quote: max 4000 chars, 128 word/punctuation tokens, 16 nonempty ordered segments split by ..., …, […] or (...). Preserve case/diacritics. (string)
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
@@ -252,10 +256,10 @@ are omitted here. Input union keys are required unless marked `?`.
   - source: type="versions": document_id:string, base_version_id:string, target_version_ids:string[]; type="previous": document_id:string, target_version_id:string; type="uploads": base_upload_id:string, target_upload_id:string. Example: `--input '{"source":{"type":"versions","document_id":"00000000-0000-4000-8000-000000000000","base_version_id":"00000000-0000-4000-8000-000000000000","target_version_ids":["00000000-0000-4000-8000-000000000000"]}}'`
 - `stella document comparison prepare`
   - `--base.name` — File name to show the user, including the .docx suffix. (string)
-  - `--base.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--base.size` — Exact byte length of the file, at most 200 MB. (int 1..209715200)
   - `--base.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
   - `--target.name` — File name to show the user, including the .docx suffix. (string)
-  - `--target.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--target.size` — Exact byte length of the file, at most 200 MB. (int 1..209715200)
   - `--target.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
 - `stella document comparison prepare-from-links`
   - `--base.url` — HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form. (string)

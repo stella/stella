@@ -52,10 +52,15 @@ const STEPS = Object.keys(COMMIT_BUDGET).filter(
   (step): step is Step => step in COMMIT_BUDGET,
 );
 
+// A page without the counter (a production build, or the canary no longer
+// around the app) measures nothing, and every budget would pass on zero.
 const readCommits = async (page: Page) =>
   await page.evaluate((key) => {
     const counted: unknown = Reflect.get(globalThis, key);
-    return typeof counted === "number" ? counted : 0;
+    if (typeof counted !== "number") {
+      throw new TypeError(`The page counts no commits (${key} is unset).`);
+    }
+    return counted;
   }, RENDER_COMMIT_COUNT_GLOBAL);
 
 test.beforeEach(async ({ request }) => {
@@ -158,6 +163,8 @@ for (const key of STEPS) {
     process.stdout.write(
       `composer commits: ${JSON.stringify({ step, commits, budget })}\n`,
     );
+    // Every step commits: zero is a broken counter.
+    expect(commits, step).toBeGreaterThan(0);
     expect(commits, step).toBeLessThanOrEqual(budget);
   });
 }

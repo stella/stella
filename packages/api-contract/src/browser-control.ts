@@ -61,6 +61,21 @@ export const BROWSER_CONTROL_KEYS = [
   "Tab",
 ] as const;
 
+type BrowserControlKey = (typeof BROWSER_CONTROL_KEYS)[number];
+
+/**
+ * The keys a coding agent on the member's computer may press: submitting or
+ * leaving a field and moving through a suggestion list. The extension
+ * refuses any other key from stella desktop.
+ */
+export const BROWSER_DESKTOP_KEYS = [
+  "Enter",
+  "Escape",
+  "Tab",
+  "ArrowDown",
+  "ArrowUp",
+] as const satisfies readonly BrowserControlKey[];
+
 export const BROWSER_CONTROL_LIMITS = {
   /** Text of the row, list item or form an element sits in; disambiguates identical controls. */
   contextChars: 200,

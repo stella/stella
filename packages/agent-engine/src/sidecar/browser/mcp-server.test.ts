@@ -161,6 +161,10 @@ describe("the local browser MCP endpoint", () => {
       "find",
       "click",
       "type",
+      "press_key",
+      "select",
+      "go_back",
+      "switch_tab",
     ]);
 
     const called = await rpc(binding, {

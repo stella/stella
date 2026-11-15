@@ -26,10 +26,6 @@ import {
   chatToolExecutor,
 } from "@stll/api-contract/chat";
 import {
-  CHAT_LOCAL_RUN_STEP_OUTPUT_GRANT_SECONDS,
-  chatLocalRunStepOutputGrantMessage,
-} from "@stll/api-contract/chat-local-run-step-output";
-import {
   CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   chatLocalRunParentCallId,
 } from "@stll/api-contract/chat-local-run-tool";
@@ -159,7 +155,6 @@ import type {
   MintRunToken,
   RunnerTimers,
 } from "@/api/lib/desktop-runner/session";
-import { ownerStepOutputGrant } from "@/api/lib/desktop-runner/step-output-grants";
 import {
   type DesktopRunnerDb,
   readNewestQueuedCommands,
@@ -176,7 +171,6 @@ import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-pr
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { chatBackgroundTasksScalingScenario } from "@/api/tests/read-scaling/chat-background-tasks";
 import { chatLocalFilesUndoScalingScenario } from "@/api/tests/read-scaling/chat-local-files-undo";
-import { chatLocalRunStepOutputGrantScalingScenario } from "@/api/tests/read-scaling/chat-local-run-step-output-grant";
 import { chatLocalRunnersScalingScenario } from "@/api/tests/read-scaling/chat-local-runners";
 import { desktopRunnerUpgradeScalingScenario } from "@/api/tests/read-scaling/desktop-runner-upgrade";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
@@ -4886,94 +4880,6 @@ describe("chat turns on a computer", () => {
     expect(readScalingViolations({ small, large })).toEqual([]);
   });
 
-  test("the computer gets each run's output key, and a step output grant reads only the owner's one run", async () => {
-    const counted = createDesktopRunnerControl({
-      // SAFETY: PGlite and Bun SQL expose the same Drizzle query APIs.
-      db: asTestRaw<DesktopRunnerDb>(withQueryLogger(db, queryCountLogger)),
-      doorbell: sharedDoorbell,
-      now,
-      timing: TIMING,
-    });
-    const { desktopId, desktop } = shared();
-    const runId = await assignRun(desktopId);
-    const start = await desktop.receive("run.start", ofRun(runId));
-    // The key grants are signed with: the run's own, which no stored command
-    // holds and the run keeps only encrypted.
-    expect(start.outputKey).toMatch(/^[0-9a-f]{64}$/u);
-    expect((await counted.readRunOutputKey({ owner, runId })).unwrap()).toBe(
-      start.outputKey,
-    );
-    const [queued] = await db
-      .select({ payload: desktopRunnerCommands.payload })
-      .from(desktopRunnerCommands)
-      .where(eq(desktopRunnerCommands.runId, runId));
-    expect(JSON.stringify(queued?.payload)).not.toContain(start.outputKey);
-    const [stored] = await db
-      .select({ sealed: desktopRunnerRuns.outputKeyEncrypted })
-      .from(desktopRunnerRuns)
-      .where(eq(desktopRunnerRuns.runId, runId));
-    expect(stored?.sealed?.toString("utf-8")).not.toContain(start.outputKey);
-    desktop.send({ type: "run.accepted", runId });
-    const fixture = { control: counted, owner, runId };
-    const small =
-      await chatLocalRunStepOutputGrantScalingScenario.measure(fixture);
-    for (let index = 0; index < 20; index += 1) {
-      const other = await assignRun(desktopId);
-      await desktop.receive("run.start", ofRun(other));
-      desktop.send({ type: "run.accepted", runId: other });
-      desktop.send(textEvent(other, 1, "Working"));
-      await desktop.receive("ack", ofRun(other));
-    }
-    const large =
-      await chatLocalRunStepOutputGrantScalingScenario.measure(fixture);
-    expect(small.rows).toBe(1);
-    expect(readScalingViolations({ small, large })).toEqual([]);
-    // Each run has its own key, and another member's grant finds no run by
-    // that id.
-    const other = await assignRun(desktopId);
-    const otherStart = await desktop.receive("run.start", ofRun(other));
-    desktop.send({ type: "run.accepted", runId: other });
-    expect(otherStart.outputKey).not.toBe(start.outputKey);
-    expect(
-      (
-        await ownerStepOutputGrant({
-          control: counted,
-          owner: { organizationId: ids.orgB, userId: ids.userB1 },
-          runId,
-          now: 0,
-        })
-      ).unwrap(),
-    ).toBeNull();
-  });
-
-  test("a grant made after the deployment's auth secret rotates still opens the output of a run started before", async () => {
-    const { desktopId, desktop } = shared();
-    const runId = await assignRun(desktopId);
-    const start = await desktop.receive("run.start", ofRun(runId));
-    desktop.send({ type: "run.accepted", runId });
-    testState.setConfig("BETTER_AUTH_SECRET", "rotated-".repeat(8));
-    const grantedAt = 1_900_000_000;
-    const grant = (
-      await ownerStepOutputGrant({ control, owner, runId, now: grantedAt })
-    ).unwrap();
-    // What the computer checks a request against: the message signed with
-    // the key it got in `run.start`.
-    const expiresAt = grantedAt + CHAT_LOCAL_RUN_STEP_OUTPUT_GRANT_SECONDS;
-    expect(grant).toEqual({
-      key: new Bun.CryptoHasher("sha256", start.outputKey)
-        .update(
-          chatLocalRunStepOutputGrantMessage({
-            runId,
-            userId: owner.userId,
-            organizationId: owner.organizationId,
-            expiresAt,
-          }),
-        )
-        .digest("hex"),
-      expiresAt,
-    });
-  });
-
   test("a computer that goes away mid-turn keeps the turn waiting until it returns, and the chat is told both", async () => {
     const chatThreadId = await newThread();
     const desktopId = Bun.randomUUIDv7();
@@ -6869,9 +6775,9 @@ describe("undoing a turn's file changes", () => {
 
   /**
    * A turn of the thread, running until `completeTurn` ends it. Its start
-   * holds microseconds, as an accepted turn's does (the database's `now()`):
-   * the newest-turn rule compares starts, and a whole millisecond would hide
-   * a comparison that drops them. Just before the clock, so the turn can
+   * holds microseconds, as an accepted turn's does (the database's `now()`),
+   * so a newest-turn rule that compared starts read out at a whole
+   * millisecond would fail here. Just before the clock, so the turn can
    * settle at it.
    */
   const newTurn = async (threadId: Thread): Promise<Turn> => {

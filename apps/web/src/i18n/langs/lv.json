@@ -294,6 +294,8 @@
       "reopened": "Atvērts vēlreiz, gaida pārbaudi",
       "reopenedTooltip": "Pārbaudītājs to pārklasificēja par pārbaudāmu faktu; tiešā pārbaude pret reģistru vēl nav veikta.",
       "sourceCount": "{count, plural, zero {# avotu} one {# avots} other {# avoti}}",
+      "verdictBy": "Slēdzienu sniedza {model}",
+      "verdictByGenerativeModel": "Slēdzienu sniedza ģeneratīvais modelis; lēmumu modelis to nenoteica",
       "whyVerdict": "Slēdziena pamatojums: enkurfakti"
     },
     "claimTypes": {
@@ -2335,6 +2337,10 @@
       "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {
+      "browserClick": "Noklikšķināt uz „{target}” lapā {url}",
+      "browserPressKey": "Nospiest taustiņu {key} elementā „{target}” lapā {url}",
+      "browserSelect": "Atlasīt „{option}” elementā „{target}” lapā {url}",
+      "browserType": "Ievadīt tekstu elementā „{target}” lapā {url}",
       "characterCount": "{count, plural, zero {# rakstzīmju} one {# rakstzīme} other {# rakstzīmes}}",
       "commandExited": "{command} (izejas kods {code})",
       "consoleLogs": "Konsoles izvade",
@@ -2344,17 +2350,17 @@
       "input": "Ievade",
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "localOutput": {
+        "arriving": "Joprojām tiek saņemts no datora, kurā šis solis tika izpildīts",
         "conversation": "Apakšaģenta saruna",
         "conversationPrompt": "Uzdevums",
         "conversationReport": "Ziņojums",
         "cut": "Rāda pirmos {kept} no {total}",
         "diff": "Failu izmaiņas",
-        "elsewhere": "Atveriet datorā, kurā tas tika izpildīts",
         "empty": "Nav izvades",
-        "failed": "stella darbvirsmas lietotne šajā datorā to nevarēja parādīt.",
-        "imageTooLarge": "Šī attēla izmērs ir {total}. Attēli, kas lielāki par {kept}, šajā datorā netiek saglabāti, tāpēc to šeit nevar parādīt.",
-        "notKept": "No šī soļa šajā datorā nekas nav saglabāts",
-        "reading": "Notiek lasīšana no šī datora"
+        "imageTooLargeToStore": "Šī attēla izmērs ir {total}. Attēli, kas lielāki par {kept}, netiek saglabāti, tāpēc to nevar parādīt.",
+        "notCopied": "Vēl nav nokopēts uz šo tērzēšanu",
+        "notStored": "No šī soļa nekas netika saglabāts",
+        "runBudgetReached": "Nav saglabāts: šī izpilde jau bija saglabājusi tik daudz, cik drīkst viena izpilde"
       },
       "output": "Izvade",
       "patternInPath": "{pattern} ({path})",
@@ -2377,6 +2383,10 @@
       "needsInputTitle": "stellai vajadzīga jūsu rīcība",
       "replyReadyBody": "stella pabeidza atbildēt jūsu tērzēšanā.",
       "replyReadyTitle": "Atbilde gatava"
+    },
+    "turnPaused": {
+      "continue": "Turpināt",
+      "status": "Apturēts pēc {count, plural, zero {# rīka izsaukumiem} one {# rīka izsaukuma} other {# rīka izsaukumiem}}"
     },
     "turnStatus": {
       "answerFailed": "Atbildi neizdevās pabeigt",
@@ -3030,7 +3040,6 @@
       "dropZone": "Ievelciet pilnvaru (.docx) šeit vai noklikšķiniet, lai izvēlētos failu",
       "extracting": "Iegūst pilnvarotāju(-us)…",
       "fileHint": "stella izlasa dokumentu un automātiski atrod pilnvaras devēju (personu, kas piešķir pilnvaru, nevis juristu). Pirms apstiprināšanas pārbaudiet rezultātu.",
-      "fileTooLarge": "Pilnvaras failam jābūt ne lielākam par 50 MB.",
       "invalidFileType": "Lūdzu, izvēlieties .docx failu.",
       "noOutorganteFound": "Šajā dokumentā neizdevās identificēt nevienu pilnvaras devēju.",
       "parseErrorGeneric": "No šī dokumenta neizdevās iegūt kontaktus.",
@@ -3410,6 +3419,7 @@
       "invitationRoleNotAllowed": "Jūs nevarat uzaicināt personu ar šo lomu. Izvēlieties citu lomu.",
       "invoiceNumberSeriesMissing": "Iestatiet rēķinu noklusējuma numuru sēriju organizācijas iestatījumu sadaļā Numuru sērijas un pēc tam izrakstiet rēķinu.",
       "invoiceSellerProfileMissing": "Pievienojiet pārdevēja profilu organizācijas iestatījumu sadaļā Norēķinu profili un pēc tam izrakstiet rēķinu.",
+      "legalHoldActive": "Dzēšana ir bloķēta, jo šie ieraksti ir jāsaglabā.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
       "matterContactCapacityExceeded": "Šajā lietā ir vairāk kontaktu, nekā iespējams parādīt. Noņemiet redzamās kontaktu piesaistes, lai parādītu pārējos kontaktus.",
@@ -5890,6 +5900,8 @@
       "auditLogsSentenceDownload": "{resource} lejupielādēts.",
       "auditLogsSentenceExecute": "{resource} palaists.",
       "auditLogsSentenceIssued": "{resource} izsniegts.",
+      "auditLogsSentenceLegalHoldPlaced": "{resource} noteikta.",
+      "auditLogsSentenceLegalHoldReleased": "{resource} atcelta.",
       "auditLogsSentenceRedeemed": "{resource} izmantots.",
       "auditLogsSentenceRefused": "{resource} atteikts.",
       "auditLogsSentenceReview": "{resource} pārskatīts.",
@@ -5941,6 +5953,7 @@
         "flow_run": "darbplūsmas izpilde",
         "folio_collab_room": "Folio sadarbības telpa",
         "invoice": "rēķins",
+        "legal_hold": "juridiskā saglabāšana",
         "legal_list": "juridiskais saraksts",
         "legal_list_generation": "juridiskā saraksta izveide",
         "legal_list_item": "juridiskā saraksta ieraksts",
@@ -6100,7 +6113,13 @@
       "usageStatusTrialing": "Izmēģinājuma periods",
       "usageUnitCount": "{count, plural, zero {# vienību} one {# vienība} other {# vienības}}",
       "usageUnitsBalanceTemplate": "Pieejamas {remaining} vienības",
-      "usageUnitsThisPeriod": "Šī perioda lietojuma vienības"
+      "usageUnitsThisPeriod": "Šī perioda lietojuma vienības",
+      "verificationDecisionModel": {
+        "description": "Pārbaudot dokumentu pēc saraksta faktiem, lēmumu modelis izvēlas katra apgalvojuma slēdzienu. Ģeneratīvais modelis joprojām atrod un citē faktus. Ja lēmumu modelis nav pietiekami pārliecināts, spēkā paliek ģeneratīvā modeļa slēdziens.",
+        "title": "Dokumentu pārbaudes slēdzieni",
+        "unavailable": "Šai organizācijai nav pieejams neviens lēmumu modelis.",
+        "updated": "Pārbaudes iestatījums atjaunināts"
+      }
     }
   },
   "sharepoint": {
@@ -6341,6 +6360,7 @@
       "previewBody5": "Pirms konversijas pārdošana vai akciju kotēšana dod Investoram tiesības saņemt lielāko no pirkuma summas vai ieņēmumiem, kas maksājami pēc konvertēšanas.",
       "previewBody6": "Sabiedrība ir pienācīgi dibināta, tai ir tiesības noslēgt šo līgumu, un tā saņems visas tā izpildei nepieciešamās atļaujas.",
       "previewBody7": "Šis līgums ietver pilnīgu pušu vienošanos, un to var grozīt tikai rakstveidā, saņemot nepieciešamo piekrišanu.",
+      "previewDocument": "Stilu kopas priekšskatījums",
       "previewFailed": "Priekšskatījumu neizdevās izveidot.",
       "previewIntroduction": "Šis līgums tiek noslēgts starp Example Labs Ltd. (turpmāk – Sabiedrība) un paraksta lapā norādīto investoru (turpmāk – Investors).",
       "previewLevel1": "Ieguldījums",

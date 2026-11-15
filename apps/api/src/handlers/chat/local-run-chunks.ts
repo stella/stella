@@ -89,6 +89,7 @@ import type {
   QueueCommandOutcome,
 } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
+import { announcedAwaitedSteps } from "@/api/lib/desktop-runner/step-contents";
 import type {
   ChatRunForRequest,
   DesktopRunnerRunView,
@@ -190,8 +191,9 @@ type LocalRunStreamInput = {
    */
   resume: readonly RunAgentResumeItem[] | undefined;
   /**
-   * The turn's own cut: a stop on any API task, its deadline, a lost owner or
-   * a failed production. It interrupts the run on the computer.
+   * The turn's own cut: a stop on any API task, a lost owner or admission,
+   * or a failed production. It interrupts the run on the computer. No
+   * deadline is among them (`ChatTurnRunBound`).
    */
   abortSignal: AbortSignal;
 };
@@ -1134,9 +1136,9 @@ type ReadRunOptions = {
 };
 
 /**
- * Stop the computer's turn: what a user's stop, a deadline or a lost owner
- * means for a run nobody reads any more. The gateway keeps one interrupt per
- * run, so a repeat is a no-op.
+ * Stop the computer's turn: what a user's stop or a lost owner means for a
+ * run nobody reads any more. The gateway keeps one interrupt per run, so a
+ * repeat is a no-op.
  */
 const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
   const stopped = await context.control.interruptRun({
@@ -1534,6 +1536,11 @@ async function* readRunChunks({
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent: {
             if (!isPublicStreamChunk(message.chunk)) {
               panic("A stored desktop runner chunk no longer folds");
+            }
+            // The run's word on the steps it still has to send was recorded
+            // when the event was stored; it is no part of the answer.
+            if (announcedAwaitedSteps(message.chunk) !== null) {
+              continue;
             }
             const output = runOutputReportOf(message.chunk);
             if (output !== null) {

@@ -294,6 +294,8 @@
       "reopened": "Rouverte, vérification en attente",
       "reopenedTooltip": "Un relecteur a requalifié cette affirmation en fait vérifiable ; une vérification en direct du dossier est encore en attente.",
       "sourceCount": "{count, plural, one {# source} other {# sources} many {# sources}}",
+      "verdictBy": "Verdict rendu par {model}",
+      "verdictByGenerativeModel": "Verdict rendu par le modèle génératif ; le modèle de décision ne l’a pas tranché",
       "whyVerdict": "Pourquoi ce verdict : faits d’ancrage"
     },
     "claimTypes": {
@@ -2335,6 +2337,10 @@
       "web_search": "Recherche web"
     },
     "toolCall": {
+      "browserClick": "Cliquer sur « {target} » sur {url}",
+      "browserPressKey": "Appuyer sur la touche {key} dans « {target} » sur {url}",
+      "browserSelect": "Sélectionner « {option} » dans « {target} » sur {url}",
+      "browserType": "Saisir du texte dans « {target} » sur {url}",
       "characterCount": "{count, plural, one {# caractère} many {# caractères} other {# caractères}}",
       "commandExited": "{command} (code de sortie {code})",
       "consoleLogs": "Sortie de la console",
@@ -2344,17 +2350,17 @@
       "input": "Entrée",
       "interrupted": "Interrompu avant la fin",
       "localOutput": {
+        "arriving": "Toujours en cours de réception depuis l’ordinateur qui a exécuté cette étape",
         "conversation": "Conversation du sous-agent",
         "conversationPrompt": "Tâche",
         "conversationReport": "Rapport",
         "cut": "Affichage des {kept} premiers sur {total}",
         "diff": "Modifications des fichiers",
-        "elsewhere": "Ouvrez-le sur l’ordinateur qui l’a exécuté",
         "empty": "Aucun résultat",
-        "failed": "L’application de bureau stella sur cet ordinateur n’a pas pu l’afficher.",
-        "imageTooLarge": "Cette image fait {total}. Les images de plus de {kept} ne sont pas conservées sur cet ordinateur ; elle ne peut donc pas être affichée ici.",
-        "notKept": "Rien de cette étape n’est conservé sur cet ordinateur",
-        "reading": "Lecture depuis cet ordinateur"
+        "imageTooLargeToStore": "Cette image fait {total}. Les images de plus de {kept} ne sont pas enregistrées ; elle ne peut donc pas être affichée.",
+        "notCopied": "Pas encore copié dans cette conversation",
+        "notStored": "Rien de cette étape n’a été enregistré",
+        "runBudgetReached": "Non enregistré : cette exécution avait déjà enregistré tout ce qu’une exécution peut enregistrer"
       },
       "output": "Résultat",
       "patternInPath": "{pattern} dans {path}",
@@ -2377,6 +2383,10 @@
       "needsInputTitle": "stella a besoin de vous",
       "replyReadyBody": "stella a fini de répondre dans votre conversation.",
       "replyReadyTitle": "Réponse prête"
+    },
+    "turnPaused": {
+      "continue": "Continuer",
+      "status": "En pause après {count, plural, one {# appel d’outil} many {# appels d’outils} other {# appels d’outils}}"
     },
     "turnStatus": {
       "answerFailed": "La réponse n’a pas pu être terminée",
@@ -3030,7 +3040,6 @@
       "dropZone": "Déposez la procuration (.docx) ici ou cliquez pour choisir un fichier",
       "extracting": "Extraction du ou des mandants…",
       "fileHint": "stella lit le document et repère automatiquement le(s) mandant(s) (celui qui donne procuration, pas l'avocat). Vérifiez le résultat avant de confirmer.",
-      "fileTooLarge": "Le fichier de procuration ne doit pas dépasser 50 Mo.",
       "invalidFileType": "Veuillez choisir un fichier .docx.",
       "noOutorganteFound": "Aucun mandant n'a pu être identifié dans ce document.",
       "parseErrorGeneric": "Impossible d'extraire des contacts de ce document.",
@@ -3410,6 +3419,7 @@
       "invitationRoleNotAllowed": "Vous ne pouvez pas inviter une personne avec ce rôle. Choisissez un autre rôle.",
       "invoiceNumberSeriesMissing": "Configurez une série de numérotation par défaut pour les factures dans Séries de numérotation, dans les paramètres de l’organisation, puis émettez la facture.",
       "invoiceSellerProfileMissing": "Ajoutez un profil vendeur dans Profils de facturation, dans les paramètres de l’organisation, puis émettez la facture.",
+      "legalHoldActive": "La suppression est bloquée, car ces documents doivent être conservés.",
       "legalSourceEntityLimitReached": "Ce dossier a atteint la limite d’éléments, le document n’a donc pas pu être créé.",
       "legalSourceFilePropertyMissing": "Il manque une propriété de fichier dans ce dossier, le document n’a donc pas pu être créé.",
       "matterContactCapacityExceeded": "Ce dossier contient plus de contacts qu’il n’est possible d’afficher. Retirez des liens visibles vers des contacts pour afficher les contacts restants.",
@@ -5890,6 +5900,8 @@
       "auditLogsSentenceDownload": "{resource} téléchargé.",
       "auditLogsSentenceExecute": "{resource} exécuté.",
       "auditLogsSentenceIssued": "{resource} émis.",
+      "auditLogsSentenceLegalHoldPlaced": "{resource} appliquée.",
+      "auditLogsSentenceLegalHoldReleased": "{resource} levée.",
       "auditLogsSentenceRedeemed": "{resource} utilisé.",
       "auditLogsSentenceRefused": "{resource} refusé.",
       "auditLogsSentenceReview": "{resource} vérifié.",
@@ -5941,6 +5953,7 @@
         "flow_run": "exécution du flux de travail",
         "folio_collab_room": "salle de collaboration Folio",
         "invoice": "facture",
+        "legal_hold": "conservation légale",
         "legal_list": "liste juridique",
         "legal_list_generation": "génération de liste juridique",
         "legal_list_item": "entrée de liste juridique",
@@ -6100,7 +6113,13 @@
       "usageStatusTrialing": "Période d'essai",
       "usageUnitCount": "{count, plural, one {# unité} many {# unités} other {# unités}}",
       "usageUnitsBalanceTemplate": "{remaining} unités disponibles",
-      "usageUnitsThisPeriod": "Unités d’utilisation sur cette période"
+      "usageUnitsThisPeriod": "Unités d’utilisation sur cette période",
+      "verificationDecisionModel": {
+        "description": "Lorsqu’un document est vérifié au regard des faits d’une liste, le modèle de décision choisit le verdict de chaque affirmation. Le modèle génératif continue de trouver et de citer les faits. Si le modèle de décision n’est pas assez sûr, le verdict du modèle génératif est conservé.",
+        "title": "Verdicts de la vérification des documents",
+        "unavailable": "Aucun modèle de décision n’est disponible pour cette organisation.",
+        "updated": "Paramètre de vérification mis à jour"
+      }
     }
   },
   "sharepoint": {
@@ -6341,6 +6360,7 @@
       "previewBody5": "Avant la conversion, une vente ou une cotation donne droit à l’Investisseur au montant le plus élevé entre le prix d’achat et le produit payable sur une base convertie.",
       "previewBody6": "La Société est régulièrement constituée, a capacité à conclure le présent contrat et obtiendra toutes les autorisations nécessaires à son exécution.",
       "previewBody7": "Le présent contrat contient l’intégralité de l’accord entre les parties et ne peut être modifié que par écrit avec le consentement requis.",
+      "previewDocument": "Aperçu du jeu de styles",
       "previewFailed": "Impossible de générer l’aperçu.",
       "previewIntroduction": "Le présent contrat est conclu entre Example Labs Ltd. (la « Société ») et l’investisseur désigné sur la page de signature (l’« Investisseur »).",
       "previewLevel1": "Investissement",

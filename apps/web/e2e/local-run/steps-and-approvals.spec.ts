@@ -17,8 +17,9 @@ import {
 
 // What the stand-in CLIs' `native_tools` and `harness_items` scenarios do
 // (packages/agent-engine/scripts/fake-codex-app-server.ts and
-// fake-claude-code-cli.ts): the steps chat names, and the text their inputs
-// and outputs carry that chat must never show.
+// fake-claude-code-cli.ts): the steps chat names, what an opened step shows
+// as stella stored it (a command's output, a change's diff), and the text
+// their inputs carry that chat must never show.
 const STEPS = {
   codex: {
     model: "native_tools",
@@ -28,11 +29,10 @@ const STEPS = {
       "Changing files",
       "/workspace/drafts/lease.md, /workspace/drafts/notice.md",
     ],
+    stored: ["zsh: permission denied", "Rent is due quarterly."],
     hidden: [
       "Tenant owes 4,200 in arrears.",
-      "Rent is due quarterly.",
       "Working through the private plan",
-      "zsh: permission denied",
     ],
   },
   "claude-code": {
@@ -45,35 +45,59 @@ const STEPS = {
       "termination",
       "civil code lease",
     ],
+    stored: ["Rent is due quarterly."],
     hidden: [
       "Tenant owes 4,200 in arrears.",
-      "Rent is due monthly.",
-      "Rent is due quarterly.",
-      "Confidential settlement terms.",
       "Summarise the termination rules",
       "Working through the private plan",
-      "lease.md: termination",
     ],
   },
 } as const satisfies Record<
   Agent,
-  { model: string; shown: readonly string[]; hidden: readonly string[] }
+  {
+    model: string;
+    shown: readonly string[];
+    stored: readonly string[];
+    hidden: readonly string[];
+  }
 >;
 
 /**
- * A step's output and diff stay on the computer that ran it; an opened step
- * reads them from stella desktop's bridge on the browser's own computer. The
- * stand-in computer serves no bridge, so nothing answers there, whatever
- * else runs on the computer the suite runs on.
+ * Where stella desktop's loopback bridge served a step's output before
+ * stella stored it: no page reads a step from the computer any more.
  */
 const STEP_OUTPUT_ON_THIS_COMPUTER =
   /^http:\/\/127\.0\.0\.1:\d+\/v1\/runs\/[^/]+\/steps\/[^/]+\/output$/u;
-const OUTPUT_ELSEWHERE = "Open on the computer that ran it";
 
-const noDesktopOnThisComputer = async (page: Page) => {
+/** Every read of a step from the computer the page attempts. */
+const loopbackReads = async (page: Page) => {
+  const reads: string[] = [];
   await page.route(STEP_OUTPUT_ON_THIS_COMPUTER, async (route) => {
+    reads.push(route.request().url());
     await route.abort("connectionrefused");
   });
+  return reads;
+};
+
+const expectStepsAsStored = async (page: Page, agent: Agent) => {
+  for (const text of STEPS[agent].shown) {
+    // await-in-loop: each named step part, checked in turn.
+    await expect(
+      transcript(page).getByText(text, { exact: false }).first(),
+    ).toBeVisible();
+  }
+  // An opened command or file change shows what stella stored of it.
+  for (const text of STEPS[agent].stored) {
+    // await-in-loop: each stored output, checked in turn.
+    await expect(
+      transcript(page).getByText(text, { exact: false }).first(),
+    ).toBeVisible();
+  }
+  // What a step was given is never shown, opened or not.
+  const shown = (await transcript(page).textContent()) ?? "";
+  for (const text of STEPS[agent].hidden) {
+    expect(shown, `chat holds "${text}"`).not.toContain(text);
+  }
 };
 
 // `approval_outcome`: asks to run `rm draft.md`, then answers by the decision.
@@ -92,13 +116,10 @@ test.beforeEach(async ({ request }) => {
 for (const agent of ["codex", "claude-code"] as const) {
   const { name } = AGENTS[agent];
 
-  test(`${name} steps show what they ran on, and their output and file contents never come through the API`, async ({
+  test(`${name} steps show what they ran on, and their output as stella stored it`, async ({
     page,
-    browserErrors,
   }) => {
-    // The browser logs each read of a step's output that nothing answered.
-    browserErrors.expectCaptured(/net::ERR_CONNECTION_REFUSED/u);
-    await noDesktopOnThisComputer(page);
+    const reads = await loopbackReads(page);
     await openNewChat(page);
     await chooseRunOn(page, {
       place: "computer",
@@ -109,42 +130,14 @@ for (const agent of ["codex", "claude-code"] as const) {
 
     await expectTurnsFinished(page, 1);
     expect(await expandTranscript(page)).toBeGreaterThan(0);
-    for (const text of STEPS[agent].shown) {
-      // await-in-loop: each named step part, checked in turn.
-      await expect(
-        transcript(page).getByText(text, { exact: false }).first(),
-      ).toBeVisible();
-    }
-    // An opened command or file change says where its output is, once read.
-    await expect(
-      transcript(page).getByText(OUTPUT_ELSEWHERE).first(),
-    ).toBeVisible();
-    await expect(
-      transcript(page).getByText("Reading from this computer"),
-    ).toHaveCount(0);
-    // Not shown, and not in the page at all.
-    const shown = (await transcript(page).textContent()) ?? "";
-    for (const text of STEPS[agent].hidden) {
-      expect(shown, `chat holds "${text}"`).not.toContain(text);
-    }
+    await expectStepsAsStored(page, agent);
 
-    // The same after a reload, from what the server kept.
+    // The same after a reload, from what the server stored.
     await page.reload({ waitUntil: "commit" });
     await expectTurnsFinished(page, 1);
-    await expect(transcript(page)).toContainText(STEPS[agent].shown[0]);
     await expandTranscript(page);
-    await expect(
-      transcript(page).getByText(OUTPUT_ELSEWHERE).first(),
-    ).toBeVisible();
-    await expect(
-      transcript(page).getByText("Reading from this computer"),
-    ).toHaveCount(0);
-    const reloaded = (await transcript(page).textContent()) ?? "";
-    for (const text of STEPS[agent].hidden) {
-      expect(reloaded, `chat holds "${text}" after a reload`).not.toContain(
-        text,
-      );
-    }
+    await expectStepsAsStored(page, agent);
+    expect(reads).toEqual([]);
   });
 
   for (const decision of ["approved", "denied"] as const) {
