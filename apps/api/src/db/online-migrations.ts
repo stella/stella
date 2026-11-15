@@ -410,6 +410,7 @@ export const runNextPendingOnlineUnit = async (
 ): Promise<PendingOnlineUnitOutcome> => {
   const connection = await pool.reserve();
   let sessionStatus: "active" | "terminated" = "active";
+  const sessionIsActive = () => sessionStatus === "active";
   const terminate = connection.terminate;
   if (terminate) {
     connection.terminate = async () => {
@@ -457,7 +458,7 @@ export const runNextPendingOnlineUnit = async (
       });
       return { type: "ran", step, outcome };
     } finally {
-      if (sessionStatus === "active") {
+      if (sessionIsActive()) {
         await connection.query(RESTORE_STATEMENT_TIMEOUT_SQL, [
           statementTimeout,
         ]);
