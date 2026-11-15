@@ -4,8 +4,10 @@ import { panic } from "better-result";
 import { Pressable, Share, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import type { AIErrorKind } from "@stll/api-contract/ai-errors";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import { MOBILE_REDIRECT_SCHEMES } from "@stll/api-contract/mobile-client";
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import { AnswerSteps, AnswerSubagent } from "@/components/answer-steps";
@@ -14,6 +16,7 @@ import { MarkdownView } from "@/components/markdown-view";
 import { ThreadMatter } from "@/components/thread-matter";
 import { APP_VARIANT } from "@/env";
 import type { SentFile } from "@/state/chat-attachments";
+import { CHAT_FAILURE_KEYS } from "@/state/chat-failure";
 import type { ChatEntry } from "@/state/chat-messages";
 import { plainText } from "@/state/markdown";
 
@@ -22,18 +25,20 @@ import { plainText } from "@/state/markdown";
  * under the files they attached, drawn from its markdown so a mention reads
  * as the chip of what it names; the assistant's answer runs the full width
  * as a document, its texts in order with a summary of each run of steps the
- * model took between them, under what its context left out, if anything.
- * `uploading` marks the files of a message still
- * going up; `live` an answer still arriving, whose last run says the step it
- * is on.
+ * model took between them, under what its context left out, if anything,
+ * and why it failed when it did. `uploading` marks the files of a message
+ * still going up; `live` an answer still arriving, whose last run says the
+ * step it is on; `onRetry` answers the message a failed answer was for again.
  */
 export const ChatMessage = ({
   entry,
   live = false,
+  onRetry,
   uploading = false,
 }: {
   entry: ChatEntry;
   live?: boolean;
+  onRetry?: (() => void) | undefined;
   uploading?: boolean;
 }) => {
   if (entry.role === "user") {
@@ -86,7 +91,31 @@ export const ChatMessage = ({
             return panic("Unhandled answer block");
         }
       })}
+      {entry.failure === undefined ? null : (
+        <FailedAnswer failure={entry.failure} onRetry={onRetry} />
+      )}
       {live || entry.text === "" ? null : <ShareAnswer text={entry.text} />}
+    </View>
+  );
+};
+
+/** Why an answer failed, and a way to ask again when the thread offers one. */
+const FailedAnswer = ({
+  failure,
+  onRetry,
+}: {
+  failure: AIErrorKind;
+  onRetry: (() => void) | undefined;
+}) => {
+  const t = useTranslations("chat");
+  return (
+    <View className="items-start gap-2">
+      <Text variant="error">{t(`failure.${CHAT_FAILURE_KEYS[failure]}`)}</Text>
+      {onRetry === undefined ? null : (
+        <Button onPress={onRetry} variant="outline">
+          {t("resend")}
+        </Button>
+      )}
     </View>
   );
 };
