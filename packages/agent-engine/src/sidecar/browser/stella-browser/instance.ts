@@ -69,6 +69,7 @@ export const startBrowserInstance = async ({
   processes,
   profile,
   testArgs,
+  errorLog = null,
 }: {
   environment: Record<string, string>;
   executable: string;
@@ -77,6 +78,8 @@ export const startBrowserInstance = async ({
   processes: BrowserProcesses;
   profile: BrowserProfile;
   testArgs: readonly string[];
+  /** Where the browser's error output goes; nowhere unless the test hooks name a file. */
+  errorLog?: string | null;
 }): Promise<Result<BrowserInstance, StartFailure>> => {
   const orphan = await clearOrphan({ processes, profile });
   if (orphan.type === "in-use") {
@@ -85,6 +88,7 @@ export const startBrowserInstance = async ({
   const launched = await spawnBrowser({
     args: browserArguments({ profileDir: profile.profileDir, testArgs }),
     environment,
+    errorLog,
     executable,
   });
   if (Result.isError(launched)) {

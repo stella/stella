@@ -1,8 +1,10 @@
 import { Result } from "better-result";
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import {
+  closeSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readlinkSync,
   renameSync,
@@ -347,17 +349,32 @@ const isReadable = (
 export const spawnBrowser = async ({
   args,
   environment,
+  errorLog = null,
   executable,
 }: {
   args: readonly string[];
   environment: Record<string, string>;
+  /** A file the browser's error output is appended to; null discards it. */
+  errorLog?: string | null;
   executable: string;
 }): Promise<Result<LaunchedBrowser, { message: string }>> => {
+  const errors =
+    errorLog === null ? null : Result.try(() => openSync(errorLog, "a", 0o600));
   const child = spawn(executable, [...args], {
     detached: true,
     env: environment,
-    stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],
+    stdio: [
+      "ignore",
+      "ignore",
+      errors !== null && Result.isOk(errors) ? errors.value : "ignore",
+      "pipe",
+      "pipe",
+    ],
   });
+  // The child holds its own copy of the log's descriptor.
+  if (errors !== null && Result.isOk(errors)) {
+    closeSync(errors.value);
+  }
   // A start that failed (no such file, not executable) has no process id
   // and reports an error event; Bun may emit `spawn` before a listener is
   // attached, so the id is what counts.

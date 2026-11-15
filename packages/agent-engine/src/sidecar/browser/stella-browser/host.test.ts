@@ -76,7 +76,7 @@ const start = () => {
     },
     platform: process.platform,
     profileRoot: path.join(root, "browser-profiles"),
-    testHooks: { args: [], executable, methodLog: null },
+    testHooks: { args: [], browserLog: null, executable, methodLog: null },
   });
   cleanups.push(host.stop);
   /** Every message the stand-in browsers received, in order. */

@@ -206,7 +206,11 @@ describe("the browser's launch", () => {
 const fakeProcesses = (
   table: Record<
     number,
-    { line: string; exitsOn?: "SIGKILL" | "SIGTERM" | null }
+    {
+      line: string;
+      /** The signal that ends it; SIGKILL ends every process. */
+      exitsOn?: "SIGKILL" | "SIGTERM";
+    }
   >,
 ) => {
   const alive = new Set(Object.keys(table).map(Number));
@@ -217,7 +221,7 @@ const fakeProcesses = (
     signal: (pid, signal) => {
       signals.push({ pid, signal });
       const exitsOn = table[pid]?.exitsOn ?? "SIGTERM";
-      if (exitsOn === signal || (signal === "SIGKILL" && exitsOn !== null)) {
+      if (signal === "SIGKILL" || exitsOn === signal) {
         alive.delete(pid);
       }
     },

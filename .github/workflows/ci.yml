@@ -3185,12 +3185,14 @@ jobs:
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Test the stella browser host
-        # The runner's Chrome, headful under a virtual display, sandbox on.
+        # The runner's Chrome in a desktop session: headful, sandbox on.
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web' && (steps.affected.outputs.flag == '' || contains(needs.ci-plan.outputs.test_scope, '@stll/agent-engine')) }}
         timeout-minutes: 5
         env:
           STELLA_BROWSER_E2E_EXECUTABLE: /opt/google/chrome/chrome
-        run: xvfb-run -a bun test packages/agent-engine/src/sidecar/browser/hosts.e2e.test.ts
+        run: |
+          command -v dbus-run-session
+          dbus-run-session -- xvfb-run -a bun test packages/agent-engine/src/sidecar/browser/hosts.e2e.test.ts
 
       - name: Upload failed API or rest test output
         if: failure() && steps.test-api-or-rest.outcome == 'failure'

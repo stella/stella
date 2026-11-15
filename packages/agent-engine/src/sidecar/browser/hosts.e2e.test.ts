@@ -99,6 +99,7 @@ const HOSTS: readonly HostLeg[] = [
       STELLA_BROWSER_TEST_HOST_RULES: site.hostRules,
       STELLA_BROWSER_TEST_SPKI: site.spki,
       STELLA_BROWSER_TEST_METHOD_LOG: path.join(root, "methods.log"),
+      STELLA_BROWSER_TEST_BROWSER_LOG: path.join(root, "browser.log"),
     }),
   },
   {
@@ -165,9 +166,16 @@ const read = async (leg: HostLeg) => {
   // No Chrome profile in this home: the extension's host is not registered.
   const home = path.join(root, "home");
   mkdirSync(home, { recursive: true });
-  // The virtual display a CI window goes to, and its access file.
+  // The desktop session a member's browser starts in: the display its
+  // window goes to and that display's access file, and the session bus
+  // the browser asks about its keyring on.
   const display = Object.fromEntries(
-    ["DISPLAY", "XAUTHORITY"].flatMap((name) => {
+    [
+      "DISPLAY",
+      "XAUTHORITY",
+      "DBUS_SESSION_BUS_ADDRESS",
+      "XDG_RUNTIME_DIR",
+    ].flatMap((name) => {
       const value = process.env[name];
       return value === undefined ? [] : [[name, value]];
     }),
@@ -278,14 +286,20 @@ describe.each(HOSTS)("reading the fixture library in $name", (leg) => {
     async () => {
       const { api, chunks, desktop, finished, harnessLog, holder, root, site } =
         await read(leg);
-      // The holder's log says why a run failed; it holds no page content.
+      // The holder's log and the browser's own output say why a run
+      // failed or was slow.
       const holderLog = path.join(root, "agent-holder", "1.4.0", "holder.log");
+      const browserLog = path.join(root, "browser.log");
+      const tail = (file: string) =>
+        existsSync(file)
+          ? readFileSync(file, "utf-8").split("\n").slice(-40).join("\n")
+          : `no ${path.basename(file)}`;
       if (
         finished.type === "run.finished" &&
         finished.outcome !== "completed"
       ) {
         process.stdout.write(
-          `${existsSync(holderLog) ? readFileSync(holderLog, "utf-8") : "no holder log"}\n${JSON.stringify(harnessLog)}\n`,
+          `${tail(holderLog)}\n${tail(browserLog)}\n${JSON.stringify(harnessLog)}\n`,
         );
       }
       expect(finished).toMatchObject({ outcome: "completed" });

@@ -30,8 +30,9 @@ const STELLA_BROWSER_DEV_VARIABLE = "STELLA_BROWSER_DEV_HOST";
  * with "0" (`scripts/build-sidecar.ts`), so a release build reads none of
  * the others: the browser to run instead of the installed one (CI has no
  * member's install, and tests on a shared computer must never start an app
- * bundle), where the fixture site's name resolves and its certificate, and
- * a file each protocol method is recorded in as it is first sent.
+ * bundle), where the fixture site's name resolves and its certificate, a
+ * file each protocol method is recorded in as it is first sent, and a file
+ * for the browser's own error output.
  */
 const STELLA_BROWSER_TEST_HOOKS_VARIABLE = "STELLA_BROWSER_TEST_HOOKS";
 const STELLA_BROWSER_TEST_VARIABLES = {
@@ -39,6 +40,7 @@ const STELLA_BROWSER_TEST_VARIABLES = {
   hostRules: "STELLA_BROWSER_TEST_HOST_RULES",
   spki: "STELLA_BROWSER_TEST_SPKI",
   methodLog: "STELLA_BROWSER_TEST_METHOD_LOG",
+  browserLog: "STELLA_BROWSER_TEST_BROWSER_LOG",
 } as const;
 const SIDECAR_VARIABLES: ReadonlySet<string> = new Set([
   VERSION_VARIABLE,
@@ -111,6 +113,8 @@ export type StellaBrowserTestHooks = {
   args: string[];
   /** A file each protocol method is appended to as it is first sent. */
   methodLog: string | null;
+  /** A file the browser's own error output goes to, to tell why it is slow or failed. */
+  browserLog: string | null;
 };
 
 const setValue = (name: string): string | null => {
@@ -139,5 +143,6 @@ export const stellaBrowserTestHooks = (): StellaBrowserTestHooks | null => {
         : [`--ignore-certificate-errors-spki-list=${spki}`]),
     ],
     methodLog: setValue(STELLA_BROWSER_TEST_VARIABLES.methodLog),
+    browserLog: setValue(STELLA_BROWSER_TEST_VARIABLES.browserLog),
   };
 };

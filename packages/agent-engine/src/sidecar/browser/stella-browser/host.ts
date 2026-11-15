@@ -106,6 +106,7 @@ export type StellaBrowserHostOptions = {
     executable: string;
     args: readonly string[];
     methodLog: string | null;
+    browserLog: string | null;
   } | null;
   log: (line: string) => void;
   processes?: BrowserProcesses;
@@ -286,6 +287,7 @@ export const createStellaBrowserHost = ({
       processes,
       profile: profile.value,
       testArgs: testHooks?.args ?? [],
+      errorLog: testHooks?.browserLog ?? null,
     });
     if (Result.isError(started)) {
       log(`the stella browser did not start: ${started.error.type}`);
