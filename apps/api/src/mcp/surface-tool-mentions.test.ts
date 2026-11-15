@@ -1,5 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
+
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -27,6 +29,8 @@ import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 /**
  * No surface tells a model to call a tool that surface does not list. The
  * names are read off the registry (every tool any surface lists) and every
@@ -36,14 +40,9 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
  * reference, or an error hint the dispatch boundary emits.
  */
 
-let previousFeaturePublicLaw: boolean;
 beforeEach(() => {
-  previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
   // Every gate open: the widest set of texts a surface can serve.
-  env.FEATURE_PUBLIC_LAW = true;
-});
-afterEach(() => {
-  env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+  testState.setConfig("FEATURE_PUBLIC_LAW", true);
 });
 
 /** Every `description` string anywhere in a JSON value. */
@@ -185,7 +184,7 @@ describe.each(MCP_MODES.map((mode) => ({ mode })))(
     test("in the connect-time instructions, gate open or closed", async () => {
       const texts = [{ where: "max", text: MCP_INSTRUCTIONS[mode] }];
       for (const gate of [true, false]) {
-        env.FEATURE_PUBLIC_LAW = gate;
+        testState.setConfig("FEATURE_PUBLIC_LAW", gate);
         texts.push({
           where: `gate=${gate}`,
           text: await getMcpInstructions(mode),

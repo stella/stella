@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/search";
 import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -37,6 +38,8 @@ import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 /**
  * The OpenAI-compatible pair reaching the public legal corpus.
@@ -291,14 +294,14 @@ const withPublicLaw = async (
   body: () => Promise<void>,
 ) => {
   const previousFeature = env.FEATURE_PUBLIC_LAW;
-  env.FEATURE_PUBLIC_LAW = featurePublicLaw;
+  testState.setConfig("FEATURE_PUBLIC_LAW", featurePublicLaw);
   const restoreRuntimeMode = setRuntimeModeForTesting({
     mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
   });
   try {
     await body();
   } finally {
-    env.FEATURE_PUBLIC_LAW = previousFeature;
+    testState.setConfig("FEATURE_PUBLIC_LAW", previousFeature);
     restoreRuntimeMode();
   }
 };

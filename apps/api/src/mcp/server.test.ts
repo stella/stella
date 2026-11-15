@@ -25,6 +25,7 @@ import {
 } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { createTestClock, waitFor } from "@stll/test-kit";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -91,6 +92,8 @@ import type { ToolScope } from "@/api/mcp/tool-types";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { compileClientWireSchema } from "@/api/tests/helpers/wire-json-schema";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const actionSizePolicyMock = mock((): ReturnType<typeof getActionSizePolicy> =>
   Result.ok(undefined),
@@ -499,8 +502,11 @@ describe("handleMcpHttpRequest", () => {
   test("native admission refusals keep their canonical recovery contract", async () => {
     const previousEnabled = env.FEATURE_ACTION_ADMISSION;
     const previousContact = env.ACTION_LIMIT_CONTACT_URL;
-    env.FEATURE_ACTION_ADMISSION = true;
-    env.ACTION_LIMIT_CONTACT_URL = "https://example.invalid/contact";
+    testState.setConfig("FEATURE_ACTION_ADMISSION", true);
+    testState.setConfig(
+      "ACTION_LIMIT_CONTACT_URL",
+      "https://example.invalid/contact",
+    );
     try {
       for (const reason of [
         "busy",
@@ -582,8 +588,8 @@ describe("handleMcpHttpRequest", () => {
         expect(handleMcpToolCallMock).not.toHaveBeenCalled();
       }
     } finally {
-      env.FEATURE_ACTION_ADMISSION = previousEnabled;
-      env.ACTION_LIMIT_CONTACT_URL = previousContact;
+      testState.setConfig("FEATURE_ACTION_ADMISSION", previousEnabled);
+      testState.setConfig("ACTION_LIMIT_CONTACT_URL", previousContact);
     }
   });
 
@@ -659,7 +665,7 @@ describe("handleMcpHttpRequest", () => {
       FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
       FEATURE_ACTION_COST_RECORDS: env.FEATURE_ACTION_COST_RECORDS,
     };
-    Object.assign(env, {
+    testState.patchConfig({
       FEATURE_ACTION_ADMISSION: false,
       FEATURE_ACTION_COST_RECORDS: false,
     });
@@ -734,7 +740,7 @@ describe("handleMcpHttpRequest", () => {
       expect(handleMcpToolCallMock).toHaveBeenCalledTimes(1);
       expect(demo.count()).toBe(DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max);
     } finally {
-      Object.assign(env, previous);
+      testState.patchConfig(previous);
     }
   });
 

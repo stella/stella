@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
@@ -21,6 +22,8 @@ import {
   rootDbTestDouble,
 } from "@/api/tests/helpers/mock-root-db";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
 
 const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 type SearchQuery = Parameters<typeof searchGlobalWithDatabase>[0];
@@ -45,9 +48,9 @@ const sourcePageLimit = (compiled: ReturnType<PgDialect["sqlToQuery"]>) => {
   return compiled.params[Number(parameter) - 1];
 };
 
-process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
-process.env["S3_BUCKET"] ??= "test";
-process.env["S3_REGION"] ??= "us-east-1";
+testState.setEnvIfAbsent("S3_ENDPOINT", "http://localhost:9000");
+testState.setEnvIfAbsent("S3_BUCKET", "test");
+testState.setEnvIfAbsent("S3_REGION", "us-east-1");
 
 const entityResourceName = (entityId: string) =>
   toResourceName(
