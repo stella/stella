@@ -233,7 +233,7 @@ const withManagedRequestEligibility = async function* ({
     yield {
       type: EventType.RUN_STARTED,
       runId: Bun.randomUUIDv7(),
-      threadId: options.threadId ?? Bun.randomUUIDv7(),
+      threadId: options.threadId,
       model: options.model,
       timestamp: Temporal.Now.instant().epochMilliseconds,
       ...(options.parentRunId === undefined

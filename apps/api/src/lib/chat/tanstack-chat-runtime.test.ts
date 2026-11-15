@@ -78,7 +78,7 @@ test("finishes an asynchronous document mutation before a sibling read starts", 
               ],
             }
           : { type: "step", text: "Document updated", toolCalls: [] },
-        { index, model, runId: runId ?? "run", threadId: threadId ?? "thread" },
+        { index, model, runId: runId ?? "run", threadId },
       );
     },
     structuredOutput: () => panic("No structured output in this test"),
@@ -167,7 +167,7 @@ test("sequential gated and ungated calls execute in document order after approva
                   index,
                   model,
                   runId: runId ?? "run",
-                  threadId: threadId ?? "thread",
+                  threadId,
                 },
               );
             },
@@ -348,7 +348,7 @@ test("SDK-resolved MCP tools retain server ownership behind approval, including 
             index,
             model,
             runId: runId ?? "run",
-            threadId: threadId ?? "thread",
+            threadId,
           },
         );
       },
@@ -435,7 +435,7 @@ test("a continuation snapshot preserves normalized legacy server ownership", asy
           index: 0,
           model,
           runId: runId ?? "run",
-          threadId: threadId ?? "thread",
+          threadId,
         },
       );
     },
@@ -521,7 +521,7 @@ test("snapshots retain a stored executor when its tool definition changes", asyn
             index: 0,
             model,
             runId: runId ?? "run",
-            threadId: threadId ?? "thread",
+            threadId,
           },
         );
       },
@@ -587,7 +587,7 @@ test("a plain client request after a pending gate can finish while server succes
               })),
             }
           : { type: "step", text: "Document updated", toolCalls: [] },
-        { index, model, runId: runId ?? "run", threadId: threadId ?? "thread" },
+        { index, model, runId: runId ?? "run", threadId },
       );
     },
     structuredOutput: () => panic("No structured output in this test"),

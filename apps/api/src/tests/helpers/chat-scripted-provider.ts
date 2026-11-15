@@ -209,7 +209,7 @@ const adapter: AnyTextAdapter = {
     threadId,
     tools,
   }) {
-    const scripts = threadId === undefined ? undefined : threads.get(threadId);
+    const scripts = threads.get(threadId);
     scripts?.modelOptions.push(modelOptions);
     scripts?.requests.push({
       earlierSteps: [...scripts.produced],
@@ -221,18 +221,14 @@ const adapter: AnyTextAdapter = {
       recordToolResults(scripts, messages);
       scripts.prompts.push(promptOf(messages));
     }
-    if (
-      threadId === undefined ||
-      runId === undefined ||
-      scripts === undefined
-    ) {
+    if (runId === undefined || scripts === undefined) {
       yield* scriptedTurnChunks(
         { finishReason: "stop", text: SIDE_CALL_TEXT, type: "text" },
         {
           index: 0,
           model,
           runId: runId ?? "side-run",
-          threadId: threadId ?? "side-thread",
+          threadId,
         },
       );
       return;

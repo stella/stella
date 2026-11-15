@@ -433,7 +433,7 @@ export const createScriptedTextAdapter = (
         index,
         model,
         runId: runId ?? "run-1",
-        threadId: threadId ?? "thread-1",
+        threadId,
       });
     },
     structuredOutput: () =>
