@@ -1974,7 +1974,7 @@
     "lucide-react": "1.65.0",
     "lucide-react-native": "1.65.0",
     "lucide-static": "1.65.0",
-    "lzma1": "0.6.2",
+    "lzma1": "0.8.0",
     "oxc-parser": "0.157.0",
     "oxc-transform-react": "0.156.0",
     "oxlint": "1.90.0",
@@ -5176,7 +5176,7 @@
 
     "lz-string": ["lz-string@1.5.0", "", { "bin": { "lz-string": "bin/bin.js" } }, "sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ=="],
 
-    "lzma1": ["lzma1@0.6.2", "", {}, "sha512-Dffh384+NAdj93zYHgDwR0kyY7E06X9xBEcOiVWxbA0OiAU41VMb2ubhDS5B4zqmBihIJMxaPUHvgBwt1pJpMw=="],
+    "lzma1": ["lzma1@0.8.0", "", {}, "sha512-mIGEiFqw+0J5efsiQeuBHiPSZOpmZlq2CErFnUN03xSqlH64azJBkfY2rldmoXRESbHALbCI6nlh3AwOKMZ/+w=="],
 
     "magic-string": ["magic-string@1.4.5", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.6.0" } }, "sha512-oLLC2+YvQUfAa+vxoufE/yc1icb87M9iXIRqAoR/2EhE/8cb3SF/+Gi0c2By1B+5Vz2e2vQtUvHiu1+63Znh+w=="],
 
