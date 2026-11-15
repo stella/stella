@@ -181,7 +181,9 @@ if (!databaseUrl || !runPostgresTests) {
             decisionDate: caseLawDecisions.decisionDate,
           })
           .from(caseLawDecisions)
-          .where(eq(caseLawDecisions.sourceId, scopedSourceId));
+          .where(eq(caseLawDecisions.sourceId, scopedSourceId))
+          // A replay rewrites its row; heap order is not result order.
+          .orderBy(caseLawDecisions.id);
       try {
         await write("Mestský súd Košice", "2025-04-18");
         const first =
