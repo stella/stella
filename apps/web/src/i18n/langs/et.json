@@ -2199,6 +2199,7 @@
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
     "sources": "Allikad:",
+    "steerPrompt": "Saada agendile töö ajal",
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",

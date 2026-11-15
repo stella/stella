@@ -12,6 +12,13 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  type ChatMemberSendAction,
+  type ChatThreadSendState,
+  isChatSteerOffered,
+} from "@stll/api-contract/chat-send-intent";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -285,6 +292,7 @@ export const ChatThreadPage = ({
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
+    steerMessage,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,
@@ -331,6 +339,7 @@ export const ChatThreadPage = ({
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,
+    getRunTarget,
     initialOlderCursor: data.olderCursor,
     playbookPane: "auto-open",
     onError: (nextError) => {
@@ -528,8 +537,11 @@ export const ChatThreadPage = ({
 
   // Stable across stream chunks: the composer takes this as a prop, and a
   // closure over `messages` would re-render it once per chunk.
-  const handleSubmit = useLatestCallback(
-    async (draft: ChatInputDraft): Promise<ChatSendOutcome> => {
+  const submitDraftAs = useLatestCallback(
+    async (
+      action: ChatMemberSendAction,
+      draft: ChatInputDraft,
+    ): Promise<ChatSendOutcome> => {
       const newThreadMessages: string[] = [];
       const handledReserved = runReservedChatCommand(draft.html, {
         new: (args) => {
@@ -666,9 +678,21 @@ export const ChatThreadPage = ({
         notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
         return CHAT_SEND_KEPT;
       }
-      await sendMessage(message.value);
+      const send = {
+        [CHAT_MEMBER_SEND_ACTION.send]: sendMessage,
+        [CHAT_MEMBER_SEND_ACTION.steer]: steerMessage,
+      } satisfies Record<ChatMemberSendAction, typeof sendMessage>;
+      await send[action](message.value);
       return CHAT_SEND_SENT;
     },
+  );
+  const handleSubmit = useLatestCallback(
+    async (draft: ChatInputDraft) =>
+      await submitDraftAs(CHAT_MEMBER_SEND_ACTION.send, draft),
+  );
+  const handleSteer = useLatestCallback(
+    async (draft: ChatInputDraft) =>
+      await submitDraftAs(CHAT_MEMBER_SEND_ACTION.steer, draft),
   );
 
   return (
@@ -978,6 +1002,15 @@ export const ChatThreadPage = ({
                     stopping={stopPending}
                     onFocusChange={setComposerFocused}
                     onSubmit={handleSubmit}
+                    steer={{
+                      offered: isChatSteerOffered(
+                        composerSendState(
+                          isGenerating,
+                          composerModels.runTarget.kind,
+                        ),
+                      ),
+                      send: handleSteer,
+                    }}
                   />
                 </div>
               </div>
@@ -992,6 +1025,16 @@ export const ChatThreadPage = ({
     </RenderStormRegion>
   );
 };
+
+/**
+ * What the composer knows of the thread when it offers a steer: a turn
+ * works, on where the thread's turns run, or none does.
+ */
+const composerSendState = (
+  isGenerating: boolean,
+  runTarget: ChatRunTarget["kind"],
+): ChatThreadSendState =>
+  isGenerating ? { type: "working", runTarget } : { type: "idle" };
 
 const ChatThreadScrollSurface = ({ children }: { children: ReactNode }) => (
   <ConversationScrollProvider>

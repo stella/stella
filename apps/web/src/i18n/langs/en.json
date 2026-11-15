@@ -2199,6 +2199,7 @@
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",
     "sources": "Sources:",
+    "steerPrompt": "Send to the agent while it works",
     "stopFailed": "Couldn't stop the answer. Try again.",
     "stopResponse": "Stop",
     "stopped": "Stopped",

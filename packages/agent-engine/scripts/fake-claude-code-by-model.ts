@@ -25,6 +25,7 @@ export const CLAUDE_BY_MODEL_SCENARIOS = [
   "approvals",
   "approval_outcome",
   "question",
+  "steered",
   "interrupt",
   "usage_limit",
 ] as const;

@@ -24,6 +24,10 @@ import type {
   ChatSend,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
+import {
+  type ChatComposerSteer,
+  ChatComposerSteerButton,
+} from "@/components/chat/chat-composer-steer-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
@@ -70,6 +74,11 @@ type ChatInputSurfaceProps = {
    */
   isGenerating?: boolean;
   onStop?: () => void;
+  /**
+   * The member's explicit steer, shown beside Stop while it is offered.
+   * Omit on surfaces whose turns can never be steered.
+   */
+  steer?: ChatComposerSteer | undefined;
   /** See `ChatComposerActionButton`'s `stopping`. */
   stopping?: boolean;
   /**
@@ -140,6 +149,7 @@ export const ChatInputSurface = ({
   onFocusChange,
   isGenerating = false,
   onStop,
+  steer,
   stopping = false,
   anonymized = false,
   dock,
@@ -172,6 +182,7 @@ export const ChatInputSurface = ({
   // during a turn is queued by `useChatSession` and dispatched once
   // the response finishes, so overlapping requests can't happen.
   const submitDisabled = Boolean(disabled || sendDisabled);
+  const canSend = !submitDisabled && canSubmit;
 
   // A failed send has already restored the draft (see `submit` in
   // chat-editor-provider), so the only thing missing is a user-visible
@@ -362,8 +373,14 @@ export const ChatInputSurface = ({
                 {/* The single primary affordance morphs in place: the button
                   itself resolves send vs. stop from the state it is fed, so
                   this surface cannot render a second, parallel control. */}
+                <ChatComposerSteerButton
+                  canSend={canSend}
+                  controller={controller}
+                  onError={handleSubmitError}
+                  steer={steer}
+                />
                 <ChatComposerActionButton
-                  canSend={!submitDisabled && canSubmit}
+                  canSend={canSend}
                   guideAnchorsEnabled={guideAnchorsEnabled}
                   isGenerating={isGenerating}
                   onSend={() => {

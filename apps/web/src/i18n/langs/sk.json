@@ -2199,6 +2199,7 @@
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
     "sources": "Zdroje:",
+    "steerPrompt": "Poslať agentovi počas práce",
     "stopFailed": "Odpoveď sa nepodarilo zastaviť. Skúste to znova.",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",

@@ -2199,6 +2199,7 @@
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",
     "sources": "Źródła:",
+    "steerPrompt": "Wyślij do agenta w trakcie pracy",
     "stopFailed": "Nie udało się zatrzymać odpowiedzi. Spróbuj ponownie.",
     "stopResponse": "Zatrzymaj",
     "stopped": "Zatrzymano",

@@ -20,8 +20,19 @@ import type {
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
 import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  CHAT_SEND_INTENT,
+  type ChatMemberSendAction,
+  chatSendIntent,
+  type ChatThreadSendState,
+} from "@stll/api-contract/chat-send-intent";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import { sleep } from "@stll/concurrency/sleep";
 import type { HandlerExceptionScope } from "@stll/errors";
@@ -217,6 +228,11 @@ type UseChatSessionOptions = {
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
+  /**
+   * Where the thread's turns run; a surface without it runs them on
+   * stella's model path only.
+   */
+  getRunTarget?: (() => ChatRunTarget) | undefined;
   /** Cursor for the first older page, seeded from the thread fetch. */
   initialOlderCursor: string | null;
   /**
@@ -348,6 +364,7 @@ export const useChatSession = ({
   getContextMatterIds,
   getEditApplyMode,
   getSendMode,
+  getRunTarget,
   initialOlderCursor,
   onError,
   playbookPane,
@@ -818,6 +835,7 @@ export const useChatSession = ({
         ...(options === undefined ? {} : { options }),
       };
       applySendQueueEvent({ type: "message-enqueued", entry });
+      return entry.id;
     },
     [applySendQueueEvent],
   );
@@ -836,60 +854,6 @@ export const useChatSession = ({
       }
     },
     [applySendQueueEvent, sendChatMessage],
-  );
-
-  const sendMessage = useCallback(
-    async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
-      if (sendQueueRef.current.conversationId !== conversationId) {
-        applySendQueueEvent({ type: "conversation-switched", conversationId });
-      }
-
-      const requestOptions = withRequestSnapshots(options);
-      if (!canSendWithoutQueueing(sendQueueRef.current)) {
-        enqueueMessage(message, requestOptions);
-        return;
-      }
-
-      // When the queue is gated after an errored turn, a manual send
-      // should resume the queue without reordering the transcript:
-      // append the new prompt, then dispatch the oldest waiting one.
-      if (sendQueueRef.current.queue.length > 0) {
-        enqueueMessage(message, requestOptions);
-        const dispatched = applySendQueueEvent({
-          type: "oldest-dispatch-started",
-        });
-        if (dispatched) {
-          await dispatchQueuedMessage(dispatched);
-        }
-        return;
-      }
-
-      await sendChatMessage(message, requestOptions);
-    },
-    [
-      applySendQueueEvent,
-      conversationId,
-      dispatchQueuedMessage,
-      enqueueMessage,
-      sendChatMessage,
-      withRequestSnapshots,
-    ],
-  );
-
-  // A turn paused on its budget runs its next step only on the user's word:
-  // Continue sends that word as their next message, which opens a new budget.
-  const continuePausedTurn = useCallback(async () => {
-    await sendMessage({
-      content: t("chat.turnPaused.continue"),
-      id: toSafeId<"chatMessage">(createUuid()),
-    });
-  }, [sendMessage, t]);
-
-  const removeQueuedMessage = useCallback(
-    (id: string) => {
-      applySendQueueEvent({ type: "queued-message-removed", id });
-    },
-    [applySendQueueEvent],
   );
 
   // "Send now" on a queued message: it moves to the front of the queue.
@@ -950,6 +914,116 @@ export const useChatSession = ({
       }
     },
     [applySendQueueEvent, chat, dispatchQueuedMessage, stop],
+  );
+
+  /** What the thread is doing, as the send routing reads it. */
+  const threadSendState = useCallback(
+    (queue: SendQueueState): ChatThreadSendState => {
+      if (queue.isGenerating) {
+        return {
+          type: "working",
+          runTarget: getRunTarget?.().kind ?? CHAT_RUN_TARGET_KIND.cloud,
+        };
+      }
+      return queue.heldForMember
+        ? { type: "waiting_on_member" }
+        : { type: "idle" };
+    },
+    [getRunTarget],
+  );
+
+  // Where a message goes is `chatSendIntent`'s call, by what the thread is
+  // doing and whether the member sent it or steered with it; a steer goes
+  // through "Send now", which hands it to the working turn.
+  const routeMessage = useCallback(
+    async (
+      action: ChatMemberSendAction,
+      message: ChatUserMessageInput,
+      options?: ChatSendMessageOptions,
+    ) => {
+      if (sendQueueRef.current.conversationId !== conversationId) {
+        applySendQueueEvent({ type: "conversation-switched", conversationId });
+      }
+
+      const requestOptions = withRequestSnapshots(options);
+      const intent = chatSendIntent(
+        threadSendState(sendQueueRef.current),
+        action,
+      );
+      switch (intent) {
+        case CHAT_SEND_INTENT.steer:
+          sendQueuedMessageNow(enqueueMessage(message, requestOptions));
+          return;
+        case CHAT_SEND_INTENT.queue:
+          enqueueMessage(message, requestOptions);
+          return;
+        case CHAT_SEND_INTENT.start:
+          break;
+        default:
+          intent satisfies never;
+          return panic(`Unhandled send intent: ${String(intent)}`);
+      }
+      if (!canSendWithoutQueueing(sendQueueRef.current)) {
+        enqueueMessage(message, requestOptions);
+        return;
+      }
+
+      // When the queue is gated after an errored turn, a manual send
+      // should resume the queue without reordering the transcript:
+      // append the new prompt, then dispatch the oldest waiting one.
+      if (sendQueueRef.current.queue.length > 0) {
+        enqueueMessage(message, requestOptions);
+        const dispatched = applySendQueueEvent({
+          type: "oldest-dispatch-started",
+        });
+        if (dispatched) {
+          await dispatchQueuedMessage(dispatched);
+        }
+        return;
+      }
+
+      await sendChatMessage(message, requestOptions);
+    },
+    [
+      applySendQueueEvent,
+      conversationId,
+      dispatchQueuedMessage,
+      enqueueMessage,
+      sendChatMessage,
+      sendQueuedMessageNow,
+      threadSendState,
+      withRequestSnapshots,
+    ],
+  );
+
+  const sendMessage = useCallback(
+    async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) =>
+      await routeMessage(CHAT_MEMBER_SEND_ACTION.send, message, options),
+    [routeMessage],
+  );
+
+  /** The member's explicit steer: the working turn on their computer takes
+   *  the message; anywhere else it goes as `sendMessage` sends it. */
+  const steerMessage = useCallback(
+    async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) =>
+      await routeMessage(CHAT_MEMBER_SEND_ACTION.steer, message, options),
+    [routeMessage],
+  );
+
+  // A turn paused on its budget runs its next step only on the user's word:
+  // Continue sends that word as their next message, which opens a new budget.
+  const continuePausedTurn = useCallback(async () => {
+    await sendMessage({
+      content: t("chat.turnPaused.continue"),
+      id: toSafeId<"chatMessage">(createUuid()),
+    });
+  }, [sendMessage, t]);
+
+  const removeQueuedMessage = useCallback(
+    (id: string) => {
+      applySendQueueEvent({ type: "queued-message-removed", id });
+    },
+    [applySendQueueEvent],
   );
 
   const resendLatestMessage = useCallback(
@@ -1915,6 +1989,7 @@ export const useChatSession = ({
     loadOlderError,
     resendLatestMessage,
     sendMessage,
+    steerMessage,
     continuePausedTurn,
     queuedMessages,
     removeQueuedMessage,
