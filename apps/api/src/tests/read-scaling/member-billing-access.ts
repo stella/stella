@@ -2,11 +2,11 @@ import { panic } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import updateBillingAccess, {
   createMemberBillingAccessHandler,
 } from "@/api/handlers/organization-settings/members/billing-access/update";
 import { HttpStatusResponse } from "@/api/http/status";
-import { setMemberBillingAccess } from "@/api/lib/auth";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
@@ -85,10 +85,7 @@ export const memberBillingScalingScenario = {
     actorUserId,
     targetMemberId,
   }: MemberBillingFixture) => {
-    const endpoint = createMemberBillingAccessHandler(
-      async (options) =>
-        await setMemberBillingAccess({ ...options, database: db }),
-    );
+    const endpoint = createMemberBillingAccessHandler();
     return await runWithMeasuredQueryCounter(async (counter) => {
       const response = await endpoint.handler(
         asTestRaw(
@@ -96,7 +93,12 @@ export const memberBillingScalingScenario = {
             audit: async () => {
               await Promise.resolve();
             },
-            safeDb: NO_DB,
+            safeDb: createSafeDb(
+              markRlsDatabase(db),
+              [],
+              organizationId,
+              actorUserId,
+            ),
             scopedDb: NO_DB,
             user: { id: actorUserId },
             featureAccessSnapshot: enrolledTimeBillingSnapshot({

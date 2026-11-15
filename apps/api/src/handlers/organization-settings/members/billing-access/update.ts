@@ -31,10 +31,18 @@ export const createMemberBillingAccessHandler = (
       }),
       body: v.strictObject({ billingAccess: v.boolean() }),
     },
-    async function* ({ session, user, params, body, recordAuditEvent }) {
+    async function* ({
+      safeDb,
+      session,
+      user,
+      params,
+      body,
+      recordAuditEvent,
+    }) {
       return Result.ok(
         yield* Result.await(
           changeAccess({
+            safeDb,
             organizationId: session.activeOrganizationId,
             actorUserId: user.id,
             targetMemberId: params.memberId,
@@ -51,7 +59,7 @@ const updateMemberBillingAccess = createMemberBillingAccessHandler();
 declareAggregateMutation(updateMemberBillingAccess, {
   type: "independent",
   reason:
-    "Updates one member attribute. The auth owner locks the scoped actor and target rows in ID order and rechecks authority in the same transaction; no aggregate state spans members.",
+    "Updates one member attribute. The scoped transaction locks the actor and target rows in ID order and rechecks authority under those locks; no aggregate state spans members.",
 });
 
 export default updateMemberBillingAccess;

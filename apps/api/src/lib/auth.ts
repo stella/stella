@@ -61,6 +61,7 @@ import {
   rlsDb,
   rootDb,
 } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   featureEnrolments,
   userProfessionalUseAcceptances,
@@ -314,7 +315,7 @@ import {
 } from "@/api/lib/email/email";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
-import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   buildFeatureAccessSnapshot,
   featureAccessReadPlan,
@@ -4357,80 +4358,77 @@ type SetMemberBillingAccessOptions = {
   organizationId: SafeId<"organization">;
   actorUserId: SafeId<"user">;
   targetMemberId: string;
-  database?: Pick<typeof rootDb, "transaction">;
+  /**
+   * The caller's scoped transaction. The application role may update only
+   * `billing_access` (and the member's own navigation state) on a membership
+   * of the active organization; the actor's authority is rechecked under the
+   * row locks.
+   */
+  safeDb: SafeDb;
   billingAccess: boolean;
   recordAuditEvent: AuditRecorder;
 };
 
-/** Membership writes use the auth owner connection; the application role cannot update this column. */
 export const setMemberBillingAccess = async ({
   organizationId,
   actorUserId,
   targetMemberId,
-  database = rootDb,
+  safeDb,
   billingAccess,
   recordAuditEvent,
 }: SetMemberBillingAccessOptions) =>
   (
-    await Result.tryPromise({
-      try: async () =>
-        await withAggregateTransaction(database, async (tx) => {
-          const rows = await lockMemberBillingAccessRows({
-            tx,
-            organizationId,
-            actorUserId,
-            targetMemberId,
-          });
-          const actor = rows.find((row) => row.userId === actorUserId);
-          if (
-            !actor ||
-            !isMemberRole(actor.role) ||
-            !hasManagementPermission(
-              memberSessionAuthority(actor.role, actor.billingAccess),
-              { member: ["update"] },
-            )
-          ) {
-            return Result.err(
-              new HandlerError({ status: 403, message: "Forbidden" }),
-            );
-          }
-          const target = rows.find((row) => row.id === targetMemberId);
-          if (!target) {
-            return Result.err(
-              new HandlerError({
-                status: 404,
-                code: MEMBER_BILLING_ACCESS_REFUSAL_CODE.memberNotFound,
-                message: "Member not found",
-              }),
-            );
-          }
-          if (target.billingAccess === billingAccess) {
-            return Result.ok({ memberId: target.id, billingAccess });
-          }
-          await tx
-            .update(member)
-            .set({ billingAccess })
-            .where(
-              and(
-                eq(member.id, target.id),
-                eq(member.organizationId, organizationId),
-              ),
-            );
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-            resourceId: organizationId,
-            changes: {
-              billingAccess: { old: target.billingAccess, new: billingAccess },
-            },
-            metadata: { field: "memberBillingAccess", memberId: target.id },
-          });
-          return Result.ok({ memberId: target.id, billingAccess });
-        }),
-      catch: (cause) =>
-        new DatabaseError({
-          message: "Unable to update member billing access",
-          cause,
-        }),
+    await safeDb(async (tx) => {
+      const rows = await lockMemberBillingAccessRows({
+        tx,
+        organizationId,
+        actorUserId,
+        targetMemberId,
+      });
+      const actor = rows.find((row) => row.userId === actorUserId);
+      if (
+        !actor ||
+        !isMemberRole(actor.role) ||
+        !hasManagementPermission(
+          memberSessionAuthority(actor.role, actor.billingAccess),
+          { member: ["update"] },
+        )
+      ) {
+        return Result.err(
+          new HandlerError({ status: 403, message: "Forbidden" }),
+        );
+      }
+      const target = rows.find((row) => row.id === targetMemberId);
+      if (!target) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            code: MEMBER_BILLING_ACCESS_REFUSAL_CODE.memberNotFound,
+            message: "Member not found",
+          }),
+        );
+      }
+      if (target.billingAccess === billingAccess) {
+        return Result.ok({ memberId: target.id, billingAccess });
+      }
+      await tx
+        .update(member)
+        .set({ billingAccess })
+        .where(
+          and(
+            eq(member.id, target.id),
+            eq(member.organizationId, organizationId),
+          ),
+        );
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+        resourceId: organizationId,
+        changes: {
+          billingAccess: { old: target.billingAccess, new: billingAccess },
+        },
+        metadata: { field: "memberBillingAccess", memberId: target.id },
+      });
+      return Result.ok({ memberId: target.id, billingAccess });
     })
   ).andThen((result) => result);
