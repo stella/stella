@@ -105,6 +105,13 @@ const visualLoaders = {
       return { default: ButtonLabelPlayground };
     },
   },
+  "menu-commits": {
+    load: async () => {
+      const { MenuCommitsPlayground } =
+        await import("./-components/menu-commits-playground");
+      return { default: MenuCommitsPlayground };
+    },
+  },
   "chat-composer-reference": {
     load: async () => {
       const { ChatComposerReferencePlayground } =

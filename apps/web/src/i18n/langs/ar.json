@@ -597,7 +597,8 @@
       "startFailed": "تعذّر بدء التحقق",
       "status": {
         "running": "جارٍ التحقق"
-      }
+      },
+      "unreadParts": "{count, plural, zero {تعذّرت قراءة أي جزء من المستند.} one {تعذّرت قراءة جزء واحد من المستند، لذا لم يُتحقق من ادعاءاته.} two {تعذّرت قراءة جزأين من المستند، لذا لم يُتحقق من ادعاءاتهما.} few {تعذّرت قراءة # أجزاء من المستند، لذا لم يُتحقق من ادعاءاتها.} many {تعذّرت قراءة # جزءًا من المستند، لذا لم يُتحقق من ادعاءاتها.} other {تعذّرت قراءة # جزء من المستند، لذا لم يُتحقق من ادعاءاتها.}}"
     },
     "save": {
       "failed": "لم يُحفظ",
@@ -1675,6 +1676,8 @@
         "actions": {
           "click": "نقر",
           "fill": "إدخال نص",
+          "find": "البحث في الصفحة",
+          "findHeadings": "عرض عناوين الصفحة",
           "open": "فتح موقع ويب",
           "openNewTab": "فتح موقع ويب في علامة تبويب جديدة",
           "pressKey": "ضغط مفتاح",
@@ -1964,6 +1967,24 @@
       "dismiss": "تجاهل وإيقاف",
       "secretAnswer": "الإجابة مخفية",
       "secretPlaceholder": "تبقى إجابتك مخفية"
+    },
+    "makeSkill": {
+      "command": "إنشاء مهارة من هذه المحادثة",
+      "drafted": "مسودة المهارة جاهزة. راجعها ثم فعّلها.",
+      "drafting": "جارٍ إعداد مسودة مهارة من هذه المحادثة…",
+      "emptyThread": "أرسل رسالة أولاً، ثم يمكن إنشاء مهارة من المحادثة.",
+      "failed": "تعذّر إنشاء مهارة من هذه المحادثة",
+      "review": {
+        "description": "تتضمن مسودة المهارة هذه الأسماء. قد يراها كل من لديه وصول إلى هذه المهارة.",
+        "replaceHint": "ألغِ تحديد اسم لاستبداله بعنصر نائب عام.",
+        "role": {
+          "organization": "اسم المؤسسة",
+          "person": "اسم الشخص"
+        },
+        "saveAll": "الاحتفاظ بالكل والحفظ",
+        "saveReplacing": "استبدال غير المحدد والحفظ",
+        "title": "هل تحفظ هذه الأسماء في المهارة؟"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, zero {لا توجد دردشات بانتظارك} one {دردشة واحدة بانتظارك} two {دردشتان بانتظارك} few {# دردشات بانتظارك} many {# دردشة بانتظارك} other {# دردشة بانتظارك}}",
@@ -2316,6 +2337,10 @@
       "web_search": "البحث على الويب"
     },
     "toolCall": {
+      "browserClick": "النقر على «{target}» في {url}",
+      "browserPressKey": "الضغط على المفتاح {key} في «{target}» في {url}",
+      "browserSelect": "تحديد «{option}» في «{target}» في {url}",
+      "browserType": "إدخال نص في «{target}» في {url}",
       "characterCount": "{count, plural, zero {# حرف} one {# حرف} two {# حرفين} few {# أحرف} many {# حرفاً} other {# حرف}}",
       "commandExited": "{command} (رمز الخروج {code})",
       "consoleLogs": "مخرجات وحدة التحكم",
@@ -2325,17 +2350,17 @@
       "input": "المدخلات",
       "interrupted": "توقّف قبل الاكتمال",
       "localOutput": {
+        "arriving": "لا يزال يصل من الحاسوب الذي نفّذ هذه الخطوة",
         "conversation": "محادثة الوكيل الفرعي",
         "conversationPrompt": "المهمة",
         "conversationReport": "التقرير",
         "cut": "يُعرض أول {kept} من {total}",
         "diff": "تغييرات الملفات",
-        "elsewhere": "افتحه على الحاسوب الذي نفّذه",
         "empty": "لا توجد مخرجات",
-        "failed": "تعذّر على تطبيق stella لسطح المكتب على هذا الحاسوب عرض هذا.",
-        "imageTooLarge": "حجم هذه الصورة {total}. لا تُحفظ على هذا الحاسوب الصور التي تتجاوز {kept}، لذا لا يمكن عرضها هنا.",
-        "notKept": "لم يُحفظ شيء من هذه الخطوة على هذا الحاسوب",
-        "reading": "جارٍ القراءة من هذا الحاسوب"
+        "imageTooLargeToStore": "حجم هذه الصورة {total}. لا تُحفظ الصور التي تتجاوز {kept}، لذا لا يمكن عرضها.",
+        "notCopied": "لم يُنسخ إلى هذه الدردشة بعد",
+        "notStored": "لم يُحفظ شيء من هذه الخطوة",
+        "runBudgetReached": "لم يُحفظ: كان هذا التشغيل قد حفظ بالفعل أقصى ما يُسمح به لتشغيل واحد"
       },
       "output": "المخرجات",
       "patternInPath": "{pattern} في {path}",
@@ -2358,6 +2383,10 @@
       "needsInputTitle": "تحتاج stella إلى مدخلاتك",
       "replyReadyBody": "أنهت stella الرد في الدردشة.",
       "replyReadyTitle": "الرد جاهز"
+    },
+    "turnPaused": {
+      "continue": "متابعة",
+      "status": "متوقف مؤقتًا بعد {count, plural, zero {# استدعاء أداة} one {استدعاء أداة واحد} two {استدعاءين لأداة} few {# استدعاءات أدوات} many {# استدعاءً لأداة} other {# استدعاء أداة}}"
     },
     "turnStatus": {
       "answerFailed": "تعذّر إكمال الإجابة",
@@ -3011,7 +3040,6 @@
       "dropZone": "أفلت التوكيل (.docx) هنا، أو انقر لاختيار ملف",
       "extracting": "جارٍ استخراج الموكّل(ين)…",
       "fileHint": "تقرأ stella المستند وتحدد الموكل تلقائيًا (الشخص الذي يمنح التوكيل، وليس المحامي). راجع النتيجة قبل التأكيد.",
-      "fileTooLarge": "يجب ألا يتجاوز ملف التوكيل 50 ميغابايت.",
       "invalidFileType": "الرجاء اختيار ملف .docx.",
       "noOutorganteFound": "تعذر التعرف على أي موكل في هذا المستند.",
       "parseErrorGeneric": "تعذر استخراج جهات الاتصال من هذا المستند.",
@@ -3391,6 +3419,7 @@
       "invitationRoleNotAllowed": "لا يمكنك دعوة شخص بهذا الدور. اختر دورًا آخر.",
       "invoiceNumberSeriesMissing": "اضبط سلسلة ترقيم افتراضية للفواتير في قسم سلاسل الترقيم ضمن إعدادات المؤسسة، ثم أصدر الفاتورة.",
       "invoiceSellerProfileMissing": "أضف ملف بائع في قسم ملفات الفوترة ضمن إعدادات المؤسسة، ثم أصدر الفاتورة.",
+      "legalHoldActive": "الحذف محظور لأن هذه السجلات يجب الاحتفاظ بها.",
       "legalSourceEntityLimitReached": "بلغ هذا الملف القانوني الحد الأقصى للعناصر، لذا تعذّر إنشاء المستند.",
       "legalSourceFilePropertyMissing": "يفتقر هذا الملف القانوني إلى خاصية ملف، لذا تعذر إنشاء المستند.",
       "matterContactCapacityExceeded": "يحتوي هذا الملف القانوني على جهات اتصال أكثر مما يمكن عرضه. أزل روابط جهات الاتصال الظاهرة لعرض جهات الاتصال المتبقية.",
@@ -3413,6 +3442,11 @@
       "sharepointNotFound": "هذا الموقع أو المكتبة أو الملف لم يعد موجودًا أو غير مشارك معك.",
       "sharepointReconnectRequired": "انتهت صلاحية تسجيل دخولك إلى Microsoft. أعد ربط SharePoint وOneDrive.",
       "sharepointThrottled": "تحدّ Microsoft من عدد الطلبات. حاول مرة أخرى بعد قليل.",
+      "skillFromChatAnonymizedThread": "لا يمكن بعد إنشاء مهارة من محادثة مجهّلة الهوية.",
+      "skillFromChatEmptyThread": "لا تحتوي هذه المحادثة بعد على ما يكفي لإنشاء مهارة.",
+      "skillFromChatLocalRunThread": "تعمل هذه المحادثة على جهاز الكمبيوتر الخاص بك، لذا لا تُعَدّ منها مهارة في السحابة.",
+      "skillFromChatThreadNotFound": "تعذّر العثور على هذه المحادثة.",
+      "skillFromChatWithdrawn": "سُحب محتوى هذه المحادثة، لذا لا يمكن إنشاء مهارة منها.",
       "skillSourceUnreachable": "تعذر تحميل مصدر المهارة. تحقق من أن الرابط يشير إلى مستودع GitHub عام، أو حاول مرة أخرى لاحقًا.",
       "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
       "usageLimitExceeded": "تم بلوغ حد الاستخدام.",
@@ -5866,6 +5900,8 @@
       "auditLogsSentenceDownload": "تم تنزيل {resource}.",
       "auditLogsSentenceExecute": "تم تشغيل {resource}.",
       "auditLogsSentenceIssued": "تم إصدار {resource}.",
+      "auditLogsSentenceLegalHoldPlaced": "تم فرض {resource}.",
+      "auditLogsSentenceLegalHoldReleased": "تم رفع {resource}.",
       "auditLogsSentenceRedeemed": "تم استرداد {resource}.",
       "auditLogsSentenceRefused": "تم رفض {resource}.",
       "auditLogsSentenceReview": "تمت مراجعة {resource}.",
@@ -5917,6 +5953,7 @@
         "flow_run": "تشغيل سير العمل",
         "folio_collab_room": "غرفة تعاون Folio",
         "invoice": "فاتورة",
+        "legal_hold": "الاحتفاظ القانوني",
         "legal_list": "قائمة قانونية",
         "legal_list_generation": "إنشاء القائمة القانونية",
         "legal_list_item": "بند القائمة القانونية",
@@ -6323,6 +6360,7 @@
       "previewBody5": "قبل التحويل، يخول البيع أو الإدراج المستثمر الحصول على الأكبر من مبلغ الشراء أو العائد المستحق على أساس التحويل.",
       "previewBody6": "تأسست الشركة أصولًا، ولها صلاحية إبرام هذه الاتفاقية، وستحصل على جميع الموافقات اللازمة لتنفيذها.",
       "previewBody7": "تتضمن هذه الاتفاقية كامل التفاهم بين الطرفين، ولا يجوز تعديلها إلا كتابةً وبموافقة الطرف المطلوب.",
+      "previewDocument": "معاينة مجموعة الأنماط",
       "previewFailed": "تعذر إنشاء المعاينة.",
       "previewIntroduction": "أُبرمت هذه الاتفاقية بين شركة إكزامبل لابس المحدودة (ويُشار إليها بـ«الشركة») والمستثمر المسمى في صفحة التوقيع (ويُشار إليه بـ«المستثمر»).",
       "previewLevel1": "الاستثمار",

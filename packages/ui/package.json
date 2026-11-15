@@ -82,6 +82,7 @@
     "./field": "./src/components/field.tsx",
     "./form": "./src/components/form.tsx",
     "./frame": "./src/components/frame.tsx",
+    "./file-size": "./src/lib/file-size.ts",
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
     "./icons": "./src/icons.ts",
     "./identity-text": "./src/components/identity-text.tsx",

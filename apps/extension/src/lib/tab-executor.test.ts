@@ -46,12 +46,26 @@ const CONTROLLED_TAB_ID = 2;
 const PAGE_URL = "https://example.com/";
 const WINDOW_ID = 1;
 
+/** A frame's read as the page script returns it: one window holding `title`. */
 const frameSnapshot = (title: string, url = PAGE_URL) => ({
-  elements: [],
   origin: new URL(url).origin,
-  text: title,
+  pageControls: [],
+  pageControlsLeftOut: false,
   title,
   url,
+  window: {
+    controls: [],
+    controlsLeftOut: false,
+    end: { type: "end" },
+    fromPercent: 0,
+    hasAfter: false,
+    hasBefore: false,
+    links: [],
+    linksLeftOut: false,
+    start: { type: "start" },
+    text: title,
+    toPercent: 100,
+  },
 });
 
 const createFakeChrome = () => {
@@ -134,6 +148,18 @@ const createFakeChrome = () => {
 
   const chrome = {
     webNavigation: {
+      // The top frame only: a read injects into it by its document id.
+      getAllFrames: async ({ tabId }: { tabId: number }) => {
+        const tab = tabs.get(tabId);
+        if (tab === undefined) {
+          return null;
+        }
+        const frame = probe.frames.get(tabId) ?? {
+          documentId: `document-tab-${String(tabId)}`,
+          errorOccurred: false,
+        };
+        return [{ ...frame, frameId: 0, parentFrameId: -1, url: tab.url }];
+      },
       getFrame: async ({ tabId }: { frameId: number; tabId: number }) => {
         if (probe.failing) {
           throw new TypeError("No frame with id 0.");
@@ -1387,8 +1413,13 @@ describe("chat's tabs", () => {
   });
 
   test("switches to a tab chat's page opened and reads it", async () => {
-    const { handlers, log, session, tabs } = installChatTabs({
+    const { handlers, log, probe, session, tabs } = installChatTabs({
       opened: [RESULTS_TAB_ID, 6],
+    });
+    // The document Chrome's frame list names, and the one the read runs in.
+    probe.frames.set(RESULTS_TAB_ID, {
+      documentId: "document-results",
+      errorOccurred: false,
     });
     // A tab showing a page chat may not operate is not offered.
     tabs.set(6, {

@@ -52,6 +52,8 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
 const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "account_audit_logs.request_metadata",
   "account_deletion_requests.storage_cleanup",
+  // Matter ids and a closed legal-basis literal; no member identifiers.
+  "account_deletion_requests.erasure_report",
   "chat_message_revisions.edit",
   "conflict_checks.parties",
   "conflict_checks.results",
@@ -171,6 +173,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_verification_runs.evidence",
   // A paragraph range and its two edges (block id, offset); no member id.
   "legal_list_verification_runs.scope",
+  // Edges of text a run could not read (block id, offset); no member id.
+  "legal_list_verification_runs.unread_parts",
   "legal_lists.sample_case",
   "legal_reader_answer_messages.citations",
   "legal_reader_answer_messages.usage",
@@ -392,6 +396,10 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "infosoud_tracked_cases.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_holds.placed_by":
+    "Legal hold placement evidence; holds are audited records that grant no matter membership.",
+  "legal_holds.released_by":
+    "Legal hold release evidence; holds are audited records that grant no matter membership.",
   "legal_list_claim_review_events.actor_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_fact_details.updated_by":

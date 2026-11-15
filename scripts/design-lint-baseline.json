@@ -1291,7 +1291,7 @@
     "apps/desktop/src/clipboard/ClipboardEditor.tsx": 1,
     "apps/desktop/src/mainview/App.tsx": 1,
     "apps/desktop/src/registry/RegistrySearch.tsx": 1,
-    "apps/extension/src/lib/tab-executor.ts": 2,
+    "apps/extension/src/lib/page-script.ts": 2,
     "apps/landing/src/components/react/previews/CliMcpPreview.tsx": 1,
     "apps/legal-atlas-runner/src/runners/case-law-ingest.ts": 1,
     "apps/web/src/components/ai-config-providers-editor.tsx": 1,

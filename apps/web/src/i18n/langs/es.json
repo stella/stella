@@ -597,7 +597,8 @@
       "startFailed": "No se pudo iniciar la verificación",
       "status": {
         "running": "Verificando"
-      }
+      },
+      "unreadParts": "{count, plural, one {No se pudo leer # parte del documento, así que sus afirmaciones no se verificaron.} other {No se pudieron leer # partes del documento, así que sus afirmaciones no se verificaron.} many {No se pudieron leer # partes del documento, así que sus afirmaciones no se verificaron.}}"
     },
     "save": {
       "failed": "No guardado",
@@ -1675,6 +1676,8 @@
         "actions": {
           "click": "Hacer clic",
           "fill": "Introducir texto",
+          "find": "Buscar en la página",
+          "findHeadings": "Listar los títulos de la página",
           "open": "Abrir sitio web",
           "openNewTab": "Abrir sitio web en una pestaña nueva",
           "pressKey": "Pulsar tecla",
@@ -1964,6 +1967,24 @@
       "dismiss": "Descartar y detener",
       "secretAnswer": "Respuesta oculta",
       "secretPlaceholder": "Su respuesta permanece oculta"
+    },
+    "makeSkill": {
+      "command": "Crear una habilidad a partir de esta conversación",
+      "drafted": "El borrador de la habilidad está listo. Revísalo y después actívalo.",
+      "drafting": "Preparando un borrador de habilidad a partir de esta conversación…",
+      "emptyThread": "Envía un mensaje primero; después podrás crear una habilidad a partir de la conversación.",
+      "failed": "No se pudo crear una habilidad a partir de esta conversación",
+      "review": {
+        "description": "El borrador de la habilidad contiene estos nombres. Cualquier persona con acceso a esta habilidad podrá verlos.",
+        "replaceHint": "Desmarca un nombre para sustituirlo por un marcador genérico.",
+        "role": {
+          "organization": "nombre de la organización",
+          "person": "nombre de la persona"
+        },
+        "saveAll": "Conservar todos y guardar",
+        "saveReplacing": "Sustituir los desmarcados y guardar",
+        "title": "¿Guardar estos nombres en la habilidad?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat espera su respuesta} other {# chats esperan su respuesta} many {# chats esperan su respuesta}}",
@@ -2316,6 +2337,10 @@
       "web_search": "Buscando en la web"
     },
     "toolCall": {
+      "browserClick": "Hacer clic en «{target}» en {url}",
+      "browserPressKey": "Pulsar la tecla {key} en «{target}» en {url}",
+      "browserSelect": "Seleccionar «{option}» en «{target}» en {url}",
+      "browserType": "Introducir texto en «{target}» en {url}",
       "characterCount": "{count, plural, one {# carácter} many {# caracteres} other {# caracteres}}",
       "commandExited": "{command} (código de salida {code})",
       "consoleLogs": "Salida de consola",
@@ -2325,17 +2350,17 @@
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
       "localOutput": {
+        "arriving": "Todavía está llegando desde el ordenador que ejecutó este paso",
         "conversation": "Conversación del subagente",
         "conversationPrompt": "Tarea",
         "conversationReport": "Informe",
         "cut": "Se muestran los primeros {kept} de {total}",
         "diff": "Cambios en archivos",
-        "elsewhere": "Ábrelo en el ordenador que lo ejecutó",
         "empty": "Sin salida",
-        "failed": "La aplicación de escritorio de stella en este ordenador no pudo mostrarlo.",
-        "imageTooLarge": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan en este ordenador, por lo que no se puede mostrar aquí.",
-        "notKept": "No se guardó nada de este paso en este ordenador",
-        "reading": "Leyendo desde este ordenador"
+        "imageTooLargeToStore": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan, por lo que no se puede mostrar.",
+        "notCopied": "Aún no se ha copiado a este chat",
+        "notStored": "No se guardó nada de este paso",
+        "runBudgetReached": "No se guardó: esta ejecución ya había guardado todo lo que puede guardar una ejecución"
       },
       "output": "Salida",
       "patternInPath": "{pattern} en {path}",
@@ -2358,6 +2383,10 @@
       "needsInputTitle": "stella necesita tu respuesta",
       "replyReadyBody": "stella terminó de responder en tu chat.",
       "replyReadyTitle": "Respuesta lista"
+    },
+    "turnPaused": {
+      "continue": "Continuar",
+      "status": "En pausa tras {count, plural, one {# llamada a herramienta} many {# llamadas a herramientas} other {# llamadas a herramientas}}"
     },
     "turnStatus": {
       "answerFailed": "No se pudo terminar la respuesta",
@@ -3011,7 +3040,6 @@
       "dropZone": "Suelta aquí el poder notarial (.docx) o haz clic para elegir un archivo",
       "extracting": "Extrayendo poderdante(s)…",
       "fileHint": "stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
-      "fileTooLarge": "El archivo del poder debe tener 50 MB o menos.",
       "invalidFileType": "Selecciona un archivo .docx.",
       "noOutorganteFound": "No se pudo identificar ningún otorgante en este documento.",
       "parseErrorGeneric": "No se pudieron extraer contactos de este documento.",
@@ -3391,6 +3419,7 @@
       "invitationRoleNotAllowed": "No puede invitar a nadie con este rol. Elija otro rol.",
       "invoiceNumberSeriesMissing": "Configure una serie de numeración predeterminada para facturas en Series de numeración, en la configuración de la organización, y después emita la factura.",
       "invoiceSellerProfileMissing": "Añada un perfil de vendedor en Perfiles de facturación, en la configuración de la organización, y después emita la factura.",
+      "legalHoldActive": "La eliminación está bloqueada porque estos registros deben conservarse.",
       "legalSourceEntityLimitReached": "Este asunto ha alcanzado el límite de elementos, por lo que no se pudo crear el documento.",
       "legalSourceFilePropertyMissing": "A este asunto le falta una propiedad de archivo, por lo que no se pudo crear el documento.",
       "matterContactCapacityExceeded": "Este asunto contiene más contactos de los que se pueden mostrar. Elimine vínculos visibles con contactos para mostrar los contactos restantes.",
@@ -3413,6 +3442,11 @@
       "sharepointNotFound": "Este sitio, biblioteca o archivo ya no existe o no está compartido contigo.",
       "sharepointReconnectRequired": "Tu inicio de sesión de Microsoft ha caducado. Reconecta SharePoint y OneDrive.",
       "sharepointThrottled": "Microsoft está limitando las solicitudes. Inténtalo de nuevo en breve.",
+      "skillFromChatAnonymizedThread": "Todavía no se puede crear una habilidad a partir de una conversación anonimizada.",
+      "skillFromChatEmptyThread": "Esta conversación todavía no contiene nada a partir de lo cual crear una habilidad.",
+      "skillFromChatLocalRunThread": "Esta conversación se ejecuta en tu ordenador, así que no se crea una habilidad a partir de ella en la nube.",
+      "skillFromChatThreadNotFound": "No se encontró esta conversación.",
+      "skillFromChatWithdrawn": "El contenido de esta conversación se retiró, por lo que no se puede crear una habilidad a partir de ella.",
       "skillSourceUnreachable": "No se pudo cargar la fuente de la habilidad. Comprueba que el enlace apunte a un repositorio público de GitHub o inténtalo de nuevo más tarde.",
       "thirdPartyBoundaryRefusal": "La solicitud intentó usar contenido fuera del contexto de espacio de trabajo permitido.",
       "usageLimitExceeded": "Se alcanzó el límite de uso.",
@@ -5866,6 +5900,8 @@
       "auditLogsSentenceDownload": "Se descargó {resource}.",
       "auditLogsSentenceExecute": "Se ejecutó {resource}.",
       "auditLogsSentenceIssued": "Se emitió {resource}.",
+      "auditLogsSentenceLegalHoldPlaced": "Se aplicó {resource}.",
+      "auditLogsSentenceLegalHoldReleased": "Se levantó {resource}.",
       "auditLogsSentenceRedeemed": "Se canjeó {resource}.",
       "auditLogsSentenceRefused": "Se rechazó {resource}.",
       "auditLogsSentenceReview": "Se revisó {resource}.",
@@ -5917,6 +5953,7 @@
         "flow_run": "ejecución del flujo de trabajo",
         "folio_collab_room": "sala colaborativa Folio",
         "invoice": "factura",
+        "legal_hold": "retención legal",
         "legal_list": "lista jurídica",
         "legal_list_generation": "generación de lista jurídica",
         "legal_list_item": "entrada de lista jurídica",
@@ -6323,6 +6360,7 @@
       "previewBody5": "Antes de la conversión, una venta o cotización da derecho al Inversor al mayor importe entre el importe de compra y el producto pagadero sobre una base convertida.",
       "previewBody6": "La Sociedad está debidamente constituida, tiene autoridad para celebrar este contrato y obtendrá todas las aprobaciones necesarias para ejecutarlo.",
       "previewBody7": "Este contrato contiene el acuerdo íntegro entre las partes y solo podrá modificarse por escrito con el consentimiento requerido.",
+      "previewDocument": "Vista previa del conjunto de estilos",
       "previewFailed": "No se pudo generar la vista previa.",
       "previewIntroduction": "Este contrato se celebra entre Example Labs Ltd. (la «Sociedad») y el inversor indicado en la página de firma (el «Inversor»).",
       "previewLevel1": "Inversión",

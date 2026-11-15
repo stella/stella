@@ -121,6 +121,7 @@ import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistenc
 import {
   CHAT_TURN_BOUNDARY_MODE,
   ChatTurnRun,
+  chatTurnRunBoundOf,
   countChatTurnSettlement,
   processChatTurnOwnership,
 } from "@/api/handlers/chat/chat-turn-run";
@@ -355,6 +356,8 @@ import {
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { previewVisual } from "@/api/lib/visual-preview";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -559,6 +562,7 @@ type ChatSendLifecycleOptions = {
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
   /** The boundary mode the turn's settlement is counted under. */
   mode: ChatTurnObservation["mode"];
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
@@ -930,7 +934,10 @@ export class ChatSendLifecycle {
    * run gets nothing of the request, so it behaves the same once the request
    * is gone.
    */
-  startRun(connectors: LoadedExternalMcpTools | undefined): ChatTurnRun {
+  startRun(
+    connectors: LoadedExternalMcpTools | undefined,
+    runsOn: ChatRunTarget["kind"],
+  ): ChatTurnRun {
     if (this.claimedTurn.status !== "preflight") {
       return panic("Cannot start a run for a turn this send does not hold");
     }
@@ -939,7 +946,7 @@ export class ChatSendLifecycle {
       admission: this.admission,
       checkpoint: this.checkpoint,
       connectors,
-      deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
+      bound: chatTurnRunBoundOf(runsOn),
       mode: this.options.mode,
       owner: {
         indexThread: this.options.indexThread,
@@ -1161,6 +1168,7 @@ export class ChatSendLifecycle {
       }
       if (this.pendingSideEffects !== undefined) {
         const rollbackResult = await this.options.rollbackSideEffects({
+          organizationId: this.options.organizationId,
           recordAuditEvent: this.options.recordAuditEvent,
           safeDb: this.options.safeDb,
           threadId: this.options.threadId,
@@ -1860,6 +1868,11 @@ type PrepareValidatedIncomingMessageOptions = {
 };
 
 /** Validates the provider-facing message and adopts thread/file rollback ownership. */
+/** An upload a legal hold refused answers with the shared hold refusal. */
+const uploadRefusal = <UploadError>(
+  error: UploadError | LegalHoldActiveError,
+) => (LegalHoldActiveError.is(error) ? legalHoldRefusal(error) : error);
+
 const prepareValidatedIncomingMessage = async ({
   dependencies: { caseLawDb, loadWebSearchProviders, uploadMessageFiles },
   authorization: {
@@ -2263,7 +2276,7 @@ const prepareValidatedIncomingMessage = async ({
       // The upload helper already cleans a partial upload (and a newly
       // created thread) before returning an error.
       lifecycle.releaseSideEffects();
-      return Result.err(uploadResult.error);
+      return Result.err(uploadRefusal(uploadResult.error));
     }
     lifecycle.trackUploadedFiles(uploadResult.value.uploadedFiles);
 
@@ -2747,6 +2760,7 @@ export const createSendMessage = (
         indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
         mode: CHAT_TURN_BOUNDARY_MODE[body.sendMode],
+        organizationId: session.activeOrganizationId,
         recordAuditEvent,
         safeDb,
         scopedDb,
@@ -3509,7 +3523,10 @@ export const createSendMessage = (
               // The run owns the turn and the loaded connectors from here.
               // Agent runs load none for streaming, so the send's cleanup
               // closes any validation-only load.
-              const run = lifecycle.startRun(externalMcpTools);
+              const run = lifecycle.startRun(
+                externalMcpTools,
+                body.runTarget?.kind ?? CHAT_RUN_TARGET_KIND.cloud,
+              );
               try {
                 // The streamed turn's persistence: every expected failure
                 // comes back as a `Result` naming the turn row's failure code,

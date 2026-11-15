@@ -7,12 +7,14 @@ import {
   getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
+  CHAT_TURN_STATUS_OF_OUTCOME,
   findUnsettledStoredToolCalls,
   isClientAnswerableToolCall,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ToolCallState } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { OLDEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -80,7 +82,7 @@ export const readThreadInvariantSnapshot = async ({
       })
       .from(chatTurns)
       .where(eq(chatTurns.threadId, threadId))
-      .orderBy(asc(chatTurns.createdAt), asc(chatTurns.id)),
+      .orderBy(...OLDEST_CHAT_TURN_FIRST),
   ]);
   return {
     messages: rows.map((row) => ({
@@ -241,7 +243,7 @@ const turnOutcomeMismatchesOf = ({
     const stored = answer.metadata?.turnOutcome;
     if (
       stored !== undefined &&
-      stored.type === expected.type &&
+      CHAT_TURN_STATUS_OF_OUTCOME[stored.type] === turn.status &&
       storedReason(stored) === expected.reason
     ) {
       return [];

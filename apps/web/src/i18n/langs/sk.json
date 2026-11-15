@@ -597,7 +597,8 @@
       "startFailed": "Overenie sa nepodarilo spustiť",
       "status": {
         "running": "Overovanie"
-      }
+      },
+      "unreadParts": "{count, plural, one {# časť dokumentu sa nepodarilo prečítať, jej tvrdenia preto neboli overené.} few {# časti dokumentu sa nepodarilo prečítať, ich tvrdenia preto neboli overené.} many {# časti dokumentu sa nepodarilo prečítať, ich tvrdenia preto neboli overené.} other {# častí dokumentu sa nepodarilo prečítať, ich tvrdenia preto neboli overené.}}"
     },
     "save": {
       "failed": "Neuložené",
@@ -1675,6 +1676,8 @@
         "actions": {
           "click": "Kliknúť",
           "fill": "Zadať text",
+          "find": "Nájsť na stránke",
+          "findHeadings": "Zobraziť nadpisy stránky",
           "open": "Otvoriť web",
           "openNewTab": "Otvoriť web na novej karte",
           "pressKey": "Stlačiť kláves",
@@ -1964,6 +1967,24 @@
       "dismiss": "Zamietnuť a zastaviť",
       "secretAnswer": "Odpoveď je skrytá",
       "secretPlaceholder": "Vaša odpoveď zostane skrytá"
+    },
+    "makeSkill": {
+      "command": "Vytvoriť zručnosť z tejto konverzácie",
+      "drafted": "Návrh zručnosti je pripravený. Skontrolujte ho a potom ho zapnite.",
+      "drafting": "Pripravujem návrh zručnosti z tejto konverzácie…",
+      "emptyThread": "Najprv odošlite správu, potom bude možné z konverzácie vytvoriť zručnosť.",
+      "failed": "Z tejto konverzácie sa nepodarilo vytvoriť zručnosť",
+      "review": {
+        "description": "Návrh zručnosti obsahuje tieto mená. Môže ich vidieť ktokoľvek, kto má k tejto zručnosti prístup.",
+        "replaceHint": "Zrušte označenie mena a nahradí sa všeobecným zástupným textom.",
+        "role": {
+          "organization": "názov organizácie",
+          "person": "meno osoby"
+        },
+        "saveAll": "Ponechať všetko a uložiť",
+        "saveReplacing": "Nahradiť neoznačené a uložiť",
+        "title": "Uložiť tieto mená v zručnosti?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {Na vás čaká # chat} few {Na vás čakajú # chaty} many {Na vás čaká # chatu} other {Na vás čaká # chatov}}",
@@ -2316,6 +2337,10 @@
       "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {
+      "browserClick": "Kliknúť na „{target}“ na stránke {url}",
+      "browserPressKey": "Stlačiť kláves {key} v „{target}“ na stránke {url}",
+      "browserSelect": "Vybrať „{option}“ v „{target}“ na stránke {url}",
+      "browserType": "Zadať text do „{target}“ na stránke {url}",
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov} many {# znaku}}",
       "commandExited": "{command} (návratový kód {code})",
       "consoleLogs": "Výstup konzoly",
@@ -2325,17 +2350,17 @@
       "input": "Vstup",
       "interrupted": "Prerušené pred dokončením",
       "localOutput": {
+        "arriving": "Stále sa prenáša z počítača, na ktorom krok bežal",
         "conversation": "Konverzácia čiastkového agenta",
         "conversationPrompt": "Zadanie",
         "conversationReport": "Správa",
         "cut": "Zobrazuje sa prvých {kept} z {total}",
         "diff": "Zmeny súborov",
-        "elsewhere": "Otvorte na počítači, kde krok bežal",
         "empty": "Žiadny výstup",
-        "failed": "Desktopová aplikácia stella na tomto počítači to nedokázala zobraziť.",
-        "imageTooLarge": "Tento obrázok má {total}. Obrázky väčšie ako {kept} sa na tomto počítači neukladajú, preto ho tu nemožno zobraziť.",
-        "notKept": "Z tohto kroku nie je na tomto počítači nič uložené",
-        "reading": "Načítava sa z tohto počítača"
+        "imageTooLargeToStore": "Tento obrázok má {total}. Obrázky väčšie ako {kept} sa neukladajú, preto ho nemožno zobraziť.",
+        "notCopied": "Do tohto chatu zatiaľ nebolo skopírované",
+        "notStored": "Z tohto kroku nebolo nič uložené",
+        "runBudgetReached": "Neuložené: tento beh už uložil toľko, koľko smie jeden beh"
       },
       "output": "Výstup",
       "patternInPath": "{pattern} v {path}",
@@ -2358,6 +2383,10 @@
       "needsInputTitle": "stella potrebuje váš vstup",
       "replyReadyBody": "stella dokončila odpoveď vo vašom chate.",
       "replyReadyTitle": "Odpoveď je hotová"
+    },
+    "turnPaused": {
+      "continue": "Pokračovať",
+      "status": "Pozastavené po {count, plural, one {# volaní nástroja} few {# volaniach nástrojov} many {# volania nástroja} other {# volaniach nástrojov}}"
     },
     "turnStatus": {
       "answerFailed": "Odpoveď sa nepodarilo dokončiť",
@@ -3011,7 +3040,6 @@
       "dropZone": "Presuňte sem plnomocenstvo (.docx) alebo kliknite a vyberte súbor",
       "extracting": "Zisťujeme splnomocniteľa…",
       "fileHint": "stella prečíta dokument a automaticky nájde splnomocniteľov (tých, ktorí udeľujú plnomocenstvo, nie advokáta). Pred potvrdením výsledok skontrolujte.",
-      "fileTooLarge": "Súbor plnomocenstva môže mať najviac 50 MB.",
       "invalidFileType": "Vyberte, prosím, súbor .docx.",
       "noOutorganteFound": "V tomto dokumente sa nepodarilo identifikovať žiadneho splnomocniteľa.",
       "parseErrorGeneric": "Z tohto dokumentu sa nepodarilo extrahovať kontakty.",
@@ -3391,6 +3419,7 @@
       "invitationRoleNotAllowed": "S touto rolou nemôžete nikoho pozvať. Vyberte inú rolu.",
       "invoiceNumberSeriesMissing": "Nastavte predvolený číselný rad pre faktúry v nastaveniach organizácie v časti Číselné rady a potom faktúru vystavte.",
       "invoiceSellerProfileMissing": "Pridajte profil dodávateľa v nastaveniach organizácie v časti Fakturačné profily a potom faktúru vystavte.",
+      "legalHoldActive": "Vymazanie je zablokované, pretože tieto záznamy musia byť zachované.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
       "matterContactCapacityExceeded": "Tento spis obsahuje viac kontaktov, než možno zobraziť. Odstránením viditeľných prepojení s kontaktmi zobrazíte zostávajúce kontakty.",
@@ -3413,6 +3442,11 @@
       "sharepointNotFound": "Táto lokalita, knižnica alebo súbor už neexistuje alebo nie je s vami zdieľaný.",
       "sharepointReconnectRequired": "Platnosť vášho prihlásenia do Microsoftu vypršala. Pripojte SharePoint a OneDrive znova.",
       "sharepointThrottled": "Microsoft obmedzuje počet požiadaviek. Skúste to čoskoro znova.",
+      "skillFromChatAnonymizedThread": "Z anonymizovanej konverzácie zatiaľ nemožno vytvoriť zručnosť.",
+      "skillFromChatEmptyThread": "Táto konverzácia zatiaľ neobsahuje nič, z čoho by sa dala vytvoriť zručnosť.",
+      "skillFromChatLocalRunThread": "Táto konverzácia beží na vašom počítači, preto sa z nej zručnosť v cloude nevytvára.",
+      "skillFromChatThreadNotFound": "Túto konverzáciu sa nepodarilo nájsť.",
+      "skillFromChatWithdrawn": "Obsah tejto konverzácie bol stiahnutý, preto z nej nemožno vytvoriť zručnosť.",
       "skillSourceUnreachable": "Zdroj zručnosti sa nepodarilo načítať. Skontrolujte, či odkaz vedie na verejný repozitár GitHub, alebo to skúste neskôr.",
       "thirdPartyBoundaryRefusal": "Požiadavka sa pokúsila použiť obsah mimo povoleného kontextu pracovného priestoru.",
       "usageLimitExceeded": "Bol dosiahnutý limit používania.",
@@ -5866,6 +5900,8 @@
       "auditLogsSentenceDownload": "Stiahnuté: {resource}.",
       "auditLogsSentenceExecute": "Spustené: {resource}.",
       "auditLogsSentenceIssued": "Vydané: {resource}.",
+      "auditLogsSentenceLegalHoldPlaced": "Nastavené: {resource}.",
+      "auditLogsSentenceLegalHoldReleased": "Uvoľnené: {resource}.",
       "auditLogsSentenceRedeemed": "Uplatnené: {resource}.",
       "auditLogsSentenceRefused": "Odmietnuté: {resource}.",
       "auditLogsSentenceReview": "Skontrolované: {resource}.",
@@ -5917,6 +5953,7 @@
         "flow_run": "spustenie pracovného postupu",
         "folio_collab_room": "miestnosť spolupráce Folio",
         "invoice": "faktúra",
+        "legal_hold": "právne zadržanie",
         "legal_list": "právny zoznam",
         "legal_list_generation": "vytvorenie právneho zoznamu",
         "legal_list_item": "položka právneho zoznamu",
@@ -6323,6 +6360,7 @@
       "previewBody5": "Pred konverziou predaj alebo uvedenie na burzu oprávňuje Investora na vyššiu z kúpnej ceny alebo výnosu splatného na konvertovanom základe.",
       "previewBody6": "Spoločnosť je riadne založená, má oprávnenie uzavrieť túto zmluvu a získa všetky schválenia potrebné na jej plnenie.",
       "previewBody7": "Táto zmluva obsahuje úplnú dohodu medzi stranami a možno ju meniť iba písomne s požadovaným súhlasom.",
+      "previewDocument": "Náhľad sady štýlov",
       "previewFailed": "Náhľad sa nepodarilo vytvoriť.",
       "previewIntroduction": "Táto zmluva sa uzatvára medzi spoločnosťou Example Labs Ltd. (ďalej len „Spoločnosť“) a investorom uvedeným na podpisovej strane (ďalej len „Investor“).",
       "previewLevel1": "Investícia",

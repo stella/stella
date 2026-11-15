@@ -20,6 +20,7 @@ import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
 import { chatLimitReminderScalingScenario } from "./chat-limit-reminder";
 import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
+import { chatLocalRunStepContentScalingScenario } from "./chat-local-run-step-content";
 import { chatLocalRunStepOutputGrantScalingScenario } from "./chat-local-run-step-output-grant";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
@@ -47,6 +48,7 @@ import {
 } from "./document-annotations";
 import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
+import { legalHoldScalingScenarios } from "./legal-holds";
 import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
@@ -84,6 +86,7 @@ import {
   verificationChronologyScalingScenarios,
   verificationGraphScalingScenarios,
 } from "./verification-graph";
+import { verifyQuoteApiScalingScenario } from "./verify-quote";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -91,6 +94,7 @@ const measuredApiScenarios = [
   ...dataExportReadScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
+  verifyQuoteApiScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
   exactIconScalingScenario,
@@ -103,6 +107,7 @@ const measuredApiScenarios = [
   chatLocalFilesUndoScalingScenario,
   chatBackgroundTasksScalingScenario,
   chatLocalRunStepOutputGrantScalingScenario,
+  chatLocalRunStepContentScalingScenario,
   chatActiveRunsScalingScenario,
   chatPinnedThreadsScalingScenario,
   chatLimitReminderScalingScenario,
@@ -128,6 +133,7 @@ const measuredApiScenarios = [
   memberCandidatesScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  ...legalHoldScalingScenarios,
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   desktopDictationModelsScalingScenario,
