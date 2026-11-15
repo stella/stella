@@ -7,6 +7,7 @@ import {
   CHAT_SEND_QUEUES_INSTEAD_CODE,
   type ChatQueueHoldReason,
 } from "@stll/api-contract/chat-queue";
+import type { ChatLocalRunSteerRefusal } from "@stll/api-contract/chat-run-target";
 import {
   CHAT_TURN_STEERING,
   type ChatThreadSendState,
@@ -114,6 +115,23 @@ export const steerableMessageText = (
     ? text
     : null;
 };
+
+/**
+ * Why a steer left the message queued: what the turn or the API said
+ * (`ChatLocalRunSteerRefusal`), or `message_not_plain` for a message with
+ * files or one sent anonymized, which only goes as a message of its own.
+ */
+export type ChatSteerRefusal = ChatLocalRunSteerRefusal | "message_not_plain";
+
+/** What the member is told about a steer that left the message queued. */
+export const CHAT_STEER_REFUSAL_MESSAGES = {
+  turn_not_running: "chat.steerRefused.turnNotRunning",
+  no_run: "chat.steerRefused.noRun",
+  harness_cannot_steer: "chat.steerRefused.cannotSteer",
+  run_full: "chat.steerRefused.runFull",
+  not_taken: "chat.steerRefused.notTaken",
+  message_not_plain: "chat.steerRefused.notPlain",
+} as const satisfies Record<ChatSteerRefusal, TranslationKey>;
 
 /** What the queue line says while something holds the queue. */
 export const CHAT_QUEUE_HOLD_NOTICE_KEYS = {
