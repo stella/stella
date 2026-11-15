@@ -1,5 +1,4 @@
 import { and, eq } from "drizzle-orm";
-import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import {
   legalListClaims,
@@ -27,7 +26,6 @@ import type { VerificationBlock } from "@/api/lib/lists/verification/document-te
 import { emitVerificationRunFailureMetric } from "@/api/lib/observability/request-metrics";
 
 type VerificationTransaction = Parameters<AuditRecorder>[0] &
-  Pick<PgAsyncDatabase<PgQueryResultHKT>, "insert" | "select"> &
   TransitionTransaction;
 
 const VERIFICATION_RUN_TRANSITIONS = defineTransitions(
