@@ -4,6 +4,7 @@ import { READER_ANNOTATION_CONSTRAINTS } from "../reader-annotation-constraint-v
 export default {
   id: "constraints-reader-annotation-constraints",
   revision: 1330,
+  lifecycle: "finalized",
   type: "constraints",
   values: [...READER_ANNOTATION_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;

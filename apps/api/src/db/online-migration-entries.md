@@ -7,7 +7,7 @@ Commit the entry and its generated export. The export index contains no values;
 changing an existing entry does not change the index.
 
 Each entry has a stable descriptive id, a unique positive integer revision,
-a phase (`indexes`, `cutovers`, `replacements`, `repairs`, or `constraints`),
+a lifecycle, a phase (`indexes`, `cutovers`, `replacements`, `repairs`, or `constraints`),
 and that phase's values. Revisions sort groups within each phase; array order
 inside a group preserves its owner's order. The initial revisions preserve the
 existing execution sequence. Choose a later revision for new work; do not
@@ -33,3 +33,13 @@ replacementNames: [ONLINE_UNIQUE_INDEX_NAMES.ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX];
 `bun scripts/check-online-index-dependencies.ts` checks entry modules along
 with other consumers and rejects raw unique-index names. The index generator
 only emits module exports; it never copies or rewrites entry values.
+
+A new entry is `lifecycle: "pending"`: its work may still be building after a
+rollout. It becomes `"finalized"` once a promoted release carries the entry
+unchanged; `bun scripts/check-online-migration-lifecycle.ts` (run by
+`scripts/check-migrations.sh`) enforces this against the release in
+`apps/landing/src/data/changelog-release-dates.json`. Work that code depends on
+in the same release (for example an `ON CONFLICT` arbiter index) may be
+finalized early only through a reasoned entry in
+`scripts/online-migration-lifecycle-exemptions.json`; the exemption lapses
+once the release carries the entry.

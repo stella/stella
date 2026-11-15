@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-legal-lists-sample-workspace-uidx",
   revision: 440,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-folio-collab-checkpoint-constraint-validation",
   revision: 1457,
+  lifecycle: "pending",
   type: "repairs",
   values: [FOLIO_COLLAB_CHECKPOINT_CONSTRAINT_VALIDATION],
 } satisfies OnlineMigrationEntry;

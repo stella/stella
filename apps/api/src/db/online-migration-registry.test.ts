@@ -24,6 +24,7 @@ const fixtureEntry = (id: string, revision: number) =>
   ({
     id,
     revision,
+    lifecycle: "pending",
     type: "indexes",
     values: [
       {

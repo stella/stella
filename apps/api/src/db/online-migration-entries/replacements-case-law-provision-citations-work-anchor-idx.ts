@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "replacements-case-law-provision-citations-work-anchor-idx",
   revision: 870,
+  lifecycle: "finalized",
   type: "replacements",
   // A provision's citing rows are its whole subtree, which the exact-anchor
   // walks cannot seek under the database collation.
