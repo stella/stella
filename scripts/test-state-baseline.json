@@ -474,11 +474,6 @@
     "owner": "pricing",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/version.test.ts": {
-    "count": 7,
-    "owner": "guards",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/workflow-start-claim.test.ts": {
     "count": 2,
     "owner": "workflow",
@@ -681,11 +676,6 @@
   },
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-document-loader.test.ts": {
     "count": 1,
-    "owner": "web",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/vite.config.test.ts": {
-    "count": 5,
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   }
