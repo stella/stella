@@ -2093,6 +2093,7 @@
       "noResults": "No matching skills",
       "tryOne": "Try one of these to start"
     },
+    "queuePrompt": "Send when the agent finishes",
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued: sends when the current response finishes",
     "reasoning": "Reasoning trace",

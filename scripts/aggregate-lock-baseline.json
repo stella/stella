@@ -955,12 +955,6 @@
     "holder": "stella_ingestion"
   },
   {
-    "file": "apps/api/src/handlers/chat/chat-turn-persistence.ts",
-    "fingerprint": "d57afde04e8f70189b3055b20bc5341b7c52c1ce116688e79cb12d82b6e540fb",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/chat/chat-turn-persistence.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/chat/file-thread-mapping.ts",
     "fingerprint": "69ca2bf448838dfa869d9085b4fefd5fed2719affb069d98acbe63154c93f9ca",
     "count": 1,

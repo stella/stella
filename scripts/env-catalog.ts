@@ -1553,6 +1553,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",
+  // The pre-push signature check reads the registered signing keys from this
+  // folder instead of the GitHub account (its tests).
+  "SIGNING_KEYS_DIR",
   "STAND_IN_ENDPOINT",
   "FAKE_SIDECAR_LOG",
   // Invocation-local handoff values are removed before test/native entry points run.
@@ -1961,6 +1964,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_SEED_ORG_ID",
   "STELLA_SEED_USER_ID",
   "STELLA_TEST_LATEST_TAG",
+  // Runner-owned migrated database cloned by isolated PostgreSQL suites.
+  "STELLA_TEST_TEMPLATE_DATABASE",
   "STELLA_TEST_OMIT_ASSET",
   "STELLA_TEST_RELEASE_NUMBERS",
   "STELLA_UPDATE_PLAN_CONTRACTS",

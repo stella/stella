@@ -1,11 +1,16 @@
 import { chatRunsChangedRealtimeEvent } from "@stll/api-contract";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
 import { broadcastToUser } from "@/api/lib/sse";
 
-/** The member whose active chat runs a turn status write changed. */
+/**
+ * The member whose active chat runs a turn status write changed, and the
+ * thread whose turn it was.
+ */
 type ChatRunOwner = {
   organizationId: SafeId<"organization">;
+  threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
 };
 
@@ -24,7 +29,10 @@ export type ChatRunPings = {
   readonly changed: (owner: ChatRunOwner) => void;
 };
 
-const ownerKey = ({ organizationId, userId }: ChatRunOwner): string =>
+const ownerKey = ({
+  organizationId,
+  userId,
+}: Omit<ChatRunOwner, "threadId">): string =>
   JSON.stringify([organizationId, userId]);
 
 /**
@@ -35,15 +43,24 @@ const ownerKey = ({ organizationId, userId }: ChatRunOwner): string =>
  * state. The ping goes out whether the transaction committed or rolled back:
  * the event carries nothing, so a ping for a write that did not land costs one
  * re-read, while a missing ping leaves a client showing a run that ended.
+ *
+ * Each thread is rung on the chat queue doorbell too, so a turn that ended
+ * lets its thread's queue send the next message without any writer having to
+ * remember it; the queue's own gate decides whether anything is due.
  */
 export const withChatRunPings = async <T>(
   run: (pings: ChatRunPings) => Promise<T>,
 ): Promise<T> => {
-  const owners = new Map<string, ChatRunOwner>();
+  const owners = new Map<string, Omit<ChatRunOwner, "threadId">>();
+  const threads = new Set<SafeId<"chatThread">>();
   const pings: ChatRunPings = {
     [CHAT_RUN_PINGS]: true,
     changed: (owner) => {
-      owners.set(ownerKey(owner), owner);
+      owners.set(ownerKey(owner), {
+        organizationId: owner.organizationId,
+        userId: owner.userId,
+      });
+      threads.add(owner.threadId);
     },
   };
   try {
@@ -51,6 +68,9 @@ export const withChatRunPings = async <T>(
   } finally {
     for (const { organizationId, userId } of owners.values()) {
       broadcastToUser(userId, organizationId, chatRunsChangedRealtimeEvent());
+    }
+    for (const threadId of threads) {
+      ringChatQueue(threadId);
     }
   }
 };

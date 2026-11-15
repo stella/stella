@@ -3,8 +3,12 @@ import { chatBackgroundTasksChangedRealtimeEvent } from "@stll/api-contract";
 import { rootDb } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
 import type { HttpServer } from "@/api/http/context";
+import { detached } from "@/api/lib/analytics/capture";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { desktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
+import { ringChatQueue } from "@/api/lib/chat/chat-queue-doorbell";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { releaseComputerAwayHoldsOnTx } from "@/api/lib/db/chat-queue-gate";
 import {
   createDesktopRunnerControl,
   type DesktopRunnerControl,
@@ -85,6 +89,22 @@ export const startDesktopRunnerGateway = async () => {
         owner.organizationId,
         chatBackgroundTasksChangedRealtimeEvent(),
       );
+      // A computer of the member reported: messages queued for it while it
+      // was away may go now.
+      detached(async () => {
+        const released = await withAggregateTransaction(
+          rootDb,
+          async (tx) =>
+            await releaseComputerAwayHoldsOnTx({
+              organizationId: owner.organizationId,
+              tx,
+              userId: owner.userId,
+            }),
+        );
+        for (const threadId of released) {
+          ringChatQueue(threadId);
+        }
+      }, "chat-queue.computer-reported");
     },
     instanceId: INSTANCE_ID,
     authorize: authorizeRunnerWith(authorizeDesktopAccount),

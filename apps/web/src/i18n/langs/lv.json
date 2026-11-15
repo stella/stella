@@ -2093,6 +2093,7 @@
       "noResults": "Nav atbilstošu prasmju",
       "tryOne": "Izmēģini vienu no tiem"
     },
+    "queuePrompt": "Sūtīt, kad aģents pabeigs",
     "queuedAttachmentCount": "{count, plural, zero {# pielikumu} one {# pielikums} other {# pielikumi}}",
     "queuedNotice": "Rindā: tiks nosūtīts, kad pabeigsies pašreizējā atbilde",
     "reasoning": "Argumentācija",
