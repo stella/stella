@@ -53,12 +53,13 @@ import { Temporal } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
-  corpusIndexJurisdictionServing,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import { readJurisdictionServingGenerationsTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   CORPUS_INDEX_PROJECTION_SERVING,
   corpusIndexProjectionIsAbsent,
@@ -436,33 +437,36 @@ const requireComparablePair = async (
       }),
     );
   }
+  const pairGenerations = [pair.serving, pair.candidate];
   const registered = await Result.tryPromise({
     try: async () =>
-      await tx
-        .select({
-          generation: corpusIndexGenerations.generation,
-          status: corpusIndexGenerations.status,
-        })
-        .from(corpusIndexGenerations)
-        .where(
-          and(
-            eq(corpusIndexGenerations.family, pair.family),
-            inArray(corpusIndexGenerations.generation, [
-              pair.serving,
-              pair.candidate,
-            ]),
+      await readBounded(
+        tx
+          .select({
+            generation: corpusIndexGenerations.generation,
+            status: corpusIndexGenerations.status,
+          })
+          .from(corpusIndexGenerations)
+          .where(
+            and(
+              eq(corpusIndexGenerations.family, pair.family),
+              inArray(corpusIndexGenerations.generation, pairGenerations),
+            ),
           ),
-        )
-        .limit(2),
+        pairGenerations.length,
+      ),
     catch: (cause) => readError(pair, cause),
   });
   if (Result.isError(registered)) {
     return registered;
   }
-  for (const generation of [pair.serving, pair.candidate]) {
-    const row = registered.value.find(
-      (entry) => entry.generation === generation,
-    );
+  if (registered.value.type === "overflow") {
+    // The registry's key is (family, generation): two names, two rows at most.
+    return panic("A generation pair matched more registry rows than names");
+  }
+  const rows = registered.value.rows;
+  for (const generation of pairGenerations) {
+    const row = rows.find((entry) => entry.generation === generation);
     if (
       row === undefined ||
       !ACTIVE_GENERATION_STATUSES.some((status) => status === row.status)
@@ -477,21 +481,17 @@ const requireComparablePair = async (
   }
   const pointers = await Result.tryPromise({
     try: async () =>
-      await tx
-        .select({ jurisdiction: corpusIndexJurisdictionServing.jurisdiction })
-        .from(corpusIndexJurisdictionServing)
-        .where(eq(corpusIndexJurisdictionServing.family, pair.family))
-        .limit(1),
+      await readJurisdictionServingGenerationsTx(tx, pair.family),
     catch: (cause) => readError(pair, cause),
   });
   if (Result.isError(pointers)) {
     return pointers;
   }
-  const pointer = pointers.value.at(0);
+  const [pointer] = pointers.value.keys();
   if (pointer !== undefined) {
     return Result.err(
       new CorpusIndexFlipPairRefusedError({
-        message: `${pointer.jurisdiction} is served through a jurisdiction-serving pointer, which makes its erasures depend on the generation; a whole-family flip is not compared while one exists`,
+        message: `${pointer} is served through a jurisdiction-serving pointer, which makes its erasures depend on the generation; a whole-family flip is not compared while one exists`,
         reason: "jurisdiction_serving_pointer",
       }),
     );

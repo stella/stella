@@ -124,6 +124,8 @@ export const FAILURE_TAGS = [
   "CorpusGenerationUndeclaredError",
   "CorpusGenerationUsageError",
   "CorpusIndexError",
+  "CorpusIndexFlipPairRefusedError",
+  "CorpusIndexFlipParityReadError",
   "CorpusIndexGroupContractMismatchError",
   "CorpusIndexGroupNotReadyError",
   "CorpusIndexGroupWithdrawalRefusedError",
