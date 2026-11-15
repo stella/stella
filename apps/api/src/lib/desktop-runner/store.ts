@@ -89,6 +89,10 @@ import {
   type DesktopRunnerRunState,
 } from "@/api/lib/desktop-runner/states";
 import {
+  announcedAwaitedSteps,
+  recordAwaitedSteps,
+} from "@/api/lib/desktop-runner/step-contents";
+import {
   brandPersistedChatThreadId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
@@ -1210,6 +1214,20 @@ export const persistRunMessage = async (
         requestId: requestIdOf(message),
         message,
       });
+      // A run's word on which steps it still has to send is recorded with
+      // the event that carries it: both are stored, or neither is and the
+      // computer sends the event again.
+      const awaited =
+        message.type === DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent
+          ? announcedAwaitedSteps(message.chunk)
+          : null;
+      if (awaited !== null) {
+        await recordAwaitedSteps(tx, {
+          owner: binding,
+          runId: message.runId,
+          stepKeys: awaited,
+        });
+      }
       return { type: "persisted", seq: message.seq };
     }
     const run = await readBoundRun(tx, binding, message.runId);

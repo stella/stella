@@ -52,6 +52,12 @@ export const FIXTURE_PAGES: Record<string, string> = {
   <select aria-label="Court">
     <option value="">Any court</option>
     <option value="supreme">Supreme Court</option>
+    <optgroup disabled label="Closed">
+      <option value="closed">Closed court</option>
+    </optgroup>
+  </select>
+  <select aria-label="Saved card">
+    <option value="card">Card 4111111111111111</option>
   </select>
   <button type="submit">Run search</button>
 </form>

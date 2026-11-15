@@ -41,8 +41,8 @@ const WEB_TITLE_KEYS: Readonly<Record<string, readonly string[]>> = {
 
 /**
  * Where the web keeps each phrase of a coding agent's own steps: the title
- * of each kind, the two sentences that place a value, and a subagent's
- * status.
+ * of each kind, the sentences that place a value, a subagent's status, and
+ * what a step's stored content says as it opens.
  */
 const WEB_LOCAL_RUN_KEYS = {
   title: {
@@ -57,12 +57,46 @@ const WEB_LOCAL_RUN_KEYS = {
   },
   patternInPath: ["chat", "toolCall", "patternInPath"],
   commandExited: ["chat", "toolCall", "commandExited"],
-  opensOnComputer: ["chat", "toolCall", "localOutput", "elsewhere"],
+  browserClick: ["chat", "toolCall", "browserClick"],
+  browserType: ["chat", "toolCall", "browserType"],
+  browserPressKey: ["chat", "toolCall", "browserPressKey"],
+  browserSelect: ["chat", "toolCall", "browserSelect"],
   status: {
     needs_approval: ["chat", "turnStatus", "waitingForApproval"],
     running: ["tasks", "statusValues", "in_progress"],
     failed: ["common", "failed"],
     interrupted: ["chat", "stopped"],
+  },
+  output: {
+    command: ["chat", "toolCall", "output"],
+    diff: ["chat", "toolCall", "localOutput", "diff"],
+    conversation: ["chat", "toolCall", "localOutput", "conversation"],
+    conversationPrompt: [
+      "chat",
+      "toolCall",
+      "localOutput",
+      "conversationPrompt",
+    ],
+    conversationReport: [
+      "chat",
+      "toolCall",
+      "localOutput",
+      "conversationReport",
+    ],
+    cut: ["chat", "toolCall", "localOutput", "cut"],
+    empty: ["chat", "toolCall", "localOutput", "empty"],
+    arriving: ["chat", "toolCall", "localOutput", "arriving"],
+    notCopied: ["chat", "toolCall", "localOutput", "notCopied"],
+    notStored: ["chat", "toolCall", "localOutput", "notStored"],
+    runBudgetReached: ["chat", "toolCall", "localOutput", "runBudgetReached"],
+    imageTooLargeToStore: [
+      "chat",
+      "toolCall",
+      "localOutput",
+      "imageTooLargeToStore",
+    ],
+    loadFailed: ["common", "loadFailed"],
+    showMore: ["common", "showMore"],
   },
 } as const satisfies WebKeysOf<MobileMessages["chat"]["localRun"]>;
 

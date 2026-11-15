@@ -525,9 +525,13 @@ export const parsePayload = (result: CallToolResult): unknown => {
   return Result.isOk(parsed) ? unwrapCapabilityResult(parsed.value) : undefined;
 };
 
-/** One structured validation issue: dot-path (empty for root) plus reason. */
+/**
+ * One structured issue: dot-path (empty for root), reason, and an optional
+ * machine code (a legal-hold refusal names each hold's scope there).
+ */
 type ErrorIssue = {
   path: string;
+  code?: string;
   message: string;
 };
 
@@ -567,8 +571,11 @@ const parseErrorIssues = (error: Record<string, unknown>): ErrorIssue[] => {
     }
     const path = entry["path"];
     const message = entry["message"];
+    const code = entry["code"];
     if (typeof path === "string" && typeof message === "string") {
-      issues.push({ path, message });
+      issues.push(
+        typeof code === "string" ? { path, code, message } : { path, message },
+      );
     }
   }
   return issues;
@@ -1091,7 +1098,7 @@ export const toolErrorLines = (
     retryAfterMs?: number;
     contactUrl?: string;
     hint: string | undefined;
-    issues: readonly { path: string; message: string }[];
+    issues: readonly ErrorIssue[];
   },
   {
     command,
@@ -1120,10 +1127,14 @@ export const toolErrorLines = (
   } else {
     lines.push(`error: ${envelope.message}`);
     for (const issue of envelope.issues) {
+      const reason =
+        issue.code === undefined
+          ? issue.message
+          : `${issue.message} [${issue.code}]`;
       lines.push(
         issue.path === ""
-          ? `  ${issue.message}`
-          : `  ${issueLocation(issue.path, flagPaths)}: ${issue.message}`,
+          ? `  ${reason}`
+          : `  ${issueLocation(issue.path, flagPaths)}: ${reason}`,
       );
     }
   }

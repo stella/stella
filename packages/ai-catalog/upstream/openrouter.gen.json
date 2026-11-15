@@ -397,6 +397,18 @@
       }
     },
     {
+      "id": "google/gemini-4-hydrogen",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-4-hydrogen:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "google/gemini-nano-banana-2.1",
       "reasoning": {
         "default_effort": "minimal"
@@ -518,6 +530,12 @@
     },
     {
       "id": "moonshotai/kimi-k3.1-pro",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "moonshotai/kimi-k3.1-pro:batch",
       "reasoning": {
         "default_effort": "max"
       }
@@ -979,6 +997,12 @@
       }
     },
     {
+      "id": "particle-ai/particle-1:free",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "perceptron/perceptron-mk1.5",
       "reasoning": {
         "default_effort": "high"
@@ -1094,6 +1118,12 @@
     },
     {
       "id": "thinkingmachines/inkling",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "thinkingmachines/inkling-2-small",
       "reasoning": {
         "default_effort": "high"
       }

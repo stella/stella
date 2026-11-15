@@ -141,8 +141,10 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 //   fallback answers, whether it is anonymized, and whether it runs as a chat
 //   turn or an agent run (whose request the sandbox's harness builds, so it
 //   is excluded by that predicate). Pull requests run an all-pairs cover of
-//   them; every night runs the all-triples cover, and a rotation of rounds
-//   runs every combination (`nightly-property-test.yml`).
+//   them, plus each provider's own model continuing the reasoning it
+//   returned, whatever the cover picks from the catalog; every night runs
+//   the all-triples cover, and a rotation of rounds runs every combination
+//   (`nightly-property-test.yml`).
 // - Every request those conversations send (the chat turns, the thread
 //   compactor's summary and the side calls) holds to the request schema the
 //   provider publishes (`scripts/provider-request-schemas.ts`) and to the
@@ -153,7 +155,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 //   right after it, with no orphan result.
 // - The typed coverage records below give every provider, request option,
 //   message part kind and tool kind one of two states, each checked at run
-//   time; the paths the all-pairs requests carry are a committed inventory.
+//   time; the paths the pull-request run's requests carry are a committed
+//   inventory.
 // - Free-form user text is sampled with fast-check (a fixed seed on pull
 //   requests, fresh seeds nightly), not exhausted.
 //
@@ -298,13 +301,39 @@ const baselineOf = (provider: TanStackAIProvider): ChatCombination => ({
   tools: "default",
 });
 
+/**
+ * Each provider's own model continuing its own history with the reasoning
+ * that model returned before the call: the replay of a provider's signed
+ * reasoning (OpenAI's encrypted reasoning and its summary, Anthropic's signed
+ * thinking, Gemini's thought signatures) runs in every mode, so it never
+ * depends on which combinations the all-pairs cover picks from the catalog.
+ */
+const reasoningContinuationOf = (
+  provider: TanStackAIProvider,
+): ChatCombination => ({ ...baselineOf(provider), history: "reasoning" });
+
+/** Where each provider that signs its reasoning carries it back to the
+ *  model that produced it. */
+const REASONING_REPLAY_PATHS: Partial<
+  Record<TanStackAIProvider, readonly string[]>
+> = {
+  anthropic: [
+    "messages[].content[].signature",
+    "messages[].content[].thinking",
+  ],
+  google: ["contents[].parts[].thoughtSignature"],
+  openai: ["input[].encrypted_content", "input[].summary"],
+};
+
 const selectedCombinations: readonly ChatCombination[] = (() => {
   const keys = new Set(runPlan.runs.map(combinationKey));
+  const pinned = TANSTACK_AI_PROVIDERS.flatMap((provider) => [
+    baselineOf(provider),
+    reasoningContinuationOf(provider),
+  ]);
   return [
     ...runPlan.runs,
-    ...TANSTACK_AI_PROVIDERS.map(baselineOf).filter(
-      (baseline) => !keys.has(combinationKey(baseline)),
-    ),
+    ...pinned.filter((combination) => !keys.has(combinationKey(combination))),
   ];
 })();
 
@@ -1267,7 +1296,35 @@ describe(`chat requests: ${String(combinations.included.length)} combinations th
     });
   }
 
-  // The inventory is the paths the all-pairs run sends, by target provider.
+  // Each provider that signs its reasoning gets it back on the same model:
+  // the pinned continuation sends the signed reasoning in every mode.
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    const replayPaths = REASONING_REPLAY_PATHS[provider];
+    if (replayPaths === undefined) {
+      continue;
+    }
+    test(
+      `${provider}: continuing its own reasoning sends the signed reasoning back`,
+      async () => {
+        const { targetRequests } = await conversationOf(
+          reasoningContinuationOf(provider),
+        );
+        const paths = new Set(
+          targetRequests.flatMap((request) => [
+            ...requestPathsOf(
+              parsedBody(request),
+              OPAQUE_REQUEST_PATHS[provider],
+            ),
+          ]),
+        );
+        expect(replayPaths.filter((entry) => !paths.has(entry))).toEqual([]);
+      },
+      propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+    );
+  }
+
+  // The inventory is the paths the pull-request run (the all-pairs cover and
+  // the pinned conversations) sends, by target provider.
   if (runPlan.mode === "all-pairs") {
     for (const provider of TANSTACK_AI_PROVIDERS) {
       test(

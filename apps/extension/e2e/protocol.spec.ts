@@ -270,6 +270,58 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
       }),
     );
     expect(snapshot.text).toContain("Submitted: notice period");
+    // An option is chosen by its visible label as well as by its value; a
+    // select without it is refused with the options it has.
+    snapshot = successful(
+      await send({
+        action: "select",
+        page: page(),
+        target: targetOf(elementNamed(snapshot.elements, "Court")),
+        value: "supreme  court",
+      }),
+    );
+    expect(elementNamed(snapshot.elements, "Court").value).toBe("supreme");
+    expect(
+      await send({
+        action: "select",
+        page: page(),
+        target: targetOf(elementNamed(snapshot.elements, "Court")),
+        value: "Family court",
+      }),
+    ).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      message:
+        'The select has no option with this label or value. Its options: "Any court", "Supreme Court"',
+    });
+    // An option in a disabled group is disabled: never chosen, never listed.
+    for (const value of ["closed", "Closed court"]) {
+      expect(
+        await send({
+          action: "select",
+          page: page(),
+          target: targetOf(elementNamed(snapshot.elements, "Court")),
+          value,
+        }),
+      ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.executionFailed });
+    }
+    snapshot = successful(
+      await send({ action: "snapshot", cursor: snapshot.window.cursor }),
+    );
+    expect(elementNamed(snapshot.elements, "Court").value).toBe("supreme");
+    // A label holding a value the page script learned as secret is listed
+    // redacted, as every read redacts it.
+    const savedCard = await send({
+      action: "select",
+      page: page(),
+      target: targetOf(elementNamed(snapshot.elements, "Saved card")),
+      value: "Another card",
+    });
+    expect(savedCard).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      message:
+        'The select has no option with this label or value. Its options: "Card [hidden]"',
+    });
+    expect(JSON.stringify(savedCard)).not.toContain("4111111111111111");
     expect(
       snapshot.elements.some(({ name }) => name === "Archive (disabled)"),
     ).toBe(false);

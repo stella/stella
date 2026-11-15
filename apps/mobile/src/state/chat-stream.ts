@@ -7,6 +7,7 @@ import {
   chatLocalRunParentCallId,
   isChatLocalRunToolName,
 } from "@stll/api-contract/chat-local-run-tool";
+import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 
 import { SignedOutError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
@@ -566,6 +567,11 @@ export const streamConnectTimeout = (bodyLength: number): number =>
  * Opens one SSE request and hands each answer event to `onEvent` as it
  * arrives. The turn id the server names in its response reaches `onTurn`
  * before any event. Aborting `signal` ends the read without an error.
+ *
+ * Only the wait for the response has a deadline. The stream is bounded by its
+ * liveness, never by how long it has run: the server writes a keep-alive
+ * frame whenever a turn has nothing to say, so one that stays silent past
+ * `SSE_SILENCE_BOUND_MS` has lost its connection and breaks, to be rejoined.
  */
 const readChatStream = async ({
   body,
@@ -640,7 +646,24 @@ const readChatStream = async ({
         const decoder = new TextDecoder();
         const parse = createSseParser();
         for (;;) {
-          const chunk = await reader.read();
+          let silenceTimer: ReturnType<typeof setTimeout> | undefined;
+          const silent = new Promise<never>((_resolve, reject) => {
+            silenceTimer = setTimeout(() => {
+              reject(
+                new ApiRequestError({
+                  message: `The stream from ${url} went silent`,
+                }),
+              );
+              // Releases the connection; a read the platform does not end on
+              // abort has already lost the race above.
+              abort();
+            }, SSE_SILENCE_BOUND_MS);
+          });
+          const chunk = await Promise.race([reader.read(), silent]).finally(
+            () => {
+              clearTimeout(silenceTimer);
+            },
+          );
           if (chunk.done) {
             break;
           }
@@ -657,7 +680,12 @@ const readChatStream = async ({
         return response.status;
       },
       catch: (cause) =>
-        new ApiRequestError({ message: `The stream from ${url} broke`, cause }),
+        cause instanceof ApiRequestError
+          ? cause
+          : new ApiRequestError({
+              message: `The stream from ${url} broke`,
+              cause,
+            }),
     });
     clearTimeout(connectTimer);
     signal.removeEventListener("abort", abort);

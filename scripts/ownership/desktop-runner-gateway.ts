@@ -52,6 +52,26 @@ export default {
           "Reads what a chat's runs left running in the background on the member's computers.",
       },
       {
+        path: "apps/api/src/handlers/chat/fork/create.ts",
+        reason:
+          "Copies what the steps of a forked thread's messages stored to the fork, on the owner connection that alone writes it.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/local-run-step-content.ts",
+        reason:
+          "Reads what a step of the member's own run produced, as stored with the step's thread.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/run-outputs/awaited-step-content.ts",
+        reason:
+          "Stores a step a finished run announced it still had to send, for the computer the run ran on.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/run-outputs/step-content.ts",
+        reason:
+          "Stores what a step produced for the run whose agent token sends it, against that run's storage budget.",
+      },
+      {
         path: "apps/api/src/handlers/chat/local-run-step-output-grant.ts",
         reason:
           "Reads the member's own run to grant reading its step outputs on the computer that ran it.",

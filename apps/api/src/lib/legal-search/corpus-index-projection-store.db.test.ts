@@ -58,8 +58,9 @@ import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/cor
 import {
   abandonCorpusProjectionAppendTx,
   classifyCorpusProjectionReservationFailureTx,
-  commitCorpusProjectionAppendTx,
   prepareCorpusProjectionReplacementsTx,
+  proveAcceptedCorpusProjectionAppendsTx,
+  recordAcceptedCorpusProjectionAppendsTx,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendBatchTx,
   startCorpusProjectionAppendTx,
@@ -117,8 +118,8 @@ const FIRST_FINGERPRINT = "a".repeat(64);
 const SECOND_FINGERPRINT = "b".repeat(64);
 const INDEX_ID = "case_law_v5_cs_sk";
 
-/** Presence evidence from the real census over one exact engine bucket. */
-const appendPresenceProof = async ({
+/** The real census over one exact engine bucket for one revision. */
+const appendPresenceCensus = async ({
   intentId,
   indexId,
 }: {
@@ -139,10 +140,53 @@ const appendPresenceProof = async ({
     indexId,
     expected: [{ revision: intentId, documentCount: 1 }],
   });
-  if (census.isErr() || census.value.status !== "proven") {
+  if (census.isErr() || census.value.proofs.length !== 1) {
     return panic("Expected an exact census to prove presence");
   }
-  return census.value.proofs.at(0) ?? panic("Expected one presence proof");
+  return census.value;
+};
+
+/** The executor's sequence after a waited request: record, then prove at once. */
+const acceptAndProveAppend = async (
+  tx: Transaction,
+  {
+    lease,
+    testNow,
+  }: {
+    lease: {
+      intentId: SafeId<"corpusIndexProjectionIntent">;
+      indexId: string;
+      leaseToken: string;
+    };
+    testNow?: Date;
+  },
+) => {
+  const recorded = (
+    await recordAcceptedCorpusProjectionAppendsTx(tx, {
+      accepted: [
+        {
+          intentId: lease.intentId,
+          leaseToken: lease.leaseToken,
+          documentCount: 1,
+        },
+      ],
+      testNow,
+    })
+  ).at(0);
+  if (recorded?.status !== "accepted") {
+    return recorded;
+  }
+  return (
+    await proveAcceptedCorpusProjectionAppendsTx(tx, {
+      indexId: lease.indexId,
+      census: await appendPresenceCensus(lease),
+      timing: {
+        type: "request_waited",
+        failureMessage: "projection append is not fully searchable",
+      },
+      testNow,
+    })
+  ).at(0);
 };
 const POL_INDEX_ID = "case_law_v5_pol";
 const INITIAL_RUNNABLE_AT = new Date("2026-08-25T00:00:00.000Z");
@@ -1996,9 +2040,8 @@ test("applied census rejects an incomplete multi-document revision", async () =>
   expect(
     await db.transaction(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          proof: await appendPresenceProof(lease),
-          leaseToken: lease.leaseToken,
+        await acceptAndProveAppend(asTestRaw<Transaction>(tx), {
+          lease,
           testNow: appliedAt,
         }),
     ),
@@ -2329,9 +2372,8 @@ test("replacement deletes and settles the old revision before reserving the new 
   expect(
     await db.transaction(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          proof: await appendPresenceProof(firstLease),
-          leaseToken: firstLease.leaseToken,
+        await acceptAndProveAppend(asTestRaw<Transaction>(tx), {
+          lease: firstLease,
           testNow: acceptedAt,
         }),
     ),
@@ -2691,9 +2733,8 @@ test("cleanup-owned replacement work rotates behind a bounded queue window", asy
     expect(
       await db.transaction(
         async (tx) =>
-          await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-            proof: await appendPresenceProof(lease),
-            leaseToken: lease.leaseToken,
+          await acceptAndProveAppend(asTestRaw<Transaction>(tx), {
+            lease,
           }),
       ),
     ).toMatchObject({ status: "applied" });
@@ -2786,9 +2827,8 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
   expect(
     await withDatabaseClock(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(tx, {
-          proof: await appendPresenceProof(lease),
-          leaseToken: lease.leaseToken,
+        await acceptAndProveAppend(tx, {
+          lease,
         }),
     ),
   ).toMatchObject({ status: "applied" });
@@ -3099,9 +3139,8 @@ test("a settled same-epoch attempt reopens after its retry is applied", async ()
   expect(
     await db.transaction(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          proof: await appendPresenceProof(retryLease),
-          leaseToken: retryLease.leaseToken,
+        await acceptAndProveAppend(asTestRaw<Transaction>(tx), {
+          lease: retryLease,
         }),
     ),
   ).toMatchObject({ status: "applied" });
@@ -4380,9 +4419,8 @@ test("an orphaned erasure applies only after its applied upsert settles", async 
   expect(
     await db.transaction(
       async (tx) =>
-        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          proof: await appendPresenceProof(lease),
-          leaseToken: lease.leaseToken,
+        await acceptAndProveAppend(asTestRaw<Transaction>(tx), {
+          lease,
           testNow: acceptedAt,
         }),
     ),

@@ -41,17 +41,23 @@ export type OrganizationAIConfig = NonNullable<
 >;
 
 export const aiConfigOptions = ({ organizationId }: AIConfigOptionsInput) =>
-  queryOptions({
-    queryKey: aiConfigKeys.byOrganization({ organizationId }),
-    queryFn: async ({ signal }) => {
-      const response = await api["organization-settings"]["ai-config"].get({
-        fetch: { signal },
-      });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: aiConfigKeys.byOrganization({ organizationId }),
+      queryFn: async ({ signal }) => {
+        const response = await api["organization-settings"]["ai-config"].get({
+          fetch: { signal },
+        });
 
-      return unwrapApiResponse(response);
+        return unwrapApiResponse(response);
+      },
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization" },
     },
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  );
 
 type AIDefaultsPreviewOptionsInput = QueryOptionsInput<
   OrganizationAIConfigKey & {

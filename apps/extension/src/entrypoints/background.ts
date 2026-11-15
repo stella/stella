@@ -35,6 +35,7 @@ import {
   pairStellaTab,
   readBrowserController,
 } from "../lib/controller";
+import { desktopCommandRefusal } from "../lib/desktop-commands";
 import {
   createDesktopLink,
   DESKTOP_LINK_ALARM,
@@ -329,19 +330,6 @@ const runCommand = async (
   });
 
 /**
- * What a coding agent on this computer may ask for: its tools open, read,
- * find, click and type. Switching to another chat's tab, going back, keys
- * and selects are refused.
- */
-const DESKTOP_ACTIONS: ReadonlySet<string> = new Set([
-  BROWSER_CONTROL_ACTION.click,
-  BROWSER_CONTROL_ACTION.fill,
-  BROWSER_CONTROL_ACTION.find,
-  BROWSER_CONTROL_ACTION.open,
-  BROWSER_CONTROL_ACTION.snapshot,
-]);
-
-/**
  * A command from a coding agent on this computer. Chrome only starts the
  * host for this extension and the member allowed it, so there is no pairing
  * to check. A desktop chat that does not hold the browser may only open a
@@ -353,10 +341,11 @@ const runDesktopCommand = async (
 ): Promise<BrowserControlResult> => {
   const controllerId = desktopControllerId(message.controllerId);
   const { command } = message;
-  if (!DESKTOP_ACTIONS.has(command.action)) {
+  const refusal = desktopCommandRefusal(command);
+  if (refusal !== null) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.invalidCommand,
-      "stella desktop opens, reads, finds, clicks and types only.",
+      refusal,
     );
   }
   const result = await runControlledCommand({

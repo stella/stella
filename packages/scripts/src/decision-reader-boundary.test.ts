@@ -310,6 +310,71 @@ const removedReaderImportViolations = (file: string, source: string) => {
   );
 };
 
+type ScannedSource =
+  | { status: "read"; text: string }
+  /** Listed by the scan, and not there when it was read. */
+  | { status: "gone" };
+
+const readScannedSource = (file: string): ScannedSource => {
+  try {
+    return {
+      status: "read",
+      text: readFileSync(path.join(repositoryRoot, file), "utf-8"),
+    };
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return { status: "gone" };
+    }
+    throw error;
+  }
+};
+
+const RESCAN_ATTEMPTS = 5;
+
+/**
+ * Every file the patterns list, with its text, each one read. Generators
+ * rewrite their outputs (for one, the MCP apps' bundles module) while other
+ * packages' tests run, so a listed path can be briefly absent. Such a file is
+ * not skipped: it is read again once the rest are, and it leaves the scan
+ * only when a fresh listing no longer names it. A file that stays listed and
+ * unreadable fails the scan.
+ */
+const scannedSources = (
+  patterns: readonly string[],
+  include: (file: string) => boolean = () => true,
+): { file: string; text: string }[] => {
+  const list = () =>
+    new Set(
+      patterns.flatMap((pattern) => [
+        ...new Bun.Glob(pattern).scanSync({ cwd: repositoryRoot }),
+      ]),
+    );
+  const sources: { file: string; text: string }[] = [];
+  let pending = [...list()].filter(include);
+  for (let attempt = 0; pending.length > 0; attempt += 1) {
+    const gone: string[] = [];
+    for (const file of pending) {
+      const source = readScannedSource(file);
+      if (source.status === "read") {
+        sources.push({ file, text: source.text });
+      } else {
+        gone.push(file);
+      }
+    }
+    if (gone.length === 0) {
+      break;
+    }
+    const listed = list();
+    pending = gone.filter((file) => listed.has(file));
+    if (pending.length > 0 && attempt + 1 >= RESCAN_ATTEMPTS) {
+      throw new Error(
+        `Listed and unreadable after ${RESCAN_ATTEMPTS} reads: ${pending.join(", ")}`,
+      );
+    }
+  }
+  return sources;
+};
+
 test("web has no second owner for any extracted reader module", () => {
   expect(
     removedReaderPaths.filter((file) =>
@@ -320,21 +385,14 @@ test("web has no second owner for any extracted reader module", () => {
 
 test("source imports never reference any removed reader module", () => {
   const violations: { file: string; specifier: string }[] = [];
-  for (const pattern of [
+  for (const { file, text } of scannedSources([
     "apps/*/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css}",
     "packages/*/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css}",
     "scripts/**/*.{ts,tsx,js,jsx}",
     ".oxlint-plugins/**/*.{ts,tsx,js,jsx}",
-  ]) {
-    for (const file of new Bun.Glob(pattern).scanSync({
-      cwd: repositoryRoot,
-    })) {
-      for (const specifier of removedReaderImportViolations(
-        file,
-        readFileSync(path.join(repositoryRoot, file), "utf-8"),
-      )) {
-        violations.push({ file, specifier });
-      }
+  ])) {
+    for (const specifier of removedReaderImportViolations(file, text)) {
+      violations.push({ file, specifier });
     }
   }
   expect(violations).toEqual([]);
@@ -450,19 +508,11 @@ const mcpReaderRequiresSharedPackage = (file: string, source: string) => {
 };
 
 test("MCP decision reader entries use the shared rendering package", () => {
-  for (const file of new Bun.Glob(
-    "packages/mcp-apps/src/**/*.{ts,tsx}",
-  ).scanSync({ cwd: repositoryRoot })) {
-    if (/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file)) {
-      continue;
-    }
-    expect(
-      mcpReaderRequiresSharedPackage(
-        file,
-        readFileSync(path.join(repositoryRoot, file), "utf-8"),
-      ),
-      file,
-    ).toBe(false);
+  for (const { file, text } of scannedSources(
+    ["packages/mcp-apps/src/**/*.{ts,tsx}"],
+    (candidate) => !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(candidate),
+  )) {
+    expect(mcpReaderRequiresSharedPackage(file, text), file).toBe(false);
   }
 });
 

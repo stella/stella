@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import {
   CHAT_LOCAL_RUN_NEEDS_MEMBER,
   CHAT_LOCAL_RUN_TOOL_NAMES,
+  type ChatLocalRunToolCall,
   type ChatLocalRunToolDetail,
   isChatLocalRunToolName,
   parseChatLocalRunToolCall,
@@ -21,7 +22,14 @@ import {
 export type LocalRunToolSubtitle =
   | { type: "text"; text: string }
   | { type: "search"; pattern: string; path: string }
-  | { type: "command"; command: string; exitCode: number };
+  | { type: "command"; command: string; exitCode: number }
+  /**
+   * A browser step the member was asked to allow: what it does, to which
+   * element (`target`, its name or else its role) on which page.
+   */
+  | { type: "browser_click" | "browser_type"; target: string; url: string }
+  | { type: "browser_press_key"; key: string; target: string; url: string }
+  | { type: "browser_select"; option: string; target: string; url: string };
 
 /** A browser step stopped at a sign-in the member completes in Chrome. */
 export const LOCAL_RUN_SIGN_IN_TITLE = "sign_in";
@@ -42,6 +50,48 @@ export type LocalRunToolView = {
 
 const text = (value: string): LocalRunToolSubtitle | null =>
   value === "" ? null : { type: "text", text: value };
+
+type LocalBrowserCall = Extract<
+  ChatLocalRunToolCall,
+  { name: typeof CHAT_LOCAL_RUN_TOOL_NAMES.browser }
+>;
+
+/**
+ * A browser step's row: the address `open` went to, or what the member was
+ * asked to allow; a step kept by its kind alone names nothing more.
+ */
+const browserSubtitle = ({
+  input,
+}: LocalBrowserCall): LocalRunToolSubtitle | null => {
+  if (input.action === "open") {
+    return input.url === undefined ? null : text(input.url);
+  }
+  if (!("asked" in input) || input.asked === undefined) {
+    return null;
+  }
+  const { action, asked } = input;
+  const about = {
+    target: asked.name === "" ? asked.role : asked.name,
+    url: asked.url,
+  };
+  switch (action) {
+    case "click":
+      return { type: "browser_click", ...about };
+    case "type":
+      return { type: "browser_type", ...about };
+    case "press_key":
+      return asked.key === undefined
+        ? null
+        : { type: "browser_press_key", key: asked.key, ...about };
+    case "select":
+      return asked.option === undefined
+        ? null
+        : { type: "browser_select", option: asked.option, ...about };
+    default:
+      action satisfies never;
+      return panic("Unhandled local browser step");
+  }
+};
 
 /** Whether a browser step's stored result says the member signs in. */
 const needsMember = (output: unknown): boolean =>
@@ -139,10 +189,7 @@ export const localRunToolView = ({
     case CHAT_LOCAL_RUN_TOOL_NAMES.browser:
       return {
         titleKind: needsMember(output) ? LOCAL_RUN_SIGN_IN_TITLE : null,
-        subtitle:
-          call.input.action === "open" && call.input.url !== undefined
-            ? text(call.input.url)
-            : null,
+        subtitle: browserSubtitle(call),
       };
     default:
       call satisfies never;
@@ -250,8 +297,10 @@ export const localRunProposedPlan = ({
     : null;
 };
 
+type BrowserStepValues = { target: string; url: string };
+
 /**
- * A subtitle as the row shows it. The two sentences that place a value in a
+ * A subtitle as the row shows it. The sentences that place a value in a
  * phrase are translated at the call site and passed in.
  */
 export const localRunToolSubtitleText = (
@@ -259,6 +308,10 @@ export const localRunToolSubtitleText = (
   phrases: {
     patternInPath: (values: { pattern: string; path: string }) => string;
     commandExited: (values: { command: string; code: string }) => string;
+    browserClick: (values: BrowserStepValues) => string;
+    browserType: (values: BrowserStepValues) => string;
+    browserPressKey: (values: BrowserStepValues & { key: string }) => string;
+    browserSelect: (values: BrowserStepValues & { option: string }) => string;
   },
 ): string | null => {
   if (subtitle === null) {
@@ -277,7 +330,28 @@ export const localRunToolSubtitleText = (
         command: subtitle.command,
         code: String(subtitle.exitCode),
       });
-
+    case "browser_click":
+      return phrases.browserClick({
+        target: subtitle.target,
+        url: subtitle.url,
+      });
+    case "browser_type":
+      return phrases.browserType({
+        target: subtitle.target,
+        url: subtitle.url,
+      });
+    case "browser_press_key":
+      return phrases.browserPressKey({
+        key: subtitle.key,
+        target: subtitle.target,
+        url: subtitle.url,
+      });
+    case "browser_select":
+      return phrases.browserSelect({
+        option: subtitle.option,
+        target: subtitle.target,
+        url: subtitle.url,
+      });
     default:
       subtitle satisfies never;
       return panic("Unhandled local run tool subtitle");

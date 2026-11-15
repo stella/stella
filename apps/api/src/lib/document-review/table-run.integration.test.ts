@@ -501,7 +501,10 @@ describe("opening runs for a files table", () => {
     }
     await testDb
       .update(documentReviewRuns)
-      .set({ status: "running", startedAt: new Date() })
+      .set({
+        status: "running",
+        startedAt: new Date("2026-04-30T09:00:00.000Z"),
+      })
       .where(eq(documentReviewRuns.id, firstRunId));
     await seedFinding(firstRunId);
 
@@ -526,7 +529,7 @@ describe("opening runs for a files table", () => {
       skippedForUnreadableReference: 0,
     });
 
-    const decidedAt = new Date();
+    const decidedAt = new Date("2026-04-30T09:05:00.000Z");
     await testDb
       .update(documentReviewFindings)
       .set({ decision: "accepted", decidedBy: ids.userA1, decidedAt })
@@ -543,7 +546,10 @@ describe("opening runs for a files table", () => {
     }
     await testDb
       .update(documentReviewRuns)
-      .set({ status: "running", startedAt: new Date() })
+      .set({
+        status: "running",
+        startedAt: new Date("2026-04-30T09:10:00.000Z"),
+      })
       .where(eq(documentReviewRuns.id, secondRunId));
     await seedFinding(secondRunId);
 

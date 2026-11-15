@@ -1,0 +1,7 @@
+{
+  "create-table-references": "The new legal_holds table is empty, so its organization, matter and item foreign keys validate no existing rows. The referenced tables take short catalog locks bounded by the migration's 1s lock_timeout and 10s statement_timeout.",
+  "row-level-security": "Enabling and forcing RLS changes only metadata on the new empty legal_holds table, bounded by the 1s lock_timeout and 10s statement_timeout.",
+  "create-policy": "The organization and owner policies are metadata on the new empty legal_holds table, bounded by the 1s lock_timeout and 10s statement_timeout.",
+  "create-trigger": "The delete backstop triggers on workspaces, entities and workspace_contacts are catalog-only changes without a row scan. Each SHARE ROW EXCLUSIVE wait is bounded by the 1s lock_timeout; a timeout rolls back for the migration runner to retry.",
+  "add-column": "Adding erasure_report with a constant jsonb default to account_deletion_requests is a catalog-only change with no table rewrite or row scan; the ACCESS EXCLUSIVE acquisition is bounded by the 1s lock_timeout and 10s statement_timeout."
+}

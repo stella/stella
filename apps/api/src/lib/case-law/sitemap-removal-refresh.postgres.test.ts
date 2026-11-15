@@ -208,11 +208,13 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
         .where(eq(caseLawSitemapShards.country, country))
         .orderBy(caseLawSitemapShards.month),
     ).toEqual([{ month: "01" }, { month: "02" }]);
-    // Only January is dirty. Removal retires February too, so its rebuilding
-    // depends on the generation trigger's whole-country invalidation.
+    // Only January is dirty: an earlier updated_at can lower its last
+    // modification, so it is logged for a recount rather than folded.
+    // Removal retires February too, so its rebuilding depends on the
+    // generation trigger's whole-country invalidation.
     await db
       .update(caseLawDecisions)
-      .set({ updatedAt: new Date("2024-04-01T00:00:00Z") })
+      .set({ updatedAt: new Date("2024-02-15T00:00:00Z") })
       .where(eq(caseLawDecisions.id, decisionId));
     const counted = Promise.withResolvers<undefined>();
     const release = Promise.withResolvers<undefined>();

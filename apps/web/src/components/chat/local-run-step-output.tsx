@@ -5,15 +5,23 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
-  CHAT_LOCAL_RUN_STEP_MAX_BYTES,
-  type ChatLocalRunConversationEntry,
-} from "@stll/api-contract/chat-local-run-step-output";
+  CHAT_LOCAL_RUN_STEP_CONTENT_STATE,
+  chatLocalRunStepContentCap,
+} from "@stll/api-contract/chat-local-run-step-content";
+import {
+  diffLines,
+  type DiffLineTone,
+  localRunConversationEntries,
+  type LocalRunStepOutputView,
+} from "@stll/api-contract/chat-local-run-step-content-view";
+import type { ChatLocalRunConversationEntry } from "@stll/api-contract/chat-local-run-step-output";
 import {
   type LocalRunStepOutputKind,
   localRunStepOutputKind,
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import { Button } from "@stll/ui/button";
+import { formatFileSize } from "@stll/ui/file-size";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
@@ -21,23 +29,15 @@ import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import { isRunningToolPart } from "@/components/chat/chat-ui-tools";
 import { CopyControl } from "@/components/copy-control";
 import { MarkdownPreview } from "@/components/markdown-preview";
-import {
-  localRunStepImageOptions,
-  localRunStepOutputOptions,
-} from "@/features/chat/local-run-step-output";
-import {
-  diffLines,
-  type DiffLineTone,
-  isLocalRunStepOutputCut,
-  localRunConversationEntries,
-} from "@/features/chat/local-run-step-output.logic";
+import { localRunStepOutputOptions } from "@/features/chat/local-run-step-output";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { formatFileSize } from "@/lib/file-size";
 import { queryView } from "@/lib/query-view.logic";
+import { type SafeId, toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { getUserFileContentUrl } from "@/lib/user-files";
 
 const DIFF_TONE_CLASS = {
   file: "text-foreground font-medium",
@@ -64,7 +64,7 @@ const Note = ({
   </p>
 );
 
-/** A kept diff, each line in its tone up to a bound, the rest as one block. */
+/** A stored diff, each line in its tone up to a bound, the rest as one block. */
 const DiffText = ({ text }: { text: string }) => {
   const { lines, rest } = diffLines(text);
   return (
@@ -79,14 +79,14 @@ const DiffText = ({ text }: { text: string }) => {
   );
 };
 
-/** The step outputs kept and read as text. */
-type LocalRunStepTextKind = Exclude<LocalRunStepOutputKind, "image">;
-
 const TEXT_KIND_LABEL_KEYS = {
   command: "chat.toolCall.output",
   diff: "chat.toolCall.localOutput.diff",
   conversation: "chat.toolCall.localOutput.conversation",
-} as const satisfies Record<LocalRunStepTextKind, TranslationKey>;
+} as const satisfies Record<
+  Exclude<LocalRunStepOutputKind, "image">,
+  TranslationKey
+>;
 
 /** Who said a piece of a subagent's conversation; what it wrote is unnamed. */
 const CONVERSATION_ROLE_LABEL_KEYS = {
@@ -99,7 +99,7 @@ const CONVERSATION_ROLE_LABEL_KEYS = {
 >;
 
 /**
- * A subagent's kept conversation: what it was told, what it wrote, what it
+ * A subagent's stored conversation: what it was told, what it wrote, what it
  * reported, formatted as the answer it belongs to is. It came from a model,
  * so opening it must not make a request it names: `MarkdownPreview` draws no
  * image from an address, only its alternative text.
@@ -129,107 +129,43 @@ const ConversationText = ({ text }: { text: string }) => {
   );
 };
 
-/**
- * What a coding agent's step produced on the member's computer, read from
- * stella desktop there as the row opens: the output, diff or conversation as
- * it arrives, how much was left out past the cap, or that it is on another
- * computer.
- */
-const LocalRunStepOutput = ({
-  activeOrganizationId,
-  callId,
-  kind,
-  userId,
-}: {
+type StepContentProps = {
   activeOrganizationId: string;
   callId: string;
-  kind: LocalRunStepTextKind;
+  /** The file's name as the step's row shows it, for an image. */
+  name: string;
+  threadId: SafeId<"chatThread">;
   userId: string;
+};
+
+/** A stored text step: the output, diff or conversation, as it is read. */
+const StepText = ({
+  output,
+  reading,
+}: {
+  output: Extract<LocalRunStepOutputView, { status: "text" }>;
+  reading: boolean;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const query = useQuery(
-    localRunStepOutputOptions({ activeOrganizationId, userId, callId }),
-  );
-  const view = queryView(query, { isEmpty: () => false });
-  useQueryViewError(view, "LocalRunStepOutput:query");
-  const label = t(TEXT_KIND_LABEL_KEYS[kind]);
-  const retry = (
-    <Button
-      onClick={() => {
-        detached(query.refetch(), "local-run-step-output.retry");
-      }}
-      size="xs"
-      variant="ghost"
-    >
-      {t("common.tryAgain")}
-    </Button>
-  );
-  switch (view.type) {
-    case "pending":
-      return <Note pending>{t("chat.toolCall.localOutput.reading")}</Note>;
-    case "error":
-      return (
-        <Note>
-          {t("chat.toolCall.localOutput.failed")}
-          {retry}
-        </Note>
-      );
-    case "empty":
-      return panic("A step's output read is never empty");
-    case "items":
-      break;
-    default:
-      view satisfies never;
-      return panic("Unhandled step output view");
-  }
-  const output = view.items;
-  switch (output.status) {
-    case "elsewhere":
-      // stella desktop may have been started since: the member can look
-      // again without reopening the row.
-      return (
-        <Note>
-          {t("chat.toolCall.localOutput.elsewhere")}
-          {retry}
-        </Note>
-      );
-    case "not-kept":
-      return <Note>{t("chat.toolCall.localOutput.notKept")}</Note>;
-    case "shown":
-      break;
-    default:
-      output satisfies never;
-      return panic("Unhandled step output status");
-  }
-  const reading = query.fetchStatus === "fetching";
-  // A read cut off after it began keeps what arrived, but never reads as
-  // the whole output.
-  const interrupted =
-    view.refetchError === undefined ? null : (
-      <Note>
-        {t("chat.toolCall.localOutput.failed")}
-        {retry}
-      </Note>
-    );
+  const label = t(TEXT_KIND_LABEL_KEYS[output.kind]);
   if (output.text === "" && !reading) {
-    return interrupted ?? <Note>{t("chat.toolCall.localOutput.empty")}</Note>;
+    return <Note>{t("chat.toolCall.localOutput.empty")}</Note>;
   }
-  const cut = isLocalRunStepOutputCut(output.totalBytes) && (
+  const cut = output.storedBytes < output.totalBytes && (
     <Note>
       {t("chat.toolCall.localOutput.cut", {
-        kept: formatFileSize(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text, format),
+        kept: formatFileSize(output.storedBytes, format),
         total: formatFileSize(output.totalBytes, format),
       })}
     </Note>
   );
-  if (kind === "conversation") {
+  if (output.kind === "conversation") {
     return (
       <section aria-busy={reading} aria-label={label}>
         <ScrollArea className="max-h-96">
           <ConversationText text={output.text} />
         </ScrollArea>
-        {interrupted}
         {cut}
       </section>
     );
@@ -252,43 +188,47 @@ const LocalRunStepOutput = ({
           aria-busy={reading}
           className="text-foreground-muted py-1 pe-8 font-mono text-xs leading-5"
         >
-          {kind === "diff" ? <DiffText text={output.text} /> : output.text}
+          {output.kind === "diff" ? (
+            <DiffText text={output.text} />
+          ) : (
+            output.text
+          )}
         </pre>
       </ScrollArea>
-      {interrupted}
       {cut}
     </section>
   );
 };
 
 /**
- * The image a step viewed, read whole from stella desktop on this computer
- * as the row opens, and shown as the kind its bytes name: never run, never
- * through the API. An image past what the computer keeps says so.
+ * What a coding agent's step produced on the member's computer, as stella
+ * stores it with the conversation, read as the row opens: the output, diff
+ * or conversation as it arrives, the image the step viewed, or why there is
+ * nothing to show.
  */
-const LocalRunStepImage = ({
+const LocalRunStepContent = ({
   activeOrganizationId,
   callId,
   name,
+  threadId,
   userId,
-}: {
-  activeOrganizationId: string;
-  callId: string;
-  /** The file's name as the step's row shows it. */
-  name: string;
-  userId: string;
-}) => {
+}: StepContentProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const query = useQuery(
-    localRunStepImageOptions({ activeOrganizationId, userId, callId }),
+    localRunStepOutputOptions({
+      activeOrganizationId,
+      userId,
+      threadId,
+      callId,
+    }),
   );
   const view = queryView(query, { isEmpty: () => false });
-  useQueryViewError(view, "LocalRunStepImage:query");
+  useQueryViewError(view, "LocalRunStepContent:query");
   const retry = (
     <Button
       onClick={() => {
-        detached(query.refetch(), "local-run-step-image.retry");
+        detached(query.refetch(), "local-run-step-content.retry");
       }}
       size="xs"
       variant="ghost"
@@ -298,65 +238,99 @@ const LocalRunStepImage = ({
   );
   switch (view.type) {
     case "pending":
-      return <Note pending>{t("chat.toolCall.localOutput.reading")}</Note>;
+      return <Note pending>{t("common.loading")}</Note>;
     case "error":
       return (
         <Note>
-          {t("chat.toolCall.localOutput.failed")}
+          {t("common.loadFailed")}
           {retry}
         </Note>
       );
     case "empty":
-      return panic("A step's image read is never empty");
+      return panic("A step's content read is never empty");
     case "items":
       break;
     default:
       view satisfies never;
-      return panic("Unhandled step image view");
+      return panic("Unhandled step content view");
   }
-  const image = view.items;
-  switch (image.status) {
-    case "elsewhere":
+  const output = view.items;
+  // A read cut off after it began keeps what arrived, but never reads as
+  // the whole content.
+  const interrupted =
+    view.refetchError === undefined ? null : (
+      <Note>
+        {t("common.loadFailed")}
+        {retry}
+      </Note>
+    );
+  switch (output.status) {
+    case "unread":
+      return interrupted ?? <Note pending>{t("common.loading")}</Note>;
+    case "text":
       return (
-        <Note>
-          {t("chat.toolCall.localOutput.elsewhere")}
-          {retry}
-        </Note>
+        <>
+          <StepText
+            output={output}
+            reading={query.fetchStatus === "fetching"}
+          />
+          {interrupted}
+        </>
       );
-    case "not-kept":
-    case "not-image":
-      return <Note>{t("chat.toolCall.localOutput.notKept")}</Note>;
-    case "incomplete":
-      return (
-        <Note>
-          {t("chat.toolCall.localOutput.failed")}
-          {retry}
-        </Note>
-      );
-    case "too-large":
-      return (
-        <Note>
-          {t("chat.toolCall.localOutput.imageTooLarge", {
-            kept: formatFileSize(CHAT_LOCAL_RUN_STEP_MAX_BYTES.image, format),
-            total: formatFileSize(image.totalBytes, format),
-          })}
-        </Note>
-      );
-    case "shown":
-      return (
+    case "answered":
+      break;
+    default:
+      output satisfies never;
+      return panic("Unhandled step content status");
+  }
+  const { content } = output;
+  switch (content.state) {
+    case CHAT_LOCAL_RUN_STEP_CONTENT_STATE.stored: {
+      const src = getUserFileContentUrl(content.file.url);
+      return src === null ? (
+        panic("A stored step image names no file")
+      ) : (
         <img
           alt={name}
           className="border-border/50 max-h-96 max-w-full rounded-sm border object-contain"
-          src={image.src}
+          src={src}
         />
       );
+    }
+    case CHAT_LOCAL_RUN_STEP_CONTENT_STATE.arriving:
+      // The computer may send it any time: the member can look again
+      // without reopening the row.
+      return (
+        <Note>
+          {t("chat.toolCall.localOutput.arriving")}
+          {retry}
+        </Note>
+      );
+    case CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notCopied:
+      return <Note>{t("chat.toolCall.localOutput.notCopied")}</Note>;
+    case CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notStored:
+      return <Note>{t("chat.toolCall.localOutput.notStored")}</Note>;
+    case CHAT_LOCAL_RUN_STEP_CONTENT_STATE.runBudgetReached:
+      return <Note>{t("chat.toolCall.localOutput.runBudgetReached")}</Note>;
+    case CHAT_LOCAL_RUN_STEP_CONTENT_STATE.tooLarge:
+      return (
+        <Note>
+          {t("chat.toolCall.localOutput.imageTooLargeToStore", {
+            kept: formatFileSize(
+              chatLocalRunStepContentCap(content.kind),
+              format,
+            ),
+            total: formatFileSize(content.totalBytes, format),
+          })}
+        </Note>
+      );
     default:
-      image satisfies never;
-      return panic("Unhandled step image status");
+      content satisfies never;
+      return panic("Unhandled step content state");
   }
 };
 
-/** A tool call as much as tells what it kept: any call of a turn fits. */
+/** A tool call as much as tells what it produced: any call of a turn fits. */
 type StepOutputPart = {
   id: string;
   name: string;
@@ -366,10 +340,10 @@ type StepOutputPart = {
 };
 
 /**
- * What a settled step of a coding agent kept on the member's computer for
- * them to open, or `null`: any other call, or a step still running.
+ * What a settled step of a coding agent produced on the member's computer
+ * for them to open, or `null`: any other call, or a step still running.
  */
-export const localRunStepOutputKindOf = ({
+const localRunStepOutputKindOf = ({
   input,
   name,
   output,
@@ -382,42 +356,49 @@ export const localRunStepOutputKindOf = ({
 /**
  * A tool row's details for what a coding agent's settled step produced on
  * the member's computer: a command's output, a change's diff, a subagent's
- * conversation, or the image a step viewed. Nothing for any other call, or
- * for a step still running.
+ * conversation, or the image a step viewed. Nothing for any other call, for
+ * a step still running, or outside a thread.
  */
 export const LocalRunStepOutputDetails = ({
   activeOrganizationId,
   part,
+  threadId,
 }: {
   activeOrganizationId: string;
   part: StepOutputPart;
+  threadId: string | undefined;
 }) => {
   const user = useMaybeAuthenticatedUser();
   const kind = localRunStepOutputKindOf(part);
-  if (kind === null || user === null) {
+  if (kind === null || user === null || threadId === undefined) {
     return null;
   }
-  if (kind === "image") {
-    const shown = localRunToolView({
-      name: part.name,
-      input: part.input,
-      output: undefined,
-    })?.subtitle;
-    return (
-      <LocalRunStepImage
-        activeOrganizationId={activeOrganizationId}
-        callId={part.id}
-        name={shown?.type === "text" ? shown.text : ""}
-        userId={user.id}
-      />
-    );
-  }
+  const shown =
+    kind === "image"
+      ? localRunToolView({
+          name: part.name,
+          input: part.input,
+          output: undefined,
+        })?.subtitle
+      : undefined;
   return (
-    <LocalRunStepOutput
+    <LocalRunStepContent
       activeOrganizationId={activeOrganizationId}
       callId={part.id}
-      kind={kind}
+      name={shown?.type === "text" ? shown.text : ""}
+      threadId={toSafeId<"chatThread">(threadId)}
       userId={user.id}
     />
   );
 };
+
+/**
+ * A subagent's conversation for its group to open, or `null` while the
+ * subagent has none to show (it is still at work).
+ */
+export const localRunSubagentConversation = (
+  details: Parameters<typeof LocalRunStepOutputDetails>[0],
+) =>
+  localRunStepOutputKindOf(details.part) === null ? null : (
+    <LocalRunStepOutputDetails {...details} />
+  );

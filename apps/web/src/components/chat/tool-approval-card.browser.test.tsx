@@ -79,6 +79,7 @@ const renderCard = (
       <ChatApprovalContext
         value={{
           activeOrganizationId: "org-1",
+          approvalIdsAwaitedAtOpen: new Set(),
           alwaysApprovedTools: grants,
           conversationApprovedTools: grants,
           confirmStoredApprovalGrant: async () =>
