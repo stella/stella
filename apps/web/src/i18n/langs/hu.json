@@ -294,7 +294,7 @@
       "reopened": "Újranyitva, ellenőrzésre vár",
       "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
       "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
-      "verdictBy": "Következtetés: {model}",
+      "verdictBy": "A következtetést a(z) {model} hozta",
       "verdictByGenerativeModel": "A következtetést a generatív modell hozta; a döntési modell nem döntötte el",
       "whyVerdict": "A következtetés indoka: referenciatények"
     },
