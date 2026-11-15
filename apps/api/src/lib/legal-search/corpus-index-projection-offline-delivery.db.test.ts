@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { dbClock } from "@stll/test-kit/db";
 
 import type { Transaction } from "@/api/db/root";
@@ -40,9 +41,11 @@ import {
   corpusProjectionOfflineIndexerKillDeadline,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
+  CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_LEASE_MAX_MS,
   type CorpusProjectionIntentLease,
   proveAcceptedCorpusProjectionAppendsTx,
+  readCorpusProjectionOfflineRequestCapsTx,
   readProvableCorpusProjectionAppendsTx,
   recordAcceptedCorpusProjectionAppendsTx,
   reserveCorpusProjectionIntentsTx,
@@ -213,6 +216,8 @@ type IndexerRun = {
   cursor: number;
   /** Revisions one of whose documents the engine rejects. */
   rejected: Set<IntentId>;
+  /** Holds a revision that keeps the whole run from publishing anything. */
+  poisoned: boolean;
 };
 
 /** What a batch process holds in memory; a crash loses it. */
@@ -242,6 +247,12 @@ type Model = {
   transactions: number;
   /** Every status any revision of this run reached. */
   reached: Set<CorpusIndexIntentStatus>;
+  /** Entities whose revision keeps any run holding it from publishing. */
+  poison: Set<string>;
+  /** Indexer runs spawned with each entity's revision in them. */
+  deliveries: Map<string, number>;
+  /** Entities a step found handed to single requests, the per-row path. */
+  everSingle: Set<string>;
 };
 
 const crashIf = (model: Model, matches: boolean, at: string) => {
@@ -359,10 +370,35 @@ const reserve = async (model: Model, limit: number) => {
 };
 
 /**
- * Start one shard offline and hand its file to an indexer. Batchable leases
- * share one shard; a lease the per-row path would isolate goes alone, as a
- * request of one revision is charged like one.
+ * The shards a batch starts: a lease the per-row path would isolate goes
+ * alone; the others are packed in ascending order of their request cap, each
+ * shard no larger than the cap of its first, smallest-capped lease.
  */
+const shardsOf = async (leases: readonly CorpusProjectionIntentLease[]) => {
+  const caps = await db.transaction(
+    async (tx) =>
+      await readCorpusProjectionOfflineRequestCapsTx(
+        asTestRaw<Transaction>(tx),
+        leases,
+      ),
+  );
+  const capOf = (lease: CorpusProjectionIntentLease) =>
+    caps.get(lease.intentId) ?? panic("A lease has no request cap");
+  const shards = leases
+    .filter(({ appendMode }) => appendMode === "single")
+    .map((lease) => [lease]);
+  let rest = leases
+    .filter(({ appendMode }) => appendMode === "batchable")
+    .toSorted((left, right) => capOf(left) - capOf(right));
+  while (rest.length > 0) {
+    const cap = capOf(rest[0] ?? panic("No lease to pack"));
+    shards.push(rest.slice(0, cap));
+    rest = rest.slice(cap);
+  }
+  return shards;
+};
+
+/** Start one shard offline and hand its file to an indexer. */
 const startShard = async (
   model: Model,
   leases: readonly CorpusProjectionIntentLease[],
@@ -401,7 +437,14 @@ const startShard = async (
     ended: "running",
     cursor: 0,
     rejected: new Set(),
+    poisoned: started.some(({ lease }) => model.poison.has(lease.entityId)),
   };
+  for (const { lease } of started) {
+    model.deliveries.set(
+      lease.entityId,
+      (model.deliveries.get(lease.entityId) ?? 0) + 1,
+    );
+  }
   model.runs.push(run);
   model.batches.push({
     leases: started.map(({ lease, expectedDocumentCount }) => ({
@@ -429,8 +472,9 @@ const publishUpTo = async (model: Model, run: IndexerRun, to: number) => {
   }
   const documents = fileDocuments(run);
   for (const { revision, index } of documents.slice(run.cursor, to)) {
-    // A strict rejection drops the revision's first document for good.
-    if (run.rejected.has(revision) && index === 0) {
+    // A strict rejection drops the revision's first document for good; a
+    // poisoned run publishes nothing at all.
+    if (run.poisoned || (run.rejected.has(revision) && index === 0)) {
       continue;
     }
     model.engine.published.set(
@@ -480,17 +524,8 @@ const applyCommand = async (model: Model, next: Command) => {
           return;
         }
         model.offsetMs += next.startDelayMs;
-        const batchable = leases.filter(
-          ({ appendMode }) => appendMode === "batchable",
-        );
-        const isolated = leases.filter(
-          ({ appendMode }) => appendMode === "single",
-        );
         const spawn = next.crash !== "after_start";
-        for (const shard of [
-          ...(batchable.length > 0 ? [batchable] : []),
-          ...isolated.map((lease) => [lease]),
-        ]) {
+        for (const shard of await shardsOf(leases)) {
           await startShard(model, shard, spawn);
         }
         if (next.reject) {
@@ -870,32 +905,29 @@ const assertStepInvariants = async (
   for (const intent of intents) {
     model.reached.add(intent.status);
     const published = model.engine.published.get(intent.id) ?? 0;
-    switch (intent.status) {
-      case "append_committed":
-        expect(intent.leaseToken).toBeNull();
-        expect(intent.appendPublishBarrierAt).not.toBeNull();
-        break;
-      case "withdrawn":
-        expect({ withdrawn: intent.id, published }).toEqual({
-          withdrawn: intent.id,
-          published: 0,
-        });
-        break;
-      case "applied":
-        if (statusBefore.get(intent.id) !== "applied") {
-          expect(model.engine.censused.get(intent.id)).toBe(
-            intent.expectedDocumentCount ?? panic("Applied without a count"),
-          );
-        }
-        expect(published).toBe(
-          intent.expectedDocumentCount ?? panic("Applied without a count"),
-        );
-        break;
-      default:
-        break;
+    if (intent.status === "append_committed") {
+      expect(intent.leaseToken).toBeNull();
+      expect(intent.appendPublishBarrierAt).not.toBeNull();
+    }
+    if (intent.status === "withdrawn") {
+      expect({ withdrawn: intent.id, published }).toEqual({
+        withdrawn: intent.id,
+        published: 0,
+      });
+    }
+    if (intent.status === "applied") {
+      const expected =
+        intent.expectedDocumentCount ?? panic("Applied without a count");
+      if (statusBefore.get(intent.id) !== "applied") {
+        expect(model.engine.censused.get(intent.id)).toBe(expected);
+      }
+      expect(published).toBe(expected);
     }
   }
   for (const state of states) {
+    if (state.appendMode === "single") {
+      model.everSingle.add(state.entityId);
+    }
     const inFlight = intents.filter(
       ({ entityId, id, status }) =>
         entityId === state.entityId &&
@@ -988,6 +1020,9 @@ const newModel = async (): Promise<Model> => {
     crash: { type: "none" },
     transactions: 0,
     reached: new Set(),
+    poison: new Set(),
+    deliveries: new Map(),
+    everSingle: new Set(),
   };
 };
 
@@ -1065,6 +1100,9 @@ describe("offline delivery", () => {
               );
               expect(served?.status).toBe("applied");
             }
+            // A refused, killed or crashed delivery never hands an entity to
+            // the per-row path: every one stays batched throughout.
+            expect([...model.everSingle]).toEqual([]);
             for (const intent of intents) {
               expect(["applied", "withdrawn", "cancelled"]).toContain(
                 intent.status,
@@ -1175,6 +1213,135 @@ const prove = async (model: Model) =>
     testNow: await now(model),
   });
 
+/** Every lease's request cap, as a batch would read them now. */
+const capsOfPending = async (model: Model) => {
+  const leases = await reserve(model, ENTITIES_PER_RUN);
+  const caps = await db.transaction(
+    async (tx) =>
+      await readCorpusProjectionOfflineRequestCapsTx(
+        asTestRaw<Transaction>(tx),
+        leases,
+      ),
+  );
+  // Hand the reservations back, as a batch that stops here would.
+  model.offsetMs += LEASE_MS + 1000;
+  await applyCommand(model, { type: "sweep" });
+  return new Map(
+    leases.map(({ entityId, intentId }) => [entityId, caps.get(intentId)]),
+  );
+};
+
+/**
+ * One batch with no crash, once every retry the last proof scheduled is due:
+ * start, run to exit, record, and prove after the end.
+ */
+const deliveryRound = async (model: Model) => {
+  await runCommands(model, [
+    { type: "advance", ms: 10 * 60_000 },
+    { type: "batch", crash: "none", reject: false, startDelayMs: 0 },
+    { type: "indexer_exit" },
+    { type: "record", crash: { type: "none" }, early: false },
+    { type: "advance", ms: ENDED_AFTER_MS + 10 * 60_000 },
+    { type: "prove", crash: { type: "none" } },
+  ]);
+};
+
+describe("offline request caps", () => {
+  test("a refused shard leaves its entities batched and uncharged, in requests of half its size", async () => {
+    const model = await newModel();
+    await runCommands(model, [
+      { type: "batch", crash: "after_start", reject: false, startDelayMs: 0 },
+      { type: "advance", ms: LEASE_MS + ENDED_AFTER_MS },
+      { type: "sweep" },
+      { type: "prove", crash: { type: "none" } },
+    ]);
+    const states = await readStates(model.entityIds);
+    // The fixture reaches the boundary: the whole shard was withdrawn.
+    expect(
+      (await readIntents(model.entityIds)).filter(
+        ({ status }) => status === "withdrawn",
+      ),
+    ).toHaveLength(ENTITIES_PER_RUN);
+    for (const state of states) {
+      expect(state.appendMode).toBe("batchable");
+      expect(state.workStatus).toBe("retry_scheduled");
+      expect((await stateOf(state.entityId)).failureAttempts).toBe(0);
+    }
+    model.offsetMs += 60_000;
+    const caps = await capsOfPending(model);
+    expect([...caps.values()]).toEqual(
+      Array.from({ length: ENTITIES_PER_RUN }, () => ENTITIES_PER_RUN / 2),
+    );
+    await deliveryRound(model);
+    for (const state of await readStates(model.entityIds)) {
+      expect(state.appliedRevision).not.toBeNull();
+    }
+    expect([...model.everSingle]).toEqual([]);
+  });
+
+  test("a revision that keeps its run from publishing is alone and blocked within floor(log2 N) plus the attempt limit", async () => {
+    const model = await newModel();
+    const poisoned = model.entityIds.at(0) ?? panic("No entity");
+    model.poison.add(poisoned);
+    for (let round = 0; round < 20; round += 1) {
+      if ((await stateOf(poisoned)).workStatus === "blocked") {
+        break;
+      }
+      await deliveryRound(model);
+    }
+    expect((await stateOf(poisoned)).workStatus).toBe("blocked");
+    // One shard of N = ENTITIES_PER_RUN, halved to one, then charged alone.
+    expect(model.deliveries.get(poisoned)).toBe(
+      Math.floor(Math.log2(ENTITIES_PER_RUN)) +
+        CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
+    );
+    for (const entityId of model.entityIds.slice(1)) {
+      expect((await stateOf(entityId)).appliedRevision).not.toBeNull();
+    }
+    expect([...model.everSingle]).toEqual([]);
+  });
+
+  test("an offline request larger than a revision's cap is refused at the start", async () => {
+    const model = await newModel();
+    model.poison.add(model.entityIds.at(0) ?? panic("No entity"));
+    model.poison.add(model.entityIds.at(1) ?? panic("No entity"));
+    // Both poisoned entities are withdrawn twice, so each may start alone only.
+    await deliveryRound(model);
+    await deliveryRound(model);
+    model.offsetMs += 10 * 60_000;
+    const leases = (await reserve(model, ENTITIES_PER_RUN)).filter(
+      ({ entityId }) => model.poison.has(entityId),
+    );
+    expect(leases).toHaveLength(2);
+    // The fixture differs on the boundary: together they exceed both caps.
+    const caps = await db.transaction(
+      async (tx) =>
+        await readCorpusProjectionOfflineRequestCapsTx(
+          asTestRaw<Transaction>(tx),
+          leases,
+        ),
+    );
+    expect([...caps.values()]).toEqual([1, 1]);
+    const startedAt = await now(model);
+    const refused = await rejectionOf(
+      db.transaction(
+        async (tx) =>
+          await startCorpusProjectionOfflineAppendBatchTx(
+            asTestRaw<Transaction>(tx),
+            {
+              leases: leases.map((lease) => ({
+                lease,
+                expectedDocumentCount: 1,
+              })),
+              testNow: startedAt,
+            },
+          ),
+      ),
+    );
+    expect(String(refused)).toContain("request cap");
+  });
+});
+
 describe("offline settlement", () => {
   test("a record before the indexer exits cannot make a proof withdraw what it then writes", async () => {
     const model = await newModel();
@@ -1208,7 +1375,7 @@ describe("offline settlement", () => {
     // An ingest request whose lease expires is still an unknown write.
     const [rest] = await reserve(model, 1);
     if (rest === undefined) {
-      return panic("Expected a second lease");
+      panic("Expected a second lease");
     }
     const restStartedAt = await now(model);
     await db.transaction(
@@ -1380,7 +1547,7 @@ describe("offline settlement", () => {
     );
     const [partial, exact] = leases;
     if (partial === undefined || exact === undefined) {
-      return panic("Expected two leases");
+      panic("Expected two leases");
     }
     model.engine.published.set(partial.intentId, 2);
     model.engine.published.set(exact.intentId, 3);
@@ -1459,7 +1626,7 @@ describe("offline delivery guards", () => {
     const model = await newModel();
     const [lease] = await reserve(model, 1);
     if (lease === undefined) {
-      return panic("Expected one projection lease");
+      panic("Expected one projection lease");
     }
     const startedAt = await now(model);
     await db.transaction(
@@ -1514,7 +1681,7 @@ describe("offline delivery guards", () => {
     // An offline start without its document count is not an offline start.
     const [bare] = await reserve(model, 1);
     if (bare === undefined) {
-      return panic("Expected a second lease");
+      panic("Expected a second lease");
     }
     expect(
       await rejected(

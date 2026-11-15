@@ -38,8 +38,6 @@ export const CORPUS_INDEX_APPEND_DELIVERIES = [
   "ingest_api",
   "offline_indexer",
 ] as const;
-export type CorpusIndexAppendDelivery =
-  (typeof CORPUS_INDEX_APPEND_DELIVERIES)[number];
 
 /**
  * What a generation-level launch probe must do with each intent state.

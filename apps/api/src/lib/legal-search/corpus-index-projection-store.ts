@@ -520,6 +520,17 @@ export const startCorpusProjectionOfflineAppendBatchTx = async (
   ) {
     return panic("Projection append document count must be a positive integer");
   }
+  const caps = await readCorpusProjectionOfflineRequestCapsTx(
+    tx,
+    leases.map(({ lease }) => lease),
+  );
+  if (
+    leases.some(({ lease }) => leases.length > (caps.get(lease.intentId) ?? 0))
+  ) {
+    return panic(
+      "An offline request holds a revision past its request cap; read the caps first",
+    );
+  }
   return await startAppendBatchTx(tx, {
     leases: leases.map(({ lease }) => lease),
     delivery: {
@@ -533,6 +544,80 @@ export const startCorpusProjectionOfflineAppendBatchTx = async (
     },
     testNow,
   });
+};
+
+/**
+ * The largest offline request a revision may start in, given the smallest
+ * request one of its entity's earlier revisions at the same epoch was
+ * withdrawn from: half of it, at least one. An offline run that publishes
+ * nothing cannot say which revision, if any, was at fault, so a withdrawal
+ * from a request of several revisions charges no one and switches no mode;
+ * each one halves the request instead. A revision that keeps its run from
+ * publishing is alone after at most floor(log2 N) withdrawals from a request
+ * of N, where a withdrawal is charged like any isolated document fault and
+ * blocks the entity at the attempt limit. A refused or killed run of many
+ * entities leaves each of them in requests of half the size, still batched.
+ */
+const corpusProjectionOfflineRequestCap = (
+  smallestWithdrawnRequest: number | null,
+): number =>
+  smallestWithdrawnRequest === null
+    ? CORPUS_PROJECTION_APPEND_MAX_REVISIONS
+    : Math.max(1, Math.floor(smallestWithdrawnRequest / 2));
+
+/**
+ * Each lease's request cap (`corpusProjectionOfflineRequestCap`), from the
+ * withdrawn revisions of its entity at its epoch. Those rows are history, so
+ * the cap survives any crash, and the lease is the entity's only outstanding
+ * revision, so it cannot shrink while the lease is held.
+ */
+export const readCorpusProjectionOfflineRequestCapsTx = async (
+  tx: Transaction,
+  leases: readonly CorpusProjectionIntentLease[],
+): Promise<Map<ProjectionIntentId, number>> => {
+  const first = leases.at(0);
+  if (first === undefined) {
+    return new Map();
+  }
+  if (
+    leases.some(
+      ({ family, generation }) =>
+        family !== first.family || generation !== first.generation,
+    )
+  ) {
+    return panic("Offline request caps are read for one generation");
+  }
+  const withdrawn = await tx
+    .select({
+      entityId: corpusIndexProjectionIntents.entityId,
+      epoch: corpusIndexProjectionIntents.epoch,
+      smallest: sql<number>`min(${corpusIndexProjectionIntents.appendRequestRevisionCount})::integer`,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.family, first.family),
+        eq(corpusIndexProjectionIntents.generation, first.generation),
+        inArray(corpusIndexProjectionIntents.entityId, [
+          ...new Set(leases.map(({ entityId }) => entityId)),
+        ]),
+        eq(corpusIndexProjectionIntents.status, "withdrawn"),
+      ),
+    )
+    .groupBy(
+      corpusIndexProjectionIntents.entityId,
+      corpusIndexProjectionIntents.epoch,
+    );
+  return new Map(
+    leases.map(({ intentId, entityId, epoch }) => [
+      intentId,
+      corpusProjectionOfflineRequestCap(
+        withdrawn.find(
+          (row) => row.entityId === entityId && row.epoch === epoch,
+        )?.smallest ?? null,
+      ),
+    ]),
+  );
 };
 
 const startDelivery = (delivery: CorpusProjectionAppendStartDelivery) => {
@@ -1716,24 +1801,34 @@ const decideUnprovenRevision = (
     panic(`Committed projection intent has no state: ${committed.id}`);
   const offlineFinal = censusFollowsOfflineEnd(context, committed);
   const stillDesired = isStillDesiredProjection(state, committed);
-  const charge = (rejection: CorpusIndexError["rejection"]) =>
+  const charge = (
+    rejection: CorpusIndexError["rejection"],
+    fault: CorpusProjectionAppendFailureFault = "document",
+  ) =>
     appendFailureCharge({
       state,
       appendRequestRevisionCount: committed.appendRequestRevisionCount,
       transitionAt,
       rejection,
-      fault: "document",
+      fault,
     });
   // Nothing of the revision reached the index and nothing can any more, so no
   // delete is owed, and no maturity waited for: the entity may be reserved
-  // again at once, under the same charge an unproven revision takes. A state
-  // that moved on has nothing to retry.
+  // again once its retry is due. An empty run cannot tell a refused or killed
+  // delivery from a revision at fault, so a withdrawal from a request of
+  // several revisions charges no one and keeps the entity batched; its next
+  // request is capped instead (`corpusProjectionOfflineRequestCap`). Alone in
+  // its request, it is a document fault like any other. A state that moved on
+  // has nothing to retry.
   if (offlineFinal && revision.observedDocumentCount === 0) {
+    const isolated = committed.appendRequestRevisionCount === 1;
     return {
       type: "withdraw",
       intent: committed,
       message: WITHDRAWN_OFFLINE_APPEND_MESSAGE,
-      charge: stillDesired ? charge("unknown") : null,
+      charge: stillDesired
+        ? charge("unknown", isolated ? "document" : "engine")
+        : null,
     };
   }
   if (!stillDesired) {
@@ -1895,7 +1990,7 @@ const CENSUS_START_CONSTRUCTION: unique symbol = Symbol(
  * is private and the constructor gated, so a caller cannot date a census
  * later than the clock it read.
  */
-export class CorpusProjectionCensusStart {
+class CorpusProjectionCensusStart {
   readonly #at: Date;
 
   constructor(construction: typeof CENSUS_START_CONSTRUCTION, at: Date) {
@@ -2189,10 +2284,11 @@ type ChargedProofTransition = {
 };
 
 /**
- * Charge each entity whose revision this proof retired or withdrew while the
- * entity still wants it; one withdrawn for an entity that moved on is not
- * charged. The retry writes a new revision, so a late publication of the old
- * one is a survivor cleanup deletes.
+ * Schedule the retry of each entity whose revision this proof retired or
+ * withdrew while the entity still wants it, under the charge its decision
+ * carries; one withdrawn for an entity that moved on has nothing to retry.
+ * The retry writes a new revision, so a late publication of the old one is a
+ * survivor cleanup deletes.
  */
 const chargeGivenUpRevisionsTx = async (
   tx: Transaction,
