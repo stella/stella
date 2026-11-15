@@ -146,6 +146,9 @@ const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   organizationBillingDraftsRoute: organizationSettingsRoute.filter(({ path }) =>
     path.startsWith("/organization-settings/billing-drafts"),
   ),
+  memberBillingAccessRoute: organizationSettingsRoute.filter(({ path }) =>
+    /^\/organization-settings\/members\/[^/]+\/billing$/u.test(path),
+  ),
   ratesRoute,
   savedTimeNarrativesRoute,
   sellerProfilesRoute,

@@ -818,6 +818,7 @@ describe("handleMcpHttpRequest", () => {
           ...options,
           resolveAuthorization: async () =>
             ({
+              billingAccess: false,
               memberId: "member_one",
               email: "limited@example.test",
               role: "owner",
@@ -872,6 +873,7 @@ describe("handleMcpHttpRequest", () => {
           ...options,
           resolveAuthorization: async () =>
             ({
+              billingAccess: false,
               memberId: "member_one",
               email: "limited@example.test",
               role: "owner",
@@ -949,6 +951,7 @@ describe("handleMcpHttpRequest", () => {
           ...options,
           resolveAuthorization: async () =>
             ({
+              billingAccess: false,
               memberId: "member_one",
               email: "limited@example.test",
               role: "owner",

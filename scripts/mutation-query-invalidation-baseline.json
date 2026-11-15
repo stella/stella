@@ -1527,7 +1527,6 @@
     "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx:InvoiceDetail/removeExpenseMutation:useMutation:mutation": "Existing mutation pending migration to resourceMutation with its resource declaration.",
     "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/new.tsx:NewInvoicePage/pendingExpenses:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/new.tsx:NewInvoicePage/pendingTime:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
-    "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/new.tsx:Route/beforeLoad/role:context.queryClient.query:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/new.tsx:Route/loader:prefetchPendingApprovals:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx:DisabledListsRedirect:useDefaultWorkspaceViewRedirect:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx:ItemSourcesPanel/activity:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
