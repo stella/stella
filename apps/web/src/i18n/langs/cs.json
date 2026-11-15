@@ -2093,6 +2093,7 @@
       "noResults": "Žádné odpovídající dovednosti",
       "tryOne": "Začni s jedním z těchto"
     },
+    "queuePrompt": "Odeslat, až agent skončí",
     "queuedAttachmentCount": "{count, plural, one {# příloha} few {# přílohy} other {# příloh} many {# přílohy}}",
     "queuedNotice": "Zařazeno: odešle se po dokončení aktuální odpovědi",
     "reasoning": "Uvažování",
@@ -2199,7 +2200,6 @@
     "sourcePlaceholder": "Chatovat o {title}",
     "sourcePlaceholderAction": "Chatovat o",
     "sources": "Zdroje:",
-    "steerPrompt": "Poslat agentovi během práce",
     "stopFailed": "Odpověď se nepodařilo zastavit. Zkuste to znovu.",
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",

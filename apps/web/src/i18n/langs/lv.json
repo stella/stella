@@ -2093,6 +2093,7 @@
       "noResults": "Nav atbilstošu prasmju",
       "tryOne": "Izmēģini vienu no tiem"
     },
+    "queuePrompt": "Sūtīt, kad aģents pabeigs",
     "queuedAttachmentCount": "{count, plural, zero {# pielikumu} one {# pielikums} other {# pielikumi}}",
     "queuedNotice": "Rindā: tiks nosūtīts, kad pabeigsies pašreizējā atbilde",
     "reasoning": "Argumentācija",
@@ -2199,7 +2200,6 @@
     "sourcePlaceholder": "Tērzēt par {title}",
     "sourcePlaceholderAction": "Tērzēt par",
     "sources": "Avoti:",
-    "steerPrompt": "Sūtīt aģentam tā darba laikā",
     "stopFailed": "Neizdevās apturēt atbildi. Mēģiniet vēlreiz.",
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",

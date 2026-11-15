@@ -180,32 +180,52 @@ export type SendNowRoute =
 
 export const sendNowRoute = (
   state: Pick<SendQueueState, "isGenerating">,
-  entry: Pick<QueuedChatEntry, "fileCount" | "options" | "text">,
+  entry: SteerableEntry,
 ): SendNowRoute => {
   if (!state.isGenerating) {
     return { type: "send" };
   }
+  const text = steerableText(entry);
+  return text === null ? { type: "stop_and_send" } : { type: "steer", text };
+};
+
+type SteerableEntry = Pick<QueuedChatEntry, "fileCount" | "options" | "text">;
+
+/**
+ * The text a turn can be steered with: a message of text alone, queued to be
+ * sent raw, since a steer hands the text to the computer's harness as is.
+ * `null` for any other message, which only goes as a message of its own.
+ */
+export const steerableText = (entry: SteerableEntry): string | null => {
   const text = entry.text.trim();
   const anonymized =
     entry.options?.body?.sendMode === CHAT_SEND_MODE.anonymized;
-  return entry.fileCount === 0 && text !== "" && !anonymized
-    ? { type: "steer", text }
-    : { type: "stop_and_send" };
+  return entry.fileCount === 0 && text !== "" && !anonymized ? text : null;
 };
 
 /**
- * What follows a steer, by what became of it: `steered` leaves the queue
- * (the running answer holds the message), `refused` stops the turn so the
- * message goes next, `unsettled` leaves it queued for the turn's end.
+ * Who handed a queued message to the running turn: "Send now" on it
+ * (`send_now`), which means now even if the turn has to stop, or the
+ * member's plain send that steers (`steer`), which never stops the turn.
+ */
+export type SteerOrigin = "send_now" | "steer";
+
+/**
+ * What follows a steer, by what became of it and who asked: `steered`
+ * leaves the queue (the running answer holds the message); `refused` stops
+ * the turn so the message goes next after "Send now", and leaves it queued
+ * for the turn's end after a steer; `unsettled` leaves it queued for the
+ * turn's end.
  */
 export const steerFallback = (
   outcome: "steered" | "refused" | "unsettled",
+  origin: SteerOrigin,
 ): "remove" | "stop" | "keep" => {
   switch (outcome) {
     case "steered":
       return "remove";
     case "refused":
-      return "stop";
+      return origin === "send_now" ? "stop" : "keep";
     case "unsettled":
       return "keep";
     default:

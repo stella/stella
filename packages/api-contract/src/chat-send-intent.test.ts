@@ -6,76 +6,75 @@ import {
   CHAT_SEND_INTENT,
   chatSendIntent,
   type ChatThreadSendState,
-  isChatSteerOffered,
+  isChatQueueOffered,
 } from "./chat-send-intent";
 
+const RUN_TARGETS = Object.values(CHAT_RUN_TARGET_KIND);
 const STATES: readonly ChatThreadSendState[] = [
   { type: "idle" },
-  { type: "waiting_on_member" },
-  ...Object.values(CHAT_RUN_TARGET_KIND).map(
-    (runTarget) =>
-      ({ type: "working", runTarget }) satisfies ChatThreadSendState,
-  ),
+  ...RUN_TARGETS.flatMap((runTarget) => [
+    { type: "working", runTarget } satisfies ChatThreadSendState,
+    { type: "waiting_on_member", runTarget } satisfies ChatThreadSendState,
+  ]),
 ];
 const ACTIONS = Object.values(CHAT_MEMBER_SEND_ACTION);
 
+const isLocalTurn = (state: ChatThreadSendState) =>
+  state.type !== "idle" && state.runTarget === CHAT_RUN_TARGET_KIND.local;
+
 describe("chatSendIntent", () => {
-  test("never starts a turn while one works", () => {
+  test("starts a turn on an idle thread, and only there", () => {
     for (const state of STATES) {
       for (const action of ACTIONS) {
-        if (state.type === "working") {
-          expect(chatSendIntent(state, action)).not.toBe(
-            CHAT_SEND_INTENT.start,
-          );
+        expect(chatSendIntent(state, action) === CHAT_SEND_INTENT.start).toBe(
+          state.type === "idle",
+        );
+      }
+    }
+  });
+
+  test("the queue action queues behind any turn", () => {
+    for (const state of STATES) {
+      if (state.type !== "idle") {
+        expect(chatSendIntent(state, CHAT_MEMBER_SEND_ACTION.queue)).toBe(
+          CHAT_SEND_INTENT.queue,
+        );
+      }
+    }
+  });
+
+  test("a plain send steers a turn on the member's computer, working or waiting on them", () => {
+    for (const state of STATES) {
+      expect(
+        chatSendIntent(state, CHAT_MEMBER_SEND_ACTION.send) ===
+          CHAT_SEND_INTENT.steer,
+      ).toBe(isLocalTurn(state));
+    }
+  });
+
+  test("a cloud turn is never steered; a plain send waits for its end", () => {
+    for (const state of STATES) {
+      if (state.type !== "idle" && !isLocalTurn(state)) {
+        for (const action of ACTIONS) {
+          expect(chatSendIntent(state, action)).toBe(CHAT_SEND_INTENT.queue);
         }
       }
     }
   });
 
-  test("starts a turn on an idle thread, whatever the member did", () => {
-    for (const action of ACTIONS) {
-      expect(chatSendIntent({ type: "idle" }, action)).toBe(
-        CHAT_SEND_INTENT.start,
-      );
-    }
-  });
-
-  test("a steer that cannot go does what a plain send does", () => {
+  test("only a plain send steers", () => {
     for (const state of STATES) {
-      const steered = chatSendIntent(state, CHAT_MEMBER_SEND_ACTION.steer);
-      if (steered !== CHAT_SEND_INTENT.steer) {
-        expect(chatSendIntent(state, CHAT_MEMBER_SEND_ACTION.send)).toBe(
-          steered,
-        );
-      }
-    }
-  });
-
-  test("steers only on the explicit action, into a turn working on the member's computer", () => {
-    for (const state of STATES) {
-      for (const action of ACTIONS) {
-        expect(chatSendIntent(state, action) === CHAT_SEND_INTENT.steer).toBe(
-          action === CHAT_MEMBER_SEND_ACTION.steer &&
-            state.type === "working" &&
-            state.runTarget === CHAT_RUN_TARGET_KIND.local,
-        );
-      }
-    }
-  });
-
-  test("a turn waiting on the member is never steered", () => {
-    for (const action of ACTIONS) {
-      expect(chatSendIntent({ type: "waiting_on_member" }, action)).not.toBe(
+      expect(chatSendIntent(state, CHAT_MEMBER_SEND_ACTION.queue)).not.toBe(
         CHAT_SEND_INTENT.steer,
       );
     }
   });
 
-  test("offers the steer action only while a turn works on the member's computer", () => {
+  test("offers the queue action exactly where a plain send steers", () => {
     for (const state of STATES) {
-      expect(isChatSteerOffered(state)).toBe(
-        state.type === "working" &&
-          state.runTarget === CHAT_RUN_TARGET_KIND.local,
+      expect(isChatQueueOffered(state)).toBe(
+        chatSendIntent(state, CHAT_MEMBER_SEND_ACTION.send) ===
+          CHAT_SEND_INTENT.steer,
       );
     }
   });

@@ -64,6 +64,7 @@ import {
   isChatClientRequestActive,
   isNonPersistentGrantChatToolName,
   isSuggestChangesApplyOutput,
+  openApprovalRequestIds,
   openMemberWaitKeys,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
@@ -159,7 +160,9 @@ import {
   type SendQueueEvent,
   type SendQueueState,
   snapshotChatRequestOptions,
+  steerableText,
   steerFallback,
+  type SteerOrigin,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import {
   fetchChatMessage,
@@ -856,16 +859,17 @@ export const useChatSession = ({
     [applySendQueueEvent, sendChatMessage],
   );
 
-  // "Send now" on a queued message: it moves to the front of the queue.
-  // During a turn on the member's computer the turn is handed the message
-  // and goes on with it; a turn that cannot take it is stopped, and the
-  // queue drain sends the message once the stop settles. A turn that ends
-  // before it says leaves the message first in the queue, sent next. Until
-  // the steer settles nothing queued is sent, so a message the turn took
-  // is never sent again. With the queue held after a failed turn it is sent
-  // at once, like a manual send.
-  const sendQueuedMessageNow = useCallback(
-    (id: string) => {
+  // Hand a queued message to the running turn; it moves to the front of the
+  // queue. During a turn on the member's computer the turn is handed the
+  // message and goes on with it. One that cannot take it is stopped after
+  // "Send now", and the queue drain sends the message once the stop
+  // settles; after a plain send's steer the turn runs on and the message
+  // waits for its end. A turn that ends before it says leaves the message
+  // first in the queue, sent next. Until the steer settles nothing queued is
+  // sent, so a message the turn took is never sent again. With the queue
+  // held after a failed turn it is sent at once, like a manual send.
+  const handQueuedMessageToTurn = useCallback(
+    (id: string, origin: SteerOrigin) => {
       applySendQueueEvent({ type: "queued-message-promoted", id });
       const entry = sendQueueRef.current.queue.find(
         (queued) => queued.id === id,
@@ -882,7 +886,7 @@ export const useChatSession = ({
             inputId: id,
             text: route.text,
           });
-          const next = steerFallback(outcome);
+          const next = steerFallback(outcome, origin);
           const dispatched = applySendQueueEvent({
             type: "steer-settled",
             id,
@@ -900,7 +904,9 @@ export const useChatSession = ({
         return;
       }
       if (sendQueueRef.current.isGenerating) {
-        stop();
+        if (origin === "send_now") {
+          stop();
+        }
         return;
       }
       const dispatched = applySendQueueEvent({
@@ -916,25 +922,69 @@ export const useChatSession = ({
     [applySendQueueEvent, chat, dispatchQueuedMessage, stop],
   );
 
-  /** What the thread is doing, as the send routing reads it. */
-  const threadSendState = useCallback(
-    (queue: SendQueueState): ChatThreadSendState => {
-      if (queue.isGenerating) {
-        return {
-          type: "working",
-          runTarget: getRunTarget?.().kind ?? CHAT_RUN_TARGET_KIND.cloud,
-        };
-      }
-      return queue.heldForMember
-        ? { type: "waiting_on_member" }
-        : { type: "idle" };
+  // "Send now" on a queued message: now, even if the running turn has to
+  // stop for it.
+  const sendQueuedMessageNow = useCallback(
+    (id: string) => {
+      handQueuedMessageToTurn(id, "send_now");
     },
-    [getRunTarget],
+    [handQueuedMessageToTurn],
   );
 
+  /** A message a plain send steers into a turn waiting on the member, handed
+   *  to the turn once declining the wait lets it run again. */
+  const steerOnResumeRef = useRef<string | null>(null);
+
+  // A plain send while a turn on the member's computer waits on them: what
+  // the turn asked is declined, explicitly, as the member's own Deny would,
+  // so the turn goes on, and the message is handed to it once it runs again.
+  // A message that cannot steer waits in the queue, and the question stays.
+  const steerWaitingTurn = useCallback(
+    (id: string) => {
+      const entry = sendQueueRef.current.queue.find(
+        (queued) => queued.id === id,
+      );
+      if (entry === undefined || steerableText(entry) === null) {
+        return;
+      }
+      applySendQueueEvent({ type: "queued-message-promoted", id });
+      steerOnResumeRef.current = id;
+      const { localRunQuestion, messages: shown } = chat.getSnapshot();
+      for (const approvalId of openApprovalRequestIds(
+        projectCanonicalChatUIMessages(shown),
+      )) {
+        detached(
+          resolveToolApproval({ id: approvalId, approved: false }),
+          "use-chat-session.decline-for-steer",
+        );
+      }
+      if (localRunQuestion !== null) {
+        detached(
+          chat.answerLocalRunQuestion(localRunQuestion.interruptId, null),
+          "use-chat-session.dismiss-for-steer",
+        );
+      }
+    },
+    [applySendQueueEvent, chat, resolveToolApproval],
+  );
+
+  /** What the thread is doing now, as the send routing reads it. */
+  const threadSendState = useCallback((): ChatThreadSendState => {
+    const runTarget = getRunTarget?.().kind ?? CHAT_RUN_TARGET_KIND.cloud;
+    if (sendQueueRef.current.isGenerating) {
+      return { type: "working", runTarget };
+    }
+    const { localRunQuestion, messages: shown } = chat.getSnapshot();
+    return openMemberWaitKeys({
+      localRunQuestion,
+      messages: projectCanonicalChatUIMessages(shown),
+    }).length > 0
+      ? { type: "waiting_on_member", runTarget }
+      : { type: "idle" };
+  }, [chat, getRunTarget]);
+
   // Where a message goes is `chatSendIntent`'s call, by what the thread is
-  // doing and whether the member sent it or steered with it; a steer goes
-  // through "Send now", which hands it to the working turn.
+  // doing and whether the member sent it plainly or queued it.
   const routeMessage = useCallback(
     async (
       action: ChatMemberSendAction,
@@ -946,14 +996,18 @@ export const useChatSession = ({
       }
 
       const requestOptions = withRequestSnapshots(options);
-      const intent = chatSendIntent(
-        threadSendState(sendQueueRef.current),
-        action,
-      );
+      const state = threadSendState();
+      const intent = chatSendIntent(state, action);
       switch (intent) {
-        case CHAT_SEND_INTENT.steer:
-          sendQueuedMessageNow(enqueueMessage(message, requestOptions));
+        case CHAT_SEND_INTENT.steer: {
+          const id = enqueueMessage(message, requestOptions);
+          if (state.type === "waiting_on_member") {
+            steerWaitingTurn(id);
+          } else {
+            handQueuedMessageToTurn(id, "steer");
+          }
           return;
+        }
         case CHAT_SEND_INTENT.queue:
           enqueueMessage(message, requestOptions);
           return;
@@ -989,8 +1043,9 @@ export const useChatSession = ({
       conversationId,
       dispatchQueuedMessage,
       enqueueMessage,
+      handQueuedMessageToTurn,
       sendChatMessage,
-      sendQueuedMessageNow,
+      steerWaitingTurn,
       threadSendState,
       withRequestSnapshots,
     ],
@@ -1002,11 +1057,11 @@ export const useChatSession = ({
     [routeMessage],
   );
 
-  /** The member's explicit steer: the working turn on their computer takes
-   *  the message; anywhere else it goes as `sendMessage` sends it. */
-  const steerMessage = useCallback(
+  /** The member's queue action: the message waits for the turn's end
+   *  wherever a turn runs or waits; on an idle thread it is sent. */
+  const queueMessage = useCallback(
     async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) =>
-      await routeMessage(CHAT_MEMBER_SEND_ACTION.steer, message, options),
+      await routeMessage(CHAT_MEMBER_SEND_ACTION.queue, message, options),
     [routeMessage],
   );
 
@@ -1926,6 +1981,7 @@ export const useChatSession = ({
   }, [stopState, t, exceptionHandlerId]);
 
   useExternalSyncEffect(() => {
+    steerOnResumeRef.current = null;
     applySendQueueEvent({ type: "conversation-switched", conversationId });
   }, [applySendQueueEvent, conversationId]);
 
@@ -1974,6 +2030,18 @@ export const useChatSession = ({
     turnAwaitsMember,
   ]);
 
+  // The declined wait let the turn run again: hand it the message the
+  // member steered while it waited. After the queue's own status sync, so
+  // the send queue knows the turn runs.
+  useExternalSyncEffect(() => {
+    const id = steerOnResumeRef.current;
+    if (id === null || !queueTurnRunning) {
+      return;
+    }
+    steerOnResumeRef.current = null;
+    handQueuedMessageToTurn(id, "steer");
+  }, [handQueuedMessageToTurn, queueTurnRunning]);
+
   return {
     activitySession: chat,
     approvalIdsAwaitedAtOpen: workAwaitedAtOpen.approvalIds,
@@ -1989,7 +2057,7 @@ export const useChatSession = ({
     loadOlderError,
     resendLatestMessage,
     sendMessage,
-    steerMessage,
+    queueMessage,
     continuePausedTurn,
     queuedMessages,
     removeQueuedMessage,
@@ -1997,6 +2065,8 @@ export const useChatSession = ({
     stop,
     leave,
     isGenerating,
+    /** The turn waits on the member: an approval or a question is open. */
+    turnAwaitsMember,
     /** A stop was asked for and the turn has not ended yet. */
     stopPending: stopState.status === "pending",
     turnAbandoned,

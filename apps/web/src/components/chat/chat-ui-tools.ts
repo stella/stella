@@ -748,6 +748,20 @@ export const openMemberWaitKeys = ({
 };
 
 /**
+ * The approvals the conversation waits on, by approval id: the cards of the
+ * awaited assistant message nobody has answered yet.
+ */
+export const openApprovalRequestIds = (
+  messages: readonly PersistedChatMessage[],
+): readonly string[] =>
+  findAwaitedAssistantMessage(messages, isApprovalRequestPart)?.parts.flatMap(
+    (part) =>
+      isApprovalPart(part) && part.state === "approval-requested"
+        ? [part.approval.id]
+        : [],
+  ) ?? [];
+
+/**
  * The tool work a thread already waits on when a page opens it: approval
  * cards, and client-run document tools no result answers yet. The page
  * resumes none of it on its own (no grant or page policy answers such a

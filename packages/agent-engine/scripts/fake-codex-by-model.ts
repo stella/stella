@@ -39,6 +39,7 @@ export const BY_MODEL_SCENARIOS = [
   "blocking_question",
   "async_question",
   "steered",
+  "steered_over_approval",
   "usage_limit",
   "slow_text",
   "slow_tool_calls",

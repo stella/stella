@@ -292,6 +292,8 @@ export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
 /** What `approval_outcome` answers once the command ran, or did not. */
 const FAKE_APPROVED_ANSWER = "Removed draft.md.";
 const FAKE_DENIED_ANSWER = "Left the draft in place.";
+/** What `steered_over_approval` answers the message steered over its request. */
+const FAKE_STEERED_OVER_APPROVAL = "Left the draft and checked the annex.";
 
 export const FAKE_APPROVAL_REASON = "\u001B[33mDeletes a file\u001B[0m";
 
@@ -1117,6 +1119,26 @@ export const FAKE_SCENARIOS = {
     { echoUser: true },
     toolResult("call-long", "notes.md"),
     assistant("msg-2", [{ type: "text", text: "Checked the annex as well." }]),
+    result(),
+  ],
+  /**
+   * A command asks for approval; the member declines it with a message
+   * written mid-turn, and the turn answers the message.
+   */
+  steered_over_approval: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-rm", "Bash", { command: "rm draft.md" }),
+    ]),
+    canUseTool(
+      "call-rm",
+      "Bash",
+      { command: "rm draft.md" },
+      { decision_reason: FAKE_APPROVAL_REASON },
+    ),
+    { echoUser: true },
+    toolResult("call-rm", "The user denied this action.", true),
+    assistant("msg-2", [{ type: "text", text: FAKE_STEERED_OVER_APPROVAL }]),
     result(),
   ],
   /** The turn ends before it takes the message written mid-turn. */

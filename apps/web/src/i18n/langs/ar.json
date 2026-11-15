@@ -2093,6 +2093,7 @@
       "noResults": "لا توجد مهارات مطابقة",
       "tryOne": "جرّب إحدى هذه للبدء"
     },
+    "queuePrompt": "إرسال عندما ينتهي الوكيل",
     "queuedAttachmentCount": "{count, plural, zero {# مرفق} one {# مرفق} two {# مرفقان} few {# مرفقات} many {# مرفقاً} other {# مرفق}}",
     "queuedNotice": "في قائمة الانتظار: يُرسَل عند انتهاء الردّ الحالي",
     "reasoning": "استدلال",
@@ -2199,7 +2200,6 @@
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",
     "sources": "المصادر:",
-    "steerPrompt": "إرسال إلى الوكيل أثناء عمله",
     "stopFailed": "تعذّر إيقاف الإجابة. حاول مرة أخرى.",
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
