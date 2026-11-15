@@ -2202,8 +2202,8 @@
     "sources": "Zdroje:",
     "steerRefused": {
       "cannotSteer": "Tento agent během práce nepřijímá zprávy.",
-      "noRun": "Agent ještě nezačal.",
-      "notPlain": "Agentovi lze během práce poslat jen textovou zprávu.",
+      "noRun": "Agent teď na vašem počítači neběží.",
+      "notPlain": "Agentovi lze během práce poslat jen textovou zprávu bez souborů, neodeslanou v anonymizovaném režimu.",
       "notTaken": "Agent teď vaši zprávu nemohl přijmout.",
       "runFull": "Agent teď další zprávy nepřijme.",
       "title": "Zpráva čeká ve frontě, dokud agent neskončí",
