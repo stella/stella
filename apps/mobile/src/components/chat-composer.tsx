@@ -146,7 +146,11 @@ export const ChatComposer = ({
     }
     if (
       onSteer({ text: message, files: [] }, () => {
-        setDraft((typed) => (typed === "" ? message : typed));
+        // A steer is settled later than a send, often after the member typed
+        // on: what comes back goes before what is in the box, never instead.
+        setDraft((typed) =>
+          typed === "" ? message : `${message}\n\n${typed}`,
+        );
       })
     ) {
       setDraft("");

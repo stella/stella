@@ -330,7 +330,7 @@ export const useChatTurn = ({
     regenerate,
     send,
     sendError,
-    ...useTurnSteer({ send, signedOut, thread, turn }),
+    ...useTurnSteer({ signedOut, thread, turn }),
     stop,
   };
 };
@@ -340,15 +340,15 @@ export const useChatTurn = ({
  * agent's next step, unless no turn of this phone runs or the draft holds
  * files (only text is steered). `onRefused` hands the draft back when the
  * agent did not take it, with `steerRefusal` saying why. A turn that ends
- * before it said takes the draft as the next message instead (`send`).
+ * before it said hands the draft back too: it may have taken it (its stored
+ * answer shows that), it may wait on the member now, and a message sent from
+ * here would not go to the member's computer, so nothing is sent on its own.
  */
 function useTurnSteer({
-  send,
   signedOut,
   thread,
   turn,
 }: {
-  send: (draft: ChatDraft, onRefused: () => void) => boolean;
   signedOut: (error: ApiError) => boolean;
   thread: { source: AccessTokenSource; threadId: string };
   turn: ReturnType<typeof useLiveTurn>;
@@ -386,9 +386,7 @@ function useTurnSteer({
           onRefused();
           return;
         case "unsettled":
-          if (!send(draft, onRefused)) {
-            onRefused();
-          }
+          onRefused();
           return;
         default:
           outcome satisfies never;
