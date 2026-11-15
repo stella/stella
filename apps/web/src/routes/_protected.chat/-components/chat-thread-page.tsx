@@ -12,11 +12,16 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import {
   CHAT_MEMBER_SEND_ACTION,
   type ChatMemberSendAction,
   type ChatThreadSendState,
+  type ChatTurnSteering,
+  chatTurnSteering,
   isChatQueueOffered,
 } from "@stll/api-contract/chat-send-intent";
 import { Button, buttonVariants } from "@stll/ui/button";
@@ -77,6 +82,7 @@ import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thre
 import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
+  localRunnersOptions,
 } from "@/features/chat/queries";
 import {
   resolveThreadActiveSkill,
@@ -229,6 +235,11 @@ export const ChatThreadPage = ({
     queryKey: threadQueryOptions.queryKey,
   });
   const { getRunTarget } = composerModels;
+  const turnSteering = useChatTurnSteering(
+    activeOrganizationId,
+    composerModels.runTarget,
+  );
+  const getTurnSteering = useLatestCallback(() => turnSteering);
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
@@ -340,7 +351,7 @@ export const ChatThreadPage = ({
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,
-    getRunTarget,
+    getTurnSteering,
     initialOlderCursor: data.olderCursor,
     playbookPane: "auto-open",
     onError: (nextError) => {
@@ -1008,7 +1019,7 @@ export const ChatThreadPage = ({
                       composerSendState({
                         isGenerating,
                         turnAwaitsMember,
-                        runTarget: composerModels.runTarget.kind,
+                        steering: turnSteering,
                       }),
                     )}
                   />
@@ -1027,24 +1038,45 @@ export const ChatThreadPage = ({
 };
 
 /**
+ * Whether the thread's turns take a message mid-turn, from what the member's
+ * computers report; read only for a turn bound for one, from the list the
+ * Run on menu reads too.
+ */
+const useChatTurnSteering = (
+  activeOrganizationId: string,
+  runTarget: ChatRunTarget,
+): ChatTurnSteering => {
+  const localRunnersView = queryView(
+    useQuery({
+      ...localRunnersOptions(activeOrganizationId),
+      enabled: runTarget.kind === CHAT_RUN_TARGET_KIND.local,
+    }),
+  );
+  return chatTurnSteering(
+    runTarget,
+    localRunnersView.type === "items" ? localRunnersView.items : undefined,
+  );
+};
+
+/**
  * What the composer knows of the thread when it offers the queue action: a
- * turn works or waits on the member, on where the thread's turns run, or
- * none does.
+ * turn works or waits on the member, with whether it takes a message
+ * mid-turn, or none does.
  */
 const composerSendState = ({
   isGenerating,
   turnAwaitsMember,
-  runTarget,
+  steering,
 }: {
   isGenerating: boolean;
   turnAwaitsMember: boolean;
-  runTarget: ChatRunTarget["kind"];
+  steering: ChatTurnSteering;
 }): ChatThreadSendState => {
   if (isGenerating) {
-    return { type: "working", runTarget };
+    return { type: "working", steering };
   }
   return turnAwaitsMember
-    ? { type: "waiting_on_member", runTarget }
+    ? { type: "waiting_on_member", steering }
     : { type: "idle" };
 };
 
