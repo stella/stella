@@ -16,8 +16,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import {
+  CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
+  chatLocalRunStepsAwaitedSchema,
+} from "@stll/api-contract/chat-local-run-step-content";
 import { parseChatLocalRunConversation } from "@stll/api-contract/chat-local-run-step-output";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
+import { DESKTOP_RUNNER_INPUT_EVENT } from "@stll/api-contract/desktop-runner";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
@@ -25,6 +30,7 @@ import {
   type FakeScenarioName,
 } from "../../scripts/fake-claude-code-cli";
 import {
+  FAKE_FORKED_THREAD_ID,
   FAKE_OUTDATED_VERSION,
   FAKE_PRIVATE_TEXT,
   FAKE_THREAD_ID,
@@ -371,7 +377,7 @@ const startRun = (
     stepOutputDir: path.join(at.root, "runs", "chat.step-outputs"),
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
-    harnessSessionId: null,
+    session: { type: "fresh" },
     reasoningEffort: null,
     policy: { network: "open", fs: "workspace", approvals: "ask" },
     mcp: {
@@ -514,7 +520,7 @@ describe("harness holder over its socket", () => {
   test("rejects unknown and invalid lines once authenticated", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
-    client.send({ type: "run.input", runId: crypto.randomUUID() });
+    client.send({ type: "run.pause", runId: crypto.randomUUID() });
     client.send("{not json");
     client.send({ type: "run.cancel", runId: "run-1" });
     client.send(helloMessage(holder));
@@ -536,7 +542,7 @@ describe("harness holder over its socket", () => {
         .filter((message) => message.type === "rejected")
         .map((message) => [message.reason, message.messageType]),
     ).toEqual([
-      ["unknown_type", "run.input"],
+      ["unknown_type", "run.pause"],
       ["not_json", null],
       ["invalid", "run.cancel"],
       ["hello_repeated", "hello"],
@@ -624,7 +630,14 @@ describe("harness holder over its socket", () => {
       outcome: {
         type: "ready",
         version: "0.166.0",
-        capabilities: ["approvals", "interrupt", "resume", "image_input"],
+        capabilities: [
+          "approvals",
+          "interrupt",
+          "resume",
+          "image_input",
+          "steer",
+          "fork",
+        ],
         approvalModes: ["ask", "auto", "full_auto"],
         models: [
           {
@@ -929,6 +942,7 @@ describe("harness holder over its socket", () => {
     expect(finished).toMatchObject({
       outcome: "completed",
       harnessSessionId: FAKE_THREAD_ID,
+      harnessBoundary: "turn-1",
     });
     expect(seqs(client, runId)).toEqual(range(1, finished.seq));
     const chunks = chunksOf(client, runId);
@@ -1071,7 +1085,7 @@ describe("harness holder over its socket", () => {
       client.messages.findIndex((message) => message.type === "run.finished"),
     );
     const second = runStart(client, holder, "background_terminal", {
-      harnessSessionId: FAKE_THREAD_ID,
+      session: { type: "resume", sessionId: FAKE_THREAD_ID },
     });
     expect(await client.waitFor(is("run.finished", second))).toMatchObject({
       outcome: "completed",
@@ -1150,7 +1164,7 @@ describe("harness holder over its socket", () => {
     const first = runStart(client, holder, "background_terminal");
     await client.waitFor(is("run.finished", first));
     const second = runStart(client, holder, "background_terminal", {
-      harnessSessionId: FAKE_THREAD_ID,
+      session: { type: "resume", sessionId: FAKE_THREAD_ID },
     });
     client.send({ type: "run.cancel", runId: second });
     expect(await client.waitFor(is("run.finished", second))).toMatchObject({
@@ -1161,6 +1175,50 @@ describe("harness holder over its socket", () => {
     expect(
       fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
     ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
+  test("a fork of a kept process's session ends that process and continues the session as a new one", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const launch = {
+      harness: "codex",
+      executable: fakeCodex(holder.root, "background_terminal"),
+      model: "gpt-test",
+    } as const;
+    const first = startRun(client, holder, launch);
+    const finished = await client.waitFor(is("run.finished", first));
+    expect(finished).toMatchObject({
+      outcome: "completed",
+      harnessSessionId: FAKE_THREAD_ID,
+      harnessBoundary: "turn-1",
+    });
+    // The same launch as the kept process, which would otherwise take the
+    // turn: only the fork tells them apart.
+    writeFileSync(
+      launch.executable,
+      `#!/bin/sh\nexec "${process.execPath}" "${FAKE_SERVER}" "fork_ok" "$@"\n`,
+    );
+    const second = startRun(client, holder, launch, {
+      session: {
+        type: "fork",
+        sessionId: FAKE_THREAD_ID,
+        boundary: finished.harnessBoundary ?? "",
+      },
+    });
+    expect(await client.waitFor(is("run.finished", second))).toMatchObject({
+      outcome: "completed",
+      harnessSessionId: FAKE_FORKED_THREAD_ID,
+      harnessBoundary: "turn-1",
+    });
+    // The work the kept process held belongs to the turns the fork leaves
+    // out: it ended before the fork's harness started.
+    expect(holder.startups()).toHaveLength(2);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+    expect(
+      holder.received().find(({ method }) => method === "thread/fork")?.params,
+    ).toMatchObject({ threadId: FAKE_THREAD_ID, lastTurnId: "turn-1" });
   });
 
   test("ends a chat's kept process before a run with another session starts", async () => {
@@ -1457,6 +1515,41 @@ describe("harness holder over its socket", () => {
     }
   });
 
+  test("hands a run.input to the running turn and reports on the run's stream that the harness took it", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "steered");
+    await client.waitFor(
+      (message): message is SidecarMessage =>
+        message.type === "run.event" &&
+        message.runId === runId &&
+        message.chunk.type === "TOOL_CALL_START",
+    );
+    const inputId = crypto.randomUUID();
+    client.send({
+      type: "run.input",
+      runId,
+      inputId,
+      message: { role: "user", content: "Also check the annex." },
+    });
+    expect(await client.waitFor(is("run.finished", runId))).toMatchObject({
+      outcome: "completed",
+    });
+    const reports = chunksOf(client, runId).filter(
+      (chunk) =>
+        chunk.type === "CUSTOM" && chunk["name"] === DESKTOP_RUNNER_INPUT_EVENT,
+    );
+    expect(reports.map((chunk) => chunk["value"])).toEqual([
+      { inputId, status: "accepted" },
+    ]);
+    // The harness was handed the text as the running turn's input.
+    expect(
+      holder.received().find(({ method }) => method === "turn/steer")?.params,
+    ).toMatchObject({
+      input: [{ type: "text", text: "Also check the annex." }],
+    });
+  });
+
   test("starts Codex with the launch's overrides and environment, and only asks it anything once the desktop granted its process", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
@@ -1577,6 +1670,7 @@ describe("harness holder over its socket", () => {
       seq: 3,
       outcome: "failed",
       harnessSessionId: null,
+      harnessBoundary: null,
     });
     expect(chunksOf(client, runId).map((chunk) => chunk.type)).toEqual([
       "RUN_STARTED",
@@ -1737,7 +1831,7 @@ describe("harness holder over its socket", () => {
       skillFolders: [],
       toolPath: [],
       unreadablePaths: [],
-      harnessSessionId: null,
+      session: { type: "fresh" },
       policy: { network: "open", fs: "workspace", approvals: "ask" },
       mcp: {
         serverName: "stella",
@@ -1751,6 +1845,7 @@ describe("harness holder over its socket", () => {
       runId,
       outcome: "failed",
       harnessSessionId: FAKE_THREAD_ID,
+      harnessBoundary: null,
     });
     // One refusal, and nothing of the run after it but its end.
     expect(refusedAt).toHaveLength(1);
@@ -1829,7 +1924,7 @@ describe("harness holder over its socket", () => {
         skillFolders: [],
         toolPath: [],
         unreadablePaths: [],
-        harnessSessionId: null,
+        session: { type: "fresh" },
         policy: { network: "open", fs: "workspace", approvals: "ask" },
         mcp: {
           serverName: "stella",
@@ -1899,6 +1994,228 @@ describe("harness holder over its socket", () => {
       expect(reports.map((chunk) => chunk["value"])).toEqual([
         { status: "failed", fileName: "report.txt" },
       ]);
+    });
+  });
+
+  describe("what a turn's steps produce", () => {
+    /**
+     * A real host and fake harness against a real listener standing in for
+     * the API: what happened in order, the API's requests among the
+     * messages the host sent.
+     */
+    const runWithSteps = async (
+      answer: () => Response,
+      reach: "reachable" | "away" = "reachable",
+      announcement: "taken" | "refused" = "taken",
+    ) => {
+      const root = mkdtempSync(path.join(tmpdir(), "stella-sidecar-steps-"));
+      const configDir = path.join(root, "codex-home");
+      const workspaceDir = path.join(root, "workspace");
+      mkdirSync(configDir);
+      mkdirSync(workspaceDir, { recursive: true });
+      const order: string[] = [];
+      const puts: { path: string; kind: string | null; body: string }[] = [];
+      /** What the run announced it still has to send, if it did. */
+      const awaited: unknown[] = [];
+      const api = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch: async (request) => {
+          const url = new URL(request.url);
+          puts.push({
+            path: url.pathname,
+            kind: url.searchParams.get("kind"),
+            body: await request.text(),
+          });
+          order.push(`put ${url.pathname.split("/").at(-2) ?? ""}`);
+          return answer();
+        },
+      });
+      const apiOrigin = `http://127.0.0.1:${String(api.port)}`;
+      if (reach === "away") {
+        // Nothing listens there any more: the API cannot be reached.
+        await api.stop(true);
+      }
+      const { promise: finished, resolve } =
+        Promise.withResolvers<
+          Extract<SidecarHostOutput, { type: "run.finished" }>
+        >();
+      const host = new SidecarHost({
+        send: (message) => {
+          if (
+            message.type === "run.event" &&
+            message.chunk["name"] === CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT
+          ) {
+            awaited.push(message.chunk["value"]);
+            order.push("awaited");
+            return announcement === "taken";
+          }
+          order.push(
+            message.type === "run.event" &&
+              message.chunk.type === "TOOL_CALL_RESULT"
+              ? `result ${String(message.chunk["toolCallId"])}`
+              : message.type,
+          );
+          if (message.type === "run.finished") {
+            resolve(message);
+          }
+          return true;
+        },
+        log: () => {},
+        protocolLog: PROTOCOL_LOG_OFF,
+        environment: {
+          PATH: process.env["PATH"] ?? "",
+          FAKE_HARNESS_LOG: path.join(root, "fake.log"),
+        },
+        processGrantTimeoutMs: WAIT_MS,
+        browser: null,
+      });
+      cleanups.push(async () => {
+        await host.shutdown();
+        await api.stop(true);
+        rmSync(root, { recursive: true, force: true });
+      });
+      host.configure("1.4.0", apiOrigin);
+      const runId = crypto.randomUUID();
+      const stepOutputDir = path.join(root, "runs", "chat.step-outputs");
+      host.handle({
+        type: "run.start",
+        runId,
+        threadId: "thread-1",
+        harness: "codex",
+        executable: fakeCodex(root, "native_tools"),
+        configDir,
+        launch: PLAIN_LAUNCH,
+        workspaceDir,
+        cacheDir: path.join(root, "agent-package-cache"),
+        stepOutputDir,
+        model: "gpt-test",
+        reasoningEffort: null,
+        instructions: "Use the stella MCP server.",
+        messages: [{ role: "user", content: "Run the steps." }],
+        attachments: [],
+        skillFolders: [],
+        toolPath: [],
+        unreadablePaths: [],
+        session: { type: "fresh" },
+        policy: { network: "open", fs: "workspace", approvals: "ask" },
+        mcp: {
+          serverName: "stella",
+          url: `${apiOrigin}/mcp`,
+          token: RUN_TOKEN,
+          expiresAt: "2026-10-28T12:00:00.000Z",
+        },
+      });
+      return {
+        finished: await finished,
+        order,
+        puts,
+        awaited,
+        runId,
+        stepOutputDir,
+      };
+    };
+
+    test("is sent to the API, each step before its result and all before the run's finish", async () => {
+      const { finished, order, puts, awaited, runId, stepOutputDir } =
+        await runWithSteps(() => Response.json({ state: "stored" }));
+      expect(finished.outcome).toBe("completed");
+      // Each kept step was put once, under the run's own step path.
+      expect(puts.length).toBeGreaterThan(0);
+      expect(
+        puts.every(({ path: put }) =>
+          put.startsWith(`/v1/chat/local-runs/${runId}/steps/`),
+        ),
+      ).toBe(true);
+      expect(new Set(puts.map(({ path: put }) => put)).size).toBe(puts.length);
+      expect(puts.some(({ body }) => body.includes("permission denied"))).toBe(
+        true,
+      );
+      // A step's content is stored before its result goes to the API, and
+      // nothing is sent once the run has finished.
+      const putAt = (toolCallId: string) =>
+        order.indexOf(
+          `put ${path.basename(stepOutputPath({ stepOutputDir, runId, toolCallId }))}`,
+        );
+      for (const toolCallId of ["call-heredoc", "call-long", "call-edit"]) {
+        expect(putAt(toolCallId)).toBeGreaterThanOrEqual(0);
+        expect(putAt(toolCallId)).toBeLessThan(
+          order.indexOf(`result ${toolCallId}`),
+        );
+      }
+      expect(
+        order.findLastIndex((entry) => entry.startsWith("put ")),
+      ).toBeLessThan(order.indexOf("run.finished"));
+      // Nothing is left waiting or announced, and the kept files are still
+      // there.
+      expect(awaited).toEqual([]);
+      expect(readdirSync(stepOutputDir)).toEqual([runId]);
+    });
+
+    test("that the API could not be reached for is announced before the run's finish, keys only, and stays on disk", async () => {
+      const { finished, order, awaited, runId, stepOutputDir } =
+        await runWithSteps(() => new Response(null), "away");
+      expect(finished.outcome).toBe("completed");
+      // The folder is handed over under the name the desktop app sends from.
+      expect(readdirSync(stepOutputDir).toSorted()).toEqual([
+        runId,
+        `${runId}.awaited`,
+      ]);
+      const left = readdirSync(
+        path.join(stepOutputDir, `${runId}.awaited`),
+      ).toSorted();
+      expect(left).toEqual(
+        expect.arrayContaining(
+          ["call-heredoc", "call-long", "call-edit"].map((toolCallId) =>
+            path.basename(stepOutputPath({ stepOutputDir, runId, toolCallId })),
+          ),
+        ),
+      );
+      // One announcement, of exactly the steps left on disk and nothing of
+      // their content, before the run's finish.
+      expect(awaited).toHaveLength(1);
+      const announced = v.parse(chatLocalRunStepsAwaitedSchema, awaited.at(0));
+      expect(announced.stepKeys.toSorted()).toEqual(left);
+      expect(announced.more).toBe(0);
+      expect(order.filter((entry) => entry === "awaited")).toHaveLength(1);
+      expect(order.indexOf("awaited")).toBeLessThan(
+        order.indexOf("run.finished"),
+      );
+      // Every announced step still has its kept file to send.
+      expect(readdirSync(path.join(stepOutputDir, runId))).toEqual(
+        expect.arrayContaining(left),
+      );
+    });
+
+    test("whose announcement the holder did not take are not left to be sent after the run", async () => {
+      const { finished, awaited, runId, stepOutputDir } = await runWithSteps(
+        () => new Response(null),
+        "away",
+        "refused",
+      );
+      // A message that could not be written fails the run.
+      expect(finished.outcome).toBe("failed");
+      expect(awaited).toHaveLength(1);
+      // Nothing awaits the steps, so no folder is handed over.
+      expect(readdirSync(stepOutputDir)).toEqual([runId]);
+    });
+
+    test("an API that cannot take a step at first is asked again before the run's finish", async () => {
+      let asked = 0;
+      const { finished, order, runId, stepOutputDir } = await runWithSteps(
+        () => {
+          asked += 1;
+          return asked === 1
+            ? new Response(null, { status: 503 })
+            : Response.json({ state: "stored" });
+        },
+      );
+      expect(finished.outcome).toBe("completed");
+      expect(order.at(-1)).toBe("run.finished");
+      // The step refused at first was put again, and nothing is left waiting.
+      const puts = order.filter((entry) => entry.startsWith("put "));
+      expect(puts.length).toBeGreaterThan(new Set(puts).size);
+      expect(readdirSync(stepOutputDir)).toEqual([runId]);
     });
   });
 
@@ -1997,6 +2314,57 @@ describe("holder limits and timers", () => {
     });
     return { at, server };
   };
+
+  test("answers a desktop that connects the moment the secret appears, while its browser tools still start", async () => {
+    const at = place();
+    // A Chrome profile: the extension's host is registered as the holder starts.
+    const home = path.join(at.root, "home");
+    mkdirSync(path.join(home, ".config", "google-chrome"), { recursive: true });
+    const secretFile = path.join(at.dir, HOLDER_SECRET_FILE);
+    // Looked for on every turn of the event loop while the holder starts.
+    const appeared = new Promise<null>((resolve) => {
+      const look = () => {
+        if (existsSync(secretFile)) {
+          resolve(null);
+          return;
+        }
+        setImmediate(look);
+      };
+      setImmediate(look);
+    });
+    const starting = startHolderServer({
+      dir: at.dir,
+      endpoint: at.endpoint,
+      sidecarVersion: "1.4.0",
+      environment: { PATH: process.env["PATH"] ?? "" },
+      idleExitMs: 60_000,
+      helloTimeoutMs: 5000,
+      unackedRetentionMs: 60_000,
+      processGrantTimeoutMs: 60_000,
+      browser: {
+        command: ["/usr/bin/true"],
+        extraExtensionIds: [],
+        home,
+        platform: "linux",
+        stellaBrowser: null,
+      },
+      limits: { maxMessages: 1000, maxBytes: 1024 * 1024 },
+      protocolLog: { type: "set", setting: "off" },
+    });
+    cleanups.unshift(async () => {
+      const started = await starting;
+      if (Result.isOk(started)) {
+        started.value.holder.stop();
+        await started.value.exited;
+      }
+    });
+    await appeared;
+    const client = await connect(at.endpoint);
+    client.send(helloMessage(at));
+    expect(await client.waitFor(is("hello"))).toMatchObject({
+      type: "hello",
+    });
+  });
 
   for (const limits of [
     { name: "messages", maxMessages: 3, maxBytes: 1024 * 1024 },

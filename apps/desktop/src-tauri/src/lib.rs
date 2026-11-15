@@ -51,6 +51,8 @@ mod dictation_format;
 #[cfg(dictation)]
 mod dictation_input;
 mod dictation_language;
+mod dictation_live;
+mod dictation_pauses;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
@@ -83,6 +85,8 @@ mod marker_file;
 mod onboarding;
 mod pdf_signing;
 mod permissions;
+mod pkcs11_module_setting;
+mod pkcs11_signing;
 mod presence;
 mod registry;
 mod relaunch;

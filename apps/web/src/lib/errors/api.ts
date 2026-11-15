@@ -19,6 +19,7 @@ import {
   parseApiErrorValue,
   parseApiValidationIssues,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
+  SKILL_FROM_CHAT_REFUSAL_CODE,
   SKILL_SOURCE_UNREACHABLE_CODE,
 } from "@stll/api-contract";
 import {
@@ -33,6 +34,7 @@ import {
 import { CORRESPONDENCE_SOURCE_CHANGED_CODE } from "@stll/api-contract/correspondence";
 import { ORGANIZATION_DATA_BOX_REFUSAL_CODE } from "@stll/api-contract/data-box";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
+import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import type { ModelRunCapCode } from "@stll/api-contract/model-run-caps";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
@@ -270,24 +272,12 @@ const MODEL_RUN_CAP_ERROR_KEYS = {
 /** Why a chat turn bound for the member's computer was refused. */
 const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
   [CHAT_LOCAL_RUN_REFUSAL.unavailable]: "chat.localRun.refusalUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.noComputer]: "chat.localRun.refusalNoComputer",
-  [CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable]:
-    "chat.localRun.refusalHarnessUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.modelUnavailable]:
-    "chat.localRun.refusalModelUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable]:
-    "chat.localRun.refusalReasoningEffortUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable]:
-    "chat.localRun.refusalPermissionUnavailable",
   [CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit]:
     "chat.localRun.refusalPermissionAboveLimit",
-  [CHAT_LOCAL_RUN_REFUSAL.tooLarge]: "chat.localRun.refusalTooLarge",
   [CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode]:
     "chat.localRun.refusalConflictingRunMode",
   [CHAT_LOCAL_RUN_REFUSAL.folderUnavailable]:
     "chat.localRun.refusalFolderUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.folderNotApproved]:
-    "chat.localRun.refusalFolderNotApproved",
 } as const satisfies Record<ChatLocalRunRefusal, TranslationKey>;
 
 /** Why a chat turn was refused before it started, with what the person can do. */
@@ -355,6 +345,7 @@ const CODE_ERROR_KEYS = {
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
   account_deletion_otp_invalid: "errors.apiCodes.accountDeletionOtpInvalid",
+  [LEGAL_HOLD_ACTIVE]: "errors.apiCodes.legalHoldActive",
   account_deletion_sole_owner: "errors.apiCodes.accountDeletionSoleOwner",
   account_deletion_task_reassignment_invalid:
     "errors.apiCodes.accountDeletionTaskReassignmentInvalid",
@@ -388,6 +379,16 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.mcpAuthorizationApprovalRequired",
   provider_key_rejected: "errors.apiCodes.providerKeyRejected",
   provider_rate_limited: "errors.apiCodes.providerRateLimited",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.anonymizedThread]:
+    "errors.apiCodes.skillFromChatAnonymizedThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.emptyThread]:
+    "errors.apiCodes.skillFromChatEmptyThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.localRunThread]:
+    "errors.apiCodes.skillFromChatLocalRunThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.threadNotFound]:
+    "errors.apiCodes.skillFromChatThreadNotFound",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.withdrawn]:
+    "errors.apiCodes.skillFromChatWithdrawn",
   [SKILL_SOURCE_UNREACHABLE_CODE]: "errors.apiCodes.skillSourceUnreachable",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
   usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",

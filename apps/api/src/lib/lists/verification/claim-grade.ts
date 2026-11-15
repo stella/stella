@@ -23,6 +23,7 @@ import { claimPassage } from "@/api/lib/lists/verification/claim-context";
 import { claimAssertedDate } from "@/api/lib/lists/verification/claim-date";
 import {
   CLAIM_FACT_RELATIONS,
+  LLM_VERDICT,
   SCORED_CLAIM_STATES,
 } from "@/api/lib/lists/verification/contract";
 import type {
@@ -31,6 +32,7 @@ import type {
   ClaimGrade,
   ClaimRef,
   ClaimVerdict,
+  DecidedClaimGrade,
   VerificationEvidenceFact,
 } from "@/api/lib/lists/verification/contract";
 import { createVerificationCall } from "@/api/lib/lists/verification/model-call";
@@ -41,6 +43,8 @@ import {
   graderQualifierFits,
 } from "@/api/lib/lists/verification/qualifiers";
 import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
+import { decideVerdicts } from "@/api/lib/lists/verification/verdict-decider";
+import type { VerdictDecider } from "@/api/lib/lists/verification/verdict-decider";
 
 /** Claims per grading call: the facts dominate the variable part of the
  *  prompt, so a batch amortises them without letting one failure take the
@@ -304,6 +308,8 @@ type GradeClaimsArgs = {
   claims: readonly GradeableClaim[];
   facts: readonly VerificationEvidenceFact[];
   deps: VerificationModelDeps;
+  /** Who decides each verdict (`resolveVerdictDecider`). */
+  verdictDecider: VerdictDecider;
 };
 
 /** `incomplete` keeps the grades it has: a run fails on any claim left
@@ -311,13 +317,13 @@ type GradeClaimsArgs = {
 export type GradeClaimsOutcome =
   | {
       type: "graded";
-      grades: Map<string, ClaimGrade>;
+      grades: Map<string, DecidedClaimGrade>;
       /** Each claim's asserted date: its words', else the grader's. */
       assertedDates: Map<string, ClaimAssertedDate>;
     }
   | {
       type: "incomplete";
-      grades: Map<string, ClaimGrade>;
+      grades: Map<string, DecidedClaimGrade>;
       /** The asserted date of each graded claim. */
       assertedDates: Map<string, ClaimAssertedDate>;
       ungraded: number;
@@ -336,11 +342,61 @@ const assertedDatesOf = (
     ]),
   );
 
+type BatchGrade = { grade: ClaimGrade; statedDate: PartialDate | null };
+
+type DecideBatchArgs = {
+  batch: readonly { promptId: string; claim: GradeableClaim }[];
+  graded: ReadonlyMap<string, BatchGrade>;
+  verdictDecider: VerdictDecider;
+  facts: Parameters<typeof decideVerdicts>[0]["facts"];
+  deps: VerificationModelDeps;
+};
+
+/** A batch's grades with who decided each verdict (`verdict-decider.ts`). */
+const decideBatch = async ({
+  batch,
+  graded,
+  verdictDecider,
+  facts,
+  deps,
+}: DecideBatchArgs) => {
+  const decided = await decideVerdicts({
+    decider: verdictDecider,
+    candidates: batch.flatMap(({ promptId, claim }) => {
+      const entry = graded.get(promptId);
+      return entry === undefined
+        ? []
+        : [
+            {
+              promptId,
+              claim: claim.text,
+              passage: claimPassage(claim.context.text, claim.context.anchor),
+              grade: entry.grade,
+            },
+          ];
+    }),
+    facts,
+    deps,
+  });
+  return new Map(
+    [...graded].map(([promptId, { statedDate }]) => [
+      promptId,
+      {
+        grade:
+          decided.get(promptId) ??
+          panic(`The verdict decider lost claim "${promptId}"`),
+        statedDate,
+      },
+    ]),
+  );
+};
+
 /** A grade per claim key, or how many claims no answer could be held to. */
 export const gradeClaims = async ({
   claims,
   facts,
   deps,
+  verdictDecider,
 }: GradeClaimsArgs): Promise<
   Result<GradeClaimsOutcome, WorkflowIntegrationError>
 > => {
@@ -364,6 +420,8 @@ export const gradeClaims = async ({
             recordConflict: null,
             refs: [],
             qualifiers: [],
+            // No model reads a claim when nothing could cover it.
+            decider: LLM_VERDICT,
           },
         ]),
       ),
@@ -376,6 +434,12 @@ export const gradeClaims = async ({
   );
   const promptIdByFactId = new Map(
     [...factIdByPromptId].map(([promptId, factId]) => [factId, promptId]),
+  );
+  const factsByEntityId = new Map(
+    facts.map((fact, index) => [
+      fact.factEntityId,
+      { promptId: `F${String(index + 1)}`, fact },
+    ]),
   );
   const factsPart = `Facts:\n${facts
     .map((fact, index) => factLine(`F${String(index + 1)}`, fact))
@@ -466,11 +530,19 @@ export const gradeClaims = async ({
               }
               hold(repaired.value.grades);
             }
-            return Result.ok(graded);
+            return Result.ok(
+              await decideBatch({
+                batch,
+                graded,
+                verdictDecider,
+                facts: factsByEntityId,
+                deps,
+              }),
+            );
           },
         });
 
-        const grades = new Map<string, ClaimGrade>();
+        const grades = new Map<string, DecidedClaimGrade>();
         const statedDates = new Map<string, PartialDate | null>();
         for (const batch of perBatch) {
           if (batch.isErr()) {

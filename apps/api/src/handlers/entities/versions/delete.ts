@@ -37,6 +37,8 @@ import {
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const paramsSchema = workspaceParams({
   entityId: resourceIdSchema("entity"),
@@ -93,6 +95,30 @@ export const deleteEntityVersionHandler = async function* ({
   // whether the version can be tombstoned.
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
+      const workspace = await tx.query.workspaces.findFirst({
+        where: { id: { eq: workspaceId } },
+        columns: { organizationId: true },
+      });
+      if (!workspace) {
+        return {
+          ok: false as const,
+          status: 404 as const,
+          message: "Version not found",
+        };
+      }
+      const hold = await requireNoHold({
+        tx,
+        organizationId: workspace.organizationId,
+        target: { type: "entityVersion", entityVersionId: versionId },
+      });
+      if (hold.isErr()) {
+        return {
+          ok: false as const,
+          status: 409 as const,
+          message: hold.error.message,
+          error: hold.error,
+        };
+      }
       const targetProperties = await tx
         .select({ propertyId: fields.propertyId })
         .from(fields)
@@ -119,8 +145,10 @@ export const deleteEntityVersionHandler = async function* ({
         });
       }
 
-      // Lock every edit owner anchored to this version first, establishing the
-      // edit-state -> entity order. Desktop sessions can be cancelled below;
+      // Lock every edit owner anchored to this version first, whatever its
+      // state, establishing the edit-state -> entity order: a session's base
+      // never changes, so the cancellations below reach only rows locked
+      // here or opened since. Desktop sessions can be cancelled below;
       // durable collaboration rooms must instead block the tombstone so their
       // shared working state never loses its base.
       await tx
@@ -130,7 +158,6 @@ export const deleteEntityVersionHandler = async function* ({
           and(
             eq(desktopEditSessions.baseVersionId, params.versionId),
             eq(desktopEditSessions.workspaceId, workspaceId),
-            eq(desktopEditSessions.status, "open"),
           ),
         )
         .for("update");
@@ -141,7 +168,6 @@ export const deleteEntityVersionHandler = async function* ({
           and(
             eq(pdfSigningSessions.baseVersionId, params.versionId),
             eq(pdfSigningSessions.workspaceId, workspaceId),
-            eq(pdfSigningSessions.status, "open"),
           ),
         )
         .for("update");
@@ -437,6 +463,9 @@ export const deleteEntityVersionHandler = async function* ({
   );
 
   if (!txOutcome.ok) {
+    if ("error" in txOutcome) {
+      return Result.err(legalHoldRefusal(txOutcome.error));
+    }
     return Result.err(
       new HandlerError({
         status: txOutcome.status,

@@ -202,6 +202,67 @@ describe("a downloads folder swapped for a link after it was checked", () => {
   });
 });
 
+describe("a run's folder reached through a link above it", () => {
+  /** The run's folder at `linked/chat`, where `linked` links to `real`. */
+  const linkedRun = () => {
+    const { root, stage } = folders();
+    const real = path.join(root, "real");
+    mkdirSync(path.join(real, "chat"), { recursive: true });
+    symlinkSync(real, path.join(root, "linked"));
+    return {
+      realRun: path.join(real, "chat"),
+      root,
+      stage,
+      workspaceDir: path.join(root, "linked", "chat"),
+    };
+  };
+
+  test("takes the download into its downloads folder", async () => {
+    const { realRun, root, stage, workspaceDir } = linkedRun();
+    const staged = stage(PDF);
+
+    const outcome = await receiveBrowserDownload(saved(staged), {
+      home: root,
+      workspaceDir,
+    });
+
+    expect(outcome).toMatchObject({
+      path: "Downloads/Decision 1.pdf",
+      status: "saved",
+    });
+    expect(
+      readFileSync(path.join(realRun, "Downloads", "Decision 1.pdf"), "utf-8"),
+    ).toBe(PDF);
+    expect(existsSync(staged)).toBe(false);
+  });
+
+  test("still refuses a downloads folder swapped for a link after it was checked", async () => {
+    const { realRun, root, stage, workspaceDir } = linkedRun();
+    const elsewhere = path.join(root, "elsewhere");
+    mkdirSync(elsewhere);
+    const staged = stage(PDF);
+
+    const outcome = await receiveBrowserDownload(saved(staged), {
+      home: root,
+      seams: {
+        afterFolderCheck: async () => {
+          const downloads = path.join(realRun, BROWSER_DOWNLOADS_FOLDER);
+          rmSync(downloads, { recursive: true });
+          symlinkSync(elsewhere, downloads);
+        },
+      },
+      workspaceDir,
+    });
+
+    expect(outcome).toMatchObject({
+      reason: "folder_unavailable",
+      status: "refused",
+    });
+    expect(readdirSync(elsewhere)).toEqual([]);
+    expect(existsSync(staged)).toBe(true);
+  });
+});
+
 describe("where a reported file may come from", () => {
   test("not from outside the member's home folder", async () => {
     const { stage, workspaceDir } = folders();

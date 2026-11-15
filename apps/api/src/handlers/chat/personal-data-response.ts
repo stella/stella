@@ -3,10 +3,15 @@ import { panic } from "better-result";
 import type {
   chatMessageRevisions,
   chatMessages,
+  chatQueuedMessages,
   chatThreads,
 } from "@/api/db/schema";
 import { CHAT_TITLE_SOURCE } from "@/api/db/schema";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import {
+  parseQueuedChatSend,
+  queuedChatSendTexts,
+} from "@/api/handlers/chat/queue/chat-queue-store";
 import type { ChatMessageRole, ChatPart } from "@/api/handlers/chat/types";
 import type {
   UnbackedProjectionKeys,
@@ -147,6 +152,9 @@ const UNEXPORTED_CHAT_THREAD_COLUMNS = [
   // thread, not authored content.
   "lastReadAt",
   "pinnedAt",
+  // Counter of the turn positions the thread has given out; internal order
+  // bookkeeping.
+  "lastTurnOrdinal",
 ] as const satisfies readonly (keyof ChatThreadRow)[];
 
 // Totality guard, bidirectional: every schema column must be exported or
@@ -236,5 +244,62 @@ true satisfies MissingExportedChatMessageRevisionColumn extends never
   ? true
   : never;
 true satisfies UnexpectedExportedChatMessageRevisionColumn extends never
+  ? true
+  : never;
+
+// A message the account queued that the server has not sent yet: its
+// authored text, as for a sent message, and its place in the queue.
+export const toPersonalQueuedChatMessageResponse = (
+  row: typeof chatQueuedMessages.$inferSelect,
+) => ({
+  id: row.id,
+  threadId: row.threadId,
+  position: row.position,
+  parts: queuedChatSendTexts(parseQueuedChatSend(row.request)).map(
+    (content) => ({ type: "text" as const, content }),
+  ),
+  revision: row.revision,
+  createdAt: row.createdAt.toISOString(),
+  updatedAt: row.updatedAt.toISOString(),
+});
+
+type PersonalQueuedChatMessageResponse = ReturnType<
+  typeof toPersonalQueuedChatMessageResponse
+>;
+// `parts` is the authored-text view of the `request` column.
+type QueuedChatMessageExportRow = typeof chatQueuedMessages.$inferSelect &
+  Pick<PersonalQueuedChatMessageResponse, "parts">;
+
+// Columns intentionally left out of the account export.
+const UNEXPORTED_QUEUED_CHAT_MESSAGE_COLUMNS = [
+  // Exported as `parts`, reduced to authored text as for a sent message: its
+  // attachments and send options (matter, skill, model) can reference
+  // organization data or describe how the assistant would run.
+  "request",
+  // Tenant id: internal routing, not data the user provided.
+  "organizationId",
+  // Matter reference: organization data, not the user's own.
+  "workspaceId",
+  // The exporting account itself; only its own messages are exported.
+  "userId",
+  // When the queue's sweep last tried the thread: internal bookkeeping.
+  "sweptAt",
+] as const satisfies readonly (keyof QueuedChatMessageExportRow)[];
+
+type MissingExportedQueuedChatMessageColumn = UnprojectedColumns<
+  QueuedChatMessageExportRow,
+  PersonalQueuedChatMessageResponse,
+  (typeof UNEXPORTED_QUEUED_CHAT_MESSAGE_COLUMNS)[number]
+>;
+type UnexpectedExportedQueuedChatMessageColumn = UnbackedProjectionKeys<
+  QueuedChatMessageExportRow,
+  PersonalQueuedChatMessageResponse,
+  (typeof UNEXPORTED_QUEUED_CHAT_MESSAGE_COLUMNS)[number]
+>;
+
+true satisfies MissingExportedQueuedChatMessageColumn extends never
+  ? true
+  : never;
+true satisfies UnexpectedExportedQueuedChatMessageColumn extends never
   ? true
   : never;

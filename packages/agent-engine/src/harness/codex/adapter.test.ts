@@ -40,6 +40,8 @@ import { createDetached } from "@stll/errors";
 
 import {
   FAKE_CONTEXT_WINDOW,
+  FAKE_FORK_BOUNDARY,
+  FAKE_FORKED_THREAD_ID,
   FAKE_FUTURE_RESET,
   FAKE_LONG_COMMAND,
   FAKE_MCP_CALL,
@@ -57,7 +59,11 @@ import {
 } from "../../../scripts/fake-stella-turn";
 import { PROTOCOL_LOG_OFF } from "../../protocol-log";
 import type { HarnessTurn, HarnessTurnInput } from "../adapter";
-import { type HarnessEvent, harnessSessionId } from "../events";
+import {
+  harnessBoundary,
+  type HarnessEvent,
+  harnessSessionId,
+} from "../events";
 import { packageCacheEnvironment } from "../package-cache";
 import { harnessEventsToChunks } from "../stream-chunks";
 import { createCodexHarnessAdapter } from "./adapter";
@@ -277,6 +283,7 @@ describe("Codex adapter over a stdio app-server", () => {
         reasoningOutputTokens: 5,
         context: { usedTokens: 150, windowTokens: FAKE_CONTEXT_WINDOW },
       },
+      boundary: harnessBoundary("turn-1"),
     });
   });
 
@@ -925,6 +932,97 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)).toEqual({ type: "turn.interrupted" });
   });
 
+  test("a steer joins the running turn through turn/steer and is settled where the server took it", async () => {
+    const inputId = crypto.randomUUID();
+    const { events, received } = await run("steered", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          expect(
+            await turn.steer({ inputId, text: "Also check the annex." }),
+          ).toEqual(Result.ok());
+        }
+      },
+    });
+    expect(
+      received().find(({ method }) => method === "turn/steer")?.params,
+    ).toEqual({
+      threadId: FAKE_THREAD_ID,
+      expectedTurnId: "turn-1",
+      input: [
+        { type: "text", text: "Also check the annex.", text_elements: [] },
+      ],
+    });
+    const settled = events.findIndex(({ type }) => type === "input.settled");
+    expect(events[settled]).toEqual({
+      type: "input.settled",
+      inputId,
+      status: "accepted",
+    });
+    // What the turn did after it took the message follows the settlement.
+    expect(
+      events.findIndex(
+        (event) =>
+          event.type === "text.completed" && event.messageId === "m-steer",
+      ),
+    ).toBeGreaterThan(settled);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a steer sent with a declined approval joins the turn that asked", async () => {
+    const inputId = crypto.randomUUID();
+    const { events, received } = await run("steered_over_approval", {
+      onEvent: async (event, turn) => {
+        if (event.type !== "approval.requested") {
+          return;
+        }
+        const declined = await turn.respond({
+          type: "approval",
+          requestId: event.request.requestId,
+          decision: "deny",
+        });
+        expect(Result.isOk(declined)).toBe(true);
+        expect(
+          await turn.steer({ inputId, text: "Also check the annex." }),
+        ).toEqual(Result.ok());
+      },
+    });
+    expect(received().map(({ method }) => method)).toContain("turn/steer");
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId, status: "accepted" },
+    ]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a steer the server refuses settles rejected and the turn goes on", async () => {
+    const inputId = crypto.randomUUID();
+    const { events } = await run("steer_refused", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId, text: "Also check the annex." });
+        }
+      },
+    });
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId, status: "rejected" },
+    ]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a steer after the turn ended is refused without an event", async () => {
+    const started = await start("tool_calls");
+    const collected = collect(started.turn, () => undefined);
+    await collected.done;
+    const steered = await started.turn.steer({
+      inputId: crypto.randomUUID(),
+      text: "Too late.",
+    });
+    await started.turn.dispose();
+    expect(Result.isError(steered) && steered.error.reason).toBe("turn_ended");
+    expect(collected.events.some(({ type }) => type === "input.settled")).toBe(
+      false,
+    );
+  });
+
   test("resuming a missing session falls back to the transcript and says so", async () => {
     const { events, received } = await run("resume_missing", {
       overrides: {
@@ -1016,6 +1114,125 @@ describe("Codex adapter over a stdio app-server", () => {
       input: [{ type: "text", text: "Search both." }],
     });
     expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  const forkRequest = {
+    type: "fork",
+    sessionId: harnessSessionId(FAKE_RESUMED_THREAD_ID),
+    boundary:
+      harnessBoundary(FAKE_FORK_BOUNDARY) ??
+      panic("the fake's boundary is one the protocol carries"),
+  } as const;
+
+  /** The `thread/*` requests the turn sent, background terminals aside. */
+  const threadMethods = (
+    received: Awaited<ReturnType<typeof run>>["received"],
+  ) =>
+    received()
+      .map(({ method }) => method)
+      .filter(
+        (m) =>
+          m?.startsWith("thread/") === true &&
+          !m.startsWith("thread/backgroundTerminals/"),
+      );
+
+  test("a completed turn ends at its native turn", async () => {
+    const { events } = await run("resume_ok", {
+      overrides: {
+        continuation: {
+          type: "resume",
+          sessionId: harnessSessionId(FAKE_RESUMED_THREAD_ID),
+        },
+      },
+    });
+    expect(terminal(events)).toEqual({
+      type: "turn.completed",
+      usage: null,
+      boundary: harnessBoundary("turn-1"),
+    });
+  });
+
+  test("a fork continues the session through the boundary turn as a new thread with this turn's settings", async () => {
+    const { events, received } = await run("fork_ok", {
+      overrides: { continuation: forkRequest },
+    });
+    expect(events[0]).toEqual({
+      type: "session.started",
+      sessionId: harnessSessionId(FAKE_FORKED_THREAD_ID),
+      continuation: { type: "forked" },
+    });
+    expect(threadMethods(received)).toEqual(["thread/fork"]);
+    const fresh = await run("tool_calls");
+    const settingsOf = (
+      runReceived: Awaited<ReturnType<typeof run>>["received"],
+      method: string,
+    ) =>
+      Object.keys(
+        v.parse(
+          v.looseObject({}),
+          runReceived().find((request) => request.method === method)?.params,
+        ),
+      ).toSorted();
+    // Through the boundary, inclusive, with every setting a new thread of
+    // this turn gets, never the stored thread's.
+    expect(settingsOf(received, "thread/fork")).toEqual(
+      [
+        ...settingsOf(fresh.received, "thread/start"),
+        "threadId",
+        "lastTurnId",
+        "excludeTurns",
+      ].toSorted(),
+    );
+    expect(
+      received().find(({ method }) => method === "thread/fork")?.params,
+    ).toMatchObject({
+      threadId: FAKE_RESUMED_THREAD_ID,
+      lastTurnId: FAKE_FORK_BOUNDARY,
+      excludeTurns: true,
+      model: "gpt-test",
+      approvalPolicy: "untrusted",
+      sandbox: "workspace-write",
+    });
+    // The fork holds the history: the prompt is the new message alone.
+    expect(
+      received().find(({ method }) => method === "turn/start")?.params,
+    ).toMatchObject({
+      threadId: FAKE_FORKED_THREAD_ID,
+      input: [{ type: "text", text: "Search both." }],
+    });
+  });
+
+  test("a fork of a missing session falls back to the transcript and says so", async () => {
+    const { events, received } = await run("fork_missing", {
+      overrides: { continuation: forkRequest },
+    });
+    expect(events[0]).toEqual({
+      type: "session.started",
+      sessionId: harnessSessionId(FAKE_THREAD_ID),
+      continuation: {
+        type: "resume_unavailable",
+        reason: "session_not_found",
+        message: `no rollout found for thread id ${FAKE_RESUMED_THREAD_ID}`,
+      },
+    });
+    expect(threadMethods(received)).toEqual(["thread/fork", "thread/start"]);
+    const prompt = JSON.stringify(
+      received().find(({ method }) => method === "turn/start")?.params,
+    );
+    expect(prompt).toContain("Find the leases.");
+    expect(prompt).toContain("Search both.");
+  });
+
+  test("an archived session is unarchived and then forked", async () => {
+    const { events, received } = await run("fork_archived", {
+      overrides: { continuation: forkRequest },
+    });
+    expect(threadMethods(received)).toEqual([
+      "thread/fork",
+      "thread/unarchive",
+      "thread/fork",
+    ]);
+    expect(events[0]).toMatchObject({ continuation: { type: "forked" } });
   });
 
   test("an archived session is unarchived and then resumed", async () => {
@@ -1176,7 +1393,12 @@ describe("Codex adapter over a stdio app-server", () => {
         event.type === "text.completed" ? [event.text] : [],
       ),
     ).toEqual(["Reading.", "Recovered."]);
-    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    // The turn ends at its continuation, which the thread holds after the
+    // native turn the capacity ended.
+    expect(terminal(events)).toMatchObject({
+      type: "turn.completed",
+      boundary: "turn-2",
+    });
     expect(delays).toEqual([10]);
     expect(starts).toHaveLength(2);
     expect(starts[1]?.params).toEqual({ threadId: FAKE_THREAD_ID, input: [] });
@@ -1301,7 +1523,14 @@ describe("Codex adapter over a stdio app-server", () => {
           inputModalities: ["text", "image"],
         },
       ],
-      capabilities: ["approvals", "interrupt", "resume", "image_input"],
+      capabilities: [
+        "approvals",
+        "interrupt",
+        "resume",
+        "image_input",
+        "steer",
+        "fork",
+      ],
       approvalModes: ["ask", "auto", "full_auto"],
       // The plan's main window is at 40 %.
       usageLimit: null,
@@ -1451,7 +1680,7 @@ const cloudChatChunks = async () => {
       // them; the answer follows the last step's results.
       const step = FAKE_STELLA_STEPS.at(iteration);
       iteration += 1;
-      const ids = { runId: runId ?? "run-1", threadId: threadId ?? "t-1" };
+      const ids = { runId: runId ?? "run-1", threadId };
       yield { type: EventType.RUN_STARTED, ...ids, model, timestamp };
       if (step !== undefined) {
         for (const call of step) {
@@ -1460,7 +1689,6 @@ const cloudChatChunks = async () => {
             type: EventType.TOOL_CALL_START,
             toolCallId: call.id,
             toolCallName: call.tool,
-            toolName: call.tool,
             model,
             timestamp,
           };
@@ -1475,7 +1703,6 @@ const cloudChatChunks = async () => {
             type: EventType.TOOL_CALL_END,
             toolCallId: call.id,
             toolCallName: call.tool,
-            toolName: call.tool,
             input: call.arguments,
             model,
             timestamp,
@@ -1551,7 +1778,52 @@ describe("Codex items as chat parts", () => {
     expect(
       cloudParts.filter(({ type }) => type === "tool-result"),
     ).toHaveLength(FAKE_STELLA_CALLS.length);
-    expect(local).toEqual(cloud);
+    // v1 chat() owns a message per model iteration and stamps its source;
+    // the native harness reports one continuous turn with model-only stamps.
+    // Verify that bookkeeping separately before comparing every ordered part.
+    expect(local.map(({ role }) => role)).toEqual(["assistant"]);
+    expect(cloud.map(({ role }) => role)).toEqual(
+      [...FAKE_STELLA_STEPS, null].map(() => "assistant"),
+    );
+    const comparableParts = (
+      messages: ReturnType<typeof storedMessages>,
+      engine: "cloud" | "local",
+    ) =>
+      messages.flatMap(({ parts }) =>
+        parts.map((part) => {
+          if (part.type === "tool-call") {
+            expect(part.metadata).toEqual({
+              tanstack: {
+                model: "gpt-test",
+                ...(engine === "cloud"
+                  ? {
+                      source: {
+                        api: "text",
+                        model: "gpt-test",
+                        provider: "scripted",
+                      },
+                    }
+                  : {}),
+              },
+            });
+            const { metadata: _metadata, ...content } = part;
+            return content;
+          }
+          if (part.type === "tool-result") {
+            expect(part.metadata).toEqual(
+              engine === "local"
+                ? { tanstack: { model: "gpt-test" } }
+                : undefined,
+            );
+            const { metadata: _metadata, ...content } = part;
+            return content;
+          }
+          return part;
+        }),
+      );
+    expect(comparableParts(local, "local")).toEqual(
+      comparableParts(cloud, "cloud"),
+    );
   });
 
   test("the answer's markdown reaches the stored text unchanged", async () => {
@@ -1680,7 +1952,11 @@ describe("Codex items as chat parts", () => {
     for (const native of ["never forwarded", "+x", "1. Search", "compact-1"]) {
       expect(stored).not.toContain(native);
     }
-    expect(terminal(events)).toEqual({ type: "turn.completed", usage: null });
+    expect(terminal(events)).toEqual({
+      type: "turn.completed",
+      usage: null,
+      boundary: harnessBoundary("turn-1"),
+    });
   });
 
   test("a subagent is a step that ends with the subagent, the steps it takes are its steps, and what it was told, wrote and reported stays on the computer", async () => {
@@ -2051,9 +2327,11 @@ const CLIENT_METHODS = [
   "model/list",
   "thread/start",
   "thread/resume",
+  "thread/fork",
   "thread/unarchive",
   "turn/start",
   "turn/interrupt",
+  "turn/steer",
 ] as const;
 
 /** Experimental client methods the adapter calls; `initialize` opts in. */

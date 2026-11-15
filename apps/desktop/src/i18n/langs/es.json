@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Firma",
     "pdfSignCertificate": "Certificado de firma",
     "pdfSignDocument": "Documento",
+    "pdfSignDownloadDriver": "Descargar controlador",
+    "pdfSignDriverMissing": "Una tarjeta en un lector necesita el controlador de {vendor}, que no está instalado. Instálalo para firmar con esa tarjeta.",
+    "pdfSignDriverNeedsUpdate": "El controlador de {vendor} instalado no funciona con el procesador de este Mac. Instala su versión actual para firmar con esa tarjeta.",
     "pdfSignErrorCode": "Código de error: {code}",
     "pdfSignErrors": {
       "authenticationRequired": "Tu llavero necesita que permitas el acceso a este certificado. Inténtalo de nuevo y permite el acceso cuando se te pida.",
@@ -118,6 +121,9 @@
       "startAgain": "La firma no pudo continuar. Vuelve a iniciar la firma en stella.",
       "temporarilyUnavailable": "stella no pudo terminar la firma ahora mismo. Inténtalo de nuevo.",
       "tokenNotPresent": "La tarjeta inteligente o el token no está conectado. Conéctalo e inténtalo de nuevo.",
+      "tokenSigningFailed": "La tarjeta inteligente o el token no firmó el documento.",
+      "tokenTimeout": "La tarjeta inteligente o el token no respondió a tiempo. Inténtalo de nuevo.",
+      "tokenUnreadable": "No se pudo leer la tarjeta inteligente o el token. Inténtalo de nuevo.",
       "unsupportedAlgorithm": "La clave de este certificado no puede crear la firma que necesita este documento. Elige otro certificado.",
       "wouldBreakSignatures": "Firmar este PDF invalidaría las firmas que ya contiene."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Asunto",
     "pdfSignNoIdentities": "No hay ningún certificado de firma disponible en tu llavero.",
     "pdfSignNoIdentitiesCertificateStore": "No hay ningún certificado de firma disponible en tu almacén de certificados.",
+    "pdfSignOnToken": "Guardado en: {tokenLabel}",
+    "pdfSignPin": "PIN",
+    "pdfSignPinFinalTry": "Otro PIN incorrecto bloqueará la tarjeta o el token.",
+    "pdfSignPinLow": "Ya se introdujo un PIN incorrecto. Revisa el PIN con cuidado.",
+    "pdfSignPinPad": "Introduce el PIN en el lector de tarjetas para firmar {documentName}.",
+    "pdfSignPinPrompt": "Introduce el PIN de tu tarjeta o token para firmar {documentName}.",
+    "pdfSignRescanCards": "Volver a buscar tarjetas",
     "pdfSignRetry": "Reintentar",
     "pdfSignServer": "Solicitado por",
     "pdfSignSign": "Firmar",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Sello visible en la página {pageNumber}",
     "pdfSignSubtitle": "La clave privada permanece en tu llavero; de este equipo solo sale la firma.",
     "pdfSignSubtitleCertificateStore": "La clave privada permanece en tu almacén de certificados; de este equipo solo sale la firma.",
+    "pdfSignSubtitleToken": "La clave privada permanece en tu tarjeta inteligente o token; de este equipo solo sale la firma.",
     "pdfSignTitle": "¿Firmar este PDF?",
     "pdfSignUnsupported": "La firma requiere macOS o Windows. Abre el documento en un Mac o en un PC con Windows para firmarlo.",
     "pdfSignVersion": "Versión",
@@ -870,6 +884,18 @@
       "runs_can_write": "Las ejecuciones locales pueden escribir en esta carpeta, así que no puede contener una habilidad.",
       "network_folder": "Esta carpeta está en una unidad de red. Las habilidades deben estar en el disco de este ordenador.",
       "path_changed": "Ha cambiado una carpeta superior. Quite esta carpeta y añádala de nuevo."
+    }
+  },
+  "signingDriver": {
+    "title": "Controlador de tarjeta inteligente",
+    "description": "Si stella desktop no encuentra por sí sola el controlador de tu tarjeta inteligente o token, elige su módulo PKCS #11. Solo se carga para firmar PDF, en un proceso aparte.",
+    "choose": "Elegir módulo",
+    "remove": "Quitar",
+    "notice": {
+      "action_failed": "No ha funcionado. Inténtelo de nuevo.",
+      "missing": "Este archivo ya no existe.",
+      "needs_update": "Este módulo no funciona con el procesador de este Mac. Instala la versión actual del controlador.",
+      "not_a_library": "Este archivo no es un módulo PKCS #11."
     }
   },
   "localLinkedFolders": {

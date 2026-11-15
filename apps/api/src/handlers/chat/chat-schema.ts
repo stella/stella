@@ -42,6 +42,10 @@ import {
   askUserInputSchema,
   askUserOutputSchema,
 } from "@stll/api-contract/chat-ask-user";
+import {
+  isApprovedClientCallAwaitingResult,
+  memberWaitsOf,
+} from "@stll/api-contract/chat-member-wait";
 import { chatUserMessageContentSchema } from "@stll/api-contract/chat-message-content";
 import {
   type ChatRunTarget,
@@ -61,10 +65,8 @@ import {
 import {
   chatMessageFromPersisted,
   continueStoredChatPart,
-  getAwaitingUserInteractions,
   getResumedUserInteraction,
   hasServerOwnedChatPartType,
-  isApprovedClientCallAwaitingResult,
   isChatPart,
   isChatTextPart,
   isIncomingChatPart,
@@ -379,6 +381,26 @@ const nativeAssistantContinuationBodySchema = v.strictObject({
   resume: agUiResumeSchema,
 });
 
+/**
+ * A send as the member queues it: a new user message with everything the send
+ * carries except its thread, its run (minted when it is sent) and the
+ * history changes a queued message never makes (edit, regenerate).
+ */
+export const queuedChatSendSchema = v.strictObject({
+  ...v.omit(noResumeBodySchema, [
+    "threadId",
+    "runId",
+    "truncateAfterMessageId",
+    "turnIntent",
+  ]).entries,
+  message: v.looseObject({
+    ...rawMessageProperties,
+    role: v.literal("user"),
+  }),
+});
+
+export type QueuedChatSend = v.InferOutput<typeof queuedChatSendSchema>;
+
 export const sendMessageBodySchema = v.union([
   noResumeBodySchema,
   nativeAssistantContinuationBodySchema,
@@ -476,16 +498,40 @@ export const agUiSendMessageBodySchema = v.union([
   v.strictObject({
     ...agUiEnvelopeCommonProperties,
     forwardedProps: noResumeBodySchema,
-    data: noResumeBodySchema,
+    // Older clients duplicated forwardedProps here; v1 sends only the canonical field.
+    data: v.exactOptional(noResumeBodySchema),
   }),
   v.strictObject({
     ...agUiEnvelopeCommonProperties,
     forwardedProps: nativeAssistantContinuationBodySchema,
-    data: nativeAssistantContinuationBodySchema,
+    data: v.exactOptional(nativeAssistantContinuationBodySchema),
     parentRunId: agUiRunIdSchema,
     resume: agUiResumeSchema,
   }),
 ]);
+
+/** Correlate the native envelope with the strictly parsed application input.
+ * v1 omits the deprecated data alias; older clients must send the same input in it. */
+export const hasAgUiEnvelopeCorrelationMismatch = (
+  transport: v.InferOutput<typeof agUiSendMessageBodySchema>,
+): boolean => {
+  const body = transport.forwardedProps;
+  return (
+    transport.threadId !== body.threadId ||
+    transport.runId !== body.runId ||
+    ("parentRunId" in transport ? transport.parentRunId : undefined) !==
+      ("parentRunId" in body ? body.parentRunId : undefined) ||
+    !deepEquals(
+      "resume" in transport ? transport.resume : undefined,
+      "resume" in body ? body.resume : undefined,
+    ) ||
+    (transport.data !== undefined && !deepEquals(transport.data, body)) ||
+    !transport.messages.some(
+      (message) =>
+        message.id === body.message.id && message.role === body.message.role,
+    )
+  );
+};
 
 type RawIncomingMessage = v.InferOutput<typeof rawMessageSchema>;
 type AgUiResume = v.InferOutput<typeof agUiResumeSchema>;
@@ -1055,7 +1101,7 @@ const validateContinuationToolCallIntegrity = ({
     validatedCallsById.set(incomingCall.id, validatedCallResult.value);
   }
 
-  const awaitedInteractions = getAwaitingUserInteractions(persistedMessage);
+  const awaitedInteractions = memberWaitsOf(persistedMessage);
   const awaitedCallIds = new Set(
     awaitedInteractions.map(({ toolCallId }) => toolCallId),
   );
@@ -1675,6 +1721,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
+  metadata.turnSpend === undefined &&
   metadata.turnTiming === undefined &&
   metadata.turnModel === undefined &&
   metadata.usage === undefined;
@@ -1700,7 +1747,7 @@ export const validateToolCallParts = ({
   const serverAuthoredCallIds = new Set<string>();
   const parts: ChatPart[] = [];
   const awaitedCallIds = new Set(
-    getAwaitingUserInteractions(message).map(({ toolCallId }) => toolCallId),
+    memberWaitsOf(message).map(({ toolCallId }) => toolCallId),
   );
   const firstAwaitedIndex = message.parts.findIndex(
     (part) => part.type === "tool-call" && awaitedCallIds.has(part.id),
@@ -1975,11 +2022,10 @@ const validateToolCallInput = ({
  * may have sent arguments the tool's schema rejects, or named a tool the run
  * does not register, and then gone on to recover. Input the schema accepts is
  * stored canonical, as for any call. Other input is stored exactly as the
- * model sent it, since every later request replays it to the model: `input`
- * holds it only when it is a JSON object whose text is the `arguments`
- * verbatim, and is left out otherwise (a primitive, other spacing, text that
- * is not JSON), so the raw `arguments` are what gets stored. The error output
- * itself must still be well formed.
+ * model sent it, since every later request replays it to the model. Parsed
+ * JSON objects stay visible as `input`; v3 storage retains the exact raw
+ * `arguments` alongside them when serialization differs. Primitives and
+ * malformed JSON remain raw-only. The error output must still be well formed.
  */
 const validateErrorToolCallPart = ({
   part,
@@ -1998,7 +2044,7 @@ const validateErrorToolCallPart = ({
   const input =
     canonicalInput !== undefined && Result.isOk(canonicalInput)
       ? { type: "present" as const, value: canonicalInput.value }
-      : verbatimToolInput(part.arguments);
+      : failedToolInput(part.arguments);
   const call: Record<string, unknown> = { ...part };
   const candidate: unknown = {
     ...Object.fromEntries(
@@ -2036,16 +2082,15 @@ const validateErrorToolCallPart = ({
   }
 };
 
-/** `argumentsText` as an input object, when the object's JSON is exactly
- *  that text, so storing the object loses nothing of what the model sent. */
-const verbatimToolInput = (
+/** Preserve the SDK's parsed input for a failed call without claiming that
+ *  it meets the tool schema. Its terminal error prevents execution. */
+const failedToolInput = (
   argumentsText: string,
 ): { type: "absent" } | { type: "present"; value: object } => {
   const parsed = Result.try((): unknown => parseJsonUnknown(argumentsText));
   return Result.isOk(parsed) &&
     typeof parsed.value === "object" &&
-    parsed.value !== null &&
-    JSON.stringify(parsed.value) === argumentsText
+    parsed.value !== null
     ? { type: "present", value: parsed.value }
     : { type: "absent" };
 };

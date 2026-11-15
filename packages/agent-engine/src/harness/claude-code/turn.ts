@@ -12,10 +12,13 @@ import { requestedNetworkHost } from "@stll/skills/network-hosts";
 import type {
   HarnessInteractionResponse,
   HarnessRespondError,
+  HarnessSteerInput,
   HarnessTurn,
 } from "../adapter";
 import {
   type HarnessApprovalOption,
+  type HarnessBoundary,
+  harnessBoundary,
   harnessContextUsage,
   type HarnessContinuation,
   type HarnessEvent,
@@ -54,6 +57,7 @@ import {
   AssistantMessageSchema,
   CanUseToolRequestSchema,
   CLAUDE_CONTROL_REQUESTS,
+  CLAUDE_STEER_PRIORITY,
   CLAUDE_STOPPED_TOOL_KINDS,
   type ClaudeControlRequestSubtype,
   type ClaudeResultMessage,
@@ -64,6 +68,7 @@ import {
   isClaudeControlRequestSubtype,
   isClaudeMessageType,
   isClaudeSystemSubtype,
+  ModelRefusalFallbackSchema,
   RateLimitEventSchema,
   ResultMessageSchema,
   STREAM_EVENTS,
@@ -346,7 +351,17 @@ const SANDBOX_NETWORK_TOOL = "SandboxNetworkAccess";
 
 export class ClaudeCodeTurnSession {
   private began = false;
+  /** The session the turn's messages are written to, once it is open. */
+  private sessionId: HarnessSessionId | null = null;
+  /** Steering messages written and not echoed yet: uuid to input id. */
+  private readonly steering = new Map<string, string>();
   private assistantError: string | null = null;
+  /**
+   * The transcript entry of the main thread's last assistant message: where
+   * the turn ends in its session once it completes. Subagents write to side
+   * chains, which never count.
+   */
+  private lastAssistantEntry: HarnessBoundary | null = null;
   /** The main thread's last model request, for the context it held. */
   private lastRequest: LastRequest | null = null;
   private readonly rejectedResets: Temporal.Instant[] = [];
@@ -453,6 +468,7 @@ export class ClaudeCodeTurnSession {
       sessionId: options.sessionId,
       continuation: options.continuation,
     });
+    this.sessionId = options.sessionId;
     this.began = true;
     for (const message of this.early.splice(0)) {
       switch (message.kind) {
@@ -484,7 +500,34 @@ export class ClaudeCodeTurnSession {
   turn(): HarnessTurn {
     return this.lifecycle.turn({
       respond: (response) => this.respond(response),
+      steer: (input) => {
+        this.steer(input);
+      },
       interrupt: async () => this.interrupt(),
+    });
+  }
+
+  /**
+   * Write the message to the CLI while the turn runs, at
+   * `CLAUDE_STEER_PRIORITY`. The CLI joins it to the turn at its next step,
+   * echoing it back with its uuid then; a turn whose result arrives first
+   * never took it, and the lifecycle settles it `rejected` with that result.
+   */
+  private steer({ inputId, text }: HarnessSteerInput) {
+    const client = this.client;
+    if (client === null || this.sessionId === null) {
+      this.lifecycle.settleInput(inputId, "rejected");
+      return;
+    }
+    const uuid = crypto.randomUUID();
+    this.steering.set(uuid, inputId);
+    client.send({
+      type: "user",
+      message: { role: "user", content: text },
+      parent_tool_use_id: null,
+      session_id: this.sessionId,
+      uuid,
+      priority: CLAUDE_STEER_PRIORITY,
     });
   }
 
@@ -596,6 +639,17 @@ export class ClaudeCodeTurnSession {
         }
         return;
       }
+      case "rerouted": {
+        const fallback = this.parse(
+          ModelRefusalFallbackSchema,
+          raw,
+          "model fallback",
+        );
+        if (fallback !== null && fallback.scope !== "local") {
+          this.emit({ type: "model.rerouted", model: fallback.fallback_model });
+        }
+        return;
+      }
       case "ignore":
         return;
       default:
@@ -694,6 +748,8 @@ export class ClaudeCodeTurnSession {
       this.assistantError = parsed.error;
       return;
     }
+    this.lastAssistantEntry =
+      parsed.uuid === undefined ? null : harnessBoundary(parsed.uuid);
     const { usage } = parsed.message;
     if (usage !== undefined) {
       // The next request carries this one's prompt and answer.
@@ -849,6 +905,17 @@ export class ClaudeCodeTurnSession {
     parsed: v.InferOutput<typeof UserMessageSchema> | null,
     parentCallId: string | null = null,
   ) {
+    if (parsed?.isReplay === true) {
+      // The echo of a message written to stdin: a steer the turn took now,
+      // or the turn's own prompt. Neither is output.
+      const inputId =
+        parsed.uuid === undefined ? undefined : this.steering.get(parsed.uuid);
+      if (parsed.uuid !== undefined && inputId !== undefined) {
+        this.steering.delete(parsed.uuid);
+        this.lifecycle.settleInput(inputId, "accepted");
+      }
+      return;
+    }
     if (parsed === null || typeof parsed.message.content === "string") {
       return;
     }
@@ -939,6 +1006,7 @@ export class ClaudeCodeTurnSession {
       this.emit({
         type: "turn.completed",
         usage: usageOf(parsed, this.lastRequest),
+        boundary: this.lastAssistantEntry,
       });
       return;
     }

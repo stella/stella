@@ -22,6 +22,11 @@ export default {
         reason: "Hands the upgrade request to the gateway.",
       },
       {
+        path: "apps/api/src/handlers/chat/queue/chat-queue-sender.ts",
+        reason:
+          "Checks a queued message bound for the member's computer finds one connected before sending it.",
+      },
+      {
         path: "apps/api/src/handlers/chat/local-run-plan.ts",
         reason:
           "Routes a chat turn bound for the member's computer through the control and reads its run back.",
@@ -35,6 +40,11 @@ export default {
         path: "apps/api/src/handlers/chat/local-runners.ts",
         reason:
           "Reads the member's computers and harness reports for the chat composer.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/turns/steer.ts",
+        reason:
+          "Queues a message for the open run of the member's running chat turn through the control.",
       },
       {
         path: "apps/api/src/handlers/chat/local-folder-approval.ts",
@@ -52,9 +62,24 @@ export default {
           "Reads what a chat's runs left running in the background on the member's computers.",
       },
       {
-        path: "apps/api/src/handlers/chat/local-run-step-output-grant.ts",
+        path: "apps/api/src/handlers/chat/fork/create.ts",
         reason:
-          "Reads the member's own run to grant reading its step outputs on the computer that ran it.",
+          "Copies what the steps of a forked thread's messages stored to the fork, on the owner connection that alone writes it.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/local-run-step-content.ts",
+        reason:
+          "Reads what a step of the member's own run produced, as stored with the step's thread.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/run-outputs/awaited-step-content.ts",
+        reason:
+          "Stores a step a finished run announced it still had to send, for the computer the run ran on.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/run-outputs/step-content.ts",
+        reason:
+          "Stores what a step produced for the run whose agent token sends it, against that run's storage budget.",
       },
     ],
   },

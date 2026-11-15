@@ -37,7 +37,7 @@ type PropertiesResponse =
 // starts or stops projecting shows up there as a type error instead of
 // silently drifting.
 export type WorkspacePropertyWire = PropertiesResponse[number];
-export type PropertyContent = PropertiesResponse[number]["content"];
+type PropertyContent = PropertiesResponse[number]["content"];
 export type PropertyOptionColor = Extract<
   PropertyContent,
   { type: "multi-select" | "single-select" }

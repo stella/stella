@@ -181,6 +181,7 @@ const readFailure = async (adapter: AnyTextAdapter, path: RequestPath) => {
   const chatOptions = {
     model: MODEL,
     messages: [{ role: "user" as const, content: "fixture request" }],
+    threadId: "openrouter-credential-inference-thread",
     logger: resolveDebugOption(false),
   };
   const structuredOptions = { chatOptions, outputSchema };

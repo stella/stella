@@ -11,7 +11,7 @@ import { bufferObjectCleanupIntents, templates } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  reserveObjectCleanupIntents,
+  reserveObjectCleanupIntentsForKey,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
@@ -69,7 +69,7 @@ const readInsertPolicyExpression = async (): Promise<string> => {
 };
 
 const reserve = async (objectKey: string) =>
-  await reserveObjectCleanupIntents({
+  await reserveObjectCleanupIntentsForKey({
     objectKey,
     organizationId,
     safeDb: scopedSafeDb,

@@ -185,6 +185,7 @@ const seedThread = async (member: Member) => {
 const accept = async (member: Member, threadId: SafeId<"chatThread">) => {
   const userMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: member.organizationId,
     threadId,
     userId: member.userId,

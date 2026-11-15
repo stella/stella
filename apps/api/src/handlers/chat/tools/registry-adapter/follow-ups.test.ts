@@ -206,15 +206,19 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
                 Transaction["query"]["invoices"]["findFirst"]
               >[0],
             ) => {
-              const predicate = options?.where?.RAW;
+              const where = options?.where;
+              const predicate =
+                typeof where === "object" ? where.RAW : undefined;
               if (typeof predicate !== "function") {
                 return panic(
                   "Invoice detail query omitted its scope predicate",
                 );
               }
-              predicates.push(
-                dialect.sqlToQuery(predicate(invoices, operators)),
-              );
+              const scope = predicate(invoices, operators);
+              if (typeof scope === "symbol") {
+                return panic("Invoice detail scope predicate must be SQL");
+              }
+              predicates.push(dialect.sqlToQuery(scope));
               return invoiceDetailRowFixture({
                 id: toSafeId<"invoice">(INV_UUID),
                 workspaceId: toSafeId<"workspace">(WS_UUID),

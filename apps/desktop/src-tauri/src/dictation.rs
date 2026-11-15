@@ -10,7 +10,8 @@
 //! leave this computer.
 //!
 //! This module owns the preferences, the speech model file and the shortcut.
-//! `dictation_engine` owns capture, transcription and insertion on one thread.
+//! `dictation_engine` owns capture, transcription and insertion on one thread;
+//! `dictation_live` transcribes each stretch of speech while the key is down.
 
 #![cfg_attr(
   not(dictation),

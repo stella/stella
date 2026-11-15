@@ -26,6 +26,7 @@ import {
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
 import { Button } from "@stll/ui/button";
+import { getFileSizeDisplay } from "@stll/ui/file-size";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -76,7 +77,6 @@ import {
   dropTargetForElements,
 } from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { getFileSizeDisplay } from "@/lib/file-size";
 import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import type {

@@ -40,7 +40,7 @@ const pdf = (pages: number, extra = "") => {
 };
 
 const answering =
-  (bodies: ReadonlyMap<string, Uint8Array>): Fetcher =>
+  (bodies: ReadonlyMap<string, Uint8Array<ArrayBuffer>>): Fetcher =>
   async (input) => {
     const url = input instanceof Request ? input.url : String(input);
     return await Promise.resolve(
@@ -70,9 +70,9 @@ describe("handing a turn's attached files to the model", () => {
 
   /** Copies the files the way a run does, then reads what the turn names. */
   const copied = async (
-    files: readonly { name: string; bytes: Uint8Array }[],
+    files: readonly { name: string; bytes: Uint8Array<ArrayBuffer> }[],
   ) => {
-    const bodies = new Map<string, Uint8Array>();
+    const bodies = new Map<string, Uint8Array<ArrayBuffer>>();
     const attachments: DesktopRunnerAttachment[] = files.map(
       ({ name, bytes }, index) => {
         const url = `https://files.example/${String(index)}`;
