@@ -342,7 +342,9 @@ if (!databaseUrl || !enabled) {
             statementsPerFile.add(statements.length);
             expect(page.items.length).toBeLessThanOrEqual(SITEMAP_RANGE_ROWS);
             for (const item of page.items) {
-              expect(item.updatedAt.toISOString()).toBe(stored.get(item.id));
+              expect(item.updatedAt.toISOString()).toBe(
+                stored.get(item.id) ?? "not stored",
+              );
             }
             const newest = Math.max(
               ...page.items.map(({ updatedAt }) => updatedAt.getTime()),

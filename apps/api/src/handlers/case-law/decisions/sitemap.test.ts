@@ -403,7 +403,7 @@ test("the ranges of a split month serve each of its decisions once, in index ord
     if (!("items" in response)) {
       return panic(`Expected range ${bucket} to be served`);
     }
-    return response.items.map(({ id }) => id);
+    return response.items.map(({ id }): string => id);
   };
   expect(await read("0000")).toEqual(ids.slice(0, 2));
   expect(await read("0001")).toEqual(ids.slice(2));

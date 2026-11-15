@@ -8,8 +8,12 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- country, which lists those months again as ranges.
 -- stella-migration-safety: reviewed delete-data - removes only hashed sitemap buckets, a derived listing the enrolled recount rebuilds; no decision is touched
 DELETE FROM "case_law_sitemap_shards" WHERE "bucket" <> 'all';--> statement-breakpoint
+-- Keep lock acquisition bounded, but do not interrupt metadata-only catalog work after PostgreSQL grants the lock.
+-- stella-migration-safety: metadata-only-type-change
+SET statement_timeout = 0;--> statement-breakpoint
 -- stella-migration-safety: reviewed alter-column-type - widening varchar(3) to varchar(4) is binary coercible, so the table is neither rewritten nor reindexed
 ALTER TABLE "case_law_sitemap_shards" ALTER COLUMN "bucket" SET DATA TYPE varchar(4);--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "case_law_sitemap_shards"
   ADD COLUMN "range_start_date" date,
   ADD COLUMN "range_start_id" uuid,

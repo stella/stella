@@ -617,6 +617,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/*",
     "apps/api/src/lib/case-law/derived-ai-mode.ts",
     "apps/api/src/lib/case-law/search-guidance-mode.ts",
+    "apps/api/src/lib/case-law/sitemap-shard-budget.ts",
     "apps/api/src/lib/email/normalized-email.ts",
     "apps/api/src/lib/email/inbound/receiving-config.ts",
     "apps/api/src/lib/feature-access/grants-schema.ts",

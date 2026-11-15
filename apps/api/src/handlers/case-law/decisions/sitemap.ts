@@ -254,7 +254,12 @@ const rangeKey = (
 /** The listed shard a file names, with its range and size. */
 const readListedShard = async (
   tx: CaseLawPublicReadTransaction,
-  { bucket, country, month, year }: Required<SitemapShardDecisionsQuery>,
+  {
+    bucket,
+    country,
+    month,
+    year,
+  }: { bucket: string; country: string; month: string; year: string },
 ) =>
   (
     await tx

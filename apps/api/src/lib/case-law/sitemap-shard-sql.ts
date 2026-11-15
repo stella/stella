@@ -32,7 +32,7 @@ export const sitemapRangeBucket = (position: number): string =>
  * id. Neither changes when a decision is rewritten, so a decision stays in its
  * range until its month is cut again.
  */
-export type SitemapRangeKey = { date: string; id: string };
+type SitemapRangeKey = { date: string; id: string };
 
 /**
  * One file's slice of a month: from `start` (inclusive) to `end` (exclusive),

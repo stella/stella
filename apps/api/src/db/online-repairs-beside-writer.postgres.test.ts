@@ -57,6 +57,10 @@ const EXTERNAL_REF_COLUMNS =
   "external_source, external_id, external_change_key, imported_at";
 const EXTERNAL_REF_VALUES = "'fixture', 'external-1', 'change-1', now()";
 const SITEMAP_ENROLLMENT = "case-law-sitemap-packing-enrollment";
+const SITEMAP_RANGE_ENROLLMENT = "case-law-sitemap-range-enrollment";
+/** One listed whole month, as the refresh writes it. */
+const SITEMAP_SHARD_INSERT =
+  "INSERT INTO case_law_sitemap_shards (country, year, month, bucket, total, last_modified_at) VALUES ('CZE', '2026', '09', 'all', 1, now())";
 /** A Czech VAT number in the legacy tax_id column; synthetic. */
 const VAT_ID = "CZ12345678";
 const READER_ANNOTATION_INSERT = `INSERT INTO legal_reader_annotations (id, organization_id, user_id, target_type, target_id, kind, visibility, color, style, block_anchor_id, start_offset, end_offset, quote) VALUES ('${ID}', 'org', 'user', 'statute', '${ID_2}', 'highlight', 'private', 'yellow', 'highlight', 'p-1', 0, 5, 'words')`;
@@ -977,7 +981,7 @@ const SEEDS = {
     ),
     seed: async (client) => {
       await exec(client, [
-        "INSERT INTO case_law_sitemap_shards (country, year, month, bucket, total, last_modified_at) VALUES ('CZE', '2026', '09', '000', 1, now())",
+        SITEMAP_SHARD_INSERT,
         `UPDATE database_backfill_states SET cursor = NULL WHERE name = '${SITEMAP_ENROLLMENT}'`,
       ]);
     },
@@ -985,6 +989,25 @@ const SEEDS = {
     writerLock: {
       column: "name",
       id: SITEMAP_ENROLLMENT,
+      table: "database_backfill_states",
+    },
+  },
+  "case-law-sitemap-range-enrollment": {
+    kind: "row-work",
+    ...repairedWhen(
+      SITEMAP_RANGE_ENROLLMENT,
+      "SELECT cursor IS NOT DISTINCT FROM 'complete' AND EXISTS (SELECT 1 FROM case_law_sitemap_changes WHERE country = 'CZE' AND year = '*' AND month = '*') AS repaired FROM database_backfill_states WHERE name = $1",
+    ),
+    seed: async (client) => {
+      await exec(client, [
+        SITEMAP_SHARD_INSERT,
+        `UPDATE database_backfill_states SET cursor = NULL WHERE name = '${SITEMAP_RANGE_ENROLLMENT}'`,
+      ]);
+    },
+    // The repair serializes its batches on this checkpoint.
+    writerLock: {
+      column: "name",
+      id: SITEMAP_RANGE_ENROLLMENT,
       table: "database_backfill_states",
     },
   },
@@ -1054,6 +1077,11 @@ const SEEDS = {
     "desktop_runner_events",
     "desktop_runner_events_request_check",
     `INSERT INTO desktop_runner_events (run_id, seq, type, request_id, message) VALUES ('${ID}', 1, 'run.approval_request', '${ID_2}', '{}')`,
+  ),
+  case_law_sitemap_shards_range_bounds: noRowSeed(
+    "case_law_sitemap_shards",
+    "case_law_sitemap_shards_range_bounds",
+    SITEMAP_SHARD_INSERT,
   ),
   chat_turns_interaction_values_check: noRowSeed(
     "chat_turns",

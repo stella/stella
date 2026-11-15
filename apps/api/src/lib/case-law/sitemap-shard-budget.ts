@@ -27,7 +27,7 @@ export const SITEMAP_SHARD_READ_PAGES_PER_ROW = 9;
  * leg of the request (transfer, parsing, XML) included: measured end to end
  * on cold sitemap files of the same read shape, divided by their pages.
  */
-export const SITEMAP_SHARD_COLD_MS_PER_PAGE = 0.133;
+const SITEMAP_SHARD_COLD_MS_PER_PAGE = 0.133;
 
 /**
  * The read's share of the serve target. The rest covers the admission wait
