@@ -88,6 +88,7 @@ describe("instance provider redirect policy", () => {
       const options = {
         model: BYOK_DEFAULT_MODELS.openrouter.chat.modelId,
         messages: [{ role: "user" as const, content: "fixture request" }],
+        threadId: "stella-openrouter-text-adapter-thread",
         logger: resolveDebugOption(false),
       };
       const managed = createManagedOpenRouterText({
@@ -206,6 +207,7 @@ describe("instance provider redirect policy", () => {
             const chatOptions = {
               model,
               messages: [{ role: "user" as const, content: "fixture request" }],
+              threadId: "stella-openrouter-text-adapter-thread",
               logger: resolveDebugOption(false),
             };
             const structuredOptions = {
@@ -405,6 +407,7 @@ describe("OpenRouter document transport", () => {
 describe("OpenRouter tool schemas", () => {
   test("an optional field also admits null on the wire; a required one does not", () => {
     const request = adapter.requestFor({
+      threadId: "stella-openrouter-text-adapter-thread",
       logger: resolveDebugOption(false),
       messages: [{ role: "user", content: "Delete the draft." }],
       model: "google/gemini-2.5-flash",

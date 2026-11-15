@@ -766,6 +766,7 @@ describe("TanStack text model resolution", () => {
       );
       try {
         for await (const _chunk of model.adapter.chatStream({
+          threadId: "tanstack-ai-models-thread",
           logger: resolveDebugOption(false),
           messages: [
             {
@@ -852,6 +853,7 @@ describe("TanStack text model resolution", () => {
       try {
         const chunks = [];
         for await (const chunk of model.adapter.chatStream({
+          threadId: "tanstack-ai-models-thread",
           logger: resolveDebugOption(false),
           messages: [
             {
@@ -1644,6 +1646,7 @@ describe("Anthropic workspace dispatch", () => {
           });
           const before = requests.length;
           for await (const _chunk of model.adapter.chatStream({
+            threadId: "tanstack-ai-models-thread",
             logger: resolveDebugOption(false),
             messages: [{ role: "user", content: "Fixture" }],
             model: model.adapter.model,
@@ -2122,6 +2125,7 @@ describe("reviewed reasoning policy reaches the provider wire", () => {
             dataClass: "customer",
           })(modelId);
           for await (const _chunk of adapter.chatStream({
+            threadId: "tanstack-ai-models-thread",
             logger: resolveDebugOption(false),
             model: modelId,
             messages: [{ role: "user", content: "Answer" }],
@@ -2137,7 +2141,7 @@ describe("reviewed reasoning policy reaches the provider wire", () => {
         if (!isRecord(body)) {
           throw new TypeError("Expected a provider request");
         }
-        const expected: Record<string, unknown> = options;
+        const expected: Record<string, unknown> = { ...options };
         expect(body["reasoning"]).toEqual(expected["reasoning"]);
         expect(body["thinking"]).toEqual(expected["thinking"]);
         expect(body["output_config"]).toEqual(expected["output_config"]);

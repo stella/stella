@@ -1,4 +1,11 @@
-import { chat, EventType, maxIterations, toolDefinition } from "@tanstack/ai";
+import {
+  chat,
+  createModel,
+  EventType,
+  extendAdapter,
+  maxIterations,
+  toolDefinition,
+} from "@tanstack/ai";
 import type { AnyTextAdapter, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import { createOpenaiChat } from "@tanstack/ai-openai";
@@ -25,6 +32,18 @@ import {
 } from "@/api/lib/observability/request-metrics";
 import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+// The product catalogue can precede the SDK's static model union. Use the
+// same public registration mechanism as the production adapter factory.
+const catalogAnthropicChat = extendAdapter(
+  createAnthropicChat,
+  BYOK_MODEL_OPTIONS.anthropic.map((model) =>
+    createModel(model, {
+      input: ["text", "image", "document"] as const,
+      features: ["structured_outputs"] as const,
+    }),
+  ),
+);
 
 const started: StreamChunk = {
   type: EventType.RUN_STARTED,
@@ -73,6 +92,7 @@ const adapterOf = (
 const run = async (adapter: AnyTextAdapter, signal?: AbortSignal) => {
   const chunks: StreamChunk[] = [];
   for await (const chunk of withProviderStreamContract(adapter).chatStream({
+    threadId: "provider-stream-contract-thread",
     logger: resolveDebugOption(false),
     messages: [],
     model: "model",
@@ -139,6 +159,7 @@ describe("the provider stream contract", () => {
       },
     ] satisfies ModelMessage[];
     const request = {
+      threadId: "provider-stream-contract-thread",
       logger: resolveDebugOption(false),
       messages,
       model: "gpt-6-sol",
@@ -217,6 +238,7 @@ describe("the provider stream contract", () => {
       },
     });
     for await (const chunk of withProviderStreamContract(adapter).chatStream({
+      threadId: "provider-stream-contract-thread",
       logger: resolveDebugOption(false),
       messages: [],
       model: "model",
@@ -249,6 +271,7 @@ describe("the provider stream contract", () => {
       },
     });
     const request = {
+      threadId: "provider-stream-contract-thread",
       logger: resolveDebugOption(false),
       messages: [],
       model: "model",
@@ -454,6 +477,7 @@ const reasoningSignedBy = async (provider: ReasoningProvider) => {
   const adapter = reasoningAdapter(provider, fetch);
   const signatures: string[] = [];
   for await (const chunk of adapter.chatStream({
+    threadId: "provider-stream-contract-thread",
     logger: resolveDebugOption(false),
     messages: [{ role: "user", content: "Delete the draft." }],
     model: adapter.model,
@@ -487,6 +511,7 @@ const requestWithReasoning = async (
   const { bodies, fetch } = recordingFetch(refused);
   const adapter = reasoningAdapter(provider, fetch);
   for await (const _chunk of adapter.chatStream({
+    threadId: "provider-stream-contract-thread",
     logger: resolveDebugOption(false),
     messages: [
       { role: "user", content: "Delete the draft." },
@@ -534,7 +559,7 @@ for (const boundary of ["base contract", "run tool-call ledger"] as const) {
         yield {
           ...started,
           runId: runId ?? "run",
-          threadId: threadId ?? "thread",
+          threadId,
           model,
         };
         if (sink.length === 1) {
@@ -694,6 +719,7 @@ describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
     const { bodies, fetch } = recordingFetch(refused);
     const adapter = reasoningAdapter(provider, fetch);
     for await (const _chunk of adapter.chatStream({
+      threadId: "provider-stream-contract-thread",
       logger: resolveDebugOption(false),
       messages: openTurn(thinking),
       model: adapter.model,
@@ -765,6 +791,7 @@ describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
     const refusal: unknown = await adapter
       .structuredOutput({
         chatOptions: {
+          threadId: "provider-stream-contract-thread",
           logger: resolveDebugOption(false),
           messages: openTurn(legacyReasoning),
           model: adapter.model,
@@ -801,6 +828,7 @@ describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
       panic("The contract hides the structured output stream");
     for await (const _chunk of stream({
       chatOptions: {
+        threadId: "provider-stream-contract-thread",
         logger: resolveDebugOption(false),
         messages: openTurn(legacyReasoning),
         model: adapter.model,
@@ -895,6 +923,7 @@ describe("Anthropic native reasoning across adapter upgrades", () => {
           { fetch },
         );
         const chatOptions = {
+          threadId: "provider-stream-contract-thread",
           logger: resolveDebugOption(false),
           model: adapter.model,
           messages: [{ role: "user", content: "Answer" }],
@@ -954,6 +983,7 @@ describe("Anthropic native reasoning across adapter upgrades", () => {
         { fetch },
       );
       const chatOptions = {
+        threadId: "provider-stream-contract-thread",
         logger: resolveDebugOption(false),
         model: adapter.model,
         messages: [{ role: "user", content: "Answer" }],
@@ -990,7 +1020,7 @@ describe("Anthropic native reasoning across adapter upgrades", () => {
   }
   test("every offered Anthropic model supports the schema path required by thinking", () => {
     for (const model of BYOK_MODEL_OPTIONS.anthropic) {
-      const adapter: AnyTextAdapter = createAnthropicChat(model, "test-key");
+      const adapter: AnyTextAdapter = catalogAnthropicChat(model, "test-key");
       expect(adapter.supportsCombinedToolsAndSchema?.(), model).toBe(true);
     }
   });
@@ -1003,6 +1033,7 @@ describe("Anthropic native reasoning across adapter upgrades", () => {
       { fetch },
     );
     for await (const _chunk of adapter.chatStream({
+      threadId: "provider-stream-contract-thread",
       logger: resolveDebugOption(false),
       model: adapter.model,
       messages: [{ role: "user", content: "Answer" }],
@@ -1031,7 +1062,7 @@ describe("Anthropic native reasoning across adapter upgrades", () => {
   ] as const) {
     test(`${model} preserves thinking through a successful native schema response`, async () => {
       const { bodies, fetch } = recordingFetch(success);
-      const adapter: AnyTextAdapter = createAnthropicChat(model, "test-key", {
+      const adapter: AnyTextAdapter = catalogAnthropicChat(model, "test-key", {
         fetch,
       });
       const thinking =
@@ -1040,6 +1071,7 @@ describe("Anthropic native reasoning across adapter upgrades", () => {
           : { type: "enabled", budget_tokens: 10_000 };
       const result = await adapter.structuredOutput({
         chatOptions: {
+          threadId: "provider-stream-contract-thread",
           logger: resolveDebugOption(false),
           model,
           messages: [{ role: "user", content: "Answer" }],
