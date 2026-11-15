@@ -2,17 +2,20 @@ import { panic } from "better-result";
 import { eq, type SQL, sql } from "drizzle-orm";
 import type { drizzle } from "drizzle-orm/pglite";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import type { Transaction } from "@/api/db/root";
 import {
+  caseLawDecisions,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { recordCorpusWithdrawalAuditEvent } from "@/api/lib/legal-search/corpus-index-job-audit";
 import {
   CORPUS_INDEX_MANIFESTS,
-  corpusIndexIdFromManifest,
   type CorpusIndexManifest,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -41,6 +44,8 @@ const FAMILY_FIXTURE = {
     generation: "legislation_v2",
     manifest: CORPUS_INDEX_MANIFESTS.legislation_v2,
     canonicalTable: sql.raw("legislation_documents"),
+    /** The index a Czech row of this generation is routed to. */
+    indexId: "legislation_v2_cze",
     /** Keeps each family's ids apart when both run on one database. */
     idPrefix: "0198e331-e578-7000-8000-",
   },
@@ -48,6 +53,7 @@ const FAMILY_FIXTURE = {
     generation: "case_law_v5",
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v5,
     canonicalTable: sql.raw("case_law_decisions"),
+    indexId: "case_law_v5_cs_sk",
     idPrefix: "0198e331-e578-7000-8001-",
   },
 } as const satisfies Record<
@@ -56,6 +62,7 @@ const FAMILY_FIXTURE = {
     generation: string;
     manifest: CorpusIndexManifest;
     canonicalTable: SQL;
+    indexId: string;
     idPrefix: string;
   }
 >;
@@ -76,9 +83,13 @@ export const corpusProjectionLegacyFixture = (
   database: () => ReturnType<typeof drizzle>,
   family: CorpusFamily = "legislation",
 ) => {
-  const { generation, manifest, canonicalTable, idPrefix } =
-    FAMILY_FIXTURE[family];
-  const INDEX_ID = corpusIndexIdFromManifest(manifest, "CZE");
+  const {
+    generation,
+    manifest,
+    canonicalTable,
+    indexId: INDEX_ID,
+    idPrefix,
+  } = FAMILY_FIXTURE[family];
   const SOURCE_ID = `${idPrefix}000000000af1`;
   /** The earlier release's publish fence: acceptance plus the generation's delay. */
   const PUBLISH_DELAY = sql.raw(
@@ -155,18 +166,28 @@ export const corpusProjectionLegacyFixture = (
 
   /** One canonical row of the fixture's family, at projection epoch 1. */
   const insertCanonical = async (entityId: string) => {
+    if (family === "case_law") {
+      await database().execute(sql`SELECT pg_sleep(0.002)`);
+      await database()
+        .insert(caseLawDecisions)
+        .values({
+          id: toSafeId<"caseLawDecision">(entityId),
+          sourceId: toSafeId<"caseLawSource">(SOURCE_ID),
+          ...decisionDocketColumns({
+            caseNumber: `1 As ${nextId}/2020`,
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+            country: "CZE",
+          }),
+          court: "Nejvyšší správní soud",
+          country: "CZE",
+          language: "cs",
+          contentHash: fingerprint(4),
+          projectionEpoch: 1n,
+        });
+      return;
+    }
     await run(
-      family === "case_law"
-        ? sql`
-          INSERT INTO case_law_decisions (
-            id, source_id, case_number, court, country, language, content_hash,
-            projection_epoch
-          ) VALUES (
-            ${entityId}, ${SOURCE_ID}, ${`1 As ${nextId}/2020`},
-            'Nejvyšší správní soud', 'CZE', 'cs', ${fingerprint(4)}, 1
-          )
-        `
-        : sql`
+      sql`
           INSERT INTO legislation_documents (
             id, source_id, eli, title, country, language, document_type, status,
             content_hash, projection_epoch
@@ -295,14 +316,15 @@ export const corpusProjectionLegacyFixture = (
 
   /** A case-law withdrawal recorded by the production audit writer. */
   const recordWithdrawal = async (entityId: string) => {
-    if (family !== "case_law") {
-      return panic("Only case-law withdrawals are recorded");
-    }
+    const decisionId =
+      family === "case_law"
+        ? toSafeId<"caseLawDecision">(entityId)
+        : panic("Only case-law withdrawals are recorded");
     await database().execute(sql`SELECT pg_sleep(0.002)`);
     await database().transaction(
       async (tx) =>
         await recordCorpusWithdrawalAuditEvent(asTestRaw<Transaction>(tx), {
-          decisionId: toSafeId<"caseLawDecision">(entityId),
+          decisionId,
           reason: "Stored payload no longer parses as a document",
         }),
     );

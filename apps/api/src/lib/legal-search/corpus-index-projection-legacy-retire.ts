@@ -169,10 +169,11 @@ const requireDecision = (value: string): LegacyRetireDecision =>
  * Legislation has no production writer of withdrawals, so this is never true
  * for legislation and the pass never retires a legislation copy.
  */
-const erasureRecordedInWindow = (family: CorpusFamily, cutover: SQL): SQL => {
+const erasureRecordedInWindow = (
+  family: CorpusFamily,
+  cutoverAt: Temporal.Instant,
+): SQL => {
   const states = corpusIndexProjectionStates;
-  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- the cutover is a full-precision text instant cast in the database, never a round-tripped Date
-  const beforeCutover = sql`${caseLawIndexJobs.createdAt} < ${cutover}`;
   const evidence = {
     case_law: sql`EXISTS (
       SELECT 1 FROM ${caseLawIndexJobs}
@@ -180,7 +181,7 @@ const erasureRecordedInWindow = (family: CorpusFamily, cutover: SQL): SQL => {
         AND ${caseLawIndexJobs.operation} = 'withdraw'
         AND ${caseLawIndexJobs.status} = 'succeeded'
         AND ${caseLawIndexJobs.createdAt} >= named.created_at
-        AND ${beforeCutover}
+        AND ${caseLawIndexJobs.createdAt} < ${cutoverAt.toString()}::timestamptz
     )`,
     legislation: sql`false`,
   } satisfies Record<CorpusFamily, SQL>;
@@ -380,7 +381,7 @@ export const retireLegacyUnprovenServedCopiesTx = async (
               AND ${states.desiredAt} >= ${cutover})
             OR named.applied_at >= ${cutover}
             THEN 'kept_after_cutover'
-          WHEN NOT ${erasureRecordedInWindow(family, cutover)}
+          WHEN NOT ${erasureRecordedInWindow(family, cutoverAt)}
             THEN 'kept_unproven'
           WHEN ${states.workStatus} = 'blocked'
             THEN 'kept_blocked'
