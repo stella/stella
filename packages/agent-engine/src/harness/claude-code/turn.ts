@@ -64,6 +64,7 @@ import {
   isClaudeControlRequestSubtype,
   isClaudeMessageType,
   isClaudeSystemSubtype,
+  ModelRefusalFallbackSchema,
   RateLimitEventSchema,
   ResultMessageSchema,
   STREAM_EVENTS,
@@ -593,6 +594,17 @@ export class ClaudeCodeTurnSession {
             type: "retrying",
             message: `Retrying after ${retry.error} (attempt ${String(retry.attempt)} of ${String(retry.max_retries)}).`,
           });
+        }
+        return;
+      }
+      case "rerouted": {
+        const fallback = this.parse(
+          ModelRefusalFallbackSchema,
+          raw,
+          "model fallback",
+        );
+        if (fallback !== null && fallback.scope !== "local") {
+          this.emit({ type: "model.rerouted", model: fallback.fallback_model });
         }
         return;
       }

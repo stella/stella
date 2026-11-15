@@ -284,6 +284,17 @@ export const ApiRetryMessageSchema = v.object({
   error: v.string(),
 });
 
+/**
+ * The turn was retried once on the fallback model after the asked one
+ * refused. `local`: only a subagent's response came from the fallback, and
+ * the main thread's model is unchanged; an older CLI leaves `scope` out,
+ * which is the main thread.
+ */
+export const ModelRefusalFallbackSchema = v.object({
+  fallback_model: v.string(),
+  scope: v.optional(v.picklist(["session", "local"])),
+});
+
 export const StreamEventMessageSchema = v.object({
   type: v.literal("stream_event"),
   parent_tool_use_id: ParentToolUseId,
