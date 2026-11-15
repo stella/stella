@@ -81,7 +81,8 @@ export const ChatComposer = ({
   onSend: (draft: ChatDraft, onRefused: () => void) => boolean;
   /**
    * Hands the draft to the turn answering now, while one that can take it
-   * runs (`isChatSteerOffered`); returns false when it was not taken.
+   * runs (where a plain send steers, `chatSendIntent`); returns false when
+   * it was not taken.
    */
   onSteer: ((draft: ChatDraft, onRefused: () => void) => boolean) | undefined;
   onStop: () => void;

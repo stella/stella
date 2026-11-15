@@ -10,8 +10,16 @@ import {
 } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { CHAT_RUN_TARGET_KIND } from "@stll/api-contract/chat-run-target";
-import { isChatSteerOffered } from "@stll/api-contract/chat-send-intent";
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  CHAT_SEND_INTENT,
+  CHAT_TURN_STEERING,
+  chatSendIntent,
+} from "@stll/api-contract/chat-send-intent";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Text } from "@stll/ui/text";
 
@@ -450,11 +458,7 @@ const ThreadMessages = ({
           canStop={turn.canStop}
           onSend={turn.send}
           onSteer={
-            isChatSteerOffered(
-              turn.busy
-                ? { type: "working", runTarget: runTargetKind }
-                : { type: "idle" },
-            )
+            isSteerOfferedOnPhone(turn.busy, runTargetKind)
               ? turn.steer
               : undefined
           }
@@ -467,6 +471,29 @@ const ThreadMessages = ({
     </View>
   );
 };
+
+/**
+ * Whether the phone offers to hand a draft to the turn answering now: where
+ * a plain send steers it (`chatSendIntent`). The phone reads no runner list,
+ * so a turn on the member's computer counts as one that takes messages; a
+ * harness that does not is refused by the steer route, and the draft comes
+ * back with the reason.
+ */
+const isSteerOfferedOnPhone = (
+  busy: boolean,
+  runTargetKind: ChatRunTarget["kind"],
+): boolean =>
+  busy &&
+  chatSendIntent(
+    {
+      type: "working",
+      steering:
+        runTargetKind === CHAT_RUN_TARGET_KIND.local
+          ? CHAT_TURN_STEERING.steerable
+          : CHAT_TURN_STEERING.notSteerable,
+    },
+    CHAT_MEMBER_SEND_ACTION.send,
+  ) === CHAT_SEND_INTENT.steer;
 
 /**
  * The turn answering now: the message sent from here, and the answer as it
