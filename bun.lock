@@ -75,7 +75,7 @@
         "@litko/yara-x": "^0.12.0",
         "@modelcontextprotocol/server": "2.4.0",
         "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
-        "@openrouter/sdk": "0.13.67",
+        "@openrouter/sdk": "1.5.73",
         "@silurus/ooxml": "catalog:",
         "@smithy/fetch-http-handler": "^5.8.1",
         "@stll/agent-engine": "workspace:*",
@@ -2884,7 +2884,7 @@
 
     "@oozcitak/util": ["@oozcitak/util@10.0.0", "", {}, "sha512-hAX0pT/73190NLqBPPWSdBVGtbY6VOhWYK3qqHqtXQ1gK7kS2yz4+ivsN07hpJ6I3aeMtKP6J6npsEKOAzuTLA=="],
 
-    "@openrouter/sdk": ["@openrouter/sdk@0.13.67", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" }, "hasInstallScript": true }, "sha512-kUVaFYA9Xehq67ndTk98i+tRLfYH/F6xSf/WuC8dsukBzcgBvYQydoeKw4Xe+peXG/wOVtDxukWt5SqzhbloKw=="],
+    "@openrouter/sdk": ["@openrouter/sdk@1.5.73", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" }, "hasInstallScript": true }, "sha512-MVmqnTk0qHO5NA25r1BR/NuUTeM8aKYWDAFT4Sj32dkEMj9G/oAhcL5eaQJt8rvz1GP2HDSXEczs2gTaVACV2w=="],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.10.0", "", {}, "sha512-lMkyes8iHrG+mk6WH7X70MdCLI2RS0FwNBY1PyQ8UemaijE2m5mv5A0Niy3HtbYTFrgkUEQjFMXmSAk2hQDuPQ=="],
 

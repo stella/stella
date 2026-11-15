@@ -119,7 +119,7 @@
     "@litko/yara-x": "^0.12.0",
     "@modelcontextprotocol/server": "2.4.0",
     "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
-    "@openrouter/sdk": "0.13.67",
+    "@openrouter/sdk": "1.5.73",
     "@silurus/ooxml": "catalog:",
     "@smithy/fetch-http-handler": "^5.8.1",
     "@stll/agent-engine": "workspace:*",
