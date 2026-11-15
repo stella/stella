@@ -7,6 +7,9 @@ import type { OAuthConsentInfo } from "@/lib/oauth-provider";
 /** Product and publisher names are proper nouns: never translated. */
 const VERIFIED_CLIENT_IDENTITY = {
   stella: { name: "stella", publisher: "stella" },
+  stella_cli: { name: "stella CLI", publisher: "stella" },
+  stella_ios: { name: "stella for iOS", publisher: "stella" },
+  stella_outlook: { name: "stella for Outlook", publisher: "stella" },
   claude: { name: "Claude", publisher: "Anthropic" },
   claude_code: { name: "Claude Code", publisher: "Anthropic" },
   chatgpt: { name: "ChatGPT", publisher: "OpenAI" },

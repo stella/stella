@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   canRevertReviewChange,
@@ -601,7 +601,8 @@ const blockIndexOf = (
 
 describe("grouping the review queue into changes", () => {
   test("partitions the queue without reordering it", () => {
-    fc.assert(
+    assertProperty(
+      "partitions the queue without reordering it",
       fc.property(generatedSession, ({ blocks, suggestions }) => {
         const ordered = orderSuggestionsByDocumentPosition(suggestions, blocks);
         const changes = groupReviewChanges(ordered, blocks);
@@ -613,12 +614,13 @@ describe("grouping the review queue into changes", () => {
           expect(change.id).toBe(change.members[0].id);
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("only chat deletions of adjacent blocks with one status share a change", () => {
-    fc.assert(
+    assertProperty(
+      "only chat deletions of adjacent blocks with one status share a change",
       fc.property(generatedSession, ({ blocks, suggestions }) => {
         const changes = groupReviewChanges(
           orderSuggestionsByDocumentPosition(suggestions, blocks),
@@ -656,12 +658,13 @@ describe("grouping the review queue into changes", () => {
           }
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("regrouping the grouped queue changes nothing", () => {
-    fc.assert(
+    assertProperty(
+      "regrouping the grouped queue changes nothing",
       fc.property(generatedSession, ({ blocks, suggestions }) => {
         const changes = groupReviewChanges(
           orderSuggestionsByDocumentPosition(suggestions, blocks),
@@ -674,12 +677,13 @@ describe("grouping the review queue into changes", () => {
 
         expect(regrouped).toEqual(changes);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("neighbouring changes could not have been one", () => {
-    fc.assert(
+    assertProperty(
+      "neighbouring changes could not have been one",
       fc.property(generatedSession, ({ blocks, suggestions }) => {
         const changes = groupReviewChanges(
           orderSuggestionsByDocumentPosition(suggestions, blocks),
@@ -698,7 +702,7 @@ describe("grouping the review queue into changes", () => {
           expect(pair).toHaveLength(2);
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

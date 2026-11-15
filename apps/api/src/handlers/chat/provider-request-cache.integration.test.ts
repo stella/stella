@@ -70,7 +70,7 @@ import {
   wireOrgAIConfig,
   wireSideModel,
 } from "@/api/tests/helpers/provider-wire-contract";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   ProviderWireReplay,
   ReplayedRequest,
@@ -137,6 +137,13 @@ let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ passThroughOrigins: [fakeS3.endpoint] }),
+});
+
 /** A member of the organization, as the send path sees them. */
 type Member = {
   /** The profile their page sends with each message; none by default. */
@@ -181,11 +188,9 @@ beforeAll(async () => {
   process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
   fakeS3 = startFakeS3();
-  replay = installProviderWireReplay({ passThroughOrigins: [fakeS3.endpoint] });
 });
 
 afterAll(async () => {
-  replay.restore();
   fakeS3.stop();
   env.USE_MOCK_AI = previousMockAI;
   if (previousBedrockEndpoint === undefined) {
@@ -357,12 +362,14 @@ const cacheableSystemTextOf = (system: string): string => {
   return system.slice(0, at + PRACTICE_JURISDICTION_LINE.length);
 };
 
-/** A fresh thread's first turn, as `member` sends it with caching on. */
+/** A fresh thread's first turn with the organization's caching choice. */
 const firstTurnBody = async ({
+  caching = "on",
   endpoint,
   member,
   tools,
 }: {
+  caching?: CachingSetting;
   endpoint: CacheEndpoint;
   member: Member;
   tools: ToolSurface;
@@ -371,7 +378,7 @@ const firstTurnBody = async ({
   seededThreadIds.push(threadId);
   replay.forgetSignedCalls();
   const session = await openSession({
-    caching: "on",
+    caching,
     chatModel: endpoint.chatModel,
     endpoint: { provider: endpoint.provider, slot: "recorded" },
     member,
@@ -392,6 +399,18 @@ const firstTurnBody = async ({
   } finally {
     await session.close();
   }
+};
+
+const expectDisabledCacheRequest = async (endpoint: CacheEndpoint) => {
+  const body = await firstTurnBody({
+    caching: "off",
+    endpoint,
+    member: firstMember,
+    tools: "default",
+  });
+  expect(cacheMarkersOf(body)).toEqual([]);
+  expect(body).not.toHaveProperty("prompt_cache_key");
+  expect(body).not.toHaveProperty("prompt_cache_retention");
 };
 
 /**
@@ -587,6 +606,14 @@ describe("chat requests: the cached prefix", () => {
   });
 
   for (const endpoint of CACHE_ENDPOINTS) {
+    test(
+      `${endpoint.key}: disabled caching emits no automatic markers or key`,
+      async () => {
+        await expectDisabledCacheRequest(endpoint);
+      },
+      propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+    );
+
     test(
       `${endpoint.key}: history and every tool-loop iteration reuse the cached prefix`,
       async () => {

@@ -17,12 +17,12 @@ import {
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
 } from "@stll/api-contract";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import arabicMessages from "@/i18n/langs/ar.json";
 import englishMessages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ClauseDetailTransport, ClauseHead } from "./clause-detail";
 import type { ClauseBodyWrite } from "./use-clause-body-save";
@@ -89,8 +89,8 @@ type Operation =
       expectedBody: ClauseParagraph[];
     };
 
-beforeEach(() => jest.useFakeTimers());
 beforeEach(() => {
+  jest.useFakeTimers();
   fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
       async (input: RequestInfo | URL) => {

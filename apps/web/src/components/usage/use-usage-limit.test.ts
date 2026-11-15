@@ -1,49 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  extractFromError,
-  parseAmounts,
-  reasonFromMessage,
-} from "@/components/usage/use-usage-limit";
+import { extractFromError } from "@/components/usage/use-usage-limit";
 import { APIError } from "@/lib/errors/api";
-
-describe("reasonFromMessage", () => {
-  test("usage_limit_exceeded for messages that mention need / have amounts", () => {
-    expect(reasonFromMessage("Usage limit exceeded: need 100, have 25")).toBe(
-      "usage_limit_exceeded",
-    );
-  });
-
-  test("no_entitlement for the API's no-entitlement message", () => {
-    expect(
-      reasonFromMessage("Organisation has no active usage entitlement"),
-    ).toBe("no_entitlement");
-  });
-
-  test("entitlement_inactive for inactive entitlements", () => {
-    expect(
-      reasonFromMessage("Usage entitlement is paused and cannot consume units"),
-    ).toBe("entitlement_inactive");
-  });
-
-  test("entitlement_inactive catches usage entitlement inactive wording", () => {
-    expect(reasonFromMessage("Usage entitlement is inactive right now")).toBe(
-      "entitlement_inactive",
-    );
-  });
-
-  test("usage_limit_exceeded is the safe default for unrecognised messages", () => {
-    expect(reasonFromMessage("some weird unrelated text")).toBe(
-      "usage_limit_exceeded",
-    );
-  });
-
-  test("matching is case-insensitive", () => {
-    expect(
-      reasonFromMessage("ORGANISATION HAS NO ACTIVE USAGE ENTITLEMENT"),
-    ).toBe("no_entitlement");
-  });
-});
 
 describe("extractFromError", () => {
   test("recognises an APIError with status 402", () => {
@@ -54,7 +12,7 @@ describe("extractFromError", () => {
     });
     const out = extractFromError(error);
     expect(out).not.toBeNull();
-    expect(out?.message).toBe("Usage limit exceeded: need 50, have 10");
+    expect(out?.reason).toBe("usage_limit_exceeded");
     expect(out?.details).toEqual({
       reason: "usage_limit_exceeded",
       required: 50,
@@ -152,35 +110,5 @@ describe("extractFromError", () => {
       responseBody: JSON.stringify([1, 2, 3]),
     });
     expect(out).toBeNull();
-  });
-});
-
-describe("parseAmounts", () => {
-  test("extracts required + available from the canonical message", () => {
-    expect(parseAmounts("Usage limit exceeded: need 100, have 25")).toEqual({
-      required: 100,
-      available: 25,
-    });
-  });
-
-  test("returns zeros when no numbers are present", () => {
-    expect(parseAmounts("Usage entitlement is paused")).toEqual({
-      required: 0,
-      available: 0,
-    });
-  });
-
-  test("handles whitespace variations", () => {
-    expect(parseAmounts("need   100,   have   25")).toEqual({
-      required: 100,
-      available: 25,
-    });
-  });
-
-  test("returns zeros if only one of the two numbers is present", () => {
-    expect(parseAmounts("need 100")).toEqual({
-      required: 0,
-      available: 0,
-    });
   });
 });

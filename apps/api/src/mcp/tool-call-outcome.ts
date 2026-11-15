@@ -27,7 +27,10 @@ export const getMcpToolCallOutcome = (
   return result.isError === true ? "tool_error" : "ok";
 };
 
-const typedEnvelopeCode = (result: CallToolResult): unknown => {
+/** The typed error envelope's code and the input paths it refused. */
+export const readToolErrorEnvelope = (
+  result: CallToolResult,
+): { code: string; issuePaths: string[] } | undefined => {
   if (result.isError !== true || result.content.length !== 1) {
     return undefined;
   }
@@ -44,10 +47,21 @@ const typedEnvelopeCode = (result: CallToolResult): unknown => {
     return undefined;
   }
   const error = parsed["error"];
-  return typeof error["code"] === "string" &&
-    typeof error["message"] === "string"
-    ? error["code"]
-    : undefined;
+  if (
+    typeof error["code"] !== "string" ||
+    typeof error["message"] !== "string"
+  ) {
+    return undefined;
+  }
+  const issues = Array.isArray(error["issues"]) ? error["issues"] : [];
+  return {
+    code: error["code"],
+    issuePaths: issues.flatMap((issue: unknown) =>
+      isRecord(issue) && typeof issue["path"] === "string"
+        ? [issue["path"]]
+        : [],
+    ),
+  };
 };
 
 export const getMcpToolCallAnalyticsOutcome = (
@@ -59,7 +73,7 @@ export const getMcpToolCallAnalyticsOutcome = (
   ) {
     return { outcome: "internal_error" };
   }
-  const errorCode = typedEnvelopeCode(result);
+  const errorCode = readToolErrorEnvelope(result)?.code;
   if (errorCode !== undefined) {
     return {
       outcome: "refused",

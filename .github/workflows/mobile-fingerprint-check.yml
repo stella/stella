@@ -61,7 +61,6 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
-          no-cache: true
 
       - name: Install the merge result's mobile dependencies
         timeout-minutes: 10
@@ -145,7 +144,6 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
-          no-cache: true
 
       - name: Install the merge result's mobile dependencies
         timeout-minutes: 10

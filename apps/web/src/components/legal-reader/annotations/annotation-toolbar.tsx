@@ -7,15 +7,16 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { AddCommentIcon, SparklesIcon, Trash2Icon } from "@stll/ui/icons";
 
+import { useSelectionCopyControl } from "@/components/copy-control";
 import type {
   AnnotationColor,
   AnnotationStyle,
   AnnotationVisibility,
 } from "@/components/legal-reader/annotations/annotation-types";
 import {
-  askAboutReaderPassage,
   readerSelectionLocator,
   readerSpansLocator,
+  useAskAboutReaderPassage,
   writeReaderPassage,
 } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
@@ -37,7 +38,6 @@ import { SelectionToolbar } from "@/components/selection-toolbar";
 import {
   SelectionAIActions,
   SelectionCopyMenu,
-  useSelectionCopy,
 } from "@/components/selection-toolbar-actions";
 import {
   MarkColorSwatches,
@@ -133,6 +133,7 @@ export const AnnotationToolbar = ({
   target,
 }: AnnotationToolbarProps) => {
   const t = useTranslations();
+  const askAboutReaderPassage = useAskAboutReaderPassage();
   const barRef = useRef<HTMLDivElement | null>(null);
   const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const attachBar = (node: HTMLDivElement | null) => {
@@ -146,7 +147,14 @@ export const AnnotationToolbar = ({
   const [doc, setDoc] = useState<Document | null>(null);
   const [style, setStyle] = useState<AnnotationStyle>("highlight");
   const [copyOpen, setCopyOpen] = useState(false);
-  const selectionCopy = useSelectionCopy();
+  // The bar copies the words selected in the reader while it is showing.
+  const selectionCopy = useSelectionCopyControl({
+    ownsSelection: (selection, root) =>
+      barRef.current !== null &&
+      root.contains(selection.anchorNode) &&
+      root.contains(selection.focusNode),
+    rootRef: scrollContainerRef,
+  });
   // A new highlight is private; sharing is a deliberate second step on the mark.
   const visibility: AnnotationVisibility = "private";
 
@@ -396,22 +404,7 @@ export const AnnotationToolbar = ({
       }
       readSelection();
     };
-    const onSelectionChange = () => {
-      selectionCopy.selectionChanged();
-      readSelection();
-    };
-    const onCopy = () => {
-      const selection = ownerDoc.getSelection();
-      if (
-        barRef.current !== null &&
-        selection !== null &&
-        !selection.isCollapsed &&
-        root.contains(selection.anchorNode) &&
-        root.contains(selection.focusNode)
-      ) {
-        selectionCopy.confirmNativeCopy();
-      }
-    };
+    const onSelectionChange = () => readSelection();
     const onViewportChange = () => readSelection();
     const onScroll = (event: Event) => {
       if (scrollMovesSelection(event, [barRef.current, copyMenuRef.current])) {
@@ -435,7 +428,6 @@ export const AnnotationToolbar = ({
       writePassage(event.dataTransfer, quote);
     };
     ownerDoc.addEventListener("selectionchange", onSelectionChange);
-    ownerDoc.addEventListener("copy", onCopy);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
     ownerDoc.addEventListener("pointercancel", onPointerCancel);
@@ -450,7 +442,6 @@ export const AnnotationToolbar = ({
       observer.disconnect();
       cancelAnimationFrame(frame);
       ownerDoc.removeEventListener("selectionchange", onSelectionChange);
-      ownerDoc.removeEventListener("copy", onCopy);
       ownerDoc.removeEventListener("keydown", onKeyDown);
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
       ownerDoc.removeEventListener("pointercancel", onPointerCancel);
@@ -507,6 +498,7 @@ export const AnnotationToolbar = ({
   // the same question, and the tools look the provision up by it.
   const askAboutPassage = (quote: string, locator: string | null) => {
     askAboutReaderPassage({
+      locator,
       prompt: t("legalReader.annotations.askPassagePrompt", {
         citation: readerTargetCitation({ locator, target }).inline,
         quote,
@@ -613,6 +605,8 @@ export const AnnotationToolbar = ({
                       blockAnchorId: span.blockAnchorId,
                       endOffset: span.endOffset,
                       quote: span.quote,
+                      quotePrefix: span.quotePrefix,
+                      quoteSuffix: span.quoteSuffix,
                       startOffset: span.startOffset,
                     })),
                   );

@@ -3,7 +3,7 @@
   "kind": "native-tool",
   "slug": "krs",
   "displayName": "Krajowy Rejestr Sądowy",
-  "description": "Polish company lookup by KRS number from the Ministry of Justice's Krajowy Rejestr Sądowy (KRS) open API. Covers both Rejestr Przedsiębiorców (commercial entities) and Rejestr Stowarzyszeń (associations / foundations).",
+  "description": "Polish company lookup by KRS number from the Ministry of Justice's Krajowy Rejestr Sądowy (KRS) open API. Covers both Rejestr Przedsiębiorców (commercial companies) and Rejestr Stowarzyszeń (associations / foundations).",
   "author": "stella",
   "authorUrl": "https://github.com/stella",
   "license": "Apache-2.0",

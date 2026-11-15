@@ -21,6 +21,7 @@ import {
   createTaskProgressWatchdog,
   DEFAULT_TASK_BUDGETS,
   evaluateTaskBudgets,
+  largestOwnedProcesses,
   ownedProcessGroupMembers,
   ownedProcessTreeRows,
   parseTaskBudgets,
@@ -1169,6 +1170,23 @@ test("termination diagnostics retain tree ancestry, group members and process st
     "102 101 102 S worker",
     "103 1 100 Z exited",
   ]);
+});
+
+test("the machine trail names the group's largest resident processes, largest first", () => {
+  const snapshot = [
+    "100 1 100 S 2468 bun --bun turbo run lint",
+    "101 100 100 S 19688 turbo daemon",
+    "102 101 102 S 9437184 oxlint --type-aware apps/api",
+    "103 102 102 R 4194304 tsgolint headless",
+    "104 101 104 Z 0 [node] <defunct>",
+    "105 999 999 S 16777216 unrelated database",
+  ].join("\n");
+  expect(largestOwnedProcesses(snapshot, 100)).toEqual([
+    "rss_mib=9216 oxlint --type-aware apps/api",
+    "rss_mib=4096 tsgolint headless",
+    "rss_mib=19 turbo daemon",
+  ]);
+  expect(largestOwnedProcesses(`${"x".repeat(10)}\n`, 100)).toEqual([]);
 });
 
 test("a runnable owned process is progress between CPU clock ticks", () => {

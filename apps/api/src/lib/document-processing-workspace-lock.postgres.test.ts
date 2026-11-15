@@ -20,6 +20,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import {
+  DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
   DOCUMENT_OCR_PROCESSOR_VERSION,
   DOCUMENT_PROCESSING_MAX_ATTEMPTS,
 } from "@/api/lib/document-processing-contract";
@@ -29,17 +30,20 @@ import {
   persistMissingNativeExtractionRuns,
   persistOcrProjection,
   processDocumentProcessingRun,
+  readInlineNativeExtractionRuns,
 } from "@/api/lib/document-processing-queue";
 import {
   DocumentProcessingJobError,
   SEARCH_INDEX_FAILURE_CODE,
 } from "@/api/lib/document-processing-queue-policy";
 import { persistManualOcrRun } from "@/api/lib/document-processing-request";
+import { LIMITS } from "@/api/lib/limits";
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -60,7 +64,7 @@ const seedOcrFixture = async (db: GatedTestDb) => {
   const sourceFileId = Bun.randomUUIDv7();
   const sourceSha256Hex = "a".repeat(64);
   const cleanup = async () => {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   };
   try {
@@ -387,6 +391,66 @@ if (!databaseUrl || !runPostgresTests) {
     });
   });
 } else {
+  test("inline extraction selects only small runs that are due now", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const fixture = await seedOcrFixture(db);
+      const { organizationId, workspaceId, source, content } = fixture;
+      const database = asTestRaw<typeof rootDb>(db);
+      const id = createSafeId<"documentProcessingRun">();
+      const isSelected = async () =>
+        (await readInlineNativeExtractionRuns({ database, limit: 1000 })).some(
+          (run) => run.id === id,
+        );
+      const setSize = async (sizeBytes: number) => {
+        await db
+          .update(fields)
+          .set({ content: { ...content, sizeBytes } })
+          .where(eq(fields.id, source.fieldId));
+      };
+      const setRun = async (
+        values: Partial<typeof documentProcessingRuns.$inferInsert>,
+      ) => {
+        await db
+          .update(documentProcessingRuns)
+          .set(values)
+          .where(eq(documentProcessingRuns.id, id));
+      };
+      try {
+        await db.insert(documentProcessingRuns).values({
+          id,
+          organizationId,
+          workspaceId,
+          ...source,
+          kind: "native-extraction",
+          processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
+          requestSource: "upload",
+          requestedBy: null,
+        });
+        expect(await isSelected()).toBe(true);
+
+        await setSize(LIMITS.documentProcessingInlineMaxBytes);
+        expect(await isSelected()).toBe(true);
+        await setSize(LIMITS.documentProcessingInlineMaxBytes + 1);
+        expect(await isSelected()).toBe(false);
+        await setSize(10);
+
+        await setRun({ nextAttemptAt: new Date(Date.now() + 60_000) });
+        expect(await isSelected()).toBe(false);
+        await setRun({ nextAttemptAt: null });
+
+        await setRun({ attemptCount: DOCUMENT_PROCESSING_MAX_ATTEMPTS });
+        expect(await isSelected()).toBe(false);
+        await setRun({ attemptCount: 0 });
+
+        await setRun({ status: "succeeded" });
+        expect(await isSelected()).toBe(false);
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+  });
+
   test("pre-schedule search failures recover and exhaust the bounded replay budget", async () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const { db } = openClient();
@@ -1177,9 +1241,7 @@ if (!databaseUrl || !runPostgresTests) {
                 await release.promise;
               }
               if (parent === "organization") {
-                await tx
-                  .delete(organization)
-                  .where(eq(organization.id, organizationId));
+                await deleteOrganizationsForTest(tx, [organizationId]);
               } else {
                 await tx
                   .delete(workspaces)
@@ -1402,9 +1464,7 @@ if (!databaseUrl || !runPostgresTests) {
                 await release.promise;
               }
               if (parent === "organization") {
-                await tx
-                  .delete(organization)
-                  .where(eq(organization.id, organizationId));
+                await deleteOrganizationsForTest(tx, [organizationId]);
               } else {
                 await tx
                   .delete(workspaces)

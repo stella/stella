@@ -717,11 +717,15 @@ impl ChatGptAuth {
       verifier: &pkce.verifier,
     };
     let result = self.complete(&pending, &url).await;
-    if let Some(page) = page {
-      let _ = page.send(match result {
-        Ok(()) => CallbackPage::Connected,
-        _ => CallbackPage::NotConnected,
-      });
+    if let Some(page) = page
+      && page
+        .send(match result {
+          Ok(()) => CallbackPage::Connected,
+          _ => CallbackPage::NotConnected,
+        })
+        .is_err()
+    {
+      tracing::debug!("ChatGPT sign-in callback page had no waiter");
     }
     result
   }

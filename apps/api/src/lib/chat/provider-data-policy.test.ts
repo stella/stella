@@ -11,6 +11,7 @@ import {
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { DECISION_MODEL_PROVIDERS } from "@/api/lib/ai-config";
@@ -46,7 +47,9 @@ import {
   findTranscriptProblems,
   providerWireFormatOf,
 } from "@/api/tests/helpers/provider-request-transcript";
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -66,6 +69,7 @@ const ORIGINAL_REQUESTS = {
     authorization: `Bearer ${REQUEST_API_KEY}`,
     apiKey: null,
     body: {
+      include: ["reasoning.encrypted_content"],
       max_output_tokens: 64,
       model,
       input: [
@@ -472,35 +476,37 @@ describe("provider request policy", () => {
         OPENAI_API_KEY: apiKey,
         OPENROUTER_API_KEY: apiKey,
       });
-      globalThis.fetch = Object.assign(
-        async (
-          input: Parameters<typeof globalThis.fetch>[0],
-          init?: RequestInit,
-        ) => {
-          const request =
-            input instanceof Request
-              ? input
-              : new Request(input.toString(), init);
-          requests.push({
-            url: request.url,
-            body: await request.json(),
-            authorization: request.headers.get("authorization"),
-            contentType: request.headers.get("content-type"),
-            apiKey:
-              request.headers.get("x-api-key") ??
-              request.headers.get("x-goog-api-key"),
-          });
-          return new Response(
-            JSON.stringify({
-              error: { code: 400, message: "Request unavailable" },
-            }),
-            {
-              status: 400,
-              headers: { "content-type": "application/json" },
-            },
-          );
-        },
-        { preconnect: originalFetch.preconnect },
+      testFetchState.set(
+        Object.assign(
+          async (
+            input: Parameters<typeof globalThis.fetch>[0],
+            init?: RequestInit,
+          ) => {
+            const request =
+              input instanceof Request
+                ? input
+                : new Request(input.toString(), init);
+            requests.push({
+              url: request.url,
+              body: await request.json(),
+              authorization: request.headers.get("authorization"),
+              contentType: request.headers.get("content-type"),
+              apiKey:
+                request.headers.get("x-api-key") ??
+                request.headers.get("x-goog-api-key"),
+            });
+            return new Response(
+              JSON.stringify({
+                error: { code: 400, message: "Request unavailable" },
+              }),
+              {
+                status: 400,
+                headers: { "content-type": "application/json" },
+              },
+            );
+          },
+          { preconnect: originalFetch.preconnect },
+        ),
       );
       try {
         const model = MODEL_DEFAULTS_LEDGER.chat[provider].candidate.modelId;
@@ -513,6 +519,7 @@ describe("provider request policy", () => {
           apiKey: expected.apiKey,
         };
         const chatOptions = {
+          threadId: "provider-data-policy-test",
           model,
           logger: resolveDebugOption(false),
           messages: [{ role: "user" as const, content: REQUEST_TEXT }],
@@ -555,7 +562,7 @@ describe("provider request policy", () => {
           expect(requests.at(0)).toEqual(expectedRequest);
         }
       } finally {
-        globalThis.fetch = originalFetch;
+        testFetchState.restore();
         Object.assign(env, previous);
         if (previousBedrockEndpoint === undefined) {
           delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
@@ -574,24 +581,26 @@ describe("provider request policy", () => {
     testState.setConfig("AI_PROVIDER", "openrouter");
     testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
     testState.setConfig("OPENROUTER_API_KEY", REQUEST_API_KEY);
-    globalThis.fetch = Object.assign(
-      async (
-        input: Parameters<typeof globalThis.fetch>[0],
-        init?: RequestInit,
-      ) => {
-        const request =
-          input instanceof Request
-            ? input
-            : new Request(input.toString(), init);
-        requests.push({ url: request.url, body: await request.json() });
-        return new Response(
-          JSON.stringify({
-            error: { code: 400, message: "Request unavailable" },
-          }),
-          { status: 400, headers: { "content-type": "application/json" } },
-        );
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async (
+          input: Parameters<typeof globalThis.fetch>[0],
+          init?: RequestInit,
+        ) => {
+          const request =
+            input instanceof Request
+              ? input
+              : new Request(input.toString(), init);
+          requests.push({ url: request.url, body: await request.json() });
+          return new Response(
+            JSON.stringify({
+              error: { code: 400, message: "Request unavailable" },
+            }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     try {
       for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
@@ -621,6 +630,7 @@ describe("provider request policy", () => {
           MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId,
         );
         for await (const _chunk of model.adapter.chatStream({
+          threadId: "provider-data-policy-test",
           model: model.modelId,
           logger: resolveDebugOption(false),
           messages: [{ role: "user", content: REQUEST_TEXT }],
@@ -640,7 +650,7 @@ describe("provider request policy", () => {
         });
       }
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     }
   });
 
@@ -737,18 +747,20 @@ describe("provider request policy", () => {
     let sent = 0;
     env.USE_MOCK_AI = false;
     env.OPENROUTER_API_KEY = "test-instance-key";
-    globalThis.fetch = Object.assign(
-      async () => {
-        sent += 1;
-        return new Response(
-          JSON.stringify({ error: { message: "Unexpected request" } }),
-          {
-            status: 400,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async () => {
+          sent += 1;
+          return new Response(
+            JSON.stringify({ error: { message: "Unexpected request" } }),
+            {
+              status: 400,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     try {
       for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
@@ -770,6 +782,7 @@ describe("provider request policy", () => {
             "not/in-the-catalog",
           ]) {
             const chatOptions = {
+              threadId: "provider-data-policy-test",
               model: invalidModel,
               messages: [{ role: "user" as const, content: REQUEST_TEXT }],
               logger: resolveDebugOption(false),
@@ -826,7 +839,7 @@ describe("provider request policy", () => {
         }
       }
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
       env.USE_MOCK_AI = previousMock;
       env.OPENROUTER_API_KEY = previousKey;
     }
@@ -940,33 +953,35 @@ describe("provider request policy", () => {
           const requests: { url: string; body: unknown }[] = [];
           env.USE_MOCK_AI = false;
           env.OPENROUTER_API_KEY = "test-instance-key";
-          globalThis.fetch = Object.assign(
-            async (
-              input: Parameters<typeof globalThis.fetch>[0],
-              init?: RequestInit,
-            ) => {
-              const request =
-                input instanceof Request
-                  ? input
-                  : new Request(input.toString(), init);
-              requests.push({ url: request.url, body: await request.json() });
-              if (status === "aborted") {
-                throw new DOMException("Request aborted", "AbortError");
-              }
-              return new Response(
-                JSON.stringify({
-                  error: {
-                    code: status,
-                    message,
-                    ...("metadata" in response
-                      ? { metadata: response.metadata }
-                      : {}),
-                  },
-                }),
-                { status, headers: { "content-type": "application/json" } },
-              );
-            },
-            { preconnect: originalFetch.preconnect },
+          testFetchState.set(
+            Object.assign(
+              async (
+                input: Parameters<typeof globalThis.fetch>[0],
+                init?: RequestInit,
+              ) => {
+                const request =
+                  input instanceof Request
+                    ? input
+                    : new Request(input.toString(), init);
+                requests.push({ url: request.url, body: await request.json() });
+                if (status === "aborted") {
+                  throw new DOMException("Request aborted", "AbortError");
+                }
+                return new Response(
+                  JSON.stringify({
+                    error: {
+                      code: status,
+                      message,
+                      ...("metadata" in response
+                        ? { metadata: response.metadata }
+                        : {}),
+                    },
+                  }),
+                  { status, headers: { "content-type": "application/json" } },
+                );
+              },
+              { preconnect: originalFetch.preconnect },
+            ),
           );
           try {
             const model = scenario.strict
@@ -984,6 +999,7 @@ describe("provider request policy", () => {
                   },
             )(model);
             const chatOptions = {
+              threadId: "provider-data-policy-test",
               model,
               logger: resolveDebugOption(false),
               messages: [{ role: "user" as const, content: "Reply with OK." }],
@@ -1126,7 +1142,7 @@ describe("provider request policy", () => {
               });
             }
           } finally {
-            globalThis.fetch = originalFetch;
+            testFetchState.restore();
             env.USE_MOCK_AI = previousMock;
             env.OPENROUTER_API_KEY = previousKey;
           }

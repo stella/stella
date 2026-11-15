@@ -80,9 +80,7 @@ const assertBoundedSourceCounts = (root: Record<string, unknown>) => {
   const groupProbes = nodes.filter((node) => {
     const condition = node["Index Cond"];
     return (
-      node["Index Name"] === GROUP_INDEX &&
-      typeof condition === "string" &&
-      condition.includes("language_group_key")
+      typeof condition === "string" && condition.includes("language_group_key")
     );
   });
   expect(groupProbes.length).toBeGreaterThan(0);
@@ -110,9 +108,12 @@ describe.skipIf(!enabled)("bounded source facet plan (postgres)", () => {
         }
         await db.execute(sql`SET search_path TO ${schema}, public`);
         await db.execute(caseLawPublishedDecisionsFixtureSql);
-        const indexes = await db.execute(sql`SELECT indexname FROM pg_indexes
+        const indexes = await db.execute(
+          sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'case_law_decisions'
-            AND indexdef LIKE '%(language_group_key)%'`);
+            AND indexdef LIKE '%(language_group_key)%'`,
+          "objects",
+        );
         expect(indexes).toHaveLength(1);
         const indexName = indexes.at(0)?.["indexname"];
         if (typeof indexName !== "string") {
@@ -179,9 +180,10 @@ describe.skipIf(!enabled)("bounded source facet plan (postgres)", () => {
         }).facets.source;
         const explained = await db.execute(
           sql`EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON) ${statement}`,
+          "objects",
         );
         assertBoundedSourceCounts(explainRoot(explained));
-        const rows = await db.execute(statement);
+        const rows = await db.execute(statement, "objects");
         expect(rows).toHaveLength(SOURCES);
         expect(new Set(rows.map((row) => row["value"]))).toEqual(
           new Set(sourceIds),

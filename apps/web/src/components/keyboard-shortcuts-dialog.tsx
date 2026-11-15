@@ -127,7 +127,7 @@ const ShortcutRow = ({
   return (
     <li
       className={cn(
-        "group flex items-center justify-between gap-4 rounded px-1 py-1",
+        "group flex items-center justify-between gap-4 rounded-sm px-1 py-1",
         isFlashing && "bg-accent/60",
       )}
     >
@@ -141,7 +141,7 @@ const ShortcutRow = ({
           onReset={onReset}
         />
       ) : (
-        <kbd className="border-border bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
+        <kbd className="border-border bg-muted text-muted-foreground rounded-sm border px-1.5 py-0.5 text-xs">
           {shortcut.binding.char}
         </kbd>
       )}
@@ -260,7 +260,7 @@ const RebindableBinding = ({
     return (
       <div className="flex flex-col items-end gap-1">
         <div className="flex items-center gap-2">
-          <kbd className="border-primary bg-muted text-foreground min-w-16 rounded border border-dashed px-1.5 py-0.5 text-center text-xs">
+          <kbd className="border-primary bg-muted text-foreground min-w-16 rounded-sm border border-dashed px-1.5 py-0.5 text-center text-xs">
             {preview
               ? formatHotkeyForPlatform(preview, hotkeyPlatform)
               : t("navigation.shortcutsDialog.pressKeys")}
@@ -300,16 +300,18 @@ const RebindableBinding = ({
           {t("common.resetToDefault")}
         </Button>
       ) : null}
-      <kbd className="border-border bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
+      <kbd className="border-border bg-muted text-muted-foreground rounded-sm border px-1.5 py-0.5 text-xs">
         {formatShortcutBinding({ type: "hotkey", hotkey }, hotkeyPlatform)}
       </kbd>
       <Button
-        // Coarse pointers show the edit action at rest; mouse and keyboard
-        // users reveal it through hover or focus.
+        // Coarse pointers show the edit action at rest; mouse users reveal it
+        // on hover, keyboard users on focus-visible. Not focus-within: the
+        // dialog focuses the first row's button on open, which would pin it
+        // visible there for mouse users.
         aria-label={t("navigation.shortcutsDialog.editShortcut")}
         className={cn(
           "text-muted-foreground opacity-0 transition-opacity",
-          "group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100",
+          "group-hover:opacity-100 pointer-coarse:opacity-100",
           "focus-visible:opacity-100",
         )}
         disabled={isBusy}

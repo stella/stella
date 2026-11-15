@@ -9,9 +9,10 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { WorkspaceActivity } from "@/components/app-sidebar.logic";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const {
@@ -62,6 +63,7 @@ const { QueryClient, QueryClientProvider } =
 const { RouterProvider } = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { MatterActivityList } = await import("@/components/app-sidebar");
+const { roleOptions } = await import("@/lib/auth-queries");
 
 afterEach(() => {
   cleanup();
@@ -81,6 +83,35 @@ const RecentActivity = () => (
     workspaceId={TEST_MATTER_ID}
   />
 );
+
+test("a recent row's menu says the delete reaches past the recent list", async () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  seedTestMatterTrees(queryClient);
+  queryClient.setQueryData(roleOptions.queryKey, "owner");
+  const router = await createMatterViewTestRouter(
+    TEST_OTHER_TREE_DOCUMENT_PATH,
+    RecentActivity,
+  );
+  render(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <RouterProvider router={router} />
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  fireEvent.contextMenu(
+    await screen.findByRole("button", { name: /Pleadings/u }),
+  );
+
+  expect(
+    await screen.findByRole("menuitem", {
+      name: messages.workspaces.deleteFromMatter,
+    }),
+  ).toBeDefined();
+});
 
 test("a recent folder reveals itself in the tree on screen, not the first tree", async () => {
   const queryClient = new QueryClient({

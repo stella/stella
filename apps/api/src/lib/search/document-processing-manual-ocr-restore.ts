@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
@@ -90,7 +92,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
               organizationId: workspaces.organizationId,
             })
             .from(workspaces),
-        where: eq(workspaces.status, "active"),
+        where: eq(workspaces.status, WORKSPACE_STATUS.active),
       })
     ).rows;
     if (!workspaceRows.at(0)) {

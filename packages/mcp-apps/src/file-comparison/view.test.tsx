@@ -27,6 +27,7 @@ test("comparison labels both files and enables the handoff only when ready", () 
       uploads += 1;
     },
     connect: async () => undefined,
+    mountViewport: () => undefined,
   } satisfies ReturnType<typeof createFileComparisonRuntime>;
   const view = render(<FileComparison runtime={runtime} />);
   expect(

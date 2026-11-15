@@ -12,6 +12,7 @@ import {
   XSquareIcon,
 } from "@stll/ui/icons";
 import { MenuItem, MenuSeparator } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { requestInspectorRename } from "@/components/inspector/inspector-actions";
 import { useInspectorGroupMenu } from "@/components/inspector/inspector-group-controls";
@@ -81,16 +82,25 @@ export const useTabContextMenu = ({
           <XIcon />
           {/* One span, so the rich chunks stay one flex item and keep
               their word spacing; a long label truncates, not the verb. */}
-          <span className="min-w-0 truncate">
+          <TruncatedText
+            tooltip={t.rich("inspector.closeTab", {
+              bdi: (chunks) => <BidiText>{chunks}</BidiText>,
+              name: tabLabel,
+            })}
+          >
             {t.rich("inspector.closeTab", {
               bdi: (chunks) => (
-                <BidiText className="inline-block max-w-56 truncate align-bottom">
+                <TruncatedText
+                  className="inline-block max-w-56 align-bottom"
+                  hint={false}
+                  render={<BidiText />}
+                >
                   {chunks}
-                </BidiText>
+                </TruncatedText>
               ),
               name: tabLabel,
             })}
-          </span>
+          </TruncatedText>
         </MenuItem>
         {hasOthers && (
           <MenuItem onClick={() => closeOthers(tabId)}>

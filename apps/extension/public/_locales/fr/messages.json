@@ -1,46 +1,15 @@
 {
-  "accessOff": {
-    "message": "L’accès aux sites est désactivé. Accordez-le une fois pour permettre à stella d’utiliser les sites auxquels vous êtes connecté."
-  },
-  "accessReady": {
-    "message": "Prêt. stella peut utiliser un onglet dédié tout en conservant vos connexions aux sites."
-  },
   "accessUpdateFailed": {
     "message": "Chrome n’a pas pu modifier l’accès aux sites."
-  },
-  "adoptTab": {
-    "message": "Utiliser cet onglet avec stella"
   },
   "adoptUnsupported": {
     "message": "Seules les pages HTTPS publiques peuvent être utilisées avec stella."
   },
-  "adoptedTab": {
-    "message": "stella peut maintenant lire $ORIGIN$ dans cet onglet. Posez vos questions dans le chat.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Vérification de l’accès aux sites…"
-  },
-  "connectTab": {
-    "message": "Connecter l’onglet stella actuel"
-  },
-  "controllerReady": {
-    "message": "Connecté à $ORIGIN$. Chaque action doit toujours être autorisée dans stella.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Déconnecter l’onglet"
+  "usingTabs": {
+    "message": "Onglets utilisés :"
   },
   "downloadKept": {
-    "message": "Téléchargements terminés pendant que stella contrôlait un onglet et conservés : $COUNT$. Vérifiez leur provenance avant de les ouvrir.",
+    "message": "Téléchargements conservés : $COUNT$, vérifiez-les avant de les ouvrir",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -48,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "Téléchargements arrêtés par stella pendant qu’il contrôlait un onglet : $COUNT$.",
+    "message": "Téléchargements arrêtés : $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -56,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "Pendant que stella contrôlait un onglet : téléchargements arrêtés : $STOPPED$. Téléchargements terminés et conservés (vérifiez leur provenance avant de les ouvrir) : $KEPT$.",
+    "message": "Téléchargements arrêtés : $STOPPED$ · conservés : $KEPT$, vérifiez-les avant de les ouvrir",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -72,13 +41,61 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Autoriser tous les sites"
-  },
-  "revokeAccess": {
-    "message": "Retirer l’accès aux sites"
-  },
   "unsupportedTab": {
     "message": "Ouvrez un onglet de l’application stella, puis réessayez."
+  },
+  "connectionPurpose": {
+    "message": "Ouvre et lit des sites pour le chat, avec vos sessions actives."
+  },
+  "statusConnected": {
+    "message": "Connecté"
+  },
+  "statusNotConnected": {
+    "message": "Non connecté"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "Accès aux sites requis"
+  },
+  "statusOpenStella": {
+    "message": "Ouvrez stella pour vous connecter"
+  },
+  "allowAndConnect": {
+    "message": "Autoriser l’accès et connecter"
+  },
+  "allowWebsiteAccess": {
+    "message": "Autoriser l’accès aux sites"
+  },
+  "connectStella": {
+    "message": "Connecter stella"
+  },
+  "adoptTab": {
+    "message": "Utiliser cet onglet avec stella"
+  },
+  "disconnectTab": {
+    "message": "Déconnecter"
+  },
+  "revokeAccess": {
+    "message": "Retirer l’accès"
+  },
+  "checkingAccess": {
+    "message": "Vérification de la connexion…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Connecté ailleurs"
+  },
+  "connectStellaInstead": {
+    "message": "Connecter stella ici à la place"
+  },
+  "allowDesktop": {
+    "message": "Utiliser avec stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop connecté"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop n’est pas lancé"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Mettez à jour stella desktop et cette extension"
   }
 }

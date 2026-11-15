@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { MODEL_TASKS } from "@stll/ai-catalog";
 import { parseSource } from "@stll/scripts/src/syntax-tree";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { USAGE_ACTION_TYPES, USAGE_SERVICE_TIERS } from "@/api/db/schema";
@@ -27,7 +28,6 @@ import type {
   ConcurrencyOnlyActionKind,
   PeriodActionKind,
 } from "@/api/lib/rate-limit/action-kinds";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { canonicalModuleId } from "../../../../../.oxlint-plugins/module-id.ts";

@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import {
   fingerprintEvolutionFailures,
   scanExternalIdentity,
@@ -23,7 +25,7 @@ test("the source fingerprint baseline and evolution guard match the tree", () =>
       "scripts/source-fingerprint-baseline.ts",
       "--check",
       "--base",
-      "origin/main",
+      treeBaseRevision({ repoRoot: path.resolve(import.meta.dir, "..") }),
     ],
     {
       cwd: path.resolve(import.meta.dir, ".."),

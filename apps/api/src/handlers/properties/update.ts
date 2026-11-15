@@ -12,7 +12,7 @@ import type { PropertyRole } from "@/api/db/schema";
 import {
   aiModelToolSchema,
   manualInputToolSchema,
-  propertyContentSchema,
+  scalarPropertyContentSchema,
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
@@ -24,7 +24,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
-  defaultVarcharSchema,
+  displayNameSchema,
   resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
@@ -46,6 +46,7 @@ import {
 } from "@/api/lib/properties/dependency-limits";
 import { propertyKindsForUpdate } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
+import { UPDATE_PROPERTY_TABLE_ANALYSIS_ACCESS } from "@/api/lib/properties/table-analysis-access";
 
 type PropertyWithDeps = {
   id: SafeId<"property">;
@@ -216,8 +217,8 @@ const hasCircularDependency = ({
 };
 
 const updatePropertyBodySchema = v.object({
-  name: defaultVarcharSchema,
-  content: propertyContentSchema,
+  name: displayNameSchema(),
+  content: scalarPropertyContentSchema,
   tool: v.union([
     v.intersect([
       aiModelToolSchema,
@@ -255,6 +256,7 @@ const config = {
     "changed to or from another type. Keep the existing type when renaming; " +
     "use properties.create for a custom column with another value type.",
   permissions: { property: ["update"] },
+  featureAccess: UPDATE_PROPERTY_TABLE_ANALYSIS_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: propertyRealtimeUpdates,
   mcp: {

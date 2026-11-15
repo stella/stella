@@ -7,6 +7,7 @@ import {
   Sidebar,
   SIDEBAR_WIDTH_ICON_PX,
   SIDEBAR_WIDTH_PX,
+  SidebarIdentityButton,
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
@@ -216,4 +217,30 @@ describe("SidebarRail", () => {
       expect(rail).not.toContain("-left-2");
     },
   );
+});
+
+describe("SidebarIdentityButton", () => {
+  test("is the full-width avatar row while the sidebar is expanded", () => {
+    const markup = renderToStaticMarkup(
+      <SidebarProvider onOpenChange={() => undefined} open>
+        <SidebarIdentityButton aria-label="Sign in">
+          Sign in
+        </SidebarIdentityButton>
+      </SidebarProvider>,
+    );
+
+    expect(markup).toContain('type="button"');
+    expect(markup).toContain('data-slot="sidebar-identity-button"');
+    expect(markup).toContain("w-full gap-2 p-2");
+  });
+
+  test("is the rail's centred square while collapsed on desktop", () => {
+    const markup = renderToStaticMarkup(
+      <SidebarProvider onOpenChange={() => undefined} open={false}>
+        <SidebarIdentityButton aria-label="Sign in" />
+      </SidebarProvider>,
+    );
+
+    expect(markup).toContain("size-8 justify-center");
+  });
 });

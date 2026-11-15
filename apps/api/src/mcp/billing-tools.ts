@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, gt, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { EmptyFilter } from "drizzle-orm/relations";
 import * as v from "valibot";
 
 import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
@@ -72,6 +73,11 @@ import {
   mcpMemberAuthority,
 } from "@/api/mcp/effective-authority";
 import {
+  cursorInput,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
+import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
   runTextFieldSpecs,
@@ -85,7 +91,6 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  cursorInput,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -94,10 +99,8 @@ import {
   invalidCursorResult,
   MAX_LIST_LIMIT,
   notFoundResult,
-  nullAsAbsent,
   structuredEgressPlan,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -487,7 +490,7 @@ const resolveInvoiceWorkspace = async ({
           limit: 1,
           where:
             requestedMatterId === undefined
-              ? undefined
+              ? EmptyFilter
               : { workspaceId: { eq: requestedMatterId } },
         },
       },

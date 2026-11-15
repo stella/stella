@@ -17,6 +17,7 @@ export default {
     kind: "import",
     specifiers: ["@/api/lib/search/projection-repair-flush"],
     allowed: [
+      "apps/api/src/handlers/contacts/bulk/delete.ts",
       "apps/api/src/handlers/contacts/create.ts",
       "apps/api/src/handlers/contacts/delete.ts",
       "apps/api/src/handlers/contacts/import.ts",
@@ -41,8 +42,12 @@ export default {
       "apps/api/src/lib/entities/create-from-buffer.ts",
       "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts",
       "apps/api/src/lib/flows/flow-executor.ts",
+      "apps/api/src/lib/review-organization/reset.ts",
+      "apps/api/src/lib/scheduler/tasks/review-organization-reset.ts",
       "apps/api/src/lib/tasks/create-task-entity.ts",
       "apps/api/src/lib/uploads/entity-create.ts",
+      "apps/api/src/lib/workspace-deletion.ts",
+      "apps/api/src/mcp/matter-tools.ts",
     ].map((importer) => ({
       path: importer,
       reason: FLUSHES_ITS_OWN_SEARCH_MARKS,

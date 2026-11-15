@@ -1,19 +1,20 @@
 import { useHeaderHeight } from "expo-router/react-navigation";
 import { KeyboardAvoidingView, Platform } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
-import { useRevision } from "@/components/changes";
 import { ChatThreadView } from "@/components/chat-thread-view";
 import { screenStyles } from "@/components/empty-state-screen";
 import { EntityDetailSheet } from "@/components/entity-detail-sheet";
 import { MatterEntities } from "@/components/matter-entities";
+import { MatterName } from "@/components/matter-name";
 import { Pane } from "@/components/pane";
+import { useSelection } from "@/components/selection";
 import type {
   MatterSelection,
   TaskSelection,
   ThreadSelection,
 } from "@/components/selection";
+import { SafeAreaView } from "@/components/ui/safe-area-view";
 import { useSession } from "@/connection/session-provider";
 
 /**
@@ -36,6 +37,7 @@ export const ThreadPane = ({ thread }: { thread: ThreadSelection }) => {
           <ChatThreadView
             fresh={thread.fresh === true}
             matterId={thread.matterId}
+            shareId={undefined}
             source={state.source}
             threadId={thread.threadId}
           />
@@ -48,13 +50,19 @@ export const ThreadPane = ({ thread }: { thread: ThreadSelection }) => {
 /** The matter selected in the matters' list, beside it: its documents and tasks. */
 export const MatterPane = ({ matter }: { matter: MatterSelection }) => {
   const { state } = useSession();
-  const revision = useRevision("documents", "tasks");
 
   return (
-    <Pane title={matter.name}>
+    <Pane
+      title={
+        <MatterName fallback={matter.name} matterId={matter.workspaceId}>
+          {(name) => name}
+        </MatterName>
+      }
+    >
       {state.status === "signed-in" ? (
         <MatterEntities
-          key={revision}
+          // Another matter is another list.
+          key={matter.workspaceId}
           source={state.source}
           workspaceId={matter.workspaceId}
         />
@@ -66,11 +74,15 @@ export const MatterPane = ({ matter }: { matter: MatterSelection }) => {
 /** The task selected in the tasks' list, beside it, as its sheet shows it. */
 export const TaskPane = ({ task }: { task: TaskSelection }) => {
   const { state } = useSession();
+  const selection = useSelection();
 
   return state.status === "signed-in" ? (
-    <SafeAreaView className="flex-1" edges={["top"]}>
+    <SafeAreaView edges={["top"]}>
       <EntityDetailSheet
         entityId={task.entityId}
+        onDeleted={() => {
+          selection.select("task", null);
+        }}
         source={state.source}
         workspaceId={task.workspaceId}
       />

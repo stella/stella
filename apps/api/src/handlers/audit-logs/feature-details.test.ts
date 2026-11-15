@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { AUDIT_LOG_EXPORT_CSV_HEADER } from "@/api/lib/audit-log-export";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -96,6 +97,7 @@ const contextFor = ({
       }
       return {
         from: () => ({
+          where: async () => [],
           innerJoin: () => ({
             where: async () => [
               {
@@ -202,8 +204,8 @@ describe("audit details follow feature enrolment", () => {
           ),
         );
         expect(result).toBe(
-          `Time,User Name,User Email,Action,Resource Type,Resource ID,Changes,Changes Status\n` +
-            `2026-07-16T12:00:00.000Z,Test User,test@example.test,update,${resourceType},resource_test,${
+          `${AUDIT_LOG_EXPORT_CSV_HEADER}\n` +
+            `2026-07-16T12:00:00.000Z,${PRINCIPAL.userId},Test User,test@example.test,update,${resourceType},resource_test,${
               enrolled ? '"{""amount"":{""old"":100,""new"":200}}"' : ""
             },${changesStatus}`,
         );

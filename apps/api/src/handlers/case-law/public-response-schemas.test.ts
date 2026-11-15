@@ -53,7 +53,7 @@ const stressResponse = (
   if (Array.isArray(enumValues)) {
     return enumValues.at(choice % enumValues.length);
   }
-  const branches = schema["anyOf"];
+  const branches = schema["anyOf"] ?? schema["oneOf"];
   if (Array.isArray(branches)) {
     return stressResponse(
       branches.at(choice % branches.length),

@@ -1,3 +1,6 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -66,39 +69,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-  UnreadListedItem,
-  UnreadOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
@@ -124,6 +94,39 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { parseScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+  UnreadListedItem,
+  UnreadOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRtf, readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
@@ -929,14 +932,15 @@ export const assembleHuBhgyDecision = async ({
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.HU_BHGY].country,
     language: HU_BHGY_LANGUAGE,
-    ...(read?.decisionDate === undefined
-      ? {}
-      : { decisionDate: read.decisionDate }),
-    ...(read?.decisionType === undefined
-      ? {}
-      : { decisionType: read.decisionType }),
-    ...(read?.fulltext === undefined ? {} : { fulltext: read.fulltext }),
-    ...(read?.sections === undefined ? {} : { sections: read.sections }),
+    // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
+    ...(read?.decisionDate !== undefined
+      ? { decisionDate: read.decisionDate }
+      : {}),
+    ...(read?.decisionType !== undefined
+      ? { decisionType: read.decisionType }
+      : {}),
+    ...(read?.fulltext !== undefined ? { fulltext: read.fulltext } : {}),
+    ...(read?.sections !== undefined ? { sections: read.sections } : {}),
     ...(document === undefined ? { isListingOnly: true } : {}),
     sourceUrl: decisionUrl(row),
     documentUrl: documentUrlOf(row),
@@ -955,30 +959,31 @@ export const assembleHuBhgyDecision = async ({
     metadata: checkedDecisionMetadata({
       caseNumber,
       court,
-      ...(read?.decisionDate === undefined
-        ? {}
-        : { decisionDate: read.decisionDate }),
-      ...(read?.decisionType === undefined
-        ? {}
-        : { decisionType: read.decisionType }),
+      ...(read?.decisionDate !== undefined
+        ? { decisionDate: read.decisionDate }
+        : {}),
+      ...(read?.decisionType !== undefined
+        ? { decisionType: read.decisionType }
+        : {}),
       documentId: IndexId,
       bhgyIdentifier: row.EgyediAzonosito,
       kollegiums: huKollegiumsOf(row.Kollegium),
       legalArea: row.JogTerulet,
       decisionYear: row.HatarozatEve,
       publishedAt: row.IndexelesIdeje,
+      citationRestriction: row.NemHivatkozhatoSzoveg,
       statutes,
       relatedProceedings: related,
-      ...(read?.documentDocket === undefined
-        ? {}
-        : { documentDocket: read.documentDocket }),
+      ...(read?.documentDocket !== undefined
+        ? { documentDocket: read.documentDocket }
+        : {}),
       ...(document === undefined
         ? {}
         : { documentContentType: document.contentType }),
-      ...(read?.relatedProceedings === undefined ||
-      read.relatedProceedings.length === 0
-        ? {}
-        : { instanceChainLines: read.relatedProceedings }),
+      ...(read?.relatedProceedings !== undefined &&
+      read.relatedProceedings.length > 0
+        ? { instanceChainLines: read.relatedProceedings }
+        : {}),
       ...(document === undefined
         ? {
             detailUnavailable:
@@ -1161,6 +1166,10 @@ const DOCUMENT_FIELDS = [
 
 const SOURCE_FIELDS = [...LISTING_FIELDS, ...DOCUMENT_FIELDS] as const;
 
+type HuBhgyPublisherRecord = Readonly<
+  Record<(typeof SOURCE_FIELDS)[number] | keyof HuBhgyRow, unknown>
+>;
+
 const HU_BHGY_SOURCE_FIELDS = {
   Azonosito: {
     disposition: "stored",
@@ -1193,18 +1202,32 @@ const HU_BHGY_SOURCE_FIELDS = {
   // The search never fills this on a listing row; the decision's text comes
   // from the download, which is what `documentAst` and `fulltext` are read
   // from.
-  Szoveg: excludedSourceField(
-    "always null on a listing row; the decision's text is the downloaded document",
-  ),
+  Szoveg: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["Szoveg"],
+      reason:
+        "Publisher listing field retained verbatim, including null and alternate renderings",
+    },
+  },
   Rezume: {
     disposition: "stored",
     target: { type: "textField", key: "headnote" },
   },
   // Only a keyword search fills this: it is the résumé re-rendered with the
   // query's hits marked, so it is a view of `Rezume` rather than a field.
-  RezumeSzovegKornyezet: excludedSourceField(
-    "keyword-search highlight over Rezume, which is stored whole",
-  ),
+  RezumeSzovegKornyezet: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["RezumeSzovegKornyezet"],
+      reason:
+        "Publisher listing field retained verbatim, including null and alternate renderings",
+    },
+  },
   EgyediAzonosito: {
     disposition: "stored",
     target: { type: "metadata", key: "bhgyIdentifier" },
@@ -1213,18 +1236,26 @@ const HU_BHGY_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "publishedAt" },
   },
-  // The verbatim row is kept in the envelope, so reading this later is a
-  // parser change rather than another walk of the collection.
-  NemHivatkozhatoSzoveg: excludedSourceField(
-    "null on every row the search serves; the citability filter changes no count it reports",
-  ),
+  // The publisher's citation restriction is part of the legal record, even
+  // though the sampled listing rows leave it empty.
+  NemHivatkozhatoSzoveg: {
+    disposition: "stored",
+    target: { type: "metadata", key: "citationRestriction" },
+  },
   IndexId: { disposition: "stored", target: { type: "identity" } },
   // Always null: the collection addresses a download by the three fields above
   // rather than by a link, and a link in a payload is not one this adapter
   // would follow (rule 21).
-  DownloadLink: excludedSourceField(
-    "always null; the download URL is rebuilt from IndexId, Azonosito and MeghozoBirosag",
-  ),
+  DownloadLink: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["DownloadLink"],
+      reason:
+        "Publisher listing field retained verbatim, including null and alternate renderings",
+    },
+  },
 
   // ── The decision file's header ──
 
@@ -1262,7 +1293,7 @@ const HU_BHGY_SOURCE_FIELDS = {
     target: { type: "metadata", key: "instanceChainLines" },
   },
 } as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
+  keyof HuBhgyPublisherRecord,
   SourceFieldDisposition
 >;
 
@@ -1832,6 +1863,7 @@ const sweepPage = async (
         return Result.ok({
           ...collectedPage(collected.value),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: cursor,
         });
       }
@@ -1840,6 +1872,7 @@ const sweepPage = async (
         return Result.ok({
           ...collectedPage(collected.value),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: encodeHuBhgyCursor({
             ...start,
             year,
@@ -1852,6 +1885,7 @@ const sweepPage = async (
       return Result.ok({
         ...collectedPage(collected.value),
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor:
           after === null
             ? // Every window is swept. The tip takes over from the boundary
@@ -1876,6 +1910,7 @@ const sweepPage = async (
       return Result.ok({
         decisions: [],
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: encodeHuBhgyCursor({
           phase: "tip",
           walk: "head",
@@ -1892,6 +1927,7 @@ const sweepPage = async (
   return Result.ok({
     decisions: [],
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodeHuBhgyCursor({ ...start, year, slug, offset }),
   });
 };
@@ -1943,6 +1979,7 @@ const tipPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: start.walk === "head" ? cursor : caughtUp(),
     });
   }
@@ -1956,6 +1993,7 @@ const tipPage = async (
     return Result.ok({
       ...collectedPage(collected.value),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: cursor,
     });
   }
@@ -1964,6 +2002,7 @@ const tipPage = async (
     return Result.ok({
       ...collectedPage(collected.value),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: caughtUp(),
     });
   }
@@ -1984,6 +2023,7 @@ const tipPage = async (
   return Result.ok({
     ...collectedPage(collected.value),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodeHuBhgyCursor({
       phase: "tip",
       walk: "catch-up",

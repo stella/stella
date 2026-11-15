@@ -49,6 +49,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -691,9 +692,7 @@ describe("playbook document type references", () => {
       scope: { documentTypeKey: "teardown" },
       positions: { version: 3, items: [] },
     });
-    await testDb
-      .delete(organization)
-      .where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(testDb, [organizationId]);
     expect(
       await testDb
         .select({ id: organization.id })

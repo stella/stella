@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
-import { hasTabOrderChanged } from "../lib/tab-order";
+import { hasTabOrderChanged, revealActiveTab } from "../lib/tab-order";
 import { cn, composeRefs } from "../lib/utils";
 
 type TabsVariant = "default" | "underline";
@@ -50,6 +50,23 @@ const TabsList = ({
       setRemeasureToken((token) => token + 1);
     }
   });
+
+  // Base UI reveals the active tab on mount and on focus only, so a strip
+  // narrowed later, by a pane docking beside it, would strand it off-screen
+  // behind a hidden scrollbar.
+  useIsoLayoutEffect(() => {
+    const list = listRef.current;
+    if (list === null || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+    const observer = new ResizeObserver(() => {
+      revealActiveTab(list);
+    });
+    observer.observe(list);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   return (
     <TabsPrimitive.List

@@ -5,7 +5,12 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { TransactionOf } from "@/api/db/scoped";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { READ_BUDGETS, type ReadBudgetId } from "@/api/lib/db/read-budgets";
+import {
+  READ_BUDGETS,
+  type ReadBudgetId,
+  readBudgetPages,
+  type ScheduledJobReadBudgetId,
+} from "@/api/lib/db/read-budgets";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   explainAsStella,
@@ -19,6 +24,7 @@ import {
 
 import { analyzePlan } from "./plan-analyzer";
 import type { QueryPerfProfileId, QueryPerfTenantProfileId } from "./profiles";
+import { withQueryPerfRollback } from "./rollback";
 import type { seedQueryPerf } from "./seed";
 import {
   applyPlannerSettings,
@@ -32,9 +38,22 @@ const QUERY_PERF_REPETITIONS = 5;
  * on a shared runner is not a measurement.
  */
 const QUERY_PERF_HANG_GUARD_MS = 10_000;
+/** Markers need a material improvement before noisy boundary results remove them. */
+export const OVER_BUDGET_REMOVAL_BAND = 0.15;
 export type QueryPerfMetrics = {
   sharedBlocks: number;
   executionTimeMs: number;
+};
+
+export const sharedBlockSampleProblem = (
+  owner: string,
+  samples: readonly QueryPerfMetrics[],
+) => {
+  const blocks = samples.map(({ sharedBlocks }) => sharedBlocks);
+  const first = blocks.at(0);
+  return first !== undefined && blocks.every((value) => value === first)
+    ? undefined
+    : `${owner} produced non-deterministic shared-block samples: ${blocks.join(", ")}`;
 };
 
 /** A scheduled run costs every statement's buffers and execution time. */
@@ -118,32 +137,88 @@ export const budgetViolations = (
 
 /**
  * Why a measurement breaks its budget, if it does. An entry marked over
- * budget must stay over it: once a change brings it under, the marker has to
- * go, so the budget is enforced again.
+ * budget keeps its marker until it is materially under budget.
  */
 const pageBudgetProblem = (
   id: ReadBudgetId,
   sharedBlocks: number,
 ): string | undefined => {
   const budget = READ_BUDGETS[id];
-  const over = sharedBlocks > budget.pages;
+  const pages = readBudgetPages(id);
+  const over = sharedBlocks > pages;
   if ("overBudget" in budget) {
-    return over
-      ? undefined
-      : `${id} is marked over budget but measured ${String(sharedBlocks)} <= ${String(budget.pages)}; remove its overBudget marker`;
+    const removalLine = pages * (1 - OVER_BUDGET_REMOVAL_BAND);
+    return sharedBlocks <= removalLine
+      ? `${id} is marked over budget but measured ${String(sharedBlocks)} <= removal line ${String(removalLine)}; remove its overBudget marker`
+      : undefined;
   }
   return over
-    ? `${id}: ${String(sharedBlocks)} pages > budget ${String(budget.pages)}`
+    ? `${id}: ${String(sharedBlocks)} pages > budget ${String(pages)}`
     : undefined;
 };
 
 export const budgetProblem = (id: ReadBudgetId, measured: QueryPerfMetrics) => {
-  const hang = budgetViolations(measured, READ_BUDGETS[id].pages).find(
+  const hang = budgetViolations(measured, readBudgetPages(id)).find(
     (violation) => violation.kind === "execution-time-hang-guard",
   );
   return hang === undefined
     ? pageBudgetProblem(id, measured.sharedBlocks)
     : `${id}: ${hang.message}`;
+};
+
+export const scheduledJobBudgetProblems = (
+  id: ScheduledJobReadBudgetId,
+  measured: {
+    readMetrics: QueryPerfMetrics;
+    writeMetrics: QueryPerfMetrics;
+    writtenRows: number;
+  },
+) => {
+  const budget = READ_BUDGETS[id];
+  const problems: string[] = [];
+  const hang = budgetViolations(
+    sumMetrics([measured.readMetrics, measured.writeMetrics]),
+    readBudgetPages(id),
+  ).find((violation) => violation.kind === "execution-time-hang-guard");
+  if (hang !== undefined) {
+    problems.push(`${id}: ${hang.message}`);
+  }
+  const readProblem = pageBudgetProblem(id, measured.readMetrics.sharedBlocks);
+  if (readProblem !== undefined) {
+    problems.push(readProblem);
+  }
+  if ("combinedPagesPerRun" in budget) {
+    const combined =
+      measured.readMetrics.sharedBlocks + measured.writeMetrics.sharedBlocks;
+    if (combined > budget.combinedPagesPerRun) {
+      problems.push(
+        `${id}: ${String(combined)} combined pages per run > budget ${String(budget.combinedPagesPerRun)}`,
+      );
+    }
+  }
+  const writes = "writes" in budget ? budget.writes : undefined;
+  if (
+    (measured.writtenRows > 0 || measured.writeMetrics.sharedBlocks > 0) &&
+    writes === undefined
+  ) {
+    problems.push(`${id}: measured writes but declares no write budget`);
+    return problems;
+  }
+  if (writes === undefined) {
+    return problems;
+  }
+  const perRow = measured.writeMetrics.sharedBlocks / measured.writtenRows;
+  if (measured.writtenRows > 0 && perRow > writes.pagesPerWrittenRow) {
+    problems.push(
+      `${id}: ${String(perRow)} write pages per row > budget ${String(writes.pagesPerWrittenRow)}`,
+    );
+  }
+  if (measured.writeMetrics.sharedBlocks > writes.ceilingPagesPerRun) {
+    problems.push(
+      `${id}: ${String(measured.writeMetrics.sharedBlocks)} write pages per run > budget ${String(writes.ceilingPagesPerRun)}`,
+    );
+  }
+  return problems;
 };
 
 /**
@@ -166,6 +241,44 @@ export const scaleViolations = ({
         `reads grow with the corpus: ${size} pages at one size, ${double} at twice the size (at most ${allowed})`,
       ]
     : [];
+};
+
+type ScheduledWriteMeasurement = {
+  writeMetrics: QueryPerfMetrics;
+  writtenRows: number;
+};
+
+/**
+ * Write pages per written row may not grow with the corpus either. The twin's
+ * write pages are scaled to the first run's written rows, then held to the
+ * same tolerance as reads: a b-tree level more, never a share of the extra rows.
+ */
+export const writeScaleViolations = ({
+  size,
+  double,
+}: {
+  size: ScheduledWriteMeasurement;
+  double: ScheduledWriteMeasurement;
+}) => {
+  if (size.writtenRows === 0 || double.writtenRows === 0) {
+    return size.writtenRows === double.writtenRows
+      ? []
+      : [
+          `writes appear at only one size: ${String(size.writtenRows)} rows at one size, ${String(double.writtenRows)} at twice the size`,
+        ];
+  }
+  const scaled = Math.ceil(
+    (double.writeMetrics.sharedBlocks * size.writtenRows) / double.writtenRows,
+  );
+  return scaleViolations({
+    size: size.writeMetrics.sharedBlocks,
+    double: scaled,
+  }).map((violation) =>
+    violation.replace(
+      /^reads grow with the corpus/u,
+      "write pages per written row grow with the corpus",
+    ),
+  );
 };
 
 export const shapeViolations = (
@@ -246,7 +359,7 @@ export const measureQueryPerf = async ({
     const documents = await explainAsStella({
       database: {
         transaction: async (fn) =>
-          await database.transaction(async (tx) => {
+          await withQueryPerfRollback(database, async (tx) => {
             await applyPlannerSettings(tx);
             const value = await fn(tx);
             await assertPlannerSettings(tx);
@@ -326,13 +439,16 @@ export const measureOwnerStatement = async ({
   let lastStatement = "";
   for (let sample = 0; sample <= QUERY_PERF_REPETITIONS; sample++) {
     // db-await-in-loop: sequential warm-cache measurements plus one discarded warmup; concurrency would distort the benchmark.
-    const { document, statement } = await database.transaction(async (tx) => {
-      await applyPlannerSettings(tx);
-      const query = build(tx);
-      const explained = await explainOwnerStatement(tx, query);
-      await assertPlannerSettings(tx, "owner");
-      return { document: explained, statement: statementText(query) };
-    });
+    const { document, statement } = await withQueryPerfRollback(
+      database,
+      async (tx) => {
+        await applyPlannerSettings(tx);
+        const query = build(tx);
+        const explained = await explainOwnerStatement(tx, query);
+        await assertPlannerSettings(tx, "owner");
+        return { document: explained, statement: statementText(query) };
+      },
+    );
     plans.push(document);
     lastStatement = statement;
     if (sample !== 0) {

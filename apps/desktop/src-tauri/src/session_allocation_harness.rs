@@ -51,16 +51,21 @@ impl Fixture {
       bytes: vec![b'x'; size],
       reads: AtomicUsize::new(0),
     });
-    let mut manager = SessionManager::new();
+    let mut manager = SessionManager::new().expect("test data directory");
     let root =
       std::env::temp_dir().join(format!("stella-alloc-{}", uuid::Uuid::new_v4()));
     manager.store_path = root.join("sessions.json");
     manager.edit_root = root.join("editing");
     manager.file_system = files.clone();
+    let owner = AccountOwner::fixture("allocation");
+    manager.account_owner = Some(owner.clone());
     let sha = hash_bytes(&files.bytes);
     manager.sessions.insert(
       "allocation".into(),
       DesktopSession {
+        editor_state: EditorState::Unknown,
+        account_owner: owner,
+        download_sha: None,
         api_base_url: "http://127.0.0.1".into(),
         base_version_number: 1,
         entity_id: "entity".into(),
@@ -105,9 +110,11 @@ impl Fixture {
   }
 
   pub fn retry(&self) {
-    self
-      .runtime
-      .block_on(retry_session(self.manager.clone(), "allocation"));
+    // Pinned here, so the runtime never boxes the retry future: debug-build
+    // Tokio boxes any future past its size threshold, which would count the
+    // future's size rather than the retry's own allocations.
+    let retry = std::pin::pin!(retry_session(self.manager.clone(), "allocation"));
+    self.runtime.block_on(retry);
   }
 
   pub fn reads(&self) -> usize {

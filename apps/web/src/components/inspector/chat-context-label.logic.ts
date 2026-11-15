@@ -57,42 +57,42 @@ export const chatTabHeaderLabel = ({
     ? (activeSkillName ?? boundDocumentLabel ?? newChatLabel)
     : tabLabel;
 
-type ChatContextLabelOptions = ChatTabHeaderLabelOptions & {
+type ChatContextLabelOptions = {
+  /** The active skill's title, translated when it is a built-in. */
+  activeSkillName: string | undefined;
+  boundDocumentLabel: string | undefined;
   /** The matters in the tab's context, named, in the order the tab holds them. */
   matterNames: readonly string[];
+  tabLabel: string;
 };
 
 /**
  * What the composer says the chat is about. The active skill wins because the
  * reader chose it for this turn; the bound document comes next because it is
- * what the model will actually read.
+ * what the model will actually read. `undefined` when nothing names it: an
+ * untitled chat is not about its own placeholder title, so the composer then
+ * uses its context-free placeholder.
  */
 export const chatContextLabel = ({
   activeSkillName,
   boundDocumentLabel,
   matterNames,
-  newChatLabel,
   tabLabel,
-}: ChatContextLabelOptions): string => {
+}: ChatContextLabelOptions): string | undefined => {
   if (activeSkillName !== undefined) {
     return activeSkillName;
   }
   if (boundDocumentLabel !== undefined) {
     return boundDocumentLabel;
   }
-
-  const header = chatTabHeaderLabel({
-    activeSkillName,
-    boundDocumentLabel,
-    newChatLabel,
-    tabLabel,
-  });
-  const fallback = header.trim().length > 0 ? header : "chat";
   const firstName = matterNames.at(0);
-  if (firstName === undefined) {
-    return fallback;
+  if (firstName !== undefined) {
+    return matterNames.length === 1
+      ? firstName
+      : `${firstName} +${String(matterNames.length - 1)}`;
   }
-  return matterNames.length === 1
-    ? firstName
-    : `${firstName} +${String(matterNames.length - 1)}`;
+  const title = tabLabel.trim();
+  return title.length > 0 && !isPlaceholderThreadTitle(title)
+    ? title
+    : undefined;
 };

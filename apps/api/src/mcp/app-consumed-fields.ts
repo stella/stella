@@ -24,6 +24,7 @@ export const MCP_APP_CONSUMED_FIELDS = {
     "results[].keywords.omitted",
     "facets.court[].tierLabel",
     "facets.court[].courts[].value",
+    "facets.court[].courts[].count",
     "nextCursor",
     "searches[].warnings[].message",
     "searches[].warnings[].audience",

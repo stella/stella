@@ -1,18 +1,30 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
+import {
+  CHAT_FORK_STEP_CONTENT,
+  type ChatForkStepContent,
+} from "@stll/api-contract/chat-local-run-step-content";
+import { chatLocalRunOfCall } from "@stll/api-contract/chat-local-run-step-output";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
-import { defaultDatabaseRetry } from "@/api/db/safe-db";
-import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
+import { defaultDatabaseRetry, type SafeDbError } from "@/api/db/safe-db";
+import {
+  chatLocalRunStepContents,
+  chatMessages,
+  chatThreads,
+  userFiles,
+} from "@/api/db/schema";
 import {
   attachTerminalTurnOutcome,
   cancelPendingChatToolCalls,
   chatMessageFromPersisted,
+  continueStoredChatPart,
   createChatAttachmentPart,
-  getAwaitingUserInteractions,
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
   getChatAttachmentPlaceholder,
@@ -29,15 +41,25 @@ import type {
   ChatPart,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import {
+  copyThreadArtefactTitle,
+  THREAD_ARTEFACT_PROVENANCE_SELECTION,
+} from "@/api/lib/chat/artefact-provenance";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
+import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileThumbnailKey, type FileKey } from "@/api/lib/file-key";
@@ -49,6 +71,8 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import {
   copyObject,
@@ -103,6 +127,7 @@ const FORKED_THREAD_COLUMNS = {
   dataWorkspaceIds: chatThreads.dataWorkspaceIds,
   title: chatThreads.title,
   titleSource: chatThreads.titleSource,
+  ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
   subjectDecisionId: chatThreads.subjectDecisionId,
   usedAnonymization: chatThreads.usedAnonymization,
   webSearchEnabled: chatThreads.webSearchEnabled,
@@ -149,8 +174,43 @@ type UserFileCopy = {
 /** A prefix row beside its decoded message, so each row is decoded once. */
 type PrefixMessage = {
   message: PersistableChatMessage;
+  /** The id the fork stores its copy of the message under. */
+  newMessageId: SafeId<"chatMessage">;
   row: ChatMessagePrefixRow;
 };
+
+/** A step of a local run that a copied message shows. */
+type PrefixStep = { stepKey: string; messageId: SafeId<"chatMessage"> };
+
+/**
+ * The steps of local runs the copied prefix shows, each with the fork's
+ * message that shows it. A fork keeps its source's call ids, so a step's key
+ * is the same in both threads; a call repeated across messages belongs to
+ * the first that shows it.
+ */
+const collectPrefixSteps = (
+  prefix: readonly Pick<PrefixMessage, "message" | "newMessageId">[],
+): PrefixStep[] => {
+  const steps = new Map<string, PrefixStep>();
+  for (const { message, newMessageId } of prefix) {
+    for (const part of message.parts) {
+      if (part.type !== "tool-call" || chatLocalRunOfCall(part.id) === null) {
+        continue;
+      }
+      const stepKey = sha256Hex(part.id);
+      if (!steps.has(stepKey)) {
+        steps.set(stepKey, { stepKey, messageId: newMessageId });
+      }
+    }
+  }
+  return [...steps.values()];
+};
+
+/** The fork exists; what its copied steps stored could not be copied with it. */
+const FORK_STEP_CONTENT_SINK = failureSink({
+  event: "chat.fork_step_content_copy_failed",
+  expected: [],
+});
 
 /**
  * Every `stella://file::<id>` a copied prefix points at, in insertion order.
@@ -199,12 +259,15 @@ const remapChatAttachmentPart = (
   }
   const filename = getChatAttachmentFilename(part);
   const placeholder = getChatAttachmentPlaceholder(part);
-  return createChatAttachmentPart({
-    mimeType: getChatAttachmentMimeType(part),
-    url: toUserFileUrl(copiedFileId),
-    ...(filename === undefined ? {} : { filename }),
-    ...(placeholder === undefined ? {} : { placeholder }),
-  });
+  return continueStoredChatPart(
+    part,
+    createChatAttachmentPart({
+      mimeType: getChatAttachmentMimeType(part),
+      url: toUserFileUrl(copiedFileId),
+      ...(filename === undefined ? {} : { filename }),
+      ...(placeholder === undefined ? {} : { placeholder }),
+    }),
+  );
 };
 
 /**
@@ -231,7 +294,7 @@ const settleForkedPendingInteractions = (
   // A pre-outcome message carries no `turnOutcome` and can still hold an
   // unanswered call, so the parts decide too. A message that awaited the user
   // is superseded on the fork even when settling left nothing to answer.
-  const pending = getAwaitingUserInteractions({
+  const pending = memberWaitsOf({
     parts: settled.parts,
     role: settled.role,
   });
@@ -532,7 +595,9 @@ const copyUserFiles = async ({
  */
 class ChatForkAttachmentRowMissingError extends TaggedError(
   "ChatForkAttachmentRowMissingError",
-)<{ message: string }> {}
+)<{
+  message: string;
+}> {}
 
 /**
  * A `user_files` row of the copied prefix points at a storage object (or a
@@ -587,9 +652,12 @@ const rollbackCopiedS3Keys = async (
 // still awaits are settled in the copy. The fork's id comes from
 // the caller, so a retry converges on one copy instead of duplicating it.
 export const createForkThread = ({
+  control,
   fileUsageDb,
   indexChatThread = upsertChatThreadSearchDocument,
 }: {
+  /** The gateway control that copies stored step content; the process's own by default. */
+  control?: () => Pick<DesktopRunnerControl, "copyStepContents">;
   fileUsageDb?: Parameters<typeof copyOrganizationFiles>[0]["db"];
   /** Search-index write, which runs on the root database; supplied by the
    *  focused integration test, whose fixture only stands up a scoped one. */
@@ -617,6 +685,7 @@ export const createForkThread = ({
       }
 
       const scope = yield* resolveChatScope({
+        admitted: "active",
         getWorkspaceAccess,
         workspaceId,
       });
@@ -635,6 +704,7 @@ export const createForkThread = ({
             parentThreadId: chatThreads.parentThreadId,
             title: chatThreads.title,
             titleSource: chatThreads.titleSource,
+            ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
             subjectDecisionId: chatThreads.subjectDecisionId,
           })
           .from(chatThreads)
@@ -662,6 +732,86 @@ export const createForkThread = ({
         fork.forkedFromMessageId === upToMessageId &&
         (fork.parentThreadId === null ||
           fork.parentThreadId === params.threadId);
+
+      /**
+       * Copy what `steps` stored in the source thread to the fork. The fork
+       * is whole without it, so a failure is reported and answered as
+       * `incomplete`, never raised: the same request sent again copies what
+       * is missing, since a row the fork already holds is kept.
+       */
+      const copyStepContent = async ({
+        sourceThreadId,
+        steps: copiedSteps,
+      }: {
+        sourceThreadId: SafeId<"chatThread">;
+        steps: readonly PrefixStep[];
+      }): Promise<ChatForkStepContent> => {
+        if (copiedSteps.length === 0) {
+          return CHAT_FORK_STEP_CONTENT.complete;
+        }
+        const stepControl = control?.() ?? getDesktopRunnerControl().control;
+        const copied = await stepControl.copyStepContents({
+          owner: {
+            userId: user.id,
+            organizationId: session.activeOrganizationId,
+          },
+          sourceThreadId,
+          targetThreadId: newThreadId,
+          steps: copiedSteps,
+        });
+        if (copied.isErr()) {
+          observeFailure(copied.error, { sink: FORK_STEP_CONTENT_SINK });
+          return CHAT_FORK_STEP_CONTENT.incomplete;
+        }
+        return CHAT_FORK_STEP_CONTENT.complete;
+      };
+
+      /**
+       * Copy again for a fork that already exists: its own stored messages
+       * say which steps it shows. A fork whose source thread is gone has
+       * nothing left to copy from.
+       */
+      const repairStepContent = async (fork: {
+        parentThreadId: SafeId<"chatThread"> | null;
+      }): Promise<Result<ChatForkStepContent, SafeDbError>> => {
+        const sourceThreadId = fork.parentThreadId;
+        if (sourceThreadId === null) {
+          return Result.ok(CHAT_FORK_STEP_CONTENT.complete);
+        }
+        const forkSteps = await safeDb(async (tx) => {
+          const last = (
+            await tx
+              .select({ id: chatMessages.id })
+              .from(chatMessages)
+              .where(eq(chatMessages.threadId, newThreadId))
+              .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+              .limit(1)
+          ).at(0);
+          const rows =
+            last === undefined
+              ? null
+              : await loadChatMessagePrefixOnTx({
+                  targetMessageId: last.id,
+                  threadId: newThreadId,
+                  tx,
+                });
+          // A fork that holds no message shows no step.
+          return rows === null
+            ? []
+            : collectPrefixSteps(
+                rows.map((row) => ({
+                  message: chatMessageFromPersisted(row),
+                  newMessageId: row.id,
+                })),
+              );
+        });
+        if (Result.isError(forkSteps)) {
+          return Result.err(forkSteps.error);
+        }
+        return Result.ok(
+          await copyStepContent({ sourceThreadId, steps: forkSteps.value }),
+        );
+      };
 
       const reads = yield* Result.await(
         safeDb(async (tx) => {
@@ -715,10 +865,46 @@ export const createForkThread = ({
             message: settleForkedPendingInteractions(
               chatMessageFromPersisted(row),
             ),
+            newMessageId: createSafeId<"chatMessage">(),
             row,
           }));
 
-          const sourceFileIds = collectPrefixUserFileIds(prefix);
+          // The images the copied steps viewed are chat files of the source
+          // thread: the fork copies them with the attachments, and the step
+          // copy then names the fork's own file of the same bytes.
+          const steps = collectPrefixSteps(prefix);
+          const stepImages =
+            steps.length === 0
+              ? []
+              : await tx
+                  .select({
+                    stepKey: chatLocalRunStepContents.stepKey,
+                    userFileId: userFiles.id,
+                  })
+                  .from(chatLocalRunStepContents)
+                  .innerJoin(
+                    userFiles,
+                    eq(userFiles.id, chatLocalRunStepContents.userFileId),
+                  )
+                  .where(
+                    and(
+                      eq(chatLocalRunStepContents.threadId, params.threadId),
+                      inArray(
+                        chatLocalRunStepContents.stepKey,
+                        steps.map((step) => step.stepKey),
+                      ),
+                      isNotNull(chatLocalRunStepContents.userFileId),
+                    ),
+                  )
+                  // At most one image per copied step.
+                  .limit(steps.length);
+
+          const sourceFileIds = [
+            ...new Set([
+              ...collectPrefixUserFileIds(prefix),
+              ...stepImages.map((image) => image.userFileId),
+            ]),
+          ];
           const sourceFiles =
             sourceFileIds.length === 0
               ? []
@@ -754,6 +940,7 @@ export const createForkThread = ({
             prefix,
             source,
             sourceFiles,
+            steps,
             unresolvedFileIds: sourceFileIds.filter(
               (fileId) => !resolvedFileIds.has(fileId),
             ),
@@ -801,13 +988,16 @@ export const createForkThread = ({
             readWithdrawnCopyProjection({ values: existingFork }),
           ),
         );
+        // A retry of a fork whose step content did not copy completes it.
+        const repaired = yield* Result.await(repairStepContent(existingFork));
         return Result.ok({
+          stepContent: repaired,
           threadId: existingFork.id,
           title: projection.thread(existingFork).title,
         });
       }
 
-      const { prefix, source, sourceFiles, unresolvedFileIds } = reads;
+      const { prefix, source, sourceFiles, steps, unresolvedFileIds } = reads;
       const projection = yield* Result.await(
         Result.tryPromise(async () =>
           readWithdrawnCopyProjection({ values: source }),
@@ -889,8 +1079,7 @@ export const createForkThread = ({
           id: newThreadId,
           organizationId: session.activeOrganizationId,
           parentThreadId: params.threadId,
-          title: source.title,
-          titleSource: source.titleSource,
+          ...copyThreadArtefactTitle(source),
           subjectDecisionId: source.subjectDecisionId,
           usedAnonymization: source.usedAnonymization,
           userId: user.id,
@@ -930,20 +1119,23 @@ export const createForkThread = ({
             // audit: skip — copied history belongs to the CHAT_THREAD create
             // event recorded below.
             await tx.insert(chatMessages).values(
-              batch.map(({ message, row }) => ({
+              batch.map(({ message, newMessageId, row }) => ({
                 // Timestamps are preserved: keyset ordering, recap and
                 // compaction all read (createdAt, id), so a re-stamped copy
                 // would reorder the fork against its own history.
                 createdAt: row.createdAt,
-                content: toPersistedChatMessageContentV3({
-                  data: message.parts.map((part) =>
-                    remapChatAttachmentPart(part, copiedFileIds),
-                  ),
-                  ...(message.metadata === undefined
-                    ? {}
-                    : { metadata: message.metadata }),
-                }),
-                id: createSafeId<"chatMessage">(),
+                content: toPersistedChatMessageContentV3(
+                  {
+                    data: message.parts.map((part) =>
+                      remapChatAttachmentPart(part, copiedFileIds),
+                    ),
+                    ...(message.metadata === undefined
+                      ? {}
+                      : { metadata: message.metadata }),
+                  },
+                  row.id,
+                ),
+                id: newMessageId,
                 memoryExtractionEligible: row.memoryExtractionEligible,
                 role: row.role,
                 threadId: newThreadId,
@@ -1014,7 +1206,11 @@ export const createForkThread = ({
           if (!raced.ownObjectsReferenced) {
             await rollbackCopiedS3Keys(copiedS3Keys, fileUsageDb);
           }
+          const repaired = yield* Result.await(
+            repairStepContent(raced.existingFork),
+          );
           return Result.ok({
+            stepContent: repaired,
             threadId: raced.existingFork.id,
             title: projection.thread(raced.existingFork).title,
           });
@@ -1023,16 +1219,28 @@ export const createForkThread = ({
         return Result.err(written.error);
       }
 
+      // What the copied steps stored is written only on the gateway's owner
+      // connection, so it is copied once the fork exists.
+      const stepContent = await copyStepContent({
+        sourceThreadId: params.threadId,
+        steps,
+      });
+
       // Fire-and-forget after the fork commits: indexing must never block or
       // fail it. Rebuilds both the thread and message search documents for the
       // new thread. Mirrors rename-thread.ts and send-message.ts.
-      indexChatThread(newThreadId).catch(
-        createErrorCapture(
-          handlerErrorContext("createForkThread.indexChatThread"),
-        ),
+      detached(
+        async () =>
+          indexChatThread(newThreadId).catch(
+            createErrorCapture(
+              handlerErrorContext("createForkThread.indexChatThread"),
+            ),
+          ),
+        "fork-create.index-chat-thread",
       );
 
       return Result.ok({
+        stepContent,
         threadId: newThreadId,
         title: projection.thread(source).title,
       });

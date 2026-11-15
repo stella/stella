@@ -114,6 +114,7 @@ type BrowseFacetsCacheOptions = {
 };
 
 const browseFacetsCacheKey = ({
+  populationVersion,
   documentFamily,
   excludedSourceIds,
   jurisdiction,
@@ -123,7 +124,7 @@ const browseFacetsCacheKey = ({
   // must not split one source policy across two entries. Source policy is
   // not caller-influenced and changes rarely, so it adds a generation to the
   // key space rather than a dimension.
-  `${documentFamily ?? ""}:${jurisdiction ?? ""}:${limit}:${excludedSourceIds.toSorted().join(",")}`;
+  `${populationVersion ?? ""}:${documentFamily ?? ""}:${jurisdiction ?? ""}:${limit}:${excludedSourceIds.toSorted().join(",")}`;
 
 export const createBrowseFacetsCache = (options: BrowseFacetsCacheOptions) =>
   createTtlResultCache({ ...options, key: browseFacetsCacheKey });

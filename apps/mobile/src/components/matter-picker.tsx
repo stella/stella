@@ -99,11 +99,11 @@ export const MatterPicker = ({
               <Text numberOfLines={1} variant="rowTitle">
                 {matter.name}
               </Text>
-              {matter.client?.displayName === undefined ? null : (
+              {matter.client?.displayName !== undefined ? (
                 <Text numberOfLines={1} variant="caption">
                   {matter.client.displayName}
                 </Text>
-              )}
+              ) : null}
             </View>
             {matter.id === selected ? (
               <CheckIcon color={ui.foreground} size={18} />

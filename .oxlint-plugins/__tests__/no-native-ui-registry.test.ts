@@ -90,8 +90,7 @@ describe("no-native-ui registry", () => {
         const target = exportTarget(value) ?? "";
         const key = registryKeyForExport(subpath);
         const rendersMarkup =
-          target.endsWith(".tsx") ||
-          /\/(?:calendar|data-table|kanban)\//u.test(target);
+          target.endsWith(".tsx") || /\/(?:data-table|kanban)\//u.test(target);
         return rendersMarkup && REGISTRY[key]?.kind === "not-component"
           ? [subpath]
           : [];

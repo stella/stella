@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
-import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
+import { aiDisclosure } from "@stll/api-contract/ai-disclosure";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -17,6 +17,7 @@ import {
   installDockedLegalFixtures,
 } from "../helpers/docked-chat-legal-fixtures";
 import { dockedChatLegalPayloads } from "../helpers/docked-chat-legal-payloads";
+import { apiJson, respond } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 
 const SECTION_COUNT = 6;
@@ -143,17 +144,20 @@ const openDecision = async (page: Page) => {
     async (route) => {
       const { pathname } = new URL(route.request().url());
       if (pathname.endsWith("/analysis")) {
-        await route.fulfill({
-          json: {
+        await respond(
+          route,
+          apiJson("v1/case/decisions/:decisionId/analysis", "get", {
             status: "done",
             analysis,
-          } satisfies { status: "done"; analysis: DecisionAnalysis },
-        });
+            aiDisclosure: aiDisclosure("caseLaw"),
+          }),
+        );
         return;
       }
       if (pathname === "/v1/organization-settings/ai-availability") {
-        await route.fulfill({
-          json: {
+        await respond(
+          route,
+          apiJson("v1/organization-settings/ai-availability", "get", {
             available: true,
             instanceProvisioned: true,
             orgConfigured: false,
@@ -161,11 +165,16 @@ const openDecision = async (page: Page) => {
             providerConfiguration: "allowed",
             deferredServiceTierAvailable: false,
             mockAnswers: false,
-          } satisfies OrganizationAIAvailability,
-        });
+          }),
+        );
         return;
       }
-      await route.fulfill({ json: decision });
+      await respond(
+        route,
+        pathname.includes("/by-slug/")
+          ? apiJson("v1/case/decisions/by-slug/:slug", "get", decision)
+          : apiJson("v1/case/decisions/:decisionId", "get", decision),
+      );
     },
   );
   await openMemberDecision(page, {
@@ -275,15 +284,12 @@ for (const { locale, dir, messages } of WIDE_CASES) {
         frame.y + frame.height / 2,
       );
       await page.mouse.wheel(0, 1800);
-      const currentSection = aside.getByTitle(
-        messages.caseLaw.analysis.backToSection,
+      const currentSection = aside.locator(
+        '[data-slot="reader-current-section"]',
       );
       // The header stays mounted at zero opacity until a heading has passed
       // the top, so its own visibility flag is what says it shows.
-      await expect(currentSection.locator("..")).toHaveAttribute(
-        "aria-hidden",
-        "false",
-      );
+      await expect(currentSection).toHaveAttribute("aria-hidden", "false");
       const barBox = await box(bar);
       expect(intersects(barBox, await box(currentSection))).toBe(false);
       expect(intersects(barBox, await box(aside))).toBe(false);

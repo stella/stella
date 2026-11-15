@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { INVOICE_ISSUE_BLOCKER } from "@stll/api-contract/billing";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   featureEnrolments,
@@ -31,6 +33,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 setDefaultTimeout(120_000);
@@ -182,7 +185,7 @@ if (!databaseUrl || !runPostgres) {
     };
     cleanUp(async () => {
       if (orgIds.length > 0) {
-        await db.delete(organization).where(inArray(organization.id, orgIds));
+        await deleteOrganizationsForTest(db, orgIds);
       }
       if (userIds.length > 0) {
         await db.delete(user).where(inArray(user.id, userIds));
@@ -470,8 +473,9 @@ if (!databaseUrl || !runPostgres) {
       expect(await finalize({ scenario, db, invoiceId })).toEqual({
         code: 409,
         response: {
+          code: INVOICE_ISSUE_BLOCKER.numberSeriesMissing,
           message: "No default number series configured for this document type",
-          hint: "Create a number series for this documentType and this seller or all sellers, set it as default, then finalize again.",
+          hint: "Create a number series (number-series.create) for this documentType and this seller or all sellers, set it as default, then finalize again.",
         },
       });
       expect(

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -14,6 +14,12 @@ import nodePath from "node:path";
 
 import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
 import { parseChangesetEntry } from "./changeset-entry";
+import {
+  DESKTOP_SUPPORT_FLOOR_PATH,
+  desktopBuildsFromTags,
+  type DesktopSupportFloorMove,
+  moveDesktopSupportFloor,
+} from "./check-desktop-support-floor";
 import { computeProvenanceVerdicts } from "./check-marketing-recordings";
 import { releaseQueueHistoryWarning } from "./check-release-queue-history";
 import {
@@ -23,6 +29,12 @@ import {
   type PreCutGate,
   preCutGates,
 } from "./prepare-maintenance-release-gates";
+import {
+  parseReleaseManifest,
+  type ReleaseManifest,
+  selectPromotedReleaseBelow,
+  serializeReleaseManifest,
+} from "./promoted-release-policy";
 
 // Computed filesystem reads retain these repository Markdown inputs.
 export const CI_MARKDOWN_READER_INPUTS = [
@@ -300,6 +312,11 @@ export const foldSupersededChangelog = ({
   return `${older.body}\n${PACKAGES_HEADING}\n\n${entries.map((entry) => `${entry}\n`).join("")}`;
 };
 
+const isVersionAhead = (version: StableVersion, reference: StableVersion) =>
+  (version.major - reference.major ||
+    version.minor - reference.minor ||
+    version.patch - reference.patch) > 0;
+
 export const parseStableVersion = (value: string): StableVersion => {
   const match = STABLE_VERSION_PATTERN.exec(value);
   if (!match) {
@@ -401,27 +418,18 @@ export const parseMaintenanceReleaseOptions = (
 // A `null` value records a stable tag that was built but never promoted; the
 // landing changelog omits it. Preserved as written: a maintenance release
 // after an unpromoted one must not turn that record into a publication date.
-const readReleaseDates = (rootDir: string): Record<string, string | null> => {
-  const parsed: unknown = JSON.parse(
-    readFileSync(nodePath.join(rootDir, RELEASE_DATES_PATH), "utf-8"),
+export const readReleaseManifest = (rootDir: string): ReleaseManifest => {
+  const parsed = parseReleaseManifest(
+    JSON.parse(
+      readFileSync(nodePath.join(rootDir, RELEASE_DATES_PATH), "utf-8"),
+    ),
   );
-  if (
-    !isRecord(parsed) ||
-    Object.values(parsed).some(
-      (value) => typeof value !== "string" && value !== null,
-    )
-  ) {
+  if (parsed.status === "invalid") {
     throw new MaintenanceReleaseError(
-      `${RELEASE_DATES_PATH} must be an object of string or null values`,
+      `${RELEASE_DATES_PATH}: ${parsed.message}`,
     );
   }
-  const releaseDates: Record<string, string | null> = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (typeof value === "string" || value === null) {
-      releaseDates[key] = value;
-    }
-  }
-  return releaseDates;
+  return parsed.manifest;
 };
 
 const atomicWriteFile: ReleaseFileWriter = (path, contents) => {
@@ -493,6 +501,40 @@ const runChangesetVersion = (rootDir: string) => {
   }
 };
 
+export type ReleaseDates = Record<string, string | null>;
+
+/**
+ * The release publication manifest as the release PR will carry it: every
+ * recorded entry stays as written (a null is a release that was never
+ * promoted, even when GitHub later shows a published release for it), the
+ * previous final takes GitHub's verdict (a time when promoted, null when
+ * not), and a never-tagged previous version records nothing. The cut writes
+ * this and checks npm against it, so the cut and the tag see the same
+ * promotions.
+ */
+export const projectReleaseDates = ({
+  dates,
+  previousRelease,
+  previousTag,
+}: {
+  dates: ReleaseDates;
+  previousRelease: PreviousRelease;
+  previousTag: string;
+}): ReleaseDates => {
+  const projected: ReleaseDates = { ...dates };
+  switch (previousRelease.kind) {
+    case "published":
+      return { ...projected, [previousTag]: previousRelease.publishedAt };
+    case "unpromoted":
+      return { ...projected, [previousTag]: null };
+    case "superseded":
+      return projected;
+    default:
+      previousRelease satisfies never;
+      return panic("Unhandled previous release");
+  }
+};
+
 export const prepareMaintenanceReleaseFiles = ({
   previousFinalVersion,
   previousRelease,
@@ -544,14 +586,12 @@ export const prepareMaintenanceReleaseFiles = ({
   }
 
   const releaseDatesPath = nodePath.join(rootDir, RELEASE_DATES_PATH);
-  const releaseDates = readReleaseDates(rootDir);
-  if (
-    previousRelease.kind !== "superseded" &&
-    releaseDates[previousTag] !== null
-  ) {
-    releaseDates[previousTag] =
-      previousRelease.kind === "published" ? previousRelease.publishedAt : null;
-  }
+  const recordedManifest = readReleaseManifest(rootDir);
+  const releaseDates = projectReleaseDates({
+    dates: recordedManifest.releases,
+    previousRelease,
+    previousTag,
+  });
   const changesets = readPendingChangesets(rootDir);
   const emptyChangesetPath = nodePath.join(
     rootDir,
@@ -588,7 +628,13 @@ export const prepareMaintenanceReleaseFiles = ({
       if (supersededChangelog !== null) {
         rmSync(absolutePreviousChangelogPath);
       }
-      writeFile(releaseDatesPath, `${JSON.stringify(releaseDates, null, 2)}\n`);
+      writeFile(
+        releaseDatesPath,
+        serializeReleaseManifest({
+          note: recordedManifest.note,
+          releases: releaseDates,
+        }),
+      );
       writeFile(versionPath, `${next.value}\n`);
       return {
         changelogPath,
@@ -969,11 +1015,10 @@ const readGitHubPages = async (
   const items: unknown[] = [];
   for (let page = 1; page <= GITHUB_PAGE_LIMIT; page += 1) {
     const separator = path.includes("?") ? "&" : "?";
-    const payload = itemsOf(
-      await readJson(
-        `${path}${separator}per_page=${String(GITHUB_PAGE_SIZE)}&page=${String(page)}`,
-      ),
+    const raw = await readJson(
+      `${path}${separator}per_page=${String(GITHUB_PAGE_SIZE)}&page=${String(page)}`,
     );
+    const payload = itemsOf(raw);
     if (!Array.isArray(payload)) {
       throw new MaintenanceReleaseError(
         `GitHub ${path} returned an unexpected payload`,
@@ -998,13 +1043,23 @@ const runIdFromUrl = (url: unknown): string | null => {
   return /^[1-9]\d*$/u.test(id) ? id : null;
 };
 
-const failingJobNames = async (
+type RunJobsRead =
+  | {
+      readonly kind: "jobs";
+      readonly jobs: readonly unknown[];
+    }
+  | { readonly kind: "unreadable"; readonly failing: string[] };
+
+const readRunJobs = async (
   runUrl: string | null,
   readJson: GitHubJsonReader,
-): Promise<string[]> => {
+): Promise<RunJobsRead> => {
   const runId = runIdFromUrl(runUrl);
   if (runId === null) {
-    return [`(no workflow run linked: ${String(runUrl)})`];
+    return {
+      kind: "unreadable",
+      failing: [`(no workflow run linked: ${String(runUrl)})`],
+    };
   }
   const jobsResult = await Result.tryPromise(async () =>
     readGitHubPages(
@@ -1015,11 +1070,21 @@ const failingJobNames = async (
   );
   if (Result.isError(jobsResult)) {
     const { cause } = jobsResult.error;
-    return [
-      `(jobs unreadable: ${cause instanceof Error ? cause.message : String(cause)})`,
-    ];
+    return {
+      kind: "unreadable",
+      failing: [
+        `(jobs unreadable: ${cause instanceof Error ? cause.message : String(cause)})`,
+      ],
+    };
   }
-  return jobsResult.value.flatMap((job) => {
+  return { kind: "jobs", jobs: jobsResult.value };
+};
+
+const failingJobNames = (read: RunJobsRead): string[] => {
+  if (read.kind === "unreadable") {
+    return read.failing;
+  }
+  return read.jobs.flatMap((job) => {
     const name = isRecord(job) ? job["name"] : undefined;
     if (!isRecord(job) || typeof name !== "string") {
       return ["(a job GitHub returned without a name)"];
@@ -1042,11 +1107,17 @@ const STATUS_STATES: Record<string, ReleaseCutGate["state"]> = {
   success: "success",
 };
 
-const gateFromStatus = async (
-  spec: ReleaseCutGateSpec,
-  status: Record<string, unknown>,
-  readJson: GitHubJsonReader,
-): Promise<ReleaseCutGate> => {
+type GateFromStatusOptions = {
+  spec: ReleaseCutGateSpec;
+  status: Record<string, unknown>;
+  readJson: GitHubJsonReader;
+};
+
+const gateFromStatus = async ({
+  spec,
+  status,
+  readJson,
+}: GateFromStatusOptions): Promise<ReleaseCutGate> => {
   const creator = status["creator"];
   const login = isRecord(creator) ? creator["login"] : undefined;
   const runUrl =
@@ -1060,14 +1131,20 @@ const gateFromStatus = async (
     login === TRUSTED_STATUS_CREATOR
       ? `status ${String(status["state"])}`
       : `status ${String(status["state"])} set by ${String(login)}, not ${TRUSTED_STATUS_CREATOR}`;
-  return {
+  const gate: ReleaseCutGate = {
     context: spec.context,
     workflow: spec.workflow,
     state,
     evidence,
     runUrl,
-    failingJobs:
-      state === "success" ? [] : await failingJobNames(runUrl, readJson),
+    failingJobs: [],
+  };
+  if (state === "success") {
+    return gate;
+  }
+  return {
+    ...gate,
+    failingJobs: failingJobNames(await readRunJobs(runUrl, readJson)),
   };
 };
 
@@ -1117,7 +1194,9 @@ const gateFromScheduledRun = async (
     evidence: `no status; latest scheduled run ${String(latest["status"])}/${String(latest["conclusion"])}`,
     runUrl,
     failingJobs:
-      state === "success" ? [] : await failingJobNames(runUrl, readJson),
+      state === "success"
+        ? []
+        : failingJobNames(await readRunJobs(runUrl, readJson)),
   };
 };
 
@@ -1159,7 +1238,7 @@ export const readReleaseCutGates = async (
       (entry) => isRecord(entry) && entry["context"] === spec.context,
     );
     if (isRecord(status)) {
-      return gateFromStatus(spec, status, readJson);
+      return gateFromStatus({ spec, status, readJson });
     }
     if (spec.scheduledRunFallback) {
       return gateFromScheduledRun(spec, sha, readJson);
@@ -1219,25 +1298,87 @@ const resolveHeadSha = (rootDir: string): string => {
   return sha;
 };
 
+/** Whether a merge-group receipt stands in for main/heavy and main/pr-depth. */
+export type ReceiptCoverage = "covered" | "not_covered";
+
+/** Answers receipt coverage for a commit; a throw counts as not covered. */
+export type ReceiptCoverageReader = (sha: string) => Promise<ReceiptCoverage>;
+
+const RELEASE_REPOSITORY = "stella/stella";
+
+const RECEIPT_COVERAGE_COMMAND = [
+  "bash",
+  "scripts/check-release-receipt-coverage.sh",
+] as const;
+
 /**
- * Refuses the cut unless main/heavy and main/pr-depth are green on it. With
+ * The proof the release health check (check-release-main-health.sh) accepts
+ * for a main commit that carries no release-candidate tag, asked of the
+ * script that owns it with the repository and commit appended to `command`.
+ * Only its exit 0 is coverage: no receipt, uncovered history, any other exit
+ * and a command that cannot start all keep both statuses required.
+ */
+export const receiptCoverageReader =
+  (
+    command: readonly string[] = RECEIPT_COVERAGE_COMMAND,
+  ): ReceiptCoverageReader =>
+  async (sha) => {
+    const spawned = Result.try(() =>
+      Bun.spawn([...command, RELEASE_REPOSITORY, sha], {
+        cwd: ROOT_DIR,
+        stderr: "inherit",
+        stdin: "ignore",
+        stdout: "ignore",
+      }),
+    );
+    if (Result.isError(spawned)) {
+      return "not_covered";
+    }
+    return (await spawned.value.exited) === 0 ? "covered" : "not_covered";
+  };
+
+export type ReleaseCutReaders = {
+  json?: GitHubJsonReader;
+  coverage?: ReceiptCoverageReader;
+};
+
+/**
+ * Refuses the cut unless main/heavy and main/pr-depth are green on it, or,
+ * when neither has failed, a merge-group receipt on it covers them: the same
+ * proof the release health check accepts for a main commit that carries no
+ * release-candidate tag. A failed gate is never covered. With
  * --allow-unproven-main the same verdict is printed and the cut goes on.
  */
 export const assertReleaseCutReady = async (
   sha: string,
   allowUnprovenMain: boolean,
-  readJson: GitHubJsonReader = readGitHubJson,
+  readers: ReleaseCutReaders = {},
   write: (text: string) => void = (text) => {
     process.stdout.write(text);
   },
 ): Promise<void> => {
-  const refusal = releaseCutRefusal(
-    sha,
-    await readReleaseCutGates(sha, readJson),
-  );
+  const gates = await readReleaseCutGates(sha, readers.json ?? readGitHubJson);
+  const refusal = releaseCutRefusal(sha, gates);
   if (refusal === null) {
     write(
       `maintenance-release: main/heavy and main/pr-depth are green on ${sha}\n`,
+    );
+    return;
+  }
+  // A receipt stands in only for evidence that is absent or not yet in; a
+  // gate that ran and failed refuses whatever the receipt says.
+  const failed = gates.some(({ state }) => state === "failure");
+  const readCoverage = readers.coverage ?? receiptCoverageReader();
+  const coverage = failed
+    ? null
+    : await Result.tryPromise(async () => readCoverage(sha));
+  if (
+    coverage !== null &&
+    Result.isOk(coverage) &&
+    coverage.value === "covered"
+  ) {
+    write(
+      `maintenance-release: a merge-group receipt and validated queue history stand in for main/heavy and main/pr-depth on ${sha}\n`,
     );
     return;
   }
@@ -1295,6 +1436,8 @@ export type CutGateOutcome =
 export type CutGateContext = {
   readonly baseSha: string;
   readonly previousFinalTag: string;
+  /** The publication manifest as the release PR will carry it. */
+  readonly releaseDates: ReleaseDates;
   readonly rootDir: string;
   readonly write: (text: string) => void;
 };
@@ -1306,8 +1449,10 @@ export type CutGateRunner = (
 ) => Promise<CutGateOutcome>;
 
 /**
- * Runs the tag's guards on the base tree. The cut checks npm at its resolved
- * final tag; the RC checks the preceding final from its candidate. The caller's
+ * Runs the tag's guards on the base tree. The cut checks npm at the newest
+ * promoted final below the release it cuts, chosen from the manifest the
+ * release PR will carry (GitHub's verdict on the previous final included); the
+ * RC checks the same release from its candidate. The caller's
  * environment forwards an explicit waiver
  * (WAIVE_DEPENDENCY_AUDIT=true with WAIVER_REASON) reaches the dependency
  * audit exactly as the tag's waiver inputs do.
@@ -1317,25 +1462,32 @@ export const runCutGate: CutGateRunner = async (gate, context) => {
   switch (gate.check.kind) {
     case "main-statuses":
       // Refuses by throwing; the cut reads a thrown gate as a failed one.
-      await assertReleaseCutReady(
-        context.baseSha,
-        false,
-        readGitHubJson,
-        context.write,
-      );
+      await assertReleaseCutReady(context.baseSha, false, {}, context.write);
       return { passed: true };
     case "command":
       command = gate.check.command;
       break;
-    case "npm-publish-lag":
-      // The cut has no candidate yet: check the final it will increment.
+    case "npm-publish-lag": {
+      // The cut has no candidate yet. The reference is the newest promoted
+      // final below the release it will cut, chosen from the manifest the
+      // release PR will carry (GitHub's verdict on the previous final
+      // included), so the tag later checks the same release.
+      const reference = selectPromotedReleaseBelow(
+        context.releaseDates,
+        nextPatchVersion(parseStableVersion(context.previousFinalTag.slice(1)))
+          .value,
+      );
+      if (reference.status !== "resolved") {
+        return { passed: false, detail: reference.message };
+      }
       command = [
         "bun",
         "scripts/check-npm-publish-lag.ts",
         "--ref",
-        context.previousFinalTag,
+        reference.ref,
       ];
       break;
+    }
     default:
       gate.check satisfies never;
       return panic("Unhandled maintenance release gate");
@@ -1387,13 +1539,14 @@ const postCutNote = (): string =>
 export const assertPreCutGates = async ({
   allowUnprovenMain,
   context,
+  gates = preCutGates(MAINTENANCE_CUT_GATES),
   runGate,
 }: {
   allowUnprovenMain: boolean;
   context: CutGateContext;
+  gates?: readonly PreCutGate[];
   runGate: CutGateRunner;
 }): Promise<void> => {
-  const gates = preCutGates(MAINTENANCE_CUT_GATES);
   const failures: string[] = [];
   for (const gate of gates) {
     // One at a time: each gate prints its own output.
@@ -1430,19 +1583,68 @@ export const assertPreCutGates = async ({
   );
 };
 
+export class IncompleteReleaseListingError extends TaggedError(
+  "IncompleteReleaseListingError",
+)<{ message: string }> {}
+
+const OPEN_RELEASE_LIST_LIMIT = 500;
+
+export const assertNoOpenReleasePullRequests = (listing: unknown): void => {
+  if (!Array.isArray(listing) || listing.length >= OPEN_RELEASE_LIST_LIMIT) {
+    throw new IncompleteReleaseListingError({
+      message:
+        "Open release pull request listing is incomplete; cannot cut a release",
+    });
+  }
+  const blockers: string[] = [];
+  for (const pull of listing) {
+    if (
+      !isRecord(pull) ||
+      typeof pull["title"] !== "string" ||
+      typeof pull["number"] !== "number" ||
+      !Number.isSafeInteger(pull["number"]) ||
+      pull["number"] <= 0 ||
+      typeof pull["headRefOid"] !== "string" ||
+      !/^[0-9a-f]{40}$/u.test(pull["headRefOid"])
+    ) {
+      throw new IncompleteReleaseListingError({
+        message:
+          "Open release pull request listing is incomplete or invalid; cannot cut a release",
+      });
+    }
+    if (pull["title"].startsWith("chore: release v")) {
+      blockers.push(
+        `#${pull["number"]} ${pull["title"]} (head ${pull["headRefOid"].slice(0, 7)}); land it first (merge-bar ${pull["number"]})`,
+      );
+    }
+  }
+  if (blockers.length > 0) {
+    throw new MaintenanceReleaseError(
+      `Earlier release pull requests are still open: ${blockers.join("; ")}`,
+    );
+  }
+};
+
 /** Everything the cut does besides its own release file writes. */
 export type MaintenanceCutEffects = {
   readonly rootDir: string;
   readonly assertCleanWorktree: () => void;
   readonly resolveHeadSha: () => string;
   readonly latestFinalVersion: () => string;
-  readonly assertNoOpenRelease: () => void;
+  readonly listOpenPullRequests: () => unknown;
   readonly openReleasePullRequest: (version: string) => void;
   readonly runGate: CutGateRunner;
   readonly queueHistoryWarning: (baseSha: string) => string | null;
   readonly readPreviousRelease: (tag: string) => Promise<PreviousRelease>;
   readonly ensureFreshRecordings: (reviewReason: string) => void;
   readonly versionPackages: (rootDir: string) => void;
+  /**
+   * Writes the desktop support floor that this cut's clock and the release
+   * dates give (docs/releases.md, "Desktop Support").
+   */
+  readonly moveDesktopSupportFloor: (
+    releaseDates: ReleaseDates,
+  ) => DesktopSupportFloorMove;
   /** Checks the written release: its changelog and marketing provenance. */
   readonly checkPreparedRelease: (version: string) => void;
   readonly write: (text: string) => void;
@@ -1459,15 +1661,43 @@ export const cutMaintenanceRelease = async (
   const { rootDir } = effects;
   const options = parseMaintenanceReleaseOptions(args);
   effects.assertCleanWorktree();
-  effects.assertNoOpenRelease();
-  const current = parseStableVersion(effects.latestFinalVersion());
-  const previousFinalTag = `v${current.value}`;
+  assertNoOpenReleasePullRequests(effects.listOpenPullRequests());
+  const latestFinal = parseStableVersion(effects.latestFinalVersion());
+  const previousFinalTag = `v${latestFinal.value}`;
+  const versionOnMain = parseStableVersion(
+    readFileSync(nodePath.join(rootDir, "VERSION"), "utf-8").trim(),
+  );
+  // A release pull request merged before its final tag leaves VERSION ahead of
+  // every final. Its number cannot be cut again: the changelog already exists
+  // and the release tree must change VERSION. The cut supersedes it instead.
+  const supersedesVersionOnMain = isVersionAhead(versionOnMain, latestFinal);
+  const current = supersedesVersionOnMain ? versionOnMain : latestFinal;
+  const previousTag = `v${current.value}`;
   const baseSha = effects.resolveHeadSha();
+  // GitHub's verdict on the previous release, read before any gate: the npm
+  // gate checks against the manifest the release PR will carry, which the
+  // preparation writes.
+  const previousRelease = await effects.readPreviousRelease(previousTag);
+  // The fetch saw no final tag for VERSION, so any other verdict means one was
+  // pushed since. Cutting on would keep its notes out of the changelog and
+  // check npm against the older final.
+  if (supersedesVersionOnMain && previousRelease.kind !== "superseded") {
+    throw new MaintenanceReleaseError(
+      `${previousTag} gained a final tag after this cut fetched tags; run the cut again`,
+    );
+  }
+  // The publication manifest as the preparation below writes it.
+  const releaseDates = projectReleaseDates({
+    dates: readReleaseManifest(rootDir).releases,
+    previousRelease,
+    previousTag,
+  });
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
     context: {
       baseSha,
       previousFinalTag,
+      releaseDates,
       rootDir,
       write: effects.write,
     },
@@ -1477,7 +1707,6 @@ export const cutMaintenanceRelease = async (
   if (queueHistoryWarning !== null) {
     effects.write(`${queueHistoryWarning}\n`);
   }
-  const previousRelease = await effects.readPreviousRelease(previousFinalTag);
   const next = nextPatchVersion(current);
   // Read before the preparation consumes them: the changelog and marketing
   // checks below run after it, and a failure there must restore the version
@@ -1492,13 +1721,17 @@ export const cutMaintenanceRelease = async (
         rootDir,
         versionPackages: effects.versionPackages,
       });
+      // The floor rides in the release change, so the API this release builds
+      // refuses exactly the builds its own dates end support for.
+      const desktopSupportFloor = effects.moveDesktopSupportFloor(releaseDates);
       effects.checkPreparedRelease(release.version);
-      return release;
+      return { ...release, desktopSupportFloor };
     },
     paths: [
       nodePath.join(rootDir, RECORDINGS_MANIFEST_PATH),
       nodePath.join(rootDir, "VERSION"),
       nodePath.join(rootDir, RELEASE_DATES_PATH),
+      nodePath.join(rootDir, DESKTOP_SUPPORT_FLOOR_PATH),
       nodePath.join(rootDir, `docs/changelog/v${next.value}.md`),
       nodePath.join(rootDir, `docs/changelog/v${current.value}.md`),
       nodePath.join(rootDir, CHANGESET_DIRECTORY, `release-v${next.value}.md`),
@@ -1517,6 +1750,9 @@ export const cutMaintenanceRelease = async (
             `  ${prepared.foldedChangelogPath} (removed: never tagged, notes folded into ${prepared.changelogPath})`,
           ]),
       `  ${RELEASE_DATES_PATH} (${prepared.previousTag}${PREVIOUS_RELEASE_NOTE[previousRelease.kind]})`,
+      prepared.desktopSupportFloor.from === prepared.desktopSupportFloor.to
+        ? `  ${DESKTOP_SUPPORT_FLOOR_PATH} (desktop support floor stays ${prepared.desktopSupportFloor.to})`
+        : `  ${DESKTOP_SUPPORT_FLOOR_PATH} (desktop support floor ${prepared.desktopSupportFloor.from} to ${prepared.desktopSupportFloor.to})`,
       ...(prepared.changesets.length === 0
         ? []
         : [
@@ -1528,11 +1764,26 @@ export const cutMaintenanceRelease = async (
   );
 };
 
-const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
+/** Resolve the last final tag for a checked-out snapshot, including rehearsals. */
+export const readLatestFinalVersion = (rootDir: string): string => {
+  const tags = spawnOutput([
+    "git",
+    "-C",
+    rootDir,
+    "tag",
+    "--list",
+    "v*",
+    "--sort=-creatordate",
+  ]);
+  const latest = newestFinalTag(tags?.split("\n") ?? []);
+  if (!latest) {
+    throw new MaintenanceReleaseError("No final release tag exists");
+  }
+  return latest.slice(1);
+};
+
+export const productionCutGateEffects = (rootDir: string) => ({
   rootDir,
-  assertCleanWorktree: () => {
-    assertCleanWorktree(rootDir);
-  },
   resolveHeadSha: () => resolveHeadSha(rootDir),
   latestFinalVersion: () => {
     run(["git", "fetch", "origin", "main", "--tags"]);
@@ -1543,20 +1794,20 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
         "Cut releases from the fetched main commit",
       );
     }
-    const tags = spawnOutput([
-      "git",
-      "tag",
-      "--list",
-      "v*",
-      "--sort=-creatordate",
-    ]);
-    const latest = newestFinalTag(tags?.split("\n") ?? []);
-    if (!latest) {
-      throw new MaintenanceReleaseError("No final release tag exists");
-    }
-    return latest.slice(1);
+    return readLatestFinalVersion(rootDir);
   },
-  assertNoOpenRelease: () => {
+  runGate: runCutGate,
+  write: (text: string) => {
+    process.stdout.write(text);
+  },
+});
+
+const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
+  ...productionCutGateEffects(rootDir),
+  assertCleanWorktree: () => {
+    assertCleanWorktree(rootDir);
+  },
+  listOpenPullRequests: () => {
     const listing = spawnOutput([
       "gh",
       "pr",
@@ -1568,30 +1819,16 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
       "--base",
       "main",
       "--limit",
-      "500",
+      String(OPEN_RELEASE_LIST_LIMIT),
       "--json",
-      "title",
+      "number,title,headRefOid",
     ]);
     if (listing === null) {
       throw new MaintenanceReleaseError(
         "Could not read open release pull requests",
       );
     }
-    const pulls: unknown = JSON.parse(listing);
-    if (
-      !Array.isArray(pulls) ||
-      pulls.length >= 500 ||
-      pulls.some(
-        (pull: unknown) =>
-          isRecord(pull) &&
-          typeof pull["title"] === "string" &&
-          pull["title"].startsWith("chore: release v"),
-      )
-    ) {
-      throw new MaintenanceReleaseError(
-        "An earlier release pull request is still open, or the listing is incomplete",
-      );
-    }
+    return JSON.parse(listing);
   },
   openReleasePullRequest: (version) => {
     const branch = `release/v${version}`;
@@ -1615,18 +1852,23 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
       `Release v${version}.`,
     ]);
   },
-  runGate: runCutGate,
   queueHistoryWarning: (baseSha) =>
     releaseQueueHistoryWarning(() => ({ baseSha })),
   readPreviousRelease,
   ensureFreshRecordings,
   versionPackages: runChangesetVersion,
+  moveDesktopSupportFloor: (releases) =>
+    moveDesktopSupportFloor({
+      rootDir,
+      releases,
+      isDesktopBuild: desktopBuildsFromTags(rootDir),
+      // The cut's own clock: support ends as of the release being cut.
+      now: new Date(),
+      writeFile: atomicWriteFile,
+    }),
   checkPreparedRelease: (version) => {
     run(["bash", "scripts/check-release-changelog.sh", "--version", version]);
     run(["bun", "run", "marketing:provenance", "--strict"]);
-  },
-  write: (text) => {
-    process.stdout.write(text);
   },
 });
 

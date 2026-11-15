@@ -4,6 +4,7 @@ import type { CachePolicy } from "@/api/http/cache";
 import type { QueryRecord } from "@/api/http/input";
 import type { RouteEntry } from "@/api/http/route";
 import type { status } from "@/api/http/status";
+import type { ApiSocketData } from "@/api/http/websocket";
 
 /** Response headers a request accumulates before its answer is built. */
 export type ResponseHeaders = Record<string, string | string[]>;
@@ -18,7 +19,8 @@ export type ResponseSet = {
   privateOnly?: boolean;
 };
 
-export type HttpServer = Server<undefined>;
+/** The server a request arrived on; an upgraded socket carries its session. */
+export type HttpServer = Server<ApiSocketData>;
 
 /** What every stage of the pipeline sees about the request in flight. */
 export type RequestContext = {

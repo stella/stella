@@ -22,15 +22,7 @@ const otherCourtCandidatesSchema = v.optional(
 const legalResolveDecisionTextSchema = v.variant("status", [
   v.strictObject({
     status: v.literal("readable"),
-    blocks: v.array(v.unknown()),
-    extent: v.variant("type", [
-      v.strictObject({ type: v.literal("complete") }),
-      v.strictObject({
-        type: v.literal("partial"),
-        returnedChars: v.number(),
-        totalChars: v.number(),
-      }),
-    ]),
+    charCount: v.number(),
   }),
   v.strictObject({
     status: v.literal("withheld"),
@@ -85,6 +77,7 @@ export const legalResolveResponseSchema = v.variant("status", [
   }),
   v.strictObject({
     status: v.literal("not_found"),
+    hint: v.optional(v.string()),
     reason: v.picklist([
       "unknown_document",
       "unknown_section",

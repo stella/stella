@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
@@ -9,7 +10,6 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -107,7 +107,10 @@ const runProposal = async ({
           ? null
           : {
               id,
-              status: workspaceAccess === "deleting" ? "deleting" : "active",
+              status:
+                workspaceAccess === "deleting" || workspaceAccess === "archived"
+                  ? workspaceAccess
+                  : "active",
             },
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
@@ -153,6 +156,11 @@ describe("answer rewrite endpoint", () => {
     },
     {
       options: { workspaceAccess: "deleting" },
+      status: 404,
+      message: "Chat message not found",
+    },
+    {
+      options: { workspaceAccess: "archived" },
       status: 404,
       message: "Chat message not found",
     },

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { EMPTY_LOCALE_INPUT_TEXT, type LocaleInputText } from "@stll/money";
 import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -28,6 +29,7 @@ import { TimeEntryNarrativeField } from "@/components/billing/time-entry-narrati
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import type { QueryView } from "@/lib/query-view.logic";
@@ -89,6 +91,7 @@ const timeEntryFormSchema = (
   });
 const initialPricingSelection = (
   entry: TimeEntryFormProps["defaultValues"],
+  locale: string,
 ): TimeEntryPricingSelection =>
   (entry?.rateAtEntry ?? 0) > 0
     ? {
@@ -96,6 +99,7 @@ const initialPricingSelection = (
         draft: majorUnitInput(
           entry?.rateAtEntry ?? 0,
           entry?.currency ?? DEFAULT_CURRENCY,
+          locale,
         ),
         currency: entry?.currency ?? DEFAULT_CURRENCY,
       }
@@ -232,6 +236,7 @@ export const TimeEntryForm = ({
           rate={currentRate}
           override={rateOverride}
           draft={rateInputValue}
+          invalid={pricingStatus === "invalid"}
           onCurrencyChange={setManualCurrency}
           onOverride={beginOverride}
           onDraftChange={setRateInputValue}
@@ -362,10 +367,11 @@ const useTimeEntryFormState = ({
   contextState = "available",
 }: TimeEntryFormProps) => {
   const t = useTranslations();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const canReadBilling = usePermissions(BILLING_MATTER_READ_PERMISSION);
   const [pricingSelection, setPricingSelection] = useState(() =>
-    initialPricingSelection(defaultValues),
+    initialPricingSelection(defaultValues, locale),
   );
 
   const taskCodesQuery = useQuery(billingCodesOptions(workspaceId, "task"));
@@ -386,6 +392,7 @@ const useTimeEntryFormState = ({
         // Read the exact submitted lookup again: validation may outlive a render.
         const pricing = deriveTimeEntryPricing({
           selection: canReadBilling ? pricingSelection : { type: "hidden" },
+          locale,
           lookup: canReadBilling
             ? queryClient.getQueryState(
                 resolvedRateOptions({
@@ -426,6 +433,7 @@ const useTimeEntryFormState = ({
   const resolvedView = queryView(resolvedQuery);
   const pricing = deriveTimeEntryPricing({
     selection: canReadBilling ? pricingSelection : { type: "hidden" },
+    locale,
     lookup:
       !canReadBilling || resolvedQuery.isPlaceholderData
         ? undefined
@@ -435,8 +443,10 @@ const useTimeEntryFormState = ({
   const currentCurrency = pricing.currency;
   const rateOverride = pricingSelection.type === "manual";
   const rateInputValue =
-    pricingSelection.type === "manual" ? pricingSelection.draft : "";
-  const initialSelection = initialPricingSelection(defaultValues);
+    pricingSelection.type === "manual"
+      ? pricingSelection.draft
+      : EMPTY_LOCALE_INPUT_TEXT;
+  const initialSelection = initialPricingSelection(defaultValues, locale);
   const pricingDirty =
     pricingSelection.type !== initialSelection.type ||
     (pricingSelection.type === "manual" &&
@@ -464,15 +474,17 @@ const useTimeEntryFormState = ({
         type: "manual",
         currency: currentCurrency,
         draft:
-          currentRate > 0 ? majorUnitInput(currentRate, currentCurrency) : "",
+          currentRate > 0
+            ? majorUnitInput(currentRate, currentCurrency, locale)
+            : EMPTY_LOCALE_INPUT_TEXT,
       }),
     rateInputValue,
-    setRateInputValue: (draft: string) =>
+    setRateInputValue: (draft: LocaleInputText) =>
       setPricingSelection({ type: "manual", currency: currentCurrency, draft }),
     setManualCurrency: (currency: string) =>
       setPricingSelection({ type: "manual", currency, draft: rateInputValue }),
     resetPricing: () =>
-      setPricingSelection(initialPricingSelection(defaultValues)),
+      setPricingSelection(initialPricingSelection(defaultValues, locale)),
     pricingStatus: pricing.status,
     taskCodesView,
     activityCodesView,

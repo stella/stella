@@ -1,14 +1,15 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PublisherPageError, validatePublisherPage } from "./publisher-page";
 
 test("arbitrary response bodies only pass a JSON listing contract when they parse and contain its array", () => {
-  fc.assert(
+  assertProperty(
+    "arbitrary response bodies only pass a JSON listing contract when they parse and contain its array",
     fc.property(
       fc.oneof(
         fc.string(),
@@ -34,6 +35,6 @@ test("arbitrary response bodies only pass a JSON listing contract when they pars
         expect(validated.value).toEqual(parsed);
       },
     ),
-    propertyConfig({ numRuns: 500 }),
+    { numRuns: 500 },
   );
 });

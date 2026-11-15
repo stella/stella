@@ -4,10 +4,15 @@ import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KEY } from "@stll/agent-input";
 import { moneySchema } from "@stll/api-contract/billing-money";
-import { propertyConfig } from "@stll/property-testing";
+import { uuidSchema } from "@stll/api-contract/uuid";
+import { assertProperty } from "@stll/property-testing";
 
 import { ANALYSIS_OUTPUT_JSON_SCHEMA } from "@/api/handlers/case-law/analysis/analysis-output";
-import { fileSchema, uniqueItems } from "@/api/lib/custom-schema";
+import {
+  fileSchema,
+  uniqueItems,
+  utf8ByteBounds,
+} from "@/api/lib/custom-schema";
 import {
   toJsonSchema,
   toRouteJsonSchema,
@@ -18,6 +23,37 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   LAW_MCP_TOOL_DEFINITIONS,
 } from "@/api/mcp/static-tool-definitions";
+
+test("UTF-8 bounds retain precise published limits and stronger character bounds", () => {
+  const schema = v.pipe(
+    v.string(),
+    v.maxLength(10),
+    utf8ByteBounds({ maxBytes: 20, maxSegmentBytes: 6 }),
+  );
+  for (const convert of [toJsonSchema, toRouteJsonSchema]) {
+    const { $schema: _dialect, ...projected } = convert(schema);
+    expect(projected).toEqual({
+      type: "string",
+      maxLength: 10,
+      "x-maxUtf8Bytes": 20,
+      "x-maxSegmentUtf8Bytes": 6,
+    });
+  }
+  expect(v.safeParse(schema, "ŽŽŽ").success).toBe(true);
+  expect(v.safeParse(schema, "ŽŽŽŽ").success).toBe(false);
+  expect(v.safeParse(schema, "ab/ŽŽŽ/ŽŽŽ").success).toBe(true);
+});
+
+test("UTF-8 constraint support keeps unknown checks strict", () => {
+  expect(() =>
+    toJsonSchema(
+      v.pipe(
+        v.string(),
+        v.check((value: string) => value.includes("x")),
+      ),
+    ),
+  ).toThrow(/check/u);
+});
 
 // Every keyword JSON Schema (draft-07, 2020-12) and the OpenAPI 3.0 subset
 // define, plus the vendor extensions Stella advertises on purpose. A key
@@ -224,24 +260,36 @@ const { schema: schemaArbitrary } = fc.letrec<{ schema: v.GenericSchema }>(
 );
 
 describe("toJsonSchema", () => {
+  test("UUID canonicalization keeps the uppercase-capable input contract", () => {
+    expect(toJsonSchema(uuidSchema)).toMatchObject({
+      type: "string",
+      minLength: 36,
+      maxLength: 36,
+      pattern:
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+    });
+  });
+
   test("emits only JSON Schema keywords, whatever metadata a schema carries", () => {
-    fc.assert(
+    assertProperty(
+      "emits only JSON Schema keywords, whatever metadata a schema carries",
       fc.property(schemaArbitrary, (schema) => {
         expect(findNonKeywordKeys(toJsonSchema(schema))).toEqual([]);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("keeps the JSON Schema annotations metadata carries", () => {
-    fc.assert(
+    assertProperty(
+      "keeps the JSON Schema annotations metadata carries",
       fc.property(leafArbitrary, metadataArbitrary, (make, metadata) => {
         const emitted = toJsonSchema(annotate(make(), metadata));
         expect(emitted.title).toEqual(metadata?.title);
         expect(emitted.description).toEqual(metadata?.description);
         expect(emitted.examples).toEqual(metadata?.examples);
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });

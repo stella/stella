@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/prompt" });
 const originalFetch = globalThis.fetch;
@@ -91,9 +91,9 @@ test("prompt skill read exposes pending and retry without removing the editable 
       Response.json({ message: "Read unavailable" }, { status: 503 }),
     );
   });
-  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeNull());
+  await waitFor(() => expect(screen.queryByRole("alert") === null).toBe(false));
   fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
-  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("alert") === null).toBe(true));
   expect(attempts).toBe(2);
   expect(screen.getByText("Instruction")).toBeTruthy();
 });
@@ -129,6 +129,6 @@ test("prompt skill read retains the editor and reports a failed refresh of cache
   await act(async () => {
     await client.invalidateQueries({ queryKey: options.queryKey });
   });
-  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeNull());
+  await waitFor(() => expect(screen.queryByRole("alert") === null).toBe(false));
   expect(screen.getByText("Instruction")).toBeTruthy();
 });

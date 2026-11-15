@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -7,6 +7,7 @@ import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lookupByVerificationCode } from "@/api/lib/entity-versions/document-reference-lookup";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -115,9 +116,7 @@ beforeAll(
 );
 
 afterAll(async () => {
-  await testDb
-    .delete(organization)
-    .where(inArray(organization.id, [organizationId]));
+  await deleteOrganizationsForTest(testDb, [organizationId]);
   await releaseTestDb();
 });
 

@@ -1,8 +1,11 @@
+import { useId } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { NumberInput } from "@stll/ui/number-input";
 import { Separator } from "@stll/ui/separator";
 
 import type { NumericFilter } from "@/lib/workspaces/types";
@@ -12,12 +15,8 @@ type ItemsFilterPopoverProps = {
   onChange: (value: NumericFilter | undefined) => void;
 };
 
-const parseField = (raw: string): number | undefined => {
-  if (raw.trim() === "") {
-    return undefined;
-  }
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) {
+const parseField = (n: number | null): number | undefined => {
+  if (n === null || !Number.isFinite(n) || n < 0) {
     return undefined;
   }
   return Math.floor(n);
@@ -45,42 +44,42 @@ export const ItemsFilterPopover = ({
   onChange,
 }: ItemsFilterPopoverProps) => {
   const t = useTranslations();
+  const gteId = useId();
+  const lteId = useId();
 
   return (
     <div className="flex w-56 flex-col gap-2">
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={gteId} variant="muted">
             {t("workspaces.filters.items.gte")}
-          </span>
-          <Input
-            inputMode="numeric"
+          </Label>
+          <NumberInput
+            id={gteId}
+            inputProps={{ placeholder: "0" }}
             min={0}
-            onChange={(e) =>
-              onChange(build(parseField(e.target.value), value?.lte))
+            onValueChange={(next) =>
+              onChange(build(parseField(next), value?.lte))
             }
-            placeholder="0"
             size="sm"
-            type="number"
-            value={value?.gte ?? ""}
+            value={value?.gte ?? null}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={lteId} variant="muted">
             {t("workspaces.filters.items.lte")}
-          </span>
-          <Input
-            inputMode="numeric"
+          </Label>
+          <NumberInput
+            id={lteId}
+            inputProps={{ placeholder: "∞" }}
             min={0}
-            onChange={(e) =>
-              onChange(build(value?.gte, parseField(e.target.value)))
+            onValueChange={(next) =>
+              onChange(build(value?.gte, parseField(next)))
             }
-            placeholder="∞"
             size="sm"
-            type="number"
-            value={value?.lte ?? ""}
+            value={value?.lte ?? null}
           />
-        </label>
+        </div>
       </div>
       {value && (
         <>

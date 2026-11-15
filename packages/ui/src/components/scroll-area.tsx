@@ -55,11 +55,16 @@ const ScrollArea = ({
         flexes in) has no definite height for a percentage to resolve
         against, so an `h-full` viewport grows with its content past the root
         and paints over whatever follows it. As a flex item the viewport takes
-        the root's used height, whatever bounds it, and scrolls. */}
+        the root's used height, whatever bounds it, and scrolls.
+
+        The viewport is also the containing block of everything positioned
+        inside it. Otherwise an absolute descendant (every `sr-only` label is
+        one) is placed against some ancestor outside the scroll, escapes its
+        clip, and gives that ancestor a scrollbar of its own. */}
     <ScrollAreaPrimitive.Viewport
       ref={viewportRef}
       className={cn(
-        "focus-visible:ring-ring focus-visible:ring-offset-background min-h-0 flex-1 overscroll-contain rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-offset-1 data-has-overflow-x:overscroll-x-contain",
+        "focus-visible:ring-ring focus-visible:ring-offset-background relative min-h-0 flex-1 overscroll-contain rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-offset-1 data-has-overflow-x:overscroll-x-contain",
         scrollFade &&
           "mask-t-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-start)))] mask-r-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-end)))] mask-b-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-end)))] mask-l-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-start)))] [--fade-size:1.5rem]",
         scrollbarGutter &&

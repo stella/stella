@@ -39,6 +39,38 @@ const uploadsPath = (matterId: string) =>
   `/v1/uploads/${encodeURIComponent(matterId)}`;
 
 /**
+ * Where the file a save sheet uploads came from: a scan reviewed before it,
+ * or a document picked from Files.
+ */
+export const UPLOAD_ORIGIN = { file: "file", scan: "scan" } as const;
+
+/** A picked file as the save sheet's route parameters. */
+export const pickedFileSaveParams = ({
+  file,
+  matterId,
+  sha256Hex,
+  size,
+}: {
+  readonly file: {
+    readonly mimeType?: string | undefined;
+    readonly name: string;
+    readonly uri: string;
+  };
+  readonly matterId: string | undefined;
+  readonly sha256Hex: string;
+  readonly size: number;
+}) => ({
+  // The picker names no type for some files; the server sniffs those.
+  mimeType: file.mimeType ?? "application/octet-stream",
+  name: file.name,
+  origin: UPLOAD_ORIGIN.file,
+  sha256Hex,
+  size: String(size),
+  uri: file.uri,
+  ...(matterId === undefined ? {} : { matterId }),
+});
+
+/**
  * The matter's documents column: its one property whose content is a file,
  * created with the matter, which the web uploads into as well.
  */

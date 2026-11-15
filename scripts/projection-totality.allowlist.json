@@ -68,10 +68,6 @@
     "reason": "not a row projection: it reads skill ids and metadata only to decide availability, and answers each unavailable skill's id with the tool names chat lacks"
   },
   {
-    "file": "apps/api/src/handlers/chat/threads/list.ts",
-    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
-  },
-  {
     "file": "apps/api/src/handlers/chat/memory-context.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
@@ -284,10 +280,6 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/sharepoint/list-drive-root.ts",
-    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
-  },
-  {
     "file": "apps/api/src/handlers/skills/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
@@ -346,6 +338,10 @@
   {
     "file": "apps/api/src/handlers/time-entries/me/suggestions/list.ts",
     "reason": "not a row projection: matter rows supply only id, name and reference as the label of each day's suggestion group; the suggestions are derived activity clusters, never stored rows"
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/report/get.ts",
+    "reason": "not a row projection: it returns per-bucket sums and counts keyed by the grouped member, matter or client id and display name; no time entry row or column set reaches the client"
   },
   {
     "file": "apps/api/src/handlers/time-entries/summary/get.ts",

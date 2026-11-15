@@ -9,7 +9,7 @@ import {
 } from "@/api/db/schema";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { reopenCitationsForDecisionIdentifiers } from "@/api/handlers/case-law/citation-resolution";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import type { ReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
 import type { ObservationShape } from "@/api/handlers/case-law/ingestion/pipeline/decision-existing";
 import type {
   DecisionIdentity,
@@ -26,6 +26,7 @@ import type { StoredSupplement } from "@/api/handlers/case-law/ingestion/supplem
 import type { SafeId } from "@/api/lib/branded-types";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
@@ -67,15 +68,18 @@ type DecisionIdentifierLookup = Pick<
  *
  * Only when the identifier set is genuinely new to this row: a metadata
  * refresh under the same identities changes nothing about who can be cited.
+ *
+ * Returns what it reopened, for the write to settle once the decision's row
+ * and identifiers are stored (`settleReopenedCitations`).
  */
 export const announceDecisionIdentifiers = async (
   tx: CitationGraphTransaction<Transaction>,
   { result, persistedDecisionDate }: DecisionRowWrite,
   id: SafeId<"caseLawDecision">,
   identifiers: readonly DecisionIdentifierLookup[],
-): Promise<void> => {
+): Promise<ReopenedCitations> => {
   if (identifiers.length === 0) {
-    return;
+    return { reopened: 0, citationIds: [] };
   }
   if (!isCaseLawJurisdiction(result.country)) {
     // A stored country nobody declares a resolution policy for. Loud rather
@@ -84,9 +88,9 @@ export const announceDecisionIdentifiers = async (
     logger.error("case_law.citation_resolution.undeclared_jurisdiction", {
       jurisdiction: result.country,
     });
-    return;
+    return { reopened: 0, citationIds: [] };
   }
-  await reopenCitationsForDecisionIdentifiers(tx, {
+  return await reopenCitationsForDecisionIdentifiers(tx, {
     identifiers,
     decisionId: id,
     jurisdiction: result.country,

@@ -6,13 +6,16 @@ import {
 } from "@/api/lib/auth/oauth-own-client-links";
 
 describe("stella's own app clients", () => {
-  test("an https deployment links the app's document client, and only it, to the REST API", () => {
+  test("an https deployment links the apps' document clients, and only them, to the REST API", () => {
     const origin = "https://stella-api.example.test";
     const mobile = `${origin}/v1/mcp/oauth/mobile-client-metadata.json`;
+    const outlook = `${origin}/v1/mcp/oauth/outlook-client-metadata.json`;
     expect(ownNativeClientResourceLinks(origin)).toEqual([
       { clientId: mobile, resourceId: `${origin}/v1` },
+      { clientId: outlook, resourceId: `${origin}/v1` },
     ]);
     expect(ownNativeClientResources(origin, mobile)).toEqual([`${origin}/v1`]);
+    expect(ownNativeClientResources(origin, outlook)).toEqual([`${origin}/v1`]);
     expect(
       ownNativeClientResources(
         origin,

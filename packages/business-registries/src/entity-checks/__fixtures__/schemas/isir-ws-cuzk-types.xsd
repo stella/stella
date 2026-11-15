@@ -1,0 +1,129 @@
+<?xml version='1.0' encoding='UTF-8'?><xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://isirws.cca.cz/types/" targetNamespace="http://isirws.cca.cz/types/">
+
+    <xsd:element name="getIsirWsCuzkDataRequest">
+        <xsd:complexType>
+            <xsd:sequence>
+                <xsd:element maxOccurs="1" minOccurs="0" name="ic" nillable="false" type="xsd:string"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="rc" nillable="false" type="xsd:string"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="druhVec" nillable="false" type="xsd:string"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="bcVec" nillable="false" type="xsd:int"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="rocnik" nillable="false" type="xsd:int"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="nazevOsoby" nillable="false" type="xsd:string"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="jmeno" nillable="false" type="xsd:string"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="datumNarozeni" nillable="false" type="xsd:date"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="maxPocetVysledku" nillable="false" type="xsd:int"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="filtrAktualniRizeni" nillable="false" type="priznakType"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="vyhledatPresnouShoduJmen" nillable="false" type="priznakType"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="vyhledatBezDiakritiky" nillable="false" type="priznakType"/>
+                <xsd:element maxOccurs="1" minOccurs="0" name="maxRelevanceVysledku" nillable="false" type="relevanceType"/>
+            </xsd:sequence>
+        </xsd:complexType>
+    </xsd:element>
+
+    <xsd:element name="getIsirWsCuzkDataResponse">
+        <xsd:complexType>
+            <xsd:sequence>
+                <xsd:element maxOccurs="unbounded" minOccurs="0" name="data" nillable="true" type="isirWsCuzkData"/>
+                <xsd:element name="stav" nillable="false" type="isirWsCuzkStatus"/>
+            </xsd:sequence>
+        </xsd:complexType>
+    </xsd:element>
+
+    <xsd:complexType name="isirWsCuzkData">
+        <xsd:sequence>
+            <xsd:element minOccurs="0" name="ic" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="rc" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="1" name="cisloSenatu" nillable="false" type="xsd:int"/>
+            <xsd:element minOccurs="1" name="druhVec" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="1" name="bcVec" nillable="false" type="xsd:int"/>
+            <xsd:element minOccurs="1" name="rocnik" nillable="false" type="xsd:int"/>
+            <xsd:element minOccurs="0" name="nazevOrganizace" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="datumNarozeni" nillable="false" type="xsd:date"/>
+            <xsd:element minOccurs="0" name="titulPred" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="titulZa" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="jmeno" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="nazevOsoby" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="druhAdresy" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="mesto" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="ulice" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="cisloPopisne" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="okres" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="zeme" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="psc" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="druhStavKonkursu" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="urlDetailRizeni" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="dalsiDluznikVRizeni" nillable="false" type="priznakType"/>
+            <xsd:element minOccurs="0" name="datumPmZahajeniUpadku" nillable="false" type="xsd:date"/>
+            <xsd:element minOccurs="0" name="datumPmUkonceniUpadku" nillable="false" type="xsd:date"/>
+        </xsd:sequence>
+    </xsd:complexType>
+
+    <xsd:complexType name="isirWsCuzkStatus">
+        <xsd:sequence>
+            <xsd:element minOccurs="0" name="pocetVysledku" nillable="false" type="xsd:int"/>
+            <xsd:element minOccurs="0" name="relevanceVysledku" nillable="false" type="relevanceType"/>
+            <xsd:element minOccurs="0" name="casSynchronizace" nillable="false" type="xsd:dateTime"/>
+            <xsd:element minOccurs="0" name="kodChyby" nillable="false" type="kodChybyType"/>
+            <xsd:element minOccurs="0" name="textChyby" nillable="false" type="xsd:string"/>
+            <xsd:element minOccurs="0" name="popisChyby" nillable="false" type="xsd:string"/>
+        </xsd:sequence>
+    </xsd:complexType>
+
+    <xsd:simpleType name="kodChybyType">
+        <xsd:restriction base="xsd:string">
+            <!-- Nespravna kombinace parametru -->
+            <xsd:enumeration value="WS1"/>
+
+            <!-- Prazdny vysledek -->
+            <xsd:enumeration value="WS2"/>
+
+            <!-- Kratky nazev osoby -->
+            <xsd:enumeration value="WS3"/>
+
+            <!-- Neaktualnost dat -->
+            <xsd:enumeration value="WS4"/>
+
+            <!-- Chyba databaze -->
+            <xsd:enumeration value="SQL1"/>
+
+            <!-- Chyba aplikace -->
+            <xsd:enumeration value="SERVER1"/>
+        </xsd:restriction>
+    </xsd:simpleType>
+
+    <xsd:simpleType name="relevanceType">
+        <xsd:restriction base="xsd:int">
+            <!-- Vyhledano podle rodneho cisla -->
+            <xsd:enumeration value="1"/>
+
+            <!-- Vyhledano podle identifikacniho cisla osoby (IC) -->
+            <xsd:enumeration value="2"/>
+
+            <!-- Vyhledano podle spisove znacky -->
+            <xsd:enumeration value="3"/>
+
+            <!-- Vyhledano podle prijmeni, jmena a data narozeni -->
+            <xsd:enumeration value="4"/>
+
+            <!-- Vyhledano podle prijmeni a data narozeni -->
+            <xsd:enumeration value="5"/>
+
+            <!-- Vyhledano podle prijmeni a jmena -->
+            <xsd:enumeration value="6"/>
+
+            <!-- Vyhledano podle nazvu osoby (prijmeni) -->
+            <xsd:enumeration value="7"/>
+        </xsd:restriction>
+    </xsd:simpleType>
+
+    <xsd:simpleType name="priznakType">
+        <xsd:restriction base="xsd:string">
+            <!-- True -->
+            <xsd:enumeration value="T"/>
+
+            <!-- False -->
+            <xsd:enumeration value="F"/>
+        </xsd:restriction>
+    </xsd:simpleType>
+
+</xsd:schema>

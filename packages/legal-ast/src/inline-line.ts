@@ -1,3 +1,4 @@
+// parser-output-unchanged: only the sk-us parser calls rewriteInlineWhitespace, and its version is bumped; every other parser reaches only the unchanged helpers in this file.
 // parser-output-unchanged: moved unchanged from the ingestion parsers' shared-inlines so every parser layer can import it.
 /**
  * One line of inline content, trimmed and cut, without losing formatting.
@@ -228,6 +229,16 @@ export const mapInlineText = (
 const isWhitespace = (char: string | undefined): boolean =>
   char !== undefined && /^\s$/u.test(char);
 
+const whitespaceRunLengths = (text: string): number[] => {
+  const lengths = Array.from<number>({ length: text.length }).fill(0);
+  for (let index = text.length - 1; index >= 0; index -= 1) {
+    if (isWhitespace(text[index])) {
+      lengths[index] = 1 + (lengths[index + 1] ?? 0);
+    }
+  }
+  return lengths;
+};
+
 /**
  * What each character of `before` becomes in `after`: itself, other
  * whitespace, or nothing. `undefined` when `after` is not `before` with only
@@ -240,9 +251,19 @@ const whitespaceEdits = (
   const kept: string[] = [];
   let next = 0;
   // Code units, not code points: the offsets below are a text node's length.
-  for (const char of before.split("")) {
+  const source = before.split("");
+  const sourceWhitespaceRuns = whitespaceRunLengths(before);
+  const targetWhitespaceRuns = whitespaceRunLengths(after);
+  for (const [index, char] of source.entries()) {
     const target = after[next];
-    if (char === target || (isWhitespace(char) && isWhitespace(target))) {
+    const canSkipWhitespace =
+      isWhitespace(char) &&
+      isWhitespace(target) &&
+      (sourceWhitespaceRuns[index] ?? 0) > (targetWhitespaceRuns[next] ?? 0);
+    if (
+      char === target ||
+      (isWhitespace(char) && isWhitespace(target) && !canSkipWhitespace)
+    ) {
       kept.push(target ?? "");
       next += 1;
     } else if (isWhitespace(char)) {
@@ -284,8 +305,12 @@ export const rewriteInlineWhitespace = (
         return text.length === 0 ? [] : [{ ...node, text }];
       }
       if (node.type === "line-break") {
+        const text = kept[offset] ?? "";
         offset += 1;
-        return [node];
+        if (text === "\n") {
+          return [node];
+        }
+        return text.length === 0 ? [] : [{ type: "text", text }];
       }
       return hasInlineChildren(node)
         ? [{ ...node, children: apply(node.children) }]

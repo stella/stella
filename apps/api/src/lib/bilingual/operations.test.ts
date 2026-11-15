@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import type { Paragraph } from "@stll/docx-core/model";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import {
   createDocx,
   createEmptyDocument,
@@ -90,8 +89,8 @@ const paragraphSignature = async (
   buffer: ArrayBuffer,
   paraId: string,
 ): Promise<string> => {
-  const zip = await JSZip.loadAsync(buffer);
-  const xml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(buffer);
+  const xml = await zip.entry("word/document.xml")?.text();
   if (!xml) {
     throw new Error("fixture has no document part");
   }
@@ -114,8 +113,8 @@ const wordElementCount = (xml: string, localName: string): number =>
 const addExtendedInlineControls = async (
   buffer: ArrayBuffer,
 ): Promise<ArrayBuffer> => {
-  const zip = await JSZip.loadAsync(buffer);
-  const xml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(buffer);
+  const xml = await zip.entry("word/document.xml")?.text();
   if (!xml) {
     throw new Error("fixture has no document part");
   }
@@ -123,20 +122,19 @@ const addExtendedInlineControls = async (
   if (!marker.test(xml)) {
     throw new Error("fixture has no italic text marker");
   }
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     xml.replaceAll(marker, "$1<w:cr/><w:noBreakHyphen/><w:softHyphen/>"),
   );
-  return await zip.generateAsync({ type: "arraybuffer" });
+  return (await zip.generate({ compression: "store" })).buffer;
 };
 
 const addParagraphPropertyTabStop = async (
   buffer: ArrayBuffer,
   paraId: string,
 ): Promise<ArrayBuffer> => {
-  const zip = await JSZip.loadAsync(buffer);
-  const xml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(buffer);
+  const xml = await zip.entry("word/document.xml")?.text();
   if (!xml) {
     throw new Error("fixture has no document part");
   }
@@ -156,12 +154,8 @@ const addParagraphPropertyTabStop = async (
   tab.setAttributeNS(W_NS, "w:pos", "720");
   tabs.append(tab);
   paragraphProperties.append(tabs);
-  writeZipEntry(
-    zip,
-    "word/document.xml",
-    slimdom.serializeToWellFormedString(doc),
-  );
-  return await zip.generateAsync({ type: "arraybuffer" });
+  zip.set("word/document.xml", slimdom.serializeToWellFormedString(doc));
+  return (await zip.generate({ compression: "store" })).buffer;
 };
 
 /** A clause, a heading, a signature label, and a signature table. */
@@ -523,12 +517,13 @@ describe("buildOperations applied to a bilingual document", () => {
     expect(targetClauseSignature).toContain("<w:highlight");
     expect(targetClauseSignature).toContain("<w:tab");
     expect(targetClauseSignature).toContain("<w:br");
-    // Folio canonicalizes hyphen controls to their OOXML text equivalents
-    // during the later structural edit pass. `w:cr` is a break kind of its
-    // own, so it survives the pass as itself rather than as a `w:br`.
+    // Hyphen controls survive the later structural edit pass as their own
+    // elements, as Word wrote them. `w:cr` is a break kind of its own, so it
+    // survives the pass as itself rather than as a `w:br`.
     expect(wordElementCount(targetClauseSignature, "br")).toBe(1);
     expect(wordElementCount(targetClauseSignature, "cr")).toBe(1);
-    expect(targetClauseSignature).toContain("‑­");
+    expect(wordElementCount(targetClauseSignature, "noBreakHyphen")).toBe(1);
+    expect(wordElementCount(targetClauseSignature, "softHyphen")).toBe(1);
     expect(targetClauseSignature).toContain("<w:sym");
     expect(targetClauseSignature).toContain("<w:fldChar");
     expect(wordElementCount(targetClauseSignature, "tab")).toBe(1);
@@ -553,12 +548,20 @@ describe("buildOperations applied to a bilingual document", () => {
         wordElementCount(inlineSignature, localName),
       ).toBeGreaterThanOrEqual(2);
     }
-    for (const localName of ["br", "cr", "tab", "sym", "fldChar"]) {
+    for (const localName of [
+      "br",
+      "cr",
+      "tab",
+      "sym",
+      "fldChar",
+      "noBreakHyphen",
+      "softHyphen",
+    ]) {
       expect(wordElementCount(inlineSignature, localName)).toBe(
         wordElementCount(sourceInlineSignature, localName) * 2,
       );
     }
-    expect(inlineSignature.match(/‑­/gu)).toHaveLength(2);
+    expect(wordElementCount(inlineSignature, "noBreakHyphen")).toBe(2);
     const tableInlineSignature = await paragraphSignature(
       applied.buffer,
       tableLabel.rowId,
@@ -568,12 +571,20 @@ describe("buildOperations applied to a bilingual document", () => {
         wordElementCount(tableInlineSignature, localName),
       ).toBeGreaterThanOrEqual(2);
     }
-    for (const localName of ["br", "cr", "tab", "sym", "fldChar"]) {
+    for (const localName of [
+      "br",
+      "cr",
+      "tab",
+      "sym",
+      "fldChar",
+      "noBreakHyphen",
+      "softHyphen",
+    ]) {
       expect(wordElementCount(tableInlineSignature, localName)).toBe(
         wordElementCount(sourceTableSignature, localName) * 2,
       );
     }
-    expect(tableInlineSignature.match(/‑­/gu)).toHaveLength(2);
+    expect(wordElementCount(tableInlineSignature, "noBreakHyphen")).toBe(2);
   });
 
   test("rejects a reordered formatted translation span contract", async () => {

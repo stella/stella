@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import { DEFAULT_STATEMENT_CEILING } from "./statement-ceiling";
 import ledger from "./statement-ceiling.json";
 
@@ -71,13 +73,7 @@ test("finds the statement ceiling ledger from the API package directory", () => 
 
 test("statement ceiling allowances only shrink after their initial census", () => {
   const current = v.parse(ledgerSchema, ledger);
-  const base = Bun.spawnSync(["git", "merge-base", "HEAD", "origin/main"]);
-  if (base.exitCode !== 0) {
-    panic(
-      `Statement ceiling ledger requires origin/main: ${base.stderr.toString()}`,
-    );
-  }
-  const revision = base.stdout.toString().trim();
+  const revision = treeBaseRevision({ repoRoot: process.cwd() });
   const files = ledgerFiles({ revision });
   if (files.exitCode !== 0) {
     panic("Cannot enumerate the statement ceiling ledger base");

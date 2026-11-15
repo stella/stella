@@ -1,33 +1,30 @@
-//! Commands of the activity window. Every command takes an
+//! Day timeline commands of the activity window. Every command takes an
 //! [`ActivityCaller`], which only the activity window on the app origin can
-//! produce, and only while the feature is enabled. Changes are announced
-//! with a payload-free event; the window reads the data back through
-//! `activity_get_day`.
+//! produce, and only while the feature is enabled. Settings commands live in
+//! `activity_settings`. Changes are announced with a payload-free event; the
+//! window reads the data back through `activity_get_day`.
 
 use chrono::Utc;
 use tauri::{AppHandle, State};
 
 use crate::{
-  activity::{
-    self, ActivityAppDetailCapture, ActivityAppState, ActivityDaySnapshot,
-    ActivityDeletionError, ActivityDeletionRecovery, ActivityHistoryDisposition,
-    ActivityManager, ActivityOtherHistoryRecovery, ActivityRecordingStatus,
-    ActivityRetention,
-  },
+  activity::{self, ActivityAppState, ActivityDaySnapshot, ActivityManager},
   activity_details,
-  local_window::ActivityCaller,
+  local_window::{ActivityAccountFeature, ActivityCaller, LocalCaller},
 };
 
 const MAX_COPY_BYTES: usize = 16 * 1024;
 
-fn lock_error<T>(poisoned: std::sync::PoisonError<T>) -> String {
+pub(crate) fn lock_error<T>(poisoned: std::sync::PoisonError<T>) -> String {
   crate::logging::with_cause_logged("activity timeline is unavailable")(poisoned)
 }
 
-fn update<E: From<String>>(
+/// Applies one change for the caller's account, then tells every activity
+/// view and the tray to read again.
+pub(crate) fn update<F: ActivityAccountFeature, E: From<String>>(
   app: &AppHandle,
   state: &ActivityAppState,
-  caller: &ActivityCaller,
+  caller: &LocalCaller<F>,
   change: impl FnOnce(&mut ActivityManager) -> Result<(), E>,
 ) -> Result<(), E> {
   let mut manager = state
@@ -46,7 +43,6 @@ pub fn activity_get_day(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
-  gates: State<'_, crate::feature_gate::FeatureGates>,
   date: Option<String>,
 ) -> Result<ActivityDaySnapshot, String> {
   let now = Utc::now();
@@ -74,98 +70,7 @@ pub fn activity_get_day(
   );
   drop(manager);
   snapshot.resolve_app_visuals();
-  snapshot.time_billing_enabled =
-    gates.is_enabled(crate::feature_gate::DesktopFeature::TimeBilling);
   Ok(snapshot)
-}
-
-#[tauri::command]
-pub fn activity_set_recording_status(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  status: ActivityRecordingStatus,
-) -> Result<(), String> {
-  if status == ActivityRecordingStatus::Off {
-    return Err("activity recording can only be paused".to_string());
-  }
-  update(&app, &state, &caller, |manager| {
-    manager.set_recording_status(status, Utc::now())
-  })
-}
-
-#[tauri::command]
-pub fn activity_set_retention(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  retention: ActivityRetention,
-) -> Result<(), String> {
-  update(&app, &state, &caller, |manager| {
-    manager.set_retention(retention, Utc::now())
-  })
-}
-
-#[tauri::command]
-pub fn activity_exclude_app(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  identifier: String,
-  name: String,
-  history: ActivityHistoryDisposition,
-) -> Result<(), String> {
-  update(&app, &state, &caller, |manager| {
-    manager.exclude_app(&identifier, &name, history)
-  })
-}
-
-#[tauri::command]
-pub fn activity_remove_app_exclusion(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  identifier: String,
-) -> Result<(), String> {
-  update(&app, &state, &caller, |manager| {
-    manager.remove_exclusion(&identifier)
-  })
-}
-
-#[tauri::command]
-pub fn activity_delete_day(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  date: String,
-) -> Result<(), ActivityDeletionError> {
-  let date = activity::parse_date(&date)?;
-  update(&app, &state, &caller, |manager| manager.delete_day(date))
-}
-
-#[tauri::command]
-pub async fn activity_delete_all(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  recovery: ActivityDeletionRecovery,
-) -> Result<(), ActivityDeletionError> {
-  let _confirmation = crate::time_entry_commands::BATCH_CONFIRMATION.lock().await;
-  update(&app, &state, &caller, |manager| {
-    manager.delete_all(recovery)
-  })
-}
-
-#[tauri::command]
-pub fn activity_delete_other_account_history(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  recovery: ActivityOtherHistoryRecovery,
-) -> Result<(), ActivityDeletionError> {
-  update(&app, &state, &caller, |manager| {
-    manager.delete_other_account_history(recovery)
-  })
 }
 
 /// Copies a block summary the window composed. The text goes to the system
@@ -191,85 +96,6 @@ pub fn activity_copy_text(
 }
 
 #[tauri::command]
-pub fn activity_set_capture_details(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  enabled: bool,
-) -> Result<(), String> {
-  let should_prompt = {
-    let mut manager = state.lock().map_err(lock_error)?;
-    caller.require_current(&app)?;
-    manager.require_caller(&caller)?;
-    manager.set_capture_details(enabled, Utc::now())?
-  };
-  if should_prompt {
-    caller.require_current(&app)?;
-    activity_details::request_permission();
-  }
-  activity::emit_changed(&app);
-  Ok(())
-}
-
-#[tauri::command]
-pub fn activity_set_detect_calls(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  enabled: bool,
-) -> Result<(), String> {
-  {
-    let mut manager = state.lock().map_err(lock_error)?;
-    caller.require_current(&app)?;
-    manager.require_caller(&caller)?;
-    manager.set_detect_calls(enabled, Utc::now())?;
-  }
-  activity::emit_changed(&app);
-  Ok(())
-}
-
-#[tauri::command]
-pub fn activity_set_app_detail_capture(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  identifier: String,
-  name: String,
-  mode: ActivityAppDetailCapture,
-) -> Result<(), String> {
-  update(&app, &state, &caller, |manager| {
-    manager.set_app_detail_capture(&identifier, &name, mode, Utc::now())
-  })
-}
-
-#[tauri::command]
-pub fn activity_open_accessibility_settings(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-) -> Result<(), String> {
-  let manager = state.lock().map_err(lock_error)?;
-  caller.require_current(&app)?;
-  manager.require_caller(&caller)?;
-  drop(manager);
-  activity_details::open_accessibility_settings()
-}
-
-#[tauri::command]
-pub fn activity_set_browser_title_capture(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  identifier: String,
-  name: String,
-  enabled: bool,
-) -> Result<(), String> {
-  update(&app, &state, &caller, |manager| {
-    manager.set_browser_title_capture(&identifier, &name, enabled, Utc::now())
-  })
-}
-
-#[tauri::command]
 pub fn activity_assign_ranges(
   caller: ActivityCaller,
   app: AppHandle,
@@ -281,4 +107,16 @@ pub fn activity_assign_ranges(
   update(&app, &state, &caller, |manager| {
     manager.assign_ranges(date, ranges)
   })
+}
+
+/// Opens the Settings window on its Activity tab, where the activity
+/// settings live.
+#[tauri::command]
+pub async fn activity_open_settings(
+  caller: ActivityCaller,
+  app: AppHandle,
+) -> Result<(), String> {
+  caller.require_current(&app)?;
+  crate::ensure_main_window(&app, crate::PreferencesTab::Activity);
+  Ok(())
 }

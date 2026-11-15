@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { workspaceContacts, workspaces } from "@/api/db/schema";
@@ -109,7 +110,7 @@ const readContactById = createSafeRootHandler(
                 workspaceContacts.organizationId,
                 session.activeOrganizationId,
               ),
-              eq(workspaces.status, "active"),
+              eq(workspaces.status, WORKSPACE_STATUS.active),
             ),
           )
           .groupBy(

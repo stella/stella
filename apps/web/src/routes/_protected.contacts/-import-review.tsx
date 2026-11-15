@@ -16,7 +16,13 @@ import {
 import { stableStringify } from "@stll/stable-stringify";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
-import { AlertTriangleIcon, CheckIcon, PlusIcon, XIcon } from "@stll/ui/icons";
+import {
+  AlertTriangleIcon,
+  CheckIcon,
+  PlusIcon,
+  Undo2Icon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -127,6 +133,7 @@ const IMPORT_ISSUE_LABELS = {
 
 const IMPORT_SKIP_REASON_LABELS = {
   duplicate_contact_id: "contacts.import.skippedDuplicateContactId",
+  duplicate_external_ref: "contacts.import.skippedDuplicateExternalRef",
   duplicate_tax_id: "contacts.import.skippedDuplicateTaxId",
   in_file_duplicate: "contacts.import.skippedInFileDuplicate",
   invalid_row: "contacts.import.skippedInvalidRow",
@@ -157,12 +164,15 @@ type ImportReviewSeedRow = {
 };
 
 type ImportReviewRow = ImportReviewSeedRow & {
-  /** The contact id the commit will use; stable so a retry replays. */
+  /** Local identity for editing the reviewed row. */
   id: SafeId<"contact">;
 };
 
 export type ImportReviewResult = { rowNumber: number; displayName: string } & (
-  | { status: "created"; contactId: SafeId<"contact"> }
+  | {
+      status: "created" | "updated" | "unchanged";
+      contactId: SafeId<"contact">;
+    }
   | { status: "skipped"; reason: ImportSkipReason }
 );
 
@@ -398,10 +408,7 @@ export const useImportReview = ({
     setIsImporting(true);
     const payload = {
       taxIdScheme,
-      rows: validRows.map(({ candidate, id }) => ({
-        id,
-        ...toWireCandidate(candidate),
-      })),
+      rows: validRows.map(({ candidate }) => toWireCandidate(candidate)),
     } satisfies ImportCommitPayload;
 
     const outcome = await Result.tryPromise(async () => {
@@ -433,18 +440,18 @@ export const useImportReview = ({
         const row = validRows.at(result.index);
         const rowNumber = row?.rowNumber ?? result.index;
         const displayName = row?.candidate.displayName ?? "";
-        return result.status === "created"
+        return result.status === "skipped"
           ? {
-              rowNumber,
-              displayName,
-              status: "created",
-              contactId: result.contactId,
-            }
-          : {
               rowNumber,
               displayName,
               status: "skipped",
               reason: result.reason,
+            }
+          : {
+              rowNumber,
+              displayName,
+              status: result.status,
+              contactId: result.contactId,
             };
       }),
     );
@@ -750,49 +757,69 @@ export const ImportCandidateCard = ({
 /** The receipt a commit returns: one line per submitted row. */
 export const ImportResultsList = ({
   results,
+  undoneContactIds,
 }: {
   results: ImportReviewResult[];
+  /** Created contacts a later undo removed; they no longer have a page. */
+  undoneContactIds?: ReadonlySet<string> | undefined;
+}) => (
+  <ul className="flex flex-col gap-1.5 text-sm">
+    {results.map((result) => (
+      <li className="flex items-center gap-1.5" key={result.rowNumber}>
+        <ImportResultLine result={result} undoneContactIds={undoneContactIds} />
+      </li>
+    ))}
+  </ul>
+);
+
+// Each line names the contact; a written one links to its page so the
+// receipt is a way into the imported data, not just a tally.
+const ImportResultLine = ({
+  result,
+  undoneContactIds,
+}: {
+  result: ImportReviewResult;
+  undoneContactIds: ReadonlySet<string> | undefined;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const name =
+    result.displayName ||
+    t("contacts.import.rowLabel", { index: format.number(result.rowNumber) });
 
-  // Each line names the contact; a created one links to its page so the
-  // receipt is a way into the imported data, not just a tally.
+  if (result.status === "skipped") {
+    return (
+      <>
+        <AlertTriangleIcon className="text-destructive size-4 shrink-0" />
+        <span>{name}</span>
+        <span className="text-muted-foreground">
+          {t(IMPORT_SKIP_REASON_LABELS[result.reason])}
+        </span>
+      </>
+    );
+  }
+  if (undoneContactIds?.has(result.contactId)) {
+    return (
+      <>
+        <Undo2Icon className="text-muted-foreground size-4 shrink-0" />
+        <span className="text-muted-foreground">{name}</span>
+        <span className="text-muted-foreground">
+          {t("contacts.importStudio.undoneRow")}
+        </span>
+      </>
+    );
+  }
   return (
-    <ul className="flex flex-col gap-1.5 text-sm">
-      {results.map((result) => (
-        <li className="flex items-center gap-1.5" key={result.rowNumber}>
-          {result.status === "created" ? (
-            <>
-              <CheckIcon className="text-success size-4 shrink-0" />
-              <Link
-                className="hover:underline"
-                params={{ contactId: result.contactId }}
-                to="/contacts/$contactId"
-              >
-                {result.displayName ||
-                  t("contacts.import.rowLabel", {
-                    index: format.number(result.rowNumber),
-                  })}
-              </Link>
-            </>
-          ) : (
-            <>
-              <AlertTriangleIcon className="text-destructive size-4 shrink-0" />
-              <span>
-                {result.displayName ||
-                  t("contacts.import.rowLabel", {
-                    index: format.number(result.rowNumber),
-                  })}
-              </span>
-              <span className="text-muted-foreground">
-                {t(IMPORT_SKIP_REASON_LABELS[result.reason])}
-              </span>
-            </>
-          )}
-        </li>
-      ))}
-    </ul>
+    <>
+      <CheckIcon className="text-success size-4 shrink-0" />
+      <Link
+        className="hover:underline"
+        params={{ contactId: result.contactId }}
+        to="/contacts/$contactId"
+      >
+        {name}
+      </Link>
+    </>
   );
 };
 

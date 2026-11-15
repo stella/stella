@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
 import {
@@ -11,6 +13,7 @@ import {
   IN_FLOW_POPUP_CLASS_NAME,
 } from "../lib/positioner-sizing";
 import { cn } from "../lib/utils";
+import { Kbd, type KbdKeys } from "./kbd";
 
 const TooltipCreateHandle = TooltipPrimitive.createHandle;
 
@@ -41,14 +44,36 @@ const TooltipTrigger = (props: TooltipPrimitive.Trigger.Props) => (
   <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
 );
 
+/**
+ * A fact read inline with the facts beside it, whose dotted rule says there
+ * is more on hover or focus. The words keep the colour and weight of the
+ * text the caller wraps them in; the trigger owns the rule, the focus ring
+ * and the touch target.
+ */
+const TooltipFactTrigger = ({ children }: { children: ReactNode }) => (
+  <TooltipPrimitive.Trigger
+    className="decoration-foreground-placeholder hover:decoration-foreground-muted focus-visible:ring-ring relative cursor-default rounded-xs underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
+    data-slot="tooltip-trigger"
+    type="button"
+  >
+    {children}
+  </TooltipPrimitive.Trigger>
+);
+
 const TooltipPopup = ({
   className,
   align = "center",
   sideOffset = 4,
   side = "top",
   children,
+  shortcut,
   ...props
 }: TooltipPrimitive.Popup.Props & {
+  /**
+   * The keys that do the same as the trigger, shown after the label and
+   * spelled for the reader's platform (`["mod", "K"]`).
+   */
+  shortcut?: KbdKeys | undefined;
   align?: TooltipPrimitive.Positioner.Props["align"];
   side?: TooltipPrimitive.Positioner.Props["side"];
   sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
@@ -79,7 +104,19 @@ const TooltipPopup = ({
           className="relative size-full overflow-clip px-(--viewport-inline-padding) py-1 [--viewport-inline-padding:--spacing(2)] **:data-current:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-current:opacity-100 **:data-current:transition-opacity **:data-current:data-ending-style:opacity-0 data-instant:transition-none **:data-previous:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-previous:truncate **:data-previous:opacity-100 **:data-previous:transition-opacity **:data-previous:data-ending-style:opacity-0 **:data-current:data-starting-style:opacity-0 **:data-previous:data-starting-style:opacity-0"
           data-slot="tooltip-viewport"
         >
-          {children}
+          {shortcut === undefined ? (
+            children
+          ) : (
+            // The keys move under a label too long to share the line, rather
+            // than be clipped by the viewport.
+            <span
+              className="flex flex-wrap items-center gap-x-2 gap-y-1"
+              data-slot="tooltip-shortcut-row"
+            >
+              {children}
+              <Kbd keys={shortcut} />
+            </span>
+          )}
         </TooltipPrimitive.Viewport>
       </TooltipPrimitive.Popup>
     </TooltipPrimitive.Positioner>
@@ -92,6 +129,7 @@ export {
   TooltipProvider,
   Tooltip,
   TooltipTrigger,
+  TooltipFactTrigger,
   TooltipPopup,
   TooltipPopup as TooltipContent,
 };

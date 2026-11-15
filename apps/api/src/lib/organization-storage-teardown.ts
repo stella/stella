@@ -3,8 +3,11 @@ import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+
 import { member, organization } from "@/api/db/auth-schema";
 import { entityFeatureGateMetadata } from "@/api/db/entity-feature-gate-metadata";
+import { SETTING_ORGANIZATION_DELETION_IDS } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
@@ -18,8 +21,10 @@ import {
   fields,
   fileComparisonUploads,
   folioCollabRooms,
+  hostedCustomerErasures,
   invoiceLines,
   invoices,
+  legalHolds,
   pendingUploads,
   propertyDependencies,
   styleSets,
@@ -29,13 +34,16 @@ import {
   userFiles,
   workspaces,
 } from "@/api/db/schema";
+import { requireOrganizationAuditExport } from "@/api/lib/account-export/organization-audit-gate";
+import type { OrganizationAuditExportRefusalCode } from "@/api/lib/account-export/organization-audit-gate";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import {
-  lockOrganizationObjectIntentsForLifecycle,
   preserveBufferObjectCleanupIntents,
   releaseObjectCleanupIntentsForLifecycle,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { lockOrganizationObjectIntentsForLifecycle } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   createFileKey,
@@ -44,6 +52,7 @@ import {
 } from "@/api/lib/file-key";
 import { extractFieldFileRefs } from "@/api/lib/files/field-file-refs";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
+import { hostedExternalAccountRef } from "@/api/lib/hosted-usage-provider/external-account-ref";
 import { LIMITS } from "@/api/lib/limits";
 import {
   forEachOcrDerivativePage,
@@ -56,6 +65,7 @@ import {
 } from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -99,8 +109,11 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
  *                                 same member belongs to can name the object.
  *
  * Deliberately not enumerated: `exports/…` report and chat exports, which the
- * bucket's lifecycle already expires, and the shared legal-corpus objects under
- * `case-law/` and `legal-corpus/`, which belong to no tenant.
+ * bucket's lifecycle already expires; `account-exports/{user}/…` archives,
+ * including the audit archive this deletion requires, which belong to the
+ * requesting account and are reclaimed by the account-export ledger when they
+ * expire; and the shared legal-corpus objects under `case-law/` and
+ * `legal-corpus/`, which belong to no tenant.
  */
 
 /** Keys recorded per cleanup request, and rows read per enumeration page. */
@@ -146,6 +159,11 @@ export const WORKSPACE_DELETION_RETAINED_TABLES = [
 ] as const;
 
 type RetainedTable = (typeof WORKSPACE_DELETION_RETAINED_TABLES)[number];
+
+// Rows whose restrictive references refuse a matter or item deletion while
+// they are active: the deletion's own hold check refuses first, and the delete
+// backstop trigger removes released rows together with their matter or item.
+export const WORKSPACE_DELETION_BLOCKING_TABLES = [legalHolds] as const;
 
 const cascadesFrom = (child: PgTable, parent: PgTable) =>
   child !== parent &&
@@ -248,6 +266,9 @@ export const WORKSPACE_STORAGE_DISPOSITION = {
 
 export const WORKSPACE_STORAGE_REFERENCE_DISPOSITION = {
   "buffer_object_cleanup_intents.object_key": "recovery-tombstone",
+  // Names a `user_files` row, whose own key is cleaned up; the step's row
+  // cascades when that row goes.
+  "chat_local_run_step_contents.user_file_id": "user-file-alias",
   "desktop_edit_sessions.checkpoint_file_id": "cleanup-request",
   "document_processing_runs.id": "derived-key-cleanup-request",
   "document_processing_runs.source_file_id": "field-file-alias",
@@ -271,6 +292,9 @@ const WORKSPACE_DERIVED_REFERENCE_DISPOSITION = {
     "delete-derived-row",
   "chat_threads.context_matter_ids": "prune-reference",
   "chat_threads.data_workspace_ids": "delete-derived-thread",
+  // A run's MCP token only narrows the live access set; an id of a deleted
+  // workspace in it grants nothing.
+  "desktop_runner_runs.workspace_ids": "attenuation-only",
   "docx_suggestions.source_data_workspace_ids": "delete-derived-row",
 } as const;
 
@@ -842,6 +866,32 @@ const recordMatterStorage = async (
   await recordMatterStorage(scope, workspaceIds, record, index + 1);
 };
 
+/**
+ * Close the organization's lifecycle: exact-key writers share the advisory
+ * lock while reserving storage, so taking it exclusively closes the lifecycle
+ * to matter-scoped and organization-scoped publications; the row lock then
+ * waits out, and holds off, every insert that references the organization,
+ * its audit trail included. Re-entrant within one transaction.
+ */
+const lockOrganizationForLifecycle = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+): Promise<void> => {
+  await lockOrganizationObjectIntentsForLifecycle(tx, organizationId);
+  const lockedOrganizations = await tx
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1)
+    .for("update");
+  if (lockedOrganizations.length !== 1) {
+    throw new OrganizationStorageTeardownStateError({
+      message: "Organization teardown target no longer exists.",
+      organizationId,
+    });
+  }
+};
+
 type OrganizationStorageTeardownResult = {
   requestIds: SafeId<"entityDeletionCleanupRequest">[];
 };
@@ -862,21 +912,14 @@ export const recordOrganizationStorageTeardown = async ({
   pagesMax = LIMITS.organizationStorageTeardownPagesMax,
   tx,
 }: OrganizationTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
-  // Exact-key writers share this advisory lock while reserving storage. Taking
-  // it exclusively before transferring intents closes the lifecycle to both
-  // matter-scoped and organization-scoped publications.
-  await lockOrganizationObjectIntentsForLifecycle(tx, organizationId);
-  const lockedOrganizations = await tx
-    .select({ id: organization.id })
-    .from(organization)
-    .where(eq(organization.id, organizationId))
-    .limit(1)
-    .for("update");
-  if (lockedOrganizations.length !== 1) {
-    throw new OrganizationStorageTeardownStateError({
-      message: "Organization teardown target no longer exists.",
-      organizationId,
-    });
+  await lockOrganizationForLifecycle(tx, organizationId);
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "organization" },
+  });
+  if (hold.isErr()) {
+    abortTransaction(hold.error);
   }
   await releaseObjectCleanupIntentsForLifecycle(tx, {
     organizationId,
@@ -921,7 +964,7 @@ export const recordOrganizationStorageTeardown = async ({
     // endpoint already answers for.
     await tx
       .update(workspaces)
-      .set({ status: "deleting" })
+      .set({ status: WORKSPACE_STATUS.deleting })
       .where(inArray(workspaces.id, workspaceIds));
   }
   await cancelRecoverableUploads(tx, workspaceIds);
@@ -991,6 +1034,15 @@ export const completeWorkspaceDeletion = async ({
   tx,
   workspaceId,
 }: WorkspaceStorageTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
+  await lockOrganizationObjectIntentsForLifecycle(tx, organizationId);
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "matter", workspaceId },
+  });
+  if (hold.isErr()) {
+    abortTransaction(hold.error);
+  }
   const teardown = await recordWorkspaceStorageTeardown({
     organizationId,
     ...(pagesMax === undefined ? {} : { pagesMax }),
@@ -1084,10 +1136,32 @@ export const completeWorkspaceDeletion = async ({
   return teardown;
 };
 
+export type OrganizationDeletionOutcome =
+  | {
+      type: "deleted";
+      requestIds: SafeId<"entityDeletionCleanupRequest">[];
+      /** The owner's archive of the audit trail this deletion removes. */
+      auditExportId: string;
+    }
+  | { type: "refused"; code: OrganizationAuditExportRefusalCode };
+
+type CompleteOrganizationDeletionOptions = OrganizationTeardownOptions & {
+  /** The owner deleting the organization. */
+  deletedBy: SafeId<"user">;
+};
+
 /**
- * Complete one organization's deletion: record every storage-erasure
- * instruction, remove the chat rows that own storage, and delete the
- * organization, all inside the caller's single transaction.
+ * Complete one organization's deletion: require the deleting owner's archive
+ * of the audit trail, record every storage-erasure instruction, remove the
+ * chat rows that own storage, and delete the organization, all inside the
+ * caller's single transaction. This is the only place an organization row is
+ * deleted, so no entry point reaches the cascade without the archive.
+ *
+ * The audit trail cascades with the organization, so the deletion first
+ * requires the owner's ready archive of it and refuses, before writing
+ * anything, when there is none or when the trail has grown past it. The check
+ * runs under the organization row lock, which every audit insert waits for,
+ * so no audit row can land between the check and the cascade.
  *
  * The organization row is deleted here rather than left to the caller so that
  * the instructions and the cascade that strands the objects commit together.
@@ -1105,10 +1179,31 @@ export const completeWorkspaceDeletion = async ({
  * `ON DELETE RESTRICT` too.
  */
 export const completeOrganizationDeletion = async ({
+  deletedBy,
   organizationId,
   pagesMax,
   tx,
-}: OrganizationTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
+}: CompleteOrganizationDeletionOptions): Promise<OrganizationDeletionOutcome> => {
+  const auditExport = await requireOrganizationAuditExport({
+    tx,
+    organizationId,
+    userId: deletedBy,
+    lockOrganization: async () =>
+      await lockOrganizationForLifecycle(tx, organizationId),
+  });
+  if (auditExport.type === "refused") {
+    return auditExport;
+  }
+
+  // Every deletion records the intent: a checkout can create the provider
+  // record before any entitlement exists, and a missing record erases as done.
+  await tx
+    .insert(hostedCustomerErasures)
+    .values({ externalCustomerRef: hostedExternalAccountRef(organizationId) })
+    .onConflictDoNothing({
+      target: hostedCustomerErasures.externalCustomerRef,
+    });
+
   const teardown = await recordOrganizationStorageTeardown({
     organizationId,
     ...(pagesMax === undefined ? {} : { pagesMax }),
@@ -1128,7 +1223,15 @@ export const completeOrganizationDeletion = async ({
   await tx
     .delete(chatThreads)
     .where(eq(chatThreads.organizationId, organizationId));
+  // The organization delete guard admits exactly the row named here.
+  await tx.execute(
+    sql`SELECT pg_catalog.set_config(${SETTING_ORGANIZATION_DELETION_IDS}, ${organizationId}, true)`,
+  );
   await tx.delete(organization).where(eq(organization.id, organizationId));
 
-  return teardown;
+  return {
+    type: "deleted",
+    requestIds: teardown.requestIds,
+    auditExportId: auditExport.exportId,
+  };
 };

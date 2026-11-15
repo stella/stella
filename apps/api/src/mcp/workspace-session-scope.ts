@@ -1,3 +1,5 @@
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
+
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 
 type FilterUsableMcpWorkspacesInput = {
@@ -20,7 +22,7 @@ export const filterUsableMcpWorkspaces = ({
     : null;
   return accessibleWorkspaces.filter(
     (workspace) =>
-      workspace.status !== "deleting" &&
+      workspaceIsVisible(workspace.status) &&
       (tokenWorkspaceIdSet === null || tokenWorkspaceIdSet.has(workspace.id)),
   );
 };

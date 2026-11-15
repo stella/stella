@@ -3,6 +3,8 @@ import { panic } from "better-result";
 import { produce } from "immer";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -125,11 +127,8 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
   const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
 
   return (
-    <button
-      className={cn(
-        CITATION_CHIP_CLASSES,
-        isActive && "bg-primary/25 hover:bg-primary/25",
-      )}
+    <Button
+      className="align-baseline"
       onClick={() => {
         detached(
           (async () => {
@@ -169,10 +168,17 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
       onMouseEnter={() => {
         createBoundingBoxes();
       }}
-      type="button"
+      variant="plain"
     >
-      p.&nbsp;{citation.pageNumber}
-    </button>
+      <span
+        className={cn(
+          CITATION_CHIP_CLASSES,
+          isActive && "bg-primary/25 hover:bg-primary/25",
+        )}
+      >
+        p.&nbsp;{citation.pageNumber}
+      </span>
+    </Button>
   );
 };
 
@@ -198,8 +204,10 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
       <Tooltip
         content={t("common.unverifiedCitationHint")}
         render={
-          <span className="text-muted-foreground text-2xs inline-flex max-w-[16rem] items-center gap-1 truncate align-baseline font-medium italic underline decoration-dotted underline-offset-2">
-            “{preview}” · {t("common.unverified")}
+          <span className="text-muted-foreground text-2xs inline-flex max-w-[16rem] items-center gap-1 align-baseline font-medium italic underline decoration-dotted underline-offset-2">
+            <TruncatedText>
+              “{preview}” · {t("common.unverified")}
+            </TruncatedText>
           </span>
         }
       />
@@ -209,8 +217,8 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
     <Tooltip
       content={trimmed || undefined}
       render={
-        <button
-          className={cn(CITATION_CHIP_CLASSES, "max-w-[16rem] truncate")}
+        <Button
+          className="max-w-[16rem] align-baseline"
           data-block-id={citation.blockId}
           onClick={() => {
             // Inspector peek path reads `pendingBlockScroll` from the
@@ -232,10 +240,15 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
               }),
             );
           }}
-          type="button"
+          variant="plain"
         >
-          “{preview}”
-        </button>
+          <TruncatedText
+            className={cn(CITATION_CHIP_CLASSES, "block")}
+            hint={false}
+          >
+            “{preview}”
+          </TruncatedText>
+        </Button>
       }
     />
   );

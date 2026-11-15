@@ -81,7 +81,7 @@ export const SOFT_LAW_ATTEMPT_STATES = [
   "retryable",
 ] as const;
 type SoftLawAuthorityDefinition = {
-  domain: "data-protection" | "competition";
+  domain: "data-protection" | "competition" | "labour";
   jurisdiction: string;
   name: string;
 };
@@ -91,6 +91,11 @@ export const SOFT_LAW_AUTHORITIES = {
     domain: "data-protection",
     jurisdiction: "CZE",
     name: "Úřad pro ochranu osobních údajů",
+  },
+  "cz-suip": {
+    domain: "labour",
+    jurisdiction: "CZE",
+    name: "Státní úřad inspekce práce",
   },
   "eu-edpb": {
     domain: "data-protection",

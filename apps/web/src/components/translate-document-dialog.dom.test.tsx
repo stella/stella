@@ -2,9 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { WebRoutes } from "@/generated/api-routes.gen";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/document" });
 const originalFetch = globalThis.fetch;
@@ -163,6 +163,19 @@ for (const controlled of [true, false]) {
       await act(async () => {
         await Promise.resolve();
       });
+      // The dialog's own close button, found by its name: its label sits in
+      // the button's label span, so text queries see the span, not the button.
+      const dialogClose = () => {
+        const closes = view
+          .getAllByRole("button", { name: messages.common.close })
+          .filter((button) => button.dataset["slot"] === "dialog-close");
+        expect(closes).toHaveLength(1);
+        const [close] = closes;
+        if (close === undefined) {
+          throw new TypeError("The dialog has no close button");
+        }
+        return close;
+      };
       expect(calls).toBe(0);
       fireEvent.click(
         mode === "controlled"
@@ -177,9 +190,7 @@ for (const controlled of [true, false]) {
           ? view.getByText(messages.common.close, {
               selector: "button:not([data-slot])",
             })
-          : view.getByText(messages.common.close, {
-              selector: "button[data-slot=dialog-close]",
-            }),
+          : dialogClose(),
       );
       fireEvent.click(view.getByText(messages.common.refresh));
       fireEvent.click(
@@ -206,9 +217,7 @@ for (const controlled of [true, false]) {
           ? view.getByText(messages.common.close, {
               selector: "button:not([data-slot])",
             })
-          : view.getByText(messages.common.close, {
-              selector: "button[data-slot=dialog-close]",
-            }),
+          : dialogClose(),
       );
       fireEvent.click(view.getByText(messages.common.refresh));
       fireEvent.click(

@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { ContextMenu, type ContextMenuAction } from "@stll/ui/context-menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -11,7 +12,10 @@ import {
   SkillBindingBadge,
 } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 
 /**
  * Minimal display fields shared by onboarding (`LoadedCatalogueEntry`)
@@ -74,6 +78,11 @@ export const CatalogueRow = ({
     kind: display.kind,
   });
   const displayName = labelKey ? t(labelKey) : display.displayName;
+  const descriptionKey = nativeToolDescriptionKey({
+    slug: display.slug,
+    kind: display.kind,
+  });
+  const description = descriptionKey ? t(descriptionKey) : display.description;
 
   return (
     <ContextMenu actions={contextActions}>
@@ -101,11 +110,12 @@ export const CatalogueRow = ({
         tabIndex={0}
       >
         <CatalogueEntryIcon
-          className="text-muted-foreground mt-0.5 shrink-0"
+          className="mt-0.5 shrink-0"
           icon={display.icon}
           iconUrl={display.iconUrl ?? null}
           size={24}
           slug={display.slug}
+          tone="muted"
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex min-h-7 items-center gap-2 sm:min-h-6">
@@ -115,13 +125,14 @@ export const CatalogueRow = ({
             {isFirstParty && <FirstPartyMark />}
             <div className="ms-auto flex items-center gap-2">{actions}</div>
           </div>
-          {display.description.length > 0 && (
-            <p
-              className="text-muted-foreground line-clamp-1 text-xs"
+          {description.length > 0 && (
+            <TruncatedText
+              className="text-muted-foreground text-xs"
               dir="auto"
+              render={<p />}
             >
-              {display.description}
-            </p>
+              {description}
+            </TruncatedText>
           )}
           {notice !== undefined && (
             <p className="text-muted-foreground text-xs" dir="auto">

@@ -30,6 +30,7 @@ import type {
   DesktopActionStatus,
   DesktopSetupStep,
 } from "@/features/desktop/desktop-action-gate.logic";
+import { DESKTOP_LINK_REFUSAL_MESSAGE } from "@/features/desktop/desktop-link-refusal";
 import type { DesktopPresenceType } from "@/features/desktop/desktop-presence";
 import { useDesktopPresence } from "@/features/desktop/desktop-presence";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
@@ -61,7 +62,7 @@ export const useDesktopActionGate = (
 ): DesktopActionGateResult => {
   const t = useTranslations();
   const presence = useDesktopPresence();
-  const { connect, state } = useDesktopAccountConnection();
+  const { connect, state, switchAccount } = useDesktopAccountConnection();
   const [required, setRequired] = useState<DesktopRequiredPresence | null>(
     null,
   );
@@ -69,7 +70,7 @@ export const useDesktopActionGate = (
   const connectApp = () => {
     detached(
       (async () => {
-        const outcome = await connect();
+        const outcome = await connect("explicit");
         switch (outcome.status) {
           case "connected": {
             stellaToast.add({
@@ -82,6 +83,11 @@ export const useDesktopActionGate = (
           case "started": {
             return;
           }
+          // A joined automatic attempt found no local proof; the settings
+          // page keeps the explicit approval on offer.
+          case "approval-required": {
+            return;
+          }
           // Nothing answered on this computer: offer the install instead.
           case "error": {
             setRequired("none");
@@ -90,6 +96,22 @@ export const useDesktopActionGate = (
           // The app must update before it can link this account.
           case "update-required": {
             setRequired("outdated");
+            return;
+          }
+          // The app said why it kept its account; only a conflict can be
+          // resolved from here, by asking the app to switch.
+          case "refused": {
+            stellaToast.add({
+              title: t(DESKTOP_LINK_REFUSAL_MESSAGE[outcome.reason]),
+              ...(outcome.reason === "account_conflict"
+                ? {
+                    actionProps: {
+                      children: t("settings.account.desktopSwitchAccount"),
+                      onClick: switchAccount,
+                    },
+                  }
+                : {}),
+            });
             return;
           }
           default: {
@@ -146,7 +168,7 @@ export const useDesktopActionGate = (
   return {
     label: t(DESKTOP_ACTION_LABELS[action][presence.type]),
     status,
-    isConnecting: state.status === "connecting",
+    isConnecting: state.status === "connecting" || state.status === "opening",
     connect: connectApp,
     setUp,
     run,

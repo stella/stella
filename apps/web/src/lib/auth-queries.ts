@@ -4,6 +4,7 @@ import {
   skipToken,
 } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
 import { memberHasPermissions } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
@@ -12,6 +13,7 @@ import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 import { STALE_TIME } from "@/lib/consts";
 import { organizationOptions } from "@/lib/organization/queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 export { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 
@@ -49,24 +51,30 @@ export const fetchSession = async ({
   return result.data;
 };
 
-export const roleOptions = queryOptions({
-  retry: BOOT_QUERY_RETRY,
-  queryKey: rootKeys.role,
-  queryFn: async () => {
-    const [{ authClient }, { toAuthClientError }] = await Promise.all([
-      import("@/lib/auth-client"),
-      import("@/lib/errors/auth"),
-    ]);
-    const result = await authClient.organization.getActiveMemberRole();
+export const roleOptions = resourceQueryOptions(
+  queryOptions({
+    retry: BOOT_QUERY_RETRY,
+    queryKey: rootKeys.role,
+    queryFn: async () => {
+      const [{ authClient }, { toAuthClientError }] = await Promise.all([
+        import("@/lib/auth-client"),
+        import("@/lib/errors/auth"),
+      ]);
+      const result = await authClient.organization.getActiveMemberRole();
 
-    if (result.error) {
-      throw toAuthClientError(result.error);
-    }
+      if (result.error) {
+        throw toAuthClientError(result.error);
+      }
 
-    return result.data.role;
+      return result.data.role;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  }),
+  {
+    resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
+    scope: { type: "organization" },
   },
-  staleTime: STALE_TIME.FIVE.MINUTES,
-});
+);
 
 /** The additional membership grant is read only when role grants do not decide the operation. */
 export const activeMemberOptions = queryOptions({

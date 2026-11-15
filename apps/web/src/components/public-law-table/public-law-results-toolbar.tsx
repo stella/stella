@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
@@ -251,9 +252,9 @@ export const PublicLawFilterChips = ({
           {chip.kind !== undefined && (
             <span className="text-muted-foreground shrink-0">{chip.kind}</span>
           )}
-          <BidiText as="span" className="min-w-0 truncate">
+          <TruncatedText render={<BidiText as="span" />}>
             {chip.value}
-          </BidiText>
+          </TruncatedText>
           <Button
             aria-label={t("caseLaw.filters.remove", { filter: chip.value })}
             className="text-muted-foreground hover:text-foreground size-5 min-h-0 shrink-0 p-0"

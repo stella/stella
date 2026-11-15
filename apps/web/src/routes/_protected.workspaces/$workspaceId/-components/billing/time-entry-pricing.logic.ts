@@ -1,13 +1,15 @@
 import type { QueryState } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import type { LocaleInputText } from "@stll/money";
+
 import { submittedRateCents } from "@/components/billing/amount-input.logic";
 import { DEFAULT_CURRENCY } from "@/components/billing/format-currency";
 import type { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 
 export type TimeEntryPricingSelection =
   | { type: "automatic" }
-  | { type: "manual"; draft: string; currency: string }
+  | { type: "manual"; draft: LocaleInputText; currency: string }
   | { type: "hidden" };
 
 type RateResolution = Awaited<
@@ -19,14 +21,16 @@ type DeriveTimeEntryPricingOptions = {
   lookup:
     | Pick<QueryState<RateResolution>, "status" | "fetchStatus" | "data">
     | undefined;
+  locale: string;
 };
 
 /** Automatic prices belong to the current lookup; only manual prices are stored. */
 export const deriveTimeEntryPricing = ({
   selection,
   lookup,
+  locale,
 }: DeriveTimeEntryPricingOptions) => {
-  let status: "pending" | "ready" | "error" = "pending";
+  let status: "pending" | "ready" | "error" | "invalid" = "pending";
   if (
     lookup !== undefined &&
     lookup.status !== "pending" &&
@@ -44,16 +48,22 @@ export const deriveTimeEntryPricing = ({
         rateAtEntry: 0,
         currency: DEFAULT_CURRENCY,
       } as const;
-    case "manual":
-      return {
-        status,
-        rateAtEntry: submittedRateCents({
-          draft: selection.draft,
-          currency: selection.currency,
-          resolvedRateCents: 0,
-        }),
+    case "manual": {
+      const rateAtEntry = submittedRateCents({
+        draft: selection.draft,
         currency: selection.currency,
-      };
+        resolvedRateCents: 0,
+        locale,
+      });
+      // An unreadable draft blocks submission instead of saving a zero rate.
+      return rateAtEntry === null
+        ? {
+            status: "invalid" as const,
+            rateAtEntry: 0,
+            currency: selection.currency,
+          }
+        : { status, rateAtEntry, currency: selection.currency };
+    }
     case "automatic": {
       const resolved = lookup?.status === "success" ? lookup.data : undefined;
       if (resolved && resolved.hourlyRate !== null) {

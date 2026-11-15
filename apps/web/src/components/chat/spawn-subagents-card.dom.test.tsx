@@ -9,10 +9,10 @@ import {
   spawnSubagentsOutputSchema,
 } from "@stll/api-contract/spawn-subagents";
 import { UI_LOCALES } from "@stll/locales";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import arabic from "@/i18n/langs/ar.json";
 import english from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { RegisteredChatUIToolCallPart } from "./chat-ui-tools";
 

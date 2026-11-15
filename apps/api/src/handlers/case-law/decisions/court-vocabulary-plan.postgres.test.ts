@@ -19,6 +19,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 import { vacuumUntilAllVisible } from "@/api/tests/query-plans/visibility";
@@ -68,13 +69,16 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
         await db.execute(sql`SET search_path TO ${schema}, public`);
         const view = getViewConfig(publishedCaseLawDecisions);
         await db.execute(sql`CREATE VIEW ${schema}.${sql.identifier(view.name)}
-          AS (${sql.raw(new PgDialect().sqlToQuery(view.query).sql)})`);
+          AS (${sql.raw(new PgDialect().sqlToQuery(view.query ?? panic("Declared view must include a query")).sql)})`);
         // Remove any cloned published twin, so the guard exercises the online
         // declaration even when the template already has this index installed.
-        const clones = await db.execute(sql`SELECT indexname FROM pg_indexes
+        const clones = await db.execute(
+          sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'case_law_decisions'
             AND indexdef LIKE '%(country, court, COALESCE(decision_date%'
-            AND indexdef LIKE '% WHERE %'`);
+            AND indexdef LIKE '% WHERE %'`,
+          "objects",
+        );
         for (const row of clones) {
           const name = row["indexname"];
           if (typeof name !== "string") {
@@ -93,11 +97,13 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
               ),
           ),
         );
-        const installed =
-          await db.execute(sql`SELECT pg_get_indexdef(indexrelid) AS definition
+        const installed = await db.execute(
+          sql`SELECT pg_get_indexdef(indexrelid) AS definition
           FROM pg_index JOIN pg_class ON pg_class.oid = indexrelid
           JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
-          WHERE pg_namespace.nspname = ${schemaName} AND pg_class.relname = ${PUBLISHED_INDEX}`);
+          WHERE pg_namespace.nspname = ${schemaName} AND pg_class.relname = ${PUBLISHED_INDEX}`,
+          "objects",
+        );
         expect(installed).toEqual([
           {
             definition: `CREATE INDEX ${PUBLISHED_INDEX} ${index.definitionBody.replace("ON public.", () => `ON ${schemaName}.`)}`,
@@ -148,14 +154,26 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
               vocabulary.params,
             ),
           );
-          const vocabularyScans = scanOccurrences(vocabularyPlan).filter(
-            ({ relation }) => relation === "case_law_decisions",
+          // Every scan of the table, of any kind, must be one of the two
+          // covering probes: a covering-index proof paired with the
+          // heap-fetch check below.
+          expect(
+            scanOccurrences(vocabularyPlan).filter(
+              ({ relation }) => relation === "case_law_decisions",
+            ),
+          ).toHaveLength(2);
+          const vocabularyScans = indexedAccessPaths(
+            vocabularyPlan,
+            "case_law_decisions",
+            { accessKind: "index-only" },
           );
           expect(vocabularyScans).toHaveLength(2);
           for (const scan of vocabularyScans) {
-            expect(scan.index).toBe(PUBLISHED_INDEX);
-            expect(scan.nodeType).toBe("Index Only Scan");
-            expect(scan.filter).toBeNull();
+            expect(scan.branches.map(({ indexName }) => indexName)).toEqual([
+              PUBLISHED_INDEX,
+            ]);
+            // A residual filter would walk index entries the bound skips.
+            expect(scan.node["Filter"]).toBeUndefined();
           }
           for (const scan of indexScans(vocabularyPlan)) {
             expect(scan["Actual Rows"]).toBeLessThanOrEqual(1);

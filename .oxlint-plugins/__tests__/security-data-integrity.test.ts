@@ -191,6 +191,29 @@ describe.serial("security and data-integrity lint boundaries", () => {
     ).toEqual([]);
   });
 
+  test("reports direct case-law source lease acquisition outside its owner", async () => {
+    expect(
+      await lintSingleRule(
+        "no-bare-case-law-source-ingestion-lease",
+        "await acquireCaseLawSourceIngestionLease(options);\n",
+        { sourcePath: "apps/api/src/lib/legal-search/example.ts" },
+      ),
+    ).toEqual([1]);
+  });
+
+  test("accepts case-law source lease acquisition inside its owner", async () => {
+    expect(
+      await lintSingleRule(
+        "no-bare-case-law-source-ingestion-lease",
+        "await acquireCaseLawSourceIngestionLease(options);\n",
+        {
+          sourcePath:
+            "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts",
+        },
+      ),
+    ).toEqual([]);
+  });
+
   test("reports an outbound wrapper receiving a runtime-selected target", async () => {
     expect(
       await lintSingleRule(

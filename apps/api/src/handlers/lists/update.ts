@@ -7,7 +7,7 @@ import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets"
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -15,7 +15,7 @@ import { includes } from "@/api/lib/type-guards";
 
 const bodySchema = v.object({
   id: resourceIdSchema("legalList"),
-  name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+  name: v.optional(displayNameSchema()),
   description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
   status: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
 });

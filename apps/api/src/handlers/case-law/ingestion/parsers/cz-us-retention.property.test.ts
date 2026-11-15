@@ -1,20 +1,23 @@
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   buildValidationHtml,
   validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseUsDecisionHtml } from "./cz-us";
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "./cz-us";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,
   markerPlan,
 } from "./marker-injection.test-helper";
+
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
 const metadata = {
   caseNumber: "property-fixture",
@@ -51,7 +54,7 @@ test(
         shapes,
         wrappers,
         (plan, fragments, ancestors) => {
-          const fixture = cheerio.load(
+          const fixture = load(
             `<html><body><header>headerqzexcluded</header><span id="lblDecisionForm">NÁLEZ</span><div class="DocContent"><p>Ústavní soud rozhodl takto: Návrh se zamítá.</p><p>Odůvodnění: Posouzení návrhu.</p>${fragments.join("")}<script>scriptqzexcluded</script><style>styleqzexcluded</style></div><footer>footerqzexcluded</footer></body></html>`,
           );
           for (const tag of ancestors) {
@@ -119,7 +122,7 @@ test(
           .$("p")
           .toArray()
           .map((node) => injected.$(node).text());
-        const fixture = cheerio.load(
+        const fixture = load(
           '<html><body><span id="lblDecisionForm">NÁLEZ</span><input id="docContentHidden"><div class="DocContent">visibleqzexcluded</div></body></html>',
         );
         fixture("#docContentHidden").attr(

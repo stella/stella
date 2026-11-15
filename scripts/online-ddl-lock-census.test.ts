@@ -230,6 +230,104 @@ END $probe$`;
     },
   );
 
+  test.each([
+    ["catch parameter", "try {} catch (CATALOG_READ) {", "}"],
+    ["catch object pattern", "try {} catch ({ CATALOG_READ }) {", "}"],
+    ["catch array pattern", "try {} catch ([CATALOG_READ]) {", "}"],
+    [
+      "default arrow parameter",
+      "const wrapper = (CATALOG_READ = suppliedSql) => {",
+      "};",
+    ],
+    [
+      "rest arrow parameter",
+      "const wrapper = (...CATALOG_READ: string[]) => {",
+      "};",
+    ],
+    ["function parameter", "function wrapper(CATALOG_READ: string) {", "}"],
+    [
+      "default function parameter",
+      "function wrapper(CATALOG_READ = suppliedSql) {",
+      "}",
+    ],
+    [
+      "rest function parameter",
+      "function wrapper(...CATALOG_READ: string[]) {",
+      "}",
+    ],
+    ["function declaration", "{ function CATALOG_READ() {}", "}"],
+    [
+      "named function expression",
+      "const wrapper = function CATALOG_READ() {",
+      "};",
+    ],
+    ["class declaration", "{ class CATALOG_READ {}", "}"],
+    [
+      "named class expression",
+      "const wrapper = class CATALOG_READ { method() {",
+      "} };",
+    ],
+    ["object variable pattern", "{ const { CATALOG_READ } = supplied;", "}"],
+    ["array variable pattern", "{ const [CATALOG_READ] = supplied;", "}"],
+    [
+      "renamed default pattern",
+      "{ const { query: CATALOG_READ = suppliedSql } = supplied;",
+      "}",
+    ],
+    ["object rest pattern", "{ const { ...CATALOG_READ } = supplied;", "}"],
+    ["array rest pattern", "{ const [...CATALOG_READ] = supplied;", "}"],
+    ["let declaration", "{ let CATALOG_READ = suppliedSql;", "}"],
+    [
+      "var declaration",
+      "function wrapper() { var CATALOG_READ = suppliedSql;",
+      "}",
+    ],
+    [
+      "import equals declaration",
+      "namespace Wrapper { import CATALOG_READ = supplied.query;",
+      "}",
+    ],
+    [
+      "declared function parameter",
+      "{ declare function wrapper(CATALOG_READ: string): void;",
+      "}",
+    ],
+    ["for-in declaration", "for (const CATALOG_READ in supplied) {", "}"],
+    ["for-of declaration", "for (const CATALOG_READ of supplied) {", "}"],
+    [
+      "for declaration",
+      "for (let CATALOG_READ = suppliedSql; condition;) {",
+      "}",
+    ],
+    ["namespace declaration", "{ namespace CATALOG_READ {}", "}"],
+    ["enum declaration", "{ enum CATALOG_READ { value }", "}"],
+    [
+      "parameter property",
+      "class Wrapper { constructor(public CATALOG_READ: string) {",
+      "} }",
+    ],
+  ])("read-query proof rejects %s shadowing", (_name, opening, closing) => {
+    const source = `${ownerSource}\nconst CATALOG_READ = "SELECT 1";\n${opening} lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`DO $read_query$ BEGIN PERFORM (\${CATALOG_READ}); ALTER TABLE public.probe ADD COLUMN added text; END $read_query$\` }); ${closing}`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /unresolved SQL variant/iu,
+    );
+  });
+
+  test.each([
+    'import CATALOG_READ from "./queries";',
+    'import * as CATALOG_READ from "./queries";',
+    'import { query as CATALOG_READ } from "./queries";',
+    'import { CATALOG_READ } from "./queries";',
+  ])(
+    "imported bindings cannot provide a module-constant proof: %s",
+    (declaration) => {
+      const source = `${ownerSource}\n${declaration}\nlockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`DO $read_query$ BEGIN PERFORM (\${CATALOG_READ}); ALTER TABLE public.probe ADD COLUMN added text; END $read_query$\` });`;
+      expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+        /unresolved SQL variant/iu,
+      );
+    },
+  );
+
   test("a non-module read-query declaration cannot supply a constant proof", () => {
     const source = `${ownerSource}\nconst wrapper = () => { const CATALOG_READ = "SELECT 1"; return lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`DO $read_query$ BEGIN PERFORM (\${CATALOG_READ}); ALTER TABLE public.probe ADD COLUMN added text; END $read_query$\` }); };`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(

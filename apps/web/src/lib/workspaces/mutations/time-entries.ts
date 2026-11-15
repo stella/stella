@@ -4,8 +4,11 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
+
 import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
@@ -140,6 +143,9 @@ export const useCreateTimeEntry = () => {
         fingerprintKey: "useCreateTimeEntry:failure",
         scope: { type: "handler", handlerId: "useCreateTimeEntry:failure" },
       });
+      if (APIError.is(error) && error.code === TIME_ENTRY_RATE_REQUIRED_CODE) {
+        return;
+      }
       notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
@@ -182,6 +188,9 @@ export const useUpdateTimeEntry = () => {
         fingerprintKey: "useUpdateTimeEntry:failure",
         scope: { type: "handler", handlerId: "useUpdateTimeEntry:failure" },
       });
+      if (APIError.is(error) && error.code === TIME_ENTRY_RATE_REQUIRED_CODE) {
+        return;
+      }
       notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });

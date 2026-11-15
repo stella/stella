@@ -6,6 +6,11 @@ import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { createGitProvider, resolveGitHead } from "./git-provider";
 import type { SOURCE_CONFIG } from "./git-provider";
 import {
+  deriveJobPrivileges,
+  expectedJobDigest,
+  jobDependencyDigests,
+} from "./job-digests";
+import {
   METADATA_ORIGIN,
   metadataReferenceIdentity,
   parseRemoteReference,
@@ -27,10 +32,13 @@ const TEXT = v.pipe(
   v.check((text) => text.trim().length > 0, "Expected nonblank metadata text"),
 );
 const DIGEST = v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u));
+// Every job is listed with its digest; only a privileged job is reviewed and
+// carries the decision.
 const JOB = v.strictObject({
   id: TEXT,
-  kind: v.picklist(CLASSIFICATIONS),
-  qualifier: TEXT,
+  decision: v.optional(
+    v.strictObject({ kind: v.picklist(CLASSIFICATIONS), qualifier: TEXT }),
+  ),
   digest: DIGEST,
 });
 const SOURCE = v.strictObject({
@@ -80,6 +88,7 @@ const safePath = (path: string) => {
     reject("unsafe metadata path");
   }
 };
+
 type ReferenceOptions = {
   callerRepository: string;
   callerOrigin: MetadataOrigin;
@@ -185,6 +194,99 @@ const verifyWorkflowInventory = (
   }
 };
 
+type VerifyJobDigestsOptions = {
+  nodes: ReadonlyMap<string, PublicMetadata["nodes"][number]>;
+  parsedDocuments: ReadonlyMap<string, ParsedDocument>;
+  documentDigest: (id: string) => string;
+  jobPrivileges: ReadonlyMap<string, boolean>;
+  inheritedGrants: ReadonlyMap<string, ReadonlyMap<string, unknown>>;
+};
+
+const verifyJobDigests = ({
+  nodes,
+  parsedDocuments,
+  documentDigest,
+  jobPrivileges,
+  inheritedGrants,
+}: VerifyJobDigestsOptions) => {
+  for (const node of nodes.values()) {
+    if (node.type !== "metadata") {
+      continue;
+    }
+    const parsed = parsedDocuments.get(node.id);
+    if (!parsed) {
+      reject("parsed metadata missing");
+    }
+    const changedJobs = node.jobs.filter((job) => {
+      const definition = parsed.jobs[job.id];
+      if (!definition) {
+        return true;
+      }
+      const dependencyDigests = jobDependencyDigests({
+        definition,
+        edges: node.edges,
+        isMetadata: (target) => nodes.get(target)?.type === "metadata",
+        documentDigest,
+      });
+      const key = `${node.repository}:${node.path}/${job.id}`;
+      return (
+        job.digest !==
+        expectedJobDigest({
+          definition,
+          privileged: jobPrivileges.get(key) ?? false,
+          inheritedGrants: inheritedGrants.get(key),
+          dependencyDigests,
+        })
+      );
+    });
+    if (changedJobs.length) {
+      reject(
+        `Classification-relevant shape changed: ${changedJobs.map((job) => `${node.path}/${job.id}`).join(", ")}. Re-review kind and qualifier, then ${REVIEW_INSTRUCTION}`,
+      );
+    }
+  }
+};
+
+type VerifyJobReviewsOptions = {
+  nodes: ReadonlyMap<string, PublicMetadata["nodes"][number]>;
+  jobPrivileges: ReadonlyMap<string, boolean>;
+};
+
+// The reviewed jobs are exactly the privileged ones, so a manifest can
+// neither leave a privileged job undecided nor keep a decision past its use.
+const verifyJobReviews = ({
+  nodes,
+  jobPrivileges,
+}: VerifyJobReviewsOptions) => {
+  const undecided: string[] = [];
+  const stale: string[] = [];
+  for (const node of nodes.values()) {
+    if (node.type !== "metadata") {
+      continue;
+    }
+    for (const job of node.jobs) {
+      const privileged =
+        jobPrivileges.get(`${node.repository}:${node.path}/${job.id}`) ?? false;
+      if (privileged && job.decision === undefined) {
+        undecided.push(`${node.path}/${job.id}`);
+      }
+      if (!privileged && job.decision !== undefined) {
+        stale.push(`${node.path}/${job.id}`);
+      }
+    }
+  }
+  if (undecided.length) {
+    reject(
+      `Privileged jobs without a decision: ${undecided.join(", ")}. Classify them, then ${REVIEW_INSTRUCTION}`,
+    );
+  }
+  if (stale.length) {
+    reject(
+      `Decisions for jobs that are not privileged: ${stale.join(", ")}. Remove their directories from .github/ci-job-classification-decisions/`,
+    );
+  }
+};
+
 export type MetadataOptions = { manifest: unknown; reader: MetadataReader };
 export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
   Result.try({
@@ -261,7 +363,9 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
             );
           }
           for (const job of node.jobs) {
-            classifications[job.kind] += 1;
+            if (job.decision !== undefined) {
+              classifications[job.decision.kind] += 1;
+            }
             jobCount += 1;
           }
           const references = new Set(Object.keys(parsed.value.dependencies));
@@ -333,45 +437,31 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
         documentDigests.set(id, digest);
         return digest;
       };
-      for (const node of nodes.values()) {
-        if (node.type !== "metadata") {
-          continue;
-        }
-        const parsed = parsedDocuments.get(node.id);
-        if (!parsed) {
-          reject("parsed metadata missing");
-        }
-        const changedJobs = node.jobs.filter((job) => {
-          const definition = parsed.jobs[job.id];
-          if (!definition) {
-            return true;
-          }
-          const dependencies = Object.fromEntries(
-            Object.keys(definition.dependencies)
-              .toSorted(compareCodeUnit)
-              .flatMap((reference) => {
-                const target = node.edges[reference];
-                return target && nodes.get(target)?.type === "metadata"
-                  ? [[reference, documentDigest(target)]]
-                  : [];
-              }),
-          );
-          const digests = [definition.digest, definition.privilegedDigest].map(
-            (definitionDigest) =>
-              Object.keys(dependencies).length
-                ? sha256(
-                    JSON.stringify({ digest: definitionDigest, dependencies }),
-                  )
-                : definitionDigest,
-          );
-          return !digests.includes(job.digest);
-        });
-        if (changedJobs.length) {
-          reject(
-            `Classification-relevant shape changed: ${changedJobs.map((job) => `${node.path}/${job.id}`).join(", ")}. Re-review kind and qualifier, then ${REVIEW_INSTRUCTION}`,
-          );
-        }
-      }
+      const decisions = Object.fromEntries(
+        metadata.nodes.flatMap((node) =>
+          node.type === "metadata"
+            ? node.jobs.flatMap((job) => {
+                const key = `${node.repository}:${node.path}/${job.id}`;
+                return job.decision === undefined
+                  ? []
+                  : [[key, { kind: job.decision.kind }] as const];
+              })
+            : [],
+        ),
+      );
+      const { jobPrivileges, inheritedGrants } = deriveJobPrivileges({
+        nodes,
+        parsedDocuments,
+        decisions,
+      });
+      verifyJobReviews({ nodes, jobPrivileges });
+      verifyJobDigests({
+        nodes,
+        parsedDocuments,
+        documentDigest,
+        jobPrivileges,
+        inheritedGrants,
+      });
       return {
         workflowCount: metadata.workflows.length,
         jobCount,

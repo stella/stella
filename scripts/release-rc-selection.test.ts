@@ -89,6 +89,7 @@ fi
 case "$*" in
   *pulls?*) cat "$TEST_ROOT/pulls.json" ;;
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
+  *actions/workflows/*/runs?*) printf '{"workflow_runs":[]}\\n' ;;
   *actions/runs/*) endpoint="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{endpoint##*/}.json" ;;
   *issues?*) printf '[[]]\\n' ;;
   *commits/*)
@@ -202,6 +203,7 @@ esac
           display_title: `${title}${proofSha}`,
           status: "completed",
           conclusion: "success",
+          run_attempt: 1,
         }),
       );
       return {
@@ -211,7 +213,16 @@ esac
         target_url: htmlUrl,
       };
     });
-    writeFileSync(path.join(root, "statuses.json"), JSON.stringify([statuses]));
+    const gate = {
+      context: "release/prod-gate",
+      state: "success",
+      creator: { login: "release-operator", type: "User" },
+      target_url: "",
+    };
+    writeFileSync(
+      path.join(root, "statuses.json"),
+      JSON.stringify([[gate, ...statuses]]),
+    );
   };
   return {
     sha,

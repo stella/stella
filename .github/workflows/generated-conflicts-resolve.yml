@@ -43,7 +43,7 @@ jobs:
       contents: read
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: 1.99.0
+      RUSTUP_TOOLCHAIN: 1.99.1
     steps:
       - name: Validate inputs
         env:
@@ -64,7 +64,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/actions/setup-bun-cached@2ba6dc5822df5213c500aa6edb7b6c4bdec56804
         with:
           # Always false here: this job never runs on main.
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -80,6 +80,8 @@ jobs:
           bun --no-install --no-env-file scripts/generated-conflicts.ts plan \
             --git-dir .git --head "$HEAD_SHA" --main "$MAIN_SHA" > "$RUNNER_TEMP/plan.json"
           cat "$RUNNER_TEMP/plan.json"
+          jq -r 'if .eligible then "resolution: planned" elif (.conflicts | length) == 0 then "resolution: no-conflicts" else .refusals[] | "resolution: \(.type) \(.path)" end' \
+            "$RUNNER_TEMP/plan.json" >> "$GITHUB_STEP_SUMMARY"
           eligible=$(jq -r '.eligible' "$RUNNER_TEMP/plan.json")
           echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
           if [[ "$eligible" == true ]]; then
@@ -134,4 +136,5 @@ jobs:
           name: generated-conflicts
           path: ${{ runner.temp }}/resolution
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 1

@@ -7,6 +7,8 @@
 
 import type { CommandContext } from "@stricli/core";
 
+import type { EffectiveGrants } from "./auth/command-scopes.js";
+
 /** Context every generated (and hand-written) command receives. */
 export type Context = CommandContext & {
   /**
@@ -29,4 +31,6 @@ export type Context = CommandContext & {
    * keeping startup offline-instant.
    */
   readonly token: string | undefined;
+  /** Resolved once after registry discovery; executors never reinterpret the token. */
+  readonly effectiveGrants: EffectiveGrants;
 };

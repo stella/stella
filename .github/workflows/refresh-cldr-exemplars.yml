@@ -38,13 +38,16 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        uses: stella/.github/actions/setup-bun-cached@2ba6dc5822df5213c500aa6edb7b6c4bdec56804
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install refresh dependencies
         timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts --filter '@stll/mojibake...' --filter '!stella'
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Check input validation
         run: bun test ./packages/mojibake/src/exemplar-input.test.ts

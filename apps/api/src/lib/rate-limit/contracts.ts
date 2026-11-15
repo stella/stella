@@ -41,7 +41,7 @@ export type RateLimitGenerator = (
 ) => MaybePromise<string>;
 
 /**
- * Body served with a 429. A string goes out as `text/plain`; an object is
+ * Body served when a budget refuses a request. A string goes out as `text/plain`; an object is
  * serialized as JSON, so a route whose clients parse every response into a
  * protocol envelope (JSON-RPC) can answer in that envelope instead of prose.
  */
@@ -51,6 +51,8 @@ export type RateLimitOptions = {
   context: RateLimitContext;
   duration: number;
   errorResponse?: RateLimitErrorResponse;
+  /** Shared capacity exhaustion is service unavailability, not a caller quota. */
+  refusalStatus?: 429 | 503;
   generator: RateLimitGenerator;
   max: number | ((request: Request) => MaybePromise<number>);
   additionalBudgets?: (

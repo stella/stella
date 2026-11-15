@@ -6,7 +6,18 @@ import * as v from "valibot";
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { readDecisions } from "./decisions";
-import { approvalPathForKey, decisionPathForKey } from "./inputs";
+import {
+  approvalPathForKey,
+  CLASSIFICATION_DECISIONS_PATH,
+  decisionDirectoryForKey,
+  decisionPathForKey,
+} from "./inputs";
+import {
+  deriveJobPrivileges,
+  expectedJobDigest,
+  jobDependencyDigests,
+  reachableJobDocuments,
+} from "./job-digests";
 import { verifyPublicMetadata } from "./public-metadata";
 import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
@@ -17,11 +28,8 @@ import {
   sameMetadataOrigin,
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
-import {
-  isPrivilegedJobClosure,
-  isRepositoryWritingJob,
-  ReviewRequiredError,
-} from "./review";
+import { isRepositoryWritingJob, ReviewRequiredError } from "./review";
+import { readFilesAtRevision } from "./revision-files";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
@@ -35,16 +43,9 @@ const DECISIONS = v.record(
 );
 // The decision shape the generator accepts, as readDecisions produces it.
 export type ClassificationDecisionsInput = v.InferInput<typeof DECISIONS>;
-const REVISION_DECISIONS = v.record(
-  v.string(),
-  v.strictObject({
-    kind: v.picklist(CLASSIFICATIONS),
-    qualifier: v.pipe(v.string(), v.minLength(1)),
-    approvedDigests: v.optional(
-      v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
-    ),
-  }),
-);
+type ReadClassificationInputsOptions = {
+  observeRead?: (file: string) => void;
+};
 const SNAPSHOTS = v.record(
   v.string(),
   v.strictObject({
@@ -52,9 +53,20 @@ const SNAPSHOTS = v.record(
     documents: v.record(v.string(), v.string()),
   }),
 );
-export const readClassificationInputs = (root: string) => {
-  const read = (file: string): unknown =>
-    JSON.parse(readFileSync(path.resolve(root, ".github", file), "utf-8"));
+export const readClassificationInputs = (
+  root: string,
+  { observeRead }: ReadClassificationInputsOptions = {},
+) => {
+  const read = (file: string): unknown => {
+    const repositoryPath = `.github/${file}`;
+    observeRead?.(repositoryPath);
+    return JSON.parse(
+      readFileSync(path.resolve(root, repositoryPath), "utf-8"),
+    );
+  };
+  // This manifest generates conditions in ci.yml. Recording it here keeps a
+  // source edit in the same selection set as the workflow digests it changes.
+  read("global-rule-inputs.json");
   const snapshots = v.parse(
     SNAPSHOTS,
     read("ci-job-classification-sources.json"),
@@ -74,6 +86,7 @@ export const readClassificationInputs = (root: string) => {
         ) {
           throw new AdmissionError({ message: "unsafe metadata path" });
         }
+        observeRead?.(file);
         return readFileSync(path.resolve(root, file), "utf-8");
       }
       const text = snapshots[repository]?.documents[file];
@@ -88,7 +101,7 @@ export const readClassificationInputs = (root: string) => {
   return {
     decisions: v.parse(
       DECISIONS,
-      readDecisions({ type: "working-tree", root }),
+      readDecisions({ type: "working-tree", root }, { observeRead }),
     ),
     snapshots,
     reader,
@@ -124,15 +137,42 @@ const gitText = (root: string, args: string[]) => {
 export const readClassificationInputsAtRevision = (
   root: string,
   revision: string,
+  { observeRead }: ReadClassificationInputsOptions = {},
 ) => {
-  const readCandidate = (file: string) =>
-    gitText(root, ["show", `${revision}:${file}`]);
+  // Workflows, local actions and the source manifest all live under .github,
+  // so one batched read serves them; anything else falls back to git show.
+  // Decision files are read by readDecisions, so they are left out here.
+  let githubFiles: Map<string, string> | undefined;
+  const prefetched = () => {
+    githubFiles ??= readFilesAtRevision(
+      root,
+      revision,
+      gitText(root, ["ls-tree", "-r", "--name-only", revision, "--", ".github"])
+        .split("\n")
+        .filter(
+          (file) =>
+            file.length > 0 &&
+            !file.startsWith(`${CLASSIFICATION_DECISIONS_PATH}/`),
+        ),
+    );
+    return githubFiles;
+  };
+  const readCandidate = (file: string) => {
+    observeRead?.(file);
+    return (
+      prefetched().get(file) ?? gitText(root, ["show", `${revision}:${file}`])
+    );
+  };
   const readGithubJson = (file: string): unknown =>
     JSON.parse(readCandidate(`.github/${file}`));
   const snapshots = v.parse(
     SNAPSHOTS,
     readGithubJson("ci-job-classification-sources.json"),
   );
+  // The manifest reaches the digests only through the ci.yml conditions it
+  // generates, so its content is not read here. It is recorded as an input
+  // without a read: a revision from before it existed still classifies.
+  observeRead?.(".github/global-rule-inputs.json");
   const reader: MetadataReader = {
     workflows: () =>
       gitText(root, [
@@ -165,22 +205,10 @@ export const readClassificationInputsAtRevision = (
       return text;
     },
   };
-  const revisionDecisions = v.parse(
-    REVISION_DECISIONS,
-    readDecisions({ type: "git-revision", root, revision }),
-  );
   return {
     decisions: v.parse(
       DECISIONS,
-      Object.fromEntries(
-        Object.entries(revisionDecisions).map(([key, decision]) => [
-          key,
-          {
-            ...decision,
-            approvedDigests: decision.approvedDigests ?? [],
-          },
-        ]),
-      ),
+      readDecisions({ type: "git-revision", root, revision }, { observeRead }),
     ),
     snapshots,
     reader,
@@ -188,6 +216,9 @@ export const readClassificationInputsAtRevision = (
       const file = ["action.yml", "action.yaml"]
         .map((name) => `${directory}/${name}`)
         .find((candidatePath) => {
+          if (prefetched().has(candidatePath)) {
+            return true;
+          }
           const result = Bun.spawnSync(
             [
               "git",
@@ -261,7 +292,7 @@ type DocumentDigestOptions = {
 };
 // A document digest binds its own shape and every metadata document it
 // reaches, so editing a callee changes the digest of each caller.
-const createDocumentDigest = ({
+export const createDocumentDigest = ({
   nodes,
   parsedDocuments,
 }: DocumentDigestOptions) => {
@@ -307,36 +338,7 @@ type ReviewJobsOptions = DocumentDigestOptions & {
   documentDigest: (id: string) => string;
   observeJobs?: (jobs: ReadonlyMap<string, DerivedJob>) => void;
 };
-type ReachableDocumentsOptions = DocumentDigestOptions & {
-  initialTargets: string[];
-};
-const reachableDocuments = ({
-  initialTargets,
-  nodes,
-  parsedDocuments,
-}: ReachableDocumentsOptions) => {
-  const documents: ParsedDocument[] = [];
-  const visited = new Set<string>();
-  const visit = (id: string) => {
-    if (visited.has(id)) {
-      return;
-    }
-    visited.add(id);
-    const node = nodes.get(id);
-    const parsed = parsedDocuments.get(id);
-    if (!node || node.type !== "metadata" || !parsed) {
-      return;
-    }
-    documents.push(parsed);
-    for (const target of Object.values(node.edges)) {
-      visit(target);
-    }
-  };
-  for (const target of initialTargets) {
-    visit(target);
-  }
-  return documents;
-};
+
 const reviewJobs = ({
   nodes,
   parsedDocuments,
@@ -348,9 +350,14 @@ const reviewJobs = ({
     string,
     { kind: string; qualifier: string; reviewedDigest: string }
   > = {};
-  const privilegedJobs: string[] = [];
-  const observedJobs = new Set<string>();
   const derivedJobs = new Map<string, DerivedJob>();
+
+  const { jobPrivileges, inheritedGrants } = deriveJobPrivileges({
+    nodes,
+    parsedDocuments,
+    decisions,
+  });
+
   for (const node of nodes.values()) {
     if (node.type !== "metadata") {
       continue;
@@ -359,44 +366,31 @@ const reviewJobs = ({
     if (!parsed) {
       throw new AdmissionError({ message: "parsed metadata missing" });
     }
-    node.jobs = Object.entries(parsed.jobs).flatMap(([jobId, job]) => {
+    node.jobs = Object.entries(parsed.jobs).map(([jobId, job]) => {
       const key = `${node.repository}:${node.path}/${jobId}`;
-      observedJobs.add(key);
-      const dependencyDigests = Object.fromEntries(
-        Object.keys(job.dependencies)
-          .toSorted(compareCodeUnit)
-          .flatMap((reference) => {
-            const target = node.edges[reference];
-            return target && nodes.get(target)?.type === "metadata"
-              ? [[reference, documentDigest(target)]]
-              : [];
-          }),
-      );
+      const dependencyDigests = jobDependencyDigests({
+        definition: job,
+        edges: node.edges,
+        isMetadata: (target) => nodes.get(target)?.type === "metadata",
+        documentDigest,
+      });
       const decision = decisions[key];
       const targets = Object.keys(job.dependencies).flatMap((reference) => {
         const target = node.edges[reference];
         return target ? [target] : [];
       });
-      const reachable = reachableDocuments({
+      const reachable = reachableJobDocuments({
         initialTargets: targets,
         nodes,
         parsedDocuments,
       });
-      const privileged = isPrivilegedJobClosure({
-        kind: decision?.kind,
-        privileged: job.privileged,
-        shape: job.shape,
-        reachableDocuments: reachable,
+      const privileged = jobPrivileges.get(key) ?? false;
+      const digest = expectedJobDigest({
+        definition: job,
+        privileged,
+        inheritedGrants: inheritedGrants.get(key),
+        dependencyDigests,
       });
-      const surfaceDigest = privileged ? job.privilegedDigest : job.digest;
-      const digest = Object.keys(dependencyDigests).length
-        ? sha256(
-            JSON.stringify({
-              digest: surfaceDigest,
-              dependencies: dependencyDigests,
-            }),
-          )
-        : surfaceDigest;
       derivedJobs.set(key, {
         digest,
         privileged,
@@ -405,7 +399,9 @@ const reviewJobs = ({
           reachableDocuments: reachable,
         }),
       });
-      if (!decision || !decision.approvedDigests.includes(digest)) {
+      // Review is owed by the job as derived here, never by the presence of
+      // a record: a job that turns privileged fails although it had none.
+      if (privileged && !decision?.approvedDigests.includes(digest)) {
         entries[key] = {
           kind: decision?.kind ?? "<choose ordinary, support, or priority>",
           qualifier:
@@ -413,34 +409,31 @@ const reviewJobs = ({
           // The approval file format the decision reader validates.
           reviewedDigest: digest,
         };
-        if (privileged) {
-          privilegedJobs.push(key);
-        }
       }
       return decision
-        ? [
-            {
-              id: jobId,
-              kind: decision.kind,
-              qualifier: decision.qualifier,
-              digest,
-            },
-          ]
-        : [];
+        ? {
+            id: jobId,
+            decision: { kind: decision.kind, qualifier: decision.qualifier },
+            digest,
+          }
+        : { id: jobId, digest };
     });
   }
   observeJobs?.(derivedJobs);
-  const removed = Object.keys(decisions).filter(
-    (key) => !observedJobs.has(key),
-  );
-  if (removed.length) {
-    throw new AdmissionError({
-      message: `Decisions for removed jobs: ${removed.join(", ")}. Remove these files:\n${removed.map(decisionPathForKey).join("\n")}`,
-    });
+  const staleJobs = Object.keys(entries);
+  // A `priority` decision makes its job privileged, so it goes stale only
+  // when the job is removed; any other kind also when the job loses the
+  // permissions, secrets or publication metadata that made it privileged.
+  const staleDecisions = Object.keys(decisions)
+    .filter((key) => derivedJobs.get(key)?.privileged !== true)
+    .toSorted(compareCodeUnit);
+  if (staleJobs.length === 0 && staleDecisions.length === 0) {
+    return;
   }
-  if (Object.keys(entries).length) {
-    throw new ReviewRequiredError({
-      message: `${privilegedJobs.length ? `Sensitive classification change: ${privilegedJobs.join(", ")}\n` : ""}Missing or changed job review. Re-review kind and qualifier, then create or update each listed file (choose kind and qualifier for new jobs):\n${Object.entries(
+  const messages: string[] = [];
+  if (staleJobs.length > 0) {
+    messages.push(
+      `Sensitive classification change: ${staleJobs.join(", ")}\nMissing or changed job review. Re-review kind and qualifier, then create or update each listed file (choose kind and qualifier for new jobs):\n${Object.entries(
         entries,
       )
         .map(
@@ -448,9 +441,19 @@ const reviewJobs = ({
             `${decisionPathForKey(key)}\n${approvalPathForKey(key, value.reviewedDigest)}\n${JSON.stringify(value, null, 2)}`,
         )
         .join("\n")}`,
-      privilegedJobs,
-    });
+    );
   }
+  if (staleDecisions.length > 0) {
+    messages.push(
+      `Stale decisions: ${staleDecisions.join(", ")}. Only privileged jobs keep a decision, and these jobs are not privileged or no longer exist. Remove these directories (bun scripts/check-ci-job-classification.ts --write does it):\n${staleDecisions.map(decisionDirectoryForKey).join("\n")}`,
+    );
+  }
+  throw new ReviewRequiredError({
+    message: messages.join("\n"),
+    privilegedJobs: staleJobs,
+    staleJobs: staleJobs.toSorted(compareCodeUnit),
+    staleDecisions,
+  });
 };
 
 type GenerateOptions = {

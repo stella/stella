@@ -16,3 +16,8 @@ export const moneyExportSchema = v.pipe(
   v.unknown(),
   v.brand(MONEY_SCHEMA_BRAND),
 );
+
+/** Refusals of changing a member's billing visibility, for clients and agents to branch on. */
+export const MEMBER_BILLING_ACCESS_REFUSAL_CODE = {
+  memberNotFound: "member_billing_access_member_not_found",
+} as const;

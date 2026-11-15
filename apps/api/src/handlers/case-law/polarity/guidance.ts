@@ -29,6 +29,8 @@ export const POLARITY_GUIDANCE = {
   // "odlišuje se" cues read. Whether that refusal is a distinguishing or a
   // limiting is the reviewed doctrine axis, set apart from this reading.
   negative: `The court overrules, departs from, declines to apply, or
-  criticizes the cited decision. Phrases like "na rozdíl od",
-  "nelze aplikovat", "odlišuje se", "překonán", "zrušen", "overruled".`,
+  criticizes the cited decision, or says it dealt with a different question
+  or does not carry over to the case at hand. Phrases like "na rozdíl od",
+  "nelze aplikovat", "odlišuje se", "překonán", "zrušen", "řešil jinou
+  otázku", "overruled", "distinguished".`,
 } as const satisfies Record<ClassifiablePolarity, string>;

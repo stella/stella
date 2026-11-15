@@ -6,6 +6,7 @@
 import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
 import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { readerTextQuoteContext } from "@stll/legal-ast/reader-text-quote";
 
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 
@@ -82,6 +83,7 @@ export const selected = (
   startOffset: number,
   endOffset: number,
 ): SelectionAnchor => ({
+  ...readerTextQuoteContext(textOf(blockAnchorId), { startOffset, endOffset }),
   blockAnchorId,
   endOffset,
   quote: textOf(blockAnchorId).slice(startOffset, endOffset),

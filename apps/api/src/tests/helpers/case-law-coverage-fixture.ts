@@ -11,6 +11,7 @@ const base = {
   health: "current",
   stored: { decisions: 150, asOf: storedAsOf },
   addedLastWeek: 5,
+  unreadParts: [],
   completeness: {
     measuredSources: 1,
     stored: 150,
@@ -26,7 +27,8 @@ const base = {
       name: "Synthetic publisher",
       publicHomeUrl:
         "https://example.test/00000000-0000-4000-8000-000000000002",
-      health: "current",
+      health: "snapshot",
+      edition: { type: "snapshot", snapshotDate: "2025-03-06" },
       lastSyncAt: storedAsOf,
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
@@ -47,6 +49,7 @@ const base = {
 /** The answer as the refresh stores it. */
 export const CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE = {
   generatedAt: asOf,
+  unreadParts: [],
   provisionProcessing: [],
   totals: {
     addedLastWeek: 10,
@@ -108,6 +111,7 @@ const expectedSources = [
   {
     adapterKey: "synthetic-source",
     name: "Synthetic publisher",
+    edition: { type: "snapshot", snapshotDate: "2025-03-06" },
     lastSyncAt: storedAsOf,
     decisionYearFrom: 1993,
     decisionYearTo: 2026,

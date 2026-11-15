@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * Formex 4 reader, used only as a test oracle for the CJEU parser.
  *
@@ -14,8 +15,9 @@
  * to check the parser against, not available enough to parse from.
  */
 
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 
 type FormexHeading = {
   /** Formex nesting depth, clamped to the AST's 1–3 heading levels. */
@@ -66,7 +68,7 @@ const headingText = (
 };
 
 export const parseFormex = (xml: string): FormexDocument => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
 
   // Formex models quotation marks as empty elements carrying the
   // codepoint; the rendering emits the character. Materialize them so

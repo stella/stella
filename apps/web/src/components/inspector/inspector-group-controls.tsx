@@ -10,12 +10,12 @@ import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogFooter,
-  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import { FolderPlusIcon, ListTreeIcon, UngroupIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
@@ -32,6 +32,7 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer";
 import { getInspectorTabGroupId } from "@/components/inspector/inspector-groups.logic";
@@ -203,7 +204,10 @@ export const InspectorGroupEditor = ({
       }}
     >
       <DialogPopup finalFocus={returnFocus}>
-        <DialogFormState
+        {/* `contents`: the form adds no box of its own, so the dialog's
+          header, panel and footer keep the popup's own layout. */}
+        <Form
+          className="contents"
           dirty={
             name !== (target.type === "edit" ? target.name : "") ||
             color !==
@@ -215,8 +219,6 @@ export const InspectorGroupEditor = ({
               target.type === "edit" ? target.color : MATTER_SWATCHES[0],
             );
           }}
-        />
-        <form
           onSubmit={(event) => {
             event.preventDefault();
             save();
@@ -276,7 +278,7 @@ export const InspectorGroupEditor = ({
               {t("common.save")}
             </Button>
           </DialogFooter>
-        </form>
+        </Form>
       </DialogPopup>
     </Dialog>
   );
@@ -369,7 +371,9 @@ const InspectorGroupDestinations = ({
       {destinations.map((group) => (
         <MenuItem key={group.id} onClick={() => onMove(group.id)}>
           <InspectorGroupIcon group={group} />
-          <bdi className="max-w-64 truncate">{group.name}</bdi>
+          <TruncatedText className="max-w-64" render={<bdi />}>
+            {group.name}
+          </TruncatedText>
         </MenuItem>
       ))}
     </>

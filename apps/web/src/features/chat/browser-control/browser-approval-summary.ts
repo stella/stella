@@ -42,6 +42,8 @@ export const getBrowserApprovalDetails = (
   command: BrowserControlCommand,
 ): BrowserApprovalDetail[] => {
   switch (command.action) {
+    // A tab switch shows the address the model saw the tab on.
+    case BROWSER_CONTROL_ACTION.switchTab:
     case BROWSER_CONTROL_ACTION.open:
       return [{ type: "website", value: command.url }];
     case BROWSER_CONTROL_ACTION.click:
@@ -54,6 +56,10 @@ export const getBrowserApprovalDetails = (
       ];
     case BROWSER_CONTROL_ACTION.pressKey:
       return [...targetDetails(command), { type: "key", value: command.key }];
+    case BROWSER_CONTROL_ACTION.find:
+      return command.search.query === undefined || command.search.query === ""
+        ? []
+        : [{ type: "value", value: command.search.query }];
     case BROWSER_CONTROL_ACTION.goBack:
     case BROWSER_CONTROL_ACTION.snapshot:
       return [];

@@ -8,7 +8,7 @@ import {
 } from "@stll/folio-core/prosemirror/conversion";
 import { schema } from "@stll/folio-core/prosemirror/schema";
 import { createDocx, parseDocx } from "@stll/folio-core/server";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   collectEvidenceReferences,
@@ -43,7 +43,8 @@ const documentWith = (ids: number[]) =>
 
 describe("evidence references", () => {
   test("numbering follows first appearance, deduplicates sources and reaches a fixed point", () => {
-    fc.assert(
+    assertProperty(
+      "numbering follows first appearance, deduplicates sources and reaches a fixed point",
       fc.property(
         fc.array(fc.integer({ min: 1, max: 20 }), {
           minLength: 1,
@@ -93,7 +94,7 @@ describe("evidence references", () => {
           ).toMatch(/ ordinary prose$/u);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

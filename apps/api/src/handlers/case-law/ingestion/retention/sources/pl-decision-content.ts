@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * The publisher text of one Polish decision document, as the shared Polish
  * decision reader receives it: an HTML document or fragment, or plain text
@@ -5,7 +6,7 @@
  * interpretations both hand their document to that reader, so both project
  * their document the same way.
  */
-import * as cheerio from "cheerio";
+import { load } from "@stll/html";
 
 import {
   RETENTION_TEXT_ABSENCE,
@@ -37,7 +38,7 @@ export const plDecisionContentProjection = (
   }
   // The document is the decision alone, with no site navigation around it:
   // its body is the content region, and a fragment parses into a body too.
-  const $ = cheerio.load(content);
+  const $ = load(content);
   return {
     type: "source",
     source: {

@@ -1,15 +1,28 @@
 import { panic } from "better-result";
 
+import { readBillingDraftSettings } from "@/api/handlers/desktop-time-entries/billing-draft-settings";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
 import readEntities from "@/api/handlers/entities/list";
 import readVersions from "@/api/handlers/entities/versions/list";
+import {
+  listBillingKnowledgeFiles,
+  readBillingKnowledgeFile,
+} from "@/api/handlers/organization-settings/billing-drafts";
+import readBillingDraftConfiguration from "@/api/handlers/organization-settings/billing-drafts/get";
+import readMatterNumbering from "@/api/handlers/workspaces/matter-numbering/get";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { measureDesktopBillingDraftSettings } from "@/api/tests/read-scaling/desktop-billing-drafts";
 import type { seedEntityReadScaling } from "@/api/tests/read-scaling/entity-fixture";
 import { measureReadFilesystemTree } from "@/api/tests/read-scaling/filesystem-tree";
+import {
+  measureBillingDraftConfiguration,
+  measureBillingKnowledgeFile,
+  measureBillingKnowledgeFiles,
+} from "@/api/tests/read-scaling/organization-billing-drafts";
 
 type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
 
@@ -17,6 +30,7 @@ type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
 export const readScalingScenarios = [
   {
     name: "entity list",
+    expectedRows: 10,
     definition: readEntities,
     measure: async (fixture: ReadFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
@@ -45,11 +59,13 @@ export const readScalingScenarios = [
   },
   {
     name: "filesystem tree",
+    expectedRows: 10,
     definition: readFilesystemTree,
     measure: measureReadFilesystemTree,
   },
   {
     name: "version history",
+    expectedRows: 10,
     definition: readVersions,
     measure: async (fixture: ReadFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
@@ -75,6 +91,61 @@ export const readScalingScenarios = [
           transactionRoundTrips: counter.transactions,
           responseBytes: Buffer.byteLength(JSON.stringify(response)),
           rows: response.versions.length,
+        };
+      }),
+  },
+  {
+    name: "desktop billing draft settings",
+    expectedRows: 1,
+    definition: readBillingDraftSettings,
+    measure: measureDesktopBillingDraftSettings,
+  },
+  {
+    name: "organization billing draft configuration",
+    expectedRows: 1,
+    definition: readBillingDraftConfiguration,
+    measure: measureBillingDraftConfiguration,
+  },
+  {
+    name: "billing knowledge file page",
+    expectedRows: 20,
+    definition: listBillingKnowledgeFiles,
+    measure: measureBillingKnowledgeFiles,
+  },
+  {
+    name: "billing knowledge file content",
+    expectedRows: 1,
+    definition: readBillingKnowledgeFile,
+    measure: measureBillingKnowledgeFile,
+  },
+  {
+    name: "matter-number convention",
+    expectedRows: 1,
+    definition: readMatterNumbering,
+    measure: async (fixture: ReadFixture) =>
+      await runWithMeasuredQueryCounter(async (counter) => {
+        const response = await readMatterNumbering.handler(
+          asTestRaw<Parameters<typeof readMatterNumbering.handler>[0]>({
+            safeDb: fixture.safeDb,
+            user: { id: fixture.userId },
+            session: { activeOrganizationId: fixture.organizationId },
+            memberRole: sessionMemberRole("member"),
+            request: new Request(
+              "https://example.test/v1/workspaces/matter-numbering",
+            ),
+            route: "/v1/workspaces/matter-numbering" satisfies ApiRoutePath,
+          }),
+        );
+        if (response instanceof HttpStatusResponse) {
+          return panic(
+            "Matter numbering scaling requires a successful handler response",
+          );
+        }
+        return {
+          statements: counter.count,
+          transactionRoundTrips: counter.transactions,
+          responseBytes: Buffer.byteLength(JSON.stringify(response)),
+          rows: 1,
         };
       }),
   },

@@ -5,6 +5,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type {
   DocumentMark,
@@ -12,7 +13,6 @@ import type {
 } from "@/components/pdf/annotations/use-document-marks";
 import type { PdfSelectionPassage } from "@/components/pdf/pdf-selection.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 
@@ -34,8 +34,10 @@ const { PDF_SELECTION_CHAT, PdfSelectionToolbar } =
   await import("@/components/pdf/pdf-selection-toolbar");
 const { pdfSelectionPassage } =
   await import("@/components/pdf/pdf-selection.logic");
-const { DETACHED_REASON, locateSelection, placeMark } =
+const { locateSelection } =
   await import("@/components/pdf/annotations/document-mark-anchor.logic");
+const { DETACHED_REASON, placeMark } =
+  await import("@stll/api-contract/pdf-mark-placement");
 const { DOCUMENT_MARK_BOX_ATTRIBUTE, DocumentMarkBoxes } =
   await import("@/components/pdf/annotations/document-mark-boxes");
 const { DocumentMarksPanel } =
@@ -271,6 +273,8 @@ const markOn = (overrides: Partial<DocumentMark>): DocumentMark => {
     pageNumber: 1,
     pageTextSha256: "page-digest",
     quote: "deliver the goods",
+    quotePrefix: "",
+    quoteSuffix: "",
     startOffset,
   };
   return {

@@ -409,3 +409,80 @@ describe("aggregate lock confinement", () => {
     }
   });
 });
+
+describe("row-lock targets", () => {
+  const targetsOf = (source: string) =>
+    aggregateLockSites(file, source).map((site) => site.rowLock);
+  test("a builder lock reaches every relation its chain reads, or its `of`", () => {
+    expect(
+      targetsOf(
+        'tx.select().from(candidates).innerJoin(runs, on).where(w).for("update")',
+      ),
+    ).toEqual([{ type: "relations", relations: ["candidates", "runs"] }]);
+    expect(
+      targetsOf(
+        'tx.select().from(members).innerJoin(users, on).for("update", { of: users })',
+      ),
+    ).toEqual([{ type: "relations", relations: ["users"] }]);
+    expect(
+      targetsOf(
+        'tx.select().from(a).innerJoin(b, on).for("share", { of: [a, b], skipLocked: true })',
+      ),
+    ).toEqual([{ type: "relations", relations: ["a", "b"] }]);
+  });
+  test("follows a builder chain held in a const the file declares once", () => {
+    expect(
+      targetsOf(
+        'const query = tx.select().from(timers).limit(1);\nconst rows = await query.for("update");',
+      ),
+    ).toEqual([{ type: "relations", relations: ["timers"] }]);
+    expect(
+      targetsOf(
+        'let query = tx.select().from(timers);\nawait query.for("update");',
+      ),
+    ).toEqual([{ type: "unwritten" }]);
+    expect(
+      targetsOf(
+        'const rowsOf = (tx) => tx.select().from(timers);\nawait rowsOf(tx).for("update");',
+      ),
+    ).toEqual([{ type: "relations", relations: ["timers"] }]);
+    expect(targetsOf('await query.for("update");')).toEqual([
+      { type: "unwritten" },
+    ]);
+  });
+  test("a SQL lock reaches its FROM and JOIN relations, or its OF list", () => {
+    expect(
+      targetsOf(
+        `sql\`SELECT s.id FROM "public"."sources" s JOIN \${runs} r ON r.id = s.run_id WHERE s.id = \${id} FOR UPDATE\``,
+      ),
+    ).toEqual([{ type: "relations", relations: ["sources", "runs"] }]);
+    expect(
+      targetsOf(
+        "sql`SELECT c.id FROM clients c JOIN tokens t ON t.client_id = c.id FOR KEY SHARE OF c`",
+      ),
+    ).toEqual([{ type: "relations", relations: ["clients"] }]);
+    expect(
+      targetsOf(
+        `sql\`SET LOCAL lock_timeout = \${timeout}; SELECT 1 FROM \${members} JOIN \${users} ON true FOR UPDATE OF \${users}\``,
+      ),
+    ).toEqual([{ type: "relations", relations: ["users"] }]);
+    expect(
+      targetsOf(
+        `sql\`WITH due AS (SELECT id FROM jobs) SELECT * FROM due JOIN \${sql.identifier(name)} ON true FOR UPDATE SKIP LOCKED\``,
+      ),
+    ).toEqual([
+      { type: "relations", relations: ["jobs", "sql.identifier(name)"] },
+    ]);
+  });
+  test("a lock whose relations the site does not spell out is unwritten", () => {
+    for (const source of [
+      "sql`SELECT a.id FROM a, b WHERE a.id = b.id FOR UPDATE`",
+      `sql.raw(\`FOR \${mode}\`)`,
+    ]) {
+      expect(targetsOf(source)).toEqual([{ type: "unwritten" }]);
+    }
+    expect(targetsOf("sql`SELECT pg_advisory_xact_lock(1)`")).toEqual([
+      undefined,
+    ]);
+  });
+});

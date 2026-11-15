@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { buttonVariants } from "./button";
-import { BUTTON_VARIANT_TOKENS, type ButtonVariant } from "./button.shared";
+import {
+  BUTTON_VARIANT_TOKENS,
+  type ButtonTokenVariant,
+} from "./button.shared";
 
 const VARIANTS = Object.keys(BUTTON_VARIANT_TOKENS).filter(
-  (name): name is ButtonVariant => name in BUTTON_VARIANT_TOKENS,
+  (name): name is ButtonTokenVariant => name in BUTTON_VARIANT_TOKENS,
 );
 
 describe("the button's shared contract", () => {

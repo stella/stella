@@ -1,9 +1,5 @@
 import type { Result } from "better-result";
 
-import type {
-  IngestionResult,
-  SourceAdapter,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { atAsylghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
 import { atBksAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
 import { atBvwgAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
@@ -41,6 +37,10 @@ import {
   IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  IngestionResult,
+  SourceAdapter,
+} from "@/api/lib/legal-search/ingestion-types";
 
 import { courtListenerImport } from "./courtlistener/import";
 import { checkedSourceRegistrations } from "./source-registrations";
@@ -50,6 +50,13 @@ import { checkedSourceRegistrations } from "./source-registrations";
  * anything outside this slice reaches an adapter.
  */
 export { listDeferredDocumentDrains } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
+
+/**
+ * The graded budget each deferred-document fetch starts, carried with the
+ * drains so a drain outside this slice grades a slow publisher the same way
+ * the read-through path does.
+ */
+export { startDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
 
 type AdapterRegistry = {
   readonly [TKey in AdapterKey]: SourceAdapter & { readonly key: TKey };

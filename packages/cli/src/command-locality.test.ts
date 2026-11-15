@@ -26,3 +26,15 @@ describe("commandNeedsRegistry", () => {
     expect(commandNeedsRegistry(["reference", "get"])).toBe(true);
   });
 });
+
+test("server overrides preserve command locality", () => {
+  expect(
+    commandNeedsRegistry(["--server", "https://example.com", "matter", "list"]),
+  ).toBe(true);
+  expect(
+    commandNeedsRegistry(["--server=https://example.com", "matter", "list"]),
+  ).toBe(true);
+  expect(
+    commandNeedsRegistry(["--server", "https://example.com", "auth", "whoami"]),
+  ).toBe(false);
+});

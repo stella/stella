@@ -30,9 +30,11 @@ describe("release-candidate commit identity", () => {
       const line = dispatch
         .split("\n")
         .find((candidate) =>
-          candidate.includes(`/workflows/${workflow}/dispatches`),
+          candidate.includes(
+            `gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" ${workflow} main`,
+          ),
         );
-      expect(line, workflow).toContain("inputs[sha]=$SHA");
+      expect(line, workflow).toContain('"sha=$SHA"');
       expect(line, workflow).not.toContain("github.head_ref");
     }
     expect(release).toContain(

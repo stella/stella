@@ -43,6 +43,9 @@ export { BookOpenIcon as CaseLawIcon } from "lucide-react-native";
 // Starting a new AI chat: a chat bubble with a plus, the same glyph on every
 // new-chat button, menu item and rail action.
 export { MessageSquarePlusIcon as NewChatIcon } from "lucide-react-native";
+// stella operating the user's own browser through the extension: a browser
+// window, kept apart from the globe of web search and page fetches.
+export { AppWindowMacIcon as BrowserControlIcon } from "lucide-react-native";
 // Commenting on a document passage: a quoted bubble, so it never reads as
 // starting a new AI chat.
 export { MessageSquareQuoteIcon as AddCommentIcon } from "lucide-react-native";
@@ -60,6 +63,14 @@ export { CopyIcon as CopyFromMenuIcon } from "lucide-react-native";
 // sharedOnPurpose: CopyToClipboardIcon, lucide's two-sheet glyph is the common duplicate mark.
 // sharedOnPurpose: CopyFromMenuIcon, as above.
 export { CopyIcon as DuplicateIcon } from "lucide-react-native";
+
+// Dictating a message: speech that becomes text in the message box. The
+// mobile composer's round button shows it while there is nothing to send.
+export { MicIcon as DictateIcon } from "lucide-react-native";
+
+// Opening a document's pages to reorder, rotate, crop or delete them: a stack
+// of pages with no pen, so it never reads as signing the document.
+export { FileStackIcon as EditPagesIcon } from "lucide-react-native";
 
 // --- Plain re-exports ------------------------------------------------------
 // @generated-start by scripts/codemod-icons.ts: edit by importing a lucide name and rerunning it
@@ -117,10 +128,10 @@ export {
   ClipboardListIcon,
   Clock3Icon,
   ClockIcon,
+  CloudIcon,
   CogIcon,
   Columns2Icon,
   Columns3Icon,
-  ColumnsIcon,
   CommandIcon,
   CompassIcon,
   CopyPlusIcon,
@@ -146,7 +157,6 @@ export {
   FileIcon,
   FileImageIcon,
   FileOutputIcon,
-  FilePenLineIcon,
   FilePlus2Icon,
   FilePlusIcon,
   FileQuestionIcon,

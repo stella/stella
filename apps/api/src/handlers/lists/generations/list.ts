@@ -39,7 +39,9 @@ const config = {
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List one list's generation runs, newest first, with cursor pagination: " +
-    "each run's status, its instruction, and its created, updated, and " +
+    "each run's status, who produces its candidates (an external client or " +
+    "stella), the item type a stella run proposes, why a failed run " +
+    "failed, its instruction, and its created, updated, started, and " +
     "completed timestamps.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -91,9 +93,13 @@ const readGenerations = createSafeHandler(
           .select({
             id: legalListGenerationRuns.id,
             status: legalListGenerationRuns.status,
+            producer: legalListGenerationRuns.producer,
+            itemType: legalListGenerationRuns.itemType,
+            errorCode: legalListGenerationRuns.errorCode,
             instruction: legalListGenerationRuns.instruction,
             createdAt: legalListGenerationRuns.createdAt,
             updatedAt: legalListGenerationRuns.updatedAt,
+            startedAt: legalListGenerationRuns.startedAt,
             completedAt: legalListGenerationRuns.completedAt,
             createdAtCursor:
               generationCursor.cursorValue.as("created_at_cursor"),

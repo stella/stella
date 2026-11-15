@@ -1,3 +1,8 @@
+// parser-output-unchanged: [sk-courts] exports `romanValue` for the case-law outline; no designator level changes.
+// parser-output-unchanged: [sk-us] exports `romanValue` for the case-law outline; no designator level changes.
+// parser-output-unchanged: [sk-courts] exports the title split for the reader's contents; no designator level changes.
+// parser-output-unchanged: [sk-us] exports the title split for the reader's contents; no designator level changes.
+// parser-output-unchanged: exports the title split for the reader's contents; designator detection and levels are unchanged for every parser.
 /**
  * Heading levels read from the headings' own designators.
  *
@@ -49,19 +54,20 @@ const DASH = /^\s*[–—-]\s+\S/u;
 
 /** Each delimited style, tried in this order; the token is group 1. */
 const DELIMITED_STYLES = [
-  ["paren", /^\s*\(([^\s()]{1,6})\)\s+\S/u],
-  ["close-paren", /^\s*([^\s().]{1,6})\)\s+\S/u],
-  ["dot", /^\s*([^\s.()]{1,6})\.\s+\S/u],
+  ["paren", /^\s*\(([^\s()]{1,6})\)\s+(?=\S)/u],
+  ["close-paren", /^\s*([^\s().]{1,6})\)\s+(?=\S)/u],
+  ["dot", /^\s*([^\s.()]{1,6})\.\s+(?=\S)/u],
 ] as const satisfies readonly (readonly [DesignatorStyle, RegExp])[];
 
-/** The delimited token a title starts with, and how it is set off. */
+/** The delimited token a title starts with, how it is set off, and the words after it. */
 const delimitedToken = (
   title: string,
-): { style: DesignatorStyle; token: string } | null => {
+): { style: DesignatorStyle; token: string; words: string } | null => {
   for (const [style, pattern] of DELIMITED_STYLES) {
-    const token = pattern.exec(title)?.[1];
-    if (token !== undefined) {
-      return { style, token };
+    const match = pattern.exec(title);
+    const token = match?.[1];
+    if (match !== null && token !== undefined) {
+      return { style, token, words: title.slice(match[0].length) };
     }
   }
   return null;
@@ -78,7 +84,7 @@ const ROMAN_VALUES: Readonly<Record<string, number>> = {
 };
 
 /** A roman numeral's value, or null when the token is not one. */
-const romanValue = (token: string): number | null => {
+export const romanValue = (token: string): number | null => {
   const digits = Array.from(
     token.toLowerCase(),
     (digit) => ROMAN_VALUES[digit],
@@ -166,6 +172,20 @@ const designatorOf = (
   return /^[ivx]$/iu.test(token)
     ? { kind: romanKind, style, token, ordinal: roman }
     : { kind: letterKind, style, token, ordinal: letter };
+};
+
+/**
+ * A title apart from the number or letter it opens with: `II. Arguments` is
+ * the token `II` and the words `Arguments`. A dash counts nothing, so it stays
+ * with the words, and so does a token that is not a designator (`Art. 5`).
+ */
+export const designatedTitle = (
+  title: string,
+): { token: string | null; words: string } => {
+  const delimited = delimitedToken(title);
+  return delimited === null || designatorOf(title, []) === null
+    ? { token: null, words: title }
+    : { token: delimited.token, words: delimited.words };
 };
 
 const ONE_LEVEL_DEEPER = {

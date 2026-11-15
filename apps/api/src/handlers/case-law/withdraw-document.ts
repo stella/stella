@@ -1,3 +1,5 @@
+import { panic, Result } from "better-result";
+import { and, eq } from "drizzle-orm";
 /**
  * Take back the document a decision holds, without tombstoning the row.
  *
@@ -9,9 +11,6 @@
  * The two share the object-deletion step and nothing else.
  */
 
-import { panic, Result } from "better-result";
-import { eq } from "drizzle-orm";
-
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -22,6 +21,7 @@ import type { CorpusObjectErasure } from "@/api/handlers/case-law/erasure";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   cancelCaseLawCorpusUploadIntents,
@@ -216,17 +216,18 @@ export const withdrawCaseLawDecisionDocument = async ({
       decisionId,
       reason,
     });
+    const write = replayWrite(caseLawDecisions, {
+      corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+      ...TRIMMED_CORPUS_PAYLOAD_COLUMNS,
+      contentHash: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    });
     await tx
       .update(caseLawDecisions)
-      .set({
-        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-        ...TRIMMED_CORPUS_PAYLOAD_COLUMNS,
-        contentHash: null,
-        textS3Key: null,
-        normalizedS3Key: null,
-        astS3Key: null,
-      })
-      .where(eq(caseLawDecisions.id, decisionId));
+      .set(write.set)
+      .where(and(write.setWhere, eq(caseLawDecisions.id, decisionId)));
     // A mirror write already in flight would otherwise settle the payload
     // back onto the row it was just taken off.
     const cancelledIntents = await cancelCaseLawCorpusUploadIntents({

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { Fetch } from "@/connection/http";
 import {
   createAccessTokenSource,
+  createSessionStore,
   type StoredSession,
 } from "@/connection/session";
 
@@ -11,6 +12,7 @@ import {
   prependOlderPage,
   readChatThread,
   readOlderChatMessages,
+  sentEntry,
   toChatEntry,
 } from "./chat-messages";
 import type { ChatEntry } from "./chat-messages";
@@ -22,35 +24,60 @@ const SESSION: StoredSession = {
     "https://stella.example.com/v1/mcp/oauth/mobile-client-metadata.json",
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
+  signInId: "sign-in-1",
   refreshToken: "refresh-1",
   userId: "user-1",
 };
 
-const sourceFor = (fetch: Fetch) =>
-  createAccessTokenSource({
+const sourceFor = (fetch: Fetch) => {
+  const store = createSessionStore({
+    read: async () => SESSION,
+    write: async () => {},
+    prepareClear: async () => {},
+    clear: async () => {},
+  });
+  return createAccessTokenSource({
     fetch,
     initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
     now: () => 0,
     session: SESSION,
-    store: {
-      read: async () => SESSION,
-      write: async () => {},
-      clear: async () => {},
-    },
+    store,
+    generation: store.generation(),
   });
+};
 
 const CREATED_AT = "2026-10-20T10:00:00.000Z";
 
 describe("what a thread shows of a stored message", () => {
-  test("joins its text parts and names the tools it called", () => {
+  test("joins its text parts and sums up the steps before them by their titles", () => {
     expect(
       toChatEntry({
         id: "m1",
         role: "assistant",
         createdAt: CREATED_AT,
         parts: [
-          { type: "thinking", content: "private reasoning" },
-          { type: "tool-call", name: "search_case_law", arguments: "{}" },
+          { type: "thinking", content: "Check the register first." },
+          {
+            type: "tool-call",
+            name: "discover_tools",
+            arguments: "{}",
+            state: "complete",
+            output: { tools: [] },
+          },
+          {
+            type: "tool-call",
+            name: "execute_typescript",
+            arguments: "{}",
+            state: "complete",
+            output: { success: true, result: [] },
+          },
+          { type: "tool-result", toolCallId: "c2", content: "{}" },
+          {
+            type: "tool-call",
+            name: "load-skill",
+            arguments: "{}",
+            state: "error",
+          },
           { type: "text", content: "First.  " },
           { type: "text", content: "Second." },
           { type: "image", source: { type: "url", value: "x" } },
@@ -61,8 +88,146 @@ describe("what a thread shows of a stored message", () => {
       role: "assistant",
       createdAt: CREATED_AT,
       text: "First.\n\nSecond.",
-      tools: ["search_case_law"],
+      blocks: [
+        {
+          type: "steps",
+          key: "0",
+          // A skill that failed to load is not news to the reader.
+          steps: [
+            { type: "reasoning", text: "Check the register first." },
+            { type: "tool", label: "discover_tools", status: "done" },
+            { type: "tool", label: "execute_typescript", status: "done" },
+          ],
+          work: new Map([
+            ["research", 1],
+            ["computation", 1],
+          ]),
+        },
+        { type: "text", key: "5", markdown: "First.\n\nSecond." },
+      ],
+      files: [{ name: "", mimeType: "" }],
+      drafts: [],
+      contextNotice: null,
     });
+  });
+
+  test("keeps a finished web search as a step, having no sources tray", () => {
+    expect(
+      toChatEntry({
+        id: "m4",
+        role: "assistant",
+        createdAt: CREATED_AT,
+        parts: [
+          {
+            type: "tool-call",
+            name: "web_search",
+            arguments: "{}",
+            state: "complete",
+            output: { results: [] },
+          },
+          { type: "text", content: "Found it." },
+        ],
+      })?.blocks,
+    ).toEqual([
+      {
+        type: "steps",
+        key: "0",
+        steps: [{ type: "tool", label: "web_search", status: "done" }],
+        work: new Map([["research", 1]]),
+      },
+      { type: "text", key: "1", markdown: "Found it." },
+    ]);
+  });
+
+  test("names the files the person attached, and shows a message of files alone", () => {
+    expect(
+      toChatEntry({
+        id: "m2",
+        role: "user",
+        createdAt: CREATED_AT,
+        parts: [
+          {
+            type: "document",
+            source: {
+              type: "url",
+              value: "userfile://f1",
+              mimeType: "application/pdf",
+            },
+            metadata: { filename: "Lease.pdf" },
+          },
+          {
+            type: "image",
+            source: {
+              type: "url",
+              value: "userfile://f2",
+              mimeType: "image/png",
+            },
+            metadata: { filename: "Stamp.png" },
+          },
+        ],
+      }),
+    ).toEqual({
+      id: "m2",
+      role: "user",
+      createdAt: CREATED_AT,
+      text: "",
+      blocks: [],
+      files: [
+        { name: "Lease.pdf", mimeType: "application/pdf" },
+        { name: "Stamp.png", mimeType: "image/png" },
+      ],
+      drafts: [],
+      contextNotice: null,
+    });
+  });
+
+  test("draws a message sent from here with its files' names, not their bytes", () => {
+    expect(
+      sentEntry({
+        createdAt: CREATED_AT,
+        draft: {
+          text: "Summarise this",
+          files: [
+            {
+              name: "Lease.pdf",
+              mimeType: "application/pdf",
+              dataUrl: "data:application/pdf;base64,JVBERg==",
+            },
+          ],
+        },
+        messageId: "m3",
+      }),
+    ).toEqual({
+      id: "m3",
+      role: "user",
+      createdAt: CREATED_AT,
+      text: "Summarise this",
+      blocks: [],
+      files: [{ name: "Lease.pdf", mimeType: "application/pdf" }],
+      drafts: [],
+      contextNotice: null,
+    });
+  });
+
+  test("says what an answer's context left out, and nothing of a notice it does not know", () => {
+    const answer = (metadata: unknown) =>
+      toChatEntry({
+        id: "m5",
+        role: "assistant",
+        createdAt: "2026-10-20T10:00:00.000Z",
+        parts: [{ type: "text", content: "Done." }],
+        metadata,
+      })?.contextNotice;
+    expect(answer({ contextNotice: { type: "session-not-resumed" } })).toEqual({
+      type: "session-not-resumed",
+    });
+    expect(answer({ contextNotice: { type: "history-trimmed" } })).toEqual({
+      type: "history-trimmed",
+    });
+    expect(
+      answer({ contextNotice: { type: "from-a-newer-server" } }),
+    ).toBeNull();
+    expect(answer(undefined)).toBeNull();
   });
 
   test("leaves out system messages and messages with nothing to draw", () => {
@@ -79,7 +244,7 @@ describe("what a thread shows of a stored message", () => {
         id: "e",
         role: "user",
         createdAt: CREATED_AT,
-        parts: [{ type: "document", source: {} }],
+        parts: [{ type: "thinking", content: "private reasoning" }],
       }),
     ).toBeUndefined();
   });
@@ -171,7 +336,10 @@ describe("reading a thread", () => {
       role: "user",
       createdAt: CREATED_AT,
       text: id,
-      tools: [],
+      blocks: [],
+      files: [],
+      drafts: [],
+      contextNotice: null,
     });
     expect(
       prependOlderPage(
@@ -179,5 +347,108 @@ describe("reading a thread", () => {
         [entry("a"), entry("b"), entry("c")],
       ).map(({ id }) => id),
     ).toEqual(["a", "b", "c", "d"]);
+  });
+});
+
+describe("an answer whose turn failed", () => {
+  const LOCAL = {
+    kind: "local",
+    harness: "codex",
+    model: "gpt-5-codex",
+    approvals: "ask",
+    reasoningEffort: null,
+  } as const;
+  const ASKED = {
+    id: "u1",
+    role: "user",
+    createdAt: CREATED_AT,
+    parts: [{ type: "text", content: "Which leases end this year?" }],
+  };
+  const failedAnswer = (error: unknown) => ({
+    id: "a1",
+    role: "assistant",
+    createdAt: CREATED_AT,
+    parts: [],
+    metadata: { turnOutcome: { type: "failed", error } },
+  });
+  const latestPage = async (
+    messages: readonly unknown[],
+    runTarget?: unknown,
+  ) => {
+    const fetch: Fetch = async () =>
+      Response.json({
+        messages,
+        olderCursor: null,
+        activeTurnId: null,
+        ...(runTarget === undefined ? {} : { runTarget }),
+      });
+    const page = await readChatThread({
+      fetch,
+      matterId: undefined,
+      source: sourceFor(fetch),
+      threadId: "t1",
+    });
+    return page.isOk() ? page.value : undefined;
+  };
+
+  test("draws with the reason it failed, though it has no parts, and a kind this build does not know reads as unknown", () => {
+    for (const [error, failure] of [
+      ["local_runner_no_computer", "local_runner_no_computer"],
+      ["a_kind_from_a_newer_server", "unknown"],
+      [undefined, "unknown"],
+    ] as const) {
+      expect(toChatEntry(failedAnswer(error))).toMatchObject({
+        id: "a1",
+        role: "assistant",
+        blocks: [],
+        failure,
+      });
+    }
+    // A turn that did not fail still leaves out an answer with nothing to draw.
+    expect(
+      toChatEntry({
+        ...failedAnswer("unknown"),
+        metadata: { turnOutcome: { type: "completed" } },
+      }),
+    ).toBeUndefined();
+  });
+
+  test("the latest page offers to answer the person's message again, on the thread's computer", async () => {
+    const page = await latestPage(
+      [ASKED, failedAnswer("local_runner_no_computer")],
+      LOCAL,
+    );
+    expect(page?.entries.map(({ id, failure }) => ({ id, failure }))).toEqual([
+      { id: "u1", failure: undefined },
+      { id: "a1", failure: "local_runner_no_computer" },
+    ]);
+    expect(page?.retry).toEqual({
+      answerId: "a1",
+      messageId: "u1",
+      parts: ASKED.parts,
+      runTarget: LOCAL,
+    });
+    // A thread on stella's own models names no target.
+    expect(
+      (
+        await latestPage([ASKED, failedAnswer("provider_unavailable")], {
+          kind: "cloud",
+        })
+      )?.retry?.runTarget,
+    ).toBeUndefined();
+  });
+
+  test("no retry is offered once a later answer did not fail", async () => {
+    const answered = {
+      id: "a2",
+      role: "assistant",
+      createdAt: CREATED_AT,
+      parts: [{ type: "text", content: "Two of them." }],
+      metadata: { turnOutcome: { type: "completed" } },
+    };
+    expect((await latestPage([ASKED, answered]))?.retry).toBeNull();
+    expect(
+      (await latestPage([failedAnswer("unknown"), ASKED, answered]))?.retry,
+    ).toBeNull();
   });
 });

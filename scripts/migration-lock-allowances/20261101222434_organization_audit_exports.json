@@ -1,0 +1,4 @@
+{
+  "add-column": "The constant text default takes PostgreSQL's fast-default catalog path and the other four columns are nullable without a default, so account_exports is not rewritten; lock acquisition is bounded by 1s and each statement by 5s.",
+  "add-constraint": "Both CHECKs validate account_exports, which holds a few rows per account bounded by the hourly request budget, and every existing row carries the defaults the columns were just created with; the scan runs under the 1s lock_timeout and 5s statement_timeout."
+}

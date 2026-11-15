@@ -32,7 +32,6 @@ import {
   describeDocketGrammarFamilyIdentity,
   docketFamilyDecisionRows,
   docketFamilyIdentifierRows,
-  docketFamilyKeyGrantSql,
   docketFamilyScenario,
   docketGrammarFamilyDecisionRows,
   docketGrammarFamilyScenario,
@@ -60,10 +59,6 @@ if (!databaseUrl || !runPostgresTests) {
       1 + (scenario.number % DOCKET_IDENTITY_FIXTURE_NUMBER_MAX),
     );
 
-    const setFamilyKeyGrant = async (mode: "grant" | "revoke") => {
-      await db.execute(docketFamilyKeyGrantSql(mode));
-    };
-
     const readAsPublicReader = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>
@@ -78,7 +73,6 @@ if (!databaseUrl || !runPostgresTests) {
     const caseLawDb = readAsPublicReader as unknown as CaseLawPublicReadDb;
 
     beforeAll(async () => {
-      await setFamilyKeyGrant("grant");
       await db.insert(caseLawSources).values(
         caseLawSourceRow({
           adapterKey: `docket-family-${String(scenario.number)}`,
@@ -101,13 +95,11 @@ if (!databaseUrl || !runPostgresTests) {
     // The decisions and their identifiers go with their source.
     cleanUp(async () => {
       await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
-      await setFamilyKeyGrant("revoke");
     });
 
     describeDocketFamilyIdentity(() => ({
       caseLawDb,
       scenario,
-      setFamilyKeyGrant,
     }));
 
     describeDocketGrammarFamilyIdentity(() => ({

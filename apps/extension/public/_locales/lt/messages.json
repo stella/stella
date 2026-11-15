@@ -1,46 +1,15 @@
 {
-  "accessOff": {
-    "message": "Prieiga prie svetainių išjungta. Suteikite ją vieną kartą, kad stella galėtų naudoti svetaines, prie kurių esate prisijungę."
-  },
-  "accessReady": {
-    "message": "Paruošta. stella gali naudoti atskirą kortelę, o jūsų prisijungimai lieka aktyvūs."
-  },
   "accessUpdateFailed": {
     "message": "Chrome nepavyko pakeisti prieigos prie svetainių."
-  },
-  "adoptTab": {
-    "message": "Naudoti šią kortelę su stella"
   },
   "adoptUnsupported": {
     "message": "Su stella galima naudoti tik viešus HTTPS puslapius."
   },
-  "adoptedTab": {
-    "message": "stella dabar gali skaityti $ORIGIN$ šioje kortelėje. Klauskite apie ją pokalbyje.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Tikrinama prieiga prie svetainių…"
-  },
-  "connectTab": {
-    "message": "Prijungti dabartinę stella kortelę"
-  },
-  "controllerReady": {
-    "message": "Prisijungta prie $ORIGIN$. Kiekvieną veiksmą vis tiek reikia patvirtinti stelloje.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Atjungti kortelę"
+  "usingTabs": {
+    "message": "Naudojama:"
   },
   "downloadKept": {
-    "message": "Atsisiuntimai, kurie baigėsi, kol stella valdė skirtuką, ir buvo palikti: $COUNT$. Prieš atidarydami patikrinkite, iš kur jie.",
+    "message": "Palikti atsisiuntimai: $COUNT$, prieš atidarydami patikrinkite",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -48,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "Atsisiuntimai, kuriuos stella sustabdė valdydama skirtuką: $COUNT$.",
+    "message": "Sustabdyti atsisiuntimai: $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -56,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "Kol stella valdė skirtuką: sustabdyti atsisiuntimai: $STOPPED$. Baigti ir palikti atsisiuntimai (prieš atidarydami patikrinkite, iš kur jie): $KEPT$.",
+    "message": "Sustabdyti atsisiuntimai: $STOPPED$ · palikti: $KEPT$, prieš atidarydami patikrinkite",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -72,13 +41,61 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Leisti visas svetaines"
-  },
-  "revokeAccess": {
-    "message": "Pašalinti prieigą prie svetainių"
-  },
   "unsupportedTab": {
     "message": "Atverkite stella programos kortelę ir bandykite dar kartą."
+  },
+  "connectionPurpose": {
+    "message": "Atveria ir skaito svetaines pokalbiui, naudodama jūsų prisijungimus."
+  },
+  "statusConnected": {
+    "message": "Prisijungta"
+  },
+  "statusNotConnected": {
+    "message": "Neprisijungta"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "Reikia prieigos prie svetainių"
+  },
+  "statusOpenStella": {
+    "message": "Norėdami prisijungti, atverkite „stella“"
+  },
+  "allowAndConnect": {
+    "message": "Leisti prieigą ir prisijungti"
+  },
+  "allowWebsiteAccess": {
+    "message": "Leisti prieigą prie svetainių"
+  },
+  "connectStella": {
+    "message": "Prijungti „stella“"
+  },
+  "adoptTab": {
+    "message": "Naudoti šį skirtuką su „stella“"
+  },
+  "disconnectTab": {
+    "message": "Atsijungti"
+  },
+  "revokeAccess": {
+    "message": "Pašalinti prieigą"
+  },
+  "checkingAccess": {
+    "message": "Tikrinamas ryšys…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Prisijungta kitur"
+  },
+  "connectStellaInstead": {
+    "message": "Vietoj to prijungti „stella“ čia"
+  },
+  "allowDesktop": {
+    "message": "Naudoti su stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop prijungta"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop neveikia"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Atnaujinkite stella desktop ir šį plėtinį"
   }
 }

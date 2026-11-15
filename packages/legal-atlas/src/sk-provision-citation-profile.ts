@@ -1,22 +1,22 @@
 /**
  * Slovakia: Zbierka zákonov, Slov-Lex anchors.
  *
- * Two collections, not one: `Zb.` is the federal Czechoslovak collection an
- * act keeps forever (40/1964 Zb. is still the civil code), `Z. z.` is the
- * Slovak one from 1993. Reading either as the other silently merges two
- * different acts that share a number and a year, so the collection is part of
- * the identity, never a display suffix.
+ * The publication year determines the collection: through 1992, `Zb.`
+ * (including Slovak National Council acts); from 1993, `Z. z.`. Slov-Lex
+ * files both under `/zz/`, so year and number identify the work. An explicit
+ * collection contradicting its year must not resolve to that work.
  *
  * `OZ` means 40/1964 Zb. here and 89/2012 Sb. in Prague. That collision is the
  * reason the alias table is profile data and not a shared dictionary.
  */
 
 import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
+import { SLOV_LEX_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
+import { titleHeadsFor } from "./act-titles";
 import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
   JurisdictionProfile,
-  TitleHeadSpec,
   WorkIdentifier,
 } from "./provision-citation-profile";
 
@@ -66,10 +66,8 @@ const LABOUR_CODE_SUCCESSION = {
   on: LABOUR_CODE_RECODIFICATION,
 };
 
-const ACT_HEAD = {
-  nominative: "zákon",
-  forms: ["zákon", "zákona", "zákonu", "zákonom", "zákone", "zák."],
-} as const satisfies TitleHeadSpec;
+const TITLE_HEADS = titleHeadsFor("sk");
+const [ACT_HEAD] = TITLE_HEADS;
 
 export const SK_PROFILE = {
   jurisdiction: "SVK",
@@ -355,13 +353,18 @@ export const SK_PROFILE = {
     },
   ],
 
-  titleHeads: [
-    ACT_HEAD,
-    {
-      nominative: "zákonník",
-      forms: ["zákonník", "zákonníka", "zákonníku", "zákonníkom"],
-    },
-  ],
+  titleHeads: TITLE_HEADS,
+  amendingClause: {
+    openers: [
+      "a o zmene",
+      "a o doplnení",
+      "a o zrušení",
+      "a ktorým sa mení",
+      "a ktorým sa dopĺňa",
+      "a ktorým sa zrušuje",
+    ],
+    amendedActStems: ["zákon", "poriad", "predpis"],
+  },
 
   ordinalWords: {
     prvá: "1",
@@ -422,14 +425,5 @@ export const SK_PROFILE = {
   earliestYear: 1918,
   maxActGapChars: 60,
 
-  anchor: {
-    join: ".",
-    render: {
-      section: (value) => `paragraf-${value}`,
-      article: (value) => `clanok-${value}`,
-      subsection: (value) => `odsek-${value}`,
-      letter: (value) => `pismeno-${value}`,
-      point: (value) => `bod-${value}`,
-    },
-  },
+  anchor: SLOV_LEX_ANCHORS,
 } as const satisfies JurisdictionProfile;

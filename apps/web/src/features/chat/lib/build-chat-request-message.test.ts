@@ -8,10 +8,12 @@ const UUID_PATTERN =
 
 describe("chat request message building", () => {
   test("uses a stella chat message id for text-only TanStack sends", async () => {
-    const message = await buildChatRequestMessage({
-      files: [],
-      html: "<p>ahoj</p>",
-    });
+    const message = (
+      await buildChatRequestMessage({
+        files: [],
+        html: "<p>ahoj</p>",
+      })
+    ).unwrap();
 
     expectTypeOf(message.id).toEqualTypeOf<SafeId<"chatMessage">>();
     expect(message.id).toMatch(UUID_PATTERN);
@@ -22,18 +24,22 @@ describe("chat request message building", () => {
 
 test("sends pasted text as a native text attachment without normalizing it", async () => {
   const text = " \r\n<b>Literal text</b>\n\t  ";
-  const message = await buildChatRequestMessage({
-    files: [{ type: "pasted_text", id: "paste", text }],
-    html: "<p>Read this</p>",
-  });
+  const message = (
+    await buildChatRequestMessage({
+      files: [{ type: "pasted_text", id: "paste", text }],
+      html: "<p>Read this</p>",
+    })
+  ).unwrap();
   expect(message.content).toEqual([
     { type: "text", content: "<p>Read this</p>" },
     { type: "text", content: text, metadata: { type: "pasted_text" } },
   ]);
-  const attachmentOnly = await buildChatRequestMessage({
-    files: [{ type: "pasted_text", id: "paste", text }],
-    html: "",
-  });
+  const attachmentOnly = (
+    await buildChatRequestMessage({
+      files: [{ type: "pasted_text", id: "paste", text }],
+      html: "",
+    })
+  ).unwrap();
   expect(attachmentOnly.content).toEqual([
     { type: "text", content: text, metadata: { type: "pasted_text" } },
   ]);

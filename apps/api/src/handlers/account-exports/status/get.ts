@@ -13,6 +13,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const personalDataExportStatus = createSafeSessionHandler(
   {
+    accountScope: "stella:account_export_read",
     accountAccess: ACCOUNT_ACCESS.accountControl,
     contract: "patch",
     access: "read",
@@ -29,7 +30,13 @@ const personalDataExportStatus = createSafeSessionHandler(
   async function* ({ user, params: { exportId } }) {
     const row = yield* Result.await(
       Result.tryPromise(
-        async () => await readAccountExport({ id: exportId, userId: user.id }),
+        async () =>
+          await readAccountExport({
+            id: exportId,
+            userId: user.id,
+            // Agents reach this capability under account-export consent.
+            reader: "delegated",
+          }),
       ),
     );
     if (row === null) {

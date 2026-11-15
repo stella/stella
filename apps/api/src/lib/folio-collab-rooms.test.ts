@@ -7,6 +7,7 @@ import { Doc, encodeStateAsUpdate, XmlElement, XmlText } from "yjs";
 
 import { FOLIO_YJS_ATTR_SCHEMA_VERSION } from "@stll/folio-core/server";
 import { sha256Hex } from "@stll/sha256/node";
+import { createTestClock } from "@stll/test-kit";
 
 import { folioCollabRooms, workspaces } from "@/api/db/schema";
 import { createMockDatabase } from "@/api/db/sql-client";
@@ -601,6 +602,7 @@ describe("folio collaboration room snapshot generation", () => {
   );
 
   test("a refused snapshot resets its own generation and retires only its object", async () => {
+    const testClock = createTestClock();
     const authorized = await authorize(validRow());
     if (authorized.status !== "authorized") {
       throw new Error("Expected an authorized snapshot target");
@@ -618,7 +620,7 @@ describe("folio collaboration room snapshot generation", () => {
           generation: 3,
           yjsSnapshotFileId,
           yjsSnapshotRevision: 4,
-          yjsSnapshotUpdatedAt: new Date(),
+          yjsSnapshotUpdatedAt: new Date(testClock.now()),
         },
       ],
       [{ generation: 4 }],

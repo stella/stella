@@ -76,6 +76,34 @@ test("generated views are generally available behind the deployment switch for v
   }
 });
 
+test("the activity timeline is never enabled without time billing", () => {
+  const principal = { organizationId: "org-a", userId: "user-a" } as const;
+  const billingEnrolment = { ...principal, featureId: "time-billing" } as const;
+  for (const activityGrant of [null, memberGrant, organizationGrant]) {
+    for (const enrolments of [[], [billingEnrolment]]) {
+      const decide = (featureId: string) =>
+        decideFeatureAccess({
+          ...principal,
+          registry: FEATURE_REGISTRY,
+          grants:
+            activityGrant === null
+              ? {}
+              : { "activity-timeline": [activityGrant] },
+          featureId,
+          user: { email: "member@example.test", emailVerified: true },
+          membership: true,
+          enrolments,
+        }).status;
+      expect(decide("time-billing")).toBe(
+        enrolments.length > 0 ? "enabled" : "hidden",
+      );
+      expect(decide("activity-timeline")).toBe(
+        activityGrant !== null && enrolments.length > 0 ? "enabled" : "hidden",
+      );
+    }
+  }
+});
+
 test("invitation access requires matching grants, a verified identity, and current membership", () => {
   for (const grant of [null, memberGrant, organizationGrant]) {
     const grants = {

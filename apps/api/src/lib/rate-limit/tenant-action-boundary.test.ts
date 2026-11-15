@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { apiPipeline } from "@/api/api-pipeline";
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
@@ -15,10 +17,10 @@ import type {
   RouteRequest,
 } from "@/api/http/route";
 import { resolveClientAddress } from "@/api/lib/client-ip";
+import { ownedMessage } from "@/api/lib/observability/owned-message";
 import { sendServedRequest } from "@/api/tests/helpers/served-request";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   ActionSizeError,
@@ -224,7 +226,7 @@ describe("tenant HTTP action boundary", () => {
           policy: () =>
             Result.err(
               new ActionSizeError({
-                message: "Invalid size limits",
+                message: ownedMessage("Invalid size limits"),
                 reason: "configuration",
               }),
             ),
@@ -240,7 +242,7 @@ describe("tenant HTTP action boundary", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
       code: "service_unavailable",
-      message: "Invalid size limits",
+      message: ownedMessage("Invalid size limits"),
     });
     expect(dispatched).toBe(0);
   });

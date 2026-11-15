@@ -49,6 +49,14 @@ export const SYNTHETIC_SCALE_PROFILE = {
     },
     case_law_decisions: { reltuples: 100_000_000, allVisibleFraction: 0.5 },
     case_law_index_jobs: { reltuples: 100_000_000, allVisibleFraction: 0.5 },
+    case_law_population_deltas: {
+      reltuples: 1_000_000,
+      allVisibleFraction: 0.5,
+    },
+    case_law_population_projections: {
+      reltuples: 100_000_000,
+      allVisibleFraction: 0.5,
+    },
     case_law_provision_citations: {
       reltuples: 100_000_000,
       allVisibleFraction: 0.5,

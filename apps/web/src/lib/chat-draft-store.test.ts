@@ -8,6 +8,7 @@ import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import {
   appendInlineContentToDraftDoc,
   appendMentionToDraftDoc,
+  appendParagraphToDraftDoc,
   areDraftDocsEqual,
   createChatDraftState,
   createEmptyChatDraftDoc,
@@ -99,6 +100,31 @@ describe("appendInlineContentToDraftDoc", () => {
       { type: "bulletList" },
       { type: "paragraph", content: chip },
     ]);
+  });
+});
+
+describe("appendParagraphToDraftDoc", () => {
+  const paragraph = (text: string): JSONContent => ({
+    type: "paragraph",
+    content: [{ type: "text", text }],
+  });
+
+  test("keeps recovered words apart from what is already typed", () => {
+    expect(
+      appendParagraphToDraftDoc(
+        docWithText("Review clause 4"),
+        "The guarantor signs",
+      ).content,
+    ).toEqual([paragraph("Review clause 4"), paragraph("The guarantor signs")]);
+  });
+
+  test("an empty draft becomes just the recovered words", () => {
+    expect(
+      appendParagraphToDraftDoc(
+        createEmptyChatDraftDoc(),
+        "The guarantor signs",
+      ).content,
+    ).toEqual([paragraph("The guarantor signs")]);
   });
 });
 

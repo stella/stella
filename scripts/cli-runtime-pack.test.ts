@@ -17,6 +17,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import {
   canonicalJson,
@@ -116,42 +117,7 @@ test("fresh CLI export includes preparation metadata imports", () => {
   ).toContain("packages/scripts/src/generated-file-inventory.ts");
 });
 
-const Sha = v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/u));
-const MergeGroupEvent = v.object({
-  merge_group: v.object({ base_sha: Sha }),
-});
-const PullRequestEvent = v.object({
-  pull_request: v.object({ base: v.object({ sha: Sha }) }),
-});
-
-/**
- * The commit a CI event compares against: the merge group's own base, which
- * may trail `origin/main` by several queued commits, or the pull request's
- * base. Other events have none and compare against the merge base.
- */
-const eventBaseRevision = (
-  eventName: string | undefined,
-  readPayload: () => unknown,
-): string | undefined => {
-  if (eventName === "merge_group") {
-    return v.parse(MergeGroupEvent, readPayload()).merge_group.base_sha;
-  }
-  if (eventName === "pull_request") {
-    return v.parse(PullRequestEvent, readPayload()).pull_request.base.sha;
-  }
-  return undefined;
-};
-
-const baseRevision = (): string =>
-  eventBaseRevision(process.env["GITHUB_EVENT_NAME"], () =>
-    JSON.parse(
-      readFileSync(
-        process.env["GITHUB_EVENT_PATH"] ??
-          panic("GITHUB_EVENT_PATH is not set for a CI event"),
-        "utf-8",
-      ),
-    ),
-  ) ?? run(["git", "merge-base", "origin/main", "HEAD"], REPO_ROOT).trim();
+const baseRevision = () => treeBaseRevision({ repoRoot: REPO_ROOT });
 
 type Tree = {
   readonly root: string;
@@ -409,49 +375,6 @@ const revisionFiles = ({ revision }: Tree): string[] =>
     .split("\0")
     .filter(Boolean)
     .toSorted();
-
-describe("comparison base", () => {
-  const payload = (value: unknown) => () => value;
-  const sha = "a".repeat(40);
-
-  test("a merge group compares against its own base, not the branch tip", () => {
-    expect(
-      eventBaseRevision(
-        "merge_group",
-        payload({ merge_group: { base_sha: sha, head_sha: "b".repeat(40) } }),
-      ),
-    ).toBe(sha);
-  });
-
-  test("a pull request compares against its base commit", () => {
-    expect(
-      eventBaseRevision(
-        "pull_request",
-        payload({ pull_request: { base: { sha }, head: { sha: "c" } } }),
-      ),
-    ).toBe(sha);
-  });
-
-  test("other events fall back without reading a payload", () => {
-    for (const event of [undefined, "workflow_dispatch", "push"]) {
-      expect(
-        eventBaseRevision(event, () => panic("payload must not be read")),
-      ).toBeUndefined();
-    }
-  });
-
-  test("a malformed event payload fails instead of choosing another base", () => {
-    expect(() =>
-      eventBaseRevision("merge_group", payload({ merge_group: {} })),
-    ).toThrow(v.ValiError);
-    expect(() =>
-      eventBaseRevision(
-        "pull_request",
-        payload({ pull_request: { base: { sha: "main" } } }),
-      ),
-    ).toThrow(v.ValiError);
-  });
-});
 
 describe("generated imports", () => {
   const derived = {

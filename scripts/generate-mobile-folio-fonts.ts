@@ -1,16 +1,18 @@
 // The faces folio lays documents out in, for the mobile app's document viewer.
 //
-// folio's editor.css imports fontsource stylesheets whose @font-face rules
-// load each face with `url(./files/...)`. Metro bundles CSS without such local
-// resources, so in the app every face would fall back to a system font and a
-// Calibri or Times New Roman document would lay out with the wrong metrics.
-// This reads the same stylesheets and writes the faces as a table of bundled
-// font files the viewer declares itself, so a folio upgrade that changes its
-// fonts fails the generated-files check until the app takes it too.
+// @stll/folio-fonts declares its faces in fonts.css with `url(./fonts/...)`.
+// Metro bundles CSS without such local resources, so in the app every face
+// would fall back to a system font and a Calibri or Times New Roman document
+// would lay out with the wrong metrics. Metro can bundle a font file only
+// from an import it can read, so this turns the package's face catalogue
+// into a table of imported font files the viewer declares itself. A
+// folio-fonts upgrade that changes its faces fails the generated-files check
+// until the app takes it too.
 
-import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
+import * as v from "valibot";
 
 import {
   formattedArtifactsLikeRepository,
@@ -23,66 +25,60 @@ const OUTPUT = path.join(
   REPO_ROOT,
   "apps/mobile/src/components/document-viewer/folio-fonts.gen.ts",
 );
+const FONTS_PACKAGE = "@stll/folio-fonts";
 
 /**
  * The scripts a legal document in the app's languages is written in: Latin
  * and Latin Extended for the European languages, Arabic for Arabic. Greek,
  * Cyrillic and Vietnamese fall back to the system's faces.
  */
-const SUBSETS = ["latin", "latin-ext", "arabic"] as const;
+const SUBSETS: ReadonlySet<string> = new Set(["latin", "latin-ext", "arabic"]);
+
+/** The fields of the package's `FOLIO_FONT_FACES` this reads. */
+const CatalogueSchema = v.object({
+  FOLIO_FONT_FACES: v.array(
+    v.object({
+      family: v.string(),
+      subset: v.string(),
+      style: v.string(),
+      weight: v.number(),
+      unicodeRange: v.string(),
+      /** Package-relative, such as `fonts/tinos/files/<file>.woff2`. */
+      woff2: v.string(),
+    }),
+  ),
+});
+
+export type CatalogueFace = v.InferOutput<
+  typeof CatalogueSchema
+>["FOLIO_FONT_FACES"][number];
 
 export type FolioFontFace = {
   readonly family: string;
   readonly style: string;
   readonly weight: number;
   readonly unicodeRange: string;
-  /** The font file as a module specifier, `@fontsource/<package>/files/<file>`. */
+  /** The font file as a module specifier, `@stll/folio-fonts/fonts/...`. */
   readonly file: string;
 };
 
-/** The fontsource stylesheets editor.css imports, in its order. */
-export const fontsourceImportsOf = (editorCss: string): string[] =>
-  [...editorCss.matchAll(/@import\s+"(@fontsource\/[^"]+\.css)"/gu)].flatMap(
-    ([, specifier]) => (specifier === undefined ? [] : [specifier]),
-  );
-
-/** The faces of one fontsource stylesheet in the scripts `SUBSETS` names. */
-export const fontFacesOf = (
-  css: string,
-  fontsourcePackage: string,
+/** The catalogue's faces in the scripts `SUBSETS` names, in its order. */
+export const appFacesOf = (
+  catalogue: readonly CatalogueFace[],
 ): FolioFontFace[] =>
-  [...css.matchAll(/@font-face\s*\{([^}]*)\}/gu)].flatMap(([, body = ""]) => {
-    const family = /font-family:\s*'([^']+)'/u.exec(body)?.[1];
-    const style = /font-style:\s*([\w-]+)/u.exec(body)?.[1];
-    const weight = /font-weight:\s*(\d+)/u.exec(body)?.[1];
-    const file = /url\(\.\/files\/([\w-]+\.woff2)\)/u.exec(body)?.[1];
-    const unicodeRange = /unicode-range:\s*([^\s;][^;]*);/u.exec(body)?.[1];
-    if (
-      family === undefined ||
-      style === undefined ||
-      weight === undefined ||
-      file === undefined ||
-      unicodeRange === undefined
-    ) {
-      return [];
-    }
-    // `<package>-<subset>-<weight>-<style>.woff2`
-    const subset = /^((?:latin|arabic)(?:-ext)?)-\d+-/u.exec(
-      file.slice(fontsourcePackage.length + 1),
-    )?.[1];
-    if (!SUBSETS.some((wanted) => wanted === subset)) {
-      return [];
-    }
-    return [
-      {
-        family,
-        style,
-        weight: Number(weight),
-        unicodeRange: unicodeRange.trim(),
-        file: `@fontsource/${fontsourcePackage}/files/${file}`,
-      },
-    ];
-  });
+  catalogue.flatMap((face) =>
+    SUBSETS.has(face.subset)
+      ? [
+          {
+            family: face.family,
+            style: face.style,
+            weight: face.weight,
+            unicodeRange: face.unicodeRange,
+            file: `${FONTS_PACKAGE}/${face.woff2}`,
+          },
+        ]
+      : [],
+  );
 
 const identifierOf = (file: string): string =>
   path
@@ -91,9 +87,8 @@ const identifierOf = (file: string): string =>
 
 export const renderFolioFonts = (faces: readonly FolioFontFace[]): string =>
   [
-    "// Generated by scripts/generate-mobile-folio-fonts.ts from the fontsource",
-    "// stylesheets @stll/folio-react's editor.css imports. Do not edit; run it",
-    "// with --write.",
+    "// Generated by scripts/generate-mobile-folio-fonts.ts from the face",
+    "// catalogue of @stll/folio-fonts. Do not edit; run it with --write.",
     "",
     ...faces.map(
       (face) =>
@@ -117,25 +112,18 @@ export const renderFolioFonts = (faces: readonly FolioFontFace[]): string =>
   ].join("\n");
 
 export const generateMobileFolioFonts = async (write: boolean) => {
-  const editorCss = createRequire(MOBILE_PACKAGE).resolve(
-    "@stll/folio-react/editor.css",
+  // The catalogue as the app resolves it: the version the root catalog pins.
+  const entry = createRequire(MOBILE_PACKAGE).resolve(FONTS_PACKAGE);
+  const catalogue = v.parse(
+    CatalogueSchema,
+    await import(pathToFileURL(entry).href),
   );
-  const fromEditor = createRequire(editorCss);
-  // Read together; `Promise.all` keeps editor.css's order.
-  const faces = (
-    await Promise.all(
-      fontsourceImportsOf(await readFile(editorCss, "utf-8")).map(
-        async (specifier) =>
-          fontFacesOf(
-            await readFile(fromEditor.resolve(specifier), "utf-8"),
-            specifier.split("/")[1] ?? "",
-          ),
-      ),
-    )
-  ).flat();
   return await writeOrCheckArtifacts(
     await formattedArtifactsLikeRepository([
-      { path: OUTPUT, contents: renderFolioFonts(faces) },
+      {
+        path: OUTPUT,
+        contents: renderFolioFonts(appFacesOf(catalogue.FOLIO_FONT_FACES)),
+      },
     ]),
     { matched: "folio's fonts", write },
   );

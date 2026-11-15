@@ -21,6 +21,7 @@ import type {
   DocumentAst,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import { collapseLetterSpacing } from "@stll/text-normalize";
 
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
@@ -509,7 +510,8 @@ export const plNsaParagraphs = (
   stated: PlNsaStatedSuperscripts,
 ): string[] =>
   withSentencesJoined(withoutPageFurniture(splitParagraphs(text))).map(
-    (paragraph) => withSuperscripts(paragraph, stated),
+    // Letter-spaced emphasis (`o d d a l a`) read once the lines are joined.
+    (paragraph) => withSuperscripts(collapseLetterSpacing(paragraph), stated),
   );
 
 const escapeHtml = (text: string): string =>

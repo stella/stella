@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { load } from "cheerio";
+import { load } from "@stll/html";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import * as v from "valibot";

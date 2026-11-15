@@ -1,0 +1,3 @@
+{
+  "add-column": "A jsonb column with a constant default on legal_list_verification_runs is a catalog change that rewrites no rows, under a one-second lock timeout and a five-second statement timeout."
+}

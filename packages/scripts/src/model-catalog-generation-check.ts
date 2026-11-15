@@ -9,6 +9,7 @@ import type {
   FindNewerGenerationModelsOptions,
   GenerationGuardFailure,
 } from "./model-catalog-discovery";
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 
 const snapshotPath = new URL(
   "../../ai-catalog/upstream/models.dev.gen.json",
@@ -117,5 +118,7 @@ const main = async () => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   await main();
 }

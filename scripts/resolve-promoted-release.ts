@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 import { selectPromotedRelease } from "./promoted-release-policy";
 
 const DEFAULT_MANIFEST_PATH = path.join(
@@ -104,5 +105,7 @@ const run = async () => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   await run();
 }

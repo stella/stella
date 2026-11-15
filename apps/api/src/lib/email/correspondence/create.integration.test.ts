@@ -121,6 +121,7 @@ const parsedMessage = (provenance: CorrespondenceDeliveryProvenance) =>
   ({
     direction: "in",
     channel: "email",
+    dataBox: null,
     messageId: `<${Bun.randomUUIDv7()}@example.test>`,
     contentHash: "a".repeat(64),
     from: { address: "sender@example.test", name: null },
@@ -147,7 +148,9 @@ const commonContext = () => ({
   recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),
 });
 
-const fileMessage = async (parsed: ParsedCorrespondence) => {
+const fileMessage = async (
+  parsed: Extract<ParsedCorrespondence, { source: "delivery" }>,
+) => {
   const result = await createCorrespondence({
     safeDb: safeDbFor(ids.userA1, ids.wsA1),
     workspaceId: ids.wsA1,
@@ -197,6 +200,7 @@ describe("matter correspondence", () => {
     expect(duplicate).toEqual({
       type: "ok",
       id: first.id,
+      contentHash: parsed.contentHash,
       created: false,
       filerAdded: false,
     });
@@ -363,6 +367,7 @@ describe("matter correspondence", () => {
     expect(mailboxFiling).toMatchObject({
       type: "ok",
       id: first.id,
+      contentHash: parsed.contentHash,
       created: false,
       filerAdded: true,
     });

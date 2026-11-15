@@ -1,6 +1,6 @@
 import type { LiveActivityFactory } from "expo-widgets";
 
-import type { TimerActivityProps } from "@/state/timer-activity";
+import type { TimerActivityProps } from "@stll/api-contract/timer-activity";
 
 /** Live Activities are iOS's; elsewhere there is none to start. */
 export const TimerActivity: LiveActivityFactory<TimerActivityProps> | null =

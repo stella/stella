@@ -106,6 +106,20 @@ const noFilters = {
 };
 
 describe("filterPublicToolEntries", () => {
+  test("finds a tool by its source wording in any language", () => {
+    const localized = entries.map((tool) => ({
+      ...tool,
+      description: "popis",
+      sourceCopy: "business registry lookup",
+    }));
+    expect(
+      filterPublicToolEntries(localized, { ...noFilters, query: "registry" }),
+    ).toEqual(localized);
+    expect(
+      filterPublicToolEntries(localized, { ...noFilters, query: "popis" }),
+    ).toEqual(localized);
+  });
+
   test("searches names, descriptions, authors, and metadata without accents", () => {
     expect(
       filterPublicToolEntries(entries, { ...noFilters, query: "adrian AR" }),

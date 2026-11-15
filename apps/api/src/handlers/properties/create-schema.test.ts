@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
   buildPropertyParts,
@@ -23,6 +24,37 @@ describe("property creation schema", () => {
       return;
     }
     expect(built.role).toBe(DOCUMENT_TYPE_CLASSIFIER_ROLE);
+  });
+
+  test("a money column is manual unless an AI column is asked for", () => {
+    const manual = buildPropertyParts({
+      name: "Bid price",
+      contentType: "money",
+      currency: "CZK",
+    });
+    expect(manual).toMatchObject({
+      content: { version: 1, type: "money", currency: "CZK" },
+      tool: { version: 1, type: "manual-input" },
+      dependencies: [],
+    });
+
+    const dependency = {
+      dependsOnPropertyId: toSafeId<"property">(Bun.randomUUIDv7()),
+      condition: null,
+    };
+    const extracted = buildPropertyParts({
+      name: "Bid price",
+      contentType: "money",
+      currency: null,
+      toolType: "ai-model",
+      prompt: "Total bid price excluding VAT.",
+      dependencies: [dependency],
+    });
+    expect(extracted).toMatchObject({
+      content: { version: 1, type: "money", currency: null },
+      tool: { version: 1, type: "ai-model" },
+      dependencies: [dependency],
+    });
   });
 
   test("does not tag manual Document Type columns as classifiers", () => {

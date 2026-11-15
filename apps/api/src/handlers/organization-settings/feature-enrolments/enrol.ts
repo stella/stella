@@ -3,17 +3,19 @@ import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { featureEnrolments } from "@/api/db/schema";
+import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
 import {
   FEATURE_REGISTRY,
   SELF_SERVE_FEATURE_IDS,
 } from "@/api/lib/feature-access/registry";
+import { publishMcpToolProjectionChange } from "@/api/mcp/tool-freshness";
 
 const config = {
   contract: "patch",
@@ -44,9 +46,7 @@ export const enrolFeatureHandler = async function* ({
   featureId,
   recordAuditEvent,
 }: EnrolFeatureHandlerProps) {
-  if (
-    !isDeploymentFeatureEnabled(FEATURE_REGISTRY[featureId].deploymentFeature)
-  ) {
+  if (!isFeatureDeployed(FEATURE_REGISTRY, featureId)) {
     return Result.err(new HandlerError({ status: 404, message: "Not found" }));
   }
   yield* Result.await(
@@ -70,6 +70,11 @@ export const enrolFeatureHandler = async function* ({
         },
       });
     }),
+  );
+  detached(
+    async () =>
+      await publishMcpToolProjectionChange({ organizationId, userId }),
+    "mcp.feature-enrolment-tool-projection",
   );
   return Result.ok({ featureId, enrolled: true });
 };

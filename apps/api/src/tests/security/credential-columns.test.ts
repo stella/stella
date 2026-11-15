@@ -18,6 +18,7 @@ import { pathToFileURL } from "node:url";
 import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { agentDelegation } from "@/api/db/agent-auth-schema";
 import { oauthConsent } from "@/api/db/auth-schema";
@@ -221,7 +222,11 @@ const addedCleartextColumns = (
 
 const readBaseRegistry = () => {
   const result = Bun.spawnSync(
-    ["git", "show", `origin/main:${REGISTRY_PATH}`],
+    [
+      "git",
+      "show",
+      `${treeBaseRevision({ repoRoot: REPO_ROOT })}:${REGISTRY_PATH}`,
+    ],
     { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
   );
   if (result.exitCode === 0) {
@@ -302,6 +307,11 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     }
     if (query.includes("AS aggregate_context")) {
       return { rows: [["fixture_owner", "", "", "", "", ""]] };
+    }
+    // The removal runs on the owner connection, which names no organization
+    // before it scopes the departing member's contacts.
+    if (query.includes("AS is_owner")) {
+      return { rows: [{ organization_id: "", is_owner: true }] };
     }
     // Advisory fences report their physical identity and acquisition.
     if (query.includes("AS key1")) {

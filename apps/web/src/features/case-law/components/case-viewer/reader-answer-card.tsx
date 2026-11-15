@@ -12,11 +12,13 @@ import type {
 } from "@stll/api-contract/reader-answers";
 import { READER_ANSWER_QUESTION_MAX_LENGTH } from "@stll/api-contract/reader-answers";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { CitationChip } from "@/components/references/citation-chip";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 
@@ -63,7 +65,7 @@ const ReaderAnswerCitationChip = ({
         <CitationChip
           kind="decision"
           decision={target.decision}
-          onOpen={() => onCitation(citation)}
+          onOpenInSidePanel={() => onCitation(citation)}
           paragraphNumber={target.paragraphNumber}
           presentation="inline"
         />
@@ -211,9 +213,9 @@ export const ReaderAnswerCard = ({
       ref={observe}
     >
       <div className="flex items-center justify-between gap-1">
-        <span className="text-foreground-muted line-clamp-1">
+        <TruncatedText className="text-foreground-muted">
           {answer.anchor.spans.map(({ quote }) => quote).join(" ")}
-        </span>
+        </TruncatedText>
         <Button
           className="min-h-11 shrink-0"
           size="sm"
@@ -287,7 +289,7 @@ export const ReaderAnswerCard = ({
           )}
           {languagePicker}
           <div className="flex flex-wrap items-center gap-1">
-            <CopyActionButton
+            <CopyControl
               variant="ghost"
               size="sm"
               text={answer.messages
@@ -332,7 +334,7 @@ export const ReaderAnswerCard = ({
             )}
           </div>
           {answer.mine && generationMode === "enabled" && (
-            <form
+            <Form
               className="mt-1 flex flex-col gap-1"
               onSubmit={(event) => {
                 event.preventDefault();
@@ -366,17 +368,15 @@ export const ReaderAnswerCard = ({
               >
                 {t("readerAnswers.send")}
               </Button>
-            </form>
+            </Form>
           )}
         </>
       ) : (
-        <button
-          className="text-foreground-muted min-h-11 w-full text-start"
-          type="button"
-          onClick={open}
-        >
-          {lastAssistant?.content.slice(0, 140) || t("readerAnswers.expand")}
-        </button>
+        <Button className="min-h-11 w-full" onClick={open} variant="plain">
+          <span className="text-foreground-muted">
+            {lastAssistant?.content.slice(0, 140) || t("readerAnswers.expand")}
+          </span>
+        </Button>
       )}
     </section>
   );

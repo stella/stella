@@ -94,9 +94,15 @@ const PROCESSED_FIELD_CHECKS: Readonly<
       ({ ast }) => paragraphNumbers(ast.blocks).length >= 2,
     );
     // Numbering still sitting in the text: the extractor would move it.
-    const leftInText = documents.filter(
-      ({ ast }) =>
-        extractCourtParagraphNumbers(ast.blocks).type !== "unnumbered",
+    const leftInText = documents.filter(({ ast }) =>
+      extractCourtParagraphNumbers(ast.blocks).blocks.some((block, index) => {
+        const original = ast.blocks[index];
+        return (
+          block.type === "paragraph" &&
+          original?.type === "paragraph" &&
+          block.number !== original.number
+        );
+      }),
     );
     if (disposition.disposition === "provided") {
       const problems = leftInText.map(

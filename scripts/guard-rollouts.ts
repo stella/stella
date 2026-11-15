@@ -64,16 +64,17 @@ type GuardLineOptions = {
   rollouts?: readonly GuardRollout[];
   file: string;
   line: number;
-  now?: Date;
   changedLines?: ReadonlyMap<string, ReadonlySet<number>>;
 };
 
+// A passing deadline does not widen the scope: that would fail changes that
+// never touched the guarded line. scripts/dated-waivers.ts owns the deadline,
+// and healing restores `type: "full"` once the full check passes.
 export const guardEnforcesLine = ({
   guard,
   rollouts = GUARD_ROLLOUTS,
   file,
   line,
-  now = new Date(),
   changedLines,
 }: GuardLineOptions): boolean => {
   const rollout = rollouts.find(({ id }) => id === guard);
@@ -84,13 +85,6 @@ export const guardEnforcesLine = ({
     rollout.type !== "changed-lines" ||
     process.env["STELLA_GUARD_SCOPE"] === "all"
   ) {
-    return true;
-  }
-  const deadline = Date.parse(rollout.expiresAt);
-  if (!Number.isFinite(deadline)) {
-    return panic(`Invalid guard rollout deadline: ${guard}`);
-  }
-  if (now.getTime() >= deadline) {
     return true;
   }
   // Expected-violation directives must remain used even in unchanged fixtures.

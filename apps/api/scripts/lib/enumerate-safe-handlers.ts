@@ -88,6 +88,7 @@ export type ParsedExposure =
   | {
       type: "capability";
       reason: string;
+      by?: string;
       consumesServices: ServiceClassification;
       confirmation?: "required";
       readClass?: McpReadClass;
@@ -157,12 +158,14 @@ export const parseExposure = (mcp: unknown): ParsedExposure => {
   if (
     type === "capability" &&
     typeof reason === "string" &&
-    isServiceClassification(consumesServices)
+    isServiceClassification(consumesServices) &&
+    (by === undefined || typeof by === "string")
   ) {
     return {
       type: "capability",
       reason,
       consumesServices,
+      ...(by === undefined ? {} : { by }),
       ...(confirmation === undefined ? {} : { confirmation }),
       ...readClassification,
     };

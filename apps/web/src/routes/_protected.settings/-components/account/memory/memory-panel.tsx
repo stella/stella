@@ -4,6 +4,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
 import {
@@ -176,7 +177,7 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
                 <span className="min-w-0 flex-1">
                   <MatterOptionLabel matter={workspace} />
                 </span>
-                {workspace.status === "archived" ? (
+                {workspace.status === WORKSPACE_STATUS.archived ? (
                   <span className="text-muted-foreground">
                     {t("views.archived")}
                   </span>

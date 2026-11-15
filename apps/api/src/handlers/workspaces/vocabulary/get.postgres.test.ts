@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import {
-  contacts,
   infoSoudTrackedCases,
   workspaceContacts,
   workspaceMembers,
@@ -11,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import {
   matterVocabularyScalingScenario,
   seedMatterVocabulary,
@@ -166,7 +166,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               type: "organization" as const,
               displayName: `Žďárská dílna ${String(index).padStart(3, "0")}`,
             }));
-            await db.insert(contacts).values(extraContacts);
+            await insertOwnerContacts(db, extraContacts);
             await db.insert(workspaceContacts).values(
               extraContacts.map(({ id: contactId }, index) => ({
                 id: createSafeId<"workspaceContact">(),

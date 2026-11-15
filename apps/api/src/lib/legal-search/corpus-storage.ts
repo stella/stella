@@ -3,8 +3,10 @@ import { sql } from "drizzle-orm";
 import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import {
   type DocumentAst,
+  headMatterOrderDegradations,
   persistedAstDegradations,
 } from "@stll/legal-ast/document-ast";
 
@@ -59,6 +61,7 @@ import type {
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
@@ -176,11 +179,28 @@ export const parsePersistedCorpusAst = (
     }
     throw error;
   }
+  // Late head matter is a known state of stored rows that a read serves as
+  // stored: a line per read, so its rate stays visible, and no exception, since
+  // no one can act on each read of the same row. Undeclared vocabulary is the
+  // schema falling behind what was stored, and is reported as a failure.
+  const lateHeadMatter =
+    parsed.output !== null && "blocks" in parsed.output
+      ? headMatterOrderDegradations(parsed.output.blocks)
+      : [];
+  if (lateHeadMatter.length > 0) {
+    logger.warn(
+      "case_law.decision.stored_ast_head_matter_order",
+      sanitizeErrorAttributesForOutput({
+        ...(documentId === undefined ? {} : { documentId }),
+        lateBlockCount: lateHeadMatter.length,
+      }),
+    );
+  }
   const degradations = persistedAstDegradations(value);
   if (degradations.length > 0) {
     captureError(
       new StoredAstDegradedError({
-        message: "Stored document AST carries undeclared vocabulary",
+        message: "Stored document AST was degraded on read",
         degradations,
       }),
       handlerErrorContext("legalsearch.parsePersistedCorpusAst", {
@@ -196,16 +216,41 @@ const STORED_CORPUS_VALIDATION_SINK = failureSink({
   expected: [],
 });
 
+const reportedStoredValidationErrors = new WeakMap<
+  StoredCorpusValidationError,
+  Set<string>
+>();
+
 /** Correlate a rejected payload without logging its values or validator messages. */
 const reportStoredCorpusValidation = (
   error: StoredCorpusValidationError,
   documentId: string,
 ): void => {
+  // A row parser and its recovery boundary can observe the same rejection.
+  const reportedDecisions =
+    reportedStoredValidationErrors.get(error) ?? new Set<string>();
+  if (reportedDecisions.has(documentId)) {
+    return;
+  }
+  reportedDecisions.add(documentId);
+  reportedStoredValidationErrors.set(error, reportedDecisions);
   observeFailure(error, {
     sink: STORED_CORPUS_VALIDATION_SINK,
     ctx: { decisionId: documentId },
   });
 };
+
+/** The corpus operations a timeout names, each its own telemetry label. */
+const CORPUS_IO_TIMEOUT_LABEL = {
+  "corpus-delete": "corpus-delete",
+  "corpus-read-ast": "corpus-read-ast",
+  "corpus-read-sections": "corpus-read-sections",
+  "corpus-read-text": "corpus-read-text",
+  "corpus-write-ast": "corpus-write-ast",
+  "corpus-write-sections": "corpus-write-sections",
+  "corpus-write-text": "corpus-write-text",
+} as const;
+type CorpusIoLabel = keyof typeof CORPUS_IO_TIMEOUT_LABEL;
 
 /**
  * The single bounded boundary for every corpus object read/write/delete.
@@ -217,7 +262,7 @@ const reportStoredCorpusValidation = (
  * is safe to retry.
  */
 const boundedCorpusIo = async <T>(
-  label: string,
+  label: CorpusIoLabel,
   operation: (signal: AbortSignal) => Promise<T>,
   {
     signal,
@@ -225,7 +270,7 @@ const boundedCorpusIo = async <T>(
   }: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<T> =>
   await withTimeout(operation, {
-    label,
+    label: CORPUS_IO_TIMEOUT_LABEL[label],
     ...(signal === undefined ? {} : { signal }),
     timeoutMs,
   });
@@ -292,7 +337,7 @@ type SettleCancellableCorpusIoGroupOptions = {
  * cleanup deleted it.
  */
 const startCancellableCorpusIo = <T>(
-  label: string,
+  label: CorpusIoLabel,
   operation: (signal: AbortSignal) => Promise<T>,
   options: CorpusIoOptions,
 ): StartedCorpusIo<T> => {
@@ -632,14 +677,18 @@ export const corpusPayloadDisposition = ({
 export const writeCorpusDocument = async (
   uncheckedInput: WriteCorpusInput,
   { signal, s3Policy }: CorpusIoOptions = {},
-): Promise<CorpusWriteOutcome> => {
-  const input = {
-    ...uncheckedInput,
-    ast: prepareCorpusAst({ ast: uncheckedInput.ast }).ast,
-  };
+): Promise<Result<CorpusWriteOutcome, StoredCorpusValidationError>> => {
+  const prepared = prepareCorpusAst({
+    ast: uncheckedInput.ast,
+    fallbackText: uncheckedInput.text,
+  });
+  if (prepared.isErr()) {
+    return prepared;
+  }
+  const input = { ...uncheckedInput, ast: prepared.value.ast };
   const plan = planCorpusDocumentWrite(input);
   if (plan.type !== "put") {
-    return plan;
+    return Result.ok(plan);
   }
   const { written } = plan;
   const frames = await corpusPayloadFrames(input);
@@ -699,7 +748,7 @@ export const writeCorpusDocument = async (
     operations: writes,
   });
 
-  return { type: "written", written };
+  return Result.ok({ type: "written", written });
 };
 
 type BoundedObjectReader = (options: {
@@ -988,9 +1037,17 @@ export const readSizedCorpusAst = async (
     { ...(signal === undefined ? {} : { signal }) },
   );
   const decoded = await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
-  const parsed: unknown = JSON.parse(decoded);
+  const parsed = Result.try((): unknown => JSON.parse(decoded));
+  if (!Result.isOk(parsed)) {
+    const error = new StoredCorpusValidationError({
+      message: "Stored document AST failed validation",
+      code: STORED_CORPUS_VALIDATION_CODE,
+      paths: ["$"],
+    });
+    throw error;
+  }
   return {
-    ast: parsePersistedCorpusAst(parsed),
+    ast: parsePersistedCorpusAst(parsed.value),
     decodedLength: decoded.length,
   };
 };
@@ -1056,6 +1113,33 @@ export const storedCorpusValidationFailure = (
   }
   const cause = rejectionCause(raised.cause);
   return StoredCorpusValidationError.is(cause) ? cause : null;
+};
+
+type RecoverableCorpusReadOptions<T> = {
+  documentId: string;
+  read: () => Promise<T>;
+};
+
+/** Classified validation failures are recoverable; other read failures propagate. */
+export const readCorpusForRecovery = async <T>({
+  documentId,
+  read,
+}: RecoverableCorpusReadOptions<T>): Promise<
+  Result<T, StoredCorpusValidationError>
+> => {
+  const outcome = await Result.tryPromise(read);
+  if (Result.isOk(outcome)) {
+    return Result.ok(outcome.value);
+  }
+  const raised = rejectionCause(outcome.error);
+  const invalid = storedCorpusValidationFailure(raised);
+  if (invalid === null) {
+    throw raised;
+  }
+  if (StoredCorpusValidationError.is(raised)) {
+    reportStoredCorpusValidation(invalid, documentId);
+  }
+  return Result.err(invalid);
 };
 
 type CorpusReadWithFallbackInput<T> = {

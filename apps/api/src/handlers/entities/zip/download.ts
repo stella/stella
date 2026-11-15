@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { makeZip } from "client-zip";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
 import { streamWithConcurrency } from "@stll/concurrency";
+import { createZipStream } from "@stll/docx-core/zip/stream";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -278,7 +278,7 @@ const downloadZipHandler = async function* ({
 
   const archiveEntries = async function* () {
     for (const folderPath of folderPaths) {
-      yield { name: `${folderPath}/` };
+      yield { path: `${folderPath}/` };
     }
 
     const failedPaths: string[] = [];
@@ -293,7 +293,7 @@ const downloadZipHandler = async function* ({
         failedFileIds.push(result.fileId);
         continue;
       }
-      yield { name: result.path, input: result.data };
+      yield { path: result.path, data: result.data };
     }
 
     // Report missing entries in the archive and capture only their IDs.
@@ -303,15 +303,15 @@ const downloadZipHandler = async function* ({
       const context = { entityId, fileIds: failedFileIds.join(",") };
       captureError(error, handlerErrorContext(ZIP_FETCH_KEY, context));
       yield {
-        name: uniquePath(seenPaths, `${rootPath}/${ERROR_MANIFEST_NAME}`),
-        input: buildErrorManifest(failedPaths),
+        path: uniquePath(seenPaths, `${rootPath}/${ERROR_MANIFEST_NAME}`),
+        data: buildErrorManifest(failedPaths),
       };
     }
   };
 
   return Result.ok(
     secureDocumentResponse({
-      body: makeZip(archiveEntries()),
+      body: createZipStream(archiveEntries()),
       contentType: "application/zip",
       disposition: "attachment",
       fileName: zipFileName,

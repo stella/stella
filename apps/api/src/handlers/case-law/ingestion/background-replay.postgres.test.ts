@@ -30,11 +30,6 @@ import {
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
 import {
-  EMPTY_AST,
-  type SourceAdapter,
-  type StoredRawReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   type BackgroundReplayBatch,
   type BackgroundReplaySource,
   type BackgroundReplayTickReport,
@@ -46,10 +41,7 @@ import {
   REPLAY_ROW_OUTCOME,
   type ReplayRunReport,
 } from "@/api/handlers/case-law/ingestion/replay";
-import {
-  BACKGROUND_REPLAY_LIMITS,
-  REPLAY_ENROLMENT,
-} from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import { BACKGROUND_REPLAY_LIMITS } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
@@ -63,6 +55,11 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  EMPTY_AST,
+  type SourceAdapter,
+  type StoredRawReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,
@@ -74,6 +71,7 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { OFF_REPLAY_ENROLMENT_FIXTURE } from "@/api/tests/helpers/replay-enrolment";
 import { runReplayTickFixture } from "@/api/tests/helpers/replay-tick";
 
 /** A replayed raw key is reported only when the reserved batch has one. */
@@ -1276,7 +1274,7 @@ if (!databaseUrl || !enabled) {
             PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
           );
           const enrolment = {
-            ...REPLAY_ENROLMENT,
+            ...OFF_REPLAY_ENROLMENT_FIXTURE,
             [ADAPTER_KEYS.EU_ECJ]: {
               mode: "enrolled",
               dailyBudget: 3,

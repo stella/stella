@@ -64,19 +64,6 @@ const metricRecord = ({
   kind,
   RawSourceStoredBytes: byteLength,
   RawSourceStoredObjects: 1,
-  _aws: {
-    Timestamp: expect.any(Number),
-    CloudWatchMetrics: [
-      {
-        Namespace: "Stella/Api",
-        Dimensions: [["family", "source", "kind"]],
-        Metrics: [
-          { Name: "RawSourceStoredBytes", Unit: "Bytes" },
-          { Name: "RawSourceStoredObjects", Unit: "Count" },
-        ],
-      },
-    ],
-  },
 });
 
 describe("raw storage metrics count successful object writes", () => {

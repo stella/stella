@@ -1,8 +1,8 @@
 import * as v from "valibot";
 
-import { uniqueItems } from "@/api/lib/custom-schema";
+import { MAX_CONTACT_NATIONALITY_CODES } from "@stll/api-contract/contact-write";
 
-export const MAX_CONTACT_NATIONALITY_CODES = 250;
+import { uniqueItems } from "@/api/lib/custom-schema";
 
 export const nationalityCodesSchema = v.pipe(
   v.array(v.pipe(v.string(), v.regex(/^[A-Z]{2}$/u))),

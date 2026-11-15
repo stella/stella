@@ -10,9 +10,9 @@ import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { CaseLawIndexSearch } from "./case-law-index-search.logic";
 

@@ -52,6 +52,11 @@ const TEST_FILE_SUFFIXES = [
 ] as const;
 
 const EXCLUDED_PATH_PREFIXES = ["apps/api/src/db/schema"] as const;
+// Schema inventories list every column of a kind; naming one there is not a use.
+const EXCLUDED_FILES = new Set([
+  "apps/api/src/lib/db/enum-column-roles.ts",
+  "apps/api/src/lib/db/status-tables.gen.ts",
+]);
 // Migrations replay column names verbatim and would make every column look
 // referenced; generated/vendor output belongs out for the same reason.
 const EXCLUDED_PATH_SEGMENTS = new Set(["node_modules", "drizzle"]);
@@ -111,6 +116,7 @@ export const shouldScanFile = (relativePath: string): boolean => {
     return false;
   }
   if (
+    EXCLUDED_FILES.has(relativePath) ||
     EXCLUDED_PATH_PREFIXES.some((prefix) => relativePath.startsWith(prefix))
   ) {
     return false;

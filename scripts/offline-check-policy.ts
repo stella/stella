@@ -37,6 +37,11 @@ export type OfflineImportAllowance = {
 export type OfflineCheckCommand = { command: string } & (
   { protected: true; entry: string | null } | { protected: false }
 );
+export type OfflineCheckCallerSource = {
+  file: string;
+  source: string;
+  type: "package" | "test" | "turbo" | "workflow";
+};
 const root = path.resolve(import.meta.dir, "..");
 const preload = path.join(root, "scripts/offline-network-preload.ts");
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -76,6 +81,195 @@ export const usesOfflineCheckPreload = (
   words: readonly string[],
   cwd: string,
 ) => offlineCheckEntry(words, cwd) !== undefined;
+
+const directCheckEntry = (words: readonly string[], cwd: string) => {
+  if (words.at(0) !== "bun") {
+    return undefined;
+  }
+  const relativeCwd = repoRelativePath(root, cwd);
+  const invocation = parseBunFlags({
+    args: words.slice(1),
+    context: { root, expanding: new Set(), checkouts: [] },
+    cwd: relativeCwd,
+    stdin: undefined,
+  });
+  if (invocation.type !== "parsed" || invocation.filter !== undefined) {
+    return undefined;
+  }
+  const entry = invocation.positional.at(0);
+  return entry === undefined || !SOURCE_FILE.test(entry)
+    ? undefined
+    : path.resolve(cwd, entry);
+};
+
+const sourceLine = (source: string, offset: number) =>
+  source.slice(0, offset).split("\n").length;
+
+/** Find direct protected-check callers outside the workflow-only policy inventory. */
+export const protectedOfflineCheckCallerViolations = (
+  protectedEntries: readonly string[],
+  sources: readonly OfflineCheckCallerSource[],
+): string[] => {
+  const protectedPaths = new Set(
+    protectedEntries.map((entry) => path.resolve(entry)),
+  );
+  const violations: string[] = [];
+  const report = (file: string, line: number) =>
+    violations.push(
+      `${file}:${line}: protected offline check must use the network preload; add \`--preload ./scripts/offline-network-preload.ts\` before the entry`,
+    );
+  const inspectShell = (
+    file: string,
+    commandSource: string,
+    cwd: string,
+    fileSource: string,
+  ) => {
+    for (const event of lexShell(commandSource)) {
+      if (event.type !== "command" || !event.words.includes("--check")) {
+        continue;
+      }
+      const words = programWords(event.words);
+      const entry = directCheckEntry(words, cwd);
+      if (
+        entry !== undefined &&
+        protectedPaths.has(entry) &&
+        !usesOfflineCheckPreload(words, cwd)
+      ) {
+        const offset = fileSource.indexOf(commandSource);
+        report(file, offset === -1 ? 1 : sourceLine(fileSource, offset));
+      }
+    }
+  };
+  for (const { file, source, type } of sources) {
+    const absoluteFile = path.resolve(root, file);
+    const cwd = type === "package" ? path.dirname(absoluteFile) : root;
+    if (type === "package") {
+      const manifest: unknown = JSON.parse(source);
+      if (!isRecord(manifest) || !isRecord(manifest["scripts"])) {
+        continue;
+      }
+      for (const command of Object.values(manifest["scripts"])) {
+        if (typeof command === "string") {
+          inspectShell(file, command, cwd, source);
+        }
+      }
+      continue;
+    }
+    if (type === "workflow") {
+      const workflow: unknown = Bun.YAML.parse(source);
+      if (!isRecord(workflow) || !isRecord(workflow["jobs"])) {
+        continue;
+      }
+      for (const job of Object.values(workflow["jobs"])) {
+        if (!isRecord(job) || job["steps"] === undefined) {
+          continue;
+        }
+        for (const step of flattenWorkflowSteps(job["steps"])) {
+          if (typeof step["run"] === "string") {
+            inspectShell(file, step["run"], root, source);
+          }
+        }
+      }
+      continue;
+    }
+    if (type === "turbo") {
+      const visit = (value: unknown): void => {
+        if (typeof value === "string") {
+          inspectShell(file, value, root, source);
+        } else if (Array.isArray(value)) {
+          for (const entry of value) {
+            visit(entry);
+          }
+        } else if (isRecord(value)) {
+          for (const entry of Object.values(value)) {
+            visit(entry);
+          }
+        }
+      };
+      visit(Bun.JSONC.parse(source));
+      continue;
+    }
+    if (
+      !source.includes('"--check"') ||
+      ![...protectedPaths].some((entry) =>
+        source.includes(path.basename(entry)),
+      )
+    ) {
+      continue;
+    }
+    const parsed = parseSyntax({ fileName: absoluteFile, text: source });
+    walk(parsed.program, (node) => {
+      if (
+        node.type !== "CallExpression" ||
+        node.callee.type !== "MemberExpression" ||
+        node.callee.computed ||
+        node.callee.object.type !== "Identifier" ||
+        node.callee.object.name !== "Bun" ||
+        node.callee.property.type !== "Identifier" ||
+        !["spawn", "spawnSync"].includes(node.callee.property.name)
+      ) {
+        return;
+      }
+      const call = source.slice(node.start, node.end);
+      const callsProtected = [...protectedPaths].some((entry) =>
+        call.includes(path.basename(entry)),
+      );
+      if (
+        callsProtected &&
+        call.includes('"--check"') &&
+        !call.includes("offline-network-preload.ts")
+      ) {
+        report(file, sourceLine(source, node.start));
+      }
+    });
+  }
+  return violations;
+};
+
+export const trackedOfflineCheckCallerSources =
+  (): OfflineCheckCallerSource[] => {
+    const tracked = Bun.spawnSync(
+      [
+        "git",
+        "ls-files",
+        "-z",
+        "package.json",
+        "apps/*/package.json",
+        "packages/*/package.json",
+        "turbo.json",
+        ".github/workflows/*.yml",
+        "*.test.ts",
+        "scripts/*.test.ts",
+        "apps/**/*.test.ts",
+        "packages/**/*.test.ts",
+      ],
+      { cwd: root },
+    );
+    if (tracked.exitCode !== 0) {
+      throw new OfflineCheckPolicyError({
+        message: "Cannot enumerate offline check callers",
+      });
+    }
+    return tracked.stdout
+      .toString()
+      .split("\0")
+      .filter(Boolean)
+      .map((file) => {
+        let type: OfflineCheckCallerSource["type"] = "test";
+        if (file.endsWith("package.json")) {
+          type = "package";
+        } else if (file === "turbo.json") {
+          type = "turbo";
+        } else if (file.startsWith(".github/workflows/")) {
+          type = "workflow";
+        }
+        return {
+          file,
+          source: readFileSync(path.join(root, file), "utf-8"),
+          type,
+        };
+      });
+  };
 
 const packageCheckEntry = (words: readonly string[]) => {
   const invocation = parseBunFlags({
@@ -216,6 +410,169 @@ export const offlineCheckViolations = (
   for (const command of allowed) {
     if (!raw.has(command)) {
       violations.push(`Stale offline check exception: ${command}`);
+    }
+  }
+  return violations;
+};
+
+export const offlineCheckStartupViolations = (
+  entries: readonly string[],
+): string[] => {
+  const violations: string[] = [];
+  for (const entry of new Set(entries)) {
+    const parsed = parseSyntax({
+      fileName: entry,
+      text: readFileSync(entry, "utf-8"),
+    });
+    const bindings = new Set<string>();
+    for (const statement of parsed.program.body) {
+      if (
+        statement.type !== "ImportDeclaration" ||
+        statement.importKind === "type"
+      ) {
+        continue;
+      }
+      const resolved = Result.try(() =>
+        realpathSync(
+          Bun.resolveSync(statement.source.value, path.dirname(entry)),
+        ),
+      );
+      if (
+        resolved.isErr() ||
+        ![
+          path.join(root, "scripts/offline-check-startup.ts"),
+          path.join(root, "packages/scripts/src/offline-check-startup.ts"),
+        ].includes(resolved.value)
+      ) {
+        continue;
+      }
+      for (const binding of statement.specifiers) {
+        if (
+          binding.type === "ImportSpecifier" &&
+          binding.importKind !== "type" &&
+          (binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value) === "assertOfflineCheckPreload"
+        ) {
+          bindings.add(binding.local.name);
+        }
+      }
+    }
+    const isGuardCall = (statement: Node | undefined) =>
+      statement?.type === "ExpressionStatement" &&
+      statement.expression.type === "CallExpression" &&
+      !statement.expression.optional &&
+      statement.expression.callee.type === "Identifier" &&
+      bindings.has(statement.expression.callee.name);
+    const declarationOnly = new Set([
+      "TSTypeAliasDeclaration",
+      "TSInterfaceDeclaration",
+      "FunctionDeclaration",
+    ]);
+    const firstExecutable = parsed.program.body.find((statement) => {
+      if (statement.type === "ExportNamedDeclaration") {
+        return (
+          statement.declaration !== null &&
+          !declarationOnly.has(statement.declaration.type)
+        );
+      }
+      return (
+        statement.type !== "ImportDeclaration" &&
+        statement.type !== "ExportAllDeclaration" &&
+        !declarationOnly.has(statement.type)
+      );
+    });
+    const namesGuard = (node: Node): boolean => {
+      if (node.type === "Identifier") {
+        return bindings.has(node.name);
+      }
+      if (node.type === "ObjectPattern") {
+        return node.properties.some((property) =>
+          property.type === "RestElement"
+            ? namesGuard(property.argument)
+            : namesGuard(property.value),
+        );
+      }
+      if (node.type === "ArrayPattern") {
+        return node.elements.some(
+          (element) => element !== null && namesGuard(element),
+        );
+      }
+      if (node.type === "AssignmentPattern") {
+        return namesGuard(node.left);
+      }
+      if (node.type === "RestElement") {
+        return namesGuard(node.argument);
+      }
+      return false;
+    };
+    const shadowsGuard = (child: Node): boolean => {
+      if (child.type === "VariableDeclaration") {
+        return child.declarations.some(({ id }) => namesGuard(id));
+      }
+      if (
+        child.type === "FunctionDeclaration" ||
+        child.type === "ClassDeclaration"
+      ) {
+        return child.id !== null && bindings.has(child.id.name);
+      }
+      if (child.type === "TSEnumDeclaration") {
+        return bindings.has(child.id.name);
+      }
+      if (child.type === "TSModuleDeclaration") {
+        return child.id.type === "Identifier" && bindings.has(child.id.name);
+      }
+      return false;
+    };
+    const calledAtStartup = parsed.program.body.some((statement) => {
+      if (statement === firstExecutable && isGuardCall(statement)) {
+        return true;
+      }
+      if (
+        statement.type !== "IfStatement" ||
+        statement.test.type !== "MemberExpression" ||
+        statement.test.computed ||
+        statement.test.property.type !== "Identifier" ||
+        statement.test.property.name !== "main" ||
+        statement.test.object.type !== "MetaProperty" ||
+        statement.test.object.meta.name !== "import" ||
+        statement.test.object.property.name !== "meta"
+      ) {
+        return false;
+      }
+      if (
+        statement.consequent.type === "BlockStatement" &&
+        statement.consequent.body.some(shadowsGuard)
+      ) {
+        return false;
+      }
+      // A check's guarded main branch starts with the assertion itself.
+      // Calls in dormant helpers or unrelated conditionals prove no startup.
+      return isGuardCall(
+        statement.consequent.type === "BlockStatement"
+          ? statement.consequent.body.at(0)
+          : statement.consequent,
+      );
+    });
+    if (!calledAtStartup) {
+      violations.push(
+        `Offline check entry must assert the preload at startup: ${repoRelativePath(root, entry)}`,
+      );
+    }
+  }
+  return violations;
+};
+
+export const bunfigRuntimePreloadViolations = (
+  bunfigs: ReadonlyMap<string, string>,
+): string[] => {
+  const violations: string[] = [];
+  for (const [file, source] of bunfigs) {
+    const parsed: unknown = Bun.TOML.parse(source);
+    if (isRecord(parsed) && "preload" in parsed) {
+      violations.push(
+        `Tracked bunfig must not declare a top-level runtime preload: ${file}`,
+      );
     }
   }
   return violations;
@@ -637,6 +994,41 @@ if (import.meta.main) {
     ),
   );
   const violations = offlineCheckViolations(checks, exceptions);
+  violations.push(
+    ...offlineCheckStartupViolations(
+      checks.flatMap((check) =>
+        check.protected && check.entry !== null ? [check.entry] : [],
+      ),
+    ),
+  );
+  violations.push(
+    ...protectedOfflineCheckCallerViolations(
+      checks.flatMap((check) =>
+        check.protected && check.entry !== null ? [check.entry] : [],
+      ),
+      trackedOfflineCheckCallerSources(),
+    ),
+  );
+  const trackedBunfigs = Bun.spawnSync(
+    ["git", "ls-files", "-z", "*bunfig.toml"],
+    { cwd: root },
+  );
+  if (trackedBunfigs.exitCode !== 0) {
+    throw new OfflineCheckPolicyError({
+      message: "Cannot enumerate tracked bunfig.toml files",
+    });
+  }
+  violations.push(
+    ...bunfigRuntimePreloadViolations(
+      new Map(
+        trackedBunfigs.stdout
+          .toString()
+          .split("\0")
+          .filter(Boolean)
+          .map((file) => [file, readFileSync(path.join(root, file), "utf-8")]),
+      ),
+    ),
+  );
   violations.push(
     ...offlineImportGraphViolations({
       entries: checks.flatMap((check) =>

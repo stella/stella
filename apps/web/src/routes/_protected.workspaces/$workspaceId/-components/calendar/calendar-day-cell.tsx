@@ -3,9 +3,16 @@ import { useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
-import { CalendarCell } from "@stll/ui/calendar";
+import { Button } from "@stll/ui/button";
+import { CalendarCell } from "@stll/ui/calendar-primitives";
 import { PlusIcon, SquareCheckIcon } from "@stll/ui/icons";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import {
+  Menu,
+  MenuAnchor,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -70,6 +77,7 @@ export const CalendarDayCell = ({
 
   // Context menu state
   const [ctxOpen, setCtxOpen] = useState(false);
+  const [ctxOpener, setCtxOpener] = useState<HTMLElement | null>(null);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -79,6 +87,9 @@ export const CalendarDayCell = ({
       return;
     }
     e.preventDefault();
+    setCtxOpener(
+      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+    );
     const x = e.clientX;
     const y = e.clientY;
     setCtxAnchor({
@@ -156,13 +167,12 @@ export const CalendarDayCell = ({
             <MenuTrigger
               aria-label={t("common.add")}
               render={
-                <button
-                  aria-label={t("common.add")}
-                  className="text-muted-foreground hover:bg-accent hover:text-foreground inline-flex size-5 items-center justify-center rounded opacity-0 transition-opacity group-hover/day:opacity-100 pointer-coarse:opacity-100"
-                  type="button"
+                <Button
+                  className="opacity-0 transition-opacity group-hover/day:opacity-100 pointer-coarse:opacity-100"
+                  size="icon-xs"
+                  variant="muted"
                 />
               }
-              tooltip={t("common.add")}
             >
               <PlusIcon className="size-3.5" />
             </MenuTrigger>
@@ -190,15 +200,18 @@ export const CalendarDayCell = ({
 
       {/* Overflow indicator */}
       {overflow > 0 && !expanded && (
-        <button
-          className="text-muted-foreground hover:text-foreground text-start text-xs"
+        <Button
+          className="self-start"
           onClick={() => setExpanded(true)}
-          type="button"
+          size="inline"
+          variant="muted"
         >
-          {t("workspaces.views.calendar.more", {
-            count: String(overflow),
-          })}
-        </button>
+          <span className="text-xs">
+            {t("workspaces.views.calendar.more", {
+              count: String(overflow),
+            })}
+          </span>
+        </Button>
       )}
 
       {/* Right-click context menu */}
@@ -212,11 +225,11 @@ export const CalendarDayCell = ({
           }}
           open={ctxOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
-          <MenuPopup anchor={ctxAnchor ?? undefined}>
+          <MenuAnchor />
+          <MenuPopup
+            anchor={ctxAnchor ?? undefined}
+            finalFocus={() => ctxOpener}
+          >
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />
               {t("tasks.newTask")}

@@ -8,20 +8,23 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 
 import {
   documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
   seedDocumentAnnotationScaling,
 } from "./document-annotations";
 import { readScalingViolations } from "./measurement";
 
-/** Every scenario on one fresh document of `size` marks, list first. */
+/** Every scenario on one fresh document of `size` marks, list first; the
+ *  marked download before the writes change how many marks there are. */
 const measureAt = async (db: GatedTestDb, size: number) => {
   const fakeS3 = startFakeS3();
   const fixture = await seedDocumentAnnotationScaling({ db, fakeS3, size });
   try {
+    const download = await markedPdfDownloadScalingScenario.measure(fixture);
     const measurements = [];
     for (const scenario of documentAnnotationScalingScenarios) {
       measurements.push(await scenario.measure(fixture));
     }
-    return measurements;
+    return { download, measurements };
   } finally {
     await fixture.cleanup();
     fakeS3.stop();
@@ -47,9 +50,12 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               ({ definition }) => definition === scenario.definition,
             ),
           ).toBe(true);
-          const at10 = small.at(index) ?? panic(`${scenario.name}: unmeasured`);
+          const at10 =
+            small.measurements.at(index) ??
+            panic(`${scenario.name}: unmeasured`);
           const at200 =
-            large.at(index) ?? panic(`${scenario.name}: unmeasured`);
+            large.measurements.at(index) ??
+            panic(`${scenario.name}: unmeasured`);
           console.info(
             "handler-scaling",
             JSON.stringify({ name: scenario.name, at10, at200 }),
@@ -62,6 +68,30 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             [],
           );
         }
+        // The copy carries every mark, one annotation each, for the same
+        // round trips at either size.
+        expect(
+          apiApp.routes.some(
+            ({ definition }) =>
+              definition === markedPdfDownloadScalingScenario.definition,
+          ),
+        ).toBe(true);
+        console.info(
+          "handler-scaling",
+          JSON.stringify({
+            name: markedPdfDownloadScalingScenario.name,
+            at10: small.download,
+            at200: large.download,
+          }),
+        );
+        expect(small.download.rows).toBe(10);
+        expect(large.download.rows).toBe(200);
+        expect(
+          readScalingViolations({
+            small: small.download,
+            large: large.download,
+          }),
+        ).toEqual([]);
       });
     }, 180_000); // timeout: seeds 210 marks, each one reading and parsing the PDF
   },

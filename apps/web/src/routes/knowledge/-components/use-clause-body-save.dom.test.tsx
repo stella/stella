@@ -11,10 +11,10 @@ import {
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import { APIError } from "@/lib/errors/api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ClauseBodyWrite } from "./use-clause-body-save";
 

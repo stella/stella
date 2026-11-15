@@ -14,15 +14,27 @@
  *     certificate, so provenance survives without re-parsing the bytes.
  *   - "sharepoint": the version was copied (one-way, read-only) from a
  *     Microsoft Graph drive item the user had permission to read. The
- *     payload pins the exact item and its ETag at copy time so a later
- *     re-import can detect drift without a sync loop.
- *
- * `sharepoint` is reserved for the future SharePoint/OneDrive import pipeline.
+ *     payload pins the exact item, its ETag and the content digest at copy
+ *     time so a later re-import can detect drift without a sync loop.
+ *   - "import": the file was brought in from another system. The payload
+ *     keeps what that system recorded and stella cannot recreate: its id
+ *     for the file, the original creation and modification times, and the
+ *     author's name when the author is not a stella user. The version's own
+ *     `createdAt`/`createdBy` stay the import's, so queues, retention and
+ *     audit keep reading when the bytes entered stella.
  */
 
 import * as v from "valibot";
 
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+
+import {
+  EXTERNAL_ID_MAX_LENGTH,
+  EXTERNAL_SOURCE_MAX_LENGTH,
+  EXTERNAL_SOURCE_PATTERN,
+} from "@/api/lib/imports/external-ref-limits";
+
+export const ORIGINAL_AUTHOR_NAME_MAX_LENGTH = 256;
 
 export const documentSourceSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("upload") }),
@@ -42,7 +54,7 @@ export const documentSourceSchema = v.variant("kind", [
     baseVersionId: v.pipe(v.string(), v.uuid()),
     certificateSha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
     signingTime: apiDateTimeSchema,
-    level: v.picklist(["B-B", "B-T", "B-LT"]),
+    level: v.picklist(["B-B", "B-T", "B-LT", "B-LTA"]),
     /** The authority whose trusted time the signature carries. */
     timestampAuthorityUrl: v.nullable(v.pipe(v.string(), v.url())),
     /** Why `level` is what it is when it fell short of the configuration. */
@@ -62,12 +74,37 @@ export const documentSourceSchema = v.variant("kind", [
     itemId: v.pipe(v.string(), v.minLength(1)),
     eTag: v.string(),
     webUrl: v.pipe(v.string(), v.url()),
+    /** SHA-256 of the bytes as copied, so a re-import detects a real change. */
+    contentHash: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+  }),
+  v.strictObject({
+    kind: v.literal("import"),
+    externalSource: v.pipe(
+      v.string(),
+      v.maxLength(EXTERNAL_SOURCE_MAX_LENGTH),
+      v.regex(EXTERNAL_SOURCE_PATTERN),
+    ),
+    externalId: v.nullable(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(EXTERNAL_ID_MAX_LENGTH)),
+    ),
+    contentHash: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+    originalCreatedAt: v.nullable(apiDateTimeSchema),
+    originalModifiedAt: v.nullable(apiDateTimeSchema),
+    originalAuthorName: v.nullable(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(ORIGINAL_AUTHOR_NAME_MAX_LENGTH),
+      ),
+    ),
   }),
 ]);
 
 export type DocumentSource = v.InferOutput<typeof documentSourceSchema>;
 
-/** Constant upload provenance — the only branch produced by upload paths. */
+export type ImportDocumentSource = Extract<DocumentSource, { kind: "import" }>;
+
+/** Constant provenance of a direct upload. */
 export const UPLOAD_DOCUMENT_SOURCE: DocumentSource = { kind: "upload" };
 
 /** Constant desktop-edit provenance — produced by edit round-trip paths. */

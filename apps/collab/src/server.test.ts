@@ -1582,7 +1582,10 @@ describe("collaboration server", () => {
         () => fakeApi.storeRequestBodies().length > 0,
         "Server did not reject the stale room generation.",
       );
-      await Bun.sleep(100);
+      await waitFor(
+        () => closeCodes.includes(FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE),
+        "Provider did not close after its room generation changed.",
+      );
       expect(closeCodes).toContain(FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE);
       expect(closeCodes).not.toContain(FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE);
       expect(secondRoomCloseCodes).not.toContain(

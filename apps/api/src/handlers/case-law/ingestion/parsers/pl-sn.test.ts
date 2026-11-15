@@ -6,18 +6,21 @@ import { hasInlineChildren } from "@stll/legal-ast/inline";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  assemblePlSnParagraphs,
-  extractPlPdfSeparatedContent,
-  extractPlSnLines,
-  parsePlSnDecisionPdf,
-  PL_PDF_PARAGRAPH_START,
-  plSnParagraphsToHtml,
-  withoutRaisedReferenceMarkers,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
-import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  assemblePdfParagraphs,
+  extractPdfBodyAndNotes,
+  extractPdfLines,
+  PDF_PARAGRAPH_START,
+  pdfParagraphsToHtml,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import type { PdfLine } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import { parsePlSnDecisionPdf as uncheckedParsePlSnDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { readPdfTextPages } from "@/api/lib/legal-search/parsers/libpdf-utils";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-type PlSnTextLine = Extract<PlSnLine, { type: "text" }>;
+const parsePlSnDecisionPdf = guardParser(uncheckedParsePlSnDecisionPdf);
+
+type PlSnTextLine = Extract<PdfLine, { type: "text" }>;
 
 const body = (text: string, bold = false): PlSnTextLine => ({
   type: "text",
@@ -30,7 +33,7 @@ const opens = (text: string, bold = false): PlSnTextLine => ({
   indented: true,
 });
 
-const BLANK: PlSnLine = { type: "blank" };
+const BLANK: PdfLine = { type: "blank" };
 
 const UOKIK_PDF = new URL(
   "__fixtures__/pl-uokik-dok-9-2011.pdf",
@@ -42,7 +45,7 @@ const plainText = (paragraphs: readonly { text: string }[][]): string[] =>
 
 describe("assembling sn.pl's typeset lines into paragraphs", () => {
   test("an indented line opens a paragraph and unindented lines continue it", () => {
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       opens("Sąd Najwyższy rozpoznał sprawę"),
       body("ze skargi kasacyjnej powoda."),
       opens("Skarga podlega oddaleniu."),
@@ -55,7 +58,7 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
   });
 
   test("a blank line ends a paragraph without opening one", () => {
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       body("Wyrok z dnia 23 czerwca 1994 r."),
       BLANK,
       BLANK,
@@ -71,7 +74,7 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
   test("a paragraph runs on across a page break it is not indented after", () => {
     // Pages are concatenated in reading order, so the only signal that the
     // text continues is the absence of an indent on the first line overleaf.
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       opens("Izba Skarbowa podzieliła stanowisko"),
       body("Urzędu Skarbowego w całości."),
     ]);
@@ -80,7 +83,7 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
   });
 
   test("a word broken across lines is rejoined without its hyphen", () => {
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       body("po rozpo-"),
       body("znaniu sprawy"),
     ]);
@@ -89,7 +92,7 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
   });
 
   test("a compound broken at its own hyphen keeps it, and gains no space", () => {
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       body("Sądowi Administracyjnego-"),
       body("Ośrodkowi Zamiejscowemu"),
     ]);
@@ -100,11 +103,11 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
   });
 
   test("a paragraph of nothing but spaces is dropped", () => {
-    expect(assemblePlSnParagraphs([body("   "), BLANK])).toEqual([]);
+    expect(assemblePdfParagraphs([body("   "), BLANK])).toEqual([]);
   });
 
   test("runs of the same weight merge across a line join, others do not", () => {
-    const paragraphs = assemblePlSnParagraphs([
+    const paragraphs = assemblePdfParagraphs([
       { type: "text", indented: true, runs: [{ text: "Sąd", bold: true }] },
       {
         type: "text",
@@ -129,7 +132,7 @@ describe("assembling sn.pl's typeset lines into paragraphs", () => {
 
 describe("emitting the paragraphs as markup the Polish parser reads", () => {
   test("bold survives as <b> and markup characters are escaped", () => {
-    const html = plSnParagraphsToHtml([
+    const html = pdfParagraphsToHtml([
       [
         { text: "UZASADNIENIE", bold: true },
         { text: ' w sprawie "A & B" <spółka>', bold: false },
@@ -142,7 +145,7 @@ describe("emitting the paragraphs as markup the Polish parser reads", () => {
   });
 
   test("each paragraph is its own element", () => {
-    const html = plSnParagraphsToHtml([
+    const html = pdfParagraphsToHtml([
       [{ text: "Pierwszy", bold: false }],
       [{ text: "Drugi", bold: false }],
     ]);
@@ -151,58 +154,222 @@ describe("emitting the paragraphs as markup the Polish parser reads", () => {
   });
 });
 
-describe("raised reference markers", () => {
-  const span = (text: string, x: number, y: number, fontSize: number) => ({
-    text,
-    bbox: { x, y, width: text.length * 5 },
-    fontSize,
-    fontName: "Body",
+type Drawn = { text: string; x: number; y: number; size: number };
+
+/**
+ * A Supreme Court page read the way the court sets it: three lines of
+ * running text in `bodySize` type, plus `extra`.
+ */
+const readSupremeCourtPage = async (
+  bodySize: number,
+  extra: readonly Drawn[],
+) => {
+  const pdf = PDF.create();
+  const page = pdf.addPage({ size: "letter" });
+  for (const index of [0, 1, 2]) {
+    page.drawText("Running text sets the ordinary body type of the page.", {
+      x: 72,
+      y: 600 - index * bodySize * 1.25,
+      size: bodySize,
+    });
+  }
+  for (const { text, x, y, size } of extra) {
+    page.drawText(text, { x, y, size });
+  }
+  const paragraphs = assemblePdfParagraphs(
+    await extractPdfLines(await pdf.save(), PDF_PARAGRAPH_START.INDENT, {
+      supremeCourt: { docket: "I CSK 1/26" },
+    }),
+  );
+  return {
+    texts: plainText(paragraphs),
+    superscripts: paragraphs.flatMap((runs) =>
+      runs.flatMap(({ superscript, text }) =>
+        superscript === true ? [text] : [],
+      ),
+    ),
+  };
+};
+
+const readLetterheadPage = async (
+  footer: string,
+  { x = 250, y = 36 }: { x?: number; y?: number } = {},
+): Promise<string> => {
+  const pdf = PDF.create();
+  const page = pdf.addPage({ size: "letter" });
+  for (const [index, text] of [
+    "Ordinary body text line one.",
+    "Ordinary body text line two.",
+    "Ordinary body text line three.",
+  ].entries()) {
+    page.drawText(text, { x: 72, y: 700 - index * 15, size: 12 });
+  }
+  page.drawText(footer, { x, y, size: 12 });
+  const content = await extractPdfBodyAndNotes(
+    await pdf.save(),
+    PDF_PARAGRAPH_START.INDENT,
+  );
+  return plainText(assemblePdfParagraphs(content.body)).join("\n");
+};
+
+describe("page numbers on letterhead pages", () => {
+  test.each([
+    { opening: "separate", noteY: 84, footerY: 20 },
+    { opening: "joined", noteY: 84, footerY: 20 },
+    { opening: "measured", noteY: 90, footerY: 64 },
+    { opening: "numbered", noteY: 84, footerY: 20 },
+  ] as const)(
+    "repeated footnote citations stay with their labels beside running footers %j",
+    async ({ opening, noteY, footerY }) => {
+      const pdf = PDF.create();
+      const citation = "Published commentary, volume 4, page 25.";
+      const continuation = "Additional citation text.";
+      const footer = "Office publication footer";
+      for (const label of ["1", "2"]) {
+        const page = pdf.addPage({ size: "letter" });
+        page.drawText("Body reference", { x: 72, y: 700, size: 12 });
+        page.drawText(label, { x: 153, y: 704, size: 7 });
+        for (const index of [0, 1, 2]) {
+          page.drawText("Ordinary body text establishes the page type.", {
+            x: 72,
+            y: 600 - index * 15,
+            size: 12,
+          });
+        }
+        page.drawText(label, {
+          x: 72,
+          y: opening === "joined" ? noteY : 100,
+          size: 7,
+        });
+        page.drawText(citation, { x: 82, y: noteY, size: 9 });
+        if (opening === "measured") {
+          page.drawText(continuation, { x: 82, y: noteY - 10, size: 9 });
+        }
+        page.drawText(footer, { x: 72, y: footerY, size: 7 });
+        if (opening === "numbered") {
+          page.drawText(label, { x: 250, y: 5, size: 12 });
+        }
+      }
+      const bytes = await pdf.save();
+      const pages = await readPdfTextPages(bytes);
+      expect(pages).toHaveLength(2);
+      const citationLines = pages.map(({ lines }) =>
+        lines.find(({ text }) => text.includes(citation)),
+      );
+      expect(citationLines.at(0)?.bbox.y).toEqual(expect.any(Number));
+      expect(citationLines.at(1)?.bbox.y).toBe(citationLines.at(0)?.bbox.y);
+      for (const [index, page] of pages.entries()) {
+        if (opening !== "joined") {
+          expect(
+            page.lines.some(({ text }) => text.trim() === String(index + 1)),
+          ).toBe(true);
+        }
+        expect(page.lines.some(({ text }) => text === footer)).toBe(true);
+      }
+      const content = await extractPdfBodyAndNotes(
+        bytes,
+        PDF_PARAGRAPH_START.INDENT,
+      );
+      const notes = content.notes.filter(
+        (line): line is PlSnTextLine => line.type === "text",
+      );
+      for (const label of ["1", "2"]) {
+        expect(
+          notes
+            .filter(({ footnote }) => footnote?.label === label)
+            .flatMap(({ runs }) => runs.map(({ text }) => text))
+            .join(" ")
+            .trim(),
+        ).toBe(
+          opening === "measured" ? `${citation} ${continuation}` : citation,
+        );
+      }
+      expect(JSON.stringify(content)).not.toContain(footer);
+    },
+  );
+
+  test.each([
+    "1",
+    "-1-",
+    "1/16",
+    "Strona 1 z 16",
+    "str.1",
+    "Strona   1   z   16",
+  ])("removes the centered page number form %s", async (footer) => {
+    const text = await readLetterheadPage(footer);
+    expect(text).not.toContain(footer);
+    expect(text).toContain("Ordinary body text line one.");
   });
 
-  test("a marker removes its own digits, not equal digits earlier in the line", () => {
-    const line = {
-      spans: [
-        span("1. Úřad obdržel podnět", 0, 100, 10),
-        span("1", 110, 104, 6),
-        span(" a zahájil řízení.", 115, 100, 10),
-      ],
-      text: "1. Úřad obdržel podnět1 a zahájil řízení.",
-      bbox: { x: 0, y: 100 },
-    };
-    const cleaned = withoutRaisedReferenceMarkers(line, 10);
-    expect(cleaned.text).toBe("1. Úřad obdržel podnět a zahájil řízení.");
-    expect(cleaned.spans.map(({ text }) => text)).toEqual([
-      "1. Úřad obdržel podnět",
-      " a zahájil řízení.",
+  test("keeps another page's number and a left-aligned body reference", async () => {
+    const wrongPage = await readLetterheadPage("2");
+    expect(wrongPage).toContain("2");
+
+    const bodyReference = await readLetterheadPage("str. 1", { x: 72, y: 700 });
+    expect(bodyReference).toContain("str. 1");
+  });
+});
+
+describe("small digits the text layer prints as a line of their own", () => {
+  test("a thousands group stays in its amount", async () => {
+    const { texts, superscripts } = await readSupremeCourtPage(12, [
+      { text: "Kara 10", x: 72, y: 700, size: 12 },
+      { text: "000", x: 118, y: 703, size: 7 },
+      { text: " PLN", x: 130, y: 700, size: 12 },
     ]);
+    expect(superscripts).toEqual([]);
+    expect(texts.some((text) => /^Kara 10 000 PLN(?: |$)/u.test(text))).toBe(
+      true,
+    );
   });
 
-  test("a raised digit without a matching footnote stays as text", () => {
-    const line = {
-      spans: [span("m", 0, 100, 10), span("2", 5, 104, 6)],
-      text: "m2",
-      bbox: { x: 0, y: 100 },
-    };
-    expect(withoutRaisedReferenceMarkers(line, 10, new Set()).text).toBe("m2");
+  test("a digit raised less than an index is set stays on its line", async () => {
+    // 2.2pt over 16pt type: past the 2pt the text layer keeps on a line,
+    // short of the 2.4pt an index is raised at least.
+    const { texts, superscripts } = await readSupremeCourtPage(16, [
+      { text: "Tekst", x: 72, y: 700, size: 16 },
+      { text: "1", x: 111.5, y: 702.2, size: 7 },
+      { text: " follows", x: 116, y: 700, size: 16 },
+    ]);
+    expect(superscripts).toEqual([]);
+    expect(texts.some((text) => /^Tekst1 follows(?: |$)/u.test(text))).toBe(
+      true,
+    );
+  });
+
+  test("an article's index raised as an index is set stays a superscript", async () => {
+    const { texts, superscripts } = await readSupremeCourtPage(16, [
+      { text: "art. 394", x: 72, y: 700, size: 16 },
+      { text: "1", x: 132, y: 705, size: 7 },
+      { text: " k.p.c.", x: 137, y: 700, size: 16 },
+    ]);
+    expect(superscripts).toEqual(["1"]);
+    expect(texts.some((text) => text.startsWith("art. 3941"))).toBe(true);
   });
 });
 
 describe("reading recorded PDF lines", () => {
-  test("the default reader keeps its byte-identical UOKiK output", async () => {
+  test("the default reader keeps its byte-identical output on a UOKiK PDF", async () => {
     const bytes = new Uint8Array(await Bun.file(UOKIK_PDF).arrayBuffer());
-    const lines = await extractPlSnLines(bytes);
+    const lines = await extractPdfLines(bytes);
     const digest = sha256Hex(JSON.stringify(lines));
 
+    // Re-pinned once: the PDF reader now reads glyphs its fonts name the
+    // legacy way (`zdot`), so `nało-enia` and `pienię'ną` read `nałożenia`
+    // and `pieniężną`; nothing else in the reading changed.
     expect(digest).toBe(
-      "63491377b0a8cc8d1f205d0a43b32add539c1e0e6ef4f281ad252f9311d27592",
+      "c75a70f07bf9fb4bf8233e263b9f39e506f6832aab76e8a7452c07fe406ca0c7",
     );
+    const text = JSON.stringify(lines);
+    expect(text).toContain("nałożenia kary pieniężnej");
+    expect(text).not.toContain("nało-enia");
   });
 
-  test("the separated reader retains the UOKiK footnote zone as typed lines", async () => {
+  test("the body-and-notes reader keeps the UOKiK footnotes as typed lines", async () => {
     const bytes = new Uint8Array(await Bun.file(UOKIK_PDF).arrayBuffer());
-    const { notes: lines } = await extractPlPdfSeparatedContent(
+    const { notes: lines } = await extractPdfBodyAndNotes(
       bytes,
-      PL_PDF_PARAGRAPH_START.INDENT,
+      PDF_PARAGRAPH_START.INDENT,
     );
     const notes = lines.filter(
       (line): line is PlSnTextLine =>
@@ -283,7 +450,7 @@ describe("reading recorded Supreme Court PDFs", () => {
       fulltext.split("\n\n").filter((paragraph) => /^\d+$/u.test(paragraph)),
     ).toEqual([]);
     expect(fulltext).toContain(
-      "służy instytucja tzw. przedsądu, ustanowiona w art. 3989 k.p.c.",
+      "służy instytucja tzw. przedsądu, ustanowiona w art. 398^9 k.p.c.",
     );
   });
 
@@ -293,10 +460,14 @@ describe("reading recorded Supreme Court PDFs", () => {
       "V CSK 98/17",
     );
 
+    expect(paragraphs.join("\n\n")).toContain(
+      "obie podstawy przewidziane w art. 398^3 § 1 k.p.c.",
+    );
+
     expect(
       paragraphs.some((paragraph) =>
         paragraph.startsWith(
-          "Potrzeba dokonania wykładni przepisów prawnych, przewidziana w art. 3989 § 1 pkt 2 k.p.c.",
+          "Potrzeba dokonania wykładni przepisów prawnych, przewidziana w art. 398^9 § 1 pkt 2 k.p.c.",
         ),
       ),
     ).toBe(true);
@@ -479,7 +650,7 @@ const typesetPdf = async (
 /** The text of each line the Supreme Court reading extracts. */
 const supremeCourtLineTexts = async (pdfBytes: Uint8Array): Promise<string[]> =>
   (
-    await extractPlSnLines(pdfBytes, PL_PDF_PARAGRAPH_START.INDENT, {
+    await extractPdfLines(pdfBytes, PDF_PARAGRAPH_START.INDENT, {
       supremeCourt: { docket: "I CSK 1/26" },
     })
   ).flatMap((line) =>
@@ -526,7 +697,7 @@ describe("reading word spaces set by position alone", () => {
 });
 
 test("inline emphasis survives wrapped lines and nested superscripts in one paragraph", () => {
-  const paragraphs = assemblePlSnParagraphs([
+  const paragraphs = assemblePdfParagraphs([
     { type: "text", indented: true, runs: [{ text: "The rule", bold: false }] },
     {
       type: "text",
@@ -549,7 +720,133 @@ test("inline emphasis survives wrapped lines and nested superscripts in one para
     },
   ]);
   expect(paragraphs).toHaveLength(1);
-  expect(plSnParagraphsToHtml(paragraphs)).toBe(
+  expect(pdfParagraphsToHtml(paragraphs)).toBe(
     "<p>The rule<i> in dubio contra proferentem</i><b><i> in article 109</i></b><b><i><sup>7</sup></i></b>.</p>",
   );
 });
+
+test("a baseline reference at a wrapped line keeps its exact footnote target", () => {
+  const reference = { label: "1", noteId: 'footnote-custom "1"' };
+  const paragraphs = assemblePdfParagraphs([
+    { type: "text", indented: true, runs: [{ text: "Claim", bold: false }] },
+    {
+      type: "text",
+      indented: false,
+      runs: [
+        { text: "1", bold: true, italic: true, footnoteReference: reference },
+        { text: " continues.", bold: false },
+      ],
+    },
+  ]);
+  expect(
+    paragraphs.flat().find((run) => run.footnoteReference !== undefined)
+      ?.footnoteReference,
+  ).toEqual(reference);
+  expect(pdfParagraphsToHtml(paragraphs)).toContain(
+    `<a href="#${encodeURIComponent(reference.noteId)}"><b><i> 1</i></b></a>`,
+  );
+});
+
+test.each(
+  [24, 30, 42].flatMap((gap) => [72, 108, 180].map((x) => ({ gap, x }))),
+)(
+  "a sentence continuation with layout %j stays in its paragraph",
+  async ({ gap, x }) => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    for (const index of [0, 1, 2, 3, 4]) {
+      page.drawText(
+        "Ten akapit ustala rozmiar pisma i standardowy rytm tekstu.",
+        {
+          x: 72,
+          y: 700 - index * 15,
+          size: 12,
+        },
+      );
+    }
+    const opening =
+      "Organ antymonopolowy na podstawie zebranego w sprawie dowodu";
+    page.drawText(opening, { x: 72, y: 600, size: 12 });
+    page.drawText("ustala stan sprawy.", { x, y: 600 - gap, size: 12 });
+    page.drawText("Nowy akapit opisuje inny fakt.", {
+      x: 72,
+      y: 570 - gap,
+      size: 12,
+    });
+    page.drawText("1. Pierwszy punkt.", { x: 72, y: 540 - gap, size: 12 });
+    const content = await extractPdfBodyAndNotes(
+      await pdf.save(),
+      PDF_PARAGRAPH_START.INDENT,
+    );
+    const paragraphs = plainText(assemblePdfParagraphs(content.body));
+    expect(paragraphs).toContain(`${opening} ustala stan sprawy.`);
+    expect(paragraphs).toContain("Nowy akapit opisuje inny fakt.");
+    expect(paragraphs).toContain("1. Pierwszy punkt.");
+  },
+);
+
+test.each([
+  { inline: "1", layout: "spaced" },
+  { inline: "12", layout: "spaced" },
+  { inline: "1", layout: "adjacent" },
+  { inline: "12", layout: "adjacent" },
+] as const)(
+  "mixed superscript layout %j retains reference attachments and order",
+  async ({ inline, layout }) => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    const extraWidth = (inline.length - 1) * 4;
+    page.drawText("art. 12", { x: 72, y: 700, size: 12 });
+    page.drawText(inline, { x: 107, y: 701.9, size: 7 });
+    if (layout === "spaced") {
+      page.drawText(" oraz 34", { x: 112 + extraWidth, y: 700, size: 12 });
+    }
+    page.drawText("2", {
+      x: (layout === "spaced" ? 157.1 : 111.3) + extraWidth,
+      y: 704,
+      size: 7,
+    });
+    page.drawText(" koniec.", {
+      x: (layout === "spaced" ? 161.5 : 115.7) + extraWidth,
+      y: 700,
+      size: 12,
+    });
+    for (const index of [0, 1, 2]) {
+      page.drawText("Ordinary body text establishes the page type.", {
+        x: 72,
+        y: 600 - index * 15,
+        size: 12,
+      });
+    }
+    const bytes = await pdf.save();
+    const extracted = (await readPdfTextPages(bytes)).at(0);
+    if (extracted === undefined) {
+      expect.unreachable("The fixture has one printed page");
+    }
+    const bodyLine = extracted.lines.find(({ text }) =>
+      text.includes("art. 12"),
+    );
+    expect(bodyLine?.spans.some(({ text }) => text.trim() === inline)).toBe(
+      true,
+    );
+    expect(extracted.lines.some(({ text }) => text.trim() === "2")).toBe(true);
+    const content = await extractPdfBodyAndNotes(
+      bytes,
+      PDF_PARAGRAPH_START.INDENT,
+    );
+    const paragraphs = assemblePdfParagraphs(content.body);
+    if (layout === "spaced") {
+      expect(pdfParagraphsToHtml(paragraphs)).toContain(
+        `art. 12<sup>${inline}</sup> oraz 34<sup>2</sup> koniec.`,
+      );
+    }
+    expect(
+      paragraphs
+        .flatMap((runs) =>
+          runs.filter(({ superscript }) => superscript === true),
+        )
+        .map(({ text }) => text)
+        .join(""),
+    ).toBe(`${inline}2`);
+  },
+);

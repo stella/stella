@@ -15,6 +15,7 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { allInvoicesQueryRoot } from "@/lib/resource-query-roots.logic";
 import {
+  useCreateTimeEntry,
   useDecideTimeSuggestion,
   useUpdateTimeEntry,
 } from "@/lib/workspaces/mutations/time-entries";
@@ -58,6 +59,7 @@ export const useMyWeekActions = ({
   const queryClient = useQueryClient();
   const decideSuggestion = useDecideTimeSuggestion();
   const updateEntry = useUpdateTimeEntry();
+  const createMutation = useCreateTimeEntry();
   const [busyFingerprints, setBusyFingerprints] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -167,6 +169,22 @@ export const useMyWeekActions = ({
     ]);
   };
 
+  const createEntry = async (
+    workspaceId: string,
+    values: ManualTimeEntryValues,
+  ) => {
+    await createMutation.mutateAsync({ workspaceId, timezoneId, ...values });
+    await Promise.all([
+      refreshWeek(),
+      queryClient.invalidateQueries({
+        queryKey: timeEntriesKeys.all(workspaceId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: invoicesKeys.all(workspaceId),
+      }),
+    ]);
+  };
+
   const reportFailure = (error: unknown) => {
     notifyUserError(error, tErrors("actionFailed"));
   };
@@ -178,12 +196,16 @@ export const useMyWeekActions = ({
 
   return {
     busyFingerprints,
-    pending: decideSuggestion.isPending || updateEntry.isPending,
+    pending:
+      decideSuggestion.isPending ||
+      updateEntry.isPending ||
+      createMutation.isPending,
     submitWeek: submitWeek.mutateAsync,
     submitting: submitWeek.isPending,
     accept,
     dismiss,
     editEntry,
+    createEntry,
     fromRow,
     reportFailure,
   };

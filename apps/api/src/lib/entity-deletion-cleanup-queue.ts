@@ -127,18 +127,15 @@ export const createEntityDeletionCleanupReconciler = ({
       return;
     }
     reconciling = true;
-    detached(
-      (async () => {
-        try {
-          await run();
-        } catch (error) {
-          onError(error);
-        } finally {
-          reconciling = false;
-        }
-      })(),
-      "entity-deletion-cleanup.reconcile",
-    );
+    detached(async () => {
+      try {
+        await run();
+      } catch (error) {
+        onError(error);
+      } finally {
+        reconciling = false;
+      }
+    }, "entity-deletion-cleanup.reconcile");
   };
 };
 

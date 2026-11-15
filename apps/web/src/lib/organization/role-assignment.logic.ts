@@ -27,3 +27,9 @@ export const inviteMemberSchema = (
     email: emailSchema(invalidEmail),
     role: v.picklist(actorRole === undefined ? [] : assignableRoles(actorRole)),
   });
+
+/** Most invites are for colleagues, so the standard role leads. */
+export const defaultInviteRole = (
+  roles: readonly OrganizationRoleName[],
+): OrganizationRoleName | undefined =>
+  roles.includes("member") ? "member" : roles.at(-1);

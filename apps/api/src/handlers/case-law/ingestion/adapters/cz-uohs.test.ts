@@ -4,33 +4,42 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CZ_UOHS_SYNTHETIC_LISTING,
   czUohsSyntheticPdf,
 } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import {
-  buildCzUohsDecision,
+  buildCzUohsDecision as uncheckedBuildCzUohsDecision,
+  CZ_UOHS_DOCUMENT_TIMEOUT_MS,
+  CZ_UOHS_PAGE_SIZE,
   czUohsAdapter,
   czUohsCollectionOf,
   czUohsDecisionIdentifiers,
+  czUohsFileNumber,
   czUohsLetterheadDate,
+  czUohsPrintedDecisionType,
   encodeCzUohsCursor,
-  parseCzUohsDocumentPdf,
+  parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
-  extractPlPdfSeparatedContent,
-  PL_PDF_PARAGRAPH_START,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
+import { ADAPTER_TIMEOUT } from "@/api/lib/legal-search/ingestion-constants";
+import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const originalFetch = globalThis.fetch;
+const buildCzUohsDecision = guardParser(uncheckedBuildCzUohsDecision);
+const parseCzUohsDocumentPdf = guardParser(uncheckedParseCzUohsDocumentPdf);
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const records = async () => parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING);
@@ -74,9 +83,45 @@ describe("ÚOHS JSON-LD", () => {
     expect(czUohsCollectionOf(listed[3]!)).toBeUndefined();
   });
 
+  test("a list the publisher leaves null reads as empty instead of failing the listing", async () => {
+    const [first, ...rest] = await records();
+    const parsed = parseCzUohsListing({
+      rozhodnutí: [
+        {
+          ...first,
+          instance: null,
+          odbor: null,
+          účastník: null,
+          typ_řízení: null,
+          typ_rozhodnutí: null,
+          dokument: null,
+        },
+        ...rest,
+      ],
+    });
+
+    expect(parsed).toHaveLength(rest.length + 1);
+    expect(parsed[0]).toMatchObject({
+      instance: [],
+      odbor: [],
+      účastník: [],
+      typ_řízení: [],
+      typ_rozhodnutí: [],
+      dokument: [],
+    });
+  });
+
+  test("a list that is neither a list nor null still fails the listing", async () => {
+    const [first] = await records();
+
+    expect(() =>
+      parseCzUohsListing({ rozhodnutí: [{ ...first, dokument: "none" }] }),
+    ).toThrow("Invalid type");
+  });
+
   test("keeps a decision from an unknown department with no collection", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response("unavailable", { status: 500 }),
+    testFetchState.set(
+      asFetchMock(async () => new Response("unavailable", { status: 500 })),
     );
     const unknown = (await records())[3]!;
     const decision = await buildCzUohsDecision(unknown);
@@ -89,7 +134,7 @@ describe("ÚOHS JSON-LD", () => {
 
   test("an unchanged decision keeps its fingerprint across reads", async () => {
     const bytes = czUohsSyntheticPdf();
-    globalThis.fetch = asFetchMock(async () => new Response(bytes));
+    testFetchState.set(asFetchMock(async () => new Response(bytes)));
     const record = (await records())[0]!;
     const first = await buildCzUohsDecision(record);
     const second = await buildCzUohsDecision(record);
@@ -108,7 +153,7 @@ describe("ÚOHS JSON-LD", () => {
           new URL(`__fixtures__/${fixture}`, import.meta.url),
         ).arrayBuffer(),
       );
-      globalThis.fetch = asFetchMock(async () => new Response(bytes));
+      testFetchState.set(asFetchMock(async () => new Response(bytes)));
       const decision = await buildCzUohsDecision((await records())[0]!);
       expect(decision.decisionDate).toBe(issued);
       expect(decision.metadata).toMatchObject({
@@ -119,8 +164,8 @@ describe("ÚOHS JSON-LD", () => {
   );
 
   test("a document without a letterhead date marks the date as not published", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response(czUohsSyntheticPdf()),
+    testFetchState.set(
+      asFetchMock(async () => new Response(czUohsSyntheticPdf())),
     );
     const decision = await buildCzUohsDecision((await records())[0]!);
     expect(decision.fulltext).toContain("Fiktivni rozhodnuti");
@@ -188,6 +233,154 @@ describe("ÚOHS JSON-LD", () => {
     },
   );
 
+  describe("a decision set with the docket as its running header", () => {
+    const read = async (fixture: string) =>
+      await parseCzUohsDocumentPdf(
+        new Uint8Array(
+          await Bun.file(
+            new URL(`__fixtures__/${fixture}`, import.meta.url),
+          ).arrayBuffer(),
+        ),
+        { caseNumber: fixture, sourceUrl: fixture },
+      );
+    const bodyOf = (ast: Awaited<ReturnType<typeof read>>) =>
+      ast.blocks.filter(
+        (block) => !(block.type === "paragraph" && block.note !== undefined),
+      );
+    const notesOf = (ast: Awaited<ReturnType<typeof read>>) =>
+      ast.blocks.flatMap((block) =>
+        block.type === "paragraph" && block.note !== undefined ? [block] : [],
+      );
+
+    test.each([
+      [
+        "cz-uohs-2015-S0569.pdf",
+        "Č.j.: ÚOHS-S0569/2015/KD-42098/2016/852/MAd",
+        "UOHSX008YFQ5",
+      ],
+      [
+        "cz-uohs-2018-R0003.pdf",
+        "Č.j.: ÚOHS-R0003/2018/HS-31751/310/MHf",
+        "UOHSX00BKPME",
+      ],
+    ] as const)(
+      "%s keeps the running header and the barcode out of the text, and the barcode's payload in it",
+      async (fixture, header, payload) => {
+        const body = bodyOf(await read(fixture));
+        const text = body.map(({ plainText }) => plainText).join("\n");
+        expect(text).not.toContain(header);
+        expect(text).not.toContain(`*${payload}*`);
+        expect(body.at(0)?.plainText).toBe(payload);
+        // The letterhead's own docket line, printed once, stays.
+        expect(text).toContain(header.replace("Č.j.:", "Č. j.:"));
+      },
+    );
+
+    test("a paragraph the running header cut at a page break reads whole", async () => {
+      const text = bodyOf(await read("cz-uohs-2015-S0569.pdf"))
+        .map(({ plainText }) => plainText)
+        .join("\n");
+      expect(text).toContain(
+        "Praha 4, IČO 22671617, tím že, schválil dokument nazvaný",
+      );
+      expect(text).toContain(
+        "o právním posouzení šetřeného případu Úřadem a předal mu také informace",
+      );
+    });
+
+    test.each([
+      [
+        "cz-uohs-2018-R0003.pdf",
+        "uvedených v její Příloze č. 1, a s účinností od",
+        "11. února 2015",
+      ],
+      [
+        "cz-uohs-2015-S0569.pdf",
+        "jednání konaném v rámci správního řízení ve dnech",
+        "29. 4. 2016",
+      ],
+      [
+        "cz-uohs-2024-R0145.pdf",
+        "v zadávacím řízení“ ze dne",
+        "29. 8. 2024, které je ve správním spise",
+      ],
+    ] as const)(
+      "%s: a date wrapped after its day goes on in its paragraph",
+      async (fixture, sentence, date) => {
+        const body = bodyOf(await read(fixture));
+        expect(
+          body.filter(({ plainText }) => plainText.startsWith(date)),
+        ).toEqual([]);
+        expect(
+          body.find(({ plainText }) => plainText.includes(sentence))?.plainText,
+        ).toContain(date);
+      },
+    );
+
+    test("every footnote is a note, in order, and none is left in the text", async () => {
+      const ast = await read("cz-uohs-2018-R0003.pdf");
+      const notes = notesOf(ast);
+      expect(notes.map(({ note }) => note?.label)).toEqual(
+        Array.from({ length: 69 }, (_, index) => String(index + 1)),
+      );
+      // Set in two type sizes on one line, and once read as text.
+      expect(notes.at(26)?.plainText).toBe(
+        "Rozhodnutí Nejvyššího správního soudu ze dne 7. 4. 2006, č.j. 6 As 23/2005-66.",
+      );
+      const text = bodyOf(ast)
+        .map(({ plainText }) => plainText)
+        .join("\n");
+      for (const { plainText } of notes) {
+        expect(text).not.toContain(plainText);
+      }
+    });
+
+    test("the footnotes are searchable text of the decision", async () => {
+      const bytes = new Uint8Array(
+        await Bun.file(
+          new URL("__fixtures__/cz-uohs-2018-R0003.pdf", import.meta.url),
+        ).arrayBuffer(),
+      );
+      testFetchState.set(asFetchMock(async () => new Response(bytes)));
+      const decision = await buildCzUohsDecision((await records())[0]!);
+      expect(decision.fulltext).toContain(
+        "Rozhodnutí Nejvyššího správního soudu ze dne 7. 4. 2006, č.j. 6 As 23/2005-66.",
+      );
+    });
+
+    test("a footnote's mark is a linked superscript, not a digit glued to its word", async () => {
+      const body = bodyOf(await read("cz-uohs-2018-R0003.pdf"));
+      expect(body.map(({ plainText }) => plainText)).toContain("II. ROZKLAD");
+      const appeal = body.find(({ plainText }) =>
+        plainText.startsWith("Účastník řízení podal proti všem výrokům"),
+      );
+      expect(
+        appeal?.type === "paragraph" ? appeal.inlines.slice(0, 2) : [],
+      ).toEqual([
+        {
+          type: "text",
+          text: "Účastník řízení podal proti všem výrokům napadeného rozhodnutí včas rozklad",
+        },
+        {
+          type: "link",
+          href: "#footnote-2",
+          children: [
+            { type: "superscript", children: [{ type: "text", text: "2" }] },
+          ],
+        },
+      ]);
+    });
+
+    test("the head matter's printed lines join into its paragraphs", async () => {
+      const text = bodyOf(await read("cz-uohs-2018-R0003.pdf"))
+        .map(({ plainText }) => plainText)
+        .join("\n");
+      expect(text).toContain(
+        "č. j. ÚOHS-S0595/2016/VS-37308/2017/830/ESk ze dne 20. 12. 2017 podalo statutární město Karlovy Vary,",
+      );
+    });
+  });
+
   test("keeps a raised reference immediately after its claim inside a line", async () => {
     const pdf = PDF.create();
     const page = pdf.addPage({ size: "letter" });
@@ -242,7 +435,7 @@ describe("ÚOHS JSON-LD", () => {
     ]);
   });
 
-  test("keeps an unlabelled page-top continuation in the previous footnote until body resumes", async () => {
+  test("keeps a small unlabelled line atop the next page as text, never filed under a note", async () => {
     const pdf = PDF.create();
     const first = pdf.addPage({ size: "letter" });
     first.drawText("First body paragraph with a reference", {
@@ -279,13 +472,18 @@ describe("ÚOHS JSON-LD", () => {
     if (saved.status !== "saved") {
       return;
     }
-    const separated = await extractPlPdfSeparatedContent(
+    const separated = await extractPdfBodyAndNotes(
       saved.bytes,
-      PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+      PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
     );
+    // The note's number on a line of its own, then its one line of text.
     expect(separated.notes).toMatchObject([
       { type: "text", footnote: { label: "1", noteId: "footnote-1" } },
-      { type: "text", footnote: { label: "1", noteId: "footnote-1" } },
+      {
+        type: "text",
+        footnote: { label: "1", noteId: "footnote-1" },
+        runs: [{ text: "Note begins on the first page" }],
+      },
     ]);
     const ast = await parseCzUohsDocumentPdf(saved.bytes, {
       caseNumber: "synthetic-continuation",
@@ -297,15 +495,16 @@ describe("ÚOHS JSON-LD", () => {
     expect(notes).toHaveLength(1);
     expect(notes.at(0)).toMatchObject({
       note: { type: "footnote", label: "1", noteId: "footnote-1" },
-      plainText:
-        "Note begins on the first page and continues at the next page top.",
+      plainText: "Note begins on the first page",
     });
     const bodyText = ast.blocks
       .filter((block) => block.type === "paragraph" && block.note === undefined)
       .map(({ plainText }) => plainText)
       .join(" ");
     expect(bodyText).not.toContain("Note begins");
-    expect(bodyText).not.toContain("and continues at the next page top.");
+    // Small type atop a page shows no note it continues: the reader keeps it
+    // in the text rather than guess which note it belongs to.
+    expect(bodyText).toContain("and continues at the next page top.");
     expect(bodyText).toContain("Small body text after the body resumes.");
   });
 
@@ -350,8 +549,8 @@ describe("ÚOHS JSON-LD", () => {
   });
 
   test("the date of legal force is not the decision date", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response("unavailable", { status: 500 }),
+    testFetchState.set(
+      asFetchMock(async () => new Response("unavailable", { status: 500 })),
     );
     const record = (await records())[0]!;
     const decision = await buildCzUohsDecision(record);
@@ -359,6 +558,113 @@ describe("ÚOHS JSON-LD", () => {
     expect(JSON.stringify(decision.metadata["legalForceDate"])).toBe(
       JSON.stringify(record.datum_právní_moci),
     );
+  });
+
+  test("the file number keeps its year in both export layouts", () => {
+    // Older export rows state only the serial and carry the whole file
+    // number at the head of the reference number.
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "R0003",
+        číslo_jednací: "R0003/2018/HS-31751/310/MHf",
+      }),
+    ).toBe("ÚOHS-R0003/2018/HS");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S0196/2026/KS",
+        číslo_jednací: "14168/2026/890",
+      }),
+    ).toBe("ÚOHS-S0196/2026/KS");
+    // The same serial in two years names two files.
+    const [first] = czUohsDecisionIdentifiers({
+      spisová_značka: "R0003",
+      číslo_jednací: "R0003/2018/HS-31751/310/MHf",
+    });
+    const [second] = czUohsDecisionIdentifiers({
+      spisová_značka: "R0003",
+      číslo_jednací: "R0003/2017/VZ-12345/2017/321/ABc",
+    });
+    expect(first.value).not.toBe(second.value);
+    // The decision's own number may follow without a hyphen.
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S817,818,819",
+        číslo_jednací: "S817,818,819/2014/VZ 26112/2014/533/ZPr",
+      }),
+    ).toBe("ÚOHS-S817,818,819/2014/VZ");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "R4",
+        číslo_jednací: "R4/2016/VZ29770/2016/321/TNo",
+      }),
+    ).toBe("ÚOHS-R4/2016/VZ");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "R449,450",
+        číslo_jednací: "R449,450/2015/38132/2016/321/EDy/HBa",
+      }),
+    ).toBe("ÚOHS-R449,450/2015");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S0049",
+        číslo_jednací: "S0049/2013",
+      }),
+    ).toBe("ÚOHS-S0049/2013");
+    // A serial the reference does not extend is kept as stated.
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S0904",
+        číslo_jednací: "1/2026/500",
+      }),
+    ).toBe("ÚOHS-S0904");
+  });
+
+  test("reads the date beside the reference number in older letterheads", () => {
+    expect(
+      czUohsLetterheadDate(
+        "PŘEDSEDA ÚŘADU PRO OCHRANU HOSPODÁŘSKÉ SOUTĚŽE\nROZHODNUTÍ\nČ. j.: ÚOHS-R0003/2018/HS-31751/310/MHf Brno 1. listopadu 2018\nV řízení o rozkladu",
+      ),
+    ).toBe("2018-11-01");
+    expect(
+      czUohsLetterheadDate(
+        "Č. j.: ÚOHS-R0007/2017/HS-33348/2017/310/AŠi Brno: 13. listopadu 2017\n",
+      ),
+    ).toBe("2017-11-13");
+    expect(
+      czUohsLetterheadDate(
+        "Č. j.: ÚOHS-S0569/2015/KD-42098/2016/852/MAd Brno: 17. 10. 2016\n",
+      ),
+    ).toBe("2016-10-17");
+    // The 2023 and 2024 letterheads label both references, in either order.
+    expect(
+      czUohsLetterheadDate(
+        "ROZHODNUTÍ\nSpisová značka: ÚOHS-R0145/2024/VZ Číslo jednací: ÚOHS-37007/2024/163 Brno 1. 10. 2024\n",
+      ),
+    ).toBe("2024-10-01");
+    expect(
+      czUohsLetterheadDate(
+        "ROZHODNUTÍ\nSpisová značka: ÚOHS-S0876/2023/KS Brno 8. 1. 2024 Číslo jednací: ÚOHS-00750/2024/873\n",
+      ),
+    ).toBe("2024-01-08");
+    // A cited reference in the body is followed by "ze dne", not the place.
+    expect(
+      czUohsLetterheadDate(
+        "rozhodnutí č. j. ÚOHS-S0595/2016/VS-37308/2017/830/ESk ze dne 20. 12. 2017",
+      ),
+    ).toBeUndefined();
+  });
+
+  test("the type is the decision's printed title", () => {
+    expect(
+      czUohsPrintedDecisionType(
+        "*UOHSX00BKPME*\n PŘEDSEDA ÚŘADU\n\n ROZHODNUTÍ \nČ. j.: ÚOHS-R0003/2018/HS",
+      ),
+    ).toBe("rozhodnutí");
+    expect(czUohsPrintedDecisionType("USNESENÍ\n")).toBe("usnesení");
+    expect(czUohsPrintedDecisionType(" Rozhodnutí \n")).toBe("rozhodnutí");
+    expect(
+      czUohsPrintedDecisionType("Úřad vydal rozhodnutí ve věci"),
+    ).toBeUndefined();
   });
 
   test("emits citation-shaped authority identifiers", async () => {
@@ -370,9 +676,13 @@ describe("ÚOHS JSON-LD", () => {
 
   test("fetches the PDF and retains both raw responses with provenance", async () => {
     const bytes = czUohsSyntheticPdf();
-    globalThis.fetch = asFetchMock(
-      async () =>
-        new Response(bytes, { headers: { "Content-Type": "application/pdf" } }),
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          new Response(bytes, {
+            headers: { "Content-Type": "application/pdf" },
+          }),
+      ),
     );
     const decision = await buildCzUohsDecision((await records())[0]!);
     expect(decision.fulltext).toContain("Fiktivni rozhodnuti");
@@ -395,14 +705,19 @@ describe("ÚOHS JSON-LD", () => {
     expect(JSON.stringify(decision.metadata["participants"])).toBe(
       JSON.stringify([{ typ: "Osoba", jméno: { cs: "obec Fiktivní Lhota" } }]),
     );
-    expect(String(decision.decisionType)).toBe(
-      "https://uohs.gov.cz/cs/ciselniky/typy-rozhodnuti/36.html",
+    // The synthetic text prints no title, so no type is claimed; the
+    // code-list address the export names stays in metadata.
+    expect(decision.decisionType).toBeUndefined();
+    expect(JSON.stringify(decision.metadata["decisionTypes"])).toBe(
+      JSON.stringify([
+        "https://uohs.gov.cz/cs/ciselniky/typy-rozhodnuti/36.html",
+      ]),
     );
   });
 
   test("keeps PDF bytes when text extraction fails", async () => {
     const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
-    globalThis.fetch = asFetchMock(async () => new Response(bytes));
+    testFetchState.set(asFetchMock(async () => new Response(bytes)));
     const decision = await buildCzUohsDecision((await records())[0]!);
     expect(decision.sourceRawObjects?.["document"]?.bytes).toEqual(bytes);
     expect(decision.metadata["documentExtraction"]).toEqual(
@@ -411,8 +726,8 @@ describe("ÚOHS JSON-LD", () => {
   });
 
   test("keeps an unreadable PDF as typed text absence and continues", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response("unavailable", { status: 500 }),
+    testFetchState.set(
+      asFetchMock(async () => new Response("unavailable", { status: 500 })),
     );
     const decision = await buildCzUohsDecision((await records())[0]!);
     expect(decision.textFields.summary).toEqual({
@@ -443,8 +758,8 @@ describe("ÚOHS JSON-LD", () => {
     const invalid = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
     const valid = czUohsSyntheticPdf();
     let request = 0;
-    globalThis.fetch = asFetchMock(
-      async () => new Response(request++ === 0 ? invalid : valid),
+    testFetchState.set(
+      asFetchMock(async () => new Response(request++ === 0 ? invalid : valid)),
     );
     const decision = await buildCzUohsDecision(record);
     expect(decision.fulltext).toContain("Fiktivni rozhodnuti");
@@ -480,10 +795,12 @@ describe("ÚOHS JSON-LD", () => {
       })),
     };
     let listingRequests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      listingRequests += 1;
-      return Response.json(listing);
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        listingRequests += 1;
+        return Response.json(listing);
+      }),
+    );
     const first = (await czUohsAdapter.fetchPage(null, {}, undefined)).unwrap();
     const second = (
       await czUohsAdapter.fetchPage(first.nextCursor, {}, undefined)
@@ -492,6 +809,17 @@ describe("ÚOHS JSON-LD", () => {
     expect(second.decisions).toHaveLength(1);
     expect(listingRequests).toBe(1);
     expect(second.nextCursor).not.toBe(first.nextCursor);
+  });
+
+  test("a page deadline fits a full page of gated document reads and one slow read", () => {
+    const documentsPerRecord = 2;
+    const gatedReads =
+      CZ_UOHS_PAGE_SIZE *
+      documentsPerRecord *
+      czUohsAdapter.minRequestIntervalMs;
+    expect(czUohsAdapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE).toBeGreaterThan(
+      gatedReads + CZ_UOHS_DOCUMENT_TIMEOUT_MS,
+    );
   });
 
   test("a parked walk resumes after its frontier, not from the start", async () => {
@@ -503,8 +831,10 @@ describe("ÚOHS JSON-LD", () => {
       spisová_značka: `R${id}/2026/VZ`,
       dokument: [],
     });
-    globalThis.fetch = asFetchMock(async () =>
-      Response.json({ rozhodnutí: [make("01"), make("02"), make("03")] }),
+    testFetchState.set(
+      asFetchMock(async () =>
+        Response.json({ rozhodnutí: [make("01"), make("02"), make("03")] }),
+      ),
     );
     const parked = encodeCzUohsCursor({
       version: 1,
@@ -521,10 +851,12 @@ describe("ÚOHS JSON-LD", () => {
 
   test("refuses a cursor it did not write instead of restarting the walk", async () => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests += 1;
-      return Response.json({ rozhodnutí: [] });
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests += 1;
+        return Response.json({ rozhodnutí: [] });
+      }),
+    );
     const page = await czUohsAdapter.fetchPage("40", {}, undefined);
     expect(Result.isError(page)).toBe(true);
     expect(requests).toBe(0);
@@ -544,7 +876,7 @@ describe("ÚOHS JSON-LD", () => {
         make(String(index * 2).padStart(2, "0")),
       ),
     };
-    globalThis.fetch = asFetchMock(async () => Response.json(listing));
+    testFetchState.set(asFetchMock(async () => Response.json(listing)));
     const first = (await czUohsAdapter.fetchPage(null, {}, undefined)).unwrap();
     listing = { rozhodnutí: [...listing.rozhodnutí, make("39")] };
     // A process restart drops the bulk snapshot; the durable key still resumes
@@ -574,7 +906,7 @@ describe("ÚOHS JSON-LD", () => {
       odbor: [url],
       dokument: [],
     }));
-    globalThis.fetch = asFetchMock(async () => Response.json({ rozhodnutí }));
+    testFetchState.set(asFetchMock(async () => Response.json({ rozhodnutí })));
     const page = await czUohsAdapter.reconciliation.listSlicePage({
       slice: "all",
       page: 0,
@@ -591,8 +923,8 @@ describe("ÚOHS JSON-LD", () => {
   });
 
   test("returns a tagged listing error instead of throwing", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response("unavailable", { status: 503 }),
+    testFetchState.set(
+      asFetchMock(async () => new Response("unavailable", { status: 503 })),
     );
     const outcome = await czUohsAdapter.fetchPage(null, {}, undefined);
     expect(outcome.isErr()).toBe(true);

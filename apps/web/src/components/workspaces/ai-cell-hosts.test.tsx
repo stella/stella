@@ -53,6 +53,7 @@ const decision = {
   languageAlternates: [],
   decisionDate: null,
   decisionType: null,
+  decisionTypeKind: null,
   headnote: { type: "absent", reason: "not_published" },
   citationCount: 0,
 } satisfies Decision;

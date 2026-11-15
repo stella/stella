@@ -38,13 +38,18 @@ const PERSONAL_WRITE_SCOPES = {
   chat: null,
   organizationSettings: null,
   auditLog: null,
+  dataExport: null,
   agentSkill: null,
   firmMemory: null,
   caseLawResearch: null,
+  legalHold: null,
   legalReaderAnnotation: ["stella:knowledge_write"],
   savedSearch: null,
   searchHistory: ["stella:knowledge_write"],
   integration: null,
+  // A conflict check probes matters the key's holder cannot open; it stays a
+  // signed-in action until a personal key can carry that decision.
+  conflictCheck: null,
 } as const satisfies Record<
   keyof typeof statements,
   readonly PersonalApiKeyScope[] | null

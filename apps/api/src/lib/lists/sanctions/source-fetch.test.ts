@@ -1,13 +1,19 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
-import { readUnListVersion, SANCTIONS_SOURCES } from "@stll/sanctions";
+import {
+  readEuListVersion,
+  readUnListVersion,
+  SANCTIONS_SOURCES,
+} from "@stll/sanctions";
 import type { SanctionsSource } from "@stll/sanctions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   fetchStreamWithResolvedAddress,
+  fetchWithResolvedAddress,
+  type safeOutboundFetchBytes,
   type safeOutboundFetchStream,
 } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -15,6 +21,7 @@ import {
   parseSafeOutboundUrl,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
+import { createSilentPublisher } from "@/api/tests/helpers/silent-publisher";
 
 import { SANCTIONS_SOURCE_CONFIG } from "./source-config";
 import {
@@ -55,23 +62,32 @@ const fixtureStream = (
   return { fetchStreamRequest, requested };
 };
 
-const euMetadata = (downloadUrl: string) => ({
-  "@graph": [
-    {
-      "@type": "dcat:Distribution",
-      "dct:title": [
-        {
-          "@language": "en",
-          "@value": "Consolidated Financial Sanctions File 1.1",
-        },
-      ],
-      "dct:format": {
-        "@id": "http://publications.europa.eu/resource/authority/file-type/XML",
-      },
-      "dcat:downloadURL": { "@id": downloadUrl },
-    },
-  ],
-});
+const EU_FILES = "https://webgate.ec.europa.eu/fsd/fsf/public/files";
+
+/** The Commission's feed of list files, shaped as the publisher serves it. */
+const euFeed = (xmlLinks: readonly string[]) => {
+  const item = (title: string, link: string, type: string) => `
+    <item>
+      <title>${title}</title>
+      <link>${link.replaceAll("&", "&amp;")}</link>
+      <description>Consolidated Sanctions List</description>
+      <enclosure url="${link.replaceAll("&", "&amp;")}" length="25899600" type="${type}" />
+      <pubDate>Fri, 23 Oct 2026 15:10:13 GMT</pubDate>
+      <guid>${link.replaceAll("&", "&amp;")}&amp;checksum=8F13301B67F7A5E4D5BBDA035D03FCC6E90F58B4</guid>
+    </item>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>European Commission - External relations / Sanctions List</title>
+    <link>https://webgate.ec.europa.eu/fsd/fsf/public/rss</link>
+    <lastBuildDate>Sun, 08 Nov 2026 21:22:51 GMT</lastBuildDate>
+    ${item("PDF - v1.0", `${EU_FILES}/pdfFullSanctionsList/content?token=example`, "application/pdf")}
+    ${item("CSV - v1.1", `${EU_FILES}/csvFullSanctionsList_1_1/content?token=example`, "text/plain")}
+    ${xmlLinks.map((link) => item("XML (Based on XSD) - v1.1", link, "application/xml")).join("")}
+    ${item("XML (Based on XSD) - v1.0", `${EU_FILES}/xmlFullSanctionsList/content?token=example`, "application/xml")}
+  </channel>
+</rss>`;
+};
 
 test("every source carries its canonical redirect policy into API configuration", () => {
   for (const source of Object.values(SANCTIONS_SOURCES)) {
@@ -89,23 +105,55 @@ test("every source carries its canonical redirect policy into API configuration"
 });
 
 describe("publisher download discovery", () => {
-  test("takes the XML 1.1 distribution from EU metadata with its current query token", () => {
-    const url =
-      "https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=example";
-    const found = discoverEuXmlUrl(euMetadata(url));
+  test("takes the XML 1.1 file from the Commission feed with its current query token", () => {
+    const url = `${EU_FILES}/xmlFullSanctionsList_1_1/content?token=example`;
+    const found = discoverEuXmlUrl(euFeed([url]));
     expect(found.isOk()).toBe(true);
     expect(found.unwrap()).toBe(url);
+    // The same file listed twice is still one file.
+    expect(discoverEuXmlUrl(euFeed([url, url])).unwrap()).toBe(url);
   });
 
-  test("rejects a distribution redirected to a different host without exposing its query", () => {
-    const found = discoverEuXmlUrl(
-      euMetadata(
-        "https://example.test/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=private",
-      ),
-    );
-    expect(found.isErr()).toBe(true);
-    if (found.isErr()) {
-      expect(found.error.message).not.toContain("private");
+  test("rejects a feed item on a different host without exposing its query", () => {
+    for (const link of [
+      "https://example.test/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=private",
+      "http://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=private",
+      "https://webgate.ec.europa.eu:444/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=private",
+      "https://user:private@webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content",
+    ]) {
+      const found = discoverEuXmlUrl(euFeed([link]));
+      expect(found.isErr()).toBe(true);
+      if (found.isErr()) {
+        expect(found.error.code).toBe("metadata-invalid");
+        expect(found.error.message).not.toContain("private");
+      }
+    }
+  });
+
+  test("refuses a feed that names no XML 1.1 file, two of them, or is not a feed", () => {
+    const xml = `${EU_FILES}/xmlFullSanctionsList_1_1/content`;
+    const complete = euFeed([`${xml}?token=example`]);
+    for (const body of [
+      euFeed([]),
+      euFeed([`${xml}?token=one`, `${xml}?token=two`]),
+      // The file without its access token, or with an empty one.
+      euFeed([xml]),
+      euFeed([`${xml}?token=`]),
+      euFeed([`${xml}?other=example`]),
+      // Cut off after the XML item: what parsed must not stand for the feed.
+      complete.slice(0, complete.indexOf("XML (Based on XSD) - v1.0")),
+      // An error page that embeds a feed is still not a feed.
+      `<html><body>${complete.replace(/^<\?xml[^>]*\?>/u, "")}</body></html>`,
+      `${complete}<rss version="2.0"><channel></channel></rss>`,
+      '{"status":500,"error":"Internal Server Error"}',
+      "<html><body>Maintenance</body></html>",
+      "",
+    ]) {
+      const found = discoverEuXmlUrl(body);
+      expect(found.isErr()).toBe(true);
+      if (found.isErr()) {
+        expect(found.error.code).toBe("metadata-invalid");
+      }
     }
   });
 
@@ -457,6 +505,104 @@ describe("streaming list downloads", () => {
       expect(result.error.code).toBe("fetch-failed");
     }
     expect(attempts).toBe(3);
+  });
+});
+
+describe("EU list refresh", () => {
+  const EU_FIXTURE = path.join(FIXTURES, "eu.xml");
+  const xmlUrl = `${EU_FILES}/xmlFullSanctionsList_1_1/content?token=example`;
+
+  test("finds the XML in the publisher feed and reads the edition from its start", async () => {
+    const received: string[] = [];
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: (request) => {
+        const url = new URL(request.url);
+        received.push(`${url.pathname}${url.search}`);
+        return url.pathname === "/fsd/fsf/public/rss"
+          ? new Response(euFeed([xmlUrl]), {
+              headers: { "Content-Type": "text/xml; charset=UTF-8" },
+            })
+          : new Response(Bun.file(EU_FIXTURE));
+      },
+    });
+    const toServer = (target: string | URL) => {
+      const url = new URL(target);
+      url.protocol = "http:";
+      url.port = String(server.port);
+      return url;
+    };
+    const addresses = [{ address: "127.0.0.1", family: 4 as const }];
+    const options = {
+      permit,
+      signal: new AbortController().signal,
+      fetchBytesRequest: (async (request) =>
+        await fetchWithResolvedAddress({
+          permit: request.permit,
+          url: toServer(request.url),
+          addresses,
+          maxBytes: request.maxBytes,
+          headers: request.headers,
+          signal: request.signal,
+          timeoutMs: 5000,
+        })) satisfies typeof safeOutboundFetchBytes,
+      fetchStreamRequest: (async (request) =>
+        await fetchStreamWithResolvedAddress({
+          ...request,
+          url: toServer(request.url),
+          addresses,
+        })) satisfies typeof safeOutboundFetchStream,
+    };
+    try {
+      const marker = await fetchSanctionsMarker("eu", options);
+      expect(marker.isOk()).toBe(true);
+      const fetched = marker.unwrap();
+      expect(fetched.downloadUrl).toBe(xmlUrl);
+      expect(fetched.version).toEqual(
+        (await readEuListVersion(Bun.file(EU_FIXTURE).stream())).unwrap(),
+      );
+      expect(received).toEqual([
+        "/fsd/fsf/public/rss",
+        "/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=example",
+      ]);
+
+      const edition = await fetchSanctionsEdition(fetched, options);
+      expect(edition.unwrap().parsed.version).toEqual(fetched.version);
+      expect(edition.unwrap().parsed.entries.length).toBeGreaterThan(0);
+    } finally {
+      await server.stop(true);
+    }
+  });
+
+  test("gives up on a feed that never answers within the request time limit", async () => {
+    // Each attempt ends only when the transport's own time limit fires; a
+    // missing limit leaves this test waiting until the runner fails it.
+    const publisher = createSilentPublisher({ timeoutMs: 50 }); // timeout under test
+    try {
+      const marker = await fetchSanctionsMarker("eu", {
+        permit,
+        signal: new AbortController().signal,
+        fetchBytesRequest: publisher.fetchBytesRequest,
+        fetchStreamRequest: async () =>
+          panic("no list download without a discovered file"),
+      });
+      expect(marker.isErr()).toBe(true);
+      if (marker.isErr()) {
+        expect(marker.error.code).toBe("fetch-failed");
+      }
+      expect(publisher.requested()).toEqual(
+        Array.from({ length: 3 }, () => ({
+          url: SANCTIONS_SOURCE_CONFIG.eu.markerUrl,
+          timeoutMs: 30_000,
+        })),
+      );
+      expect(publisher.received()).toEqual(
+        Array.from({ length: 3 }, () => "/fsd/fsf/public/rss"),
+      );
+    } finally {
+      await publisher.stop();
+    }
   });
 });
 

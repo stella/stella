@@ -1,5 +1,6 @@
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
+import { caseLawPopulationCounts, caseLawSources } from "@/api/db/schema";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
   type CourtWeightEntry,
@@ -7,10 +8,12 @@ import {
 } from "@/api/lib/case-law/court-weights";
 import { isCourtDirectoryJurisdiction } from "@/api/lib/case-law/decision-court-id-sql";
 import { loadPublicCourtWeightsForCountry } from "@/api/lib/case-law/public-case-law-config";
+import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import { typedPgArray } from "@/api/lib/search/sql";
 import type { FacetBucket } from "@/api/lib/search/types";
 
 /**
@@ -111,6 +114,79 @@ export const readCourtNames = async ({
       const court = row["court"];
       return typeof court === "string" && court.length > 0 ? [court] : [];
     });
+};
+
+type AdmittedCourtPageOptions = {
+  country: string;
+  /** The sources a public surface may not count or serve. */
+  excludedSourceIds: readonly string[];
+  /** The last court of the previous page; the page starts after it. */
+  after: string | null;
+  /** Courts to read; one more is read to tell whether a page follows. */
+  limit: number;
+};
+
+/**
+ * One page of the courts holding at least one decision a public surface may
+ * serve, by stored name, plus one court that says another page follows.
+ *
+ * One keyset walk of the folded population counts per admitted source, each
+ * stopping at the page's size, then merged and cut to it: a page reads at most
+ * its size from each source, however many courts the country holds. Folded
+ * counts hold only positive totals, and `readCourtNames` is join-free, so a
+ * surface that lists courts to a reader reads these: a court whose every source
+ * the redistribution policy withholds is never named. The policy applies when
+ * the page is read; the counts follow the corpus at the next fold, so a court's
+ * first decision lists it, and its last one's removal unlists it, from then.
+ */
+export const admittedCourtPageStatement = ({
+  country,
+  excludedSourceIds,
+  after,
+  limit,
+}: AdmittedCourtPageOptions): SQL => sql`
+  SELECT page.court
+  FROM (
+    SELECT DISTINCT walk.value AS court
+    FROM ${caseLawSources} AS source
+    CROSS JOIN LATERAL (
+      SELECT counted.value
+      FROM ${caseLawPopulationCounts} AS counted
+      WHERE counted.kind = 'court'
+        AND counted.country = ${country}
+        AND counted.source_id = source.id
+        ${after === null ? sql`` : sql`AND counted.value > ${after}`}
+      ORDER BY counted.value
+      LIMIT ${limit + 1}
+    ) AS walk
+    WHERE ${redistributableCaseLawSourceFor(sql`source.descriptor`)}
+      AND source.id <> ALL(${typedPgArray(excludedSourceIds, "uuid")})
+  ) AS page
+  ORDER BY page.court
+  LIMIT ${limit + 1}
+`;
+
+/** The page's courts and whether more follow. */
+export const readAdmittedCourtPage = async ({
+  caseLawDb,
+  ...options
+}: AdmittedCourtPageOptions & { caseLawDb: CaseLawPublicReadDb }): Promise<{
+  courts: string[];
+  more: boolean;
+}> => {
+  const result: unknown = await caseLawDb(
+    async (tx) => await tx.execute(admittedCourtPageStatement(options)),
+  );
+  const courts = executedRows(result)
+    .filter(isRecord)
+    .flatMap((row) => {
+      const court = row["court"];
+      return typeof court === "string" ? [court] : [];
+    });
+  return {
+    courts: courts.slice(0, options.limit),
+    more: courts.length > options.limit,
+  };
 };
 
 type CourtDocketSizesOptions = {

@@ -3,12 +3,12 @@ import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import { cents } from "@stll/money";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { Temporal } from "@stll/time";
 
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
 import type { TimeApprovalItem } from "@/lib/workspaces/queries/time-approvals";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/time/approvals" });
 
@@ -372,7 +372,7 @@ describe("approving time by person", () => {
 
     const row = (await screen.findByText("Narrative adam-1")).closest("li");
     if (!(row instanceof HTMLElement)) {
-      throw new Error("no row for adam-1");
+      throw new TypeError("no row for adam-1");
     }
     const send = within(row).getByRole("button", {
       name: messages.billing.revertToDraft,
@@ -452,7 +452,7 @@ describe("approving time by person", () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByText("Narrative adam-1")).toBeNull();
+      expect(screen.queryByText("Narrative adam-1") === null).toBe(true);
     });
     expect(screen.queryByText("Narrative adam-3")).toBeNull();
     expect(screen.getByText("Narrative adam-2")).toBeTruthy();
@@ -497,11 +497,11 @@ describe("approving time by person", () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByText("Narrative adam-1")).toBeNull();
+      expect(screen.queryByText("Narrative adam-1") === null).toBe(true);
     });
     const refused = (await screen.findByText("Narrative adam-2")).closest("li");
     if (!(refused instanceof HTMLElement)) {
-      throw new Error("no row for adam-2");
+      throw new TypeError("no row for adam-2");
     }
     // In return wording, never the approval's.
     expect(within(refused).getByRole("alert").textContent).toBe(

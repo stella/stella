@@ -34,8 +34,16 @@ const parseSearchRankingTier = (value: string): SearchRankingTier | null => {
   }
 };
 
-const LEGACY_GLOBAL_SEARCH_CURSOR_ID = "global";
-const DUAL_CURSOR_SEPARATOR = "==";
+/**
+ * A release that still served offset-paging replicas issued every keyset
+ * payload behind an offset cursor and this separator. No replica reads the
+ * offset any more, so the payload is issued alone; the prefixed form is still
+ * read, because a page issued before the change can be continued after it.
+ *
+ * REMOVAL CONDITION: delete the prefixed read once every serving replica
+ * issues the payload alone and the searches paged before that have ended.
+ */
+const PREFIXED_CURSOR_SEPARATOR = "==";
 
 export const GLOBAL_SEARCH_HIT_ID_PREFIXES = [
   "entity:",
@@ -48,7 +56,6 @@ export const GLOBAL_SEARCH_HIT_ID_PREFIXES = [
 export type ParsedGlobalSearchCursor =
   | { type: "initial" }
   | { type: "keyset"; cursor: GlobalSearchCursor }
-  | { type: "legacy"; offset: number }
   | { type: "invalid" };
 
 type ScoredSearchHit<T extends { id: string }> = {
@@ -106,20 +113,6 @@ const decodeGlobalSearchKeysetPayload = (
   return { tier, score: decoded.score, id, seen };
 };
 
-const decodeLegacyGlobalSearchOffset = (cursor: string): number | null => {
-  const decoded = decodeCursor(cursor);
-  if (
-    decoded?.id !== LEGACY_GLOBAL_SEARCH_CURSOR_ID ||
-    !Number.isInteger(decoded.score) ||
-    decoded.score < 0 ||
-    decoded.score >= GLOBAL_SEARCH_RESULT_LIMIT
-  ) {
-    return null;
-  }
-
-  return decoded.score;
-};
-
 export const parseGlobalSearchCursor = (
   cursor: string | undefined,
 ): ParsedGlobalSearchCursor => {
@@ -127,34 +120,19 @@ export const parseGlobalSearchCursor = (
     return { type: "initial" };
   }
 
-  const dualSeparatorIndex = cursor.indexOf(DUAL_CURSOR_SEPARATOR);
-  if (
-    dualSeparatorIndex !== -1 &&
-    dualSeparatorIndex + DUAL_CURSOR_SEPARATOR.length < cursor.length
-  ) {
-    const legacyPayload = cursor.slice(0, dualSeparatorIndex);
-    const keysetPayload = cursor.slice(
-      dualSeparatorIndex + DUAL_CURSOR_SEPARATOR.length,
-    );
-    const offset = decodeLegacyGlobalSearchOffset(legacyPayload);
-    const keysetCursor = decodeGlobalSearchKeysetPayload(keysetPayload);
-    if (
-      offset === null ||
-      keysetCursor === null ||
-      offset !== keysetCursor.seen
-    ) {
-      return { type: "invalid" };
-    }
-    return { type: "keyset", cursor: keysetCursor };
-  }
-
-  const keysetCursor = decodeGlobalSearchKeysetPayload(cursor);
-  if (keysetCursor !== null) {
-    return { type: "keyset", cursor: keysetCursor };
-  }
-
-  const offset = decodeLegacyGlobalSearchOffset(cursor);
-  return offset === null ? { type: "invalid" } : { type: "legacy", offset };
+  // Base64 padding ends a payload with the separator's own characters, so
+  // only a separator with a payload after it marks a prefix. The prefix
+  // restated the payload's `seen` and is not read.
+  const separatorIndex = cursor.indexOf(PREFIXED_CURSOR_SEPARATOR);
+  const payloadStart = separatorIndex + PREFIXED_CURSOR_SEPARATOR.length;
+  const keysetCursor = decodeGlobalSearchKeysetPayload(
+    separatorIndex !== -1 && payloadStart < cursor.length
+      ? cursor.slice(payloadStart)
+      : cursor,
+  );
+  return keysetCursor === null
+    ? { type: "invalid" }
+    : { type: "keyset", cursor: keysetCursor };
 };
 
 export const decodeGlobalSearchCursor = (
@@ -169,22 +147,7 @@ export const encodeGlobalSearchCursor = ({
   score,
   id,
   seen,
-}: GlobalSearchCursor): string => {
-  // The prefix remains a valid offset cursor for replicas running the previous
-  // release. New replicas use the suffix for keyset pagination, so requests can
-  // move safely between old and new replicas during a rolling deployment.
-  const encodedLegacyCursor = encodeCursor(
-    seen,
-    LEGACY_GLOBAL_SEARCH_CURSOR_ID,
-  );
-  const paddingIndex = encodedLegacyCursor.indexOf("=");
-  const legacyPayload =
-    paddingIndex === -1
-      ? encodedLegacyCursor
-      : encodedLegacyCursor.slice(0, paddingIndex);
-  const keysetPayload = encodeCursor(score, `${seen}:${tier}:${id}`);
-  return `${legacyPayload}${DUAL_CURSOR_SEPARATOR}${keysetPayload}`;
-};
+}: GlobalSearchCursor): string => encodeCursor(score, `${seen}:${tier}:${id}`);
 
 export const globalSearchCursorSql = ({
   cursor,

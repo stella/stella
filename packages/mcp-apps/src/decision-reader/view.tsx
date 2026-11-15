@@ -5,23 +5,26 @@ import { DirectionProvider } from "@base-ui/react/direction-provider";
 import { createFormatter } from "use-intl";
 
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
-import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { DecisionIdentity } from "@stll/decision-reader/decision-identity";
 import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
 import type { TextAnchor } from "@stll/decision-reader/document-ast-text";
 import { ReaderPresentationProvider } from "@stll/decision-reader/reader-adapters";
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
+import { Button, ButtonTextRun } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronLeftIcon } from "@stll/ui/icons";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import type { ProvisionPreview } from "../shared/generated/contracts";
 import { appLocale } from "../shared/locale";
 import "../shared/generated/style.css";
 import type { ReaderController } from "./controller";
+import { readerErrorPresentation } from "./failures";
 import { openDecisionAnchor, openProvisionAnchor } from "./link-actions";
 import { readerMessages } from "./messages";
 import { resolveReaderRange } from "./model";
 import type { OpenDecision, ReaderPager } from "./model";
+import { handleReaderBackShortcut } from "./navigation";
 
 const focusReaderBack = (button: HTMLButtonElement | null) => {
   button?.focus({ preventScroll: true });
@@ -63,9 +66,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
         !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <ButtonTextRun
             onClick={() =>
               host.bridge.detached(
                 openDecisionAnchor(anchor, linkHost),
@@ -74,7 +75,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
             }
           >
             {children}
-          </button>
+          </ButtonTextRun>
         ),
     });
   }
@@ -87,9 +88,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
         !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <ButtonTextRun
             onClick={() =>
               host.bridge.detached(
                 openProvisionAnchor(anchor, linkHost),
@@ -98,7 +97,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
             }
           >
             {children}
-          </button>
+          </ButtonTextRun>
         ),
     });
   }
@@ -110,7 +109,11 @@ const McpDecisionMetadata = ({
   host,
   formattingLocale,
   openInStella,
+  onBack,
+  backLabel,
 }: {
+  onBack: (() => void) | undefined;
+  backLabel: string;
   metadata: ReaderPager["metadata"] | undefined;
   host: ReaderController;
   formattingLocale: ReturnType<typeof appLocale>["formattingLocale"];
@@ -121,9 +124,24 @@ const McpDecisionMetadata = ({
   return (
     <>
       {" "}
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <header
+        data-slot="reader-header"
+        className="mb-4 flex flex-wrap items-center gap-3"
+      >
+        {onBack !== undefined && (
+          <Button
+            variant="ghost"
+            size="touch"
+            onClick={containedEventHandler(onBack)}
+            ref={focusReaderBack}
+          >
+            <DirectionalIcon icon={ChevronLeftIcon} />
+            {backLabel}
+          </Button>
+        )}
         {metadata !== undefined && (
           <DecisionIdentity
+            presentation="embedded"
             caseNumber={metadata.caseNumber}
             court={metadata.court}
             courtAbbreviation={metadata.courtAbbreviation}
@@ -146,17 +164,14 @@ const McpDecisionMetadata = ({
             </Button>
           )}
       </header>
-      {metadata !== undefined && (
+      {metadata !== undefined && metadata.date !== null && (
         <div className="text-muted-foreground mb-4 flex items-center gap-3 text-sm">
-          {metadata.date !== null && (
-            <time dateTime={metadata.date}>
-              {format.dateTime(new Date(metadata.date), {
-                dateStyle: "medium",
-                timeZone: "UTC",
-              })}
-            </time>
-          )}
-          <BidiText as="span">{metadata.language}</BidiText>
+          <time dateTime={metadata.date}>
+            {format.dateTime(new Date(metadata.date), {
+              dateStyle: "medium",
+              timeZone: "UTC",
+            })}
+          </time>
         </div>
       )}
     </>
@@ -173,7 +188,7 @@ const McpProvisionPreview = ({
   openInStella: string;
 }) => {
   const previewUrl = preview.url;
-  const statuteLists = statuteListSchemeFor(preview.country);
+  const statuteAnchors = statuteAnchorSchemeFor(preview.country);
   return (
     <aside className="mt-4 space-y-2" lang={preview.language} dir="ltr">
       {previewUrl !== null && (
@@ -201,7 +216,7 @@ const McpProvisionPreview = ({
           }}
           activeMatchIndex={-1}
           rangesByPieceId={{}}
-          statuteLists={statuteLists}
+          statuteAnchors={statuteAnchors}
           variant="statute"
           anchorPresentation="embedded"
         />
@@ -251,7 +266,7 @@ export const ReaderView = ({
     host.bridge.getSnapshot,
   );
   const landing = useRef({ key: "", opening: bridgeState.result });
-  const { direction, messages, formattingLocale } = appLocale(
+  const { direction, messages, formattingLocale, t } = appLocale(
     bridgeState.context.locale,
   );
   const presentation = readerMessages(bridgeState.context.locale);
@@ -271,11 +286,11 @@ export const ReaderView = ({
       : new Set<string>();
   const mode = bridgeState.context.displayMode ?? "inline";
   const preview = state.preview;
-  const error =
-    state.requestStatus === "error" ||
-    state.requestStatus === "conflict" ||
-    state.previewStatus === "error" ||
-    bridgeState.result.status === "error";
+  const { errorMessage, retryable } = readerErrorPresentation({
+    state,
+    bridgeState,
+    t,
+  });
   return (
     <DirectionProvider direction={direction}>
       <ReaderPresentationProvider
@@ -292,26 +307,15 @@ export const ReaderView = ({
               return undefined;
             }
             const handleKeyDown = (event: KeyboardEvent) => {
-              if (event.key !== "Escape" || event.defaultPrevented) {
-                return;
-              }
-              event.preventDefault();
-              onBack();
+              handleReaderBackShortcut(event, onBack);
             };
             element.addEventListener("keydown", handleKeyDown);
             return () => element.removeEventListener("keydown", handleKeyDown);
           }}
         >
-          {onBack !== undefined && (
-            <Button
-              variant="ghost"
-              onClick={containedEventHandler(() => onBack())}
-              ref={focusReaderBack}
-            >
-              {presentation["common.back"]}
-            </Button>
-          )}
           <McpDecisionMetadata
+            onBack={onBack}
+            backLabel={presentation["common.back"]}
             metadata={metadata}
             host={host}
             formattingLocale={formattingLocale}
@@ -323,19 +327,21 @@ export const ReaderView = ({
               {presentation["caseLaw.reader.documentUpdated"]}
             </p>
           )}
-          {error && (
+          {(errorMessage !== null || state.requestStatus === "conflict") && (
             <div
               role={state.requestStatus === "conflict" ? undefined : "alert"}
             >
-              {state.requestStatus !== "conflict" && <p>{messages.error}</p>}
-              <Button
-                variant="outline"
-                onClick={() =>
-                  host.bridge.detached(host.retry(), "decisionReader.retry")
-                }
-              >
-                {messages.retry}
-              </Button>
+              {errorMessage !== null && <p>{errorMessage}</p>}
+              {retryable && (
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    host.bridge.detached(host.retry(), "decisionReader.retry")
+                  }
+                >
+                  {messages.retry}
+                </Button>
+              )}
             </div>
           )}
           {state.document?.status === "available" && (

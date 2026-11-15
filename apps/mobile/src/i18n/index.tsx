@@ -1,3 +1,5 @@
+import "@/i18n/plural-rules";
+
 import { IntlProvider } from "use-intl";
 
 import { resolveUiLocale } from "@stll/locales";

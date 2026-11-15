@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import type { CaseLawWindowProfile } from "@/api/lib/files/windowed-read-surface";
 import {
   WINDOWED_READ_DELEGATES,
@@ -109,11 +111,7 @@ test("every registered document window has a live owner and executable budget gu
 test("document window exceptions only shrink from the merge base", () => {
   const cwd = fileURLToPath(new URL("../../../../../", import.meta.url));
   const ledger = "apps/api/src/lib/files/windowed-read-exceptions.json";
-  const base = Bun.spawnSync(["git", "merge-base", "HEAD", "origin/main"], {
-    cwd,
-  });
-  expect(base.exitCode).toBe(0);
-  const revision = new TextDecoder().decode(base.stdout).trim();
+  const revision = treeBaseRevision({ repoRoot: cwd });
   const present = Bun.spawnSync(
     ["git", "ls-tree", "--name-only", revision, ledger],
     { cwd },

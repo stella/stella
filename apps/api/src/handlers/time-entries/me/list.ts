@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, gte, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, lte, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
@@ -31,8 +31,7 @@ import type {
 } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
-
-const DELETING_WORKSPACE_STATUS = "deleting" as const;
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 const myTimeEntryColumns = {
   id: timeEntries.id,
@@ -45,6 +44,7 @@ const myTimeEntryColumns = {
   billedMinutes: timeEntries.billedMinutes,
   narrative: timeEntries.narrative,
   narrativeLanguage: timeEntries.narrativeLanguage,
+  activityCode: timeEntries.activityCode,
   billable: timeEntries.billable,
   status: timeEntries.status,
   source: timeEntries.source,
@@ -67,6 +67,7 @@ const toMyTimeEntryItem = (
     billedMinutes: row.billedMinutes,
     narrative: row.narrative,
     narrativeLanguage: row.narrativeLanguage,
+    activityCode: row.activityCode,
     billable: row.billable,
     status: row.status,
     source: row.source,
@@ -104,6 +105,11 @@ const toMyTimeEntryItem = (
 };
 
 const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
+  // Import provenance is reserved for the time-entry import contract.
+  "externalSource",
+  "externalId",
+  "externalChangeKey",
+  "importedAt",
   // The request is scoped to the active organization and signed-in user.
   "organizationId",
   "userId",
@@ -115,7 +121,6 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "invoiceNarrative",
   "noCharge",
   "taskCode",
-  "activityCode",
   // Invoice and split identifiers are internal billing links.
   "invoiceId",
   "invoiceAttachment",
@@ -242,7 +247,7 @@ const listMyTimeEntries = createSafeRootHandler(
         and(
           eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
           eq(workspaces.organizationId, session.activeOrganizationId),
-          ne(workspaces.status, DELETING_WORKSPACE_STATUS),
+          visibleWorkspaceSql(),
         ),
       ),
     );

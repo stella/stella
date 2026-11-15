@@ -37,7 +37,7 @@ A plain-English bug report is enough to start.
 Everything else is mechanical. With a fast, deterministic, agent-runnable
 pass/fail signal, bisection and hypothesis testing all just consume it.
 Without one, no amount of staring at code will save you. Spend
-disproportionate effort here. Be aggressive. Be creative. Refuse to give up.
+disproportionate effort here.
 
 Resolve the repository's test runner and the flags its scripts wire from its
 instructions first; the commands below show the Bun shape. Try these in roughly
@@ -76,9 +76,6 @@ Then treat the loop as a product. Iterate on it:
 - **Sharper signal?** Assert on the specific symptom, not "didn't crash".
 - **More deterministic?** Pin time, seed RNG, isolate filesystem, freeze
   network.
-
-A 30-second flaky loop is barely better than no loop. A 2-second
-deterministic loop is a debugging superpower.
 
 For non-deterministic bugs the goal is a **higher reproduction rate**, not a
 clean repro. Loop the trigger 100×, parallelise, narrow timing windows,

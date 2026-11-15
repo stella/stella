@@ -2,8 +2,9 @@ import { codexText, type CodexTextConfig } from "@tanstack/ai-codex";
 import { withSandbox } from "@tanstack/ai-sandbox";
 import { panic } from "better-result";
 
+import type { AgentHarness } from "@stll/api-contract/agent-harness";
+
 import {
-  type AgentHarness,
   defineStellaSandbox,
   SANDBOX_NO_MCP,
   STELLA_WORKSPACE_ROOT,

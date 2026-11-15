@@ -3,7 +3,7 @@ import { describe, expect, jest, test } from "bun:test";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import { APIError } from "@/lib/errors/api";
-import { EmptyUploadFileError } from "@/lib/files/upload-file-validation";
+import { UploadFileSizeError } from "@/lib/files/upload-file-validation";
 import { uploadFailureDisposition, UploadQueue } from "@/lib/upload-queue";
 
 /**
@@ -204,7 +204,7 @@ test("a local empty-file rejection fails once without automatic or manual retry"
     queue.enqueue(makeFiles("empty.pdf"));
     uploader.rejectFile(
       "empty.pdf",
-      new EmptyUploadFileError({ message: "The file is empty." }),
+      new UploadFileSizeError({ message: "The file is empty." }),
     );
     await flush();
 

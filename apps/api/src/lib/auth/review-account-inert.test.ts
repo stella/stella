@@ -18,9 +18,6 @@ import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
 const routeServer = serveRoutesForTest(authCapabilitiesRoute);
-afterAll(async () => {
-  await routeServer.stop();
-});
 
 const email = "member@example.test";
 const password = "fixture password for tests";
@@ -38,7 +35,8 @@ beforeAll(() => {
   env.DEMO_ACCOUNT_EMAIL = undefined;
 });
 
-afterAll(() => {
+afterAll(async () => {
+  await routeServer.stop();
   env.APP_REVIEW_ACCOUNT_EMAIL = previous.email;
   env.APP_REVIEW_ORGANIZATION_ID = previous.organizationId;
   env.DEMO_ACCOUNT_EMAIL = previous.demoEmail;

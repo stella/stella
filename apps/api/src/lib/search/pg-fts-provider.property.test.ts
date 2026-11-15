@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   buildPlainSearchTsQuery,
@@ -156,11 +156,12 @@ describe("pg-fts tsquery robustness", () => {
       // directly to the permanent memory floor for the rest of that run, not
       // just this file's own footprint. PR CI stays at this budget; the
       // nightly sweep still gets full depth via PROPERTY_TEST_NUM_RUNS_FACTOR.
-      await fc.assert(
+      await assertProperty(
+        "arbitrary Unicode queries never raise a tsquery syntax error",
         fc.asyncProperty(queryArb, async (query) => {
           await runQuery(query);
         }),
-        propertyConfig({ numRuns: 60 }),
+        { numRuns: 60 },
       );
     },
     propertyTestTimeout(30_000),

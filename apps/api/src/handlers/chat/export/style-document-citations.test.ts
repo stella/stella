@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
 import type { BlockContent, ParagraphContent } from "@stll/docx-core/model";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { createChatExportDocx } from "@/api/handlers/chat/export/create-chat-export-docx";
 import {
@@ -31,11 +31,13 @@ const collectParagraphContent = (
       case "blockCustomXml":
         content.push(...collectParagraphContent(block.content));
         break;
-      // Hold no paragraph content: a bookmark or move range marker is a
-      // position and a preserved block is opaque markup.
+      // Hold no paragraph content: a bookmark, comment or move range marker
+      // is a position and a preserved block is opaque markup.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "commentRangeStart":
+      case "commentRangeEnd":
       case "moveFromRangeStart":
       case "moveFromRangeEnd":
       case "moveToRangeStart":
@@ -635,13 +637,13 @@ describe("styleDocumentCitations", () => {
       "footnotes",
       options,
     );
-    const zip = await JSZip.loadAsync(await createChatExportDocx(styled));
-    const contentTypes = await zip.file("[Content_Types].xml")?.async("text");
-    const documentXml = await zip.file("word/document.xml")?.async("text");
+    const zip = await ZipArchive.read(await createChatExportDocx(styled));
+    const contentTypes = await zip.entry("[Content_Types].xml")?.text();
+    const documentXml = await zip.entry("word/document.xml")?.text();
     const relationships = await zip
-      .file("word/_rels/document.xml.rels")
-      ?.async("text");
-    const footnotesXml = await zip.file("word/footnotes.xml")?.async("text");
+      .entry("word/_rels/document.xml.rels")
+      ?.text();
+    const footnotesXml = await zip.entry("word/footnotes.xml")?.text();
 
     expect(contentTypes).toContain('PartName="/word/footnotes.xml"');
     expect(relationships).toContain(

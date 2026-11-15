@@ -1,3 +1,5 @@
+import type { ActivitySettingsSnapshot } from "../../../src/activity/activity-types";
+import type { DictationSnapshot } from "../../../src/onboarding/use-dictation";
 import type { PermissionsSnapshot } from "../../../src/shared/permissions";
 import type {
   AppSnapshot,
@@ -25,6 +27,28 @@ export const PERMISSIONS = {
   ],
 } as const satisfies PermissionsSnapshot;
 
+/** What the setup window reads with dictation available: its microphone
+ *  row joins the others. */
+export const SETUP_PERMISSIONS = {
+  rows: [
+    ...PERMISSIONS.rows,
+    { permission: "microphone", status: "notDetermined" },
+  ],
+} as const satisfies PermissionsSnapshot;
+
+/** Dictation turned on with its speech model in place: the tallest state of
+ *  its setup step, with both permission rows and the field to try it. */
+export const DICTATION_READY = {
+  available: true,
+  enabled: true,
+  failure: null,
+  keys: { code: "Space", modifiers: ["control", "alt"] },
+  model: { status: "ready" },
+  modelBytes: 740_363_168,
+  phase: "idle",
+  shortcutTaken: false,
+} as const satisfies DictationSnapshot;
+
 export const ACCOUNT = {
   account: {
     email: "eliska.novakova@example.test",
@@ -38,6 +62,12 @@ export const ACCOUNT = {
 } as const satisfies DesktopAccountSnapshot;
 
 export const APP_STATE = {
+  documentRecovery: {
+    edits: [],
+    unassigned: false,
+    pending: false,
+    access: "available",
+  },
   bridgePort: 45_901,
   bridgeVersion: 1,
   capabilities: [],
@@ -63,3 +93,28 @@ export const APP_STATE = {
     updateReady: false,
   },
 } satisfies AppSnapshot;
+
+/** A recording account's activity settings, with a few apps on the day. */
+export const ACTIVITY_SETTINGS = {
+  date: "2026-10-27",
+  today: "2026-10-27",
+  earliestDate: "2026-09-28",
+  latestDate: "2026-10-27",
+  deletionStatus: "available",
+  persistence: "encrypted",
+  retention: "month",
+  excludedApps: [{ identifier: "com.example.music", name: "Example Music" }],
+  otherAccountHistoryDays: 2,
+  captureDetails: true,
+  detectCalls: true,
+  appNameOnlyApps: [{ identifier: "com.example.mail", name: "Example Mail" }],
+  detailsAccess: "ready",
+  browserApps: [{ identifier: "com.example.browser", name: "Example Browser" }],
+  browserTitleApps: [],
+  apps: [
+    { identifier: "com.example.editor", name: "Example Editor" },
+    { identifier: "com.example.browser", name: "Example Browser" },
+    { identifier: "com.example.mail", name: "Example Mail" },
+  ],
+  sourceAppVisuals: [],
+} satisfies ActivitySettingsSnapshot;

@@ -11,8 +11,12 @@ import {
 } from "../lib/scroll-edge-fade";
 import { cn } from "../lib/utils";
 
+// The controls sit beside the viewport, never over an item. One that cannot
+// scroll takes no room, so the row starts flush with the edge it has reached.
 const CONTROL_CLASS =
-  "bg-background/90 text-foreground absolute top-1/2 -translate-y-1/2 rounded-full border p-1 shadow-sm";
+  "bg-background text-foreground shrink-0 rounded-full border p-1 shadow-sm";
+const INERT_CONTROL_CLASS =
+  "pointer-events-none w-0 overflow-hidden border-0 p-0 opacity-0 focus-visible:w-auto focus-visible:border focus-visible:p-1 focus-visible:opacity-100";
 
 type ScrollDirection = "ltr" | "rtl";
 
@@ -46,13 +50,16 @@ export const HorizontalScroller = ({
 
   const measure = useCallback((node: HTMLDivElement) => {
     writeScrollEdgeFade(node);
+    const rowWidth = rowContentWidth(node.parentElement) ?? node.clientWidth;
     setState(
-      scrollState(
-        node.scrollLeft,
-        node.scrollWidth,
-        node.clientWidth,
-        getComputedStyle(node).direction === "rtl" ? "rtl" : "ltr",
-      ),
+      fitsRow(node.scrollWidth, rowWidth)
+        ? { canScrollEnd: false, canScrollStart: false }
+        : scrollState(
+            node.scrollLeft,
+            node.scrollWidth,
+            node.clientWidth,
+            getComputedStyle(node).direction === "rtl" ? "rtl" : "ltr",
+          ),
     );
   }, []);
 
@@ -124,9 +131,11 @@ export const HorizontalScroller = ({
   const onScroll = (event: UIEvent<HTMLDivElement>) =>
     measure(event.currentTarget);
 
+  const overflows = state.canScrollStart || state.canScrollEnd;
+
   return (
     <div
-      className={cn("relative min-w-0", className)}
+      className={cn("flex min-w-0 items-center", className)}
       onFocus={containedEventHandler(({ target }) => {
         if (target instanceof HTMLElement && target !== viewport) {
           target.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -134,9 +143,32 @@ export const HorizontalScroller = ({
       })}
       {...props}
     >
+      {/* Both controls stay mounted while the row overflows: one that
+          reached its edge turns inert instead of unmounting, so keyboard
+          focus on it survives the scroll that got it there. An inert one
+          leaves the tab order and shows only while it still holds focus. */}
+      {overflows && (
+        <button
+          aria-disabled={!state.canScrollStart}
+          tabIndex={state.canScrollStart ? undefined : -1}
+          aria-label={previousLabel}
+          className={cn(
+            CONTROL_CLASS,
+            state.canScrollStart ? "me-1" : INERT_CONTROL_CLASS,
+          )}
+          onClick={() => {
+            if (state.canScrollStart) {
+              scroll(-1);
+            }
+          }}
+          type="button"
+        >
+          <ChevronLeftIcon className="size-4 rtl:rotate-180" />
+        </button>
+      )}
       <div
         className={cn(
-          "scrollbar-subtle overflow-x-auto overscroll-x-contain [--fade-size:2.5rem]",
+          "scrollbar-subtle min-w-0 flex-1 overflow-x-auto overscroll-x-contain [--fade-size:2.5rem]",
           SCROLL_EDGE_FADE_CLASS,
           viewportClassName,
         )}
@@ -147,51 +179,24 @@ export const HorizontalScroller = ({
           {children}
         </div>
       </div>
-      {(state.canScrollStart || state.canScrollEnd) && (
-        // Both controls stay mounted while the row overflows: one that
-        // reached its edge turns inert instead of unmounting, so keyboard
-        // focus on it survives the scroll that got it there. An inert one
-        // leaves the tab order and shows only while it still holds focus.
-        <>
-          <button
-            aria-disabled={!state.canScrollStart}
-            tabIndex={state.canScrollStart ? undefined : -1}
-            aria-label={previousLabel}
-            className={cn(
-              CONTROL_CLASS,
-              "start-1",
-              !state.canScrollStart &&
-                "pointer-events-none opacity-0 focus-visible:opacity-100",
-            )}
-            onClick={() => {
-              if (state.canScrollStart) {
-                scroll(-1);
-              }
-            }}
-            type="button"
-          >
-            <ChevronLeftIcon className="size-4 rtl:rotate-180" />
-          </button>
-          <button
-            aria-disabled={!state.canScrollEnd}
-            tabIndex={state.canScrollEnd ? undefined : -1}
-            aria-label={nextLabel}
-            className={cn(
-              CONTROL_CLASS,
-              "end-1",
-              !state.canScrollEnd &&
-                "pointer-events-none opacity-0 focus-visible:opacity-100",
-            )}
-            onClick={() => {
-              if (state.canScrollEnd) {
-                scroll(1);
-              }
-            }}
-            type="button"
-          >
-            <ChevronRightIcon className="size-4 rtl:rotate-180" />
-          </button>
-        </>
+      {overflows && (
+        <button
+          aria-disabled={!state.canScrollEnd}
+          tabIndex={state.canScrollEnd ? undefined : -1}
+          aria-label={nextLabel}
+          className={cn(
+            CONTROL_CLASS,
+            state.canScrollEnd ? "ms-1" : INERT_CONTROL_CLASS,
+          )}
+          onClick={() => {
+            if (state.canScrollEnd) {
+              scroll(1);
+            }
+          }}
+          type="button"
+        >
+          <ChevronRightIcon className="size-4 rtl:rotate-180" />
+        </button>
       )}
     </div>
   );
@@ -210,6 +215,27 @@ export const scrollState = (
     canScrollEnd: maximum > 1 && position < maximum - 1,
   };
 };
+
+/**
+ * The width the row's children span: the room the controls and the viewport
+ * share, without the row's own padding, in either direction.
+ */
+const rowContentWidth = (row: Element | null): number | undefined => {
+  const first = row?.firstElementChild?.getBoundingClientRect();
+  const last = row?.lastElementChild?.getBoundingClientRect();
+  if (first === undefined || last === undefined) {
+    return undefined;
+  }
+  return Math.max(first.right, last.right) - Math.min(first.left, last.left);
+};
+
+/**
+ * Whether the content needs the controls at all, decided from `rowWidth`, the
+ * whole width the scroller has: the controls take room from the viewport once
+ * they show, and content that fits the row without them needs none.
+ */
+export const fitsRow = (scrollWidth: number, rowWidth: number): boolean =>
+  scrollWidth - rowWidth <= 1;
 
 const LINE_HEIGHT_PX = 16;
 

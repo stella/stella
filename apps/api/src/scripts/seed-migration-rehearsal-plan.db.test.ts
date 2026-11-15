@@ -15,6 +15,9 @@ import {
   rehearsalVacuumStatement,
 } from "./seed-migration-rehearsal-plan";
 
+// This integration fixture is also selected by the STELLA_RUN_POSTGRES_TESTS
+// proof runner, which supplies the repository's database test environment.
+
 /**
  * The seeders run against a real PostgreSQL with the current schema: a
  * statement that violates a CHECK, a unique index or a foreign key fails

@@ -4,16 +4,15 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  withModelPlaceholdersOmitted,
+  withOptionalsNullable,
+} from "@stll/agent-input";
+import {
   assertProperty,
-  propertyConfig,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
 
-import {
-  withModelPlaceholdersOmitted,
-  withOptionalsNullable,
-} from "@/api/lib/json-schema/null-optionals";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   ownJsonKey,
@@ -348,7 +347,8 @@ const hasUnion = (schema: Schema): boolean =>
 test(
   "widening optional fields to null and reading them back is the identity on declared inputs",
   () => {
-    fc.assert(
+    assertProperty(
+      "widening optional fields to null and reading them back is the identity on declared inputs",
       fc.property(caseArbitrary, ({ schema, spellings, value }) => {
         expect(ajv.validate(schema, value)).toBe(true);
         const widened = widenedSchema(schema);
@@ -382,7 +382,7 @@ test(
           expect(ajv.validate(widened, sent)).toBe(true);
         }
       }),
-      propertyConfig({ numRuns: 150, seed: propertySeed() }),
+      { numRuns: 150, seed: propertySeed() },
     );
   },
   propertyTestTimeout(30_000),

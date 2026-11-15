@@ -24,6 +24,7 @@ const createBatchProperty = (
 ): AIBatchProperty => ({
   id: propertyId(id),
   status: "fresh",
+  answerShape: "value",
   content: { version: 1, type: "text" },
   tool: { version: 1, type: "ai-model", prompt: "test" },
   dependencies: [],

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import {
   ORG_AI_CONFIG_STATUS,
@@ -22,7 +24,6 @@ import {
   NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createConditionPreviewHandler } from "./get";

@@ -11,20 +11,29 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 import {
+  CHAT_TOOL_DECLINED_ERROR,
   chatToolExecutor,
-  isServerChatToolCall,
+  isUnsupportedChatPart,
 } from "@stll/api-contract/chat";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import {
   GENERATED_VISUAL_MIME_TYPE,
   generatedVisualPartSchema,
 } from "@stll/api-contract/generated-visual";
+import { isOwnKey, ownEntry } from "@stll/api-contract/own-key";
+import {
+  STELLA_MCP_APP_MIME_TYPE,
+  stellaMcpAppPartSchema,
+} from "@stll/api-contract/stella-mcp-app";
 
+import { carriedChatPart } from "@/api/db/stored-chat-part-codec";
+import type { STORED_CHAT_PART_TYPES } from "@/api/db/stored-chat-part-codec";
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import {
   TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
   TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
 } from "@/api/handlers/chat/tanstack-chat-lifecycle";
-import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import { retainToolResultsInParts } from "@/api/handlers/chat/tool-result-retention";
 import type {
   ChatAttachmentMetadata,
   ChatAttachmentPart,
@@ -43,6 +52,10 @@ import type {
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  appPresentsTool,
+  chatMcpAppByUri,
+} from "@/api/lib/chat/mcp-app-catalog";
+import {
   isPersistedJsonObject,
   isPersistedJsonValue,
   isPersistedToolProviderMetadata,
@@ -54,14 +67,213 @@ import {
 } from "@/api/lib/chat/persisted-message-content";
 import type {
   PersistedJsonValue,
+  PersistedToolCallPart,
   PersistedToolInput,
   PersistedToolResultContent,
+  PersistedToolResultPart,
 } from "@/api/lib/chat/persisted-message-content";
 import { isReasoningProvenance } from "@/api/lib/chat/reasoning-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
 const IMAGE_MIME_PREFIX = "image/";
+
+// What this release knows of each stored part, at every depth. `true` marks a
+// field whose value is kept whole (free JSON, or a provider's own record). Any
+// other field is one a newer release added: this release never reads it,
+// never shows it to the model, and writes it back as stored.
+type KnownFields = { readonly [field: string]: true | KnownFields };
+
+const SOURCE_FIELDS = { mimeType: true, type: true, value: true } as const;
+const MEDIA_FIELDS = {
+  id: true,
+  metadata: true,
+  source: SOURCE_FIELDS,
+  type: true,
+} as const;
+
+const KNOWN_STORED_FIELDS = {
+  activity: {
+    activityType: true,
+    content: true,
+    subagentRunId: true,
+    type: true,
+  },
+  audio: MEDIA_FIELDS,
+  document: MEDIA_FIELDS,
+  image: MEDIA_FIELDS,
+  "structured-output": {
+    data: true,
+    errorMessage: true,
+    partial: true,
+    raw: true,
+    reasoning: true,
+    status: true,
+    type: true,
+  },
+  text: { content: true, metadata: true, providerMetadata: true, type: true },
+  thinking: {
+    content: true,
+    provenance: { format: true, model: true, provider: true },
+    providerMetadata: true,
+    redacted: true,
+    signature: true,
+    stepId: true,
+    type: true,
+  },
+  "tool-call": {
+    approval: { approved: true, id: true, needsApproval: true },
+    id: true,
+    input: { rawArguments: true, status: true, value: true },
+    metadata: true,
+    name: true,
+    output: { value: true },
+    providerMetadata: { call: true, result: true },
+    state: true,
+    type: true,
+  } satisfies Record<keyof PersistedToolCallPart, true | KnownFields>,
+  "tool-result": {
+    content: { type: true, value: true },
+    error: true,
+    outcome: true,
+    state: true,
+    toolCallId: true,
+    type: true,
+  } satisfies Record<keyof PersistedToolResultPart, true | KnownFields>,
+  "ui-resource": {
+    meta: true,
+    resource: { blob: true, mimeType: true, text: true, uri: true },
+    serverId: true,
+    toolCallId: true,
+    toolName: true,
+    type: true,
+  } satisfies Record<
+    keyof Extract<ChatPart, { type: "ui-resource" }>,
+    true | KnownFields
+  >,
+  video: MEDIA_FIELDS,
+} as const satisfies Record<keyof typeof STORED_CHAT_PART_TYPES, KnownFields>;
+
+const knownFieldsOfType = (type: string): KnownFields =>
+  ownEntry(KNOWN_STORED_FIELDS, type) ?? {};
+
+const isFieldRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** `value` with only the fields `known` names, at every depth. */
+const knownFieldsOf = (value: unknown, known: KnownFields): unknown => {
+  if (!isFieldRecord(value)) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([field, inner]) => {
+      const rule = ownEntry(known, field);
+      if (rule === undefined) {
+        return [];
+      }
+      return [[field, rule === true ? inner : knownFieldsOf(inner, rule)]];
+    }),
+  );
+};
+
+/** Expose only fields this release understands in a stored revision snapshot. */
+export const clientVisibleStoredChatPart = (part: unknown): unknown => {
+  if (!isFieldRecord(part) || typeof part["type"] !== "string") {
+    return {};
+  }
+  return knownFieldsOf(part, knownFieldsOfType(part["type"]));
+};
+
+/** `encoded` with every field `stored` holds that this release does not
+ *  know, at every depth, as stored. */
+const withLaterReleaseFields = <TPart extends object>(
+  encoded: TPart,
+  stored: unknown,
+  known: KnownFields,
+): TPart => {
+  if (!isFieldRecord(stored)) {
+    return encoded;
+  }
+  const later = Object.fromEntries(
+    Object.entries(stored).filter(
+      ([field]) => !isOwnKey(known, field) && !Object.hasOwn(encoded, field),
+    ),
+  );
+  const nested = Object.fromEntries(
+    Object.entries(encoded).flatMap(([field, inner]) => {
+      const rule = ownEntry(known, field);
+      return rule === undefined || rule === true || !isFieldRecord(inner)
+        ? []
+        : [[field, withLaterReleaseFields(inner, stored[field], rule)]];
+    }),
+  );
+  return { ...later, ...encoded, ...nested };
+};
+
+/** What a decoded part keeps of the stored message it came from. */
+type StoredOrigin = {
+  /** The authoritative row that supplied this part, when read as a message. */
+  messageId: SafeId<"chatMessage"> | undefined;
+  /** The part as stored: every field, a newer release's included. */
+  stored: unknown;
+  /** The stored part, written back as it is while the part is unedited.
+   *  Absent for a call stored before calls recorded their executor, which
+   *  every save upgrades. */
+  writable: PersistedV3Part | undefined;
+  /** The part as loaded: a part still equal to it is unedited. */
+  loaded: ChatPart;
+};
+
+// Keyed by the decoded part itself; a write also checks its source message.
+const STORED_ORIGINS = new WeakMap<ChatPart, StoredOrigin>();
+
+const writableStoredPart = (part: StoredPart): PersistedV3Part | undefined => {
+  // Written back only while it still proves as a stored part of this
+  // release's; otherwise every save re-encodes it.
+  if (part.type !== "tool-call") {
+    return isPersistedV3Part(part) ? part : undefined;
+  }
+  const metadata = Result.try(() =>
+    provePersistedToolCallMetadata(part.metadata),
+  );
+  if (!Result.isOk(metadata)) {
+    return undefined;
+  }
+  const writable = { ...part, metadata: metadata.value };
+  return isPersistedV3Part(writable) ? writable : undefined;
+};
+
+const rememberStoredOrigins = (
+  stored: readonly StoredPart[],
+  parts: readonly ChatPart[],
+  messageId?: SafeId<"chatMessage">,
+): void => {
+  for (const [index, part] of parts.entries()) {
+    const raw = stored.at(index);
+    if (raw === undefined) {
+      continue;
+    }
+    const origin: StoredOrigin = {
+      messageId,
+      stored: raw,
+      writable: writableStoredPart(raw),
+      loaded: structuredClone(part),
+    };
+    STORED_ORIGINS.set(part, origin);
+  }
+};
+
+/** Preserve provenance only when a server transformation names its exact source. */
+export const continueStoredChatPart = <T extends ChatPart>(
+  source: ChatPart,
+  changed: T,
+): T => {
+  const origin = STORED_ORIGINS.get(source);
+  if (origin !== undefined && source.type === changed.type) {
+    STORED_ORIGINS.set(changed, origin);
+  }
+  return changed;
+};
 
 export type ChatAttachmentInput = {
   filename?: string | undefined;
@@ -137,6 +349,19 @@ export const isChatAttachmentPart = (
   "value" in part["source"] &&
   typeof part["source"]["value"] === "string";
 
+/**
+ * A file on an assistant message is one the answer handed the member. Nobody
+ * sent it to the model, so it never goes to one, and its bytes are never
+ * fetched to prepare a turn or copied to a computer as an attachment. Every
+ * reader that turns a message's files into model input or a run's attachments
+ * asks this first; the message itself keeps the part, so it still shows.
+ */
+export const isAnswerFilePart = (
+  role: ChatMessage["role"],
+  part: unknown,
+): part is ChatAttachmentPart =>
+  role === "assistant" && isChatAttachmentPart(part);
+
 export const isChatDocumentPart = (part: unknown): part is ChatAttachmentPart =>
   isChatAttachmentPart(part) && part.type === "document";
 
@@ -192,9 +417,9 @@ export const createChatAttachmentPart = ({
 };
 
 // Stored rows may predate executor metadata; the writer output remains strict.
-type StoredChatMessageContentV3 = Omit<
+type StoredChatMessageContentV3 = Pick<
   PersistedChatMessageContentV3,
-  "data"
+  "version" | "metadata"
 > & {
   data: (
     | Exclude<PersistedV3Part, { type: "tool-call" }>
@@ -205,17 +430,15 @@ type StoredChatMessageContentV3 = Omit<
 };
 export const normalizePersistedChatMessageContent = (
   content: StoredChatMessageContentV3,
-): NormalizedChatMessageParts => {
-  const normalized = normalizePersistedV3ChatMessageContent(content);
-  return {
-    ...normalized,
-    parts: normalized.parts.map(normalizeStoredChatToolExecutor),
-  };
-};
+  messageId?: SafeId<"chatMessage">,
+): NormalizedChatMessageParts =>
+  normalizePersistedV3ChatMessageContent(content, messageId);
 type PersistedV3Part = PersistedChatMessageContentV3["data"][number];
+type StoredPart = StoredChatMessageContentV3["data"][number];
 
 const normalizePersistedV3ChatMessageContent = (
   content: StoredChatMessageContentV3,
+  messageId?: SafeId<"chatMessage">,
 ): NormalizedChatMessageParts => {
   if (!Array.isArray(content.data)) {
     panic("Stored v3 chat content has invalid data");
@@ -226,21 +449,48 @@ const normalizePersistedV3ChatMessageContent = (
   ) {
     panic("Stored v3 chat content has invalid metadata");
   }
+  const data: readonly StoredPart[] = content.data;
   const outputByToolCallId = new Map<string, unknown>();
-  for (const part of content.data) {
-    if (!isRecord(part)) {
-      panic("Stored v3 chat content has an invalid part");
-    }
-    if (part.type === "tool-call" && part.output !== undefined) {
-      outputByToolCallId.set(part.id, decodePersistedToolOutput(part.output));
+  for (const part of data) {
+    if (
+      isRecord(part) &&
+      part.type === "tool-call" &&
+      part.output !== undefined
+    ) {
+      const output = Result.try(() => decodePersistedToolOutput(part.output));
+      if (Result.isOk(output)) {
+        outputByToolCallId.set(part.id, output.value);
+      }
     }
   }
 
-  const parts: ChatPart[] = [];
-  for (const part of content.data) {
-    parts.push(persistedV3PartToChatPart({ outputByToolCallId, part }));
-  }
+  const parts = data.map((part) =>
+    readStoredChatPart({ outputByToolCallId, part }),
+  );
+  rememberStoredOrigins(data, parts, messageId);
   return { metadata: content.metadata ?? {}, parts };
+};
+
+/**
+ * Decoding is total: a stored part this release cannot decode strictly, for
+ * any reason (a type, an enum value or a nested shape a newer release
+ * introduced), is carried whole and written back as stored.
+ */
+const readStoredChatPart = ({
+  outputByToolCallId,
+  part,
+}: {
+  outputByToolCallId: ReadonlyMap<string, unknown>;
+  part: StoredPart;
+}): ChatPart => {
+  const decoded = Result.try(() =>
+    isRecord(part)
+      ? normalizeStoredChatToolExecutor(
+          persistedV3PartToChatPart({ outputByToolCallId, part }),
+        )
+      : panic("Stored v3 chat content has an invalid part"),
+  );
+  return Result.isOk(decoded) ? decoded.value : carriedChatPart(part);
 };
 
 const persistedV3PartToChatPart = ({
@@ -257,8 +507,11 @@ const persistedV3PartToChatPart = ({
     if (part.metadata !== undefined && !isPersistedJsonValue(part.metadata)) {
       panic("Stored v3 tool call has invalid metadata");
     }
+    const known = KNOWN_STORED_FIELDS["tool-call"];
     const candidate: unknown = {
-      ...(part.approval === undefined ? {} : { approval: part.approval }),
+      ...(part.approval === undefined
+        ? {}
+        : { approval: knownFieldsOf(part.approval, known.approval) }),
       arguments:
         persistedInput.status === "raw"
           ? persistedInput.rawArguments
@@ -271,7 +524,12 @@ const persistedV3PartToChatPart = ({
       ...(part.output === undefined ? {} : { output }),
       ...(part.providerMetadata === undefined
         ? {}
-        : { providerMetadata: part.providerMetadata }),
+        : {
+            providerMetadata: knownFieldsOf(
+              part.providerMetadata,
+              known.providerMetadata,
+            ),
+          }),
       state: part.state,
       type: "tool-call",
     };
@@ -300,10 +558,11 @@ const persistedV3PartToChatPart = ({
     return candidate;
   }
 
-  if (!isChatPart(part)) {
+  const known: unknown = knownFieldsOf(part, knownFieldsOfType(part.type));
+  if (!isChatPart(known)) {
     panic("Stored v3 non-tool part is not a valid chat part");
   }
-  return part;
+  return known;
 };
 
 const persistedV3ToolResultContent = ({
@@ -410,7 +669,7 @@ export const chatMessageFromPersisted = ({
   id,
   role,
 }: PersistedChatMessageRow): PersistableChatMessage => {
-  const normalized = normalizePersistedChatMessageContent(content);
+  const normalized = normalizePersistedChatMessageContent(content, id);
   return toPersistableChatMessage({
     id,
     role,
@@ -424,10 +683,13 @@ export const chatMessageFromPersisted = ({
 export const chatMessageContentFromMessage = (
   message: PersistableChatMessage,
 ): PersistedChatMessageContentV3 =>
-  toPersistedChatMessageContentV3({
-    data: message.parts,
-    ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
-  });
+  toPersistedChatMessageContentV3(
+    {
+      data: message.parts,
+      ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
+    },
+    message.id,
+  );
 
 type ChatPartClientAcceptance = "accept" | "server-only";
 type ChatPartProviderVisibility = "model" | "ui-only";
@@ -514,50 +776,6 @@ const CHAT_PART_POLICY = {
 export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
   CHAT_PART_POLICY[part.type].providerVisibility === "model";
 
-/**
- * Whether a client-executed tool call still awaits its client resolution.
- * Input readiness alone cannot identify its executor: sequential server calls
- * can remain input-complete behind an unanswered approval.
- */
-const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
-  "approval-requested": false,
-  // Only an approved client-executed call: `isApprovedClientCallAwaitingResult`.
-  "approval-responded": false,
-  // A terminal stream can end while the provider has only announced a call or
-  // is still emitting its JSON arguments. Neither state carries usable input,
-  // so neither may take durable turn ownership.
-  "awaiting-input": false,
-  complete: false,
-  error: false,
-  "input-complete": true,
-  "input-streaming": false,
-} as const satisfies Record<TanStackToolCallState, boolean>;
-
-/** A tool call as stored, or as read back over the API. */
-type ApprovableToolCall = {
-  type: "tool-call";
-  state: TanStackToolCallState;
-  approval?: { approved?: boolean };
-  metadata?: unknown;
-  output?: unknown;
-};
-
-/**
- * An approved client-executed call whose result has not arrived. Resuming the
- * approval hands the call to the client, so it stays `approval-responded` with
- * input only until the client posts its result.
- */
-export const isApprovedClientCallAwaitingResult = (
-  part: ApprovableToolCall,
-): boolean =>
-  part.state === "approval-responded" &&
-  part.approval?.approved === true &&
-  part.output === undefined &&
-  chatToolExecutor(part) === "client";
-
-const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
-  name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool";
-
 export type AwaitingUserInteraction = Extract<
   NonNullable<ChatMessageMetadata["turnOutcome"]>,
   { type: "awaiting-user" }
@@ -611,20 +829,58 @@ const terminalToolCallError = (part: ChatToolCallPart): ChatToolCallPart => {
   });
 };
 
+type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
+
+/** A declined call as it is stored, and the result answering it. */
+type DeclinedToolCall = {
+  call: ChatToolCallPart;
+  result: ChatToolResultPart;
+};
+
+/**
+ * `part` declined, in the one shape a declined call is stored in: the shape
+ * the chat engine writes when the user denies an approval. The call settles
+ * as an error whose output is the engine's denial and keeps its approval with
+ * `approved: false`, and a `denied` result answers it, so the model is told
+ * the user declined and every reader (`isDeclinedChatToolCall`) sees the same
+ * decision whoever declined the call.
+ */
+export const declineToolCall = (
+  part: ChatToolCallPart,
+  approval: ChatApprovalMetadata,
+): DeclinedToolCall => {
+  const output = { error: CHAT_TOOL_DECLINED_ERROR };
+  return {
+    call: toChatToolCallPart({
+      ...part,
+      approval: { ...approval, approved: false },
+      output,
+      state: "error",
+    }),
+    result: {
+      content: JSON.stringify(output),
+      error: CHAT_TOOL_DECLINED_ERROR,
+      outcome: "denied",
+      state: "error",
+      toolCallId: part.id,
+      type: "tool-result",
+    },
+  };
+};
+
+/** What a terminated turn leaves of one of its calls: the call, and the
+ *  result that now answers it, if any. */
 const cancelPendingToolCallPart = (
   part: ChatToolCallPart,
-): ChatToolCallPart => {
+): { call: ChatToolCallPart; result?: ChatToolResultPart } => {
   switch (part.state) {
     case "approval-requested": {
       const approval = getChatToolCallExtension(part, "approval");
       if (!isChatApprovalMetadata(approval)) {
-        return terminalToolCallError(part);
+        return { call: terminalToolCallError(part) };
       }
-      return toChatToolCallPart({
-        ...part,
-        approval: { ...approval, approved: false },
-        state: "approval-responded",
-      });
+      // Nobody can answer the approval any more, so it is declined.
+      return declineToolCall(part, approval);
     }
     case "awaiting-input":
     case "input-streaming":
@@ -632,11 +888,11 @@ const cancelPendingToolCallPart = (
       // Do not leave a partial or client-owned call in a state that a fresh
       // hydration can execute after its owning turn was superseded. Omitting
       // input/approval/output also removes now-invalid user controls.
-      return terminalToolCallError(part);
+      return { call: terminalToolCallError(part) };
     case "approval-responded":
     case "complete":
     case "error":
-      return part;
+      return { call: part };
     default:
       part.state satisfies never;
       return panic(`Unhandled state: ${String(part.state)}`);
@@ -646,53 +902,26 @@ const cancelPendingToolCallPart = (
 /**
  * Keep a terminal assistant message internally consistent: metadata records
  * its turn's outcome, and its parts no longer expose an approval or input
- * control that belongs to that terminated turn.
+ * control that belongs to that terminated turn. The results answering the
+ * approvals it declines go at the end of the message, where the engine
+ * stores the results it writes (`answerCallsInTheirStep` puts each in its
+ * step for a provider request).
  */
 export const cancelPendingChatToolCalls = (
   message: PersistableChatMessage,
 ): PersistableChatMessage => {
-  const parts = message.parts.map((part) =>
-    part.type === "tool-call" ? cancelPendingToolCallPart(part) : part,
-  );
-  return { ...message, parts };
-};
-
-/**
- * Every approval-requested call remains actionable. A chat turn is owned by
- * its assistant message, not by whichever pending approval happened to arrive
- * first in the stream.
- */
-export const getAwaitingUserInteractions = (
-  message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
-): AwaitingUserInteraction[] => {
-  const turnOutcome = message?.metadata?.turnOutcome;
-  if (
-    message?.role !== "assistant" ||
-    (turnOutcome !== undefined && turnOutcome.type !== "awaiting-user")
-  ) {
-    return [];
-  }
-  const interactions: AwaitingUserInteraction[] = [];
-  for (const part of message.parts) {
+  const results: ChatToolResultPart[] = [];
+  const parts = message.parts.map((part) => {
     if (part.type !== "tool-call") {
-      continue;
+      return part;
     }
-    if (part.state === "approval-requested") {
-      interactions.push({ type: "approval", toolCallId: part.id });
-      continue;
+    const { call, result } = cancelPendingToolCallPart(part);
+    if (result !== undefined) {
+      results.push(result);
     }
-    if (
-      (CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
-        !isServerChatToolCall(part)) ||
-      isApprovedClientCallAwaitingResult(part)
-    ) {
-      interactions.push({
-        type: clientToolInteractionType(part.name),
-        toolCallId: part.id,
-      });
-    }
-  }
-  return interactions;
+    return continueStoredChatPart(part, call);
+  });
+  return { ...message, parts: [...parts, ...results] };
 };
 
 /** The tools whose calls in `message` await an approval. */
@@ -703,7 +932,7 @@ export const getAwaitedApprovalToolNames = (
     return new Set();
   }
   const awaitedCallIds = new Set(
-    getAwaitingUserInteractions(message).flatMap((interaction) =>
+    memberWaitsOf(message).flatMap((interaction) =>
       interaction.type === "approval" ? [interaction.toolCallId] : [],
     ),
   );
@@ -718,8 +947,7 @@ export const getAwaitedApprovalToolNames = (
 
 export const getAwaitingUserInteraction = (
   message: Pick<ChatMessage, "parts" | "role"> | null,
-): AwaitingUserInteraction | null =>
-  getAwaitingUserInteractions(message).at(0) ?? null;
+): AwaitingUserInteraction | null => memberWaitsOf(message).at(0) ?? null;
 
 /**
  * Whether an incoming tool-call state answers an awaited interaction:
@@ -757,13 +985,24 @@ const CLIENT_INTERACTION_RESOLUTION = {
     "input-complete": "unchanged",
     "input-streaming": null,
   },
+  // The call never moves: the answer travels as the resume payload of the
+  // question's interrupt, and the harness reports the call's result itself.
+  "harness-question": {
+    "approval-requested": null,
+    "approval-responded": null,
+    "awaiting-input": null,
+    complete: null,
+    error: null,
+    "input-complete": "unchanged",
+    "input-streaming": null,
+  },
 } as const satisfies Record<
   AwaitingUserInteraction["type"],
   Record<TanStackToolCallState, "resolved" | "unchanged" | null>
 >;
 
 type GetResumedUserInteractionOptions = {
-  /** Interactions the persisted turn awaits (`getAwaitingUserInteractions`). */
+  /** Interactions the persisted turn awaits (`memberWaitsOf`). */
   awaited: readonly AwaitingUserInteraction[];
   message: Pick<ChatMessage, "parts" | "role">;
 };
@@ -905,6 +1144,16 @@ const isUiResourcePart = (part: Record<string, unknown>): boolean => {
   if (resource["mimeType"] === GENERATED_VISUAL_MIME_TYPE) {
     return v.is(generatedVisualPartSchema, part);
   }
+  if (resource["mimeType"] === STELLA_MCP_APP_MIME_TYPE) {
+    const app = v.safeParse(stellaMcpAppPartSchema, part);
+    if (!app.success) {
+      return false;
+    }
+    const presented = chatMcpAppByUri(app.output.resource.uri);
+    return (
+      presented !== undefined && appPresentsTool(presented, app.output.toolName)
+    );
+  }
   if (
     typeof resource["uri"] !== "string" ||
     !resource["uri"].startsWith("ui://") ||
@@ -1014,6 +1263,8 @@ const CHAT_PART_VALIDATORS = {
       isPersistedJsonObject(part["providerMetadata"])),
   thinking: (part) =>
     typeof part["content"] === "string" &&
+    // An unknown provenance stays unread in its stored part. Replay checks
+    // whether a valid provenance matches the current model.
     (part["provenance"] === undefined ||
       isReasoningProvenance(part["provenance"])) &&
     (part["providerMetadata"] === undefined ||
@@ -1097,7 +1348,14 @@ export const applyChatPartPersistenceBudget = (parts: readonly ChatPart[]) => {
   let richPartCount = 0;
 
   for (const part of parts) {
-    if (!isServerOwnedChatPart(part) || isProviderVisibleChatPart(part)) {
+    // A stored part passed the budget of the release that stored it;
+    // dropping it here would lose it the next time this release saves.
+    if (
+      !isServerOwnedChatPart(part) ||
+      isProviderVisibleChatPart(part) ||
+      isUnsupportedChatPart(part) ||
+      STORED_ORIGINS.has(part)
+    ) {
       acceptedParts.push(part);
       continue;
     }
@@ -1169,6 +1427,11 @@ const normalizeMediaSource = (source: ContentPartSource): ContentPartSource => {
 };
 
 const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
+  // A stored part was made canonical when it was first written; rebuilding it
+  // would drop what a newer release stored with it.
+  if (STORED_ORIGINS.has(part)) {
+    return part;
+  }
   switch (part.type) {
     case "audio":
       return {
@@ -1182,7 +1445,10 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
       };
     case "ui-resource": {
       const { resource } = part;
-      if (resource.mimeType === GENERATED_VISUAL_MIME_TYPE) {
+      if (
+        resource.mimeType === GENERATED_VISUAL_MIME_TYPE ||
+        resource.mimeType === STELLA_MCP_APP_MIME_TYPE
+      ) {
         return part;
       }
       const normalizedResource =
@@ -1241,16 +1507,23 @@ export const classifyChatPartForPersistence = (
     panic("Cannot classify a malformed chat part for persistence");
   }
   const type = part["type"];
+  // A server resource is persisted only as the server minted it.
   if (
     type === "ui-resource" &&
     isRecord(part["resource"]) &&
-    part["resource"]["mimeType"] === GENERATED_VISUAL_MIME_TYPE &&
+    (part["resource"]["mimeType"] === GENERATED_VISUAL_MIME_TYPE ||
+      part["resource"]["mimeType"] === STELLA_MCP_APP_MIME_TYPE) &&
     !visualOrigin?.accepts(part)
   ) {
     return { type: "drop", partType: type };
   }
   if (!isChatPartPersistenceType(type)) {
     panic(`Cannot classify unknown chat part type: ${type}`);
+  }
+  // Only the stored reader carries a part; one arriving on a stream would be
+  // written back as a stored part it never was.
+  if (isUnsupportedChatPart(part)) {
+    return { type: "drop", partType: type };
   }
   if (chatPartPersistenceFor(type) === "drop") {
     return { type: "drop", partType: type };
@@ -1272,7 +1545,9 @@ const normalizeChatPartsForPersistence = (
   parts: readonly ChatPart[],
 ): ChatPart[] => {
   const normalized: ChatPart[] = [];
-  for (const part of parts) {
+  // A message stores each superseded tool result as its projection, as the
+  // model reads it, so a browsing turn stores one page however many it read.
+  for (const part of retainToolResultsInParts(parts, continueStoredChatPart)) {
     normalized.push(normalizeChatPartForPersistence(part));
   }
   return applyChatPartPersistenceBudget(normalized).parts;
@@ -1290,7 +1565,10 @@ export const toPersistableChatMessage = (
     parts: normalizeChatPartsForPersistence(
       message.role === "assistant"
         ? message.parts.filter(
-            (part) => part.type !== "text" || part.content.trim().length > 0,
+            (part) =>
+              part.type !== "text" ||
+              part.content.trim().length > 0 ||
+              STORED_ORIGINS.has(part),
           )
         : message.parts,
     ),
@@ -1312,6 +1590,7 @@ export const toPersistableChatMessage = (
  */
 export const toPersistedChatMessageContentV3 = (
   content: ChatMessageContentCandidate,
+  expectedOriginMessageId?: SafeId<"chatMessage">,
 ): PersistedChatMessageContentV3 => {
   if (!content.data.every(isChatPart)) {
     panic("Cannot persist chat message content with unsupported parts");
@@ -1323,8 +1602,26 @@ export const toPersistedChatMessageContentV3 = (
       outputsByToolCallId.set(part.id, part.output);
     }
   }
-  const data = normalized.map((part) =>
-    chatPartToPersistedV3Part({ outputsByToolCallId, part }),
+  const origins = normalized.map((part) => {
+    const origin = STORED_ORIGINS.get(part);
+    if (
+      isUnsupportedChatPart(part) &&
+      expectedOriginMessageId !== undefined &&
+      origin?.messageId !== expectedOriginMessageId
+    ) {
+      panic("An unknown stored part has no origin in this message");
+    }
+    return expectedOriginMessageId === undefined ||
+      origin?.messageId === expectedOriginMessageId
+      ? origin
+      : undefined;
+  });
+  const data = normalized.map((part, index) =>
+    chatPartToPersistedV3Part({
+      origin: origins.at(index),
+      outputsByToolCallId,
+      part,
+    }),
   );
   if (
     content.metadata !== undefined &&
@@ -1342,7 +1639,38 @@ export const toPersistedChatMessageContentV3 = (
   );
 };
 
+/**
+ * A part as stored. A part loaded from a stored message and not edited since
+ * is written back exactly as it was stored; an edited one is encoded from what
+ * this release knows, with every field a newer release stored merged back.
+ */
 const chatPartToPersistedV3Part = ({
+  origin,
+  outputsByToolCallId,
+  part,
+}: {
+  origin: StoredOrigin | undefined;
+  outputsByToolCallId: ReadonlyMap<string, unknown>;
+  part: ChatPart;
+}): PersistedV3Part => {
+  if (
+    origin?.writable !== undefined &&
+    STORED_ORIGINS.get(part) === origin &&
+    deepEquals(part, origin.loaded)
+  ) {
+    return origin.writable;
+  }
+  const encoded = encodeChatPart({ outputsByToolCallId, part });
+  return origin === undefined
+    ? encoded
+    : withLaterReleaseFields(
+        encoded,
+        origin.stored,
+        knownFieldsOfType(encoded.type),
+      );
+};
+
+const encodeChatPart = ({
   outputsByToolCallId,
   part,
 }: {
@@ -1406,11 +1734,16 @@ const persistedToolInputFromChatPart = (
   if (part.input === undefined) {
     return { rawArguments: part.arguments, status: "raw" };
   }
-  // Keep the argument text only when the parsed input cannot reproduce it.
+  // Successful inputs are canonicalized by their schema. Failed calls keep
+  // the model's exact rejected text, alongside the parsed preview shown live.
+  const preserveFailedArguments =
+    part.state === "error" && JSON.stringify(part.input) !== part.arguments;
   const reproduced = Result.try((): unknown => JSON.parse(part.arguments));
   return proveParsedToolInput(
     part.input,
-    reproduced.isOk() && deepEquals(reproduced.value, part.input)
+    !preserveFailedArguments &&
+      reproduced.isOk() &&
+      deepEquals(reproduced.value, part.input)
       ? undefined
       : part.arguments,
   );
@@ -1513,7 +1846,11 @@ export const mergeAnonRestorations = (
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
+  metadata.answerQuotes === undefined &&
   metadata.contextNotice === undefined &&
+  metadata.localFilesUndone === undefined &&
+  metadata.localRunContext === undefined &&
+  metadata.localRunFilesNotShared === undefined &&
   metadata.mentions === undefined &&
   metadata.refContext === undefined &&
   metadata.refEncoding === undefined &&
@@ -1521,6 +1858,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
+  metadata.turnSpend === undefined &&
   metadata.turnTiming === undefined &&
   metadata.turnModel === undefined &&
   metadata.usage === undefined;

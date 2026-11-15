@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { DEFAULT_FILE_PROPERTY_NAME } from "@stll/api-contract/property-policy";
 import {
   duplicateColumnIds,
   findTableColumn,
@@ -30,6 +31,7 @@ const LABELS = {
   author: "Author",
   lastUpdated: "Updated",
   version: "Version",
+  documents: "Dokumenty",
 };
 
 const property = (id: string): WorkspaceProperty => ({
@@ -67,6 +69,21 @@ const schemaFor = (properties: WorkspaceProperty[] = []) =>
   workspaceTableSchema({ properties, view: view(), labels: LABELS });
 
 describe("workspaceTableSchema", () => {
+  test("the file column's default name reads in the reader's language", () => {
+    const fileColumn = (name: string): WorkspaceProperty => ({
+      ...property("file"),
+      content: { version: 1, type: "file" },
+      name,
+    });
+    const labelOf = (column: WorkspaceProperty) =>
+      schemaFor([column]).columns.find(({ id }) => id === column.id)?.label;
+
+    expect(labelOf(fileColumn(DEFAULT_FILE_PROPERTY_NAME))).toBe(
+      LABELS.documents,
+    );
+    expect(labelOf(fileColumn("Spis"))).toBe("Spis");
+  });
+
   test("a document table runs select, properties, metadata, add-property", () => {
     expect(tableColumnIds(schemaFor([property("phase")]))).toEqual([
       "select",

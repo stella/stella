@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Deploys release-candidate tags to staging and publishes the GitHub prerelease.",
+  "reviewedDigest": "8f2a8a6b712a3e9c3fb359659af43f8693b5b213a0901964a98379e6ca388d20"
+}

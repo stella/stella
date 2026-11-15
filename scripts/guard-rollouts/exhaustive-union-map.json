@@ -1,0 +1,19 @@
+{
+  "id": "exhaustive-union-map",
+  "rules": ["exhaustive-union-map/exhaustive-union-map"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-16T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "exhaustive-union-map/exhaustive-union-map",
+    "apps/web/src",
+    "apps/api/src"
+  ]
+}

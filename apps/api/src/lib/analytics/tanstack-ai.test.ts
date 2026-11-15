@@ -5,23 +5,35 @@ import type {
   TokenUsage,
 } from "@tanstack/ai";
 import { EventType } from "@tanstack/ai";
-import { describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   generateChatObject,
   streamChatChunks,
+  streamChatObject,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";
 import type { ServerAnalytics } from "./server-analytics";
+import type { TanStackAIAnalyticsCallbacks } from "./tanstack-ai";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -100,7 +112,9 @@ const createMiddlewareContext = ({
   phase: "modelStream",
   iteration,
   chunkIndex: 0,
+  callMetadata: {},
   abort: () => undefined,
+  retry: () => undefined,
   // The engine pushes CUSTOM chunks onto the stream through this; the
   // analytics callbacks under test only read the context.
   emitCustomEvent: () => undefined,
@@ -134,6 +148,37 @@ const createMiddlewareContext = ({
   getOptional: () => undefined,
   provide: () => undefined,
 });
+
+const recordedUsageLedger = () => {
+  const insertedRows: unknown[] = [];
+  const { safeDb } = createScopedDbMock({
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => [
+            {
+              currentPeriodEnd: new Date("2026-07-01T00:00:00.000Z"),
+              currentPeriodStart: new Date("2026-06-01T00:00:00.000Z"),
+              status: "active",
+            },
+          ],
+          for: async () => [{ id: workspaceId }],
+        }),
+      }),
+    }),
+    insert: () => ({
+      values: (values: unknown) => {
+        insertedRows.push(values);
+        return {
+          onConflictDoNothing: () => ({
+            returning: async () => [{ id: "usage_event_1" }],
+          }),
+        };
+      },
+    }),
+  });
+  return { insertedRows, safeDb };
+};
 
 describe("createTanStackAIAnalyticsCallbacks", () => {
   test("captures completion events from TanStack middleware hooks", async () => {
@@ -376,7 +421,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     },
   );
 
-  test("meters an Anthropic warm cache where cached reads exceed input tokens", async () => {
+  test("meters an Anthropic warm cache from canonical total input", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
     const insertedRows: unknown[] = [];
@@ -430,15 +475,14 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
     const deferred: Promise<unknown>[] = [];
 
-    // Production-shaped Anthropic usage on a warm cache: `input_tokens`
-    // excludes cache reads and writes, so the cached count dwarfs it.
+    // TanStack includes both cache operations in canonical promptTokens.
     await callbacks.middleware.onUsage?.(
       createMiddlewareContext({ deferred }),
       {
         completionTokens: 1538,
-        promptTokens: 217,
+        promptTokens: 46_503,
         promptTokensDetails: { cachedTokens: 45_082, cacheWriteTokens: 1204 },
-        totalTokens: 1755,
+        totalTokens: 48_041,
       },
     );
     await Promise.all(deferred);
@@ -1092,7 +1136,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         yield {
           type: EventType.RUN_STARTED,
           runId: runId ?? "truncated-run",
-          threadId: threadId ?? "truncated-thread",
+          threadId,
         } satisfies StreamChunk;
         yield {
           type: EventType.TEXT_MESSAGE_START,
@@ -1111,7 +1155,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         yield {
           type: EventType.RUN_FINISHED,
           runId: runId ?? "truncated-run",
-          threadId: threadId ?? "truncated-thread",
+          threadId,
           finishReason: "length",
           usage: {
             promptTokens: 100,
@@ -1131,6 +1175,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       expect(
         await rejectionOf(
           generateChatObject({
+            threadId: "test-thread",
             adapter,
             messages: [{ role: "user", content: "Return JSON" }],
             outputSchema: {
@@ -1272,7 +1317,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         yield {
           type: EventType.RUN_STARTED,
           runId: runId ?? "run-error-run",
-          threadId: threadId ?? "run-error-thread",
+          threadId,
         } satisfies StreamChunk;
         yield { type: EventType.RUN_ERROR, ...chunk } satisfies StreamChunk;
       },
@@ -1283,6 +1328,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       for await (const _ of streamChatChunks({
+        threadId: "test-thread",
         adapter,
         messages: [{ role: "user", content: "Reply." }],
         middleware: [callbacks.middleware],
@@ -1304,120 +1350,225 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     }
   });
 
-  test("a model call that fails after reporting usage is metered once, and its run error keeps the usage", async () => {
-    const { createTanStackAIAnalyticsCallbacks } =
-      await loadTanStackAIAnalytics();
-    const insertedRows: unknown[] = [];
-    const { safeDb } = createScopedDbMock({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => [
-              {
-                currentPeriodEnd: new Date("2026-07-01T00:00:00.000Z"),
-                currentPeriodStart: new Date("2026-06-01T00:00:00.000Z"),
-                status: "active",
+  test.each(["text", "structured"] as const)(
+    "a %s model call that fails after reporting usage is metered once, and its run error keeps the usage",
+    async (mode) => {
+      const { createTanStackAIAnalyticsCallbacks } =
+        await loadTanStackAIAnalytics();
+      const { insertedRows, safeDb } = recordedUsageLedger();
+      const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+      const callbacks = createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "public_corpus",
+        analytics: {
+          capture: (event) => {
+            events.push(event);
+          },
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
+        feature: "chat.stream",
+        orgAIConfig: createOpenAIOrgAIConfig(),
+        traceId: "trace_failed_call",
+        usageMetering: {
+          actionType: "chat",
+          organizationId: orgId,
+          safeDb,
+          serviceTier: "standard",
+          userId,
+          workspaceId,
+        },
+      });
+      const reported = {
+        promptTokens: 24,
+        completionTokens: 2,
+        totalTokens: 26,
+      } satisfies TokenUsage;
+      const adapter = {
+        kind: "text",
+        name: "cut-off",
+        model: "cut-off",
+        "~types": {
+          providerOptions: {},
+          inputModalities: ["text"],
+          messageMetadataByModality: {},
+          toolCapabilities: [],
+          toolCallMetadata: {},
+          systemPromptMetadata: undefined,
+        },
+        async *chatStream({ runId, threadId }) {
+          yield {
+            type: EventType.RUN_STARTED,
+            runId: runId ?? "cut-off-run",
+            threadId,
+          } satisfies StreamChunk;
+          yield {
+            type: EventType.RUN_ERROR,
+            message: "The provider stream ended with an error.",
+            code: "incomplete-stream",
+            usage: reported,
+          } satisfies StreamChunk;
+        },
+        structuredOutput: () => {
+          throw new Error("This run streams");
+        },
+        async *structuredOutputStream() {
+          yield {
+            type: EventType.RUN_ERROR,
+            message: "The provider stream ended with an error.",
+            code: "incomplete-stream",
+            usage: reported,
+          } satisfies StreamChunk;
+        },
+      } satisfies AnyTextAdapter;
+
+      const hookOrder: string[] = [];
+      const options = {
+        threadId: "test-thread",
+        adapter,
+        messages: [{ role: "user", content: "Reply." }] satisfies Parameters<
+          typeof streamChatChunks
+        >[0]["messages"],
+        middleware: [
+          callbacks.middleware,
+          {
+            onChunk: (_ctx: ChatMiddlewareContext, chunk: StreamChunk) => {
+              if (chunk.type === EventType.RUN_ERROR) {
+                hookOrder.push("error");
+              }
+            },
+            onUsage: () => {
+              hookOrder.push("usage");
+            },
+          },
+        ],
+      };
+      const stream =
+        mode === "text"
+          ? streamChatChunks(options)
+          : streamChatObject({
+              ...options,
+              outputSchema: {
+                type: "object",
+                properties: { value: { type: "string" } },
+                required: ["value"],
               },
-            ],
-            for: async () => [{ id: workspaceId }],
-          }),
-        }),
-      }),
-      insert: () => ({
-        values: (values: unknown) => {
-          insertedRows.push(values);
-          return {
-            onConflictDoNothing: () => ({
-              returning: async () => [{ id: "usage_event_1" }],
-            }),
-          };
-        },
-      }),
-    });
-    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
-    const callbacks = createTanStackAIAnalyticsCallbacks({
-      modelTier: MANAGED_MODEL_TIER.standard,
-      dataClass: "public_corpus",
-      analytics: {
-        capture: (event) => {
-          events.push(event);
-        },
-        flush: async () => undefined,
-        identifyOrganizationGroup: () => undefined,
-      },
-      feature: "chat.stream",
-      orgAIConfig: createOpenAIOrgAIConfig(),
-      traceId: "trace_failed_call",
-      usageMetering: {
-        actionType: "chat",
-        organizationId: orgId,
-        safeDb,
-        serviceTier: "standard",
-        userId,
-        workspaceId,
-      },
-    });
-    const reported = {
-      promptTokens: 24,
-      completionTokens: 2,
-      totalTokens: 26,
-    } satisfies TokenUsage;
-    const adapter = {
-      kind: "text",
-      name: "cut-off",
-      model: "cut-off",
-      "~types": {
-        providerOptions: {},
-        inputModalities: ["text"],
-        messageMetadataByModality: {},
-        toolCapabilities: [],
-        toolCallMetadata: {},
-        systemPromptMetadata: undefined,
-      },
-      async *chatStream({ runId, threadId }) {
-        yield {
-          type: EventType.RUN_STARTED,
-          runId: runId ?? "cut-off-run",
-          threadId: threadId ?? "cut-off-thread",
-        } satisfies StreamChunk;
-        yield {
-          type: EventType.RUN_ERROR,
-          message: "The provider stream ended with an error.",
-          code: "incomplete-stream",
-          usage: reported,
-        } satisfies StreamChunk;
-      },
-      structuredOutput: () => {
-        throw new Error("This run streams");
-      },
-    } satisfies AnyTextAdapter;
+            });
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+      expect(hookOrder).toEqual(
+        mode === "text" ? ["error", "usage"] : ["usage", "error"],
+      );
 
-    const chunks: StreamChunk[] = [];
-    for await (const chunk of streamChatChunks({
-      adapter,
-      messages: [{ role: "user", content: "Reply." }],
-      middleware: [callbacks.middleware],
-    })) {
-      chunks.push(chunk);
-    }
+      const runError = chunks.find(
+        (chunk) => chunk.type === EventType.RUN_ERROR,
+      );
+      if (runError?.type !== EventType.RUN_ERROR) {
+        throw new TypeError("The run reported no run error");
+      }
+      expect(tokenUsageFromTerminalChunk(runError)).toMatchObject(reported);
+      const generations = events.filter(
+        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+      );
+      expect(insertedRows).toHaveLength(1);
+      // One record for the one model call: the failure, with what it reported.
+      expect(generations).toHaveLength(1);
+      expect(generations[0]?.properties).toMatchObject({
+        $ai_input_tokens: reported.promptTokens,
+        $ai_is_error: true,
+        $ai_output_tokens: reported.completionTokens,
+      });
+    },
+  );
 
-    const runError = chunks.find((chunk) => chunk.type === EventType.RUN_ERROR);
-    if (runError?.type !== EventType.RUN_ERROR) {
-      throw new TypeError("The run reported no run error");
-    }
-    expect(tokenUsageFromTerminalChunk(runError)).toMatchObject(reported);
-    const generations = events.filter(
-      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
-    );
-    expect(insertedRows).toHaveLength(1);
-    // One record for the one model call: the failure, with what it reported.
-    expect(generations).toHaveLength(1);
-    expect(generations[0]?.properties).toMatchObject({
-      $ai_input_tokens: reported.promptTokens,
-      $ai_is_error: true,
-      $ai_output_tokens: reported.completionTokens,
-    });
-  });
+  test.each(["finish", "error", "error-chunk"] as const)(
+    "multiple structured calls in one iteration retain usage through on%s",
+    async (terminal) => {
+      const { createTanStackAIAnalyticsCallbacks } =
+        await loadTanStackAIAnalytics();
+      const { insertedRows, safeDb } = recordedUsageLedger();
+      const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+      const callbacks = createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "public_corpus",
+        analytics: {
+          capture: (event) => {
+            events.push(event);
+          },
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
+        feature: "chat.stream",
+        orgAIConfig: createOpenAIOrgAIConfig(),
+        traceId: "structured_usage",
+        usageMetering: {
+          actionType: "chat",
+          organizationId: orgId,
+          safeDb,
+          serviceTier: "standard",
+          userId,
+          workspaceId,
+        },
+      });
+      const deferred: Promise<unknown>[] = [];
+      const ctx = createMiddlewareContext({ deferred });
+      ctx.phase = "structuredOutput";
+      const first = {
+        promptTokens: 1200,
+        completionTokens: 200,
+        totalTokens: 1400,
+      };
+      const second = {
+        promptTokens: 4300,
+        completionTokens: 900,
+        totalTokens: 5200,
+      };
+      await callbacks.middleware.onUsage?.(ctx, first);
+      await callbacks.middleware.onUsage?.(ctx, second);
+      if (terminal === "finish") {
+        await callbacks.middleware.onFinish?.(ctx, {
+          content: "Done",
+          duration: 1,
+          finishReason: "stop",
+          usage: second,
+        });
+      } else {
+        if (terminal === "error-chunk") {
+          await callbacks.middleware.onChunk?.(ctx, {
+            type: EventType.RUN_ERROR,
+            message: "Structured validation failed after usage was reported.",
+          });
+        }
+        await callbacks.middleware.onError?.(ctx, {
+          duration: 1,
+          error: Object.assign(new Error("unavailable"), { status: 503 }),
+        });
+      }
+      await Promise.all(deferred);
+      expect(insertedRows).toHaveLength(2);
+      const generations = events.filter(
+        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+      );
+      expect(generations).toHaveLength(2);
+      expect(generations.map((event) => event.properties)).toMatchObject([
+        {
+          $ai_input_tokens: first.promptTokens,
+          $ai_output_tokens: first.completionTokens,
+        },
+        {
+          $ai_input_tokens: second.promptTokens,
+          $ai_output_tokens: second.completionTokens,
+        },
+      ]);
+      if (terminal !== "finish") {
+        expect(generations[1]?.properties).toHaveProperty("$ai_is_error", true);
+      } else {
+        expect(generations[1]?.properties).not.toHaveProperty("$ai_is_error");
+      }
+    },
+  );
 
   test("captures one generation per model call and sums the run's usage", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
@@ -1524,22 +1675,22 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           traceId: "trace_prompt_cache",
         });
         // A tool-calling turn on a warm Anthropic cache: the first call
-        // writes the prefix, the second reads it. Anthropic's input count
-        // excludes both.
+        // writes the prefix, the second reads it. TanStack includes each
+        // cache operation in the corresponding input total.
         const ctx0 = createMiddlewareContext({ iteration: 0 });
         const ctx1 = createMiddlewareContext({ iteration: 1 });
         await callbacks.middleware.onUsage?.(ctx0, {
           completionTokens: 40,
-          promptTokens: 100,
+          promptTokens: 1000,
           promptTokensDetails: { cachedTokens: 0, cacheWriteTokens: 900 },
-          totalTokens: 140,
+          totalTokens: 1040,
         });
         // The run then parks at an approval: no terminal hook follows.
         await callbacks.middleware.onUsage?.(ctx1, {
           completionTokens: 60,
-          promptTokens: 200,
+          promptTokens: 1100,
           promptTokensDetails: { cachedTokens: 900, cacheWriteTokens: 0 },
-          totalTokens: 260,
+          totalTokens: 1160,
         });
       };
 
@@ -1915,5 +2066,165 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     } finally {
       warnSpy.mockRestore();
     }
+  });
+});
+
+describe("a failed generation is recorded once per callbacks family", () => {
+  // An anticipated failure keeps these tests off the exception sink; the
+  // ledger is the same for every kind.
+  const providerFailure = () =>
+    Object.assign(new Error("rate limited"), { statusCode: 429 });
+
+  // Each recorded failure also logs at WARN; the events are what is asserted.
+  beforeEach(async () => {
+    const { logger } = await import("@/api/lib/observability/logger");
+    spyOn(logger, "warn").mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    mock.restore();
+  });
+
+  const boundModel = (modelId: string) => ({
+    keySource: "instance" as const,
+    modelId,
+    provider: "openai" as const,
+  });
+
+  const createFamilyRoot = async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const root = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+      analytics: {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "case-law.analysis.significance",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_failure_family",
+    });
+    const recorded = () => ({
+      failed: events.filter(
+        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+      ).length,
+      generationErrors: events.filter(
+        (event) =>
+          event.event === SERVER_ANALYTICS_EVENTS.aiGeneration &&
+          event.properties["$ai_is_error"] === true,
+      ).length,
+    });
+    return { recorded, root };
+  };
+
+  // The middleware's terminal hook for one run that failed at the provider.
+  const failRun = async (
+    member: TanStackAIAnalyticsCallbacks,
+    runId: string,
+  ): Promise<void> => {
+    await member.middleware.onError?.(createMiddlewareContext({ runId }), {
+      duration: 50,
+      error: providerFailure(),
+    });
+  };
+
+  test("a run that failed on a bound model and is caught by the caller records once", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    const bound = root.forModel(boundModel("gpt-5.4-mini"));
+
+    await failRun(bound, "run_bound");
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 1, generationErrors: 1 });
+  });
+
+  test("a failure before any model call records once from the catch path", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    root.forModel(boundModel("gpt-5.4-mini"));
+
+    root.captureError(providerFailure());
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 1, generationErrors: 1 });
+  });
+
+  test("two concurrent runs that both fail record twice", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    const first = root.forModel(boundModel("gpt-5.4-mini"));
+    const second = root.forModel(boundModel("gpt-5.4"));
+
+    await Promise.all([failRun(first, "run_a"), failRun(second, "run_b")]);
+    root.captureError(providerFailure());
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 2, generationErrors: 2 });
+  });
+
+  test("a nested binding shares the root's ledger", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    const child = root.forModel(boundModel("gpt-5.4-mini"));
+    const grandchild = child.forModel(boundModel("gpt-5.4"));
+
+    await failRun(grandchild, "run_nested");
+    child.captureError(providerFailure());
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 1, generationErrors: 1 });
+  });
+
+  test("every interleaving of run failures and catch-path reports records each failed run once", async () => {
+    // The root, two bound children, and two grandchildren.
+    const memberCount = 5;
+    const step = fc.record({
+      kind: fc.constantFrom("run" as const, "catch" as const),
+      member: fc.nat({ max: memberCount - 1 }),
+    });
+    await assertProperty(
+      "every interleaving of run failures and catch-path reports records each failed run once",
+      fc.asyncProperty(
+        fc.array(step, { minLength: 1, maxLength: 12 }),
+        async (steps) => {
+          const { recorded, root } = await createFamilyRoot();
+          const child = root.forModel(boundModel("gpt-5.4-mini"));
+          const members = [
+            root,
+            child,
+            root.forModel(boundModel("gpt-5.4")),
+            child.forModel(boundModel("gpt-5.4-nano")),
+            child.forModel(boundModel("gpt-5.4")),
+          ];
+
+          // A run reaches its terminal hook once, so each "run" step is a
+          // distinct failed run. A catch-path report before any run failed
+          // is a failure before the model call: one more distinct failure.
+          // A catch-path report after one is the caller's echo of a run the
+          // middleware already recorded.
+          let failedRuns = 0;
+          let failedBeforeModelCall = 0;
+          for (const [index, { kind, member }] of steps.entries()) {
+            const target = members.at(member) ?? root;
+            if (kind === "run") {
+              await failRun(target, `run_${String(index)}`);
+              failedRuns += 1;
+            } else {
+              if (failedRuns === 0) {
+                failedBeforeModelCall = 1;
+              }
+              target.captureError(providerFailure());
+            }
+          }
+
+          const expected = failedRuns + failedBeforeModelCall;
+          expect(recorded()).toEqual({
+            failed: expected,
+            generationErrors: expected,
+          });
+        },
+      ),
+    );
   });
 });

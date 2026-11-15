@@ -9,10 +9,11 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { APIError } from "@/lib/errors/api";
 import { AuthClientError } from "@/lib/errors/auth";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import {
   isNetworkError,

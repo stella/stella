@@ -34,6 +34,7 @@ import {
 } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
+import { runToolWithRealtime } from "@/api/mcp/tool-realtime";
 import type {
   AllHandlerOutputsTyped,
   AssertTrue,
@@ -113,6 +114,8 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   // Non-projectable (`chatProjectable: false`): chat files feedback through
   // its own UI. Wired only to keep this map exhaustive.
   submit_feedback: FEEDBACK_TOOL_HANDLERS.submit_feedback,
+  // Account-level creation is intentionally excluded from chat projection.
+  create_organization: RESEARCH_ADMIN_TOOL_HANDLERS.create_organization,
 } satisfies Record<RegistryWriteToolName, McpToolHandler>;
 
 type ProjectableRegistryWriteToolName = ChatProjectableToolName<
@@ -233,7 +236,7 @@ export const runRegistryWriteTool = async (
 
   if ("unavailableInputParams" in entry) {
     for (const param of entry.unavailableInputParams) {
-      if (param in args) {
+      if (Object.hasOwn(args, param)) {
         return Result.err(
           new ChatToolError({
             kind: "invalid-input",
@@ -380,12 +383,14 @@ export const runRegistryWriteTool = async (
     return Result.err(toRegistryChatToolError(needsMatter.error));
   }
 
-  const response = await REGISTRY_WRITE_TOOL_HANDLERS[toolName]({
+  const response = await runToolWithRealtime({
     args: applyChatApprovalConfirmation({
       args: normalized.value,
       toolName,
     }),
     context: authorizedContext,
+    handler: REGISTRY_WRITE_TOOL_HANDLERS[toolName],
+    toolName,
   });
   const finished = await finalizeToolEgress({
     outputSchema:

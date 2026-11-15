@@ -222,16 +222,18 @@ describe("corpus write redundancy refusal", () => {
   });
 
   test("an empty payload issues no corpus PUTs", async () => {
-    const outcome = await writeCorpusDocument({
-      documentId: redundancyDocumentId,
-      jurisdiction,
-      // The metadata-first shape: no text, no sections, the empty-AST
-      // placeholder an adapter without a document emits.
-      text: null,
-      sections: null,
-      ast: EMPTY_AST,
-      stored: null,
-    });
+    const outcome = (
+      await writeCorpusDocument({
+        documentId: redundancyDocumentId,
+        jurisdiction,
+        // The metadata-first shape: no text, no sections, the empty-AST
+        // placeholder an adapter without a document emits.
+        text: null,
+        sections: null,
+        ast: EMPTY_AST,
+        stored: null,
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       type: "skipped-empty",
@@ -256,12 +258,14 @@ describe("corpus write redundancy refusal", () => {
       contentHash,
     };
 
-    const outcome = await writeCorpusDocument({
-      documentId: redundancyDocumentId,
-      jurisdiction,
-      ...redundancyPayload,
-      stored,
-    });
+    const outcome = (
+      await writeCorpusDocument({
+        documentId: redundancyDocumentId,
+        jurisdiction,
+        ...redundancyPayload,
+        stored,
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({ type: "skipped-unchanged", written: stored });
     expect(fake.requests).toHaveLength(0);
@@ -283,12 +287,14 @@ describe("corpus write redundancy refusal", () => {
     };
     expect(corpusContentHash(changed)).not.toBe(previousHash);
 
-    const outcome = await writeCorpusDocument({
-      documentId: redundancyDocumentId,
-      jurisdiction,
-      ...changed,
-      stored,
-    });
+    const outcome = (
+      await writeCorpusDocument({
+        documentId: redundancyDocumentId,
+        jurisdiction,
+        ...changed,
+        stored,
+      })
+    ).unwrap();
 
     const changedKeys = corpusKeys({
       documentId: redundancyDocumentId,

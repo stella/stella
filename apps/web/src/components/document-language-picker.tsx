@@ -14,6 +14,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { Label } from "@stll/ui/label";
 
 import { matchesLanguageQuery } from "@/components/document-language-picker.logic";
 import { useFormattingLocale } from "@/i18n/formatting-context";
@@ -55,9 +56,7 @@ const LanguagePicker = ({
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-sm font-medium" htmlFor={id}>
-        {label}
-      </label>
+      <Label htmlFor={id}>{label}</Label>
       <Combobox<LanguageOption>
         autoHighlight
         disabled={disabled}

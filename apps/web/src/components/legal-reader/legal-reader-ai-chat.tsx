@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
+import type { AISuggestionPreset } from "@stll/folio-react";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -18,9 +19,12 @@ import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-k
 import {
   adoptLegalDocumentChatThread,
   ensureLegalDocumentChatThread,
+  lookupLegalDocumentChatThread,
   useLegalDocumentChatThreads,
 } from "@/features/chat/legal-document-chat-threads";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { createChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 type LegalReaderAIChatProps = {
@@ -31,6 +35,11 @@ type LegalReaderAIChatProps = {
   /** The reader's own text, which the composer floats over. */
   children: ReactNode;
   className?: string | undefined;
+  /**
+   * Questions the reader offers as chips over the empty composer, each sent
+   * as it is: the starting points the surface would otherwise draw itself.
+   */
+  presets?: AISuggestionPreset[] | undefined;
 };
 
 /**
@@ -52,6 +61,7 @@ export const LegalReaderAIChat = ({
   aiMode,
   children,
   className,
+  presets,
 }: LegalReaderAIChatProps) => {
   const user = useMaybeAuthenticatedUser();
   const { key: documentKey } = activeLegalDocumentRef(activeLegal);
@@ -64,6 +74,7 @@ export const LegalReaderAIChat = ({
     <FileViewerWithAI
       activeLegal={activeLegal}
       className={className}
+      presets={presets}
       {...binding}
     >
       {children}
@@ -85,7 +96,7 @@ type ReaderChatBinding =
  * chat tab about the same document is the same conversation, and closing and
  * reopening either surface continues it instead of starting over.
  */
-const useReaderChatBinding = ({
+export const useReaderChatBinding = ({
   bound,
   documentKey,
 }: {
@@ -95,24 +106,35 @@ const useReaderChatBinding = ({
   const tabThreadId = useInspectorTabsStore((state) =>
     legalDocumentChatTabThreadId({ documentKey, tabs: state.tabs }),
   );
-  // Seeded during the render that binds the composer rather than in an
-  // effect, so the composer is bound from its first paint. The call is
-  // first-wins and idempotent: a repeated render cannot mint a second
-  // conversation, and a tab restored from a previous session hands its thread
-  // back before a fresh one is minted. A different document is a different
-  // conversation, so it gets a seed of its own.
+  // Named during the render that binds the composer rather than in an effect,
+  // so the composer is bound from its first paint. A conversation the owner
+  // already knows wins, and a tab restored from a previous session hands its
+  // thread back before a fresh one is minted. A different document is a
+  // different conversation, so it gets a seed of its own.
   const [seed, setSeed] = useState<{
     documentKey: LegalDocumentChatKey;
     threadId: ChatThreadId;
   } | null>(null);
   let seededThreadId = seed?.documentKey === documentKey ? seed.threadId : null;
   if (bound && seededThreadId === null) {
-    seededThreadId = ensureLegalDocumentChatThread({
-      adoptThreadId: tabThreadId,
-      documentKey,
-    });
+    const known = lookupLegalDocumentChatThread(documentKey);
+    seededThreadId =
+      known.status === "thread"
+        ? known.threadId
+        : (tabThreadId ?? createChatThreadId());
     setSeed({ documentKey, threadId: seededThreadId });
   }
+  // Telling the owner writes to a store other components read, which a render
+  // may not do, so it waits for the commit. First writer wins: two readers on
+  // one document that named different threads both end up on the owner's.
+  useExternalSyncEffect(() => {
+    if (bound && seededThreadId !== null) {
+      ensureLegalDocumentChatThread({
+        adoptThreadId: seededThreadId,
+        documentKey,
+      });
+    }
+  }, [bound, documentKey, seededThreadId]);
   // The owner stays the live source: a new chat started from either surface
   // moves both.
   const ownerThreadId = useLegalDocumentChatThreads(

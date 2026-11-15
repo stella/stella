@@ -29,6 +29,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -89,6 +90,7 @@ if (!databaseUrl || !runPostgresTests) {
           message: {
             direction: "out",
             channel: "email",
+            dataBox: null,
             messageId: `<${Bun.randomUUIDv7()}@example.test>`,
             contentHash: "a".repeat(64),
             from: { address: sender, name: null },
@@ -334,9 +336,7 @@ if (!databaseUrl || !runPostgresTests) {
         } finally {
           releaseCandidates.resolve(undefined);
           await Promise.allSettled(activeDeliveries);
-          await setupDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(setupDb, [organizationId]);
           await setupDb.delete(user).where(eq(user.id, adminId));
         }
       });

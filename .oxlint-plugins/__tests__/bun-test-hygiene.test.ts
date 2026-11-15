@@ -290,3 +290,34 @@ test("ignores mocks created inside tests and helper callbacks", async () => {
     ),
   ).toEqual([]);
 });
+
+test("reports screen bound from Testing Library by import or dynamic import", async () => {
+  expect(
+    await lintSingleRule(
+      "no-global-testing-library-screen",
+      [
+        'import { render, screen } from "@testing-library/react";',
+        'const { screen: other } = await import("@testing-library/dom");',
+        'const { render: r } = await import("@testing-library/react");',
+        'const { screen: unrelated } = await import("./local");',
+        "void [render, screen, other, r, unrelated];",
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([1, 2]);
+});
+
+test("accepts queries through the render result and a screen bound elsewhere", async () => {
+  expect(
+    await lintSingleRule(
+      "no-global-testing-library-screen",
+      [
+        'import { render, within } from "@testing-library/react";',
+        'import { screen } from "./local-screen";',
+        "const view = render(null);",
+        "void [view.getByRole, within(view.container), screen];",
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([]);
+});

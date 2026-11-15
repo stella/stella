@@ -16,7 +16,9 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import { member, organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -64,6 +66,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -72,7 +75,6 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -283,16 +285,12 @@ testState.beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await testDb
-    .delete(organization)
-    .where(
-      inArray(organization.id, [
-        corruptOrgId,
-        unsetOrgId,
-        seededOrgId,
-        ...unreadableFixtures.map(({ organizationId }) => organizationId),
-      ]),
-    );
+  await deleteOrganizationsForTest(testDb, [
+    corruptOrgId,
+    unsetOrgId,
+    seededOrgId,
+    ...unreadableFixtures.map(({ organizationId }) => organizationId),
+  ]);
   await releaseTestDb();
 });
 

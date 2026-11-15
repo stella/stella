@@ -1,3 +1,8 @@
+import {
+  type CiBrowserSuiteLeg,
+  parseCiBrowserSuiteLegs,
+} from "./ci-browser-suites";
+
 export const UI_PLAYGROUND_SHARD_COUNT = 6;
 
 export type UiPlaygroundMatrixLeg = {
@@ -14,6 +19,8 @@ type PlanUiPlaygroundMatrixOptions = {
   allSpecs: readonly string[];
   eventName: string;
   desktopRequired: boolean;
+  /** Pull request legs that run changed specs of whole-suite legs. */
+  suiteLegs?: readonly CiBrowserSuiteLeg[];
 };
 
 const playgroundLegs = (
@@ -35,6 +42,7 @@ export const planUiPlaygroundMatrix = ({
   allSpecs,
   eventName,
   desktopRequired,
+  suiteLegs = [],
 }: PlanUiPlaygroundMatrixOptions): UiPlaygroundMatrixLeg[] => {
   if (eventName !== "pull_request") {
     return [
@@ -44,10 +52,15 @@ export const planUiPlaygroundMatrix = ({
     ];
   }
 
-  const fixedLegs =
-    desktopRequired || selectedSpecs.length === 0
+  // The desktop leg runs its whole suite; changed-spec legs carry their
+  // specs. An empty selection keeps one leg so the matrix stays valid.
+  const fixedLegs = [
+    ...(desktopRequired ||
+    (selectedSpecs.length === 0 && suiteLegs.length === 0)
       ? [{ suite: "desktop", specs: [] }]
-      : [];
+      : []),
+    ...suiteLegs.map(({ suite, specs }) => ({ suite, specs })),
+  ];
   if (selectedSpecs.length === 0) {
     return fixedLegs;
   }
@@ -88,6 +101,9 @@ if (import.meta.main) {
         allSpecs,
         eventName: process.env["EVENT_NAME"] ?? "",
         desktopRequired: process.env["DESKTOP_REQUIRED"] === "true",
+        suiteLegs: parseCiBrowserSuiteLegs(
+          process.env["BROWSER_SUITE_LEGS"] ?? "[]",
+        ),
       }),
     ),
   );

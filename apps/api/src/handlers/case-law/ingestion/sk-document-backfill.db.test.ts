@@ -345,17 +345,19 @@ if (!databaseUrl || !runPostgresTests) {
         documentUrl: "https://example.test/store.pdf",
       });
 
-      await storeBackfilledDocument({
-        decision: await claimFor(id),
-        document: {
-          fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
-          documentAst: parsedAst,
-          sections: [
-            { index: 0, type: "header", title: null, text: "Rozsudok" },
-          ],
-        },
-        scopedDb,
-      });
+      (
+        await storeBackfilledDocument({
+          decision: await claimFor(id),
+          document: {
+            fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
+            documentAst: parsedAst,
+            sections: [
+              { index: 0, type: "header", title: null, text: "Rozsudok" },
+            ],
+          },
+          scopedDb,
+        })
+      ).unwrap();
 
       const row = await db.query.caseLawDecisions.findFirst({
         where: { id: { eq: id } },
@@ -453,18 +455,22 @@ if (!databaseUrl || !runPostgresTests) {
       };
 
       const decision = await claimFor(id);
-      await storeBackfilledDocument({
-        decision,
-        document: stored,
-        scopedDb,
-      });
+      (
+        await storeBackfilledDocument({
+          decision,
+          document: stored,
+          scopedDb,
+        })
+      ).unwrap();
       // A second fetch of the same decision — the queue and a reader can
       // both reach it — must converge rather than replace what is there.
-      await storeBackfilledDocument({
-        decision,
-        document: { ...stored, fulltext: "Stale re-parse." },
-        scopedDb,
-      });
+      (
+        await storeBackfilledDocument({
+          decision,
+          document: { ...stored, fulltext: "Stale re-parse." },
+          scopedDb,
+        })
+      ).unwrap();
 
       const row = await db.query.caseLawDecisions.findFirst({
         where: { id: { eq: id } },
@@ -482,15 +488,17 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       const decision = await claimFor(id);
-      await storeBackfilledDocument({
-        decision,
-        document: {
-          fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
-          documentAst: parsedAst,
-          sections: [],
-        },
-        scopedDb,
-      });
+      (
+        await storeBackfilledDocument({
+          decision,
+          document: {
+            fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
+            documentAst: parsedAst,
+            sections: [],
+          },
+          scopedDb,
+        })
+      ).unwrap();
       await markDocumentUnavailable({
         decision,
         scopedDb,
@@ -614,11 +622,13 @@ if (!databaseUrl || !runPostgresTests) {
         .set({ sourceHash: "hash-after-refresh" })
         .where(eq(caseLawDecisions.id, id));
 
-      await storeBackfilledDocument({
-        decision,
-        document,
-        scopedDb,
-      });
+      (
+        await storeBackfilledDocument({
+          decision,
+          document,
+          scopedDb,
+        })
+      ).unwrap();
 
       expect(
         (
@@ -638,11 +648,13 @@ if (!databaseUrl || !runPostgresTests) {
 
       // Fetched again against the row as it now stands, the same
       // document stores.
-      await storeBackfilledDocument({
-        decision: await claimFor(id),
-        document,
-        scopedDb,
-      });
+      (
+        await storeBackfilledDocument({
+          decision: await claimFor(id),
+          document,
+          scopedDb,
+        })
+      ).unwrap();
 
       expect(
         (

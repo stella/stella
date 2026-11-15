@@ -13,9 +13,11 @@ export const CHAT_TOOL_GRANT_POLICY_KIND = {
   /** Approved or denied per call; never covered by a stored grant. */
   approveOnce: "approve-once",
   /**
-   * Never covered by a stored grant, like `approveOnce`. The one exception is
-   * the opt-in page-read allowance for the client-executed `use-browser`
-   * tool, which the user's own browser applies before running a command.
+   * Never covered by a stored grant, like `approveOnce`. The exceptions are
+   * for the client-executed `use-browser` tool, which the user's own browser
+   * applies before running a command: the opt-in page-read allowance, and
+   * per-website approvals (`browser-site-grants`), which the API stores but
+   * never applies to its approval gate.
    */
   neverAuto: "never-auto",
 } as const;
@@ -56,8 +58,8 @@ const MANUAL_CHAT_TOOL_GRANT_POLICY = {
   "update-current-skill-body": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "update-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "update-entity-fields": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  // Every browser command asks every time, except the opt-in page-read
-  // allowance described on `neverAuto`.
+  // Every browser command asks every time, except the page-read allowance
+  // and the per-website approvals described on `neverAuto`.
   "use-browser": CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
   web_search: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
 } as const satisfies Record<ManualGrantToolName, ChatToolGrantPolicy>;
@@ -101,6 +103,37 @@ export const getChatToolGrantPolicy = (
 
 export const isGrantableChatTool = (toolName: string): boolean =>
   getChatToolGrantPolicy(toolName) === CHAT_TOOL_GRANT_POLICY_KIND.grantable;
+
+/**
+ * The installed connector an external tool (`mcp__<connector>__<tool>`)
+ * belongs to, or `null` for any other name. A grant on such a tool covers
+ * every tool of that connector.
+ */
+export const externalMcpConnectorSlugOf = (toolName: string): string | null => {
+  if (!toolName.startsWith(EXTERNAL_MCP_TOOL_NAME_PREFIX)) {
+    return null;
+  }
+  const parts = toolName.split("__");
+  return parts.length >= 3 ? (parts.at(1) ?? null) : null;
+};
+
+/**
+ * Whether a grant stored for `grantedToolName` also answers an approval of
+ * `toolName`: the same tool, or another tool of the same external connector.
+ */
+export const isChatToolCoveredByGrantOn = (
+  grantedToolName: string,
+  toolName: string,
+): boolean => {
+  if (grantedToolName === toolName) {
+    return true;
+  }
+  const connector = externalMcpConnectorSlugOf(toolName);
+  return (
+    connector !== null &&
+    connector === externalMcpConnectorSlugOf(grantedToolName)
+  );
+};
 
 /**
  * How long a stored grant applies: the one conversation it was given in, or

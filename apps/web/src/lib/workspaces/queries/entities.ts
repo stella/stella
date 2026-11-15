@@ -508,6 +508,7 @@ export type WorkspaceFile = {
   parentId: string | null;
   fileName: string;
   mimeType: string;
+  sizeBytes: number;
 };
 
 const fetchAllWorkspaceFiles = async ({
@@ -541,6 +542,7 @@ const fetchAllWorkspaceFiles = async ({
           parentId: file.parentId,
           fileName: file.fileName,
           mimeType: file.mimeType,
+          sizeBytes: file.sizeBytes,
         })),
       );
     },
@@ -548,6 +550,36 @@ const fetchAllWorkspaceFiles = async ({
 
   return files;
 };
+
+const FILE_SEARCH_PAGE_SIZE = 50;
+
+type WorkspaceFileSearchKey = { workspaceId: string; search: string };
+
+// One bounded page of the matter's files per request, filtered on the
+// server, so a picker never walks the whole matter before showing anything.
+// Under the files key, so whatever refreshes the file list refreshes it too.
+export const workspaceFileSearchOptions = ({
+  workspaceId,
+  search,
+}: WorkspaceFileSearchKey) =>
+  infiniteQueryOptions({
+    queryKey: [...entitiesKeys.files(workspaceId), "search", search.trim()],
+    queryFn: async ({ signal, pageParam }) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .files.get({
+          fetch: { signal },
+          query: {
+            limit: FILE_SEARCH_PAGE_SIZE,
+            ...(search.trim() !== "" && { search: search.trim() }),
+            ...(pageParam !== undefined && { cursor: pageParam }),
+          },
+        });
+      return unwrapApiResponse(response);
+    },
+    initialPageParam: stringCursorSeed(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
 
 // Fetches every file-bearing entity in bounded pages, with just the
 // columns the organizer needs. The organizer still operates across the
