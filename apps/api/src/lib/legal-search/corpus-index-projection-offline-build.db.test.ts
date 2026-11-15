@@ -44,6 +44,7 @@ import {
   type CorpusProjectionOfflineBuildPolicy,
   planCorpusProjectionOfflineBuild,
 } from "@/api/lib/legal-search/corpus-index-projection-offline-plan";
+import { CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   type CorpusProjectionIntentLease,
   readCorpusProjectionOfflineRequestCapsTx,
@@ -322,6 +323,7 @@ const deliverer =
         expectedDocumentCount:
           corpusIndexProjectionIntents.expectedDocumentCount,
         appendMode: corpusIndexProjectionStates.appendMode,
+        appendRequestId: corpusIndexProjectionIntents.appendRequestId,
       })
       .from(corpusIndexProjectionIntents)
       .innerJoin(
@@ -396,6 +398,19 @@ const deliverer =
     if (capValues.includes(1)) {
       expect(shard.revisionCount).toBe(1);
     }
+    // A file is exactly one request: every revision carries its identity,
+    // and every revision that carries it is in the file.
+    const requestIds = new Set(
+      intents.map(({ appendRequestId }) => appendRequestId),
+    );
+    expect(requestIds.size).toBe(1);
+    const requestId =
+      intents.at(0)?.appendRequestId ?? panic("A file has no request");
+    const [requestRows] = await db
+      .select({ count: sql<number>`count(*)::integer` })
+      .from(corpusIndexProjectionIntents)
+      .where(eq(corpusIndexProjectionIntents.appendRequestId, requestId));
+    expect(requestRows?.count).toBe(revisions.length);
     const poisoned = intents.some(({ entityId }) =>
       model.poisoned.has(entityId),
     );
@@ -524,6 +539,10 @@ type RunCommand = {
   changeBeforeRecord: boolean;
   /** The run's shard size, when not the model's default. */
   maxShardRevisions?: number;
+  /** The process dies right before the start transaction of this index. */
+  dieBeforeStartTransaction?: number;
+  /** The start transaction of this index waits this long first. */
+  holdStartTransaction?: { index: number; ms: number };
 };
 
 type Command = RunCommand | { type: "advance"; ms: number };
@@ -567,8 +586,10 @@ const lockOf = (model: Model): CorpusProjectionOfflineBuildLock => ({
 });
 
 /**
- * An admission that admits everything at once, and moves one entity's
- * desired state at the first start or record a command asks for.
+ * An admission that admits everything at once. It moves one entity's desired
+ * state at the first start or record a command asks for, and before the
+ * start transaction a command names it can let the process die or hold the
+ * transaction back.
  */
 const admissionOf = (
   model: Model,
@@ -576,10 +597,23 @@ const admissionOf = (
 ): CorpusProjectionOfflineAdmission => {
   let changedBeforeStart = !command.changeBeforeStart;
   let changedBeforeRecord = !command.changeBeforeRecord;
+  let startTransactions = 0;
   return async <Value>(
     unit: CorpusProjectionOfflineWorkUnit,
     work: () => Promise<Value>,
   ): Promise<Value> => {
+    if (unit.phase === "start") {
+      const index = startTransactions;
+      startTransactions += 1;
+      crashIf(
+        model,
+        command.dieBeforeStartTransaction === index,
+        `before start transaction ${index}`,
+      );
+      if (command.holdStartTransaction?.index === index) {
+        model.offsetMs += command.holdStartTransaction.ms;
+      }
+    }
     if (unit.phase === "start" && !changedBeforeStart) {
       const entity = await entityIn(model, "reserved");
       if (entity !== undefined) {
@@ -745,7 +779,7 @@ const assertStepInvariants = async (model: Model) => {
   }
 };
 
-const newModel = async (): Promise<Model> => {
+const newModel = async (entities = ENTITIES): Promise<Model> => {
   // Each model starts from an empty route: the build walks the whole route.
   await db.execute(
     sql`TRUNCATE ${corpusIndexProjectionIntents}, ${corpusIndexProjectionStates}`,
@@ -754,7 +788,7 @@ const newModel = async (): Promise<Model> => {
     .delete(legislationDocuments)
     .where(eq(legislationDocuments.sourceId, SOURCE_ID));
   return {
-    entityIds: await seedEntities(ENTITIES),
+    entityIds: await seedEntities(entities),
     offsetMs: 0,
     published: new Map(),
     finishedPaths: new Set(),
@@ -1180,6 +1214,134 @@ describe("offline route build", () => {
     );
     expect(run?.progress.proved).toBe(ENTITIES + 4);
     expect(run?.progress.shards.capped).toBe(ENTITIES);
+  });
+
+  test("a process death between the start transactions of one request converges, and nothing it started is delivered", async () => {
+    const entities = 600;
+    const model = await newModel(entities);
+    // The request plans all 600 revisions: 512 start, then the process dies
+    // before the second transaction.
+    expect(
+      await runBuild(model, {
+        ...QUIET_RUN,
+        maxShardRevisions: 8192,
+        dieBeforeStartTransaction: 1,
+      }),
+    ).toBeNull();
+    expect(model.deliveries).toEqual([]);
+    const crashed = (await readIntents(model.entityIds)).filter(
+      ({ status }) => status === "append_started",
+    );
+    expect(crashed.length).toBe(512);
+    for (let round = 0; round < 4; round += 1) {
+      model.offsetMs += PLAN.leaseMs + PLAN.endedAfterMs + 60_000;
+      await runBuild(model, { ...QUIET_RUN, maxShardRevisions: 8192 });
+      await assertStepInvariants(model);
+    }
+    const intents = await readIntents(model.entityIds);
+    // Nothing of the crashed request reached the engine: its revisions are
+    // withdrawn, and each entity was delivered later in a request of at most
+    // half of what that request delivered (checked by the fake indexer).
+    for (const { id } of crashed) {
+      expect(intents.find((intent) => intent.id === id)?.status).toBe(
+        "withdrawn",
+      );
+    }
+    for (const state of await readStates(model.entityIds)) {
+      expect(state.appliedRevision).not.toBeNull();
+      expect(state.appendMode).toBe("batchable");
+    }
+    expect(
+      Math.max(...model.deliveries.map(({ revisions }) => revisions)),
+    ).toBeLessThanOrEqual(256);
+  });
+
+  test("a request whose later transactions start nothing is delivered with what started, and its accounting holds", async () => {
+    const entities = 600;
+    const model = await newModel(entities);
+    const run = await runBuild(model, {
+      ...QUIET_RUN,
+      maxShardRevisions: 8192,
+      holdStartTransaction: {
+        index: 1,
+        ms: CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS + 1000,
+      },
+    });
+    const { progress } = run ?? panic("The run did not finish");
+    expect(model.deliveries.map(({ revisions }) => revisions)).toEqual([512]);
+    expect(progress.started).toBe(512);
+    expect(progress.notStarted.handedBack).toBe(entities - 512);
+    expect(progress.reserved).toBe(
+      progress.started +
+        progress.notStarted.cancelled +
+        progress.notStarted.leaseLost +
+        progress.notStarted.retryScheduled +
+        progress.notStarted.blocked +
+        progress.notStarted.handedBack,
+    );
+    expect(progress.recorded).toBe(512);
+    expect(progress.proved).toBe(512);
+    // The handed-back revisions were cancelled, not left leased: a later
+    // run takes their entities at once.
+    const later = await runBuild(model, {
+      ...QUIET_RUN,
+      maxShardRevisions: 8192,
+    });
+    expect(later?.progress.proved).toBe(entities - 512);
+  });
+
+  // timeout: up to 24 whole offline build runs over 600 entities, each building, delivering and proving against PGlite.
+  test("a revision that keeps a request of more than one transaction from publishing is blocked within floor(log2 N) + 5 deliveries", async () => {
+    const entities = 600;
+    const model = await newModel(entities);
+    const poison = model.entityIds.at(2) ?? panic("No entity");
+    model.poisoned.add(poison);
+    for (let round = 0; round < 24; round += 1) {
+      model.offsetMs += 10 * 60_000;
+      await runBuild(model, { ...QUIET_RUN, maxShardRevisions: 8192 });
+      const states = await readStates([poison]);
+      if (states.at(0)?.workStatus === "blocked") {
+        break;
+      }
+    }
+    await assertStepInvariants(model);
+    for (const state of await readStates(model.entityIds)) {
+      if (state.entityId === poison) {
+        expect(state.workStatus).toBe("blocked");
+      } else {
+        expect(state.appliedRevision).not.toBeNull();
+      }
+    }
+    const withPoison = model.deliveries.filter(({ poisoned }) => poisoned);
+    expect(withPoison.at(0)?.revisions).toBe(entities);
+    expect(withPoison.length).toBeLessThanOrEqual(
+      Math.floor(Math.log2(entities)) + 5,
+    );
+    // Each delivery with it held at most half the one before, until alone.
+    for (const [index, delivery] of withPoison.entries()) {
+      const before = withPoison.at(index - 1);
+      if (index > 0 && before !== undefined && before.revisions > 1) {
+        expect(delivery.revisions).toBeLessThanOrEqual(
+          Math.floor(before.revisions / 2),
+        );
+      }
+    }
+  }, 600_000);
+
+  test("an entity isolated into single requests is left to the per-row path", async () => {
+    const model = await newModel();
+    const isolated = model.entityIds.at(1) ?? panic("No entity");
+    // What a retirement from a shared request leaves behind.
+    await db.execute(
+      sql`UPDATE ${corpusIndexProjectionStates}
+        SET append_mode = 'single'
+        WHERE entity_id = ${isolated}`,
+    );
+    const run = await runBuild(model, { ...QUIET_RUN, maxShardRevisions: 8 });
+    expect(run?.progress.reserved).toBe(ENTITIES - 1);
+    expect(run?.progress.proved).toBe(ENTITIES - 1);
+    const intents = await readIntents([isolated]);
+    expect(intents).toEqual([]);
   });
 
   test("a second run on the same route is refused while the first holds its lock", async () => {

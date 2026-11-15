@@ -11,8 +11,8 @@ import {
   CORPUS_INDEX_MANIFESTS,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
-  CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
   corpusIndexCommitTimeoutSecs,
   corpusProjectionAppendIngestBudgetMs,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -20,7 +20,6 @@ import {
   CORPUS_PROJECTION_OFFLINE_DEFAULT_INGEST_BYTES_PER_SECOND,
   CORPUS_PROJECTION_OFFLINE_DEFAULT_MAX_SHARD_BYTES,
   CORPUS_PROJECTION_OFFLINE_DEFAULT_MAX_SHARD_REVISIONS,
-  CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS,
   corpusProjectionOfflineBlockFits,
   corpusProjectionOfflineBlockJoins,
   type CorpusProjectionOfflineBuildPolicy,
@@ -35,8 +34,10 @@ import {
 import { openCorpusProjectionShardStaging } from "@/api/lib/legal-search/corpus-index-projection-offline-shard-file";
 import {
   CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
+  CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS,
   corpusProjectionOfflineIndexerEndedAt,
   corpusProjectionOfflineIndexerKillDeadline,
+  corpusProjectionOfflineRequestLeaseFloor,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { CORPUS_PROJECTION_LEASE_MAX_MS } from "@/api/lib/legal-search/corpus-index-projection-store";
 
@@ -75,7 +76,7 @@ const manifestAndPolicy = fc
     maxShardBytes: fc.integer({ min: 1024 ** 2, max: 4 * 1024 ** 3 }),
     maxShardRevisions: fc.integer({
       min: 1,
-      max: CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+      max: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
     }),
     closeAllowanceMs: fc.integer({ min: 0, max: 60_000 }),
     fillFraction: fc.double({ min: 0, max: 1, noNaN: true }),
@@ -146,6 +147,21 @@ describe("offline build plan", () => {
           expect(killMs).toBe(
             lastStartMs + corpusProjectionAppendIngestBudgetMs(manifest),
           );
+          // The store's own floor for a request first started then: a lease
+          // the plan lets start is one the store starts, in every one of the
+          // request's transactions, which share that first start.
+          expect(
+            corpusProjectionOfflineRequestLeaseFloor(
+              new Date(lastStartMs),
+              manifest,
+            ).getTime(),
+          ).toBeLessThanOrEqual(leaseExpiresAtMs);
+          expect(
+            corpusProjectionOfflineRequestLeaseFloor(
+              new Date(lastStartMs + 1),
+              manifest,
+            ).getTime(),
+          ).toBeGreaterThan(leaseExpiresAtMs);
 
           // A shard closes by the lease while every revision can still start
           // after the close allowance.
@@ -225,7 +241,7 @@ describe("offline build plan", () => {
       "offline-build.shard-fill",
       fc.property(
         manifestAndPolicy,
-        fc.integer({ min: 1, max: CORPUS_PROJECTION_APPEND_MAX_REVISIONS }),
+        fc.integer({ min: 1, max: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS }),
         fc.array(fc.integer({ min: 1, max: 64 * 1024 ** 2 }), {
           minLength: 1,
           maxLength: 600,
@@ -269,12 +285,12 @@ describe("offline build plan", () => {
   const requestCap = fc.oneof(
     {
       weight: 3,
-      arbitrary: fc.constant(CORPUS_PROJECTION_APPEND_MAX_REVISIONS),
+      arbitrary: fc.constant(CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS),
     },
     {
       weight: 2,
       arbitrary: fc
-        .integer({ min: 1, max: CORPUS_PROJECTION_APPEND_MAX_REVISIONS })
+        .integer({ min: 1, max: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS })
         .map((withdrawnFrom) => Math.max(1, Math.floor(withdrawnFrom / 2))),
     },
     { weight: 1, arbitrary: fc.constant(1) },
@@ -362,7 +378,7 @@ describe("offline build plan", () => {
       [{ maxShardBytes: 1024 }, "shard byte limit"],
       [{ maxShardRevisions: 0 }, "shard revision limit"],
       [
-        { maxShardRevisions: CORPUS_PROJECTION_APPEND_MAX_REVISIONS + 1 },
+        { maxShardRevisions: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS + 1 },
         "shard revision limit",
       ],
       [{ fillWindowMs: 10_000 - 1 }, "fill window"],

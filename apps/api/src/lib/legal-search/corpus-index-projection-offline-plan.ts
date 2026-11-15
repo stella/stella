@@ -1,12 +1,15 @@
 import { panic } from "better-result";
 
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import { CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
-  CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
   corpusIndexCommitTimeoutSecs,
   corpusProjectionAppendIngestBudgetMs,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
-import { CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import {
+  CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
+  CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS,
+} from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   CORPUS_PROJECTION_LEASE_MAX_MS,
   CORPUS_PROJECTION_LEASE_MIN_MS,
@@ -30,34 +33,39 @@ import {
  * revision straddles a commit boundary; and at most half the indexing heap,
  * so memory does not force an early commit either. A revision larger than
  * the shard cap travels alone.
+ *
+ * How the lease relates to the start. A shard file is one offline request,
+ * started in transactions of at most one append's rows, all within the start
+ * window of its first start, and every revision's lease must reach the
+ * request's kill deadline plus the record margin, both counted from that
+ * first start (`corpusProjectionOfflineRequestLeaseFloor`). So the first start
+ * must come no later than the earliest lease's expiry less the kill budget
+ * and the record margin; the fill window is what the lease leaves before
+ * that, less the close allowance. With a 600 s commit window the kill budget
+ * is 660 s, so a 900 s lease leaves 180 s between reserving and the first
+ * start. A build slower than that closes its shard early, with fewer
+ * revisions; a lease is never started short.
  */
 
 /** A conservative indexing rate: half the per-core rate measured offline. */
 export const CORPUS_PROJECTION_OFFLINE_DEFAULT_INGEST_BYTES_PER_SECOND = 8_000_000;
 export const CORPUS_PROJECTION_OFFLINE_DEFAULT_MAX_SHARD_BYTES = 1024 ** 3;
 /**
- * A shard file is started as one request, so it holds at most one append's
- * revisions; that is also the largest offline request cap.
+ * A shard file is one offline request, so it holds at most the most
+ * revisions one request may; bytes are the bound that usually applies first.
  */
 export const CORPUS_PROJECTION_OFFLINE_DEFAULT_MAX_SHARD_REVISIONS =
-  CORPUS_PROJECTION_APPEND_MAX_REVISIONS;
+  CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS;
 
 const MIN_INGEST_BYTES_PER_SECOND = 1_000_000;
 const MAX_INGEST_BYTES_PER_SECOND = 1_000_000_000;
 const MIN_SHARD_BYTES = 1024 ** 2;
 const MAX_SHARD_BYTES = 4 * 1024 ** 3;
-const MAX_SHARD_REVISIONS = CORPUS_PROJECTION_APPEND_MAX_REVISIONS;
+const MAX_SHARD_REVISIONS = CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS;
 const MIN_FILL_WINDOW_MS = 10_000;
 const MAX_SLOTS = 8;
 const MAX_PROOF_ALLOWANCE_MS = 30 * 60_000;
 const MAX_CONSECUTIVE_DELIVERY_FAILURES = 10;
-
-/**
- * Time between the indexer's end and the record of its revisions that a
- * start keeps in its lease, so the run records its own revisions rather than
- * leaving them to the expired-lease sweep.
- */
-export const CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS = 30_000;
 
 /** What a run may choose. Every field is validated against the manifest. */
 export type CorpusProjectionOfflineBuildPolicy = {
@@ -74,8 +82,9 @@ export type CorpusProjectionOfflineBuildPolicy = {
    */
   fillWindowMs: number;
   /**
-   * Time to start a full shard's revisions and write its file, kept between
-   * a shard's close and its earliest lease's start margin.
+   * Time from a shard's close to its first start, kept between the close
+   * and its earliest lease's start margin. Later start transactions and the
+   * file write happen after the first start and cost run time, not lease.
    */
   closeAllowanceMs: number;
   /** Time after the last indexer has certainly ended for its proof. */
@@ -94,7 +103,10 @@ export type CorpusProjectionOfflinePlan = {
   killBudgetMs: number;
   /** From a start until no write of its run can appear. */
   endedAfterMs: number;
-  /** A reservation starts only while its lease has at least this left. */
+  /**
+   * A request's first start needs every lease in it to have at least this
+   * left: the kill budget plus the record margin.
+   */
   startMarginMs: number;
   leaseMs: number;
   /** A shard closes once its earliest lease has this little left. */
