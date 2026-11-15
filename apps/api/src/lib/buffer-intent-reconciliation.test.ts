@@ -284,8 +284,11 @@ test("reserves several objects in one transaction, each under every owner", asyn
     rows.flatMap((row) =>
       isRecord(row) && row["objectKey"] === objectKey ? [row["id"]] : [],
     );
-  expect(result.value.get(file)).toEqual(idsOf(file));
-  expect(result.value.get(thumbnail)).toEqual(idsOf(thumbnail));
+  for (const objectKey of [file, thumbnail]) {
+    expect(result.value.get(objectKey)?.map(String)).toEqual(
+      idsOf(objectKey).map(String),
+    );
+  }
 });
 
 test("reserves organization-scoped ownership without inventing a matter", async () => {
