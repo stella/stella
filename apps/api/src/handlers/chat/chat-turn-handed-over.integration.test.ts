@@ -28,6 +28,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { findTurnOutcomeMismatches } from "@/api/tests/helpers/chat-thread-invariants";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -262,6 +263,9 @@ describe("a handed-over chat turn", () => {
     const turn = await readTurn(turnId);
     expect(turn.status).toBe("cancelled");
     expect(turn.assistantMessageId).toBeNull();
+    // Its run, still open on the computer, is the gateway sweep's to cancel:
+    // a cancelled turn no longer holds it.
+    expect(CHAT_TURN_RUN_ENDING_STATUSES).toContain(turn.status);
     const message = await readMessage(assistantMessageId);
     expect(message.metadata?.turnOutcome).toEqual({
       reason: "user-stop",

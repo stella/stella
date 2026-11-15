@@ -1108,10 +1108,25 @@ const stopUnownedChatTurnOnTx = async ({
       status: planned.state.status,
     })
     .where(and(eq(chatTurns.id, state.id), eq(chatTurns.status, state.status)))
-    .returning({ ...CHAT_RUN_OWNER_COLUMNS, id: chatTurns.id });
+    .returning({
+      ...CHAT_RUN_OWNER_COLUMNS,
+      id: chatTurns.id,
+      runId: chatTurns.runId,
+    });
   recordChatRunOwners(pings, stopped);
-  if (stopped.length !== 1) {
+  const [stoppedTurn] = stopped;
+  if (stopped.length !== 1 || stoppedTurn === undefined) {
     return panic("A chat turn changed status under its thread lock");
+  }
+  // A handed-over turn's log stays open for its adopter; nobody else closes
+  // it now, so a viewer tailing it learns the turn ended.
+  if (state.status === "handed-over") {
+    await closeChatRunLogOnTx({
+      organizationId: stoppedTurn.organizationId,
+      runId: stoppedTurn.runId,
+      turnId: stoppedTurn.id,
+      tx,
+    });
   }
   // The thread's revision tells a page its transcript changed in place, so it
   // rebuilds from the stored thread instead of keeping its own copy.
