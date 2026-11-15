@@ -86,8 +86,6 @@ export type ReadContext = {
   policy: OriginPolicy;
   signal: AbortSignal;
   tab: OwnedTab;
-  /** The isolated world of each document, by session, frame and loader. */
-  worlds: Map<string, number>;
   /** The chat's tabs, the one read first, for the snapshot's tab list. */
   chatTabs: () => OwnedTab[];
 };
@@ -105,32 +103,42 @@ const unsupportedPage = (): BrowserControlResult =>
 const documentIdOf = ({ cdpFrameId, loaderId }: TabFrame) =>
   `${cdpFrameId}:${loaderId}`;
 
-const worldKey = ({ cdpFrameId, loaderId, sessionId }: TabFrame) =>
-  `${sessionId} ${cdpFrameId} ${loaderId}`;
-
 /**
  * The tab's frames, the top frame first, then by number: those in the
  * tab's process from its frame tree, and each frame in another process
- * from its own session's tree.
+ * from its own session's tree. A subframe whose document's origin the
+ * origin policy refuses is left out before the page script runs anywhere
+ * near it (its own subframes are judged on their own); the frame's answer
+ * is held to the policy again after it reads.
  */
 const listFrames = async ({
   client,
+  policy,
   signal,
   tab,
 }: ReadContext): Promise<Result<TabFrame[], CdpFailure>> => {
   const frames: TabFrame[] = [];
   const walk = (node: CdpFrameTree, sessionId: string, root: string) => {
-    const { id, loaderId } = node.frame;
+    const { id, loaderId, securityOrigin, url } = node.frame;
     // A frame in another process is read through its own session.
     if (id !== root && tab.frameSessions.has(id)) {
       return;
     }
-    frames.push({
-      cdpFrameId: id,
-      loaderId,
-      number: frameNumberOf(tab, id),
-      sessionId,
-    });
+    const readable =
+      id === tab.targetId ||
+      policy.isControllableFrame({
+        isTopFrame: false,
+        origin: securityOrigin ?? "null",
+        url,
+      });
+    if (readable) {
+      frames.push({
+        cdpFrameId: id,
+        loaderId,
+        number: frameNumberOf(tab, id),
+        sessionId,
+      });
+    }
     for (const child of node.childFrames ?? []) {
       walk(child, sessionId, root);
     }
@@ -162,16 +170,16 @@ const listFrames = async ({
   );
 };
 
-/** The isolated world for the frame's document, created once per document. */
-const worldFor = async (
-  { client, signal, worlds }: ReadContext,
+/**
+ * A new isolated world in the frame's document, made right before each run
+ * of the page script: the context it names is the one the browser just
+ * created in that frame, never one an earlier answer named, so the script
+ * cannot run in the page's own world.
+ */
+const createWorld = async (
+  { client, signal }: ReadContext,
   frame: TabFrame,
 ): Promise<Result<number, CdpFailure>> => {
-  const key = worldKey(frame);
-  const known = worlds.get(key);
-  if (known !== undefined) {
-    return Result.ok(known);
-  }
   const created = await client.send(
     "Page.createIsolatedWorld",
     {
@@ -181,17 +189,9 @@ const worldFor = async (
     },
     { sessionId: frame.sessionId, signal },
   );
-  if (Result.isError(created)) {
-    return created;
-  }
-  // The frame's earlier documents are gone; so are their worlds.
-  for (const other of worlds.keys()) {
-    if (other.startsWith(`${frame.sessionId} ${frame.cdpFrameId} `)) {
-      worlds.delete(other);
-    }
-  }
-  worlds.set(key, created.value.executionContextId);
-  return Result.ok(created.value.executionContextId);
+  return Result.isOk(created)
+    ? Result.ok(created.value.executionContextId)
+    : created;
 };
 
 /**
@@ -205,41 +205,33 @@ type FrameAnswer =
 const UNREACHABLE: FrameAnswer = { type: "unreachable" };
 
 /**
- * Runs the page script with `operation` in the frame's document. A world
- * that went with its document is made again once.
+ * Runs the page script with `operation` in a world made for this run in
+ * the frame's document. A frame that navigated in between has lost that
+ * world, and the call fails rather than run elsewhere.
  */
 const runInFrame = async (
   context: ReadContext,
   frame: TabFrame,
   operation: PageOperation,
 ): Promise<FrameAnswer> => {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const world = await worldFor(context, frame);
-    if (Result.isError(world)) {
-      return UNREACHABLE;
-    }
-    const called = await context.client.send(
-      "Runtime.callFunctionOn",
-      {
-        arguments: [{ value: operation }],
-        awaitPromise: true,
-        executionContextId: world.value,
-        functionDeclaration: PAGE_SCRIPT_SOURCE,
-        returnByValue: true,
-      },
-      { sessionId: frame.sessionId, signal: context.signal },
-    );
-    if (Result.isOk(called)) {
-      return called.value.exceptionDetails === undefined
-        ? { type: "answered", value: called.value.result.value }
-        : UNREACHABLE;
-    }
-    if (called.error.type !== "protocol") {
-      return UNREACHABLE;
-    }
-    context.worlds.delete(worldKey(frame));
+  const world = await createWorld(context, frame);
+  if (Result.isError(world)) {
+    return UNREACHABLE;
   }
-  return UNREACHABLE;
+  const called = await context.client.send(
+    "Runtime.callFunctionOn",
+    {
+      arguments: [{ value: operation }],
+      awaitPromise: true,
+      executionContextId: world.value,
+      functionDeclaration: PAGE_SCRIPT_SOURCE,
+      returnByValue: true,
+    },
+    { sessionId: frame.sessionId, signal: context.signal },
+  );
+  return Result.isOk(called) && called.value.exceptionDetails === undefined
+    ? { type: "answered", value: called.value.result.value }
+    : UNREACHABLE;
 };
 
 /**
@@ -617,7 +609,7 @@ export const findOnPage = async (
 
 type Navigated =
   | { type: "loaded" }
-  | { type: "failed"; reason: string }
+  | { type: "failed" }
   | { type: "timed-out" }
   | { type: "stopped" };
 
@@ -649,12 +641,10 @@ const navigate = async (
       { sessionId: tab.sessionId, signal },
     );
     if (Result.isError(started)) {
-      return signal.aborted
-        ? { type: "stopped" }
-        : { reason: "the browser refused it", type: "failed" };
+      return signal.aborted ? { type: "stopped" } : { type: "failed" };
     }
     if (started.value.errorText !== undefined) {
-      return { reason: started.value.errorText, type: "failed" };
+      return { type: "failed" };
     }
     // A move within the same document loads nothing.
     if (started.value.loaderId !== undefined && !(await loaded.promise)) {
@@ -683,10 +673,12 @@ export const openPage = async (
   switch (navigated.type) {
     case "loaded":
       break;
+    // One message for every failed load: what the browser met on the way
+    // (a refused connection, a missing host) is not passed on.
     case "failed":
       return browserControlError(
         BROWSER_CONTROL_ERROR_CODE.navigationFailed,
-        `The page did not load (${navigated.reason}).`,
+        "The page could not be loaded.",
       );
     case "timed-out":
       return browserControlError(
@@ -708,18 +700,19 @@ export const openPage = async (
   if (landedUrl !== null && isIdentityProviderUrl(landedUrl.href)) {
     return needsMember();
   }
-  const redirected = (to: string) =>
-    browserControlError(
-      BROWSER_CONTROL_ERROR_CODE.redirected,
-      `The page redirected away from ${requested.origin} to ${to} and was not read. Use snapshot to read it after approval.`,
-    );
+  // The same answer wherever the page went: another public site, or an
+  // address the policy refuses, which is not named.
+  const redirected = browserControlError(
+    BROWSER_CONTROL_ERROR_CODE.redirected,
+    `The page went from ${requested.origin} to another address and was not read. Use snapshot to read it after approval.`,
+  );
   if (landedUrl === null || landedUrl.origin !== requested.origin) {
-    return redirected(landedUrl?.origin ?? "an unsupported address");
+    return redirected;
   }
   // The page may still move to another origin before it is read: every
   // frame refuses then, and so does the document that was read.
   return await readSnapshot(context, undefined, {
     origin: requested.origin,
-    refusal: redirected("another address"),
+    refusal: redirected,
   });
 };

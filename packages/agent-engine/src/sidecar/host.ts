@@ -709,11 +709,6 @@ export class SidecarHost {
     return true;
   }
 
-  /** The API origin `configure` took last; null before any desktop connected. */
-  accountOrigin(): string | null {
-    return this.config?.apiOrigin ?? null;
-  }
-
   /** Whether the run is still going: its `run.finished` is not sent yet. */
   holds(runId: string) {
     return this.runs.has(runId);
@@ -1384,7 +1379,7 @@ export class SidecarHost {
     // it, or ends it.
     const taken = run.live;
     run.live = null;
-    const browser = this.browserFor(message, run, taken);
+    const browser = this.browserFor(message, run, taken, config.apiOrigin);
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -1420,12 +1415,15 @@ export class SidecarHost {
     message: SidecarRunStart,
     run: HeldRun,
     taken: LiveFolder | null,
+    /** The account the run started for: its browser stays that account's. */
+    accountOrigin: string,
   ) {
     const browser = this.options.browser;
     if (browser === null) {
       return null;
     }
     const browserRun = {
+      accountOrigin,
       runId: message.runId,
       threadId: message.threadId,
       approvals: message.policy.approvals,

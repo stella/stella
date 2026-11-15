@@ -24,7 +24,10 @@ import {
   startApiStandIn,
   toolResults,
 } from "../../../scripts/fake-desktop";
-import { startFixtureSite } from "../../../scripts/fixture-site";
+import {
+  FIXTURE_SIGNED_IN,
+  startFixtureSite,
+} from "../../../scripts/fixture-site";
 import { CDP_METHOD_ALLOWLIST } from "./stella-browser/cdp-client";
 
 const ALLOWED: readonly string[] = CDP_METHOD_ALLOWLIST;
@@ -33,7 +36,8 @@ const ALLOWED: readonly string[] = CDP_METHOD_ALLOWLIST;
  * One reading scenario, run against each browser host: a local Codex run
  * searches the fixture library by its results page's address, opens the
  * decision, reads it a window at a time, finds in it, lists its headings,
- * is sent to the member at the sign-in page and cites the decision. The
+ * is sent to the member at the sign-in page and cites the decision; once
+ * the member signed in there, the chat's next run reads that page. The
  * canary checks are the transport canary's: the pages' canary strings reach
  * the agent and never the desktop or stella's API.
  *
@@ -122,8 +126,8 @@ const READ_SCENARIO_METHODS = [
   "Page.getFrameTree",
   "Page.navigate",
   "Runtime.callFunctionOn",
+  "Target.activateTarget",
   "Target.attachToTarget",
-  "Target.closeTarget",
   "Target.createTarget",
   "Target.setAutoAttach",
   "Target.setDiscoverTargets",
@@ -137,6 +141,13 @@ const notesSchema = v.object({
     clickRefused: v.nullable(v.string()),
     signIn: v.nullable(v.string()),
     webdriver: v.nullable(v.string()),
+  }),
+});
+
+const continuedSchema = v.object({
+  continuedScenario: v.object({
+    title: v.nullable(v.string()),
+    text: v.string(),
   }),
 });
 
@@ -192,7 +203,6 @@ const read = async (leg: HostLeg) => {
         ...display,
         FAKE_HARNESS_LOG: path.join(root, "fake.log"),
         FAKE_BROWSER_START: `${site.origin}/`,
-        FAKE_BROWSER_SCENARIO: "read",
         ...leg.environment(site, root),
       },
     },
@@ -223,8 +233,29 @@ const read = async (leg: HostLeg) => {
   const workspaceDir = path.join(root, "workspace");
   mkdirSync(path.join(root, "codex-home"), { recursive: true });
   mkdirSync(workspaceDir, { recursive: true });
-  const runId = crypto.randomUUID();
-  desktop.send({
+  /** A run of the chat, its harness told which turn to play. */
+  const runChat = async (scenario: "continue" | "read") => {
+    const runId = crypto.randomUUID();
+    desktop.send(runStart(runId, scenario));
+    const finished = await waitFor(
+      () =>
+        desktop.messages.find(
+          (message) =>
+            message.type === "run.finished" && message.runId === runId,
+        ),
+      { ...WAIT, description: "the run to finish" },
+    );
+    const chunks = desktop.messages.flatMap((message) =>
+      message.type === "run.event" && message.runId === runId
+        ? [message.chunk]
+        : [],
+    );
+    return { chunks, finished };
+  };
+  const runStart = (
+    runId: string,
+    scenario: "continue" | "read",
+  ): Parameters<typeof desktop.send>[0] => ({
     type: "run.start",
     runId,
     threadId: "thread-1",
@@ -238,7 +269,7 @@ const read = async (leg: HostLeg) => {
     configDir: path.join(root, "codex-home"),
     launch: {
       configOverrides: [],
-      environment: {},
+      environment: { FAKE_BROWSER_SCENARIO: scenario },
       removedEnvironment: [],
       clientName: null,
       processGrant: false,
@@ -258,34 +289,35 @@ const read = async (leg: HostLeg) => {
       expiresAt: "2099-01-01T00:00:00.000Z",
     },
   });
-  const finished = await waitFor(
-    () =>
-      desktop.messages.find(
-        (message) => message.type === "run.finished" && message.runId === runId,
-      ),
-    { ...WAIT, description: "the run to finish" },
-  );
-  const chunks = desktop.messages.flatMap((message) =>
-    message.type === "run.event" && message.runId === runId
-      ? [message.chunk]
-      : [],
-  );
-  const harnessLogFile = path.join(root, "fake.log");
-  const harnessLog = (
-    existsSync(harnessLogFile) ? readFileSync(harnessLogFile, "utf-8") : ""
-  )
-    .split("\n")
-    .filter((line) => line !== "")
-    .map((line): unknown => JSON.parse(line));
-  return { api, chunks, desktop, finished, harnessLog, holder, root, site };
+  const { chunks, finished } = await runChat("read");
+  const harnessLog = () => {
+    const file = path.join(root, "fake.log");
+    return (existsSync(file) ? readFileSync(file, "utf-8") : "")
+      .split("\n")
+      .filter((line) => line !== "")
+      .map((line): unknown => JSON.parse(line));
+  };
+  return {
+    api,
+    chunks,
+    desktop,
+    finished,
+    harnessLog,
+    holder,
+    root,
+    runChat,
+    site,
+  };
 };
 
 describe.each(HOSTS)("reading the fixture library in $name", (leg) => {
   test.skipIf(leg.skip !== null)(
-    "searches, opens, reads by cursor, finds, outlines, hands the sign-in to the member and cites, with no page content leaving the computer",
+    "searches, opens, reads by cursor, finds, outlines, hands the sign-in to the member and cites, with no page content leaving the computer; the chat's next run reads the page the member signed in on",
     async () => {
-      const { api, chunks, desktop, finished, harnessLog, holder, root, site } =
-        await read(leg);
+      const read1 = await read(leg);
+      const { api, chunks, desktop, finished, holder, root, runChat, site } =
+        read1;
+      const harnessLog = read1.harnessLog();
       // The holder's log and the browser's own output say why a run
       // failed or was slow.
       const holderLog = path.join(root, "agent-holder", "1.4.0", "holder.log");
@@ -352,19 +384,49 @@ describe.each(HOSTS)("reading the fixture library in $name", (leg) => {
         }
       }
 
-      // The run's harness exits with its turn, its endpoint goes, and with
-      // the last chat's tab gone the browser closes.
+      // The run's harness exits with its turn and its endpoint goes; the
+      // chat's window stays, on the sign-in page, for the member.
       const started = /the stella browser started: .* \(pid (\d+)\)/u.exec(
         readFileSync(holderLog, "utf-8"),
       );
       const pid = Number.parseInt(started?.[1] ?? "", 10);
       expect(Number.isSafeInteger(pid)).toBe(true);
       report("stella browser product", started?.[0] ?? "not logged");
+      expect(alive(pid)).toBe(true);
+      expect(readdirSync(path.join(root, "browser"))).toHaveLength(1);
+
+      // The member signs in there; the page loads again, signed in, and the
+      // chat's next run reads it in the same tab of the same browser.
+      site.signIn();
+      await waitFor(() => (site.signedInViews() > 0 ? true : undefined), {
+        ...WAIT,
+        description: "the sign-in page to load again, signed in",
+      });
+      const next = await runChat("continue");
+      expect(next.finished).toMatchObject({ outcome: "completed" });
+      const continued = read1.harnessLog().flatMap((entry) => {
+        const parsed = v.safeParse(continuedSchema, entry);
+        return parsed.success ? [parsed.output.continuedScenario] : [];
+      });
+      expect(continued).toEqual([
+        {
+          text: expect.stringContaining(FIXTURE_SIGNED_IN.text),
+          title: FIXTURE_SIGNED_IN.title,
+        },
+      ]);
+      expect([
+        ...readFileSync(holderLog, "utf-8").matchAll(
+          /the stella browser started/gu,
+        ),
+      ]).toHaveLength(1);
+
+      // The holder stops: the browser closes with it.
+      holder.kill("SIGTERM");
+      await holder.exited;
       await waitFor(() => (alive(pid) ? undefined : true), {
         timeoutMs: 30_000,
-        description: "the browser to close",
+        description: "the browser to close with the holder",
       });
-      expect(readdirSync(path.join(root, "browser"))).toHaveLength(1);
 
       // Every protocol method the scenario sent is on the allowlist, and
       // the set is the one this scenario is known to need.
@@ -375,8 +437,6 @@ describe.each(HOSTS)("reading the fixture library in $name", (leg) => {
         expect(ALLOWED).toContain(method);
       }
       expect(methods.toSorted()).toEqual(READ_SCENARIO_METHODS);
-      holder.kill("SIGTERM");
-      await holder.exited;
     },
   );
 });

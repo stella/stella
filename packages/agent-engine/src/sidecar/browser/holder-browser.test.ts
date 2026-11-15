@@ -34,7 +34,6 @@ const place = () => {
 
 const start = async (at: ReturnType<typeof place>, platform: NodeJS.Platform) =>
   await startHolderBrowser({
-    accountOrigin: () => null,
     command: ["/usr/bin/true"],
     dir: at.dir,
     endpoint: at.endpoint,
@@ -95,7 +94,6 @@ test("with the stella browser on, offers the tools without the extension's host,
   try {
     // No Chrome profile: the extension's host cannot be registered.
     const started = await startHolderBrowser({
-      accountOrigin: () => null,
       command: ["/usr/bin/true"],
       dir: at.dir,
       endpoint: at.endpoint,

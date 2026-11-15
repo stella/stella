@@ -69,6 +69,9 @@ describe("what a run on the member's computer is told about the browser", () => 
       "opening its href",
       "expect no downloads",
       "not_available_on_this_browser",
+      // What the host does for a sign-in (see the stella browser's host tests).
+      "comes to the front for the member",
+      "stay open for its next turn",
     ]) {
       expect(block).toContain(said);
       expect(plain).not.toContain(said);

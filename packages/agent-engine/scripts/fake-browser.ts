@@ -404,7 +404,8 @@ type FakeAgentStep = {
  * The agent's turn: a stella search through the run's stella MCP binding,
  * then the library: open it, search, open the first result, read it, and
  * try the account page, which asks for a sign-in. It answers citing the
- * decision's title and address.
+ * decision's title and address. A run that continues the chat only reads
+ * the page its tab shows.
  */
 const runFakeBrowserAgent = async ({
   browser,
@@ -416,8 +417,11 @@ const runFakeBrowserAgent = async ({
 }: {
   browser: McpEndpoint;
   browserServer: string;
-  /** `act` searches by typing and clicking; `read` only opens and reads. */
-  scenario: "act" | "read";
+  /**
+   * `act` searches by typing and clicking; `read` only opens and reads;
+   * `continue` reads the page the chat's tab shows, as its last run left it.
+   */
+  scenario: "act" | "continue" | "read";
   stella: McpEndpoint;
   stellaServer: string;
   start: string;
@@ -428,6 +432,8 @@ const runFakeBrowserAgent = async ({
   read: string[];
   /** The reading scenario's own record of its steps. */
   notes?: ReadScenarioNotes;
+  /** What the chat's tab showed to a run that continued the chat. */
+  continued?: { title: string | null; text: string };
 }> => {
   const steps: FakeAgentStep[] = [];
   let requestId = 0;
@@ -467,6 +473,28 @@ const runFakeBrowserAgent = async ({
     return text;
   };
   await call(stellaServer, stella, "search_case_law", { query: FIXTURE_QUERY });
+  if (scenario === "continue") {
+    // The page may still be loading again after the sign-in: the agent
+    // looks a few times, as one told the member signed in would.
+    const look = async () =>
+      v.safeParse(
+        pageSchema,
+        JSON.parse(await call(browserServer, browser, "snapshot", {})),
+      );
+    let shown = await look();
+    for (let tries = 1; !shown.success && tries < 10; tries += 1) {
+      await Bun.sleep(300);
+      shown = await look();
+    }
+    return {
+      answer: "Read the page the chat's tab shows.",
+      continued: shown.success
+        ? { text: shown.output.text, title: shown.output.title }
+        : { text: "", title: null },
+      read: [],
+      steps,
+    };
+  }
   if (scenario === "read") {
     const reader = await runFakeBrowserReader({
       call: async (tool, args) =>
@@ -555,8 +583,8 @@ const refusalSchema = v.object({
 /**
  * The agent's turn on a browser that only reads: a stella search, then the
  * library's results page by its address, the decision read a window at a
- * time, find and the outline, a click it is refused, the sign-in page,
- * the probe page, and an answer citing the decision.
+ * time, find and the outline, a click it is refused, the probe page, the
+ * sign-in page it leaves its tab on, and an answer citing the decision.
  */
 const runFakeBrowserReader = async ({
   call,
@@ -605,12 +633,13 @@ const runFakeBrowserReader = async ({
     foundSchema,
     JSON.parse(await call("find", { headings: true })),
   );
+  const probe = page(
+    await call("open", { url: new URL("/probe", start).href }),
+  );
+  // Last, so the chat's tab is left on the page the member signs in on.
   const signIn = v.parse(
     refusalSchema,
     JSON.parse(await call("open", { url: new URL("/account", start).href })),
-  );
-  const probe = page(
-    await call("open", { url: new URL("/probe", start).href }),
   );
   return {
     answer: `The notice period runs from delivery, as held in [${first.title}](${first.url}).`,
@@ -694,6 +723,9 @@ export const claudeMcpEndpoints = (
     }),
   );
 
+const browseScenario = (value: string | undefined) =>
+  value === "continue" || value === "read" ? value : "act";
+
 /**
  * The agent's turn against the servers a harness registered, starting at
  * `FAKE_BROWSER_START`.
@@ -713,7 +745,7 @@ export const browseAsAgent = async ({
     browserServer,
     stella: endpoints.get(stellaServer) ?? panic("No stella server registered"),
     stellaServer,
-    scenario: process.env["FAKE_BROWSER_SCENARIO"] === "read" ? "read" : "act",
+    scenario: browseScenario(process.env["FAKE_BROWSER_SCENARIO"]),
     start:
       process.env["FAKE_BROWSER_START"] ?? panic("FAKE_BROWSER_START is unset"),
   });

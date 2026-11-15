@@ -49,6 +49,7 @@ const routed = async (
   const result = readLocalBrowserResult(
     await router.request(
       {
+        accountOrigin: "https://api.example-stella.com",
         command,
         controllerId,
         observedTab: null,
@@ -104,6 +105,7 @@ describe("which browser a chat's commands go to", () => {
     const result = readLocalBrowserResult(
       await router.request(
         {
+          accountOrigin: "https://api.example-stella.com",
           command: OPEN,
           controllerId: "chat-1",
           observedTab: null,

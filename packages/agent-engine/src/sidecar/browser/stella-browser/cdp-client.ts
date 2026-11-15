@@ -18,6 +18,8 @@ const frameSchema = v.object({
   parentId: v.optional(v.string()),
   loaderId: v.string(),
   url: v.string(),
+  /** The origin of the frame's document: a blank or srcdoc frame's creator's. */
+  securityOrigin: v.optional(v.string()),
 });
 
 type FrameTreeNode = {
@@ -49,6 +51,7 @@ const CDP_COMMANDS = {
   "Target.createTarget": v.object({ targetId: v.string() }),
   "Target.attachToTarget": v.object({ sessionId: v.string() }),
   "Target.closeTarget": EMPTY,
+  "Target.activateTarget": EMPTY,
   "Target.setAutoAttach": EMPTY,
   "Page.enable": EMPTY,
   "Page.navigate": v.object({
@@ -88,6 +91,7 @@ type CdpParams = {
   };
   "Target.attachToTarget": { targetId: string; flatten: true };
   "Target.closeTarget": { targetId: string };
+  "Target.activateTarget": { targetId: string };
   "Target.setAutoAttach": {
     autoAttach: boolean;
     waitForDebuggerOnStart: boolean;

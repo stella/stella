@@ -119,6 +119,7 @@ describe("the local browser MCP endpoint", () => {
   test("serves the browser tools to the run it was registered for", async () => {
     const { mcp, requests } = start();
     const binding = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       stopped: NEVER_STOPPED,
@@ -199,6 +200,7 @@ describe("the local browser MCP endpoint", () => {
   test("refuses another run's secret, a browser page and an ended run", async () => {
     const { cancels, mcp } = start();
     const first = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       stopped: NEVER_STOPPED,
@@ -207,6 +209,7 @@ describe("the local browser MCP endpoint", () => {
       workspaceDir: UNUSED_FOLDER,
     });
     const second = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       stopped: NEVER_STOPPED,
@@ -232,6 +235,7 @@ describe("the local browser MCP endpoint", () => {
   test("a kept process's endpoint is parked between turns and serves the run that adopts it", async () => {
     const { cancels, mcp, requests } = start();
     const run = {
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       stopped: NEVER_STOPPED,
@@ -337,6 +341,7 @@ describe("downloads of a chat's tab", () => {
     // The temporary root stands in for the member's home folder.
     const { mcp, reportDownload } = start(fakeBridge(), root);
     const binding = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       runId: "run-1",
@@ -429,6 +434,7 @@ describe("a browser call in flight", () => {
     const { mcp } = start(holding);
     const stop = new AbortController();
     const binding = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       runId: "run-1",
@@ -448,6 +454,7 @@ describe("a browser call in flight", () => {
     const { mcp } = start(holding);
     const stop = new AbortController();
     const binding = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
       approve,
       runId: "run-1",

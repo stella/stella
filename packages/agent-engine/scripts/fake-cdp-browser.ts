@@ -8,7 +8,9 @@ import { appendFileSync, createReadStream, createWriteStream } from "node:fs";
  * in `fake-cdp.log` in the profile folder it was started with. A
  * navigation to an address containing `crash` makes it exit, as a crashed
  * browser does; one containing `hang` ends its pipe while it keeps running
- * and ignores SIGTERM; `Browser.close` makes it exit.
+ * and ignores SIGTERM; one containing `unreachable` fails to load; one
+ * containing `slow` loads after a second; one containing `framed-private`
+ * holds a frame from a private address; `Browser.close` makes it exit.
  */
 
 const PROFILE_FLAG = "--user-data-dir=";
@@ -33,10 +35,36 @@ const addresses = new Map<string, string>();
 /**
  * What the page script answers in a page: a page whose address holds
  * `moves-away` asks for no sign-in but has moved to another origin by the
- * time it is read; every other page asks for a sign-in.
+ * time it is read; one holding `moves-away-quietly` has moved too but
+ * reads anyway, ignoring the origin it was told to hold to; every other
+ * page asks for a sign-in.
  */
 const pageAnswer = (address: string, operation: unknown): object => {
-  if (!address.includes("moves-away")) {
+  if (address.includes("moves-away-quietly")) {
+    return {
+      origin: "https://elsewhere.example.com",
+      pageControls: [],
+      pageControlsLeftOut: false,
+      title: "Elsewhere",
+      url: "https://elsewhere.example.com/",
+      window: {
+        controls: [],
+        controlsLeftOut: false,
+        end: { type: "end" },
+        fromPercent: 0,
+        hasAfter: false,
+        hasBefore: false,
+        links: [],
+        linksLeftOut: false,
+        start: { type: "start" },
+        text: "Elsewhere",
+        toPercent: 100,
+      },
+    };
+  }
+  // A page with a private frame asks for no sign-in either, so the check
+  // for one reaches every frame.
+  if (!address.includes("moves-away") && !address.includes("framed-private")) {
     return { refused: "sign-in" };
   }
   const expected =
@@ -97,25 +125,50 @@ const answer = (
           sessionId,
         });
       }
-      setTimeout(() => {
-        send({
-          method: "Page.loadEventFired",
-          params: { timestamp: 1 },
-          sessionId,
-        });
-      }, 10);
-      return { frameId: sessions.get(sessionId ?? "") ?? "", loaderId: "L1" };
-    }
-    case "Page.getFrameTree":
-      return {
-        frameTree: {
-          frame: {
-            id: sessions.get(sessionId ?? "") ?? "",
-            loaderId: "L1",
-            url: addresses.get(sessionId ?? "") ?? "about:blank",
-          },
+      const frameId = sessions.get(sessionId ?? "") ?? "";
+      if (String(params["url"]).includes("unreachable")) {
+        return { errorText: "net::ERR_NAME_NOT_RESOLVED", frameId };
+      }
+      setTimeout(
+        () => {
+          send({
+            method: "Page.loadEventFired",
+            params: { timestamp: 1 },
+            sessionId,
+          });
         },
+        String(params["url"]).includes("slow") ? 1000 : 10,
+      );
+      return { frameId, loaderId: "L1" };
+    }
+    case "Page.getFrameTree": {
+      const address = addresses.get(sessionId ?? "") ?? "about:blank";
+      const top = {
+        id: sessions.get(sessionId ?? "") ?? "",
+        loaderId: "L1",
+        securityOrigin: URL.parse(address)?.origin ?? "null",
+        url: address,
       };
+      // A frame from a private address, in the page's own process.
+      return address.includes("framed-private")
+        ? {
+            frameTree: {
+              childFrames: [
+                {
+                  frame: {
+                    id: "PRIVATE-FRAME",
+                    loaderId: "L2",
+                    parentId: top.id,
+                    securityOrigin: "https://10.0.0.5",
+                    url: "https://10.0.0.5/",
+                  },
+                },
+              ],
+              frame: top,
+            },
+          }
+        : { frameTree: { frame: top } };
+    }
     case "Page.createIsolatedWorld":
       return { executionContextId: 1 };
     case "Runtime.callFunctionOn": {

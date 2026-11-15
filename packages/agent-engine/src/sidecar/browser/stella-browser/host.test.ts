@@ -35,7 +35,8 @@ const ALLOWED: readonly string[] = CDP_METHOD_ALLOWLIST;
  * The stella browser's lifecycle against a stand-in browser that speaks
  * the protocol over the same pipe (`scripts/fake-cdp-browser.ts`): it
  * starts on the first open, runs the shared page script in an isolated
- * world, starts again after a crash, and closes once no chat has a tab.
+ * world made for each run, keeps a chat's tabs between its runs, starts
+ * again after a crash, and closes once no chat has a tab.
  */
 
 // timeout: each test starts one or two stand-in browsers.
@@ -45,6 +46,8 @@ const FAKE_BROWSER = path.join(
   import.meta.dir,
   "../../../../scripts/fake-cdp-browser.ts",
 );
+
+const ACCOUNT = "https://api.example-stella.com";
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -69,21 +72,24 @@ const startedPids = (lines: readonly string[]) =>
     return pid === undefined ? [] : [Number(pid)];
   });
 
-const start = () => {
+const start = ({
+  chatIdleMs,
+  slowStart = false,
+}: { chatIdleMs?: number; slowStart?: boolean } = {}) => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-browser-host-"));
   cleanups.push(() => {
     rmSync(root, { force: true, recursive: true });
   });
   const executable = path.join(root, "browser");
+  // A slow start leaves time to act while the browser is starting.
   writeFileSync(
     executable,
-    `#!/bin/sh\nexec "${process.execPath}" "${FAKE_BROWSER}" "$@"\n`,
+    `#!/bin/sh\n${slowStart ? "sleep 1\n" : ""}exec "${process.execPath}" "${FAKE_BROWSER}" "$@"\n`,
   );
   chmodSync(executable, 0o755);
   const lines: string[] = [];
-  const account = { origin: "https://api.example-stella.com" };
   const host = createStellaBrowserHost({
-    accountOrigin: () => account.origin,
+    ...(chatIdleMs === undefined ? {} : { chatIdleMs }),
     environment: { PATH: process.env["PATH"] },
     home: null,
     log: (line) => {
@@ -112,10 +118,12 @@ const start = () => {
   const send = async (
     command: BrowserControlCommand,
     controllerId = "chat-1",
+    accountOrigin = ACCOUNT,
   ) =>
     readLocalBrowserResult(
       await host.request(
         {
+          accountOrigin,
           command,
           controllerId,
           observedTab: null,
@@ -126,7 +134,9 @@ const start = () => {
       ),
     );
   const methods = () => received().map(({ method }) => method);
-  return { account, host, lines, methods, received, receivedBy, send };
+  const closed = () =>
+    lines.some((line) => line.startsWith("the stella browser closed"));
+  return { closed, host, lines, methods, received, receivedBy, send };
 };
 
 const OPEN = {
@@ -135,14 +145,19 @@ const OPEN = {
 } as const satisfies BrowserControlCommand;
 
 describe("the stella browser host", () => {
-  test("refuses a non-public address before any browser starts", async () => {
+  test("refuses a non-public or stella address before any browser starts", async () => {
     const { lines, received, send } = start();
     for (const url of [
       "http://research.example.com/",
       "https://127.0.0.1/",
       "https://intranet/",
       "https://api.example-stella.com/",
+      // The account's web app, served beside its API.
+      "https://app.example-stella.com/",
+      "https://example-stella.com./",
       "https://app.stll.app/",
+      "https://my.stll.app/",
+      "https://staging.stll.app/",
     ]) {
       expect(await send({ action: "open", url })).toMatchObject({
         code: BROWSER_CONTROL_ERROR_CODE.navigationFailed,
@@ -152,7 +167,26 @@ describe("the stella browser host", () => {
     expect(lines).toEqual([]);
   });
 
-  test("starts on the first open and reads through the shared page script in an isolated world", async () => {
+  test("refuses no more than the account's API host when its parent is a country's suffix", async () => {
+    const { methods, send } = start();
+    expect(
+      await send(
+        { action: "open", url: "https://firm.co.uk/" },
+        "chat-1",
+        "https://firm.co.uk",
+      ),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.navigationFailed });
+    expect(methods()).toEqual([]);
+    expect(
+      await send(
+        { action: "open", url: "https://other.co.uk/" },
+        "chat-1",
+        "https://firm.co.uk",
+      ),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.needsMember });
+  });
+
+  test("starts on the first open and runs the shared page script in a world made for each run", async () => {
     const { received, send } = start();
     // The stand-in's every frame asks for a sign-in: the member's.
     expect(await send(OPEN)).toMatchObject({
@@ -165,12 +199,15 @@ describe("the stella browser host", () => {
     const calls = messages.filter(
       ({ method }) => method === "Runtime.callFunctionOn",
     );
+    const worlds = messages.filter(
+      ({ method }) => method === "Page.createIsolatedWorld",
+    );
     expect(calls.length).toBeGreaterThan(0);
+    // One new isolated world per run of the page script, never reused.
+    expect(worlds).toHaveLength(calls.length);
     for (const { params } of calls) {
       // The one page script the extension injects, not a copy.
       expect(params?.["functionDeclaration"]).toBe(pageScript.toString());
-      // Only in the world the holder created for the document.
-      expect(params?.["executionContextId"]).toBe(1);
     }
     expect(messages.map(({ method }) => method)).not.toContain(
       "Runtime.enable",
@@ -180,6 +217,10 @@ describe("the stella browser host", () => {
       method: "Browser.setDownloadBehavior",
       params: { behavior: "deny" },
     });
+    // The page asks for a sign-in: the chat's window comes to the front.
+    expect(messages.map(({ method }) => method)).toContain(
+      "Target.activateTarget",
+    );
   });
 
   test("refuses steps that change a page as not available here, sending nothing", async () => {
@@ -196,17 +237,14 @@ describe("the stella browser host", () => {
   });
 
   test("starts again on the next open after the browser crashed", async () => {
-    const { lines, received, send } = start();
+    const { closed, methods, send } = start();
     expect(
       await send({ action: "open", url: "https://crash.example.com/" }),
     ).toMatchObject({ status: "error" });
-    await waitFor(
-      () =>
-        lines.some((line) => line.startsWith("the stella browser closed"))
-          ? true
-          : undefined,
-      { timeoutMs: 10_000, description: "the crash to be noticed" },
-    );
+    await waitFor(() => (closed() ? true : undefined), {
+      description: "the crash to be noticed",
+      timeoutMs: 10_000,
+    });
     // The chat's tab went with the browser.
     expect(await send({ action: "snapshot" })).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.noControlledTab,
@@ -215,12 +253,31 @@ describe("the stella browser host", () => {
       code: BROWSER_CONTROL_ERROR_CODE.needsMember,
     });
     expect(
-      received().filter(({ method }) => method === "Browser.getVersion"),
+      methods().filter((method) => method === "Browser.getVersion"),
     ).toHaveLength(2);
   });
 
+  test("keeps a chat's tabs after its run ends, for its next run, and closes them once the chat stays idle", async () => {
+    const { closed, host, methods, send } = start({ chatIdleMs: 300 });
+    await send(OPEN, "chat-1");
+    // The chat's last run is gone; its next run comes before the idle limit.
+    host.releaseChat("chat-1");
+    expect(await send({ action: "snapshot" }, "chat-1")).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+    });
+    expect(methods()).not.toContain("Target.closeTarget");
+    // Idle past the limit: its tabs close, and with them the browser.
+    host.releaseChat("chat-1");
+    await waitFor(() => (closed() ? true : undefined), {
+      description: "the idle chat's browser to close",
+      timeoutMs: 10_000,
+    });
+    expect(methods()).toContain("Target.closeTarget");
+    expect(methods()).toContain("Browser.close");
+  });
+
   test("closes once no chat has a tab, and opens again for the next chat", async () => {
-    const { host, lines, received, send } = start();
+    const { closed, host, methods, received, send } = start({ chatIdleMs: 0 });
     await send(OPEN, "chat-1");
     await send(OPEN, "chat-2");
     host.releaseChat("chat-1");
@@ -230,46 +287,49 @@ describe("the stella browser host", () => {
           .length === 1
           ? true
           : undefined,
-      { timeoutMs: 10_000, description: "chat 1's window to close" },
+      { description: "chat 1's window to close", timeoutMs: 10_000 },
     );
-    expect(received().map(({ method }) => method)).not.toContain(
-      "Browser.close",
-    );
+    expect(methods()).not.toContain("Browser.close");
     host.releaseChat("chat-2");
-    await waitFor(
-      () =>
-        lines.some((line) => line.startsWith("the stella browser closed"))
-          ? true
-          : undefined,
-      { timeoutMs: 10_000, description: "the browser to close" },
-    );
-    expect(received().map(({ method }) => method)).toContain("Browser.close");
+    await waitFor(() => (closed() ? true : undefined), {
+      description: "the browser to close",
+      timeoutMs: 10_000,
+    });
+    expect(methods()).toContain("Browser.close");
     expect(await send(OPEN, "chat-3")).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.needsMember,
     });
   });
 
-  test("never uses one account's browser for another: it closes and the other's starts", async () => {
-    const { account, receivedBy, send } = start();
-    expect(await send(OPEN)).toMatchObject({ status: "error" });
-    account.origin = "https://api.other-stella.com";
-    expect(await send(OPEN, "chat-2")).toMatchObject({ status: "error" });
-    const [first, second] = receivedBy();
-    expect(receivedBy()).toHaveLength(2);
-    for (const profile of [first ?? [], second ?? []]) {
+  test("keeps each account's browser to that account, as each run names it", async () => {
+    const { receivedBy, send } = start();
+    expect(await send(OPEN, "chat-1", ACCOUNT)).toMatchObject({
+      status: "error",
+    });
+    // A run started for another account: that account's own browser, and
+    // the first one closes rather than serve it.
+    expect(
+      await send(OPEN, "chat-2", "https://api.other-stella.com"),
+    ).toMatchObject({ status: "error" });
+    const profiles = receivedBy();
+    expect(profiles).toHaveLength(2);
+    for (const profile of profiles) {
       expect(profile.map(({ method }) => method)).toContain(
         "Browser.getVersion",
       );
     }
-    // One of the two profiles' browsers was closed for the other.
     expect(
-      [first ?? [], second ?? []].filter((profile) =>
+      profiles.filter((profile) =>
         profile.some(({ method }) => method === "Browser.close"),
       ),
     ).toHaveLength(1);
+    // The first account's run reads nothing of the other account's.
+    expect(await send({ action: "snapshot" }, "chat-1", ACCOUNT)).toMatchObject(
+      { code: BROWSER_CONTROL_ERROR_CODE.noControlledTab },
+    );
   });
 
-  test("reads an opened page only on the origin it was opened on, wherever it moved meanwhile", async () => {
+  test("reads an opened page only on its origin, where each frame refuses another", async () => {
     const { received, send } = start();
     expect(
       await send({
@@ -288,6 +348,36 @@ describe("the stella browser host", () => {
       expect(JSON.stringify(params)).toContain(
         '"expectedTopOrigin":"https://research.example.com"',
       );
+    }
+  });
+
+  test("refuses a read whose document is on another origin even when the page itself does not", async () => {
+    const { send } = start();
+    // The stand-in reads the page and reports another origin, ignoring the
+    // origin it was told to hold to: the holder still refuses.
+    expect(
+      await send({
+        action: "open",
+        url: "https://research.example.com/moves-away-quietly",
+      }),
+    ).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.redirected,
+      message: expect.not.stringContaining("elsewhere"),
+    });
+  });
+
+  test("never runs the page script in a frame the origin policy refuses", async () => {
+    const { received, send } = start();
+    await send({
+      action: "open",
+      url: "https://research.example.com/framed-private",
+    });
+    const worlds = received().filter(
+      ({ method }) => method === "Page.createIsolatedWorld",
+    );
+    expect(worlds.length).toBeGreaterThan(0);
+    for (const { params } of worlds) {
+      expect(params?.["frameId"]).not.toBe("PRIVATE-FRAME");
     }
   });
 
@@ -319,33 +409,50 @@ describe("the stella browser host", () => {
     ).toHaveLength(BROWSER_CONTROL_LIMITS.tabs);
   });
 
-  test("a chat released while its open waits for the browser leaves no window, and the idle browser closes", async () => {
-    const { host, lines, methods, send } = start();
+  test("a chat released while its open waits for the browser to start makes no window, and the browser closes", async () => {
+    const { closed, host, lines, methods, send } = start({
+      chatIdleMs: 0,
+      slowStart: true,
+    });
     const opening = send(OPEN);
+    // The browser is still starting (its start is held a second).
+    await waitFor(() => (lines.length === 0 ? true : undefined), {
+      description: "the start to be under way",
+      timeoutMs: 1000,
+    });
     host.releaseChat("chat-1");
     expect(await opening).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.cancelled,
     });
-    const created = methods().filter(
-      (method) => method === "Target.createTarget",
-    ).length;
-    expect(
-      methods().filter((method) => method === "Target.closeTarget").length,
-    ).toBe(created);
-    await waitFor(
-      () =>
-        lines.every((line) => !line.startsWith("the stella browser started")) ||
-        lines.some((line) => line.startsWith("the stella browser closed"))
-          ? true
-          : undefined,
-      { description: "no browser left running", timeoutMs: 10_000 },
+    expect(methods()).toContain("Browser.getVersion");
+    expect(methods()).not.toContain("Target.createTarget");
+    await waitFor(() => (closed() ? true : undefined), {
+      description: "the browser no chat needs to close",
+      timeoutMs: 10_000,
+    });
+  });
+
+  test("one chat's release does not close the browser under another chat's first open", async () => {
+    const { closed, host, send } = start({ chatIdleMs: 0 });
+    await send(OPEN, "chat-1");
+    // Chat 2's first open is loading a slow page when chat 1 goes.
+    const opening = send(
+      { action: "open", url: "https://research.example.com/slow" },
+      "chat-2",
     );
+    host.releaseChat("chat-1");
+    expect(await opening).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+    });
+    expect(closed()).toBe(false);
+    expect(await send({ action: "snapshot" }, "chat-2")).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+    });
   });
 
   test("stopping while the browser starts closes it, and starts none again", async () => {
-    const { host, methods, send } = start();
+    const { host, methods, send } = start({ slowStart: true });
     const opening = send(OPEN);
-    // The browser has been asked for its version: it is starting.
     await waitFor(
       () => (methods().includes("Browser.getVersion") ? true : undefined),
       { description: "the browser to start", timeoutMs: 10_000 },
@@ -371,6 +478,18 @@ describe("the stella browser host", () => {
     await waitFor(() => (pid !== undefined && !alive(pid) ? true : undefined), {
       description: "the hung browser to be killed",
       timeoutMs: 15_000,
+    });
+  });
+
+  test("a failed load says so in one message, whatever the browser met", async () => {
+    const { send } = start();
+    expect(
+      await send({ action: "open", url: "https://unreachable.example.com/" }),
+    ).toEqual({
+      code: BROWSER_CONTROL_ERROR_CODE.navigationFailed,
+      message: "The page could not be loaded.",
+      protocolVersion: expect.any(Number),
+      status: "error",
     });
   });
 });

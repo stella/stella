@@ -225,6 +225,20 @@ export const createTargets = (
 
   return {
     openTab,
+    /**
+     * Brings the chat's tab and its window to the front, where the member
+     * signs in; false when the chat has none or the browser would not.
+     */
+    showTab: async (controllerId: string): Promise<boolean> => {
+      const tab = chats.get(controllerId)?.tabs.at(-1);
+      if (tab === undefined) {
+        return false;
+      }
+      const shown = await client.send("Target.activateTarget", {
+        targetId: tab.targetId,
+      });
+      return Result.isOk(shown);
+    },
     /** The tab the chat reads: the one it opened last that is still open. */
     activeTab: (controllerId: string): OwnedTab | null =>
       chats.get(controllerId)?.tabs.at(-1) ?? null,

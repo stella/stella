@@ -76,8 +76,22 @@ const decisionBody = (): string => {
 const page = (title: string, body: string, head = "") =>
   `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${title}</title>${head}</head><body>${body}</body></html>`;
 
+/** What the member's account page shows once they signed in. */
+export const FIXTURE_SIGNED_IN = {
+  title: "Your account",
+  text: "Signed in to the fixture library.",
+} as const;
+
+/**
+ * The sign-in page asks the site whether the member signed in, as a page
+ * waiting on another device's confirmation does, and loads again once
+ * they have.
+ */
+const SIGN_IN_WAIT =
+  '<script>setInterval(async () => { const state = await fetch("/account/state").then((answer) => answer.text()); if (state === "signed-in") { location.reload(); } }, 250);</script>';
+
 /** Each page by path; `null` when there is none. */
-const fixtureHtml = (url: URL): string | null => {
+const fixtureHtml = (url: URL, signedIn: boolean): string | null => {
   switch (url.pathname) {
     case "/":
       return page(
@@ -99,10 +113,15 @@ const fixtureHtml = (url: URL): string | null => {
         `<link rel="canonical" href="${FIXTURE_CITATION.path}">`,
       );
     case "/account":
-      return page(
-        "Sign in",
-        '<h1>Sign in</h1><form><label>Email <input type="email" name="email"></label><label>Password <input type="password" name="password"></label><button>Sign in</button></form>',
-      );
+      return signedIn
+        ? page(
+            FIXTURE_SIGNED_IN.title,
+            `<h1>${FIXTURE_SIGNED_IN.title}</h1><p>${FIXTURE_SIGNED_IN.text}</p>`,
+          )
+        : page(
+            "Sign in",
+            `<h1>Sign in</h1><form><label>Email <input type="email" name="email"></label><label>Password <input type="password" name="password"></label><button>Sign in</button></form>${SIGN_IN_WAIT}`,
+          );
     case "/probe":
       // What a page can see of the browser that runs it.
       return page(
@@ -162,9 +181,19 @@ const certificate = () => {
 /** The site, served over HTTPS on a loopback port. */
 export const startFixtureSite = () => {
   const tls = certificate();
+  const account = { signedIn: false, signedInViews: 0 };
   const server = Bun.serve({
     fetch: (request) => {
-      const html = fixtureHtml(new URL(request.url));
+      const url = new URL(request.url);
+      if (url.pathname === "/account/state") {
+        return new Response(account.signedIn ? "signed-in" : "signed-out", {
+          headers: { "cache-control": "no-store" },
+        });
+      }
+      if (url.pathname === "/account" && account.signedIn) {
+        account.signedInViews += 1;
+      }
+      const html = fixtureHtml(url, account.signedIn);
       return html === null
         ? new Response(null, { status: 404 })
         : new Response(html, {
@@ -182,6 +211,12 @@ export const startFixtureSite = () => {
     /** Where the browser's resolver sends the site's name; nothing else resolves. */
     hostRules: `MAP ${FIXTURE_SITE_HOST} 127.0.0.1:${String(port)}, MAP * ~NOTFOUND`,
     spki: tls.spki,
+    /** The member signs in, as they would in the window the run showed them. */
+    signIn: () => {
+      account.signedIn = true;
+    },
+    /** How often the account page was served to a signed-in member. */
+    signedInViews: () => account.signedInViews,
     stop: async () => {
       await server.stop(true);
     },

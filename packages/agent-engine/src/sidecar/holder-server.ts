@@ -331,15 +331,11 @@ export const startHolderServer = async (
     });
   };
   const protocolLog = openProtocolLog(protocolLogSetting, log);
-  // The browser starts before the holder it serves; it asks the holder for
-  // the account once a run calls.
-  const account: { holder: Holder | null } = { holder: null };
   const started =
     browserOptions === null
       ? null
       : await startHolderBrowser({
           ...browserOptions,
-          accountOrigin: () => account.holder?.accountOrigin() ?? null,
           dir,
           endpoint,
           log,
@@ -384,7 +380,6 @@ export const startHolderServer = async (
       });
     },
   });
-  account.holder = holder;
   server.on("connection", (socket) => {
     sockets.add(socket);
     connections += 1;

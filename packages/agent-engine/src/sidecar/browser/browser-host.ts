@@ -12,6 +12,12 @@ import type { LocalBrowserResult } from "./local-result";
  */
 
 export type BrowserHostRequest = {
+  /**
+   * The API origin of the account the run started for. The holder learns
+   * no member id, so this is the narrowest stable identity it has: the
+   * stella browser's profile belongs to it.
+   */
+  accountOrigin: string;
   command: BrowserControlCommand;
   /** The chat the agent runs in; each chat has tabs of its own. */
   controllerId: string;

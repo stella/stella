@@ -69,6 +69,11 @@ const cancelledParamsSchema = v.object({
 
 /** The run an endpoint serves. */
 type BrowserMcpRun = {
+  /**
+   * The API origin the run started for: the account its browser belongs
+   * to, whichever desktop connects later.
+   */
+  accountOrigin: string;
   runId: string;
   threadId: string;
   /** The run's approval mode: which browser steps wait for the member. */
@@ -423,6 +428,7 @@ export const startLocalBrowserMcp = ({
                 await browser.request(
                   {
                     command,
+                    accountOrigin: held.accountOrigin,
                     controllerId: held.threadId,
                     observedTab,
                     toolCallId: crypto.randomUUID(),

@@ -129,12 +129,9 @@ const startExtensionBridge = async ({
 };
 
 export const startHolderBrowser = async ({
-  accountOrigin,
   stellaBrowser,
   ...options
 }: HolderBrowserOptions & {
-  /** The connected desktop's API origin; the stella browser's profile is the account's. */
-  accountOrigin: () => string | null;
   dir: string;
   /** The holder's own endpoint. */
   endpoint: string;
@@ -157,7 +154,6 @@ export const startHolderBrowser = async ({
     stellaBrowser === null
       ? null
       : createStellaBrowserHost({
-          accountOrigin,
           environment: stellaBrowser.environment,
           home,
           log,

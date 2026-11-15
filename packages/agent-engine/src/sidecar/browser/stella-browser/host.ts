@@ -7,13 +7,13 @@ import {
   BROWSER_CONTROL_LIMITS,
   type BrowserControlCommand,
   type BrowserControlResult,
-  PRODUCTION_STELLA_ORIGINS,
 } from "@stll/api-contract/browser-control";
 import { browserControlError } from "@stll/browser-page/browser-control-result";
 import {
   createOriginPolicy,
   type OriginPolicy,
 } from "@stll/browser-page/origin-policy";
+import { HOSTED_STELLA_ORIGINS } from "@stll/browser-page/stella-origins";
 import { createDetached } from "@stll/errors";
 import { sha256Hex } from "@stll/sha256/node";
 
@@ -43,22 +43,31 @@ import { createTargets, type Targets } from "./targets";
 /**
  * The stella browser as a browser host: Chrome or Edge on this computer,
  * started by the holder on a profile of its own, driven over the debugging
- * pipe. It starts on the first `open` a chat sends here and closes when the
- * holder exits or no chat has a tab in it any more; one that crashed or
- * was quit starts again on the next `open`.
+ * pipe. It starts on the first `open` a chat sends here. A chat's tabs stay
+ * between the chat's runs, so the member can sign in where the agent was
+ * sent and the next run reads on; they close once no run of the chat has
+ * called for `CHAT_IDLE_MS`, and the browser closes with the last of them
+ * or when the holder exits. One that crashed or was quit starts again on
+ * the next `open`.
  *
  * This slice reads: open, snapshot by cursor, find and headings, and the
  * sign-in handoff. Steps that change a page are refused as not available
- * on this browser yet. Until its network rules match the extension's,
- * every `open` goes through the origin policy and every read re-checks the
- * address of the document it read.
+ * on this browser yet. Every `open` goes through the origin policy, and
+ * every read re-checks the address of the document it read and of each
+ * frame before reading it.
+ *
+ * A known limit until its network rules match the extension's: requests a
+ * page makes itself (a redirect, an image, a script, a frame's document)
+ * to a local or private address are not blocked. Such a page is never
+ * read, but its requests are sent. That is why it stays a development host
+ * (`STELLA_BROWSER_DEV_HOST`), switched off in release builds.
  */
 
 export const NOT_AVAILABLE_ON_STELLA_BROWSER =
   "This step is not available in the stella browser yet: it can open pages and read them (snapshot, find, headings), but not click, type, press keys, choose options, go back or switch tabs.";
 
-const NO_ACCOUNT =
-  "stella desktop has not connected to this computer's agent yet, so the stella browser cannot start. Try again in a moment.";
+/** How long a chat's tabs stay after its last run called. */
+const CHAT_IDLE_MS = 30 * 60 * 1000;
 
 const START_FAILURES = {
   "in-use":
@@ -75,20 +84,57 @@ const GONE =
 const disconnected = (message: string): BrowserControlResult =>
   browserControlError(BROWSER_CONTROL_ERROR_CODE.disconnected, message);
 
-/** The member's profile key: the account's origin, until the account's user id reaches the holder. */
+/**
+ * The account's profile key. The holder learns no member id: the API
+ * origin a run started for is the narrowest stable identity it has.
+ */
 const memberKeyOf = (apiOrigin: string) => sha256Hex(apiOrigin).slice(0, 16);
 
-/** The origin policy with the account's stella origins refused as well. */
+const withoutRootDot = (hostname: string) =>
+  hostname.toLowerCase().replace(/\.$/u, "");
+
+/**
+ * The site the account's stella is served from, as far as its API origin
+ * tells: the holder is not told the web app's origin, which a self-hosted
+ * stella usually serves beside its API, so the API host without its first
+ * label counts (`example-stella.com` for `api.example-stella.com`), with
+ * every host under it. A parent shaped like a country's second-level
+ * suffix (`co.uk`, `com.au`), or an address, is not narrowed: then only
+ * the API host is the account's.
+ */
+const accountSiteOf = (hostname: string): string => {
+  const host = withoutRootDot(hostname);
+  const labels = host.split(".");
+  const parent = labels.slice(1);
+  const [second = "", top = ""] = parent;
+  const address = host.startsWith("[") || /^\d+$/u.test(labels.at(-1) ?? "");
+  const suffixLike =
+    parent.length === 2 && second.length <= 3 && top.length === 2;
+  return address || parent.length < 2 || suffixLike ? host : parent.join(".");
+};
+
+/**
+ * The origin policy with every hosted stella refused, and the account's
+ * own: its API and the site it is served from (see `accountSiteOf`).
+ */
 const accountPolicy = (apiOrigin: string): OriginPolicy => {
-  const origins = new Set<string>([...PRODUCTION_STELLA_ORIGINS, apiOrigin]);
+  const origins = new Set<string>([...HOSTED_STELLA_ORIGINS, apiOrigin]);
+  const apiHost = URL.parse(apiOrigin)?.hostname;
+  const site = apiHost === undefined ? null : accountSiteOf(apiHost);
   return createOriginPolicy({
     hostnames: [...origins].flatMap((origin) => {
       const url = URL.parse(origin);
       return url === null ? [] : [url.hostname];
     }),
     originFromUrl: (rawUrl) => {
-      const origin = URL.parse(rawUrl)?.origin;
-      return origin !== undefined && origins.has(origin) ? origin : null;
+      const url = URL.parse(rawUrl);
+      if (url === null) {
+        return null;
+      }
+      const host = withoutRootDot(url.hostname);
+      const onSite =
+        site !== null && (host === site || host.endsWith(`.${site}`));
+      return onSite || origins.has(url.origin) ? url.origin : null;
     },
   });
 };
@@ -96,8 +142,6 @@ const accountPolicy = (apiOrigin: string): OriginPolicy => {
 export type StellaBrowserHostOptions = {
   /** Where profiles live: `<app data>/browser`. */
   profileRoot: string;
-  /** The connected desktop's API origin, or null before the first hello. */
-  accountOrigin: () => string | null;
   home: string | null;
   platform: NodeJS.Platform;
   /** The environment the holder started with; the browser gets a minimal part of it. */
@@ -111,6 +155,8 @@ export type StellaBrowserHostOptions = {
   } | null;
   log: (line: string) => void;
   processes?: BrowserProcesses;
+  /** How long a chat's tabs stay after its last run called; tests shorten it. */
+  chatIdleMs?: number;
 };
 
 type Running = {
@@ -118,8 +164,6 @@ type Running = {
   targets: Targets;
   /** The account the browser's profile is: never used for another. */
   memberKey: string;
-  /** Isolated worlds by document, shared by every chat's reads. */
-  worlds: Map<string, number>;
 };
 
 export type StellaBrowserHost = BrowserHost & {
@@ -158,7 +202,6 @@ const readingIn = (
         policy,
         signal,
         tab,
-        worlds: current.worlds,
       };
 };
 
@@ -203,6 +246,40 @@ const openIn = async (
 };
 
 /** Reads the chat's active tab: a window of it, or what find asked for. */
+/** A command as the stella browser takes it: an open, a read, or a step it refuses. */
+const runCommand = async (
+  command: BrowserControlCommand,
+  handlers: {
+    open: (
+      command: Extract<BrowserControlCommand, { action: "open" }>,
+    ) => Promise<BrowserControlResult>;
+    read: (
+      command: Extract<BrowserControlCommand, { action: "find" | "snapshot" }>,
+    ) => Promise<BrowserControlResult>;
+  },
+): Promise<BrowserControlResult> => {
+  switch (command.action) {
+    case BROWSER_CONTROL_ACTION.open:
+      return await handlers.open(command);
+    case BROWSER_CONTROL_ACTION.snapshot:
+    case BROWSER_CONTROL_ACTION.find:
+      return await handlers.read(command);
+    case BROWSER_CONTROL_ACTION.click:
+    case BROWSER_CONTROL_ACTION.fill:
+    case BROWSER_CONTROL_ACTION.pressKey:
+    case BROWSER_CONTROL_ACTION.select:
+    case BROWSER_CONTROL_ACTION.goBack:
+    case BROWSER_CONTROL_ACTION.switchTab:
+      return browserControlError(
+        BROWSER_CONTROL_ERROR_CODE.executionFailed,
+        NOT_AVAILABLE_ON_STELLA_BROWSER,
+      );
+    default:
+      command satisfies never;
+      return panic("Unhandled browser command");
+  }
+};
+
 const readIn = async (
   current: Running | null,
   { controllerId, policy, signal }: Step,
@@ -324,10 +401,45 @@ const startFor = async (
   return started.value;
 };
 
+/** Whether `result` hands the page to the member to sign in. */
+const asksMember = (result: BrowserControlResult) =>
+  result.status === "error" &&
+  result.code === BROWSER_CONTROL_ERROR_CODE.needsMember;
+
+/**
+ * Each chat's idle clock: once its last run stopped calling, its tabs go
+ * after the idle limit unless a run of the chat calls again first.
+ */
+const idleClocks = (idleMs: number, expire: (controllerId: string) => void) => {
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const stopClock = (controllerId: string) => {
+    clearTimeout(timers.get(controllerId));
+    timers.delete(controllerId);
+  };
+  return {
+    start: (controllerId: string) => {
+      stopClock(controllerId);
+      const timer = setTimeout(() => {
+        timers.delete(controllerId);
+        expire(controllerId);
+      }, idleMs);
+      // An idle chat never keeps the holder running.
+      timer.unref();
+      timers.set(controllerId, timer);
+    },
+    stop: stopClock,
+    stopAll: () => {
+      for (const controllerId of [...timers.keys()]) {
+        stopClock(controllerId);
+      }
+    },
+  };
+};
+
 export const createStellaBrowserHost = (
   options: StellaBrowserHostOptions,
 ): StellaBrowserHost => {
-  const { accountOrigin, log, testHooks } = options;
+  const { log, testHooks } = options;
   const detached = createDetached((_error, task) => {
     log(`stella browser background work failed: ${task}`);
   });
@@ -337,6 +449,8 @@ export const createStellaBrowserHost = (
     started: Promise<Running | BrowserControlResult>;
   } | null = null;
   let stopped = false;
+  /** Opens under way: the browser stays while one may still make a tab. */
+  let opening = 0;
   const queues = chatQueues();
   /** How often each chat was released: a command from before a release leaves nothing open. */
   const releases = new Map<string, number>();
@@ -367,7 +481,6 @@ export const createStellaBrowserHost = (
       instance: started,
       memberKey,
       targets: createTargets(started.client, detached),
-      worlds: new Map(),
     };
     running = next;
     detached(
@@ -385,8 +498,8 @@ export const createStellaBrowserHost = (
 
   /**
    * The account's running browser, started when none runs. A browser of
-   * another account (the desktop signed in as someone else) is never used:
-   * it closes, with its tabs, before this account's starts.
+   * another account is never used: it closes, with its tabs, before this
+   * account's starts.
    */
   const ensureRunning = async (
     apiOrigin: string,
@@ -417,12 +530,33 @@ export const createStellaBrowserHost = (
     return await launching.started;
   };
 
-  /** Closes the browser once no chat has a tab in it. */
+  /** Closes the browser once no chat has a tab in it and no open may make one. */
   const closeIfIdle = async (current: Running) => {
-    if (!current.targets.holdsTabs() && running === current) {
+    if (opening === 0 && !current.targets.holdsTabs() && running === current) {
       await closeRunning();
     }
   };
+
+  /** The chat is gone: its commands stop and its tabs close. */
+  const forgetChat = (controllerId: string) => {
+    releases.set(controllerId, (releases.get(controllerId) ?? 0) + 1);
+    // Its queued and running commands stop; an open among them closes
+    // what it made (see `open`).
+    queues.cancel(controllerId);
+    const current = running;
+    if (current === null) {
+      return;
+    }
+    detached(
+      current.targets.releaseChat(controllerId).then(async () => {
+        // No chat has a tab left: the browser closes until the next open.
+        await closeIfIdle(current);
+        return undefined;
+      }),
+      "stella-browser.release-chat",
+    );
+  };
+  const idle = idleClocks(options.chatIdleMs ?? CHAT_IDLE_MS, forgetChat);
 
   const open = async (
     step: Step,
@@ -441,19 +575,29 @@ export const createStellaBrowserHost = (
     if (isStopped(step.signal)) {
       return cancelled();
     }
-    const current = await ensureRunning(apiOrigin);
-    if ("status" in current) {
-      return current;
-    }
-    const result = isStopped(step.signal)
-      ? cancelled()
-      : await openIn(current, step, {
-          newTab: command.newTab === true,
-          requested,
-        });
+    opening += 1;
+    const opened = await (async () => {
+      const current = await ensureRunning(apiOrigin);
+      if ("status" in current) {
+        return { current: null, result: current };
+      }
+      const result = isStopped(step.signal)
+        ? cancelled()
+        : await openIn(current, step, {
+            newTab: command.newTab === true,
+            requested,
+          });
+      return { current, result };
+    })().finally(() => {
+      opening -= 1;
+    });
+    const { current, result } = opened;
     // The chat was released while this open waited or ran: what it opened
     // goes with the chat.
-    if ((releases.get(step.controllerId) ?? 0) !== releasedBefore) {
+    if (
+      current !== null &&
+      (releases.get(step.controllerId) ?? 0) !== releasedBefore
+    ) {
       await current.targets.releaseChat(step.controllerId);
       await closeIfIdle(current);
     }
@@ -461,80 +605,56 @@ export const createStellaBrowserHost = (
   };
 
   const run = async (
-    { command, controllerId }: BrowserHostRequest,
+    { accountOrigin, command, controllerId }: BrowserHostRequest,
     signal: AbortSignal,
     releasedBefore: number,
   ): Promise<BrowserControlResult> => {
-    const apiOrigin = accountOrigin();
-    if (apiOrigin === null) {
-      return disconnected(NO_ACCOUNT);
-    }
     const step: Step = {
       controllerId,
-      policy: accountPolicy(apiOrigin),
+      policy: accountPolicy(accountOrigin),
       signal,
     };
-    switch (command.action) {
-      case BROWSER_CONTROL_ACTION.open:
-        return await open(step, apiOrigin, command, releasedBefore);
-      case BROWSER_CONTROL_ACTION.snapshot:
-      case BROWSER_CONTROL_ACTION.find:
-        return await readIn(
-          running?.memberKey === memberKeyOf(apiOrigin) ? running : null,
+    return await runCommand(command, {
+      open: async (asked) =>
+        await open(step, accountOrigin, asked, releasedBefore),
+      read: async (reading) =>
+        await readIn(
+          running?.memberKey === memberKeyOf(accountOrigin) ? running : null,
           step,
-          command,
-        );
-      case BROWSER_CONTROL_ACTION.click:
-      case BROWSER_CONTROL_ACTION.fill:
-      case BROWSER_CONTROL_ACTION.pressKey:
-      case BROWSER_CONTROL_ACTION.select:
-      case BROWSER_CONTROL_ACTION.goBack:
-      case BROWSER_CONTROL_ACTION.switchTab:
-        return browserControlError(
-          BROWSER_CONTROL_ERROR_CODE.executionFailed,
-          NOT_AVAILABLE_ON_STELLA_BROWSER,
-        );
-      default:
-        command satisfies never;
-        return panic("Unhandled browser command");
-    }
+          reading,
+        ),
+    });
   };
 
   return {
     acts: false,
     request: async (request, signal) => {
+      // A run of the chat calls: its tabs stay.
+      idle.stop(request.controllerId);
       const releasedBefore = releases.get(request.controllerId) ?? 0;
-      return localBrowserResult(
-        await queues.run(
-          request.controllerId,
-          signal,
-          async (stoppable) => await run(request, stoppable, releasedBefore),
-        ),
+      const result = await queues.run(
+        request.controllerId,
+        signal,
+        async (stoppable) => await run(request, stoppable, releasedBefore),
       );
+      // The page waits for the member: the chat's window comes forward, so
+      // they find where to sign in.
+      if (asksMember(result)) {
+        await running?.targets.showTab(request.controllerId);
+      }
+      return localBrowserResult(result);
     },
     cancel: ({ controllerId }) => {
       queues.cancel(controllerId);
     },
+    // The chat's last run is gone: its tabs stay for its next run, so the
+    // member can sign in there, and go once it has been idle a while.
     releaseChat: (controllerId) => {
-      releases.set(controllerId, (releases.get(controllerId) ?? 0) + 1);
-      // Its queued and running commands stop; an open among them closes
-      // what it made (see `open`).
-      queues.cancel(controllerId);
-      const current = running;
-      if (current === null) {
-        return;
-      }
-      detached(
-        current.targets.releaseChat(controllerId).then(async () => {
-          // No chat has a tab left: the browser closes until the next open.
-          await closeIfIdle(current);
-          return undefined;
-        }),
-        "stella-browser.release-chat",
-      );
+      idle.start(controllerId);
     },
     stop: async () => {
       stopped = true;
+      idle.stopAll();
       // A browser still starting closes as soon as it has (see `launch`).
       await starting?.started;
       await closeRunning();

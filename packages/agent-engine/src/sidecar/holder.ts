@@ -174,11 +174,6 @@ export class Holder {
     this.settle();
   }
 
-  /** The API origin of the desktop that connected last; null before any did. */
-  accountOrigin(): string | null {
-    return this.host.accountOrigin();
-  }
-
   /** Start talking to a new connection. */
   accept(connection: HolderConnection): HolderPeer {
     const peer: Peer = {

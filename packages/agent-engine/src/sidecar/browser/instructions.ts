@@ -26,7 +26,7 @@ const WITHOUT_BROWSER =
  * every sentence above holds for the browser the chat's pages are in.
  */
 const READ_ONLY_HOST =
-  "When the member's Chrome cannot be reached, the pages open in the stella browser instead, which only reads so far: there, search by opening the site's search results address, follow a link by opening its href, and expect no downloads; click, type, press_key, select, go_back and switch_tab answer not_available_on_this_browser.";
+  "When the member's Chrome cannot be reached, the pages open in the stella browser instead, which only reads so far: there, search by opening the site's search results address, follow a link by opening its href, and expect no downloads; click, type, press_key, select, go_back and switch_tab answer not_available_on_this_browser. A page there that needs a sign-in comes to the front for the member, and the chat's tabs stay open for its next turn.";
 
 /** The run's instructions with what is true of its browser after them. */
 export const withLocalBrowserInstructions = (

@@ -1805,6 +1805,9 @@ const playBrowse = async ({ threadStart, write, log }: PlayBrowseOptions) => {
   if (browsed.notes !== undefined) {
     log({ readScenario: browsed.notes });
   }
+  if (browsed.continued !== undefined) {
+    log({ continuedScenario: browsed.continued });
+  }
   const notifyItem = (phase: "started" | "completed", body: object) => {
     write({
       method: `item/${phase}`,

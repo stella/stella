@@ -12,7 +12,8 @@
     "./page-script": "./src/page-script.ts",
     "./page-window": "./src/page-window.ts",
     "./sign-in-policy": "./src/sign-in-policy.ts",
-    "./snapshot-guard": "./src/snapshot-guard.ts"
+    "./snapshot-guard": "./src/snapshot-guard.ts",
+    "./stella-origins": "./src/stella-origins.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

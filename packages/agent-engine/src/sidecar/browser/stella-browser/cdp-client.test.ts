@@ -55,6 +55,7 @@ describe("the stella browser's protocol client", () => {
       "Page.getFrameTree",
       "Page.navigate",
       "Runtime.callFunctionOn",
+      "Target.activateTarget",
       "Target.attachToTarget",
       "Target.closeTarget",
       "Target.createTarget",
