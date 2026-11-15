@@ -753,13 +753,17 @@ export const openMemberWaitKeys = ({
  */
 export const openApprovalRequestIds = (
   messages: readonly PersistedChatMessage[],
-): readonly string[] =>
-  findAwaitedAssistantMessage(messages, isApprovalRequestPart)?.parts.flatMap(
-    (part) =>
-      isApprovalPart(part) && part.state === "approval-requested"
-        ? [part.approval.id]
-        : [],
-  ) ?? [];
+): readonly string[] => {
+  const awaited = findAwaitedAssistantMessage(messages, isApprovalRequestPart);
+  if (awaited === null) {
+    return [];
+  }
+  return awaited.parts.flatMap((part) =>
+    isApprovalPart(part) && part.state === "approval-requested"
+      ? [part.approval.id]
+      : [],
+  );
+};
 
 /**
  * The tool work a thread already waits on when a page opens it: approval

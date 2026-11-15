@@ -105,6 +105,9 @@ export const CHAT_USER_ACTIONS = {
   /** Opens a sent message's editor; a running turn is stopped first. */
   "open-message-editor": { handler: "startUserMessageEdit", via: "session" },
   "open-playbook": { handler: "handleOpenPlaybook", via: "session" },
+  /** Holds a message until the turn ends, where a plain send would steer
+   *  it (Cmd/Ctrl+Enter, the queue button). */
+  queue: { handler: "queueMessage", via: "session" },
   /** Reloads the canonical answer after an accepted edit or revision conflict. */
   "refresh-edited-answer": { handler: "refreshAnswers", via: "session" },
   "remove-queued-message": { handler: "removeQueuedMessage", via: "session" },
@@ -126,7 +129,8 @@ export const CHAT_USER_ACTIONS = {
     via: "session",
   },
   "submit-private-input": { handler: "handleRequestSecret", via: "session" },
-  /** Moves a queued message to the front and stops the running turn. */
+  /** Hands a queued message to the running turn, which it stops when the
+   *  turn cannot take the message. */
   "send-queued-message-now": {
     handler: "sendQueuedMessageNow",
     via: "session",

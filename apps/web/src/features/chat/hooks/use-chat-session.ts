@@ -20,18 +20,16 @@ import type {
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
 import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
-import {
-  CHAT_RUN_TARGET_KIND,
-  type ChatRunTarget,
-} from "@stll/api-contract/chat-run-target";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import {
   CHAT_MEMBER_SEND_ACTION,
   CHAT_SEND_INTENT,
+  CHAT_TURN_STEERING,
   type ChatMemberSendAction,
   chatSendIntent,
   type ChatThreadSendState,
+  type ChatTurnSteering,
 } from "@stll/api-contract/chat-send-intent";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import { sleep } from "@stll/concurrency/sleep";
@@ -234,10 +232,10 @@ type UseChatSessionOptions = {
   getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   /**
-   * Where the thread's turns run; a surface without it runs them on
-   * stella's model path only.
+   * Whether the thread's turns take a message mid-turn (`chatTurnSteering`);
+   * a surface without it has turns that never do, so its sends queue.
    */
-  getRunTarget?: (() => ChatRunTarget) | undefined;
+  getTurnSteering?: (() => ChatTurnSteering) | undefined;
   /** Cursor for the first older page, seeded from the thread fetch. */
   initialOlderCursor: string | null;
   /**
@@ -369,7 +367,7 @@ export const useChatSession = ({
   getContextMatterIds,
   getEditApplyMode,
   getSendMode,
-  getRunTarget,
+  getTurnSteering,
   initialOlderCursor,
   onError,
   playbookPane,
@@ -884,12 +882,16 @@ export const useChatSession = ({
   // held after a failed turn it is sent at once, like a manual send.
   const handQueuedMessageToTurn = useCallback(
     (id: string, origin: SteerOrigin) => {
-      applySendQueueEvent({ type: "queued-message-promoted", id });
       const entry = sendQueueRef.current.queue.find(
         (queued) => queued.id === id,
       );
       const route =
         entry === undefined ? null : sendNowRoute(sendQueueRef.current, entry);
+      // A plain send that cannot steer keeps its place in the queue, so
+      // messages queued one after another go in the order they were sent.
+      if (route?.type === "steer" || origin === "send_now") {
+        applySendQueueEvent({ type: "queued-message-promoted", id });
+      }
       if (route?.type === "steer") {
         if (sendQueueRef.current.steeringIds.includes(id)) {
           return;
@@ -960,10 +962,12 @@ export const useChatSession = ({
    *  to the turn once declining the wait lets it run again. */
   const steerOnResumeRef = useRef<string | null>(null);
 
-  // A plain send while a turn on the member's computer waits on them: what
-  // the turn asked is declined, explicitly, as the member's own Deny would,
+  // A plain send while a turn on the member's computer waits on them: the
+  // shown approval is declined, explicitly, as the member's own Deny would,
   // so the turn goes on, and the message is handed to it once it runs again.
-  // A message that cannot steer waits in the queue, and the question stays.
+  // A question is never dismissed for it: dismissing one stops the run's
+  // turn. The message then waits in the queue behind the question, as does
+  // one that cannot steer.
   const steerWaitingTurn = useCallback(
     (id: string) => {
       const entry = sendQueueRef.current.queue.find(
@@ -976,21 +980,18 @@ export const useChatSession = ({
         notifySteerRefused("message_not_plain");
         return;
       }
+      const approvalIds = openApprovalRequestIds(
+        projectCanonicalChatUIMessages(chat.getSnapshot().messages),
+      );
+      if (approvalIds.length === 0) {
+        return;
+      }
       applySendQueueEvent({ type: "queued-message-promoted", id });
       steerOnResumeRef.current = id;
-      const { localRunQuestion, messages: shown } = chat.getSnapshot();
-      for (const approvalId of openApprovalRequestIds(
-        projectCanonicalChatUIMessages(shown),
-      )) {
+      for (const approvalId of approvalIds) {
         detached(
           resolveToolApproval({ id: approvalId, approved: false }),
           "use-chat-session.decline-for-steer",
-        );
-      }
-      if (localRunQuestion !== null) {
-        detached(
-          chat.answerLocalRunQuestion(localRunQuestion.interruptId, null),
-          "use-chat-session.dismiss-for-steer",
         );
       }
     },
@@ -999,18 +1000,18 @@ export const useChatSession = ({
 
   /** What the thread is doing now, as the send routing reads it. */
   const threadSendState = useCallback((): ChatThreadSendState => {
-    const runTarget = getRunTarget?.().kind ?? CHAT_RUN_TARGET_KIND.cloud;
+    const steering = getTurnSteering?.() ?? CHAT_TURN_STEERING.notSteerable;
     if (sendQueueRef.current.isGenerating) {
-      return { type: "working", runTarget };
+      return { type: "working", steering };
     }
     const { localRunQuestion, messages: shown } = chat.getSnapshot();
     return openMemberWaitKeys({
       localRunQuestion,
       messages: projectCanonicalChatUIMessages(shown),
     }).length > 0
-      ? { type: "waiting_on_member", runTarget }
+      ? { type: "waiting_on_member", steering }
       : { type: "idle" };
-  }, [chat, getRunTarget]);
+  }, [chat, getTurnSteering]);
 
   // Where a message goes is `chatSendIntent`'s call, by what the thread is
   // doing and whether the member sent it plainly or queued it.
