@@ -121,6 +121,7 @@ import {
   enqueueChatMessage,
   moveQueuedChatMessage,
   pauseChatQueue,
+  readQueuedChatMessage,
   removeQueuedChatMessage,
   resumeChatQueue,
   sendQueuedChatMessageNow,
@@ -137,6 +138,7 @@ import {
   queueMoveTarget,
   snapshotChatRequestOptions,
   steerableMessageText,
+  steerableQueuedText,
   withQueuedMessageMoved,
   withQueuedMessageRemoved,
 } from "@/features/chat/chat-queue.logic";
@@ -1190,13 +1192,25 @@ export const useChatSession = ({
         case "steer":
           detached(
             (async () => {
-              const outcome = await chat.steerLocalTurn({
-                inputId: id,
-                text: route.text,
-              });
+              // The queue's read shows only the message's beginning; the
+              // turn is handed it whole, or it is sent next as before.
+              const whole = await Result.tryPromise(
+                async () => await readQueuedChatMessage(threadRef.threadId, id),
+              );
+              const read = Result.isOk(whole) ? whole.value : null;
+              const text =
+                read === null
+                  ? null
+                  : steerableQueuedText({ item, parts: read.message.parts });
+              const steered =
+                text !== null &&
+                (await chat.steerLocalTurn({ inputId: id, text })).type ===
+                  "steered";
               await writeQueue(async () =>
-                outcome.type === "steered"
-                  ? await removeFromQueue(id, item.revision)
+                // Removed at the revision the turn was handed: one edited
+                // since stays queued.
+                steered && read !== null
+                  ? await removeFromQueue(id, read.revision)
                   : await sendQueuedChatMessageNow(threadRef.threadId, id),
               );
             })(),

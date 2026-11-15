@@ -488,6 +488,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "PATCH /v1/chat/threads/:threadId/title": "crud",
   "GET /v1/chat/threads/:threadId/queue": "crud",
   "POST /v1/chat/threads/:threadId/queue": "crud",
+  "GET /v1/chat/threads/:threadId/queue/:messageId": "crud",
   "PUT /v1/chat/threads/:threadId/queue/:messageId": "crud",
   "DELETE /v1/chat/threads/:threadId/queue/:messageId": "crud",
   "POST /v1/chat/threads/:threadId/queue/:messageId/move": "crud",

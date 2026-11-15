@@ -86,6 +86,13 @@ export const enqueueChatMessage = async (
     unwrapApiResponse(await queueRoutes(threadId).post({ send })),
   );
 
+/** A queued message whole, as it was queued (the queue's read shows only
+ *  its beginning). */
+export const readQueuedChatMessage = async (
+  threadId: string,
+  messageId: string,
+) => unwrapApiResponse(await queuedMessageRoutes(threadId, messageId).get());
+
 /** Remove a queued message at the `revision` read; answers it as it was
  *  queued, or `null` once it was no longer queued. */
 export const removeQueuedChatMessage = async ({

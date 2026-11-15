@@ -51,7 +51,10 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
-import { chatQueueReadScalingScenario } from "@/api/tests/read-scaling/chat-queue";
+import {
+  chatQueuedMessageReadScalingScenario,
+  chatQueueReadScalingScenario,
+} from "@/api/tests/read-scaling/chat-queue";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 
 const clock = createTestClock();
@@ -883,6 +886,45 @@ const suite = (
       console.info(
         "handler-scaling",
         JSON.stringify({ name: "chat queue read", at10, at200 }),
+      );
+      expect(at10.statements).toBeGreaterThan(0);
+      expect(readScalingViolations({ small: at10, large: at200 })).toEqual([]);
+    });
+
+    test("reading a queued message whole costs the same however many messages wait", async () => {
+      const owner = await seedOwner();
+      const queueIn = async (threadId: SafeId<"chatThread">) => {
+        const id = createSafeId<"chatMessage">();
+        await withLock(threadId, owner, async (tx) => {
+          await enqueueChatMessageOnTx({
+            id,
+            send: sendOf(id, "waiting ".repeat(100)),
+            threadId,
+            tx,
+          });
+        });
+        return id;
+      };
+      const measureAt = async (others: number) => {
+        const threadId = await seedThread(owner);
+        const messageId = await queueIn(threadId);
+        for (let index = 0; index < others; index += 1) {
+          // db-await-in-loop: seeds the member's other waiting messages before the measured read.
+          await queueIn(await seedThread(owner));
+        }
+        return await chatQueuedMessageReadScalingScenario.measure({
+          database,
+          messageId,
+          organizationId: owner.organizationId,
+          threadId,
+          userId: owner.userId,
+        });
+      };
+      const at10 = await measureAt(10);
+      const at200 = await measureAt(200);
+      console.info(
+        "handler-scaling",
+        JSON.stringify({ name: "chat queued message read", at10, at200 }),
       );
       expect(at10.statements).toBeGreaterThan(0);
       expect(readScalingViolations({ small: at10, large: at200 })).toEqual([]);
