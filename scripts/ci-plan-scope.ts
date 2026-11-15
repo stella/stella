@@ -23,7 +23,11 @@ import {
   sourceImportClosure,
 } from "./detect-route-smoke-changes";
 import { planServiceSuites } from "./detect-service-suite-changes";
-import { landingDeployAffected } from "./landing-deploy-scope";
+import {
+  deployAffected,
+  type DeployRange,
+  LANDING_PACKAGE,
+} from "./landing-deploy-scope";
 import { productionE2eChanged } from "./production-e2e-inputs.mjs";
 
 const TRUE = "true";
@@ -60,9 +64,7 @@ export type ChangedFileScopeDetectors = {
   landingBuild: (
     options: Parameters<typeof requiresLandingBuild>[0],
   ) => unknown;
-  landingDeploy: (
-    options: Parameters<typeof landingDeployAffected>[0],
-  ) => unknown;
+  landingDeploy: (range: DeployRange) => unknown;
   desktopBrowser: (
     options: Parameters<typeof requiresDesktopBrowser>[0],
   ) => unknown;
@@ -71,7 +73,8 @@ export type ChangedFileScopeDetectors = {
 export const DEFAULT_DETECTORS = {
   packageChecks: requiresPackageChecks,
   landingBuild: requiresLandingBuild,
-  landingDeploy: landingDeployAffected,
+  landingDeploy: (range) =>
+    deployAffected({ ...range, packageName: LANDING_PACKAGE }),
   desktopBrowser: requiresDesktopBrowser,
 } satisfies ChangedFileScopeDetectors;
 
@@ -344,6 +347,7 @@ const desktopRustRequired = (files: readonly string[]) =>
     "packages/api-contract/src/desktop-edit-file-types.ts",
     "packages/api-contract/src/desktop-registry.ts",
     "packages/api-contract/src/desktop-rpc.gen.ts",
+    "packages/api-contract/src/chat-local-run-step-content.fixtures.json",
   ]);
 
 const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {

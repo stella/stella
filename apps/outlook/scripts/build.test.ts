@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  FONT_LICENCE_FILE_NAME,
   getHtmlAssetPaths,
   getHtmlReleaseVersion,
   isContentHashedCodeAsset,
@@ -73,6 +74,22 @@ describe("production build", () => {
     expect(bundles.some((code) => code.includes("https://api.stll.app"))).toBe(
       true,
     );
+  });
+
+  test("ships the font licence beside the fonts it covers", () => {
+    const assets = readdirSync(path.join(outDir, "assets"));
+    expect(assets.some((file) => file.endsWith(".woff2"))).toBe(true);
+    expect(read(path.join("assets", FONT_LICENCE_FILE_NAME))).toContain(
+      "SIL OPEN FONT LICENSE",
+    );
+    const headers: unknown = JSON.parse(read("deployment-headers.json"));
+    expect(headers).toMatchObject({
+      rules: expect.arrayContaining([
+        expect.objectContaining({
+          path: `/assets/${FONT_LICENCE_FILE_NAME}`,
+        }),
+      ]),
+    });
   });
 
   test("declares headers for the sign-in pages", () => {

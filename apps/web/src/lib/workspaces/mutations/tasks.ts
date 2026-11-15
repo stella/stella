@@ -27,7 +27,7 @@ export const useCreateTask = () => {
   const t = useTranslations();
 
   return useIdempotentMutation({
-    mutationFn: async (workspaceId: string) =>
+    mutationFn: async (workspaceId: string, replayRequest) =>
       readQueryResult(
         await runWorkspaceMutation({
           client: queryClient,
@@ -36,7 +36,12 @@ export const useCreateTask = () => {
               .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
               .put(
                 { name: t("tasks.untitled") },
-                { headers: { [RESOURCE_MUTATION_ID_HEADER]: mutationId } },
+                {
+                  headers: {
+                    ...replayRequest.headers,
+                    [RESOURCE_MUTATION_ID_HEADER]: mutationId,
+                  },
+                },
               );
             return unwrapApiResponse(response);
           },

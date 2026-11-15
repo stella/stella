@@ -58,6 +58,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // read only their organization's counter and object records.
   "organization_file_usage",
   "organization_file_objects",
+  // What local runs' steps produced: the gateway's owner connection writes a
+  // step with its run's budget; a scoped request reads it with its thread.
+  "chat_local_run_step_contents",
   // History written only by the record_agent_skill_revision trigger.
   "agent_skill_revisions",
   "search_document_preview_passages",
@@ -164,6 +167,7 @@ const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
   "chat_thread_names",
   "chat_message_revisions",
   "document_review_finding_decisions",
+  "legal_graph_edges",
   "legal_list_item_source_decisions",
 ]);
 
@@ -179,6 +183,10 @@ const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
   // Account export ledger: request transactions create and transition rows;
   // only the table owner deletes them, during account erasure.
   "account_exports",
+  // Legal holds: request transactions place and release holds; a hold row is
+  // removed only by the delete backstop after release, never by the request
+  // role.
+  "legal_holds",
 ]);
 const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
 
@@ -216,6 +224,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "case_law_ranking_signal_changes",
   "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
+  "case_law_sitemap_touches",
   // Coverage populations: owner-maintained, read only by the public-law reader.
   "case_law_population_counts",
   "case_law_population_deltas",

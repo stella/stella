@@ -18,7 +18,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { CitationChip } from "@/components/references/citation-chip";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 
@@ -289,7 +289,7 @@ export const ReaderAnswerCard = ({
           )}
           {languagePicker}
           <div className="flex flex-wrap items-center gap-1">
-            <CopyActionButton
+            <CopyControl
               variant="ghost"
               size="sm"
               text={answer.messages

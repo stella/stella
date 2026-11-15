@@ -62,7 +62,8 @@ export const isSkDecisionTitle = (text: string): boolean =>
 /**
  * The formula a court decides under, printed with the title in the same
  * type (`ROZSUDOK` / `V MENE SLOVENSKEJ REPUBLIKY`). It is the court's
- * words, not its title, so it is never part of the `decision-title`.
+ * words, not its title, so it is never part of the `decision-title`; every
+ * Slovak reader gives it the `opening-formula` role.
  */
 const OPENING_FORMULAE: ReadonlySet<string> = new Set([
   "vmeneslovenskejrepubliky",
@@ -71,6 +72,15 @@ const OPENING_FORMULAE: ReadonlySet<string> = new Set([
 
 export const isSkOpeningFormula = (text: string): boolean =>
   OPENING_FORMULAE.has(normalized(text));
+
+/**
+ * The state a court decides for, printed alone above the title
+ * (`SLOVENSKÁ REPUBLIKA`). Read as the opening formula only above the title:
+ * the same words on a line of their own further on are a party or a
+ * sentence the layout broke there.
+ */
+export const isSkStateLine = (text: string): boolean =>
+  normalized(text) === "slovenskárepublika";
 
 /**
  * A row of the box the court portal prints at the head of every decision

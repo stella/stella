@@ -22,7 +22,8 @@ use tokio::sync::{Mutex, mpsc};
 use super::protocol::{ProbeFailure, ProbedModel};
 use super::*;
 use crate::runner_protocol::{
-  FsPolicy, HarnessCapability, McpBinding, McpToken, NetworkPolicy, RunPolicy,
+  FsPolicy, HarnessCapability, McpBinding, McpToken, NetworkPolicy, ReasoningEffort,
+  RunPolicy,
 };
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -212,7 +213,10 @@ fn run_start(model: &str) -> SidecarRunStart {
     launch: HarnessLaunchSettings::default(),
     workspace_dir: "/data/runs/1".to_owned(),
     cache_dir: "/data/agent-package-cache".to_owned(),
+    unreadable_paths: vec!["/data/runs".to_owned(), "/data".to_owned()],
+    step_output_dir: "/data/runs/1.step-outputs".to_owned(),
     model: model.to_owned(),
+    reasoning_effort: None,
     instructions: String::new(),
     messages: vec![
       json!({ "role": "user", "content": "Find the lease decision." })
@@ -223,7 +227,7 @@ fn run_start(model: &str) -> SidecarRunStart {
     attachments: Vec::new(),
     skill_folders: Vec::new(),
     tool_path: Vec::new(),
-    harness_session_id: None,
+    session: SidecarRunSession::Fresh,
     policy: RunPolicy {
       network: NetworkPolicy::Open,
       fs: FsPolicy::Workspace,
@@ -298,6 +302,7 @@ fn ended(outcome: RunOutcome) -> SidecarRunOutput {
   SidecarRunOutput::Finished {
     outcome,
     harness_session_id: None,
+    harness_boundary: None,
   }
 }
 
@@ -334,6 +339,7 @@ fn a_run_streams_its_outputs_in_order_and_finishes() {
         SidecarRunOutput::Finished {
           outcome: RunOutcome::Completed,
           harness_session_id: Some("thread-a".to_owned()),
+          harness_boundary: Some("turn-1".to_owned()),
         },
       ]
     );
@@ -821,6 +827,41 @@ fn a_holder_that_dies_fails_its_runs_and_the_next_run_starts_a_new_one() {
 }
 
 #[test]
+fn a_holder_that_dies_reports_its_background_work_ended() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut counts = sidecar.watch_background().unwrap();
+    let mut crashed = sidecar.start_run(run_start("background-crash")).unwrap();
+    let _delivered = deliveries(&mut crashed).await;
+    let reported = counts.recv().await.unwrap();
+    assert_eq!(reported.count, 2);
+    // The holder's kept processes went with it: nothing keeps showing them.
+    let ended = counts.recv().await.unwrap();
+    assert_eq!(
+      (ended.run_id.as_str(), ended.count),
+      (reported.run_id.as_str(), 0)
+    );
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
+fn a_background_count_reported_before_the_watcher_reaches_it() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut waiting = sidecar.start_run(run_start("background-wait")).unwrap();
+    // The holder reported the count before this event, on the same line.
+    let _event = next(&mut waiting).await;
+    let mut counts = sidecar.watch_background().unwrap();
+    let reported = counts.recv().await.unwrap();
+    assert_eq!(reported.count, 2);
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
 fn a_run_start_the_holder_finds_invalid_fails_that_run_and_no_other() {
   let fixture = Fixture::new();
   with_children(async {
@@ -1151,11 +1192,17 @@ fn probe_outcomes_become_runner_reports() {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
         is_default: true,
+        reasoning_efforts: vec![
+          ReasoningEffort::High,
+          ReasoningEffort::Low,
+          ReasoningEffort::High,
+        ],
       },
       ProbedModel {
         id: "gpt-test".to_owned(),
         label: "Again".to_owned(),
         is_default: false,
+        reasoning_efforts: Vec::new(),
       },
     ],
   };
@@ -1169,6 +1216,8 @@ fn probe_outcomes_become_runner_reports() {
       models: vec![HarnessModel {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
+        is_default: true,
+        reasoning_efforts: vec![ReasoningEffort::Low, ReasoningEffort::High],
       }],
     })
   );
@@ -1309,6 +1358,10 @@ fn stand_in_holder() {
 /// - `flood`: 300 events at once;
 /// - `flood-later`: an event, then 300 more on the first approval;
 /// - `crash`: an event, then the process exits without cleaning up;
+/// - `background-crash`: an event and a background task count of 2, then
+///   the process exits without cleaning up;
+/// - `background-wait`: a background task count of 2, then an event, then
+///   nothing until it is cancelled;
 /// - `garbage`: a line that is not JSON.
 ///
 /// A launch with `processGrant` first reports the stand-in's own process id
@@ -1530,12 +1583,15 @@ mod stand_in {
     }
   }
 
+  /// A run's end; a completed one names where its turn ended, as a holder's
+  /// does.
   fn finished(run_id: &str, outcome: &str, session: Option<&str>) -> Value {
     json!({
       "type": "run.finished",
       "runId": run_id,
       "outcome": outcome,
       "harnessSessionId": session,
+      "harnessBoundary": (outcome == "completed").then_some("turn-1"),
     })
   }
 
@@ -1580,6 +1636,17 @@ mod stand_in {
       }
       "crash" => {
         emit(held, run_id, event).await;
+        std::process::exit(3);
+      }
+      "background-wait" => {
+        let count = json!({ "type": "background.tasks", "runId": run_id, "count": 2 });
+        write(held, &count.to_string()).await;
+        emit(held, run_id, event).await;
+      }
+      "background-crash" => {
+        emit(held, run_id, event).await;
+        let count = json!({ "type": "background.tasks", "runId": run_id, "count": 2 });
+        write(held, &count.to_string()).await;
         std::process::exit(3);
       }
       _ => {
@@ -1696,6 +1763,21 @@ mod stand_in {
           for _ in 0..300 {
             emit(held, &run_id, event.clone()).await;
           }
+        }
+      }
+      "run.input" => {
+        // A running turn takes every message it is steered with.
+        if held.runs.get(&run_id).is_some_and(|run| !run.finished) {
+          let taken = json!({
+            "type": "run.event",
+            "runId": run_id,
+            "chunk": {
+              "type": "CUSTOM",
+              "name": "stella.run-input",
+              "value": { "inputId": message["inputId"], "status": "accepted" },
+            },
+          });
+          emit(held, &run_id, taken).await;
         }
       }
       "run.answer" => {

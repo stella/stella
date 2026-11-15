@@ -186,7 +186,12 @@ export const InspectorTabHeader = ({
                 >
                   ·
                 </span>
-                <span className="flex max-w-full min-w-0">{matter}</span>
+                {/* On one line the matter keeps its own width (up to half
+                    the row) and the name gives way, so a long file name
+                    never squeezes the matter down to its first letter. */}
+                <span className="flex max-w-full min-w-0 md:max-w-1/2 md:shrink-0">
+                  {matter}
+                </span>
               </>
             )}
           </div>

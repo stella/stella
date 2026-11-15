@@ -3,8 +3,11 @@ import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
+import { REVIEW_STATUS_DECISION } from "@stll/api-contract/review-decision";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { DOCUMENT_REVIEW_DECISION_REASON_SETTING } from "@/api/lib/document-review/run-contract";
+import { findingDecisionHistoryMigrations } from "@/api/tests/finding-decision-history-migrations";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import { DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL } from "../../db/document-review-finding-decision-backfill";
@@ -251,7 +254,7 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
         await db.transaction(async (tx) => {
           for (const folder of [
             "20261028130100_document_review_finding_decision_history",
-            "20261111230000_document_review_finding_decision_trigger",
+            ...findingDecisionHistoryMigrations(),
           ]) {
             for (const statement of await migrationIn(folder, schema)) {
               await tx.execute(sql.raw(statement));
@@ -329,12 +332,13 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
               'accepted', '${decider}', '2026-05-01T00:00:00Z')
           `);
         });
-        // Ordered by moment: the reopening carries its own clock, later than
-        // both stamped decisions.
+        // In the order the decision changed: the second acceptance is stamped
+        // before the reopening's own clock, and still follows it, so the
+        // history ends at the row's decision.
         expect(await history(reviewed)).toEqual([
           expect.objectContaining({ decision: "accepted", actorId: decider }),
-          expect.objectContaining({ decision: "accepted", actorId: decider }),
           expect.objectContaining({ decision: null, actorId: reopener }),
+          expect.objectContaining({ decision: "accepted", actorId: decider }),
         ]);
 
         // So the repair has nothing left to do, whatever wrote the rows.
@@ -343,6 +347,119 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
             connectionIn(client, schema),
           ),
         ).toEqual({ type: "complete" });
+      } finally {
+        await client.unsafe(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+      }
+    });
+  });
+
+  // The trigger's SQL spells the finding words' shared decisions out; this
+  // runs the function production runs (every migration that defines it) for
+  // each entry of the one map, so the two cannot drift apart.
+  test("the trigger reads each finding decision as the shared map does, with the reason given", async () => {
+    if (databaseUrl === undefined) {
+      panic("DATABASE_URL required");
+    }
+
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { sql: client, db } = openClient();
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const schema = `finding_decision_map_${suffix}`;
+      const workspace = Bun.randomUUIDv7();
+      const finding = Bun.randomUUIDv7();
+      const decider = `decider_${suffix}`;
+
+      await client.unsafe(`CREATE SCHEMA ${schema}`);
+      try {
+        await client.unsafe(`SET search_path TO ${schema}, public`);
+        await client.unsafe(`
+          CREATE TABLE "user" (id text PRIMARY KEY);
+          CREATE TABLE document_review_findings (
+            id uuid PRIMARY KEY,
+            workspace_id uuid NOT NULL,
+            decision text NOT NULL,
+            decided_by text,
+            decided_at timestamptz
+          );
+          CREATE VIEW stella_authorized_workspaces AS
+            SELECT NULL::uuid AS authorized_workspace_id WHERE false;
+          INSERT INTO "user" VALUES ('${decider}');
+          INSERT INTO document_review_findings VALUES
+            ('${finding}', '${workspace}', 'open', NULL, NULL);
+        `);
+        await db.transaction(async (tx) => {
+          for (const folder of [
+            "20261028130100_document_review_finding_decision_history",
+            ...findingDecisionHistoryMigrations(),
+          ]) {
+            for (const statement of await migrationIn(folder, schema)) {
+              await tx.execute(sql.raw(statement));
+            }
+          }
+        });
+
+        const latest = async () =>
+          (
+            await client<{ decision: string | null; reason: string | null }[]>`
+              SELECT decision, reason FROM document_review_finding_decisions
+               WHERE finding_id = ${finding}
+               ORDER BY created_at DESC, id DESC LIMIT 1`
+          ).at(0);
+
+        // Every word, each taken from a different one so the trigger fires,
+        // with a reason given for the change.
+        let current = "open";
+        for (const [stored, decision] of [
+          ...Object.entries(REVIEW_STATUS_DECISION.finding).filter(
+            ([word]) => word !== "open",
+          ),
+          ["open", REVIEW_STATUS_DECISION.finding.open],
+        ] as const) {
+          expect(stored).not.toBe(current);
+          const reason = `Because ${stored}`;
+          await client.begin(async (tx) => {
+            await tx.unsafe(
+              `SELECT set_config('${DOCUMENT_REVIEW_DECISION_REASON_SETTING}', '${reason}', true)`,
+            );
+            await tx.unsafe(
+              stored === "open"
+                ? `UPDATE document_review_findings
+                      SET decision = 'open', decided_by = NULL, decided_at = NULL
+                    WHERE id = '${finding}'`
+                : `UPDATE document_review_findings
+                      SET decision = '${stored}', decided_by = '${decider}', decided_at = clock_timestamp()
+                    WHERE id = '${finding}'`,
+            );
+          });
+          expect(await latest()).toEqual({ decision, reason });
+          current = stored;
+        }
+
+        // A decision stamped ahead of the database clock, then reopened: the
+        // reopening still comes last, so the history ends where the row is.
+        await client.unsafe(`
+          UPDATE document_review_findings
+             SET decision = 'dismissed', decided_by = '${decider}',
+                 decided_at = clock_timestamp() + interval '1 hour'
+           WHERE id = '${finding}'
+        `);
+        await client.unsafe(`
+          UPDATE document_review_findings
+             SET decision = 'open', decided_by = NULL, decided_at = NULL
+           WHERE id = '${finding}'
+        `);
+        expect(await latest()).toEqual({ decision: null, reason: null });
+
+        // A change made without a reason carries none.
+        await client.unsafe(`
+          UPDATE document_review_findings
+             SET decision = 'accepted', decided_by = '${decider}', decided_at = clock_timestamp()
+           WHERE id = '${finding}'
+        `);
+        expect(await latest()).toEqual({
+          decision: REVIEW_STATUS_DECISION.finding.accepted,
+          reason: null,
+        });
       } finally {
         await client.unsafe(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
       }

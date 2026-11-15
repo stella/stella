@@ -25,7 +25,7 @@ const { WebReaderPresentationProvider } =
 const { ReaderAnswerCard } = await import("./reader-answer-card");
 // Load the real lazy renderer before assertions use its parsed Markdown.
 await import("@/components/ai-elements/message-response");
-const { CopyActionButton } = await import("@/components/copy-action-button");
+const { CopyControl } = await import("@/components/copy-control");
 const { resolveReaderAnswerCitation } =
   await import("./reader-answer-citation.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
@@ -601,7 +601,7 @@ test("copy uses the quiet card action variant and size", () => {
     if (!isValidElement(node)) {
       return;
     }
-    if (node.type === CopyActionButton) {
+    if (node.type === CopyControl) {
       copies.push(node.props);
     }
     if (

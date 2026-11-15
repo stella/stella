@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 1,
-  "reason": "A replayed review completion lowers the run's stored withheld-fix count. It is terminal bookkeeping on the run row audited at create, the same as the completing update beside it."
-}

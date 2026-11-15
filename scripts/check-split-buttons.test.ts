@@ -34,6 +34,8 @@ test("excludes plain dropdowns, independent controls and chevron navigation", ()
     `<div>${primary}<Menu><MenuTrigger>Format<ChevronDownIcon /></MenuTrigger></Menu></div>`,
     `<div>${primary}<Menu><MenuTrigger><span>{formatLabel}</span><ChevronDownIcon /></MenuTrigger></Menu></div>`,
     `<div>${primary}<Menu><MenuTrigger><PlusIcon /><ChevronDownIcon /></MenuTrigger></Menu></div>`,
+    `<div>${primary}<Popover><PopoverTrigger render={<Button />}><CopyControlFeedback control={copy} icon={CopyIcon} /><ChevronDownIcon /></PopoverTrigger></Popover></div>`,
+    `<div>${primary}<Menu><MenuTrigger><FormatPicker label={formatLabel} /><ChevronDownIcon /></MenuTrigger></Menu></div>`,
     `<div><InputGroup><Button onClick={clear} /></InputGroup>${chevronMenu}</div>`,
     `<div><div>${primary}</div>${chevronMenu}</div>`,
     `<Toolbar>${primary}<ToolbarGroup>${chevronMenu}</ToolbarGroup></Toolbar>`,

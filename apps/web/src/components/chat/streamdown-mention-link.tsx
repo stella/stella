@@ -9,6 +9,10 @@ import {
   parseCanonicalChatSourceCitationHref,
 } from "@stll/api-contract";
 import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
+import {
+  isReferenceHref,
+  referenceFromHref,
+} from "@stll/api-contract/chat-reference-href";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { isFolioBlockId } from "@stll/folio-react";
 import { MailIcon } from "@stll/ui/icons";
@@ -38,10 +42,6 @@ import {
   MarkdownReferenceChip,
   ReferenceFileTypeIcon,
 } from "@/components/references/reference-chip";
-import {
-  isReferenceHref,
-  referenceFromHref,
-} from "@/components/references/reference.logic";
 import { env } from "@/env";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import { useVerifiedEmailCitationTarget } from "@/hooks/use-verified-email-citation-target";

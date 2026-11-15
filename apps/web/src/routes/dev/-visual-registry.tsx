@@ -105,6 +105,13 @@ const visualLoaders = {
       return { default: ButtonLabelPlayground };
     },
   },
+  "menu-commits": {
+    load: async () => {
+      const { MenuCommitsPlayground } =
+        await import("./-components/menu-commits-playground");
+      return { default: MenuCommitsPlayground };
+    },
+  },
   "chat-composer-reference": {
     load: async () => {
       const { ChatComposerReferencePlayground } =
@@ -166,6 +173,13 @@ const visualLoaders = {
       const { ChatLinkIconsPlayground } =
         await import("./-components/chat-link-icons-playground");
       return { default: ChatLinkIconsPlayground };
+    },
+  },
+  "chat-follow-ups": {
+    load: async () => {
+      const { ChatFollowUpsPlayground } =
+        await import("./-components/chat-follow-ups-playground");
+      return { default: ChatFollowUpsPlayground };
     },
   },
   "ask-user": {

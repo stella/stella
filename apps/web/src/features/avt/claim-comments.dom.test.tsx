@@ -427,7 +427,7 @@ test("a comment being written on one claim is discarded when another claim is se
               facts: [],
             },
           }}
-          stepper={{ current: null, total: 0, onPrev: null, onNext: null }}
+          recheckRun={{ state: "idle", start: () => undefined }}
           workspaceId={workspaceId}
         />
       </>

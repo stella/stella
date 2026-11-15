@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds the opening-formula paragraph role to the vocabulary; only the Czech and Slovak readers that emit it change their output, and each carries its own parser version bump.
 // parser-output-unchanged: persisted readers and ingestion writers accept head matter after the body and report late blocks; parsers emit the same output, and writers now store such an AST instead of refusing it.
 // parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-us carries its parser version bump; main already gives sk-courts unique identities; every other enrolled fixture output repeats none (replay conformance asserts it).
 // parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
@@ -117,6 +118,13 @@ export type HeadingBlock = {
 
 export const PARAGRAPH_ROLES = [
   "case-number",
+  /**
+   * The formula a court decides under and the state it decides for, printed
+   * beside the decision's title (`ČESKÁ REPUBLIKA`, `JMÉNEM REPUBLIKY`,
+   * `V MENE SLOVENSKEJ REPUBLIKY`). The court's words as printed, neither
+   * a heading nor the preamble's prose.
+   */
+  "opening-formula",
   "intro",
   "history",
   "argumentation",
@@ -1134,6 +1142,7 @@ const hasUniqueBlockIdentities = (blocks: readonly Block[]): boolean => {
 /** Every paragraph role explicitly declares whether it starts the decision body. */
 const PARAGRAPH_STARTS_BODY = {
   "case-number": false,
+  "opening-formula": false,
   intro: false,
   history: false,
   argumentation: true,

@@ -20,6 +20,7 @@ import {
   DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS,
   DESKTOP_RUNNER_LIMITS,
+  DESKTOP_RUNNER_LINKED_FOLDER_STATES,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   type DESKTOP_RUNNER_MESSAGE_ROLES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
@@ -27,6 +28,7 @@ import {
   DESKTOP_RUNNER_POLICY_REASONS,
   DESKTOP_RUNNER_POLICY_VIOLATION_CODE,
   DESKTOP_RUNNER_PROTOCOL,
+  DESKTOP_RUNNER_REASONING_EFFORTS,
   DESKTOP_RUNNER_REJECT_REASONS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
   DESKTOP_RUNNER_SERVER_MESSAGE,
@@ -40,6 +42,7 @@ import {
   desktopRunnerHarnessReportSchema,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
+  knownReasoningEfforts,
   parseDesktopRunnerFrame,
 } from "./desktop-runner";
 import fixtures from "./desktop-runner.fixtures.json";
@@ -86,11 +89,18 @@ const normalized = (lists: Record<string, readonly string[]>) =>
     ]),
   );
 
-const variantTypes = (
-  options: readonly {
-    readonly entries: { readonly type: { literal: string } };
-  }[],
-) => sorted(options.map(({ entries }) => entries.type.literal));
+type VariantOption =
+  | { readonly entries: { readonly type: { literal: string } } }
+  /** A message whose shape a second key (such as its outcome) decides. */
+  | { readonly options: readonly VariantOption[] };
+
+const typesOf = (option: VariantOption): string[] =>
+  "entries" in option
+    ? [option.entries.type.literal]
+    : option.options.flatMap(typesOf);
+
+const variantTypes = (options: readonly VariantOption[]) =>
+  sorted(new Set(options.flatMap(typesOf)));
 
 type Hello = Extract<DesktopRunnerDesktopMessage, { type: "hello" }>;
 
@@ -134,10 +144,12 @@ describe("desktop runner fixtures", () => {
       networkPolicies: [...DESKTOP_RUNNER_NETWORK_POLICIES],
       fsPolicies: [...DESKTOP_RUNNER_FS_POLICIES],
       approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
+      reasoningEfforts: [...DESKTOP_RUNNER_REASONING_EFFORTS],
       desktopMessageTypes: Object.values(DESKTOP_RUNNER_DESKTOP_MESSAGE),
       serverMessageTypes: Object.values(DESKTOP_RUNNER_SERVER_MESSAGE),
       answerLimits: DESKTOP_RUNNER_ANSWER_LIMITS,
       folderRestoreOutcomes: [...DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES],
+      linkedFolderStates: [...DESKTOP_RUNNER_LINKED_FOLDER_STATES],
     });
   });
 
@@ -220,12 +232,36 @@ describe("desktop runner fixtures", () => {
         folderRestoreOutcomes: desktop.flatMap((message) =>
           message.type === "folder.restored" ? [message.outcome] : [],
         ),
+        linkedFolderStates: [
+          ...desktop.flatMap((message) =>
+            message.type === "hello"
+              ? message.linkedFolders.map(({ state }) => state)
+              : [],
+          ),
+          ...desktop.flatMap((message) =>
+            message.type === "linked_folders.status"
+              ? message.folders.map(({ state }) => state)
+              : [],
+          ),
+        ],
         networkPolicies: starts.map(({ policy }) => policy.network),
         fsPolicies: starts.map(({ policy }) => policy.fs),
         approvalModes: [
           ...starts.map(({ policy }) => policy.approvals),
           ...reports.flatMap((report) =>
             report.state === "ready" ? report.approvalModes : [],
+          ),
+        ],
+        reasoningEfforts: [
+          ...starts.flatMap(({ reasoningEffort }) =>
+            reasoningEffort === null ? [] : [reasoningEffort],
+          ),
+          ...reports.flatMap((report) =>
+            report.state === "ready"
+              ? report.models.flatMap(
+                  ({ reasoningEfforts }) => reasoningEfforts,
+                )
+              : [],
           ),
         ],
       }),
@@ -243,6 +279,58 @@ describe("desktop runner fixtures", () => {
     const parsed = v.safeParse(desktopRunnerHarnessReportSchema, report);
     expect(parsed.success).toBe(true);
     expect(parsed.output).toMatchObject({ approvalModes: ["ask"] });
+  });
+
+  test("a model reported before reasoning efforts offers none", () => {
+    const parsed = v.safeParse(desktopRunnerHarnessReportSchema, {
+      state: "ready",
+      id: "codex",
+      version: "0.48.0",
+      capabilities: ["approvals"],
+      models: [{ id: "model-large", label: "Large model" }],
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.output).toMatchObject({
+      models: [{ id: "model-large", reasoningEfforts: [] }],
+    });
+  });
+
+  test("a finish from a desktop before boundaries names none", () => {
+    const finished = {
+      type: "run.finished",
+      runId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+      seq: 4,
+      outcome: "completed",
+      harnessSessionId: "session-1",
+    };
+    expect("harnessBoundary" in finished).toBe(false);
+    expect(parsedDesktop(finished)).toMatchObject({ harnessBoundary: null });
+  });
+
+  test("a start queued before fork boundaries resumes its session whole", () => {
+    const fixture =
+      fixtures.valid.server
+        .flatMap((message) =>
+          "harnessForkBoundary" in message &&
+          message.harnessForkBoundary !== null
+            ? [message]
+            : [],
+        )
+        .at(0) ?? panic("no run.start fixture forks a session");
+    const { harnessForkBoundary, ...queued } = fixture;
+    expect(harnessForkBoundary).not.toBeNull();
+    expect(parsedServer(queued)).toMatchObject({
+      harnessSessionId: "session-1",
+      harnessForkBoundary: null,
+    });
+  });
+
+  test("a harness's efforts keep the ones the contract carries, once each, weakest first", () => {
+    expect(knownReasoningEfforts(["high", "turbo", "low", "high"])).toEqual([
+      "low",
+      "high",
+    ]);
+    expect(knownReasoningEfforts([])).toEqual([]);
   });
 
   test("an attached file's path stays in its own folder", () => {

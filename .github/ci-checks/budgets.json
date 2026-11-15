@@ -1144,6 +1144,13 @@
       "p99Seconds": 0,
       "peakRssMiB": 50
     },
+    "Tailwind sources cover class-shipping dependencies": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 3,
+      "p99Seconds": 3,
+      "peakRssMiB": 84
+    },
     "Test staging proof readiness": {
       "minutes": 30,
       "samples": 0,

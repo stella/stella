@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { SKILL_RESOURCE_REFUSAL_CODE } from "@stll/api-contract";
+
 import { agentSkillResources } from "@/api/db/schema";
 import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
@@ -118,6 +120,19 @@ const rewriteSkillResource = createSafeRootHandler(
         new HandlerError({ status: 404, message: "Resource not found" }),
       );
     }
+    // The model reads the whole file in one prompt, so a file stored past
+    // what a model may hold at once is not rewritten.
+    if (
+      resource.content.length > LIMITS.agentSkillResourceModelContextMaxChars
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 413,
+          code: SKILL_RESOURCE_REFUSAL_CODE.tooLargeForAi,
+          message: "This file is too large to rewrite with AI",
+        }),
+      );
+    }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       dataClass: "customer",
@@ -191,7 +206,7 @@ const rewriteSkillResource = createSafeRootHandler(
         }),
       );
     }
-    if (rewritten.length > LIMITS.agentSkillResourceMaxChars) {
+    if (rewritten.length > LIMITS.agentSkillResourceModelContextMaxChars) {
       return Result.err(
         new HandlerError({
           status: 400,

@@ -29,6 +29,7 @@ import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   createCaseLawProvisionStateBackfillTask,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import type { DataExportMaintenanceDependencies } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import { createLegislationExpressionIdBackfill } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { isRecord } from "@/api/lib/type-guards";
@@ -36,6 +37,7 @@ import type {
   GatedTestClientScope,
   GatedTestDb,
 } from "@/api/tests/gated-test-database";
+import { createLeasedSchedulerJobFixture } from "@/api/tests/helpers/leased-scheduler-job";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -601,6 +603,7 @@ export const measureScheduledJobRun = async ({
   openClient,
   jobId,
   task: taskName,
+  dataExportMaintenance,
   admission = QUERY_PERF_ADMISSION,
   now = new Date("2026-01-10T12:00:00Z"),
 }: {
@@ -610,6 +613,7 @@ export const measureScheduledJobRun = async ({
   task: string;
   /** The governor's verdict; a test passes a hold to prove the measurement notices one. */
   admission?: Verdict;
+  dataExportMaintenance?: DataExportMaintenanceDependencies;
   now?: Date;
 }) => {
   const job =
@@ -647,6 +651,7 @@ export const measureScheduledJobRun = async ({
             readVerdict: async () => await Promise.resolve(admission),
           }),
       }),
+      dataExportMaintenance === undefined ? {} : { dataExportMaintenance },
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   // The search configuration is cached for 60 s, and the scheduled jobs run
   // minutes apart, so a production run reads it cold. Every measured run does
@@ -659,7 +664,12 @@ export const measureScheduledJobRun = async ({
       await task(
         asTestRaw<SchedulerTaskContext>({
           db,
-          job: { id: job.id, task: job.task },
+          job: createLeasedSchedulerJobFixture({
+            id: job.id,
+            task: job.task,
+            nextRunAt: now,
+            payload: "payload" in job ? job.payload : null,
+          }),
           payload: "payload" in job ? job.payload : null,
           dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
           runId: createSafeId<"schedulerJobRun">(),

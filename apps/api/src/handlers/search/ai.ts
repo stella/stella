@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  ENTITY_KINDS,
   RESOURCE_TYPE,
   resourceRef,
   toChatResourceHref,
@@ -18,7 +19,10 @@ import {
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
-import { searchProvenanceAnswer } from "@/api/handlers/search/provenance-error";
+import {
+  searchProvenanceAnswer,
+  searchProvenanceError,
+} from "@/api/handlers/search/provenance-error";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { status } from "@/api/http/status";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -35,6 +39,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -936,16 +941,7 @@ export const createSearchSummaryChatThread = async ({
   return { threadId };
 };
 
-const loadSummaryContexts = async ({
-  accessibleWorkspaceIds,
-  grantedScopes,
-  filters,
-  organizationId,
-  userId,
-  search = searchGlobal,
-  selectedWorkspaceIds,
-  scopedDb,
-}: {
+type SummaryContextsOptions = {
   accessibleWorkspaceIds: SafeId<"workspace">[];
   grantedScopes: readonly string[] | undefined;
   filters: Pick<
@@ -963,10 +959,27 @@ const loadSummaryContexts = async ({
   search?: typeof searchGlobal;
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   scopedDb: ScopedDb;
-}) => {
+};
+
+/**
+ * The search summary's ranked, budgeted sources, or the provenance error
+ * that left a hit unreadable.
+ */
+const searchSummaryContexts = async ({
+  accessibleWorkspaceIds,
+  grantedScopes,
+  filters,
+  organizationId,
+  userId,
+  search = searchGlobal,
+  selectedWorkspaceIds,
+  scopedDb,
+}: SummaryContextsOptions): Promise<
+  Result<SearchResultContext[], ArtefactProvenanceDecodeError>
+> => {
   const types = citableSummaryTypes(filters.types);
   if (filters.types.length > 0 && types.length === 0) {
-    return [];
+    return Result.ok([]);
   }
 
   const searchResult = await search(
@@ -988,15 +1001,75 @@ const loadSummaryContexts = async ({
   );
 
   if (searchResult.isErr()) {
-    return searchProvenanceAnswer(searchResult.error);
+    return Result.err(searchResult.error);
   }
-  return await buildSearchResultContexts({
-    hits: searchResult.value.hits,
-    organizationId,
-    accessibleWorkspaceIds,
-    scopedDb,
-  });
+  return Result.ok(
+    await buildSearchResultContexts({
+      hits: searchResult.value.hits,
+      organizationId,
+      accessibleWorkspaceIds,
+      scopedDb,
+    }),
+  );
 };
+
+const loadSummaryContexts = async (options: SummaryContextsOptions) => {
+  const contexts = await searchSummaryContexts(options);
+  if (contexts.isErr()) {
+    return searchProvenanceAnswer(contexts.error);
+  }
+  return contexts.value;
+};
+
+/** A matter search hit with the clipped content the search summary reads. */
+export type MatterSearchContext = SearchResultContext;
+
+/**
+ * The search summary's sources, scoped to one matter the caller already
+ * holds: the same ranked search and the same content budget, limited to the
+ * matter's own files. Callers authorize `workspaceId` before calling.
+ */
+export const loadMatterSearchContexts = async ({
+  accessibleWorkspaceIds,
+  grantedScopes,
+  organizationId,
+  query,
+  scopedDb,
+  userId,
+  workspaceId,
+  search = searchGlobal,
+}: {
+  accessibleWorkspaceIds: SafeId<"workspace">[];
+  grantedScopes: readonly string[] | undefined;
+  organizationId: SafeId<"organization">;
+  query: string;
+  scopedDb: ScopedDb;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+  search?: typeof searchGlobal;
+}): Promise<Result<MatterSearchContext[], HandlerError>> =>
+  (
+    await searchSummaryContexts({
+      accessibleWorkspaceIds,
+      grantedScopes,
+      filters: {
+        editedByUserIds: [],
+        limit: SEARCH_SUMMARY_RESULT_LIMIT,
+        mimeTypes: [],
+        query: query.slice(0, LIMITS.searchQueryMaxLength),
+        // Only the matter's own files: a contact or the matter record must not
+        // take a slot of the result limit before a document that answers.
+        types: [...ENTITY_KINDS],
+        updatedFrom: undefined,
+        updatedTo: undefined,
+      },
+      organizationId,
+      userId,
+      search,
+      selectedWorkspaceIds: [workspaceId],
+      scopedDb,
+    })
+  ).mapError(searchProvenanceError);
 
 const toModelSearchResultContext = (context: SearchResultContext) => ({
   number: context.number,

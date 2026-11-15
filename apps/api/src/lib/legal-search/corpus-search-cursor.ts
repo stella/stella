@@ -65,24 +65,6 @@ import { isUuid } from "@stll/uuid-codec";
  * `none`, `sort` is one of `SEARCH_SORTS`, and `id` is one segment — the
  * corpus addresses documents by uuid, so the grammar is fixed-width in its
  * metadata and needs no escaping rule.
- *
- * REMOVAL CONDITION: delete `legacy` handling in `decodeCorpusSearchCursor`
- * in the release after the next one, once no replica issuing a shorter form
- * can still be serving.
- *
- * Three shorter forms were issued to clients before this one, and a rolling
- * deploy hands them back mid-pagination, so all are read rather than
- * rejected. Their identity is `none` and their order is `relevance` soundly,
- * not as a courtesy: no release issuing them could run the expanded query or
- * any order but relevance, so that is exactly what each page was built with.
- *
- *   - `<score>:<id>` predates windows, expansion and sorting, and window 0 is
- *     where a scan with no window began.
- *   - `<score>:<windowStart>:<id>` predates expansion and sorting, so its
- *     window is read as written.
- *   - `<score>:<windowStart>:<dictionary>:<id>` predates sorting only.
- *
- * One metadata segment therefore means a window rank and nothing else.
  */
 
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -91,7 +73,6 @@ import {
   type CorpusIndexRankingMode,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
-  DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
@@ -101,7 +82,6 @@ import {
 } from "@/api/lib/legal-search/index-naming";
 import {
   type ExpansionDictionaryIdentity,
-  NO_EXPANSION_DICTIONARY_IDENTITY,
   parseExpansionDictionaryIdentity,
   sameExpansionDictionary,
   serializeExpansionDictionaryIdentity,
@@ -370,7 +350,7 @@ type CursorRanking = Pick<
   "windowStart" | "sort" | "rankingMode" | "excludedGroups"
 > & {
   dictionary: ExpansionDictionaryIdentity;
-  target?: string | null;
+  target: string | null;
   phase?: CorpusSearchPhase | undefined;
 };
 
@@ -512,47 +492,8 @@ export const decodeCorpusSearchCursor = (
   if (id === undefined || !isUuid(id)) {
     return null;
   }
-  const cursorOf = ({
-    excludedGroups = [],
-    target = null,
-    ...ranking
-  }: CursorRanking): CorpusSearchCursor => ({
-    ...ranking,
-    id,
-    score: decoded.score,
-    target,
-    ...(excludedGroups.length === 0 ? {} : { excludedGroups }),
-  });
 
   switch (segments.length) {
-    // legacy: `<score>:<id>`.
-    case 1: {
-      return cursorOf({
-        dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
-        windowStart: 0,
-        sort: DEFAULT_SEARCH_SORT,
-      });
-    }
-    // legacy: `<score>:<windowStart>:<id>`.
-    case 2: {
-      const windowStart = parseWindowStart(segments.at(0) ?? "");
-      return windowStart === null
-        ? null
-        : cursorOf({
-            dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
-            windowStart,
-            sort: DEFAULT_SEARCH_SORT,
-          });
-    }
-    // legacy: `<score>:<windowStart>:<dictionary>:<id>`.
-    case 3: {
-      const windowStart = parseWindowStart(segments.at(0) ?? "");
-      const dictionary = parseExpansionDictionaryIdentity(segments.at(1) ?? "");
-      if (windowStart === null || dictionary === null) {
-        return null;
-      }
-      return cursorOf({ dictionary, windowStart, sort: DEFAULT_SEARCH_SORT });
-    }
     // The current form, with any ordered subset of the four optional segments.
     case 4:
     case 5:
@@ -560,11 +501,20 @@ export const decodeCorpusSearchCursor = (
     case 7:
     case 8: {
       const ranking = parseCurrentForm(segments.slice(0, -1));
-      return ranking === null ? null : cursorOf(ranking);
+      if (ranking === null) {
+        return null;
+      }
+      const { excludedGroups = [], ...rest } = ranking;
+      return {
+        ...rest,
+        id,
+        score: decoded.score,
+        ...(excludedGroups.length === 0 ? {} : { excludedGroups }),
+      };
     }
-    // An id carrying a colon is not a cursor this service issued: the grammar
-    // above spends every segment it defines, so a longer payload is malformed
-    // rather than an id with a separator in it.
+    // The grammar above spends every segment it defines. A shorter payload
+    // lacks one every page carries, and a longer one is an id with a
+    // separator in it: neither is a cursor this service issued.
     default: {
       return null;
     }

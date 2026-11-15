@@ -193,8 +193,10 @@ describe("approving a desktop challenge without a click", () => {
       }),
     "the status is older than the skew window": () =>
       signedStatus(PENDING, { ...SIGNED_BY_THE_LOCAL_APP, skewSeconds: -31 }),
+    // Signed in whole seconds: one second past the window is exactly the
+    // window again once the check runs in the next second, so stay clear.
     "the status is ahead of the skew window": () =>
-      signedStatus(PENDING, { ...SIGNED_BY_THE_LOCAL_APP, skewSeconds: 31 }),
+      signedStatus(PENDING, { ...SIGNED_BY_THE_LOCAL_APP, skewSeconds: 35 }),
     "the app no longer waits for it": () =>
       signedStatus(CONNECTED, SIGNED_BY_THE_LOCAL_APP),
   } as const satisfies Record<string, LoopbackReply>;

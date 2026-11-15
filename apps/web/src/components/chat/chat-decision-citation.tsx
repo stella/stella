@@ -7,6 +7,7 @@ import { panic } from "better-result";
 
 import { createCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import type { CitedDecisionParagraph } from "@stll/api-contract/chat-reference-href";
 
 import { answerQuoteChecksByKey } from "@/components/chat/answer-quote.logic";
 import type { AnswerQuoteCheck } from "@/components/chat/answer-quote.logic";
@@ -30,7 +31,6 @@ import { useExternalSourceStore } from "@/components/chat/external-source-store"
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { CitationChip } from "@/components/references/citation-chip";
 import { inlineDecisionCitationPresentation } from "@/components/references/decision-citation-chip.logic";
-import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
 import { publicCaseLawPageCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";

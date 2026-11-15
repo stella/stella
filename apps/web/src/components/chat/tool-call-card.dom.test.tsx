@@ -72,3 +72,123 @@ test("a running tool is not announced as waiting", () => {
     screen.queryByLabelText(messages.chat.toolCall.statusWaiting),
   ).toBeNull();
 });
+
+test("a call its turn cut off reads as stopped, not as a failure", () => {
+  const queryClient = new QueryClient();
+  const { container } = render(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="ar" messages={messages}>
+        <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
+          <ToolCallCard
+            activeOrganizationId="test-org"
+            part={{
+              type: "tool-call",
+              id: "stopped-search",
+              name: "search-chat-history",
+              arguments: '{"query":"synthetic"}',
+              input: { query: "synthetic" },
+              state: "error",
+            }}
+          />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  expect(container.innerHTML.includes(messages.chat.toolCall.interrupted)).toBe(
+    true,
+  );
+  expect(container.innerHTML.includes("bg-destructive")).toBe(false);
+});
+
+test("a connector call that failed with a plain-text error reads as failed, not as stopped", () => {
+  const queryClient = new QueryClient();
+  const { container } = render(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="ar" messages={messages}>
+        <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
+          <ToolCallCard
+            activeOrganizationId="test-org"
+            part={{
+              type: "tool-call",
+              id: "failed-connector",
+              name: "mcp__synthetic__lookup",
+              arguments: '{"query":"synthetic"}',
+              input: { query: "synthetic" },
+              output: "Connection refused.",
+              state: "error",
+            }}
+          />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  expect(container.innerHTML.includes(messages.chat.toolCall.failed)).toBe(
+    true,
+  );
+  expect(container.innerHTML.includes(messages.chat.toolCall.interrupted)).toBe(
+    false,
+  );
+});
+
+test("a coding agent's step its turn cut off reads as stopped, not as failed", () => {
+  const queryClient = new QueryClient();
+  const { container } = render(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="ar" messages={messages}>
+        <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
+          <ToolCallCard
+            activeOrganizationId="test-org"
+            part={{
+              type: "tool-call",
+              id: "stopped-command",
+              name: "command_execution",
+              arguments: '{"command":"bun test"}',
+              input: { command: "bun test" },
+              output: { status: "interrupted" },
+              state: "error",
+            }}
+          />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  expect(container.innerHTML.includes(messages.chat.toolCall.interrupted)).toBe(
+    true,
+  );
+  expect(container.innerHTML.includes("bg-destructive")).toBe(false);
+});
+
+test("a coding agent's step that reports it failed reads as failed, not as stopped", () => {
+  const queryClient = new QueryClient();
+  const { container } = render(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="ar" messages={messages}>
+        <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
+          <ToolCallCard
+            activeOrganizationId="test-org"
+            part={{
+              type: "tool-call",
+              id: "failed-command",
+              name: "command_execution",
+              arguments: '{"command":"bun test"}',
+              input: { command: "bun test" },
+              output: { status: "failed" },
+              state: "error",
+            }}
+          />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  expect(container.innerHTML.includes(messages.chat.toolCall.failed)).toBe(
+    true,
+  );
+  expect(container.innerHTML.includes(messages.chat.toolCall.interrupted)).toBe(
+    false,
+  );
+  expect(container.innerHTML.includes("bg-destructive")).toBe(true);
+});

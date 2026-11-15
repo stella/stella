@@ -40,7 +40,7 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { COMMUNITY_CHANNELS } from "@/components/feedback-community-items";
 import {
   buildFeedbackRequestBody,
@@ -427,7 +427,7 @@ const FeedbackReceipt = ({ onClose, response }: FeedbackReceiptProps) => {
               {response.receipt}
             </TruncatedText>
           </div>
-          <CopyActionButton
+          <CopyControl
             iconClassName="size-4"
             iconOnly
             label={t("feedback.copyReceipt")}

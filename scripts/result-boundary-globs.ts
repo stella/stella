@@ -14,6 +14,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
   "apps/api/src/mcp/**/*.{ts,tsx}",
   "apps/web/src/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.{ts,tsx}",
+  "apps/skill-runner/src/**/*.{ts,tsx}",
   "packages/*/src/**/*.{ts,tsx}",
 ] as const;
 
@@ -56,6 +57,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/outlook/src/i18n/**/*.{ts,tsx}",
   "apps/outlook/src/lib/oauth/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.ts",
+  "apps/skill-runner/src/**/*.ts",
   "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts",
@@ -71,6 +73,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/bilingual-translations/**/*.ts",
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
+  "apps/api/src/handlers/conflict-checks/**/*.ts",
+  "apps/api/src/lib/conflict-check/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
   "apps/api/src/handlers/client-invoices/**/*.ts",
   "apps/api/src/handlers/desktop-feature-access/**/*.ts",
@@ -103,6 +107,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/organization-settings/**/*.ts",
   "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
+  "apps/api/src/handlers/data-exports/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",
   "apps/api/src/handlers/saved-time-narratives/**/*.ts",
   "apps/api/src/handlers/saved-searches/**/*.ts",
@@ -127,9 +132,11 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/billing/**/*.ts",
   "apps/api/src/lib/clauses/**/*.ts",
   "apps/api/src/lib/conditions/**/*.ts",
+  "apps/api/src/lib/data-export/**/*.ts",
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
+  "apps/api/src/lib/queue/**/*.ts",
   "apps/api/src/lib/imports/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/email/correspondence/**/*.ts",
@@ -137,6 +144,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/extraction-runs/**/*.ts",
   "apps/api/src/lib/feature-access/**/*.ts",
   "apps/api/src/lib/kill-switches/**/*.ts",
+  "apps/api/src/lib/workspaces/legal-holds/**/*.ts",
   "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/github/**/*.ts",
@@ -197,6 +205,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/inbox/**/*.{ts,tsx}",
   "apps/web/src/features/knowledge/**/*.{ts,tsx}",
   "apps/web/src/features/my-week/**/*.{ts,tsx}",
+  "apps/web/src/features/sharepoint/**/*.{ts,tsx}",
   "apps/web/src/features/time-review/**/*.{ts,tsx}",
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
@@ -349,18 +358,28 @@ export const RESULT_BOUNDARY_GLOBS = [
   // append/read/close failure only from a rejection, and the throw is what
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
+  // Wraps that StreamDurability adapter for a chat turn: the SDK still reads a
+  // delivery failure only from a rejection, now carrying its AI error kind.
+  "apps/api/src/handlers/chat/chat-delivery-failure.ts",
   // Drizzle rolls back transaction callbacks through rejection; returning a
   // Result would commit their writes instead of preserving the original refusal.
   "apps/api/src/lib/db/transaction-abort.ts",
   "apps/api/src/lib/workflow-queue.ts",
+  // Queue worker entry point: BullMQ consumes the job's rejection, and the
+  // run turns every failure into the export row's state.
+  "apps/api/src/handlers/data-exports/data-export-worker.ts",
+  // An async generator: its consumer learns that a streamed entry ended at
+  // the wrong length only from the iteration rejecting.
+  "apps/api/src/handlers/data-exports/zip-writer.ts",
   // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
   // reservation callbacks whose rejection rolls back the kickoff transaction.
   "apps/api/src/lib/rate-limit/queued-action-admission.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
   "apps/api/src/handlers/visual-sandbox/**",
-  // Lambda invokes this entry point and reports a failure through rejection.
+  // Lambda invokes these entry points and reports a failure through rejection.
   "apps/visual-preview/src/handler.ts",
+  "apps/skill-runner/src/handler.ts",
   // Web worker entry modules. The browser, not our code, invokes the message
   // handler, and a failure has to travel back over `postMessage` instead of
   // returning to a caller that could read a `Result`.
@@ -523,6 +542,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
     reason:
       "Chrome extension worker and popup: chrome.* APIs fail by rejection and the injected page script cannot import better-result; the worker turns failures into protocol error codes at its message boundary. Enrol once chrome.* calls sit behind Result.tryPromise.",
     unit: "apps/extension/src/entrypoints",
+  },
+  {
+    reason:
+      "Chrome extension offscreen document: its chrome.runtime message listener is the runtime boundary, answering the worker with typed reads. Enrol together with apps/extension/src/entrypoints.",
+    unit: "apps/extension/src/entrypoints/offscreen",
   },
   {
     reason:

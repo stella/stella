@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-uodo] only reads signature lines by title and name, which the data-protection reader does not call.
+// parser-output-unchanged: [pl-uodo] the data-protection reader calls only the recital line reading, which the instruction and authority-ruling readings leave as it was.
 /**
  * How a Polish decision names its own parts: the operative verbs its ruling
  * opens with, the reasons heading, the recital before the ruling, the closing
@@ -185,6 +185,90 @@ const POLISH_OPERATIVE_WORD = new RegExp(
  */
 export const containsPlOperativeVerb = (text: string): boolean =>
   POLISH_OPERATIVE_WORD.test(grammarLine(text));
+
+/**
+ * The first person singular an authority rules in when it signs its own
+ * letter (`stwierdzam`, `zmieniam`, `przyjmuję`). Only an imperfective verb
+ * has a present tense, so a perfective lemma (`stwierdzić`) has none.
+ */
+const firstPersonOf = ({
+  lemma,
+  inflection,
+}: PolishOperativeLemma): string | undefined => {
+  switch (inflection) {
+    case "final-ć":
+      return lemma.endsWith("ać")
+        ? replaceEnding({ word: lemma, ending: "ć", replacement: "m" })
+        : undefined;
+    case "ować-to-uje":
+      return replaceEnding({ word: lemma, ending: "ować", replacement: "uję" });
+    case "ywać-to-uje":
+      return replaceEnding({ word: lemma, ending: "ywać", replacement: "uję" });
+    case "awać-to-aje":
+      return replaceEnding({ word: lemma, ending: "awać", replacement: "aję" });
+    case "ąć-to-mie":
+    case "zać-to-że":
+    case "ść-to-sie":
+    case "ec-to-eknie":
+      return undefined;
+    default:
+      inflection satisfies never;
+      return panic("Unsupported Polish operative verb inflection");
+  }
+};
+
+/**
+ * The past an authority reports its ruling in (`odmówił`, `stwierdziła`):
+ * every lemma ending in `ć` drops it for `ł`, `ła`; `przyjąć` makes
+ * `przyjął`. The rest (`orzekł`, `zniósł`) are no authority's opening.
+ */
+const reportedPastOf = ({ lemma }: PolishOperativeLemma): string[] => {
+  if (lemma.endsWith("ąć")) {
+    const stem = replaceEnding({ word: lemma, ending: "ąć", replacement: "" });
+    return [`${stem}ął`, `${stem}ęła`];
+  }
+  if (!lemma.endsWith("ć")) {
+    return [];
+  }
+  const stem = replaceEnding({ word: lemma, ending: "ć", replacement: "" });
+  return [`${stem}ł`, `${stem}ła`];
+};
+
+/**
+ * An authority's own operative act, which no court performs: it issues
+ * (`wydaje`, `wydał`) the interpretation, information or opinion it rules
+ * by. `wydaje się` ("it seems") is no act.
+ */
+const ISSUING_FORMS = ["wydaję", "wydaje", "wydał", "wydała"] as const;
+
+const AUTHORITY_RULING_FORMS = [
+  ...POLISH_OPERATIVE_FORMS,
+  ...POLISH_OPERATIVE_LEMMAS.flatMap((entry) => {
+    const firstPerson = firstPersonOf(entry);
+    return [
+      ...(firstPerson === undefined ? [] : [firstPerson]),
+      ...reportedPastOf(entry),
+    ];
+  }),
+].toSorted((left, right) => right.length - left.length);
+
+const AUTHORITY_RULING_WORD = new RegExp(
+  `(?<!\\p{L})(?:(?:${AUTHORITY_RULING_FORMS.join("|")})(?!\\p{L})|(?:${ISSUING_FORMS.join("|")})(?!\\p{L})(?! się(?!\\p{L})))`,
+  "iu",
+);
+
+/**
+ * Whether a line states an authority's ruling in its own voice, as a tax
+ * authority's letter opens: the operative verb in the third person after
+ * the authority's name (`Dyrektor … odmawia wydania opinii …`), in the first
+ * (`stwierdzam, że Państwa stanowisko … jest prawidłowe`), or reported as
+ * done (`Szef … wydał opinię zabezpieczającą`, `… odmówił wydania …`).
+ *
+ * Read on a letter's opening only: in its reasons the same past forms
+ * recount what was decided before.
+ */
+export const statesPlAuthorityRuling = (text: string): boolean =>
+  AUTHORITY_RULING_WORD.test(grammarLine(text));
 
 const holdingHeadingForms = POLISH_OPERATIVE_LEMMAS.flatMap((entry) => {
   if (!("holdingHeading" in entry)) {
@@ -488,19 +572,34 @@ export const isPlSignatureLine = (text: string): boolean => {
 export const isPlSignatureBlank = (text: string): boolean =>
   SIGNATURE_BLANK_RE.test(grammarLine(text).replaceAll(" ", ""));
 
+/** A remedy as an instruction names it, in any case (`skarga`, `zażalenia`). */
+const REMEDY_STEM = "(?:skarg|odwołani|zażaleni|apelacj|kasacj|sprzeciw)";
+
 /**
  * The heading the instructions on appeal stand under: `Pouczenie`,
- * `POUCZENIA:`, or with its outline number (`14. Pouczenie`).
+ * `POUCZENIA:`, with its outline number (`14. Pouczenie`), or naming the
+ * remedy (`Pouczenie o prawie do zażalenia`, `Pouczenie o prawie do
+ * wniesienia skargi na interpretację`). An instruction on anything else
+ * (`Pouczenie o funkcji ochronnej interpretacji`) is no appeal's.
  */
-const INSTRUCTION_HEADING_RE = /^(?:\d{1,3}\. ?)?pouczeni[ea] ?:?$/iu;
+const INSTRUCTION_HEADING_RE = new RegExp(
+  `^(?:\\d{1,3}\\. ?)?pouczeni[ea](?: o prawie do (?:wniesienia )?${REMEDY_STEM}\\p{L}*(?: na [\\p{L} ]+)?)? ?:?$`,
+  "iu",
+);
 
 /** Whether a line heads the instructions on appeal. */
 export const isPlInstructionHeading = (text: string): boolean =>
   INSTRUCTION_HEADING_RE.test(grammarLine(text));
 
-/** A remedy that lies against a decision, as an instruction states it. */
-const REMEDY_LIES_RE =
-  /przysługuje(?: stronie| stronom)?,? (?:prawo do wniesienia )?(?:skarg|odwołani|zażaleni|apelacj|kasacj|sprzeciw)/iu;
+/**
+ * A remedy that lies against a decision, as an instruction states it:
+ * `przysługuje`, or `służy` as the tax ordinance words it (`Na niniejsze
+ * postanowienie służy zażalenie …`).
+ */
+const REMEDY_LIES_RE = new RegExp(
+  `(?:przysługuje|służy)(?: stronie| stronom)?,? (?:prawo do wniesienia )?${REMEDY_STEM}`,
+  "iu",
+);
 
 /** The decision the instruction is about: this one. */
 const THIS_DECISION_RE =

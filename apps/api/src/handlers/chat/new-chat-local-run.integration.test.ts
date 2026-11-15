@@ -3,7 +3,10 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
+import {
+  CHAT_THREAD_PLACEHOLDER_TITLE,
+  CHAT_TURN_ID_HEADER,
+} from "@stll/api-contract";
 import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_FEATURE_ID,
@@ -13,7 +16,7 @@ import { createTestState } from "@stll/test-state";
 
 import { user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatThreads, featureEnrolments } from "@/api/db/schema";
+import { chatThreads, chatTurns, featureEnrolments } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
@@ -58,6 +61,7 @@ const CODEX: ChatLocalRunTarget = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 };
 
 const CODEX_READY: DesktopRunnerHarnessReport & { id: "codex" } = {
@@ -66,7 +70,7 @@ const CODEX_READY: DesktopRunnerHarnessReport & { id: "codex" } = {
   version: "0.50.0",
   capabilities: ["approvals"],
   approvalModes: ["ask"],
-  models: [{ id: CODEX.model, label: "GPT-5 Codex" }],
+  models: [{ id: CODEX.model, label: "GPT-5 Codex", reasoningEfforts: [] }],
 };
 
 const DESKTOP_ID = Bun.randomUUIDv7();
@@ -95,6 +99,8 @@ const control = asTestRaw<DesktopRunnerControl>({
       type: "available",
       desktopId: DESKTOP_ID,
       harness: CODEX_READY,
+      linkedFolders: [],
+      approvedFolderIds: [],
     };
     return await Promise.resolve(Result.ok(picked));
   },
@@ -198,6 +204,7 @@ const newThreadId = () => {
 const firstSend = (
   threadId: SafeId<"chatThread">,
   runTarget: ChatSendRequest["runTarget"],
+  { runId, runMode }: { runId?: string; runMode?: "agent" } = {},
 ): SendMessageCtx => {
   const message: ChatSendRequest["message"] = {
     id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
@@ -207,8 +214,9 @@ const firstSend = (
   const forwardedProps = {
     contextMatterIds: [],
     message,
-    runId: `run-${message.id}`,
+    runId: runId ?? `run-${message.id}`,
     ...(runTarget === undefined ? {} : { runTarget }),
+    ...(runMode === undefined ? {} : { runMode }),
     sendMode: CHAT_SEND_MODE.rawOverride,
     threadId,
   };
@@ -241,6 +249,7 @@ const firstSend = (
     route: "/v1/chat" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
   });
@@ -263,8 +272,17 @@ const handedOff = () =>
     .at(-1)
     ?.at(0)?.localRun;
 
+/** The turn the thread stores, if the send was accepted. */
+const storedTurnId = async (threadId: SafeId<"chatThread">) =>
+  (
+    await testDb
+      .select({ id: chatTurns.id })
+      .from(chatTurns)
+      .where(eq(chatTurns.threadId, threadId))
+  ).at(0)?.id;
+
 describe("a new chat's first send bound for the member's computer", () => {
-  test("creates the thread on that target and hands the turn to the computer", async () => {
+  test("creates the thread on that target and hands the turn to its run, which picks the computer", async () => {
     const threadId = newThreadId();
     picks.length = 0;
     streamChatMock.mockClear();
@@ -272,7 +290,8 @@ describe("a new chat's first send bound for the member's computer", () => {
     const result = await sendMessage.handler(firstSend(threadId, CODEX));
 
     expect(result).toBeInstanceOf(Response);
-    expect(picks).toEqual([{ harness: "codex", userId: ids.userA1 }]);
+    // The send picks no computer: the turn's run does, once it is stored.
+    expect(picks).toEqual([]);
     expect(handedOff()?.harness).toBe("codex");
     expect(await storedRunTarget(threadId)).toEqual(CODEX);
   });
@@ -297,7 +316,8 @@ describe("a new chat's first send bound for the member's computer", () => {
     const result = await sendMessage.handler(firstSend(threadId, CODEX));
 
     expect(result).toBeInstanceOf(Response);
-    expect(picks).toEqual([{ harness: "codex", userId: ids.userA1 }]);
+    // The send picks no computer: the turn's run does, once it is stored.
+    expect(picks).toEqual([]);
     expect(handedOff()?.harness).toBe("codex");
     expect(await storedRunTarget(threadId)).toEqual(CODEX);
   });
@@ -313,5 +333,25 @@ describe("a new chat's first send bound for the member's computer", () => {
     expect(picks).toEqual([]);
     expect(handedOff()).toBeUndefined();
     expect(await storedRunTarget(threadId)).toEqual({ kind: "cloud" });
+  });
+
+  test("an answer names the turn once the send is accepted, a refusal included, and not before", async () => {
+    // Refused before anything is stored: the request asks for the agent
+    // sandbox and a computer at once.
+    const refusedThread = newThreadId();
+    const refused = firstSend(refusedThread, CODEX, { runMode: "agent" });
+    await sendMessage.handler(refused);
+    expect(refused.set.headers[CHAT_TURN_ID_HEADER]).toBeUndefined();
+    expect(await storedTurnId(refusedThread)).toBeUndefined();
+
+    // Accepted, then refused: its run id already names another chat's turn.
+    const runId = `run-${Bun.randomUUIDv7()}`;
+    await sendMessage.handler(firstSend(newThreadId(), CODEX, { runId }));
+    const takenThread = newThreadId();
+    const taken = firstSend(takenThread, CODEX, { runId });
+    await sendMessage.handler(taken);
+    const turnId = await storedTurnId(takenThread);
+    expect(turnId).toBeDefined();
+    expect(taken.set.headers[CHAT_TURN_ID_HEADER]).toBe(turnId ?? "");
   });
 });

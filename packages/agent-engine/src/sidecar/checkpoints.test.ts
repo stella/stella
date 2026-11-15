@@ -26,6 +26,7 @@ import { waitFor } from "@stll/test-kit";
 import {
   captureCheckpoint,
   CHECKPOINT_LIMITS,
+  type CheckpointClock,
   type CheckpointLimits,
   checkpointStoreOf,
   type CheckpointUnavailableReason,
@@ -103,6 +104,9 @@ const treeOf = (dir: string, relative = ""): TreeEntry[] =>
 /** Every stored file's content. */
 const storedContents = (workspaceDir: string) => {
   const objects = path.join(checkpointStoreOf(workspaceDir), "objects");
+  if (!existsSync(checkpointStoreOf(workspaceDir))) {
+    return [];
+  }
   return readdirSync(objects).flatMap((bucket) =>
     readdirSync(path.join(objects, bucket)).map((name) =>
       readFileSync(path.join(objects, bucket, name), "utf-8"),
@@ -110,15 +114,21 @@ const storedContents = (workspaceDir: string) => {
   );
 };
 
-const manifestIds = (workspaceDir: string) =>
-  readdirSync(path.join(checkpointStoreOf(workspaceDir), "manifests"))
-    .map((name) => name.replace(/\.json$/u, ""))
-    .toSorted();
+/** The checkpoints kept; none before the store is first opened. */
+const manifestIds = (workspaceDir: string) => {
+  const manifests = path.join(checkpointStoreOf(workspaceDir), "manifests");
+  return existsSync(checkpointStoreOf(workspaceDir))
+    ? readdirSync(manifests)
+        .map((name) => name.replace(/\.json$/u, ""))
+        .toSorted()
+    : [];
+};
 
 type Capture = {
   memberFiles?: string[];
   protectedPaths?: string[];
   limits?: Partial<CheckpointLimits>;
+  clock?: CheckpointClock;
 };
 
 /** What captures and restores logged; nothing here fails a cleanup. */
@@ -135,7 +145,7 @@ afterEach(() => {
 
 const capture = async (
   workspaceDir: string,
-  { memberFiles = [], protectedPaths = [], limits = {} }: Capture = {},
+  { memberFiles = [], protectedPaths = [], limits = {}, clock }: Capture = {},
 ) => {
   const runId = crypto.randomUUID();
   const report = await captureCheckpoint({
@@ -144,6 +154,7 @@ const capture = async (
     memberFiles,
     protectedPaths,
     limits: { ...CHECKPOINT_LIMITS, ...limits },
+    ...(clock === undefined ? {} : { clock }),
     log: logLine,
   });
   return { runId, report };
@@ -292,6 +303,66 @@ describe("a run folder's checkpoint", () => {
         expect((await restore(workspaceDir, runId)).outcome).toBe(
           "no_checkpoint",
         );
+      }
+    });
+
+    test("a capture holds its run's start for no longer than its bound, the wait for the store included", async () => {
+      // The test's clock: each reading is 20 ms of a slow disk, and a wait
+      // passes at once unless it was called off first. Another live process
+      // holds the store until `releasedAt`, and the folder is too slow to save
+      // within the bound once it is free.
+      const STEP_MS = 20;
+      // A few readings and one lock poll past the deadline.
+      const SLACK_MS = 200;
+      const budget = CHECKPOINT_LIMITS.maxCaptureMs;
+      for (const releasedAt of [0, budget - 300, Number.POSITIVE_INFINITY]) {
+        const { workspaceDir } = place();
+        for (const index of Array.from({ length: 300 }, (_, at) => at)) {
+          write(workspaceDir, `case-${String(index)}.txt`, String(index));
+        }
+        const store = checkpointStoreOf(workspaceDir);
+        mkdirSync(store, { recursive: true, mode: 0o700 });
+        const lock = path.join(store, ".lock");
+        const releaseBy = (now: number) => {
+          if (now >= releasedAt) {
+            rmSync(lock, { force: true });
+          }
+        };
+        writeFileSync(
+          lock,
+          JSON.stringify({ pid: process.pid, token: crypto.randomUUID() }),
+        );
+        let now = 0;
+        releaseBy(now);
+        const clock: CheckpointClock = {
+          now: () => {
+            now += STEP_MS;
+            releaseBy(now);
+            return now;
+          },
+          sleep: async (ms, signal) => {
+            // After whatever else is ready, so a wait called off first
+            // takes no time.
+            await new Promise((resolve) => {
+              setImmediate(resolve);
+            });
+            if (signal?.aborted !== true) {
+              now += ms;
+              releaseBy(now);
+            }
+          },
+        };
+        const { report } = await capture(workspaceDir, { clock });
+        expect({ releasedAt, report }).toEqual({
+          releasedAt,
+          report: unavailable("too_slow"),
+        });
+        expect({ releasedAt, held: now <= budget + SLACK_MS }).toEqual({
+          releasedAt,
+          held: true,
+        });
+        expect(manifestIds(workspaceDir)).toEqual([]);
+        rmSync(lock, { force: true });
       }
     });
 
@@ -1054,6 +1125,19 @@ describe("a run folder's checkpoint", () => {
         (await capture(workspaceDir, { limits: { lockWaitMs: 100 } })).report,
       ).toEqual({ status: "taken" });
       expect(manifestIds(workspaceDir)).toHaveLength(2);
+      expect(existsSync(lockFile(workspaceDir))).toBe(false);
+    });
+
+    test("a lock whose holder is gone is taken over even when the wait is spent", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "a.txt", "saved");
+      await capture(workspaceDir);
+      const gone = Bun.spawn(["true"]);
+      await gone.exited;
+      writeFileSync(lockFile(workspaceDir), holder(gone.pid));
+      expect(
+        (await capture(workspaceDir, { limits: { lockWaitMs: 0 } })).report,
+      ).toEqual({ status: "taken" });
       expect(existsSync(lockFile(workspaceDir))).toBe(false);
     });
 

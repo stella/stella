@@ -61,6 +61,7 @@ import {
 } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
 import {
   DockedComposer,
   PromptBarPending,
@@ -109,6 +110,10 @@ import {
   settleQueuedChatSend,
   subscribeQueuedChatSend,
 } from "@/features/chat/queued-chat-sends";
+import {
+  useMakeSkillFromChat,
+  useSaveDraftedSkill,
+} from "@/features/chat/use-make-skill-from-chat";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -285,16 +290,20 @@ export const ChatTabPanel = ({
     olderCursor,
     isLoadingOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     turnAbandoned,
     computerWait,
+    turnSentAt,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -401,6 +410,13 @@ export const ChatTabPanel = ({
   });
   const hasSuggestedFollowups = suggestedPrompts.length > 0;
   const focusComposer = editorController.focus;
+  const handleContinuePausedTurn = useLatestCallback(async () => {
+    await continuePausedTurnWhenReady({
+      ensureAIAvailable,
+      awaitPendingSelection: composerModels.awaitPendingSelection,
+      continueTurn: continuePausedTurn,
+    });
+  });
   const sendWithoutAnonymization = useLatestCallback(async () => {
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
@@ -436,6 +452,8 @@ export const ChatTabPanel = ({
   // label while the real conversation title stayed stale on every other
   // surface. Pre-first-message renames stay label-only, as before.
   const renameThread = useRenameChatThread(threadRef);
+  const saveDraftedSkill = useSaveDraftedSkill();
+  const makeSkillFromChat = useMakeSkillFromChat(saveDraftedSkill);
   const hasThreadMessages = messages.length > 0;
   // The tab store keeps a document's chat across reloads only once its
   // conversation exists on the server.
@@ -610,8 +628,23 @@ export const ChatTabPanel = ({
           }
           startLabelEditingWithSuggestion();
         },
+        "make-skill": (args) => {
+          editorController.setContent(composerText(""));
+          if (!hasThreadMessages) {
+            stellaToast.add({
+              title: t("chat.makeSkill.emptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          makeSkillFromChat({ intent: args, threadRef });
+        },
       });
+      // Inside the member's send gesture, before any await: a turn for
+      // their computer opens stella desktop when none is connected. A queued
+      // question sent on mount is no gesture, so it never opens it.
       if (!handledReserved) {
+        composerModels.openDesktopForSend();
         return await handlePromptSubmit({ prompt, files });
       }
 
@@ -619,6 +652,7 @@ export const ChatTabPanel = ({
       if (newThreadMessage === undefined) {
         return CHAT_SEND_SENT;
       }
+      composerModels.openDesktopForSend();
       if (!(await ensureAIAvailable())) {
         return CHAT_SEND_KEPT;
       }
@@ -664,6 +698,7 @@ export const ChatTabPanel = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,
@@ -757,6 +792,7 @@ export const ChatTabPanel = ({
                   onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
                   onOpenPlaybook={handleOpenPlaybook}
+                  onContinuePausedTurn={handleContinuePausedTurn}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
                   queuedMessageActions={{
@@ -767,6 +803,7 @@ export const ChatTabPanel = ({
                   streamdownComponents={streamdownComponents}
                   userMessageEdit={userMessageEdit}
                   computerWait={computerWait}
+                  turnSentAt={turnSentAt}
                   workspaceId={tabWorkspaceId}
                 />
               )}
@@ -804,6 +841,7 @@ export const ChatTabPanel = ({
                   editorController.setContent(composerStoredMarkdown(prompt));
                   detached(
                     editorController.submit(async (draft) => {
+                      composerModels.openDesktopForSend();
                       if (!(await ensureAIAvailable())) {
                         return CHAT_SEND_KEPT;
                       }
@@ -831,6 +869,7 @@ export const ChatTabPanel = ({
             onStop={() => {
               stop();
             }}
+            stopping={stopPending}
             onNewThread={messages.length > 0 ? startNewThread : null}
             onSubmit={handleComposerSubmit}
             pendingCount={0}

@@ -9,6 +9,7 @@ import {
   readBillingKnowledgeFile,
 } from "@/api/handlers/organization-settings/billing-drafts";
 import readBillingDraftConfiguration from "@/api/handlers/organization-settings/billing-drafts/get";
+import readMatterNumbering from "@/api/handlers/workspaces/matter-numbering/get";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
@@ -116,5 +117,36 @@ export const readScalingScenarios = [
     expectedRows: 1,
     definition: readBillingKnowledgeFile,
     measure: measureBillingKnowledgeFile,
+  },
+  {
+    name: "matter-number convention",
+    expectedRows: 1,
+    definition: readMatterNumbering,
+    measure: async (fixture: ReadFixture) =>
+      await runWithMeasuredQueryCounter(async (counter) => {
+        const response = await readMatterNumbering.handler(
+          asTestRaw<Parameters<typeof readMatterNumbering.handler>[0]>({
+            safeDb: fixture.safeDb,
+            user: { id: fixture.userId },
+            session: { activeOrganizationId: fixture.organizationId },
+            memberRole: sessionMemberRole("member"),
+            request: new Request(
+              "https://example.test/v1/workspaces/matter-numbering",
+            ),
+            route: "/v1/workspaces/matter-numbering" satisfies ApiRoutePath,
+          }),
+        );
+        if (response instanceof HttpStatusResponse) {
+          return panic(
+            "Matter numbering scaling requires a successful handler response",
+          );
+        }
+        return {
+          statements: counter.count,
+          transactionRoundTrips: counter.transactions,
+          responseBytes: Buffer.byteLength(JSON.stringify(response)),
+          rows: 1,
+        };
+      }),
   },
 ];

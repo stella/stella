@@ -20,6 +20,7 @@ import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
 
@@ -39,6 +40,7 @@ export const AddFactForm = ({
 }: AddFactFormProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const submit = useIdempotentSubmit();
   const [name, setName] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const statement = name.trim();
@@ -53,17 +55,31 @@ export const AddFactForm = ({
       listId: toSafeId<"legalList">(listId),
       listItemType: LIST_ITEM_TYPE.FACT,
     };
-    // The task endpoint takes no idempotency key; the capability header
+    // One key per add: a retry after a lost response replays the first
+    // create instead of writing the fact twice; the capability header
     // declares the write.
+    // A refusal throws inside `send`, so the failed attempt keeps its key.
     const sent = await Result.tryPromise(
       async () =>
-        await invokeCapability("tasks.create", async (request) =>
-          unwrapApiResponse(
-            await api
-              .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-              .put(body, request),
-          ),
-        ),
+        await submit.run({
+          operation: `avt.add-fact:${workspaceId}:${listId}`,
+          body,
+          send: async (payload, replayRequest) =>
+            await invokeCapability("tasks.create", async (request) =>
+              unwrapApiResponse(
+                await api
+                  .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+                  .put(payload, {
+                    ...request,
+                    headers: {
+                      "Idempotency-Key":
+                        replayRequest.headers["Idempotency-Key"],
+                      ...request.headers,
+                    },
+                  }),
+              ),
+            ),
+        }),
     );
     setSaving(false);
     if (sent.isErr()) {

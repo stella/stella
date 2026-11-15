@@ -1,18 +1,13 @@
 import type * as React from "react";
 import { useCallback, useMemo, useState } from "react";
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import { ContextMenuActionItems } from "@stll/ui/context-menu";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   CalendarClockIcon,
@@ -23,17 +18,7 @@ import {
   UploadIcon,
   WorkflowIcon,
 } from "@stll/ui/icons";
-import {
-  Menu,
-  MenuAnchor,
-  MenuItem,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSub,
-  MenuSubPopup,
-  MenuSubTrigger,
-} from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { UNKNOWN_AUTHOR_LABEL } from "@stll/ui/review-author-avatar";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -55,14 +40,8 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
-import { notifyTaskCompletion } from "@/components/workspaces/tasks/task-completion-toast";
-import type { TaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
-import {
-  isTaskStatus,
-  STATUS_COLORS,
-  STATUS_ICONS,
-  TASK_STATUSES,
-} from "@/components/workspaces/tasks/task-detail-constants";
+import { isTaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
+import { useTaskStatusAction } from "@/components/workspaces/tasks/task-status-menu";
 import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
@@ -71,11 +50,8 @@ import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFormatter } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
-import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapApiResponse } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { queryView } from "@/lib/query-view.logic";
 import { routeQueryOptions } from "@/lib/react-query";
@@ -83,13 +59,10 @@ import {
   DAY_AND_MONTH_FORMAT,
   WEEKDAY_INITIAL_FORMAT,
 } from "@/lib/relative-time";
-import { toSafeId } from "@/lib/safe-id";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
-import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { overviewOptions } from "@/lib/workspaces/queries";
 import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
-import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 import {
   timeEntrySummaryOptions,
   timeEntryTeamSummaryOptions,
@@ -175,7 +148,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const locale = useFormattingLocale();
   const firstWeekday = getFirstWeekday(locale);
   const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
-  const queryClient = useQueryClient();
   const userId = useAuthenticatedUser().id;
   const { data } = useSuspenseQuery(overviewOptions(workspaceId));
   const [upcomingMenu, setUpcomingMenu] = useState<UpcomingMenuState>({
@@ -225,66 +197,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       createTask.mutate(workspaceId, { onSettled });
     });
 
-  const updateTaskStatus = useMutation({
-    mutationFn: async ({
-      taskId,
-      status,
-    }: {
-      taskId: string;
-      status: TaskStatus;
-    }) => {
-      const response = await api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .patch({
-          taskId: toSafeId<"entity">(taskId),
-          status,
-        });
-      return unwrapApiResponse(response);
-    },
-    onSuccess: async (_data, variables) => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: entitiesKeys.all(workspaceId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: taskKeys.detail(workspaceId, variables.taskId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: workspacesKeys.overview(workspaceId),
-        }),
-      ]);
-    },
-    onError: (error) => {
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-  });
-
-  // The menu keeps the status it opened with, so the status to go back to is
-  // read when the change is made. The returned promise, not a per-call
-  // `onSuccess`, so the toast survives a closed menu. A failure is reported by
-  // the mutation's own `onError`.
-  const handleMenuStatusChange = (taskId: string, status: TaskStatus) => {
-    const { queryKey } = taskDetailOptions(workspaceId, taskId);
-    const read = () => queryClient.getQueryData(queryKey)?.status;
-    const stored = read();
-    const previous = isTaskStatus(stored) ? stored : currentMenuTaskStatus;
-    const previousKnown = !updateTaskStatus.isPending;
-    const saveStatus = async () => {
-      const saved = await Result.tryPromise(
-        async () => await updateTaskStatus.mutateAsync({ taskId, status }),
-      );
-      if (Result.isOk(saved)) {
-        notifyTaskCompletion({
-          currentStatus: read,
-          next: status,
-          previous: previousKnown ? previous : null,
-          restore: (restored) =>
-            updateTaskStatus.mutate({ taskId, status: restored }),
-        });
-      }
-    };
-    detached(saveStatus(), "overview-view.status");
-  };
+  const taskStatusAction = useTaskStatusAction(workspaceId);
 
   const handleTaskContextMenu = useCallback(
     (task: UpcomingTaskContext) => (e: React.MouseEvent) => {
@@ -306,14 +219,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const currentMenuTaskStatus = isTaskStatus(menuTaskStatus)
     ? menuTaskStatus
     : "open";
-  const taskStatusLabels: Record<TaskStatus, string> = {
-    open: t("tasks.statusValues.open"),
-    in_progress: t("tasks.statusValues.in_progress"),
-    in_review: t("tasks.statusValues.in_review"),
-    done: t("tasks.statusValues.done"),
-    cancelled: t("tasks.statusValues.cancelled"),
-  };
-
   const recentEntities = useMemo(
     () => data.recentEntities.filter((e) => e.kind !== "folder"),
     [data.recentEntities],
@@ -698,57 +603,14 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                     <SquareCheckIcon />
                     {upcomingMenu.task.name}
                   </MenuItem>
-                  <MenuSub>
-                    <MenuSubTrigger>
-                      {(() => {
-                        const Icon = STATUS_ICONS[currentMenuTaskStatus];
-                        return (
-                          <>
-                            <Icon
-                              className={cn(
-                                "size-4",
-                                STATUS_COLORS[currentMenuTaskStatus],
-                              )}
-                            />
-                            {t("common.status")}
-                          </>
-                        );
-                      })()}
-                    </MenuSubTrigger>
-                    <MenuSubPopup>
-                      <MenuRadioGroup value={currentMenuTaskStatus}>
-                        {TASK_STATUSES.map((status) => {
-                          const Icon = STATUS_ICONS[status];
-                          return (
-                            <MenuRadioItem
-                              key={status}
-                              onClick={() => {
-                                if (status === currentMenuTaskStatus) {
-                                  return;
-                                }
-                                const task = upcomingMenu.task;
-                                if (task === null) {
-                                  return;
-                                }
-                                handleMenuStatusChange(task.entityId, status);
-                              }}
-                              value={status}
-                            >
-                              <span className="flex items-center gap-2">
-                                <Icon
-                                  className={cn(
-                                    "size-4",
-                                    STATUS_COLORS[status],
-                                  )}
-                                />
-                                {taskStatusLabels[status]}
-                              </span>
-                            </MenuRadioItem>
-                          );
-                        })}
-                      </MenuRadioGroup>
-                    </MenuSubPopup>
-                  </MenuSub>
+                  <ContextMenuActionItems
+                    actions={[
+                      taskStatusAction(
+                        upcomingMenu.task.entityId,
+                        currentMenuTaskStatus,
+                      ),
+                    ]}
+                  />
                 </>
               )}
             </MenuPopup>

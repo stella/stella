@@ -1,15 +1,12 @@
-import { useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { READER_COPY_MODES } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations";
-import { copyRichToClipboard, copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
-import { CopyFeedback, useCopiedFeedback } from "@stll/ui/copy-button";
 import {
   ChevronDownIcon,
   CopyFromMenuIcon,
@@ -19,14 +16,16 @@ import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { cn } from "@stll/ui/utils";
 
+import {
+  CopyControlFeedback,
+  useCopyControlLabel,
+} from "@/components/copy-control";
+import type { CopyControlState } from "@/components/copy-control";
 import { readerCopyMenuBox } from "@/components/legal-reader/annotations/reader-copy-menu.logic";
 import type { ReaderCopyMenuBox } from "@/components/legal-reader/annotations/reader-copy-menu.logic";
 import { previewQuotation } from "@/components/legal-reader/citation-copy.logic";
 import type { SelectionCopyText } from "@/components/selection-toolbar-copy.logic";
-import { useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   CapabilityAction,
   CapabilityActionChrome,
@@ -36,145 +35,11 @@ const MENU_ESTIMATED_HEIGHT_PX = 200;
 // Room for the options and a readable preview beside them.
 const MENU_MIN_WIDTH_PX = 416;
 
-// Module-private: only `useSelectionCopy` can produce a `SelectionCopy`, so a
-// selection bar's Copy cannot exist without the native copy listener.
-const SELECTION_COPY_OWNER = Symbol("useSelectionCopy");
-
-/** What a selection bar's Copy writes: rich text where it has any. */
-type SelectionCopyContent = Pick<SelectionCopyText, "plain"> &
-  Partial<Pick<SelectionCopyText, "html">>;
-
-export type SelectionCopy = {
-  readonly copied: boolean;
-  readonly owner: typeof SELECTION_COPY_OWNER;
-  readonly write: (content: SelectionCopyContent) => void;
-};
-
-type SelectionCopyOptions = {
-  /** The surface the bar floats over; its document carries the listeners. */
-  rootRef: RefObject<HTMLElement | null>;
-  /**
-   * Whether the bar's Copy acts on this non-empty selection, so that the
-   * reader's own copy of it copies the same words.
-   */
-  ownsSelection: (selection: Selection, root: HTMLElement) => boolean;
-};
-
-/**
- * The clipboard half of a selection bar and the one owner of its
- * confirmation: the bar's Copy and the reader's own copy of the selected
- * words (Cmd+C, Ctrl+C, the browser's Copy menu) both turn it into Copied,
- * and a new selection clears it. The listeners are installed once, on the
- * root's document.
- */
-export const useSelectionCopy = ({
-  ownsSelection,
-  rootRef,
-}: SelectionCopyOptions): SelectionCopy => {
-  const t = useTranslations();
-  const { copied, confirm, reset } = useCopiedFeedback();
-  // Counts selection changes, so a clipboard write that settles after the
-  // reader moved on to other words never confirms a copy of those words.
-  const generationRef = useRef(0);
-  const owns = useLatestCallback(ownsSelection);
-
-  useMountEffect(() => {
-    const root = rootRef.current;
-    if (root === null) {
-      return undefined;
-    }
-    const ownerDoc = root.ownerDocument;
-    const controller = new AbortController();
-    ownerDoc.addEventListener(
-      "selectionchange",
-      () => {
-        generationRef.current += 1;
-        reset();
-      },
-      { signal: controller.signal },
-    );
-    // The browser writes the selected words itself; the bar only confirms,
-    // and only for the words its own Copy would have taken.
-    ownerDoc.addEventListener(
-      "copy",
-      () => {
-        const selection = ownerDoc.getSelection();
-        if (
-          selection !== null &&
-          !selection.isCollapsed &&
-          owns(selection, root)
-        ) {
-          confirm();
-        }
-      },
-      { signal: controller.signal },
-    );
-    return () => controller.abort();
-  });
-
-  const write = (content: SelectionCopyContent) => {
-    const generation = generationRef.current;
-    detached(
-      (async () => {
-        const { html, plain } = content;
-        const copyResult =
-          html === undefined
-            ? await copyToClipboard(plain)
-            : await copyRichToClipboard({ html, plain });
-        if (Result.isError(copyResult)) {
-          notifyUserError(copyResult.error, t("errors.actionFailed"));
-          return;
-        }
-        if (generation === generationRef.current) {
-          confirm();
-        }
-      })(),
-      "selection-toolbar.copy",
-    );
-  };
-  return { copied, owner: SELECTION_COPY_OWNER, write };
-};
-
-type SelectionCopyButtonProps = {
-  copy: SelectionCopy;
-  content: SelectionCopyContent;
-  /** Classes for the visible label, e.g. to hide it on narrow screens. */
-  labelClassName?: string | undefined;
-};
-
-/**
- * A selection bar's single Copy, for a bar with no citation formats to
- * offer. Pressing it keeps the words selected.
- */
-export const SelectionCopyButton = ({
-  content,
-  copy,
-  labelClassName,
-}: SelectionCopyButtonProps) => {
-  const t = useTranslations();
-  return (
-    <Button
-      aria-label={copy.copied ? t("common.copied") : t("common.copy")}
-      data-copied={copy.copied ? "" : undefined}
-      onClick={() => copy.write(content)}
-      onMouseDown={(event) => event.preventDefault()}
-      size="sm"
-      variant="ghost"
-    >
-      <CopyFeedback
-        copied={copy.copied}
-        copiedLabel={t("common.copied")}
-        label={t("common.copy")}
-        labelClassName={labelClassName}
-      />
-    </Button>
-  );
-};
-
 type SelectionCopyMenuProps = {
   /** The bar the menu opens from, for placement and the focus return. */
   barRef: RefObject<HTMLDivElement | null>;
-  copy: SelectionCopy;
+  /** The bar's Copy, which also confirms the reader's own copy. */
+  copy: CopyControlState<"selection">;
   doc: Document | null;
   /** Receives the portalled menu, so the host can tell a press on it from a
    *  press on the text. */
@@ -207,11 +72,12 @@ export const SelectionCopyMenu = ({
   // viewport; open upward when the space below the trigger cannot fit it.
   const [menuBox, setMenuBox] = useState<ReaderCopyMenuBox | null>(null);
   const previewQuote = previewQuotation(quote);
+  const copyLabel = useCopyControlLabel(copy);
 
   return (
     <div className="relative">
       <Button
-        aria-label={copy.copied ? t("common.copied") : t("common.copy")}
+        aria-label={copyLabel}
         data-copy-trigger=""
         onClick={(event) => {
           const barRect = barRef.current?.getBoundingClientRect();
@@ -235,12 +101,7 @@ export const SelectionCopyMenu = ({
         size="sm"
         variant="ghost"
       >
-        <CopyFeedback
-          copied={copy.copied}
-          copiedLabel={t("common.copied")}
-          icon={CopyFromMenuIcon}
-          label={t("common.copy")}
-        />
+        <CopyControlFeedback control={copy} icon={CopyFromMenuIcon} />
         <ChevronDownIcon className="size-3" />
       </Button>
       {open &&
@@ -287,7 +148,10 @@ export const SelectionCopyMenu = ({
                   variant="plain"
                   key={copyMode}
                   onClick={() => {
-                    copy.write(textFor(copyMode, quote));
+                    detached(
+                      copy.copy(textFor(copyMode, quote)),
+                      "selection-toolbar.copy",
+                    );
                     onOpenChange(false);
                     // The option unmounts with the menu; keep keyboard
                     // focus on the trigger that now shows the confirmation.

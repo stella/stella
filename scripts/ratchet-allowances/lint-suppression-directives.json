@@ -1,5 +1,5 @@
 {
   "metric": "lint-suppression-directives",
-  "delta": 3,
-  "reason": "The citations cassette replays one recorded answer verbatim; its three resource links are the model output the citation renderer is developed against, so they stay raw in the fixture."
+  "delta": 1,
+  "reason": "The browser page script (apps/extension/src/lib/page-script.ts) runs serialized inside a web page, where nothing can be imported, so find in page folds a character to its base letter with the native normalize call instead of @stll/text-normalize; the one directive sits on that line."
 }

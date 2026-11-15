@@ -206,7 +206,7 @@ describe("bounded request step", () => {
   test("answers the step's value when it completes in time", async () => {
     expect(
       await runBoundedRequestStep(async () => await Promise.resolve(42), {
-        label: "step",
+        label: "case-law-admitted-courts",
         budgetMs: 1000,
       }),
     ).toEqual({ status: "complete", value: 42 });
@@ -215,7 +215,7 @@ describe("bounded request step", () => {
   test("degrades at its sub-budget instead of waiting", async () => {
     const startedAt = performance.now();
     const step = await runBoundedRequestStep(never, {
-      label: "court-list",
+      label: "case-law-admitted-courts",
       budgetMs: 20,
     });
     expect(performance.now() - startedAt).toBeLessThan(1000);
@@ -235,7 +235,7 @@ describe("bounded request step", () => {
       { label: "search_case_law", budgetMs: 20 },
       async () =>
         await runBoundedRequestStep(never, {
-          label: "court-list",
+          label: "case-law-admitted-courts",
           budgetMs: 60_000,
         }),
     );
@@ -249,7 +249,7 @@ describe("bounded request step", () => {
     const failure = new Error("court list unreadable");
     expect(
       await runBoundedRequestStep(async () => await Promise.reject(failure), {
-        label: "court-list",
+        label: "case-law-admitted-courts",
         budgetMs: 1000,
       }),
     ).toEqual({ status: "failed", error: failure });

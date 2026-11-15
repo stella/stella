@@ -27,9 +27,12 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import type { CreateTaskFactDetails } from "@/api/lib/tasks/create-task-entity";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const bodySchema = v.object({
   listId: resourceIdSchema("legalList"),
@@ -224,6 +227,10 @@ type ReleaseAcceptanceOptions = {
   entityOwnership: AcceptanceEntityOwnership;
 };
 
+type CleanupAcceptanceOutcome = {
+  status: "accepted" | "orphan-cleaned" | "released";
+};
+
 const cleanupAcceptance = async (
   {
     acceptedEntityId,
@@ -234,82 +241,103 @@ const cleanupAcceptance = async (
   }: AcceptanceScope,
   { reason, entityOwnership }: ReleaseAcceptanceOptions,
 ) =>
-  await safeDb(async (tx) => {
-    const current = (
-      await tx
-        .select({
-          acceptedEntityId: legalListGenerationCandidates.acceptedEntityId,
-          reservedEntityId: legalListGenerationCandidates.reservedEntityId,
-          status: legalListGenerationCandidates.status,
-        })
-        .from(legalListGenerationCandidates)
-        .where(
-          and(
-            eq(legalListGenerationCandidates.id, body.candidateId),
-            eq(legalListGenerationCandidates.runId, body.runId),
-            eq(legalListGenerationCandidates.listId, body.listId),
-            eq(legalListGenerationCandidates.workspaceId, workspaceId),
-          ),
-        )
-        .for("update")
-    ).at(0);
-    if (
-      current?.status === "accepted" &&
-      current.acceptedEntityId === acceptedEntityId
-    ) {
-      return { status: "accepted" as const };
-    }
+  Result.flatten(
+    await safeDb(
+      async (tx): Promise<Result<CleanupAcceptanceOutcome, HandlerError>> => {
+        const workspace = await tx.query.workspaces.findFirst({
+          where: { id: { eq: workspaceId } },
+          columns: { organizationId: true },
+        });
+        if (workspace) {
+          const hold = await requireNoHold({
+            tx,
+            organizationId: workspace.organizationId,
+            target: { type: "entity", entityId: acceptedEntityId },
+          });
+          if (hold.isErr()) {
+            return Result.err(legalHoldRefusal(hold.error));
+          }
+        }
+        const current = (
+          await tx
+            .select({
+              acceptedEntityId: legalListGenerationCandidates.acceptedEntityId,
+              reservedEntityId: legalListGenerationCandidates.reservedEntityId,
+              status: legalListGenerationCandidates.status,
+            })
+            .from(legalListGenerationCandidates)
+            .where(
+              and(
+                eq(legalListGenerationCandidates.id, body.candidateId),
+                eq(legalListGenerationCandidates.runId, body.runId),
+                eq(legalListGenerationCandidates.listId, body.listId),
+                eq(legalListGenerationCandidates.workspaceId, workspaceId),
+              ),
+            )
+            .for("update")
+        ).at(0);
+        if (
+          current?.status === "accepted" &&
+          current.acceptedEntityId === acceptedEntityId
+        ) {
+          return Result.ok({ status: "accepted" as const });
+        }
 
-    if (entityOwnership === "created-here") {
-      await tx
-        .delete(entities)
-        .where(
-          and(
-            eq(entities.id, acceptedEntityId),
-            eq(entities.workspaceId, workspaceId),
-          ),
-        );
-    }
+        if (entityOwnership === "created-here") {
+          await tx
+            .delete(entities)
+            .where(
+              and(
+                eq(entities.id, acceptedEntityId),
+                eq(entities.workspaceId, workspaceId),
+              ),
+            );
+        }
 
-    if (
-      current?.status !== "accepting" ||
-      current.reservedEntityId !== acceptedEntityId
-    ) {
-      return { status: "orphan-cleaned" as const };
-    }
-    const released = await tx
-      .update(legalListGenerationCandidates)
-      .set({
-        status: "pending",
-        reservedEntityId: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(legalListGenerationCandidates.id, body.candidateId),
-          eq(legalListGenerationCandidates.runId, body.runId),
-          eq(legalListGenerationCandidates.listId, body.listId),
-          eq(legalListGenerationCandidates.workspaceId, workspaceId),
-          eq(legalListGenerationCandidates.status, "accepting"),
-          eq(legalListGenerationCandidates.reservedEntityId, acceptedEntityId),
-        ),
-      )
-      .returning({ id: legalListGenerationCandidates.id });
-    if (!released.at(0)) {
-      return { status: "orphan-cleaned" as const };
-    }
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION,
-      resourceId: body.runId,
-      metadata: {
-        operation: "candidate_acceptance_released",
-        candidateId: body.candidateId,
-        reason,
+        if (
+          current?.status !== "accepting" ||
+          current.reservedEntityId !== acceptedEntityId
+        ) {
+          return Result.ok({ status: "orphan-cleaned" as const });
+        }
+        const released = await tx
+          .update(legalListGenerationCandidates)
+          .set({
+            status: "pending",
+            reservedEntityId: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(legalListGenerationCandidates.id, body.candidateId),
+              eq(legalListGenerationCandidates.runId, body.runId),
+              eq(legalListGenerationCandidates.listId, body.listId),
+              eq(legalListGenerationCandidates.workspaceId, workspaceId),
+              eq(legalListGenerationCandidates.status, "accepting"),
+              eq(
+                legalListGenerationCandidates.reservedEntityId,
+                acceptedEntityId,
+              ),
+            ),
+          )
+          .returning({ id: legalListGenerationCandidates.id });
+        if (!released.at(0)) {
+          return Result.ok({ status: "orphan-cleaned" as const });
+        }
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION,
+          resourceId: body.runId,
+          metadata: {
+            operation: "candidate_acceptance_released",
+            candidateId: body.candidateId,
+            reason,
+          },
+        });
+        return Result.ok({ status: "released" as const });
       },
-    });
-    return { status: "released" as const };
-  });
+    ),
+  );
 
 type ReleaseLostClaimOptions = ReleaseAcceptanceOptions & {
   entityId: SafeId<"entity">;
@@ -531,9 +559,13 @@ const finalizeAcceptance = async ({
   ) {
     return { status: "source-missing" as const };
   }
+  const itemSources = liveSources.map((source) => ({
+    id: createSafeId<"legalListItemSource">(),
+    source,
+  }));
   await tx.insert(legalListItemSources).values(
-    liveSources.map((source) => ({
-      id: createSafeId<"legalListItemSource">(),
+    itemSources.map(({ id, source }) => ({
+      id,
       workspaceId,
       listId: body.listId,
       itemEntityId: entityId,
@@ -623,6 +655,13 @@ const finalizeAcceptance = async ({
       message: "Candidate claim was lost",
     });
   }
+  // After the candidate reads as accepted, so each edge names the
+  // extraction run that proposed its passage.
+  await writeFactSourceEdges(tx, workspaceId, {
+    type: "fact-sources",
+    sourceIds: itemSources.map(({ id }) => id),
+    producer: { type: "extraction", runId: body.runId },
+  });
 
   await commitSettledRun(tx, {
     runId: body.runId,

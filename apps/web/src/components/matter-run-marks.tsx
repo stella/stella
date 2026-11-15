@@ -1,12 +1,23 @@
+import { useState } from "react";
+
+import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
-import type { ChatActiveRunState } from "@stll/api-contract/chat";
+import type { ChatTurnInteractionType } from "@stll/api-contract/chat";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { RunStateMark } from "@stll/ui/run-state-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { topMatterRunState } from "@/features/chat/active-runs.logic";
-import type { MatterRunStatus } from "@/features/chat/active-runs.logic";
-import { useFormatter } from "@/i18n/formatting-context";
+import type {
+  ActiveChatRunState,
+  MatterRuns,
+} from "@/features/chat/active-runs.logic";
+import { useFormatter, useRelativeTime } from "@/i18n/formatting-context";
+import type { TranslationKey } from "@/i18n/types";
 
 /**
  * What the reader's chats in a matter are doing, at the end of the matter's
@@ -14,41 +25,20 @@ import { useFormatter } from "@/i18n/formatting-context";
  * follows a mark only when there is more than one. Nothing renders when the
  * matter has no open chat, so quiet matters stay quiet.
  */
-export const MatterRunMarks = ({
-  status,
-}: {
-  status: MatterRunStatus | undefined;
-}) =>
-  topMatterRunState(status) === null || status === undefined ? null : (
-    <OpenRunMarks status={status} />
+export const MatterRunMarks = ({ runs }: { runs: MatterRuns | undefined }) =>
+  topMatterRunState(runs) === null || runs === undefined ? null : (
+    <OpenRunMarks runs={runs} />
   );
 
-const OpenRunMarks = ({ status }: { status: MatterRunStatus }) => {
-  const t = useTranslations();
+const OpenRunMarks = ({ runs }: { runs: MatterRuns }) => {
   const format = useFormatter();
-  const marks = [
-    {
-      count: status.needsYou,
-      label: t("chat.matterRuns.needsYou", { count: status.needsYou }),
-      state: CHAT_ACTIVE_RUN_STATE.needsYou,
-    },
-    {
-      count: status.working,
-      label: t("chat.matterRuns.working", { count: status.working }),
-      state: CHAT_ACTIVE_RUN_STATE.working,
-    },
-  ] as const satisfies readonly {
-    count: number;
-    label: string;
-    state: ChatActiveRunState;
-  }[];
-  const shown = marks.filter(({ count }) => count > 0);
+  const counts = useRunCounts(runs);
   return (
     <span
       className="text-muted-foreground text-3xs flex shrink-0 items-center gap-1.5 leading-none tabular-nums"
       data-slot="matter-run-marks"
     >
-      {shown.map(({ count, label, state }) => (
+      {counts.map(({ count, label, state }) => (
         <span
           aria-label={label}
           className="flex items-center gap-0.5"
@@ -63,32 +53,168 @@ const OpenRunMarks = ({ status }: { status: MatterRunStatus }) => {
   );
 };
 
+/** Each state with open chats, waiting first, with its count and label. */
+export const useRunCounts = (runs: MatterRuns | undefined) => {
+  const t = useTranslations();
+  const counts = [
+    {
+      count: runs?.needsYou.length ?? 0,
+      label: t("chat.matterRuns.needsYou", {
+        count: runs?.needsYou.length ?? 0,
+      }),
+      state: CHAT_ACTIVE_RUN_STATE.needsYou,
+    },
+    {
+      count: runs?.working.length ?? 0,
+      label: t("chat.matterRuns.working", {
+        count: runs?.working.length ?? 0,
+      }),
+      state: CHAT_ACTIVE_RUN_STATE.working,
+    },
+  ] as const satisfies readonly {
+    count: number;
+    label: string;
+    state: ActiveChatRunState;
+  }[];
+  return counts.filter(({ count }) => count > 0);
+};
+
 /**
  * The collapsed rail's version: only the state that matters most, as a
- * badge on the matter's icon.
+ * badge on the matter's icon. It opens the list of the matter's open chats,
+ * each saying what it waits on and linking to it. It sits beside the matter
+ * link rather than inside it, positioned over the icon's corner, so it is a
+ * control of its own.
  */
 export const MatterRunBadge = ({
-  status,
+  runs,
+  workspaceId,
 }: {
-  status: MatterRunStatus | undefined;
+  runs: MatterRuns | undefined;
+  workspaceId: string;
 }) => {
-  const t = useTranslations();
-  const state = topMatterRunState(status);
-  if (state === null || status === undefined) {
+  const state = topMatterRunState(runs);
+  if (state === null || runs === undefined) {
     return null;
   }
-  const label =
-    state === CHAT_ACTIVE_RUN_STATE.needsYou
-      ? t("chat.matterRuns.needsYou", { count: status.needsYou })
-      : t("chat.matterRuns.working", { count: status.working });
   return (
-    <span
-      aria-label={label}
-      className="bg-sidebar absolute -end-1.5 -top-1.5 flex size-3 items-center justify-center rounded-full"
-      data-slot="matter-run-badge"
-      role="img"
-    >
-      <RunStateMark size="badge" state={state} />
-    </span>
+    <MatterRunsPopover runs={runs} state={state} workspaceId={workspaceId} />
   );
 };
+
+const MatterRunsPopover = ({
+  runs,
+  state,
+  workspaceId,
+}: {
+  runs: MatterRuns;
+  state: ActiveChatRunState;
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  const relativeTime = useRelativeTime();
+  const [open, setOpen] = useState(false);
+  const label = useRunCounts(runs)
+    .map((count) => count.label)
+    .join(", ");
+  const close = () => setOpen(false);
+  return (
+    <Popover onOpenChange={setOpen} open={open}>
+      {/* Centred on the corner of the rail's 16px icon, which sits 8px into
+          its 32px button, where the badge used to be drawn. */}
+      <PopoverTrigger
+        aria-label={label}
+        data-slot="matter-run-badge"
+        render={
+          <Button
+            className="absolute start-3 -top-1 z-10"
+            size="icon-xs"
+            variant="ghost"
+          />
+        }
+      >
+        <span className="bg-sidebar flex size-3 items-center justify-center rounded-full">
+          <RunStateMark size="badge" state={state} />
+        </span>
+      </PopoverTrigger>
+      <PopoverPopup
+        align="start"
+        className="w-72"
+        padding="none"
+        side="inline-end"
+      >
+        <ul aria-label={label} className="flex flex-col p-1">
+          {runs.needsYou.map((run) => (
+            <MatterRunRow
+              detail={t(INTERACTION_LABEL_KEY[run.interaction])}
+              key={run.threadId}
+              onOpen={close}
+              since={relativeTime(run.since)}
+              state={run.state}
+              threadId={run.threadId}
+              title={run.threadTitle}
+              workspaceId={workspaceId}
+            />
+          ))}
+          {runs.working.map((run) => (
+            <MatterRunRow
+              detail={t("chat.matterRuns.workingNow")}
+              key={run.threadId}
+              onOpen={close}
+              since={relativeTime(run.since)}
+              state={run.state}
+              threadId={run.threadId}
+              title={run.threadTitle}
+              workspaceId={workspaceId}
+            />
+          ))}
+        </ul>
+      </PopoverPopup>
+    </Popover>
+  );
+};
+
+const MatterRunRow = ({
+  detail,
+  onOpen,
+  since,
+  state,
+  threadId,
+  title,
+  workspaceId,
+}: {
+  detail: string;
+  onOpen: () => void;
+  since: string;
+  state: ActiveChatRunState;
+  threadId: string;
+  title: string;
+  workspaceId: string;
+}) => (
+  <li>
+    <Link
+      className="hover:bg-accent focus-visible:bg-accent flex min-w-0 items-start gap-2 rounded-md px-2 py-1.5 text-sm outline-none"
+      onClick={onOpen}
+      params={{ threadId, workspaceId }}
+      to="/chat/workspaces/$workspaceId/$threadId"
+    >
+      <span className="flex size-4 shrink-0 items-center justify-center pt-0.5">
+        <RunStateMark size="row" state={state} />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <TruncatedText render={<BidiText as="span" />}>{title}</TruncatedText>
+        <span className="text-muted-foreground text-xs">
+          {detail} · {since}
+        </span>
+      </span>
+    </Link>
+  </li>
+);
+
+/** What each kind of wait asks of the reader, in their words. */
+const INTERACTION_LABEL_KEY = {
+  "ask-user": "chat.matterRuns.waitsOn.askUser",
+  approval: "chat.matterRuns.waitsOn.approval",
+  "client-tool": "chat.matterRuns.waitsOn.clientTool",
+  "harness-question": "chat.matterRuns.waitsOn.harnessQuestion",
+} as const satisfies Record<ChatTurnInteractionType, TranslationKey>;

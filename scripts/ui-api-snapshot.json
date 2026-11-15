@@ -792,6 +792,7 @@
     "./components/hex-color-picker": ["HexColorPicker"],
     "./components/horizontal-scroller": [
       "HorizontalScroller",
+      "fitsRow",
       "scrollState",
       "wheelDeltaPixels"
     ],
@@ -1123,6 +1124,7 @@
     "./field-trigger": ["FIELD_TRIGGER_CLASS_NAME"],
     "./file-input": ["FileInput"],
     "./file-picker": ["openFilePicker"],
+    "./file-size": ["formatFileSize", "getFileSizeDisplay"],
     "./form": ["Form", "formVariants"],
     "./frame": [
       "Frame",
@@ -1147,6 +1149,7 @@
     "./hooks/use-viewport-width": ["useViewportWidth"],
     "./horizontal-scroller": [
       "HorizontalScroller",
+      "fitsRow",
       "scrollState",
       "wheelDeltaPixels"
     ],
@@ -1207,10 +1210,10 @@
       "ClipboardListIcon",
       "Clock3Icon",
       "ClockIcon",
+      "CloudIcon",
       "CogIcon",
       "Columns2Icon",
       "Columns3Icon",
-      "ColumnsIcon",
       "CommandIcon",
       "CompassIcon",
       "CopyFromMenuIcon",
@@ -1225,6 +1228,7 @@
       "DownloadIcon",
       "DuplicateIcon",
       "EditIcon",
+      "EditPagesIcon",
       "EllipsisIcon",
       "EllipsisVerticalIcon",
       "EqualIcon",
@@ -1240,7 +1244,6 @@
       "FileIcon",
       "FileImageIcon",
       "FileOutputIcon",
-      "FilePenLineIcon",
       "FilePlus2Icon",
       "FilePlusIcon",
       "FileQuestionIcon",
@@ -1966,6 +1969,7 @@
       "secondary"
     ],
     "ButtonTextRun.layout": ["wrap"],
+    "ButtonTextRun.variant": ["link", "plain"],
     "ColorPicker.align": ["center", "end", "start"],
     "ColorPicker.side": ["bottom", "left", "right", "top"],
     "ColorPickerContent.presentation": ["inline", "popover"],

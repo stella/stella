@@ -14,7 +14,7 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { FEEDBACK_CHANNELS } from "@/components/feedback-dialog.logic";
 import {
   isNetworkError,
@@ -423,7 +423,7 @@ const UnexpectedRouteError = ({
               {visibleErrorReference}
             </TruncatedText>
           </div>
-          <CopyActionButton
+          <CopyControl
             disabled={errorReference === null}
             iconClassName="size-4"
             iconOnly

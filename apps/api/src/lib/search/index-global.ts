@@ -674,23 +674,14 @@ const readGlobalSearch = async (
       case "initial":
         return {
           isFirstPage: true,
-          legacyOffset: null,
           searchCursor: null,
           seen: 0,
         };
       case "keyset":
         return {
           isFirstPage: false,
-          legacyOffset: null,
           searchCursor: parsedCursor.cursor,
           seen: parsedCursor.cursor.seen,
-        };
-      case "legacy":
-        return {
-          isFirstPage: false,
-          legacyOffset: parsedCursor.offset,
-          searchCursor: null,
-          seen: parsedCursor.offset,
         };
       case "invalid":
         return panic("searchGlobal received an invalid cursor");
@@ -700,9 +691,9 @@ const readGlobalSearch = async (
       }
     }
   })();
-  const { isFirstPage, legacyOffset, searchCursor, seen } = pagination;
+  const { isFirstPage, searchCursor, seen } = pagination;
   const pageLimit = Math.min(limit, GLOBAL_SEARCH_RESULT_LIMIT - seen);
-  const fetchLimit = (legacyOffset ?? 0) + pageLimit + 1;
+  const fetchLimit = pageLimit + 1;
   // Counts and facets are computed only on the first page. Subsequent
   // pages reuse the values the client already has, saving ~7 of the
   // 15 SQL round-trips per request.
@@ -762,7 +753,8 @@ const readGlobalSearch = async (
   });
 
   const entityPromise = rowsWhen(hasSelectedEntityType(selected), () =>
-    database.execute(sql`
+    database.execute(
+      sql`
       SELECT
         sd.entity_id AS id,
         sd.workspace_id,
@@ -804,13 +796,16 @@ const readGlobalSearch = async (
         })}
       ORDER BY ${searchOrderBy({ id: sql`sd.entity_id`, updatedAt: sql`sd.updated_at` })}
       LIMIT ${fetchLimit}
-    `),
+    `,
+      "objects",
+    ),
   );
 
   const matterPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "matter"),
     () =>
-      database.execute(sql`
+      database.execute(
+        sql`
       SELECT
         wsd.workspace_id AS id,
         wsd.title,
@@ -841,7 +836,9 @@ const readGlobalSearch = async (
         })}
       ORDER BY ${searchOrderBy({ id: sql`wsd.workspace_id`, updatedAt: sql`wsd.updated_at` })}
       LIMIT ${fetchLimit}
-    `),
+    `,
+        "objects",
+      ),
   );
 
   const contactPromise = rowsWhen(
@@ -849,7 +846,8 @@ const readGlobalSearch = async (
       accessibleWorkspaceIds.length > 0 &&
       shouldSearchType(selected, "contact"),
     () =>
-      database.execute(sql`
+      database.execute(
+        sql`
       SELECT
         csd.contact_id AS id,
         csd.contact_type,
@@ -874,7 +872,9 @@ const readGlobalSearch = async (
         })}
       ORDER BY ${searchOrderBy({ id: sql`csd.contact_id`, updatedAt: sql`csd.updated_at` })}
       LIMIT ${fetchLimit}
-    `),
+    `,
+        "objects",
+      ),
   );
 
   const chatScope = chatThreadScopeSql({
@@ -894,7 +894,8 @@ const readGlobalSearch = async (
         pageCursor: GlobalSearchCursor | null,
         rowLimit: number,
       ) =>
-        await database.execute<ChatSearchCandidateRow>(sql`
+        await database.execute<ChatSearchCandidateRow>(
+          sql`
       SELECT
         t.id AS id,
         t.workspace_id,
@@ -945,7 +946,9 @@ const readGlobalSearch = async (
         })}
       ORDER BY ${searchOrderBy({ id: sql`t.id`, updatedAt: sql`t.updated_at` })}
       LIMIT ${rowLimit}
-    `);
+    `,
+          "objects",
+        );
       if (!hasSearchQuery) {
         return {
           rows: await readPage(searchCursor, fetchLimit),
@@ -963,7 +966,8 @@ const readGlobalSearch = async (
     hasSearchQuery || updatedFrom !== undefined;
   const countPromises = [
     countWhen(isFirstPage && hasSelectedEntityType(selected), () =>
-      database.execute(sql`
+      database.execute(
+        sql`
         SELECT count(*)::int AS total
         FROM search_documents sd
         LEFT JOIN entities e
@@ -977,21 +981,26 @@ const readGlobalSearch = async (
           ${entityUpdatedFilter}
           ${entityTextSearchFilter}
           ${entityWorkspaceFilter}
-      `),
+      `,
+        "objects",
+      ),
     ),
     countWhen(
       isFirstPage &&
         !restrictToEntities &&
         shouldSearchType(selected, "matter"),
       () =>
-        database.execute(sql`
+        database.execute(
+          sql`
         SELECT count(*)::int AS total
         FROM workspace_search_documents wsd
         WHERE wsd.organization_id = ${organizationId}
           ${matterUpdatedFilter}
           ${matterTextSearchFilter}
           ${matterWorkspaceFilter}
-      `),
+      `,
+          "objects",
+        ),
     ),
     countWhen(
       isFirstPage &&
@@ -999,19 +1008,23 @@ const readGlobalSearch = async (
         accessibleWorkspaceIds.length > 0 &&
         shouldSearchType(selected, "contact"),
       () =>
-        database.execute(sql`
+        database.execute(
+          sql`
         SELECT count(*)::int AS total
         FROM contact_search_documents csd
         WHERE csd.organization_id = ${organizationId}
           ${contactUpdatedFilter}
           ${contactTextSearchFilter}
           ${contactWorkspaceFilter}
-      `),
+      `,
+          "objects",
+        ),
     ),
     countWhen(
       isFirstPage && !restrictToEntities && shouldSearchType(selected, "chat"),
       () =>
-        database.execute(sql`
+        database.execute(
+          sql`
         SELECT count(*)::int AS total
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
@@ -1021,14 +1034,17 @@ const readGlobalSearch = async (
             ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
           ${chatUpdatedFilter}
           ${chatTextSearchFilter}
-      `),
+      `,
+          "objects",
+        ),
     ),
   ] as const;
 
   const entityTypeFacetPromise = rowsWhen(
     isFirstPage && hasSelectedEntityType(selected),
     () =>
-      database.execute(sql`
+      database.execute(
+        sql`
       SELECT sd.kind AS value, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1045,7 +1061,9 @@ const readGlobalSearch = async (
       GROUP BY sd.kind
       ORDER BY count DESC, sd.kind ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
-    `),
+    `,
+        "objects",
+      ),
   );
 
   // The primary count already covers a selected type (or every type when no
@@ -1063,34 +1081,41 @@ const readGlobalSearch = async (
   const matterTypeFacetCountPromise = countWhen(
     shouldCountAlternativeTypeFacet("matter"),
     () =>
-      database.execute(sql`
+      database.execute(
+        sql`
       SELECT count(*)::int AS total
       FROM workspace_search_documents wsd
       WHERE wsd.organization_id = ${organizationId}
         ${matterUpdatedFilter}
         ${matterTextSearchFilter}
         ${matterWorkspaceFilter}
-    `),
+    `,
+        "objects",
+      ),
   );
 
   const contactTypeFacetCountPromise = countWhen(
     shouldCountAlternativeTypeFacet("contact") &&
       accessibleWorkspaceIds.length > 0,
     () =>
-      database.execute(sql`
+      database.execute(
+        sql`
         SELECT count(*)::int AS total
         FROM contact_search_documents csd
         WHERE csd.organization_id = ${organizationId}
           ${contactUpdatedFilter}
           ${contactTextSearchFilter}
           ${contactWorkspaceFilter}
-      `),
+      `,
+        "objects",
+      ),
   );
 
   const chatTypeFacetCountPromise = countWhen(
     shouldCountAlternativeTypeFacet("chat"),
     () =>
-      database.execute(sql`
+      database.execute(
+        sql`
       SELECT count(*)::int AS total
       FROM chat_thread_search_documents cst
       JOIN chat_threads t ON t.id = cst.thread_id
@@ -1100,7 +1125,9 @@ const readGlobalSearch = async (
           ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
-    `),
+    `,
+        "objects",
+      ),
   );
 
   const entityWorkspaceFacetQuery = hasSelectedEntityType(selected)
@@ -1138,7 +1165,8 @@ const readGlobalSearch = async (
     isFirstPage &&
       (hasSelectedEntityType(selected) || shouldSearchType(selected, "matter")),
     () =>
-      database.execute(sql`
+      database.execute(
+        sql`
         SELECT value, label, count(*)::int AS count
         FROM (
           ${entityWorkspaceFacetQuery}
@@ -1148,7 +1176,9 @@ const readGlobalSearch = async (
         GROUP BY value, label
         ORDER BY count DESC, value ASC
         LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
-      `),
+      `,
+        "objects",
+      ),
   );
 
   // Editor facet drops its own filter so picking one editor still
@@ -1157,7 +1187,8 @@ const readGlobalSearch = async (
   const editorFacetPromise = rowsWhen(
     isFirstPage && hasSelectedEntityType(selected),
     () =>
-      database.execute(sql`
+      database.execute(
+        sql`
       SELECT editor.id AS value, editor.name AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1174,14 +1205,17 @@ const readGlobalSearch = async (
       GROUP BY editor.id, editor.name
       ORDER BY count DESC, editor.name ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
-    `),
+    `,
+        "objects",
+      ),
   );
 
   // Mime facet drops its own filter for the same reason.
   const mimeTypeFacetPromise = rowsWhen(
     isFirstPage && hasSelectedEntityType(selected),
     () =>
-      database.execute(sql`
+      database.execute(
+        sql`
       SELECT mime_type.value AS value, mime_type.value AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1200,7 +1234,9 @@ const readGlobalSearch = async (
       GROUP BY mime_type.value
       ORDER BY count DESC, mime_type.value ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
-    `),
+    `,
+        "objects",
+      ),
   );
 
   const [
@@ -1253,8 +1289,7 @@ const readGlobalSearch = async (
   ].toSorted(compareScoredSearchHits);
 
   const page = paginateScoredSearchHits({
-    scoredHits:
-      legacyOffset === null ? scoredHits : scoredHits.slice(legacyOffset),
+    scoredHits,
     limit: pageLimit,
     seen,
   });
@@ -1416,7 +1451,8 @@ const readGlobalFacet = async (
     if (!hasSelectedEntityType(selected)) {
       return { buckets: [] };
     }
-    const rows = await database.execute(sql`
+    const rows = await database.execute(
+      sql`
       SELECT editor.id AS value, editor.name AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1434,7 +1470,9 @@ const readGlobalFacet = async (
       GROUP BY editor.id, editor.name
       ORDER BY count DESC, editor.name ASC
       LIMIT ${limit}
-    `);
+    `,
+      "objects",
+    );
     return { buckets: facetBuckets(toStringFacetMap(rows)) };
   }
 
@@ -1442,7 +1480,8 @@ const readGlobalFacet = async (
     if (!hasSelectedEntityType(selected)) {
       return { buckets: [] };
     }
-    const rows = await database.execute(sql`
+    const rows = await database.execute(
+      sql`
       SELECT mime_type.value AS value, mime_type.value AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1462,7 +1501,9 @@ const readGlobalFacet = async (
       GROUP BY mime_type.value
       ORDER BY count DESC, mime_type.value ASC
       LIMIT ${limit}
-    `);
+    `,
+      "objects",
+    );
     return { buckets: facetBuckets(toMimeTypeFacetMap(rows)) };
   }
 
@@ -1504,7 +1545,8 @@ const readGlobalFacet = async (
     `
     : emptyWorkspaceFacetQuery;
 
-  const rows = await database.execute(sql`
+  const rows = await database.execute(
+    sql`
     SELECT value, label, count(*)::int AS count
     FROM (
       ${entityWorkspaceFacetQuery}
@@ -1516,7 +1558,9 @@ const readGlobalFacet = async (
     GROUP BY value, label
     ORDER BY count DESC, value ASC
     LIMIT ${limit}
-  `);
+  `,
+    "objects",
+  );
   return { buckets: facetBuckets(toStringFacetMap(rows)) };
 };
 

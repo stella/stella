@@ -15,11 +15,11 @@ import {
   ArchiveIcon,
   DownloadIcon,
   DuplicateIcon,
+  EditPagesIcon,
   EllipsisVerticalIcon,
   EyeIcon,
   FileDownIcon,
   FileOutputIcon,
-  FilePenLineIcon,
   FileTextIcon,
   FolderPlusIcon,
   FolderSyncIcon,
@@ -1669,7 +1669,7 @@ export const RowFeatureMenuActions = ({
         )}
       {onEditPages !== undefined && (
         <MenuItem onClick={onEditPages}>
-          <FilePenLineIcon />
+          <EditPagesIcon />
           {t("workspaces.pdf.pageEditor.editPages")}
         </MenuItem>
       )}

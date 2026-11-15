@@ -20,7 +20,6 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { apiDateSchema } from "@stll/api-contract/api-date";
 import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { locateQuote } from "@stll/legal-ast/quote-locate";
@@ -29,8 +28,8 @@ import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import {
   FACT_CONFIDENCES,
   FACT_DETAIL_LIMITS,
+  parsePartialDate,
 } from "@/api/lib/lists/fact-details";
-import type { FactDatePrecision } from "@/api/lib/lists/fact-details";
 import type { CandidateFactDetails } from "@/api/lib/lists/generation/candidate-fact-details";
 import type { LegalListSourceLocator } from "@/api/lib/lists/types";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
@@ -142,35 +141,13 @@ const nonEmpty = (text: string | null, max: number): string | null => {
   return clipped.length === 0 ? null : clipped;
 };
 
-const DATE_SHAPE = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/u;
-
-/** The stated date at the precision the model gave, or null when it is not a
- *  real calendar date. */
-export const parseOccurredOn = (
-  value: string | null,
-): { date: string; precision: FactDatePrecision } | null => {
-  const match = value === null ? null : DATE_SHAPE.exec(value.trim());
-  if (!match) {
-    return null;
-  }
-  const [, year, month, day] = match;
-  let precision: FactDatePrecision = "day";
-  if (month === undefined) {
-    precision = "year";
-  } else if (day === undefined) {
-    precision = "month";
-  }
-  const date = `${year ?? ""}-${month ?? "01"}-${day ?? "01"}`;
-  return v.is(apiDateSchema, date) ? { date, precision } : null;
-};
-
 const factDetails = (raw: RawFact): CandidateFactDetails => {
   const contested = nonEmpty(
     raw.contestedMeaning,
     FACT_DETAIL_LIMITS.INTERPRETATION_NOTE_MAX,
   );
   return {
-    occurredOn: parseOccurredOn(raw.occurredOn),
+    occurredOn: parsePartialDate(raw.occurredOn),
     evidenceKind: EXTRACTED_EVIDENCE_KIND[raw.evidenceKind],
     medium: nonEmpty(raw.medium, FACT_DETAIL_LIMITS.MEDIUM_MAX),
     confidence: raw.confidence,

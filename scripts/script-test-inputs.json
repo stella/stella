@@ -24,6 +24,7 @@
     "scripts/check-concurrency-exceptions.test.ts": ["**"],
     "scripts/check-contract-domain-ledger.test.ts": ["**"],
     "scripts/check-deploy-env-contract.test.ts": ["**"],
+    "scripts/check-desktop-support-floor.test.ts": ["**"],
     "scripts/check-dev-runner-config-guard.test.ts": ["**"],
     "scripts/check-duplicate-raster-assets.test.ts": [
       "apps/**/*.{png,jpg,jpeg,webp,gif}"
@@ -35,6 +36,7 @@
     "scripts/check-migration-baseline.test.ts": ["**"],
     "scripts/check-migrations.test.ts": ["**"],
     "scripts/check-model-defaults-ledger.test.ts": ["**"],
+    "scripts/check-mutation-query-invalidation.test.ts": ["**"],
     "scripts/check-npm-publish-lag.test.ts": ["**"],
     "scripts/check-npm-publish-readiness.test.ts": ["**"],
     "scripts/check-oxlint-fixture-counts.test.ts": ["**"],
@@ -57,6 +59,11 @@
     "scripts/check-rust-test-determinism.test.ts": ["**"],
     "scripts/check-staged-secrets.test.ts": ["**"],
     "scripts/check-swallowed-item-error-ledger.test.ts": ["**"],
+    "scripts/check-tailwind-sources.test.ts": [
+      "apps/**/*.css",
+      "apps/*/package.json",
+      "packages/*/package.json"
+    ],
     "scripts/check-test-state-baseline.test.ts": ["**"],
     "scripts/check-tracked-cloud-reports.test.ts": ["**"],
     "scripts/check-tracked-symlinks.test.ts": ["**"],
@@ -174,6 +181,7 @@
     "scripts/migration-rehearsal-writer-gap.test.ts": ["**"],
     "scripts/migration-restamp.test.ts": ["**"],
     "scripts/model-catalog-check.test.ts": ["**"],
+    "scripts/mutation-query-census.test.ts": ["**"],
     "scripts/npm-release-summary.test.ts": ["**"],
     "scripts/online-ddl-lock-census.test.ts": ["**"],
     "scripts/oxlint-additional-guards.test.ts": ["**"],

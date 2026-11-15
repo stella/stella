@@ -2530,7 +2530,14 @@ const createHarness = ({
           if (query.startsWith("SELECT 1 FROM public.case_law_sources")) {
             return [];
           }
-          if (query.startsWith("SELECT 1 FROM public.chat_run_log_entries")) {
+          if (
+            query.startsWith("SELECT 1 FROM public.search_history_entries") ||
+            query.startsWith("SELECT 1 FROM public.chat_run_log_entries") ||
+            // No claim written before asserted dates is left to read.
+            query.startsWith("SELECT 1 FROM public.legal_list_claims") ||
+            // No chat turn stored before positions is left to number.
+            query.startsWith("SELECT 1 FROM public.chat_turns")
+          ) {
             return [];
           }
           if (query.startsWith("SELECT 1 FROM public.")) {
@@ -2629,6 +2636,11 @@ const createHarness = ({
           }
           if (query.includes("starts_with")) {
             return queryIndexArtifacts(params);
+          }
+          // The graph edge backfill's matter walk: no matter holds a
+          // verification run or a Spot, so there is nothing to derive.
+          if (query.includes('FROM "workspaces" workspace')) {
+            return [];
           }
 
           return queryIndexState(params);

@@ -1135,6 +1135,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "DELETE /v1/chat/threads/:threadId/limit-reminder",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "DELETE /v1/chat/tool-grants/:grantId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1308,6 +1312,10 @@
     },
     {
       "id": "DELETE /v1/style-sets/:styleSetId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/tasks/:workspaceId/:taskId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -1603,6 +1611,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/ai/ask-email",
+      "reason": "Model-backed surface over a bounded request; it reads organization AI settings and, when a matter is named, that matter's ranked search results under the caller's access, and persists nothing beyond usage rows, awaiting the write harness for statements and emitted response bytes."
+    },
+    {
       "id": "POST /v1/ai/draft-email",
       "reason": "Model-backed surface over a bounded request; it reads only organization AI settings and persists nothing beyond usage rows, awaiting the write harness for statements and emitted response bytes."
     },
@@ -1763,6 +1775,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/chat/threads/:threadId/turns/:turnId/steer",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/chat/tool-grants",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1796,6 +1812,14 @@
     },
     {
       "id": "POST /v1/clauses/import",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/conflict-checks",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/conflict-checks/:checkId/decision",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -1833,6 +1857,10 @@
     {
       "id": "POST /v1/contacts/procuracao-upload",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/data-exports",
+      "reason": "Creates a durable export job under the organization capacity fence; archive work is covered by worker lifecycle tests, pending the write-scaling harness."
     },
     {
       "id": "POST /v1/desktop-edit-handoffs/:handoffId/opened",
@@ -1873,6 +1901,14 @@
     {
       "id": "POST /v1/desktop/billing-drafts",
       "reason": "Returns review-only proposals for at most 20 selected entries and never records time; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
+    },
+    {
+      "id": "POST /v1/desktop/dictation/cleanup",
+      "reason": "Returns transient typed text for one bounded transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
+    },
+    {
+      "id": "POST /v1/desktop/dictation/transcribe",
+      "reason": "Transcribes one bounded transient audio chunk and stores only usage and audit events; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
     },
     {
       "id": "POST /v1/desktop/presence",
@@ -2107,6 +2143,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/lists/:workspaceId/claim-rechecks/bulk",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/lists/:workspaceId/claim-reviews",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2288,6 +2328,10 @@
     },
     {
       "id": "POST /v1/organization-settings/sanctions-monitoring",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/verification-decision-model",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2495,6 +2539,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/skills/from-chat",
+      "reason": "Writes nothing; drafts a skill from the caller's chat with one model call and returns it for review. Awaits the write harness like the other skill draft POST routes."
+    },
+    {
       "id": "POST /v1/skills/generate-draft",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2504,6 +2552,10 @@
     },
     {
       "id": "POST /v1/skills/import-urls",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/save-draft",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2859,6 +2911,18 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "PUT /v1/chat/local-runners/:desktopId/folders/:linkId/approval",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/chat/local-runs/:runId/steps/:stepKey/content",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/chat/threads/:threadId/limit-reminder",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "PUT /v1/clause-categories",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2879,6 +2943,10 @@
       "reason": "Creates one invoice and claims selected work within a transaction; awaits the write scaling harness."
     },
     {
+      "id": "PUT /v1/conflict-checks/:checkId/matter/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "PUT /v1/contacts",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2889,6 +2957,10 @@
     {
       "id": "PUT /v1/desktop/billing-drafts/settings",
       "reason": "Upserts one authenticated organization/user primary-key row and records an audit event; no per-entry work grows with existing preferences. A write-harness fixture for consent changes is pending."
+    },
+    {
+      "id": "PUT /v1/desktop/runner/runs/:runId/steps/:stepKey/content",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
       "id": "PUT /v1/desktop/time-entries/:workspaceId",

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { installRenderProbe, measureAction } from "../helpers/render-probe";
+import { emptyReply, respond } from "../helpers/route-mock";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
@@ -65,7 +66,7 @@ test("an action waits for a finite request that began before measurement", async
   await page.route("**/__render-probe-pending", async (route) => {
     // real-time: the request must outlive the 500 ms quiet window to detect a missed in-flight request.
     await sleep(1500);
-    await route.fulfill({ status: 204 });
+    await respond(route, emptyReply(204));
     responseFinished = true;
   });
   const requested = page.waitForRequest("**/__render-probe-pending");

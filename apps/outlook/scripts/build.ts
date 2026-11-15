@@ -14,6 +14,7 @@ import {
   assertOfficeRuntimeEntryIsIsolated,
   assertOutlookReleaseVersion,
   createContentHashedAssetName,
+  FONT_LICENCE_FILE_NAME,
   getOutlookDeploymentHeaderRules,
   normalizeOutlookReleaseOrigins,
   resolveOutlookFrameAncestors,
@@ -37,6 +38,7 @@ const DIST_DIR = path.resolve(
 const DIST_ASSETS_DIR = path.resolve(DIST_DIR, "assets");
 const UNHASHED_ASSETS_DIR = path.resolve(DIST_DIR, ".assets");
 const PUBLIC_ASSETS_DIR = path.resolve(APP_ROOT, "public", "assets");
+const PUBLIC_FONTS_DIR = path.resolve(APP_ROOT, "public", "fonts");
 const PUBLIC_ROBOTS_PATH = path.resolve(APP_ROOT, "public", "robots.txt");
 const COMMANDS_ENTRY_PATH = path.resolve(APP_ROOT, "src", "commands.ts");
 const EVENT_RUNTIME_ENTRY_PATH = path.resolve(APP_ROOT, "src", "events.ts");
@@ -208,6 +210,18 @@ for (const fileName of readdirSync(PUBLIC_ASSETS_DIR)) {
   }
   copyFileSync(
     path.resolve(PUBLIC_ASSETS_DIR, fileName),
+    path.resolve(DIST_ASSETS_DIR, fileName),
+  );
+}
+// DM Sans, the design system's face (`--font-sans`), served beside the
+// hashed code; the same files the web app ships. The OFL requires its text to
+// travel with the fonts, so OFL.txt ships too.
+for (const fileName of readdirSync(PUBLIC_FONTS_DIR)) {
+  if (!fileName.endsWith(".woff2") && fileName !== FONT_LICENCE_FILE_NAME) {
+    continue;
+  }
+  copyFileSync(
+    path.resolve(PUBLIC_FONTS_DIR, fileName),
     path.resolve(DIST_ASSETS_DIR, fileName),
   );
 }

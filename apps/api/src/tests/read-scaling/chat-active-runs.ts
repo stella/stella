@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { inArray } from "drizzle-orm";
 
+import type { ChatTurnInteractionType } from "@stll/api-contract/chat";
+
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
@@ -24,6 +26,8 @@ export type SeededChatTurn = {
   createdAt: Date;
   /** The start of the turn's current active span; null when it has none. */
   activeStartedAt?: Date | null | undefined;
+  /** What an `awaiting-user` turn waits on; defaults to an approval. */
+  interactionType?: ChatTurnInteractionType | undefined;
   organizationId: SafeId<"organization">;
   status: ChatTurnStatus;
   title: string;
@@ -44,7 +48,12 @@ const statePayload = (
   {
     assistantMessageId,
     createdAt,
-  }: { assistantMessageId: SafeId<"chatMessage">; createdAt: Date },
+    interactionType = "approval",
+  }: {
+    assistantMessageId: SafeId<"chatMessage">;
+    createdAt: Date;
+    interactionType?: ChatTurnInteractionType | undefined;
+  },
 ) => {
   const lease = new Date(createdAt.getTime() + HOUR_MS);
   const settledAt = new Date(createdAt.getTime() + 1000);
@@ -57,7 +66,7 @@ const statePayload = (
       return {
         assistantMessageId,
         interactionToolCallId: "call-1",
-        interactionType: "approval" as const,
+        interactionType,
       };
     case "completed":
       return { assistantMessageId, settledAt };

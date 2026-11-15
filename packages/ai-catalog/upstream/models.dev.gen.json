@@ -2626,7 +2626,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "global.openai.gpt-5.6-sol": {
@@ -2678,7 +2678,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "global.openai.gpt-5.6-terra": {
@@ -2730,7 +2730,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "global.openai.gpt-6-astra": {
@@ -2833,7 +2833,7 @@
           }
         ],
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "global.openai.gpt-6-sol": {
@@ -2885,7 +2885,7 @@
           }
         ],
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "global.openai.gpt-6.1-sol": {
@@ -2988,7 +2988,7 @@
           }
         ],
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "global.xai.grok-4.6": {
@@ -3367,8 +3367,7 @@
         "modalities": {
           "input": [
             "text",
-            "image",
-            "pdf"
+            "image"
           ]
         },
         "reasoning": true,
@@ -3386,7 +3385,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "in.openai.gpt-5.6-terra": {
@@ -3420,8 +3419,7 @@
         "modalities": {
           "input": [
             "text",
-            "image",
-            "pdf"
+            "image"
           ]
         },
         "reasoning": true,
@@ -3439,7 +3437,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "jp.amazon.nova-2-lite-v1:0": {
@@ -4312,7 +4310,7 @@
           }
         ],
         "release_date": "2026-04-23",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai.gpt-5.6-luna": {
@@ -4365,7 +4363,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai.gpt-5.6-sol": {
@@ -4418,7 +4416,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai.gpt-5.6-terra": {
@@ -4471,7 +4469,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai.gpt-6-astra": {
@@ -4576,7 +4574,7 @@
           }
         ],
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai.gpt-6-sol": {
@@ -4629,7 +4627,7 @@
           }
         ],
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai.gpt-6.1-sol": {
@@ -4734,7 +4732,7 @@
           }
         ],
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai.gpt-oss-120b": {
@@ -6063,7 +6061,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "us.openai.gpt-5.6-sol": {
@@ -6115,7 +6113,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "us.openai.gpt-5.6-terra": {
@@ -6167,7 +6165,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "us.openai.gpt-6-astra": {
@@ -6270,7 +6268,7 @@
           }
         ],
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "us.openai.gpt-6-sol": {
@@ -6322,7 +6320,7 @@
           }
         ],
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "us.openai.gpt-6.1-sol": {
@@ -6425,7 +6423,7 @@
           }
         ],
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "us.writer.palmyra-x4-v1:0": {
@@ -7436,22 +7434,8 @@
       },
       "gemini-2.5-computer-use-preview-10-2025": {
         "cost": {
-          "context_over_200k": {
-            "input": 2.5,
-            "output": 15
-          },
           "input": 1.25,
-          "output": 10,
-          "tiers": [
-            {
-              "input": 2.5,
-              "output": 15,
-              "tier": {
-                "size": 200000,
-                "type": "context"
-              }
-            }
-          ]
+          "output": 10
         },
         "limit": {
           "output": 64000
@@ -8057,7 +8041,7 @@
           "output_audio": 21
         },
         "limit": {
-          "output": 32768
+          "output": 16384
         },
         "modalities": {
           "input": [
@@ -8237,6 +8221,41 @@
           }
         ],
         "release_date": "2026-11-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gemini-4-hydrogen": {
+        "cost": {
+          "cache_read": 0.075,
+          "input": 1.5,
+          "input_audio": 1.5,
+          "output": 7.5
+        },
+        "limit": {
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "release_date": "2026-11-12",
         "temperature": true,
         "tool_call": true
       },
@@ -8420,6 +8439,10 @@
         "tool_call": true
       },
       "gemma-4-26b-a4b-it": {
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
         "limit": {
           "output": 32768
         },
@@ -8440,6 +8463,10 @@
         "tool_call": true
       },
       "gemma-4-31b-it": {
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
         "limit": {
           "output": 32768
         },
@@ -8552,7 +8579,8 @@
         },
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ]
         },
         "reasoning": true,
@@ -8757,7 +8785,7 @@
           "output": 0.1
         },
         "limit": {
-          "output": 262144
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -8937,9 +8965,9 @@
       },
       "mistral-large-latest": {
         "cost": {
-          "cache_read": 0.05,
-          "input": 0.5,
-          "output": 1.5
+          "cache_read": 0.07,
+          "input": 0.7,
+          "output": 2.1
         },
         "limit": {
           "output": 262144
@@ -8951,8 +8979,18 @@
             "pdf"
           ]
         },
-        "reasoning": false,
-        "release_date": "2024-11-01",
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "release_date": "2026-10-06",
         "temperature": true,
         "tool_call": true
       },
@@ -9333,6 +9371,11 @@
   "openai": {
     "models": {
       "chatgpt-image-latest": {
+        "cost": {
+          "cache_read": 1.25,
+          "input": 5,
+          "output": 10
+        },
         "limit": {
           "output": 0
         },
@@ -10046,7 +10089,7 @@
           }
         ],
         "release_date": "2026-04-23",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-5.5-pro": {
@@ -10143,7 +10186,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-5.6-luna": {
@@ -10196,7 +10239,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-5.6-sol": {
@@ -10249,7 +10292,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-5.6-terra": {
@@ -10302,7 +10345,7 @@
           }
         ],
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-6-astra": {
@@ -10407,7 +10450,7 @@
           }
         ],
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-6-sol": {
@@ -10460,7 +10503,7 @@
           }
         ],
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-6.1-sol": {
@@ -10565,7 +10608,7 @@
           }
         ],
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-daybreak-blue-latest": {
@@ -10618,7 +10661,7 @@
           }
         ],
         "release_date": "2026-08-07",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-daybreak-red-latest": {
@@ -10671,6 +10714,11 @@
         "tool_call": false
       },
       "gpt-image-1.5": {
+        "cost": {
+          "cache_read": 1.25,
+          "input": 5,
+          "output": 10
+        },
         "limit": {
           "output": 0
         },
@@ -11842,11 +11890,10 @@
         "temperature": false,
         "tool_call": true
       },
-      "baidu/ernie-5.5-flash-preview": {
+      "baidu/ernie-5.5-flash-preview:free": {
         "cost": {
-          "cache_read": 0.028,
-          "input": 0.28,
-          "output": 1.13
+          "input": 0,
+          "output": 0
         },
         "limit": {
           "output": 921600
@@ -11899,76 +11946,6 @@
         "temperature": true,
         "tool_call": true
       },
-      "bytedance-seed/seed-1.6": {
-        "cost": {
-          "input": 0.25,
-          "output": 2,
-          "tiers": [
-            {
-              "input": 0.5,
-              "output": 4,
-              "tier": {
-                "size": 128000,
-                "type": "context"
-              }
-            }
-          ]
-        },
-        "limit": {
-          "output": 32768
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ]
-        },
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "release_date": "2025-10-15",
-        "temperature": true,
-        "tool_call": true
-      },
-      "bytedance-seed/seed-1.6-flash": {
-        "cost": {
-          "input": 0.075,
-          "output": 0.3,
-          "tiers": [
-            {
-              "input": 0.1,
-              "output": 0.8,
-              "tier": {
-                "size": 128000,
-                "type": "context"
-              }
-            }
-          ]
-        },
-        "limit": {
-          "output": 32768
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ]
-        },
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "release_date": "2025-08-28",
-        "temperature": true,
-        "tool_call": true
-      },
       "bytedance-seed/seed-2-1-turbo": {
         "cost": {
           "input": 0.5,
@@ -11991,47 +11968,6 @@
           }
         ],
         "release_date": "2026-06-23",
-        "temperature": true,
-        "tool_call": true
-      },
-      "bytedance-seed/seed-2.0-code": {
-        "cost": {
-          "input": 0.5,
-          "output": 3,
-          "tiers": [
-            {
-              "input": 1,
-              "output": 6,
-              "tier": {
-                "size": 128000,
-                "type": "context"
-              }
-            }
-          ]
-        },
-        "limit": {
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ]
-        },
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "release_date": "2026-02-14",
         "temperature": true,
         "tool_call": true
       },
@@ -12520,12 +12456,12 @@
       },
       "deepseek/deepseek-v4-pro": {
         "cost": {
-          "cache_read": 0.079605,
-          "input": 0.95526,
-          "output": 1.91052
+          "cache_read": 0.25,
+          "input": 0.9,
+          "output": 1.5
         },
         "limit": {
-          "output": 384000
+          "output": 393216
         },
         "modalities": {
           "input": [
@@ -12579,9 +12515,9 @@
       },
       "deepseek/deepseek-v4.1-flash": {
         "cost": {
-          "cache_read": 0.018,
-          "input": 0.051,
-          "output": 0.567
+          "cache_read": 0.006,
+          "input": 0.3,
+          "output": 1.2
         },
         "limit": {
           "output": 943718
@@ -12610,8 +12546,8 @@
       },
       "deepseek/deepseek-v4.1-flash-1017": {
         "cost": {
-          "cache_read": 0.005,
-          "input": 0.006,
+          "cache_read": 0.01,
+          "input": 0.038,
           "output": 0.5
         },
         "limit": {
@@ -13509,6 +13445,43 @@
         "temperature": true,
         "tool_call": true
       },
+      "google/gemini-4-hydrogen": {
+        "cost": {
+          "cache_read": 0.075,
+          "cache_write": 0.083333,
+          "input": 1.5,
+          "input_audio": 1.5,
+          "output": 7.5,
+          "reasoning": 7.5
+        },
+        "limit": {
+          "output": 943718
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "release_date": "2026-11-12",
+        "temperature": true,
+        "tool_call": true
+      },
       "google/gemini-nano-banana-2.1": {
         "cost": {
           "input": 1.5,
@@ -13637,7 +13610,7 @@
         "cost": {
           "cache_read": 0.04,
           "input": 0.08,
-          "output": 0.45
+          "output": 0.35
         },
         "limit": {
           "output": 117964
@@ -13674,12 +13647,12 @@
       },
       "google/gemma-4-26b-a4b-it": {
         "cost": {
-          "cache_read": 0.046,
-          "input": 0.08,
-          "output": 0.1
+          "cache_read": 0.05,
+          "input": 0.09,
+          "output": 0.3
         },
         "limit": {
-          "output": 128000
+          "output": 235929
         },
         "modalities": {
           "input": [
@@ -14016,45 +13989,6 @@
         ],
         "release_date": "2026-11-05",
         "temperature": true,
-        "tool_call": false
-      },
-      "liquid/lfm-2.5-2.6b": {
-        "cost": {
-          "cache_read": 0.04,
-          "input": 0.35,
-          "output": 0.5
-        },
-        "limit": {
-          "output": 8192
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ]
-        },
-        "reasoning": true,
-        "reasoning_options": [],
-        "release_date": "2026-08-11",
-        "temperature": true,
-        "tool_call": true
-      },
-      "liquid/lfm-2.5-2.6b:free": {
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
-        "limit": {
-          "output": 8192
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ]
-        },
-        "reasoning": true,
-        "reasoning_options": [],
-        "release_date": "2026-08-11",
-        "temperature": true,
         "tool_call": true
       },
       "liquid/lfm-2.5-24b-a2b": {
@@ -14178,7 +14112,7 @@
         "reasoning": false,
         "release_date": "2024-07-23",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "meta-llama/llama-3.1-8b-instruct": {
         "cost": {
@@ -14558,7 +14492,7 @@
           "output": 4.25
         },
         "limit": {
-          "output": 262144
+          "output": 943718
         },
         "modalities": {
           "input": [
@@ -14641,12 +14575,12 @@
       },
       "minimax/minimax-m2.5": {
         "cost": {
-          "cache_read": 0.06,
-          "input": 0.3,
-          "output": 1.2
+          "cache_read": 0.03,
+          "input": 0.27,
+          "output": 0.95
         },
         "limit": {
-          "output": 58982
+          "output": 32768
         },
         "modalities": {
           "input": [
@@ -14707,9 +14641,9 @@
       },
       "minimax/minimax-m3.1-flash": {
         "cost": {
-          "cache_read": 0.015,
-          "input": 0.15,
-          "output": 0.6
+          "cache_read": 0.0075,
+          "input": 0.075,
+          "output": 0.3
         },
         "limit": {
           "output": 524288
@@ -15271,12 +15205,12 @@
       },
       "moonshotai/kimi-k2.5": {
         "cost": {
-          "cache_read": 0.209,
-          "input": 0.532,
-          "output": 3.325
+          "cache_read": 0.15,
+          "input": 0.5,
+          "output": 2.5
         },
         "limit": {
-          "output": 65536
+          "output": 235929
         },
         "modalities": {
           "input": [
@@ -15462,7 +15396,7 @@
         ],
         "release_date": "2026-11-02",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "nex-agi/nex-n2.5-mini": {
         "cost": {
@@ -17950,6 +17884,39 @@
         "temperature": true,
         "tool_call": true
       },
+      "particle-ai/particle-1:free": {
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "limit": {
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "release_date": "2026-10-28",
+        "temperature": true,
+        "tool_call": true
+      },
       "perceptron/perceptron-mk1": {
         "cost": {
           "input": 0.15,
@@ -18265,11 +18232,11 @@
       },
       "qwen/qwen3-14b": {
         "cost": {
-          "input": 0.1,
-          "output": 0.22
+          "input": 0.12,
+          "output": 0.24
         },
         "limit": {
-          "output": 36864
+          "output": 16384
         },
         "modalities": {
           "input": [
@@ -18688,11 +18655,12 @@
       },
       "qwen/qwen3.5-9b": {
         "cost": {
-          "input": 0.17,
-          "output": 0.25
+          "cache_read": 0.127,
+          "input": 0.141,
+          "output": 0.208
         },
         "limit": {
-          "output": 235929
+          "output": 40960
         },
         "modalities": {
           "input": [
@@ -19386,9 +19354,9 @@
       },
       "ricursiveai/ripple-65b-preview": {
         "cost": {
-          "cache_read": 0.05,
-          "input": 0.2,
-          "output": 0.6
+          "cache_read": 0.025,
+          "input": 0.1,
+          "output": 0.3
         },
         "limit": {
           "output": 131072
@@ -19798,9 +19766,9 @@
       },
       "tencent/hy3": {
         "cost": {
-          "cache_read": 0.033,
-          "input": 0.132,
-          "output": 0.528
+          "cache_read": 0.020625,
+          "input": 0.0825,
+          "output": 0.33
         },
         "limit": {
           "output": 128000
@@ -19886,9 +19854,9 @@
       },
       "tencent/hy4-preview": {
         "cost": {
-          "cache_read": 0.042,
-          "input": 0.834,
-          "output": 2.501
+          "cache_read": 0.0378,
+          "input": 0.7506,
+          "output": 2.2509
         },
         "limit": {
           "output": 64000
@@ -20003,6 +19971,38 @@
         "temperature": true,
         "tool_call": true
       },
+      "thinkingmachines/inkling-2-small": {
+        "cost": {
+          "cache_read": 0.03,
+          "input": 0.3,
+          "output": 1
+        },
+        "limit": {
+          "output": 943718
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "release_date": "2026-11-05",
+        "temperature": true,
+        "tool_call": true
+      },
       "thinkingmachines/inkling-2-small:free": {
         "cost": {
           "input": 0,
@@ -20085,6 +20085,26 @@
         },
         "reasoning": false,
         "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "unbiased/pareto-26.10-preview": {
+        "cost": {
+          "cache_read": 0.03,
+          "input": 0.8,
+          "output": 3.2
+        },
+        "limit": {
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": false,
+        "release_date": "2026-10-01",
         "temperature": true,
         "tool_call": true
       },
@@ -20559,12 +20579,12 @@
       },
       "xiaomi/mimo-v2.5-pro": {
         "cost": {
-          "cache_read": 0.096,
-          "input": 0.48,
-          "output": 1.8
+          "cache_read": 0.0036,
+          "input": 0.435,
+          "output": 0.87
         },
         "limit": {
-          "output": 235929
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -20882,9 +20902,9 @@
       },
       "z-ai/glm-5.1": {
         "cost": {
-          "cache_read": 0.247,
-          "input": 1.33,
-          "output": 4.18
+          "cache_read": 0.26,
+          "input": 1.4,
+          "output": 4.4
         },
         "limit": {
           "output": 131072
@@ -20935,9 +20955,9 @@
       },
       "z-ai/glm-5.3": {
         "cost": {
-          "cache_read": 0.0689,
-          "input": 0.0699,
-          "output": 1.4
+          "cache_read": 0.079,
+          "input": 0.084,
+          "output": 3.6
         },
         "limit": {
           "output": 943718
@@ -21261,8 +21281,8 @@
       },
       "~deepseek/deepseek-flash-latest": {
         "cost": {
-          "cache_read": 0.005,
-          "input": 0.006,
+          "cache_read": 0.01,
+          "input": 0.038,
           "output": 0.5
         },
         "limit": {
@@ -21353,22 +21373,22 @@
       "~google/gemini-flash-latest": {
         "cost": {
           "cache_read": 0.075,
-          "cache_write": 0.041667,
-          "input": 0.75,
-          "input_audio": 0.75,
-          "output": 3.75,
-          "reasoning": 3.75
+          "cache_write": 0.083333,
+          "input": 1.5,
+          "input_audio": 1.5,
+          "output": 7.5,
+          "reasoning": 7.5
         },
         "limit": {
-          "output": 65536
+          "output": 943718
         },
         "modalities": {
           "input": [
-            "text",
-            "image",
-            "video",
+            "audio",
             "pdf",
-            "audio"
+            "image",
+            "text",
+            "video"
           ]
         },
         "reasoning": true,
@@ -21378,7 +21398,8 @@
             "values": [
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh"
             ]
           }
         ],
@@ -21442,7 +21463,7 @@
         "cost": {
           "cache_read": 0.18,
           "input": 0.1824,
-          "output": 9.3388
+          "output": 11.0055
         },
         "limit": {
           "output": 943718

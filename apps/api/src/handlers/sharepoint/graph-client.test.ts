@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { SHAREPOINT_REFUSAL_CODE } from "@stll/api-contract/sharepoint";
+import {
+  SHAREPOINT_REFUSAL_CODE,
+  SHAREPOINT_ROOT_ITEM_ID,
+} from "@stll/api-contract/sharepoint";
 
 import {
   sharepointDriveIdSchema,
@@ -18,7 +21,6 @@ import {
   listSharepointSites,
   parseRetryAfterMs,
   replayQuery,
-  SHAREPOINT_ROOT_ITEM_ID,
   toSharepointDriveItem,
 } from "@/api/handlers/sharepoint/graph-client";
 import { secretSchema } from "@/api/lib/secret-brands";

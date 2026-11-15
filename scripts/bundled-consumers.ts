@@ -398,6 +398,16 @@ export const BUNDLED_CONSUMERS = [
     },
   },
   {
+    file: "apps/skill-runner/Dockerfile",
+    command:
+      "bun build apps/skill-runner/src/handler.ts --target=node --format=esm --outfile /app/handler.mjs",
+    bootCheck: {
+      type: "none",
+      reason:
+        "The Lambda image packages a handler export rather than a directly bootable program.",
+    },
+  },
+  {
     file: "apps/visual-preview/Dockerfile",
     command:
       "bun build apps/visual-preview/src/handler.ts --target=node --format=esm --external playwright-core --outfile /app/handler.mjs",

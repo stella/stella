@@ -306,7 +306,7 @@ describe("a Czech criminal verdict's formula lines", () => {
 describe("a Czech bench recital", () => {
   const recitalLine = (
     plainText: string,
-    role?: "intro" | "case-number",
+    role?: "intro" | "case-number" | "opening-formula",
   ): Block => ({
     id: plainText,
     anchorId: plainText,
@@ -335,6 +335,18 @@ describe("a Czech bench recital", () => {
     expect(
       czechBenchRecitalStart(recital, 2, { opensAfterHeadMatter: true }),
     ).toBe(0);
+  });
+
+  test("runs back to the opening formula under the title", () => {
+    const recital = [
+      recitalLine("Nejvyšší soud České republiky rozhodl v senátě takto:"),
+    ];
+    expect(
+      czechBenchRecitalStart(
+        [title, recitalLine("JMÉNEM REPUBLIKY", "opening-formula"), ...recital],
+        3,
+      ),
+    ).toBe(2);
   });
 
   test("runs back to the head matter's apparatus", () => {

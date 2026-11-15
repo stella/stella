@@ -1,13 +1,10 @@
 import { lazy, Suspense, useRef, useState } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { DECISION_ANCHOR_RESOLUTION } from "@stll/api-contract/case-law-anchor-redirects";
 import { decisionHasNoDocument } from "@stll/decision-reader/decision-body-state.logic";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
-import { Button } from "@stll/ui/button";
-import { Minimize2Icon } from "@stll/ui/icons";
 
 import { useRequireAccount } from "@/components/auth/use-require-account";
 import type { DecisionReaderAIGate } from "@/components/authenticated-decision-tools";
@@ -27,9 +24,9 @@ import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-ty
 import type { InspectorOwnerRouteId } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { registerMainDecisionReader } from "@/components/inspector/main-decision-reader";
+import { MoveToSideButton } from "@/components/inspector/move-to-side-button";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import Tooltip from "@/components/tooltip";
 import { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { fragmentBlockAnchor } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
@@ -156,7 +153,6 @@ export function PublicDecisionViewer({
   const authStatus = useClientAuthStatus();
   const inspector = useInspectorView();
   const navigate = useNavigate();
-  const t = useTranslations();
 
   // When the inspector's active tab is another decision, the two swap
   // places: this one moves to the side and the side one takes over the
@@ -265,23 +261,10 @@ export function PublicDecisionViewer({
           className="hidden md:inline-flex"
           href={originalUrl}
         />
-        <Tooltip
-          content={
-            willSwap ? t("inspector.swapViews") : t("inspector.moveToSide")
-          }
-          render={
-            <Button
-              aria-label={
-                willSwap ? t("inspector.swapViews") : t("inspector.moveToSide")
-              }
-              className="hidden md:inline-flex"
-              onClick={moveToSide}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <Minimize2Icon className="size-4" />
-            </Button>
-          }
+        <MoveToSideButton
+          className="hidden md:inline-flex"
+          onClick={moveToSide}
+          swaps={willSwap}
         />
       </ChromeHeaderActions>
       {fileMayHoldOthers && <PublicDecisionFileNote />}

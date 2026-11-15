@@ -14,6 +14,7 @@ import type * as v from "valibot";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 
 import type { envWebClientSchema } from "../../src/env-schema";
+import { respond, staticBody } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 
 const fixtureEnv = {
@@ -91,22 +92,31 @@ test.beforeAll(() => {
 test.afterAll(() => rmSync(directory, { recursive: true, force: true }));
 test.beforeEach(async ({ page }) => {
   await page.route("**/law/coverage*", async (route) =>
-    route.fulfill({
-      contentType: "text/html",
-      body: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/coverage-fixture.css"></head><body><script type="importmap">{"imports":{"@tanstack/react-start/server":"/server-boundary.js"}}</script><script type="module" src="/coverage-fixture.js"></script></body></html>',
-    }),
+    respond(
+      route,
+      staticBody({
+        contentType: "text/html",
+        body: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/coverage-fixture.css"></head><body><script type="importmap">{"imports":{"@tanstack/react-start/server":"/server-boundary.js"}}</script><script type="module" src="/coverage-fixture.js"></script></body></html>',
+      }),
+    ),
   );
   await page.route("**/coverage-fixture.css", async (route) =>
-    route.fulfill({ contentType: "text/css", body: styles }),
+    respond(route, staticBody({ contentType: "text/css", body: styles })),
   );
   await page.route("**/server-boundary.js", async (route) =>
-    route.fulfill({
-      contentType: "text/javascript",
-      body: "export const getRequestHost = () => location.host; export const getCookie = () => undefined; export const setCookie = () => { throw new Error('Server cookie writes are unavailable in this fixture'); };",
-    }),
+    respond(
+      route,
+      staticBody({
+        contentType: "text/javascript",
+        body: "export const getRequestHost = () => location.host; export const getCookie = () => undefined; export const setCookie = () => { throw new Error('Server cookie writes are unavailable in this fixture'); };",
+      }),
+    ),
   );
   await page.route("**/coverage-fixture.js", async (route) =>
-    route.fulfill({ contentType: "text/javascript", body: bundle }),
+    respond(
+      route,
+      staticBody({ contentType: "text/javascript", body: bundle }),
+    ),
   );
 });
 

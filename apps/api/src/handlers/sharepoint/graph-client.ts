@@ -17,7 +17,12 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import { SHAREPOINT_REFUSAL_CODE } from "@stll/api-contract/sharepoint";
+import {
+  SHAREPOINT_ITEM_KIND,
+  SHAREPOINT_REFUSAL_CODE,
+  SHAREPOINT_ROOT_ITEM_ID,
+  type SharepointItemKind,
+} from "@stll/api-contract/sharepoint";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
   BodyByteLimitError,
@@ -633,20 +638,6 @@ const graphDriveItemSchema = v.looseObject({
 
 export type GraphDriveItem = v.InferOutput<typeof graphDriveItemSchema>;
 
-/**
- * What a drive item is to a picker. `other` covers items that are neither a
- * plain file nor a folder (OneNote notebooks and other packages); they are
- * listed so a folder reads as Microsoft shows it, but cannot be imported.
- */
-export const SHAREPOINT_ITEM_KIND = {
-  file: "file",
-  folder: "folder",
-  other: "other",
-} as const;
-
-type SharepointItemKind =
-  (typeof SHAREPOINT_ITEM_KIND)[keyof typeof SHAREPOINT_ITEM_KIND];
-
 export type SharepointDriveItem = {
   id: string;
   driveId: string;
@@ -683,9 +674,6 @@ export const toSharepointDriveItem = (
   webUrl: item.webUrl ?? null,
   eTag: item.eTag ?? null,
 });
-
-/** The folder id that names a drive's top level. */
-export const SHAREPOINT_ROOT_ITEM_ID = "root";
 
 const drivePathOf = (driveId: string): string =>
   `/drives/${encodeURIComponent(driveId)}`;

@@ -47,6 +47,10 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import {
+  isBoundTextCursor,
+  windowBoundText,
+} from "@/api/mcp/bound-text-window";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   continuationTokenInput,
@@ -65,10 +69,6 @@ import {
   READ_PROVISION_HISTORY_INPUT_NORMALIZATION,
   readProvisionHistoryArgsSchema,
 } from "@/api/mcp/legislation-input";
-import {
-  isProvisionTextCursor,
-  windowProvisionText,
-} from "@/api/mcp/provision-text-window";
 import type { StatuteDocument } from "@/api/mcp/public-law-handlers";
 import {
   defaultListStatuteVersionsHandler,
@@ -274,7 +274,7 @@ const provisionRequestSchema = v.strictObject({
   language: v.optional(languageInputSchema),
   text_cursor: cursorInput({
     description: "Opaque nextTextCursor from this provision and consolidation",
-    issuedBy: isProvisionTextCursor,
+    issuedBy: isBoundTextCursor,
   }),
 });
 
@@ -1034,7 +1034,7 @@ const provisionItemResult = ({
         };
       }
 
-      const window = windowProvisionText({
+      const window = windowBoundText({
         ...(item.text_cursor === undefined ? {} : { cursor: item.text_cursor }),
         limit: LIMITS.legislationProvisionTextChars,
         subject: JSON.stringify([item.eli, item.anchor, String(version.id)]),
@@ -1376,7 +1376,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
         },
       };
     }
-    const window = windowProvisionText({
+    const window = windowBoundText({
       ...(textCursor === undefined ? {} : { cursor: textCursor }),
       limit: LIMITS.legislationProvisionTextChars,
       subject: JSON.stringify([eli, anchor, String(item.documentId)]),

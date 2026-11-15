@@ -43,18 +43,34 @@ const WITHHELD: BrowserControlResult = {
  * so the next one asks. When this tab cannot tell who answered, the page is
  * withheld too.
  */
+/** The page a result hands back content from, or null for an error. */
+const resultPageUrl = (result: BrowserControlResult): string | null => {
+  switch (result.status) {
+    case "success":
+      return result.snapshot.url;
+    case "found":
+      return result.found.url;
+    case "error":
+      return null;
+    default:
+      result satisfies never;
+      return panic("Unhandled browser result status");
+  }
+};
+
 const withinSiteGrant = (
   result: BrowserControlResult,
   provenance: BrowserApprovalProvenance,
 ): BrowserControlResult => {
-  if (result.status !== "success") {
+  const pageUrl = resultPageUrl(result);
+  if (pageUrl === null) {
     return result;
   }
   switch (provenance.type) {
     case "person":
       return result;
     case "site-grant":
-      return browserSiteGrantOrigin(result.snapshot.url) === provenance.origin
+      return browserSiteGrantOrigin(pageUrl) === provenance.origin
         ? result
         : WITHHELD;
     case "unreadable":
@@ -93,7 +109,7 @@ export const createBrowserToolExecutionCache = (
         await execute(input, toolCallId, commandRun),
         provenance,
       );
-      succeeded = result.status === "success";
+      succeeded = resultPageUrl(result) !== null;
       return result;
     } finally {
       finish(succeeded);

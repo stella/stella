@@ -6,7 +6,7 @@ import fc from "fast-check";
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { assertProperty } from "@stll/property-testing";
 
-import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
+import { encodeCursor } from "@/api/lib/search/cursor";
 import {
   compareScoredSearchHits,
   decodeGlobalSearchCursor,
@@ -27,6 +27,10 @@ type TestScoredHit = {
   tier: 1 | 2 | 3 | 4;
   score: number;
 };
+
+/** A cursor as the release that prefixed keyset payloads issued it. */
+const prefixedCursor = (seen: number, keysetPayload: string): string =>
+  `${encodeCursor(seen, "global").replace(/[=]+$/u, "")}==${keysetPayload}`;
 
 const candidatesAfterCursor = ({
   sorted,
@@ -115,35 +119,28 @@ describe("global search keyset pagination", () => {
     });
   });
 
-  test("keeps new cursors consumable by legacy replicas", () => {
-    const cursor = encodeGlobalSearchCursor({
-      tier: 2,
-      score: 0.8,
-      id: "entity:2",
-      seen: 25,
-    });
+  test("issues the keyset payload alone", () => {
+    expect(
+      encodeGlobalSearchCursor({
+        tier: 2,
+        score: 0.8,
+        id: "entity:2",
+        seen: 25,
+      }),
+    ).toBe(encodeCursor(0.8, "25:2:entity:2"));
+  });
 
-    expect(decodeCursor(cursor)).toEqual({ score: 25, id: "global" });
-    expect(parseGlobalSearchCursor(cursor)).toEqual({
-      type: "keyset",
-      cursor: { tier: 2, score: 0.8, id: "entity:2", seen: 25 },
+  // These payloads end unpadded, in `=` and in `==`: no padding is a prefix
+  // separator, and an offset is not a position in the keyset order.
+  test.each([25, 5, 100])("refuses the offset cursor at %i", (seen) => {
+    expect(parseGlobalSearchCursor(encodeCursor(seen, "global"))).toEqual({
+      type: "invalid",
     });
   });
 
-  test("recognizes cursors issued by legacy replicas", () => {
-    expect(parseGlobalSearchCursor(encodeCursor(25, "global"))).toEqual({
-      type: "legacy",
-      offset: 25,
-    });
-    expect(parseGlobalSearchCursor(encodeCursor(100, "global"))).toEqual({
-      type: "legacy",
-      offset: 100,
-    });
-  });
-
-  test("dual cursors preserve both formats for every supported position", () => {
+  test("cursors round-trip every supported position, prefixed or not", () => {
     assertProperty(
-      "dual cursors preserve both formats for every supported position",
+      "cursors round-trip every supported position, prefixed or not",
       fc.property(
         fc.integer({ min: 1, max: GLOBAL_SEARCH_RESULT_LIMIT - 1 }),
         fc.integer({ min: -8, max: 8 }),
@@ -158,13 +155,15 @@ describe("global search keyset pagination", () => {
           };
           const encoded = encodeGlobalSearchCursor(keysetCursor);
 
-          expect(decodeCursor(encoded)).toEqual({ score: seen, id: "global" });
           expect(parseGlobalSearchCursor(encoded)).toEqual({
             type: "keyset",
             cursor: keysetCursor,
           });
+          expect(
+            parseGlobalSearchCursor(prefixedCursor(seen, encoded)),
+          ).toEqual({ type: "keyset", cursor: keysetCursor });
           expect(parseGlobalSearchCursor(encodeCursor(seen, "global"))).toEqual(
-            { type: "legacy", offset: seen },
+            { type: "invalid" },
           );
         },
       ),

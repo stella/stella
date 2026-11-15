@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { getTableName, is } from "drizzle-orm";
-import { PgTable } from "drizzle-orm/pg-core";
+import { getTableName } from "drizzle-orm";
 
 import * as schema from "@/api/db/schema";
 
 import { CODE_OWNED_TABLES } from "./code-owned-tables";
+import { schemaTables } from "./schema-tables";
 
 /**
  * The registry is read by `scripts/check-migration-safety.ts` as bare names;
@@ -12,9 +12,7 @@ import { CODE_OWNED_TABLES } from "./code-owned-tables";
  */
 test("every registered code-owned table is one the schema declares", () => {
   const declared = new Set(
-    Object.values(schema).flatMap((value: unknown) =>
-      is(value, PgTable) ? [getTableName(value)] : [],
-    ),
+    schemaTables(schema).map((table) => getTableName(table)),
   );
   for (const table of CODE_OWNED_TABLES) {
     expect([table, declared.has(table)]).toEqual([table, true]);

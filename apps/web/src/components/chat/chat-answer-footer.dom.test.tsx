@@ -4,6 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { createTestState } from "@stll/test-state";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
@@ -11,8 +12,8 @@ import messages from "@/i18n/langs/en.json";
 import type { ChatSourceDocument } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] ??= "https://api.example.test";
+const state = createTestState({ file: import.meta.path, config: {} });
+state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 const { act } = await import("react");
 const { cleanup, render } = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -41,11 +42,6 @@ afterEach(async () => {
 });
 afterAll(async () => {
   await unregisterDomEnvironment();
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-  } else {
-    process.env["VITE_API_URL"] = previousApiUrl;
-  }
 });
 
 const renderWithProviders = (children: ReactNode) => {

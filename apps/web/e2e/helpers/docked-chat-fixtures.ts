@@ -19,6 +19,7 @@ import {
   dockedChatTitle,
 } from "./docked-chat-history";
 import { createUploadedDocumentRoute } from "./document";
+import { apiJson, respond } from "./route-mock";
 import { expect } from "./test";
 import { createTestWorkspace, deleteTestWorkspace } from "./workspace";
 
@@ -119,20 +120,47 @@ export const installDockedChatHistory = async (page: Page) => {
   await page.route(
     /\/v1\/chat\/workspaces\/[^/]+\/file-thread(?:\?|$)/u,
     async (route) => {
-      await route.fulfill({ json: dockedChatFileThreadPage });
+      await respond(
+        route,
+        apiJson(
+          "v1/chat/workspaces/:workspaceId/file-thread",
+          "get",
+          dockedChatFileThreadPage,
+        ),
+      );
     },
   );
   await page.route("**/v1/chat/template-thread", async (route) => {
-    await route.fulfill({ json: dockedChatTemplateThread });
+    await respond(
+      route,
+      apiJson("v1/chat/template-thread", "post", dockedChatTemplateThread),
+    );
   });
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-    await route.fulfill({ json: dockedChatMessagePage });
+    await respond(
+      route,
+      apiJson(
+        "v1/chat/threads/:threadId/messages",
+        "get",
+        dockedChatMessagePage,
+      ),
+    );
   });
   await page.route("**/v1/chat/threads/*/suggested-prompts*", async (route) => {
-    await route.fulfill({ json: dockedChatSuggestedPrompts });
+    await respond(
+      route,
+      apiJson(
+        "v1/chat/threads/:threadId/suggested-prompts",
+        "post",
+        dockedChatSuggestedPrompts,
+      ),
+    );
   });
   await page.route("**/v1/chat/threads/*/title*", async (route) => {
-    await route.fulfill({ json: dockedChatTitle });
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/title", "get", dockedChatTitle),
+    );
   });
 };
 

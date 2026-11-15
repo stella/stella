@@ -19,6 +19,7 @@ import {
   legalListVerificationRuns,
   legalReaderAnnotations,
   searchHistoryEntries,
+  searchHistoryOwners,
   workspaceMembers,
   workspaces,
   workspaceViewTemplates,
@@ -595,13 +596,19 @@ describe.skipIf(!enabled)("account export personal data", () => {
             }
             return await prepareSearchHistoryRows({ organizationId, userId }, [
               {
-                entry: { kind: "search", query },
+                entry: { kind: "search", query, country: "CZE" },
                 usedAt: new Date(testClock.now()),
               },
             ]);
           }),
         );
         const historyRows = prepared.flat();
+        await db
+          .insert(searchHistoryOwners)
+          .values(
+            organizations.map((organizationId) => ({ organizationId, userId })),
+          )
+          .onConflictDoNothing();
         for (const row of historyRows) {
           expect(row.iv.every((byte) => byte === 0)).toBe(false);
           for (const query of queries) {

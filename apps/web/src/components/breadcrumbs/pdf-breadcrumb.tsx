@@ -16,6 +16,7 @@ import {
   resolveCrumbRenameShortcut,
 } from "@/components/breadcrumbs/pdf-breadcrumb.logic";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
+import { DocumentIcon } from "@/components/document-icon";
 import { fileExtensionSuffix } from "@/components/file-extension-suffix";
 import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
@@ -54,11 +55,14 @@ export const PdfBreadcrumb = () => {
   const fileQuery = useQuery({
     ...fileMetadata,
     enabled: pdfMatch !== undefined && fieldId.length > 0,
-    select: (file) => file.fileName,
+    select: (file) => ({
+      fileName: file.fileName,
+      originalMimeType: file.originalMimeType,
+    }),
   });
   const fileNameView = queryView(fileQuery);
-  const fileName =
-    fileNameView.type === "items" ? fileNameView.items : undefined;
+  const file = fileNameView.type === "items" ? fileNameView.items : undefined;
+  const fileName = file?.fileName;
   const canUpdateEntity = usePermissions({ entity: ["update"] });
   const renameEntity = useRenameEntity();
 
@@ -108,6 +112,12 @@ export const PdfBreadcrumb = () => {
     <>
       <BreadcrumbQueryContent view={fileNameView} />
       <BreadcrumbItem>
+        {/* The stored file's type, not the PDF the viewer renders from it. */}
+        <DocumentIcon
+          className="size-3.5 shrink-0"
+          fileName={storedName}
+          mimeType={file?.originalMimeType}
+        />
         {(() => {
           if (rename.state.mode === "edit") {
             return (

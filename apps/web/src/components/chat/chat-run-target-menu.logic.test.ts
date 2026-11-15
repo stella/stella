@@ -4,23 +4,26 @@ import {
   CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
   CHAT_LOCAL_RUN_HARNESSES,
   type ChatLocalHarnessReadiness,
+  type ChatLocalRunApprovalCeiling,
   type ChatLocalRunnerReadiness,
   type ChatLocalRunReadiness,
 } from "@stll/api-contract/chat-run-target";
-import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import {
   CHAT_LOCAL_HARNESS_NAMES,
   type ChatLocalHarnessOption,
   chatLocalHarnessOptions,
+  chatLocalHarnessOptionsFor,
   effectiveRunTarget,
   localRunMaxApprovals,
   localRunModelLabel,
   localRunTargetFor,
   localRunTargetState,
   permissionView,
+  reasoningEffortChoices,
   runTargetValue,
   sameRunTarget,
+  withRunFolder,
 } from "@/components/chat/chat-run-target-menu.logic";
 
 /** The ceiling of an organization that never lowered it. */
@@ -32,17 +35,19 @@ const READY_CODEX: ChatLocalHarnessReadiness = {
   version: "0.50.0",
   capabilities: ["approvals"],
   approvalModes: ["ask"],
-  models: [{ id: "gpt-5-codex", label: "GPT-5 Codex" }],
+  models: [{ id: "gpt-5-codex", label: "GPT-5 Codex", reasoningEfforts: [] }],
 };
 
 const runner = (
   harnesses: ChatLocalHarnessReadiness[],
   connected = true,
+  linkedFolders: ChatLocalRunnerReadiness["linkedFolders"] = [],
 ): ChatLocalRunnerReadiness => ({
   desktopId: Bun.randomUUIDv7(),
   connected,
   lastSeenAt: "2026-11-03T10:00:00.000Z",
   harnesses,
+  linkedFolders,
 });
 
 const stateOf = (
@@ -146,14 +151,15 @@ const LOCAL = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 } as const;
 
 /** A Claude Code that cannot sandbox on this computer. */
 const READY_CLAUDE: Extract<ChatLocalHarnessOption, { state: "ready" }> = {
   harness: "claude-code",
   state: "ready",
-  models: [{ id: "sonnet", label: "Sonnet" }],
-  approvalModes: ["ask", "auto"],
+  models: [{ id: "sonnet", label: "Sonnet", reasoningEfforts: [] }],
+  approvalModes: ["plan", "ask", "auto"],
 };
 const CLAUDE = { ...LOCAL, harness: "claude-code", model: "sonnet" } as const;
 
@@ -172,6 +178,7 @@ describe("the permission choice", () => {
     expect(permissionView(CLAUDE, [READY_CLAUDE], NO_LIMIT)).toEqual({
       type: "choice",
       modes: [
+        { mode: "plan", availability: "available" },
         { mode: "ask", availability: "available" },
         { mode: "auto", availability: "available" },
         { mode: "full_auto", availability: "computer" },
@@ -180,9 +187,11 @@ describe("the permission choice", () => {
   });
 
   test("a mode above the organization's limit is unavailable for that reason; one the computer cannot run says so first", () => {
+    // Plan continues as Ask once approved, so every limit allows it.
     expect(permissionView(CLAUDE, [READY_CLAUDE], "ask")).toEqual({
       type: "choice",
       modes: [
+        { mode: "plan", availability: "available" },
         { mode: "ask", availability: "available" },
         { mode: "auto", availability: "organization" },
         { mode: "full_auto", availability: "computer" },
@@ -190,11 +199,12 @@ describe("the permission choice", () => {
     });
     const sandboxing = {
       ...READY_CLAUDE,
-      approvalModes: ["ask", "auto", "full_auto"],
+      approvalModes: ["plan", "ask", "auto", "full_auto"],
     } as const;
     expect(permissionView(CLAUDE, [sandboxing], "auto")).toEqual({
       type: "choice",
       modes: [
+        { mode: "plan", availability: "available" },
         { mode: "ask", availability: "available" },
         { mode: "auto", availability: "available" },
         { mode: "full_auto", availability: "organization" },
@@ -227,6 +237,11 @@ describe("the permission choice", () => {
       model: "opus",
       approvals: "auto",
     });
+    expect(pick({ ...CLAUDE, approvals: "plan" })).toEqual({
+      ...CLAUDE,
+      model: "opus",
+      approvals: "plan",
+    });
     expect(pick({ ...CLAUDE, approvals: "full_auto" })).toEqual({
       ...CLAUDE,
       model: "opus",
@@ -244,6 +259,71 @@ describe("the permission choice", () => {
         maxApprovals: "ask",
       }),
     ).toEqual({ ...CLAUDE, model: "opus", approvals: "ask" });
+  });
+});
+
+describe("the reasoning effort choice", () => {
+  const withEfforts = {
+    ...READY_CLAUDE,
+    models: [
+      {
+        id: "sonnet",
+        label: "Sonnet",
+        reasoningEfforts: ["low", "high", "max"],
+      },
+      { id: "opus", label: "Opus", reasoningEfforts: ["high"] },
+      { id: "haiku", label: "Haiku", reasoningEfforts: [] },
+    ],
+  } as const satisfies Extract<ChatLocalHarnessOption, { state: "ready" }>;
+
+  test("offers the selected model's efforts, and nothing for a model without a choice, a cloud turn or a harness that cannot run", () => {
+    expect(reasoningEffortChoices(CLAUDE, [withEfforts])).toEqual([
+      "low",
+      "high",
+      "max",
+    ]);
+    expect(
+      reasoningEffortChoices({ ...CLAUDE, model: "haiku" }, [withEfforts]),
+    ).toBeNull();
+    expect(reasoningEffortChoices({ kind: "cloud" }, [withEfforts])).toBeNull();
+    expect(
+      reasoningEffortChoices(CLAUDE, [
+        { harness: "claude-code", state: "offline" },
+      ]),
+    ).toBeNull();
+  });
+
+  test("a picked model keeps the effort it offers, and leaves one it lacks to the harness", () => {
+    const pick = (
+      selected: Parameters<typeof sameRunTarget>[0],
+      model: string,
+    ) =>
+      localRunTargetFor({
+        selected,
+        option: withEfforts,
+        model,
+        maxApprovals: NO_LIMIT,
+      });
+    expect(pick({ ...CLAUDE, reasoningEffort: "high" }, "opus")).toEqual({
+      ...CLAUDE,
+      model: "opus",
+      reasoningEffort: "high",
+    });
+    for (const model of ["opus", "haiku"]) {
+      expect(pick({ ...CLAUDE, reasoningEffort: "max" }, model)).toEqual({
+        ...CLAUDE,
+        model,
+        reasoningEffort: null,
+      });
+    }
+    expect(pick({ kind: "cloud" }, "sonnet")).toEqual(CLAUDE);
+  });
+
+  test("a different effort is a different target, under the same model", () => {
+    const high = { ...CLAUDE, reasoningEffort: "high" } as const;
+    expect(runTargetValue(high)).toBe(runTargetValue(CLAUDE));
+    expect(sameRunTarget(high, CLAUDE)).toBe(false);
+    expect(sameRunTarget(high, { ...high })).toBe(true);
   });
 });
 
@@ -275,10 +355,10 @@ describe("the selected run target", () => {
       ...READY_CODEX,
       id: "claude-code",
       approvalModes: ["ask", "auto", "full_auto"],
-      models: [{ id: "sonnet", label: "Sonnet" }],
+      models: [{ id: "sonnet", label: "Sonnet", reasoningEfforts: [] }],
     };
     const readiness = (
-      maxApprovals: DesktopRunnerApprovalMode,
+      maxApprovals: ChatLocalRunApprovalCeiling,
       harness: ChatLocalHarnessReadiness = sandboxingClaude,
     ): ChatLocalRunReadiness => ({
       status: "enabled",
@@ -320,6 +400,7 @@ describe("the selected run target", () => {
       harness: "codex",
       model: "gpt-5-codex",
       approvals: "ask",
+      reasoningEffort: null,
     } as const;
     expect(
       localRunModelLabel(
@@ -353,6 +434,7 @@ describe("whether the chosen computer can take a turn now", () => {
     harness: "codex",
     model: "gpt-5-codex",
     approvals: "ask",
+    reasoningEffort: null,
   } as const;
   const enabled = (
     runners: ChatLocalRunnerReadiness[],
@@ -390,5 +472,166 @@ describe("whether the chosen computer can take a turn now", () => {
     expect(localRunTargetState({ status: "hidden" }, CODEX)).toEqual({
       type: "not_allowed",
     });
+  });
+});
+
+describe("a linked folder", () => {
+  const LINK_ID = "0192f3a0-6b1c-7d2e-8f30-0000000000d1";
+  const computer = (
+    state: "available" | "offline" | "moved",
+    approval: "approved" | "pending",
+    connected = true,
+  ) =>
+    runner([READY_CODEX], connected, [
+      { id: LINK_ID, name: "Smith v Jones", state, approval },
+    ]);
+  const readiness = (
+    linked: ChatLocalRunnerReadiness,
+  ): ChatLocalRunReadiness => ({
+    status: "enabled",
+    runners: [linked],
+    maxApprovals: NO_LIMIT,
+  });
+  const inFolder = (linked: ChatLocalRunnerReadiness) =>
+    withRunFolder(LOCAL, {
+      desktopId: linked.desktopId,
+      linkId: LINK_ID,
+      name: "Smith v Jones",
+    });
+
+  test("takes a turn once available on a connected computer and allowed", () => {
+    const linked = computer("available", "approved");
+    expect(localRunTargetState(readiness(linked), inFolder(linked))).toEqual({
+      type: "ready",
+    });
+  });
+
+  test("waits for the member's OK before its first turn", () => {
+    const linked = computer("available", "pending");
+    expect(localRunTargetState(readiness(linked), inFolder(linked))).toEqual({
+      type: "folder_pending",
+    });
+  });
+
+  test("says why it cannot take a turn: offline, moved, its computer away, unlinked", () => {
+    const offline = computer("offline", "approved");
+    expect(localRunTargetState(readiness(offline), inFolder(offline))).toEqual({
+      type: "folder",
+      problem: "offline",
+    });
+    const moved = computer("moved", "approved");
+    expect(localRunTargetState(readiness(moved), inFolder(moved))).toEqual({
+      type: "folder",
+      problem: "moved",
+    });
+    const away = computer("available", "approved", false);
+    expect(
+      localRunTargetState(
+        {
+          status: "enabled",
+          runners: [away, runner([READY_CODEX])],
+          maxApprovals: NO_LIMIT,
+        },
+        inFolder(away),
+      ),
+    ).toEqual({ type: "folder", problem: "computer_offline" });
+    const elsewhere = computer("available", "approved");
+    expect(
+      localRunTargetState(
+        readiness(runner([READY_CODEX])),
+        inFolder(elsewhere),
+      ),
+    ).toEqual({ type: "folder", problem: "unlinked" });
+  });
+
+  test("is read on the folder's computer, however ready another computer is", () => {
+    const signedOut = runner(
+      [{ id: "codex", state: "needs_login", version: "0.50.0" }],
+      true,
+      [
+        {
+          id: LINK_ID,
+          name: "Smith v Jones",
+          state: "available",
+          approval: "approved",
+        },
+      ],
+    );
+    const both: ChatLocalRunReadiness = {
+      status: "enabled",
+      // The other computer is ready and listed first.
+      runners: [runner([READY_CODEX]), signedOut],
+      maxApprovals: NO_LIMIT,
+    };
+    const target = inFolder(signedOut);
+
+    expect(localRunTargetState(both, target)).toEqual({
+      type: "harness",
+      option: { harness: "codex", state: "needs_login" },
+    });
+    expect(stateOf(chatLocalHarnessOptionsFor(both, target), "codex")).toBe(
+      "needs_login",
+    );
+    // The chat's own folder runs on whichever computer is ready.
+    expect(localRunTargetState(both, LOCAL)).toEqual({ type: "ready" });
+    expect(stateOf(chatLocalHarnessOptionsFor(both, LOCAL), "codex")).toBe(
+      "ready",
+    );
+  });
+
+  test("offers the efforts and permissions of the folder's computer", () => {
+    const efforts = (
+      reasoningEfforts: ("low" | "high")[],
+    ): ChatLocalHarnessReadiness => ({
+      id: "codex",
+      state: "ready",
+      version: "0.50.0",
+      capabilities: ["approvals"],
+      approvalModes: ["ask"],
+      models: [{ id: "gpt-5-codex", label: "GPT-5 Codex", reasoningEfforts }],
+    });
+    const folderComputer = runner([efforts(["low"])], true, [
+      {
+        id: LINK_ID,
+        name: "Smith v Jones",
+        state: "available",
+        approval: "approved",
+      },
+    ]);
+    const both: ChatLocalRunReadiness = {
+      status: "enabled",
+      runners: [runner([efforts(["low", "high"])]), folderComputer],
+      maxApprovals: NO_LIMIT,
+    };
+    const target = inFolder(folderComputer);
+
+    expect(
+      reasoningEffortChoices(
+        target,
+        chatLocalHarnessOptionsFor(both, target) ?? [],
+      ),
+    ).toEqual(["low"]);
+    expect(
+      reasoningEffortChoices(
+        LOCAL,
+        chatLocalHarnessOptionsFor(both, LOCAL) ?? [],
+      ),
+    ).toEqual(["low", "high"]);
+  });
+
+  test("stays with the chat when another model is picked, and differs from the chat's own folder", () => {
+    const linked = computer("available", "approved");
+    const target = inFolder(linked);
+    const picked = localRunTargetFor({
+      selected: target,
+      option: READY_CLAUDE,
+      model: "opus",
+      maxApprovals: NO_LIMIT,
+    });
+    expect(picked.kind === "local" ? picked.folder : null).toEqual(
+      target.folder,
+    );
+    expect(sameRunTarget(target, LOCAL)).toBe(false);
+    expect(sameRunTarget(withRunFolder(target, undefined), LOCAL)).toBe(true);
   });
 });

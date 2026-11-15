@@ -128,7 +128,7 @@ test("sidebar context menus delete only the row that was right-clicked", async (
               onDeleted={() => undefined}
               onExpandedChange={() => undefined}
               onTogglePin={() => undefined}
-              runStatus={undefined}
+              runs={undefined}
               userId="user_sidebar"
               workspace={{
                 client: null,

@@ -15,7 +15,7 @@ covered by one, or through `read_capability` or
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transcribe`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `place`, `prefill`, `prepare`, `preview`, `release`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transcribe`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -111,6 +111,16 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `client-invoices.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices create` |
 | `client-invoices.prefill` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices prefill` |
 
+## conflict-checks
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `conflict-checks.create` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks create` |
+| `conflict-checks.get` | read | stella:read | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks get` |
+| `conflict-checks.link` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks link` |
+| `conflict-checks.list` | read | stella:read | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks list` |
+| `conflict-checks.review` | write | stella:contacts_write | FEATURE_CONFLICT_CHECK | generic invoke → `stella capability conflict-checks review` |
+
 ## contacts
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -131,6 +141,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `contacts.sanctions.reviews.update` | write | stella:contacts_write | — | generic invoke → `stella capability contacts sanctions-reviews-update` |
 | `contacts.search` | read | stella:read | — | generic invoke → `stella capability contacts search` |
 | `contacts.update` | write | stella:contacts_write | — | covered by `save_contact` |
+
+## data-exports
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `data-exports.get` | read | stella:admin_read | — | generic invoke → `stella capability data-exports get` |
+| `data-exports.list` | read | stella:admin_read | — | generic invoke → `stella capability data-exports list` |
 
 ## dictation
 
@@ -187,6 +204,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `entities.folders.list` | read | stella:read | — | covered by `list_documents` |
 | `entities.from-legal-source.create` | write | stella:documents_write | — | generic invoke → `stella capability entities from-legal-source-create` |
 | `entities.get` | read | stella:read | — | curated tool `read_document` |
+| `entities.legal-holds.place` | write | stella:matters_write | — | generic invoke → `stella capability entities legal-holds-place` |
+| `entities.legal-holds.release` | write | stella:matters_write | — | generic invoke → `stella capability entities legal-holds-release` |
 | `entities.list` | read | stella:read | — | curated tool `list_documents` |
 | `entities.move` | write | stella:documents_write | — | covered by `save_document` |
 | `entities.ocr.create` | write | stella:matters_write | — | generic invoke → `stella capability entities ocr-create` |
@@ -314,6 +333,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.generations.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generations-create` |
 | `lists.generations.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generations-list` |
 | `lists.get` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists get` |
+| `lists.graph.neighbours.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists graph-neighbours-list` |
+| `lists.graph.nodes.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists graph-nodes-list` |
+| `lists.graph.paths.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists graph-paths-list` |
 | `lists.items.activity.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-activity-list` |
 | `lists.items.comments.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-comments-create` |
 | `lists.items.fact-details.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-fact-details-update` |
@@ -333,12 +355,14 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.verifications.claim-comments.delete` | write, destructive | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-delete` |
 | `lists.verifications.claim-comments.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-list` |
 | `lists.verifications.claim-comments.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-update` |
+| `lists.verifications.claim-rechecks.bulk.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-rechecks-bulk-create` |
 | `lists.verifications.claim-rechecks.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-rechecks-create` |
 | `lists.verifications.claim-reviews.bulk.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-bulk-create` |
 | `lists.verifications.claim-reviews.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-create` |
 | `lists.verifications.claim-reviews.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-list` |
 | `lists.verifications.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-create` |
 | `lists.verifications.get` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-get` |
+| `lists.verifications.graph.get` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-graph-get` |
 | `lists.verifications.latest.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-latest-list` |
 | `lists.verifications.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-list` |
 
@@ -356,17 +380,23 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.cells.retry` | write | stella:matters_write | — | generic invoke → `stella capability matters cells-retry` |
 | `matters.contacts.create` | write | stella:matters_write | — | curated tool `link_matter_contact` |
 | `matters.contacts.delete` | write, destructive | stella:matters_write | — | covered by `link_matter_contact` |
+| `matters.contacts.list` | read | stella:read | — | covered by `list_matters` |
 | `matters.correspondence.get` | read | stella:read | — | generic invoke → `stella capability matters correspondence-get` |
 | `matters.correspondence.list` | read | stella:read | — | generic invoke → `stella capability matters correspondence-list` |
 | `matters.correspondence.update` | write | stella:matters_write | — | generic invoke → `stella capability matters correspondence-update` |
 | `matters.create` | write | stella:matters_write | — | curated tool `save_matter` |
 | `matters.delete` | write, destructive | stella:matters_write | — | curated tool `delete_matter` |
 | `matters.duplicate` | write | stella:matters_write | — | generic invoke → `stella capability matters duplicate` |
+| `matters.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.justifications.list` | read | stella:read | — | generic invoke → `stella capability matters justifications-list` |
+| `matters.legal-holds.place` | write | stella:matters_write | — | generic invoke → `stella capability matters legal-holds-place` |
+| `matters.legal-holds.release` | write | stella:matters_write | — | generic invoke → `stella capability matters legal-holds-release` |
 | `matters.list` | read | stella:read | — | curated tool `list_matters` |
-| `matters.members.add` | write | stella:admin_write | — | curated tool `add_matter_member` |
+| `matters.matter-numbering.get` | read | stella:read | — | generic invoke → `stella capability matters matter-numbering-get` |
+| `matters.member-candidates.list` | read | stella:read | — | generic invoke → `stella capability matters member-candidates-list` |
+| `matters.members.add` | write | stella:matters_write | — | curated tool `add_matter_member` |
 | `matters.members.list` | read | stella:read | — | covered by `list_matters` |
-| `matters.members.remove` | write, destructive | stella:admin_write | — | curated tool `remove_matter_member` |
+| `matters.members.remove` | write, destructive | stella:matters_write | — | curated tool `remove_matter_member` |
 | `matters.search-preview.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.unarchive` | write | stella:matters_write | — | covered by `save_matter` |
 | `matters.update` | write | stella:matters_write | — | covered by `save_matter` |
@@ -614,6 +644,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `tasks.assignees.remove` | write, destructive | stella:matters_write | — | covered by `save_task` |
 | `tasks.calendar.list` | read | stella:read | — | covered by `list_tasks` |
 | `tasks.create` | write | stella:matters_write | — | curated tool `save_task` |
+| `tasks.delete` | write, destructive | stella:matters_write | — | covered by `delete_task` |
 | `tasks.entity-links.create` | write | stella:matters_write | — | covered by `save_task` |
 | `tasks.entity-links.delete` | write, destructive | stella:matters_write | — | covered by `save_task` |
 | `tasks.entity-links.list` | read | stella:read | — | covered by `list_tasks` |
@@ -791,23 +822,24 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
-| assistant_chat | 16 |
-| auth_plumbing | 39 |
+| assistant_chat | 19 |
+| auth_plumbing | 43 |
 | billing_ui | 1 |
-| chat_thread_ui | 26 |
+| chat_thread_ui | 31 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
-| document_processing | 26 |
+| document_processing | 27 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_device | 5 |
-| native_tool_ui | 10 |
-| provider_secret | 33 |
-| public_indexing | 10 |
-| realtime_stream | 9 |
+| native_tool_ui | 11 |
+| organization_export | 2 |
+| provider_secret | 34 |
+| public_indexing | 11 |
+| realtime_stream | 10 |
 | search_ui | 21 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 22 |
+| upload_mechanics | 24 |
 | url_preview | 2 |

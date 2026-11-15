@@ -1,6 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import {
+  drainReactScheduler,
+  unregisterDomEnvironment,
+} from "@stll/property-testing/dom-environment";
+
 import type {
   HarnessInstallState,
   HarnessStatus,
@@ -19,21 +24,15 @@ const { HARNESS_INSTALL_CHANGED_EVENT } =
   await import("../src/mainview/harness-install-status");
 
 afterEach(async () => {
-  // A command's follow-up status read settles after a test's last
-  // assertion; let React apply it while the DOM still exists.
   await act(async () => {
-    // real-time: one macrotask lets the mocked IPC promises settle.
-    await Bun.sleep(0);
+    await drainReactScheduler();
   });
   cleanup();
   clearMocks();
 });
 
 afterAll(async () => {
-  // React's scheduler runs on a macrotask; it must find the DOM it renders to.
-  // real-time: one macrotask drains it before the DOM is removed.
-  await Bun.sleep(0);
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const install = defaultMessages.agentSubscriptions.install;

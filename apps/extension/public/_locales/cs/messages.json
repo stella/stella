@@ -85,5 +85,17 @@
   },
   "connectStellaInstead": {
     "message": "Připojit stellu tady"
+  },
+  "allowDesktop": {
+    "message": "Používat se stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop: připojeno"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop: neběží"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Aktualizujte stella desktop a toto rozšíření"
   }
 }

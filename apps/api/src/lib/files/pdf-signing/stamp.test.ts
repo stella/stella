@@ -308,7 +308,7 @@ const signWithStamp = async (
       expectedDigestHex: first.digestHex,
       signature: new Uint8Array(signature),
       timestampAuthorities: [],
-      timestampTrustAnchors: [],
+      timestampTrust: { anchors: [], pinnedUnits: new Set() },
     }),
   );
   return { applied, first, placed, second };

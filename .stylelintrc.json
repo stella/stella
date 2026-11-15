@@ -65,6 +65,7 @@
       }
     ],
     "declaration-property-value-no-unknown": true,
+    "value-no-invalid": true,
     "function-disallowed-list": [
       [
         "rgb",

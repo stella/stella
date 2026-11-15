@@ -3,15 +3,15 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { ChatDecisionLocator } from "@stll/api-contract/chat-reference-href";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { createTestState } from "@stll/test-state";
 
 import type { AskUserInput } from "@/components/chat/chat-ui-tools";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
-
-import type { CaseLawDecisionLocator } from "./case-law-open";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/chat",
@@ -30,8 +30,8 @@ const idleFetch = Object.assign(async () => Response.json(null), {
   preconnect: () => undefined,
 });
 globalThis.fetch = idleFetch;
-const originalPublicLawFlag = process.env["VITE_PUBLIC_LAW_ENABLED"];
-process.env["VITE_PUBLIC_LAW_ENABLED"] = "true";
+const state = createTestState({ file: import.meta.path, config: {} });
+state.setEnv("VITE_PUBLIC_LAW_ENABLED", "true");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
@@ -90,11 +90,6 @@ afterEach(async () => {
 afterAll(async () => {
   await act(async () => {});
   globalThis.fetch = originalFetch;
-  if (originalPublicLawFlag === undefined) {
-    delete process.env["VITE_PUBLIC_LAW_ENABLED"];
-  } else {
-    process.env["VITE_PUBLIC_LAW_ENABLED"] = originalPublicLawFlag;
-  }
   await unregisterDomEnvironment();
 });
 
@@ -277,7 +272,7 @@ const decisionLocators = [
   },
 ] as const satisfies readonly {
   name: string;
-  locator: CaseLawDecisionLocator;
+  locator: ChatDecisionLocator;
 }[];
 
 for (const { name, locator } of decisionLocators) {

@@ -17,8 +17,11 @@ import {
   type ChatContextUsage,
 } from "@/components/chat/chat-context-meter";
 import { ChatMockModelBadge } from "@/components/chat/chat-mock-model-badge";
-import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
-import { ChatModelSelector } from "@/components/chat/chat-model-selector";
+import {
+  chatRunOnTarget,
+  type ComposerModelsMenuProps,
+} from "@/components/chat/chat-model-options-menu";
+import { ChatComposerChips } from "@/components/chat/chat-model-selector";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -145,8 +148,14 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
   const renderState = resolveChatComposerDockRenderState(props);
   const { disabled, endExtras, models, newThreadPrompt, onNewThread } =
     renderState;
+  // The switch governs stella's web tools on cloud turns. A coding agent on
+  // the member's computer always has its own web search, so the switch would
+  // say nothing true there.
+  const runsOnComputer =
+    models !== null && chatRunOnTarget(models.runTarget).kind === "local";
   const showWebSearch =
-    renderState.status === "pending" || renderState.data.webSearchAvailable;
+    !runsOnComputer &&
+    (renderState.status === "pending" || renderState.data.webSearchAvailable);
   const webSearchEnabled =
     renderState.status === "ready" && renderState.data.webSearchEnabled;
   const t = useTranslations();
@@ -216,7 +225,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
           {/* Beside the model it qualifies: while the local mock answers,
               the selected model is not the one replying. */}
           <ChatMockModelBadge />
-          {models && <ChatModelSelector models={models} />}
+          {models && <ChatComposerChips models={models} />}
           {/* The meter renders on every surface: it shows an empty ring
               for a brand-new thread (context null) and fills in once an
               estimate lands. */}

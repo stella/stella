@@ -6,6 +6,36 @@ import { safeIdSchema } from "@stll/api-contract/safe-id";
 import { uuidSchema } from "@stll/api-contract/uuid";
 
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+import { utf8ByteLength } from "@/api/lib/json-schema/utf8-byte-length";
+
+type Utf8ByteBounds = { maxBytes: number; maxSegmentBytes?: number };
+
+export type Utf8ByteBoundsKeywords = {
+  "x-maxUtf8Bytes"?: Utf8ByteBounds["maxBytes"];
+  "x-maxSegmentUtf8Bytes"?: Utf8ByteBounds["maxSegmentBytes"];
+};
+
+const UTF8_BYTE_BOUNDS = new WeakMap<object, Utf8ByteBounds>();
+
+export const readUtf8ByteBounds = (action: object) =>
+  UTF8_BYTE_BOUNDS.get(action);
+
+/** Byte limits are published as explicit x- keywords, not character limits. */
+export const utf8ByteBounds = (bounds: Utf8ByteBounds) => {
+  const { maxBytes, maxSegmentBytes } = bounds;
+  const check = v.check(
+    (value: string) =>
+      value.isWellFormed() &&
+      utf8ByteLength(value) <= maxBytes &&
+      (maxSegmentBytes === undefined ||
+        value
+          .split("/")
+          .every((segment) => utf8ByteLength(segment) <= maxSegmentBytes)),
+    "Expected text within its UTF-8 byte limits",
+  );
+  UTF8_BYTE_BOUNDS.set(check, { ...bounds });
+  return check;
+};
 
 export { uuidSchema };
 

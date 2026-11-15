@@ -12,6 +12,7 @@ import { Button } from "@stll/ui/button";
 // markdown approximation — folio loads it through its `documentBuffer` path,
 // preserving the original Word formatting. Served from public/samples.
 const SAMPLE_DOCX_URL = "/samples/safe.docx";
+const SAMPLE_DOCX_NAME = "safe.docx";
 
 // folio's own canonical English strings for the "folio" namespace its
 // toolbar/dialogs read via `useTranslations("folio")` (from
@@ -96,6 +97,7 @@ export const EditorLiveDemo = () => {
           <DocxEditor
             className="folio-docx-preview h-full"
             documentBuffer={sample.documentBuffer}
+            accessibleName={SAMPLE_DOCX_NAME}
             // Fit the page to the embed width so the SAFE never overflows and
             // clips on the right; folio re-fits as the hero frame resizes.
             initialZoom="fit-width"

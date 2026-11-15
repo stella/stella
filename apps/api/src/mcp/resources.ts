@@ -450,6 +450,10 @@ const shippedSkillResources = (
         if (resource === null) {
           return panic(`Missing shipped skill resource: ${skill.name}/${path}`);
         }
+        // `resources/read` takes a URI and no cursor, so the file is served
+        // whole. Shipped files stay within the model context cap (a test in
+        // @stll/skills holds them to it); tenant skills, whose files may be
+        // far larger, are read in windows through their skill tool instead.
         return {
           uri: `${rootUri}/${path}`,
           name: `${skill.name}/${path}`,

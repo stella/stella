@@ -296,7 +296,7 @@ export const legislationDocuments = p.pgTable(
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
     indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
-    /** Monotonic fence advanced by each desired-state transaction. */
+    /** Monotonic order of the document's projection desired-state changes. */
     projectionEpoch: p
       .bigint("projection_epoch", { mode: "bigint" })
       .default(0n)

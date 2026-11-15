@@ -68,6 +68,10 @@
       {
         "reason": "adds the regulator guidance tools",
         "tokens": 36046
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 36247
       }
     ],
     "anthropic/extended": [
@@ -138,6 +142,10 @@
       {
         "reason": "adds the regulator guidance tools",
         "tokens": 36535
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 36738
       }
     ],
     "bedrock/default": [
@@ -204,6 +212,10 @@
       {
         "reason": "adds the regulator guidance tools",
         "tokens": 36306
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 36507
       }
     ],
     "bedrock/extended": [
@@ -270,6 +282,10 @@
       {
         "reason": "ask-user questions take a selection mode for multiple-choice answers",
         "tokens": 36883
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37179
       }
     ],
     "google/default": [
@@ -332,6 +348,10 @@
       {
         "reason": "adds the regulator guidance tools",
         "tokens": 35035
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 35237
       }
     ],
     "google/extended": [
@@ -390,6 +410,10 @@
       {
         "reason": "adds the regulator guidance tools",
         "tokens": 35513
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 35714
       }
     ],
     "mistral/default": [
@@ -456,6 +480,10 @@
       {
         "reason": "ask-user questions take a selection mode for multiple-choice answers",
         "tokens": 37637
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37940
       }
     ],
     "mistral/extended": [
@@ -522,6 +550,10 @@
       {
         "reason": "ask-user questions take a selection mode for multiple-choice answers",
         "tokens": 38163
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38467
       }
     ],
     "openai/default": [
@@ -588,6 +620,10 @@
       {
         "reason": "ask-user questions take a selection mode for multiple-choice answers",
         "tokens": 37213
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37516
       }
     ],
     "openai/extended": [
@@ -654,6 +690,10 @@
       {
         "reason": "ask-user questions take a selection mode for multiple-choice answers",
         "tokens": 37728
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38031
       }
     ],
     "openrouter-anthropic/default": [
@@ -720,6 +760,10 @@
       {
         "reason": "ask-user questions take a selection mode for multiple-choice answers",
         "tokens": 37625
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37925
       }
     ],
     "openrouter-anthropic/extended": [
@@ -786,6 +830,10 @@
       {
         "reason": "ask-user questions take a selection mode for multiple-choice answers",
         "tokens": 38136
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38436
       }
     ],
     "openrouter/default": [
@@ -852,6 +900,10 @@
       {
         "reason": "ask-user questions take a selection mode for multiple-choice answers",
         "tokens": 37625
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37925
       }
     ],
     "openrouter/extended": [
@@ -918,6 +970,10 @@
       {
         "reason": "ask-user questions take a selection mode for multiple-choice answers",
         "tokens": 38136
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38436
       }
     ]
   },

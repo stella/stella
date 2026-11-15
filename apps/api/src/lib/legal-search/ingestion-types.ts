@@ -1307,10 +1307,15 @@ export type SourceRecapture = {
   /**
    * The envelope for `stored` with the listed item added. Pure: the payload
    * already held is reused, never fetched again.
+   *
+   * Absent where what a legacy row holds cannot stand in for the responses a
+   * crawl reads (a document file the adapter no longer parses, where the text
+   * comes from another rendition): such a row is located here and then
+   * re-observed through `buildDecision`, never upgraded from bytes that would
+   * build a poorer decision than the one stored.
    */
-  recaptureStoredRaw: (
-    input: StoredRawRecaptureInput,
-  ) => StoredRawRecaptureOutcome;
+  recaptureStoredRaw?:
+    ((input: StoredRawRecaptureInput) => StoredRawRecaptureOutcome) | undefined;
 };
 
 /**
@@ -2018,9 +2023,10 @@ export const defineSourceAdapter = <
           lookupOf: scoped(reconciliation.recapture.lookupOf),
           listLookup: scoped(reconciliation.recapture.listLookup),
           matchesStored: scoped(reconciliation.recapture.matchesStored),
-          recaptureStoredRaw: scoped(
-            reconciliation.recapture.recaptureStoredRaw,
-          ),
+          recaptureStoredRaw:
+            reconciliation.recapture.recaptureStoredRaw === undefined
+              ? undefined
+              : scoped(reconciliation.recapture.recaptureStoredRaw),
         } satisfies SourceRecapture);
   const sourceFieldCallbacks = {
     listSourceFields: scoped(adapter.sourceFields.listSourceFields),

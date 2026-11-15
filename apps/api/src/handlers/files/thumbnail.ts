@@ -13,7 +13,7 @@ import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import { lockLiveVersionField } from "@/api/lib/files/read-file";
+import { lockLiveVersionField } from "@/api/lib/files/live-version-field";
 import { createFileKey } from "@/api/lib/files/utils";
 import { callerDownloadSource } from "@/api/lib/s3-presign";
 
@@ -73,10 +73,9 @@ export default createSafeHandler(
             }
             return await auditedPresignDownload({
               readSessionAuthority: ownerSyntheticSessionAuthorityReader,
-              tx,
+              versionLock: row.lock,
               recordAuditEvent,
               resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-              resourceId: row.entityId,
               userId: user.id,
               source: callerDownloadSource(session),
               s3Key: createFileKey({

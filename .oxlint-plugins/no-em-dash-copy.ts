@@ -28,9 +28,7 @@
 
 import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
-import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
-  filenameForContext,
   getCalleeName,
   memberPropertyName,
   type ScopeContext,
@@ -39,7 +37,6 @@ import {
 
 const EM_DASH = "\u2014";
 const EM_DASH_ENTITY = /&(?:mdash|#0*8212|#x0*2014);/iu;
-const EM_DASH_MARK = /\u2014|&(?:mdash|#0*8212|#x0*2014);/giu;
 
 const EMPTY_CELL_MARKER = /^(?:\u2014|&mdash;|&#0*8212;|&#x0*2014;)$/iu;
 
@@ -267,23 +264,6 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        // During the changed-lines rollout a dash counts on its own line, so
-        // editing another line of a multiline string does not report it.
-        const enforces = (node: { range: readonly [number, number] }) => {
-          const text = context.sourceCode.text.slice(
-            node.range[0],
-            node.range[1],
-          );
-          return [...text.matchAll(EM_DASH_MARK)].some((match) =>
-            guardEnforcesLine({
-              guard: "no-em-dash-copy",
-              file: filenameForContext(context),
-              line: context.sourceCode.getLocFromIndex(
-                node.range[0] + match.index,
-              ).line,
-            }),
-          );
-        };
         return {
           Literal(node) {
             if (typeof node.value !== "string") {
@@ -296,9 +276,8 @@ export default eslintCompatPlugin({
               return;
             }
             if (
-              (containsEmDash(raw) ||
-                (decodesEntities && EM_DASH_ENTITY.test(raw))) &&
-              enforces(node)
+              containsEmDash(raw) ||
+              (decodesEntities && EM_DASH_ENTITY.test(raw))
             ) {
               context.report({ node, messageId: "emDash" });
             }
@@ -308,7 +287,7 @@ export default eslintCompatPlugin({
             if (isSoleMarkerContent(node, context) || isConsoleArgument(node)) {
               return;
             }
-            if (containsEmDash(raw) && enforces(node)) {
+            if (containsEmDash(raw)) {
               context.report({ node, messageId: "emDash" });
             }
           },
@@ -317,10 +296,7 @@ export default eslintCompatPlugin({
             if (isSoleMarkerContent(node, context) || isConsoleArgument(node)) {
               return;
             }
-            if (
-              (containsEmDash(raw) || EM_DASH_ENTITY.test(raw)) &&
-              enforces(node)
-            ) {
+            if (containsEmDash(raw) || EM_DASH_ENTITY.test(raw)) {
               // JSX text starts after the previous tag or expression, often a
               // line above the copy: point at the dash itself.
               const offsets = [

@@ -248,6 +248,7 @@ describe("local harness chunks", () => {
           reasoningOutputTokens: 5,
           context: null,
         },
+        boundary: null,
       },
     ];
 
@@ -305,7 +306,7 @@ describe("local harness chunks", () => {
         },
       },
       { type: "text.completed", messageId: "m-2", text: "Left it in place." },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ];
     const chunks = await localChunks(events);
     const pauseIndex = chunks.findIndex(
@@ -421,7 +422,7 @@ describe("local harness chunks", () => {
           ],
         },
       },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     expect(
       chunks.some(
@@ -487,6 +488,36 @@ describe("local harness chunks", () => {
     );
   });
 
+  test("a call the harness reports it did not run because of a stop is stored cancelled, not failed", async () => {
+    const chunks = await localChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("native-5"),
+        continuation: { type: "resumed" },
+      },
+      { type: "tool.started", toolCall: commandCall },
+      {
+        type: "tool.completed",
+        toolCall: commandCall,
+        // What the adapter built from the harness's error flag.
+        result: {
+          content: JSON.stringify({ status: "failed" }),
+          status: "cancelled",
+        },
+      },
+      { type: "turn.interrupted" },
+    ]);
+    expect(fold(chunks).flatMap(({ parts }) => parts)).toContainEqual(
+      expect.objectContaining({
+        type: "tool-result",
+        toolCallId: commandCall.id,
+        content: JSON.stringify({ status: "interrupted" }),
+        state: "error",
+        outcome: "cancelled",
+      }),
+    );
+  });
+
   test("each failure kind ends the run with its own error code", async () => {
     const failures = {
       auth_required: { type: "auth_required", message: "Sign in again." },
@@ -517,6 +548,14 @@ describe("local harness chunks", () => {
       sandbox_unavailable: {
         type: "sandbox_unavailable",
         message: "The sandbox could not start.",
+      },
+      retry_stalled: {
+        type: "retry_stalled",
+        message: "The harness kept retrying the provider without progress.",
+      },
+      tools_unavailable: {
+        type: "tools_unavailable",
+        message: "The harness could not connect to the stella MCP server.",
       },
     } as const satisfies {
       [Type in HarnessFailure["type"]]: Extract<HarnessFailure, { type: Type }>;
@@ -600,6 +639,7 @@ describe("local harness chunks", () => {
               reasoningOutputTokens: 0,
               context,
             },
+            boundary: null,
           },
         ])
       ).findLast((chunk) => chunk.type === EventType.RUN_FINISHED);
@@ -676,6 +716,11 @@ describe("approval messages", () => {
   });
 });
 
+/** A normalised chunk that names the model it was written by. */
+const NAMES_MODEL = v.object({
+  metadata: v.object({ tanstack: v.object({ model: v.string() }) }),
+});
+
 describe("chunk stream invariants", () => {
   const toolCall = fc
     .constantFrom("a", "b", "c")
@@ -728,9 +773,16 @@ describe("chunk stream invariants", () => {
       requestId: `approval-${call.id}`,
     })),
     fc.constant<HarnessEvent>({ type: "retrying", message: "retry" }),
+    fc
+      .constantFrom("gpt-rerouted", "claude-fallback")
+      .map((model) => ({ type: "model.rerouted" as const, model })),
   );
   const terminal: fc.Arbitrary<HarnessEvent | null> = fc.oneof(
-    fc.constant<HarnessEvent>({ type: "turn.completed", usage: null }),
+    fc.constant<HarnessEvent>({
+      type: "turn.completed",
+      usage: null,
+      boundary: null,
+    }),
     fc.constant<HarnessEvent>({ type: "turn.interrupted" }),
     fc.constant<HarnessEvent>({
       type: "turn.failed",
@@ -738,6 +790,55 @@ describe("chunk stream invariants", () => {
     }),
     fc.constant(null),
   );
+
+  test("every chunk names the model the turn ran on when it was written", async () => {
+    await assertProperty(
+      "every chunk names the model the turn ran on when it was written",
+      fc.asyncProperty(
+        fc.array(event, { maxLength: 25 }),
+        terminal,
+        async (body, end) => {
+          const events = end === null ? body : [...body, end];
+          // The model each chunk should name: the one asked for until a
+          // reroute, then the newest reroute's, as of the event it came from.
+          let ranOn = MODEL;
+          let terminalNamed = 0;
+          async function* tracked() {
+            for (const item of events) {
+              if (item.type === "model.rerouted") {
+                ranOn = item.model;
+              }
+              yield item;
+            }
+          }
+          for await (const chunk of harnessEventsToChunks(tracked(), {
+            harness: "codex",
+            model: MODEL,
+            runId: RUN_ID,
+            threadId: THREAD_ID,
+            workspaceDir: WORKSPACE_DIR,
+            generateId: counter(),
+            now: () => 0,
+          })) {
+            // The normaliser keeps the model under `metadata.tanstack`, on
+            // the chunks that carry it.
+            const named = v.safeParse(NAMES_MODEL, chunk);
+            if (named.success) {
+              expect(named.output.metadata.tanstack.model).toBe(ranOn);
+            }
+            if (
+              chunk.type === EventType.RUN_FINISHED ||
+              chunk.type === EventType.RUN_ERROR
+            ) {
+              expect(named.success).toBe(true);
+              terminalNamed += 1;
+            }
+          }
+          expect(terminalNamed).toBeGreaterThan(0);
+        },
+      ),
+    );
+  });
 
   test("runs alternate, every tool call is paired and exactly one terminal chunk ends the stream", async () => {
     await assertProperty(

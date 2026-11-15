@@ -104,6 +104,7 @@ const config = {
   providerDefaultModels: [],
   instanceProvisioned: false,
   decisionInstanceProvisioned: false,
+  verificationDecisionModel: { enabled: false, available: false },
 } satisfies OrganizationAIConfig;
 const savedConfig = {
   configured: true,
@@ -113,6 +114,7 @@ const savedConfig = {
   ],
   instanceProvisioned: false,
   decisionInstanceProvisioned: false,
+  verificationDecisionModel: { enabled: false, available: false },
   providers: [
     { provider: "google", apiKeyMasked: "AIza****1234", region: "global" },
   ],

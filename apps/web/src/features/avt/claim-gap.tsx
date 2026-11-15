@@ -169,7 +169,7 @@ const GapActions = ({
     disabled ||
     actions.addFact.isPending ||
     actions.link.isPending ||
-    actions.recheck.isPending;
+    actions.recheckPending;
   return (
     <div className="flex flex-col items-start gap-1.5">
       <AddFactSheet
@@ -620,6 +620,8 @@ type LinkedFactsProps = GapScope & {
   /** Facts the verdict cites: a linked one shows on its card there. */
   cited: ReadonlyMap<string, unknown>;
   disabled: boolean;
+  /** The claim is in a re-check of several claims still running. */
+  recheckLocked: boolean;
 };
 
 /**
@@ -634,6 +636,7 @@ export const LinkedFacts = ({
   claim,
   cited,
   disabled,
+  recheckLocked,
 }: LinkedFactsProps) => {
   const t = useTranslations();
   const allLinked = (claim.review ?? EMPTY_CLAIM_REVIEW).linkedFactIds;
@@ -656,7 +659,7 @@ export const LinkedFacts = ({
   const names = new Map<string, ListItem["name"]>(
     facts.map((fact) => [fact.id, fact.name]),
   );
-  const busy = disabled || actions.link.isPending || actions.recheck.isPending;
+  const busy = disabled || actions.link.isPending || actions.recheckPending;
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -664,10 +667,13 @@ export const LinkedFacts = ({
           {t("avt.gap.linked")}
         </h3>
         <Button
-          disabled={busy}
-          loading={actions.recheck.isPending}
+          disabled={busy || recheckLocked}
+          loading={actions.recheckPending}
           onClick={() => actions.recheck.mutate()}
           size="sm"
+          // While the claim is in a re-check of several, it says why it
+          // waits.
+          tooltip={recheckLocked ? t("avt.staleness.recheckLocked") : undefined}
           variant="ghost"
         >
           <RefreshCwIcon />

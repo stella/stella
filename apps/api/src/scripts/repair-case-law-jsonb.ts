@@ -79,7 +79,8 @@ await runScriptWithErrorOutput(async () => {
 
     const rows = await withAggregateTransaction(rootDb, async (tx) => {
       await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
-      const repaired = await tx.execute(sql`
+      const repaired = await tx.execute(
+        sql`
     WITH batch AS (
       SELECT id
       FROM case_law_decisions
@@ -133,7 +134,9 @@ await runScriptWithErrorOutput(async () => {
       (SELECT count(*)::int FROM batch) AS scanned,
       (SELECT count(*)::int FROM updated) AS updated,
       ARRAY(SELECT id::text FROM updated) AS updated_ids
-    `);
+    `,
+        "objects",
+      );
       const ids = repaired.at(0)?.["updated_ids"];
       if (!Array.isArray(ids)) {
         panic("Decision JSONB repair did not return its written IDs");

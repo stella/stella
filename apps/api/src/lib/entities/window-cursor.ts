@@ -8,11 +8,11 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 const ENTITIES_WINDOW_CURSOR_VERSION = 2;
 
 // Entity windows carry at most LIMITS.viewSortsCount projected field sort
-// values: buildSortKeys emits one key per requested sort, plus a fixed set of
-// built-in keys (three search-rank numbers and the entity id) whose values are
-// short. JSON can expand one control character to six ASCII bytes; the 1024
-// tail covers the version wrapper and those built-in keys before base64url
-// encoding.
+// values: buildSortKeys emits one text key per requested sort (a number column
+// adds a currency code and a number ahead of it), plus a fixed set of built-in
+// keys (three search-rank numbers and the entity id) whose values are short.
+// JSON can expand one control character to six ASCII bytes; the 1024 tail
+// covers the version wrapper and those short keys before base64url encoding.
 export const ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH = 1000;
 const ENTITIES_WINDOW_CURSOR_JSON_MAX_BYTES =
   LIMITS.viewSortsCount * ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH * 6 + 1024;

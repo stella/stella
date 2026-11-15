@@ -12,6 +12,7 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:data-export-maintenance": ["checkpointedJobs"],
   "system:monitoring-session-revoke": [
     "revokedControls",
     "deletedSessions",
@@ -70,6 +71,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   "system:corpus-index-job-detail-backfill": ["movedJobs"],
   "system:case-law-parsed-input-state-backfill": ["updatedDecisions"],
   "system:legislation-expression-id-backfill": ["claimedDocuments"],
+  "system:search-history-country-repair": ["classified", "unclassifiable"],
   "system:audit-retention": ["deletedRuns"],
   "system:case-law-background-replay": [
     "attempted",
