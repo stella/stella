@@ -491,7 +491,8 @@ export const resolveS3Credentials = async ({
   return staticCredentials;
 };
 
-class S3DeadlineCredentialsError extends TaggedError(
+/** Imported by the isolated credential-refresh child process in s3.test.ts. @public */
+export class S3DeadlineCredentialsError extends TaggedError(
   "S3DeadlineCredentialsError",
 )<{
   message: string;
