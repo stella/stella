@@ -308,6 +308,18 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },
+  updateOrganization: {
+    writes: [
+      {
+        type: "auth-plugin-endpoint",
+        plugin: "organization",
+        endpoint: "updateOrganization",
+        method: "POST",
+        route: "/organization/update",
+      } satisfies AuthPluginEndpointWrite<"updateOrganization">,
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   // A reviewer's decision on a claim changes the verification as reviewers
   // see it: the run read (kept current in place by the decision's own cache
   // write), its review history and the list's graph.

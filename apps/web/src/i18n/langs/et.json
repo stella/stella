@@ -6041,6 +6041,7 @@
         "title": "Programmeerimisagendid liikmete arvutites",
         "updated": "Programmeerimisagentide õigused on uuendatud"
       },
+      "logoInvalid": "Valige kuni 5 MB suurune PNG-, JPEG- või WebP-pilt.",
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",
       "membersDescription": "Halda, kellel on juurdepääs sellele organisatsioonile, ja ootel kutseid",
@@ -6089,6 +6090,7 @@
         "title": "Ajavöönd",
         "updated": "Ajavöönd on uuendatud"
       },
+      "uploadLogo": "Laadi logo üles",
       "usage": "Kasutus",
       "usageDescription": "Selle organisatsiooni kasutuslimiidid ja õiguse olek",
       "usageEmptyDescription": "Seadista kasutusõigus, et lubada selles organisatsioonis mõõdetud AI-funktsioonid.",

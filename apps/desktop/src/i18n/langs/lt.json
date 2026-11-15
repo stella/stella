@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Parašas",
     "pdfSignCertificate": "Pasirašymo sertifikatas",
     "pdfSignDocument": "Dokumentas",
+    "pdfSignDownloadDriver": "Atsisiųsti tvarkyklę",
+    "pdfSignDriverMissing": "Skaitytuve esančiai kortelei reikia „{vendor}“ tvarkyklės, kuri neįdiegta. Norėdami pasirašyti šia kortele, ją įdiekite.",
+    "pdfSignDriverNeedsUpdate": "Įdiegta „{vendor}“ tvarkyklė neveikia šio „Mac“ procesoriuje. Norėdami pasirašyti šia kortele, įdiekite naujausią jos versiją.",
     "pdfSignErrorCode": "Klaidos kodas: {code}",
     "pdfSignErrors": {
       "authenticationRequired": "Jūsų raktinei reikia leidimo naudoti šį sertifikatą. Bandykite dar kartą ir leiskite prieigą, kai bus paprašyta.",
@@ -118,6 +121,9 @@
       "startAgain": "Pasirašymo tęsti nepavyko. Pradėkite pasirašymą „stella“ iš naujo.",
       "temporarilyUnavailable": "„stella“ šiuo metu nepavyko užbaigti pasirašymo. Bandykite dar kartą.",
       "tokenNotPresent": "Lustinė kortelė arba žetonas neprijungtas. Prijunkite jį ir bandykite dar kartą.",
+      "tokenSigningFailed": "Lustinė kortelė arba žetonas nepasirašė dokumento.",
+      "tokenTimeout": "Lustinė kortelė arba žetonas laiku neatsakė. Bandykite dar kartą.",
+      "tokenUnreadable": "Nepavyko nuskaityti lustinės kortelės arba žetono. Bandykite dar kartą.",
       "unsupportedAlgorithm": "Šio sertifikato raktu negalima sukurti šiam dokumentui reikalingo parašo. Pasirinkite kitą sertifikatą.",
       "wouldBreakSignatures": "Pasirašius šį PDF, jame jau esantys parašai taptų negaliojantys."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Byla",
     "pdfSignNoIdentities": "Raktinėje nėra nė vieno pasirašymo sertifikato.",
     "pdfSignNoIdentitiesCertificateStore": "Sertifikatų saugykloje nėra nė vieno pasirašymo sertifikato.",
+    "pdfSignOnToken": "Saugoma: {tokenLabel}",
+    "pdfSignPin": "PIN kodas",
+    "pdfSignPinFinalTry": "Dar vienas neteisingas PIN kodas užblokuos kortelę arba žetoną.",
+    "pdfSignPinLow": "Anksčiau buvo įvestas neteisingas PIN kodas. Atidžiai patikrinkite PIN kodą.",
+    "pdfSignPinPad": "Norėdami pasirašyti {documentName}, įveskite PIN kodą kortelių skaitytuve.",
+    "pdfSignPinPrompt": "Norėdami pasirašyti {documentName}, įveskite kortelės arba žetono PIN kodą.",
+    "pdfSignRescanCards": "Ieškoti kortelių iš naujo",
     "pdfSignRetry": "Bandyti dar kartą",
     "pdfSignServer": "Prašo",
     "pdfSignSign": "Pasirašyti",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Matomas spaudas {pageNumber} puslapyje",
     "pdfSignSubtitle": "Privatusis raktas lieka jūsų raktinėje; iš šio kompiuterio išsiunčiamas tik parašas.",
     "pdfSignSubtitleCertificateStore": "Privatusis raktas lieka jūsų sertifikatų saugykloje; iš šio kompiuterio išsiunčiamas tik parašas.",
+    "pdfSignSubtitleToken": "Privatusis raktas lieka jūsų lustinėje kortelėje arba žetone; iš šio kompiuterio išsiunčiamas tik parašas.",
     "pdfSignTitle": "Pasirašyti šį PDF?",
     "pdfSignUnsupported": "Pasirašymui reikia macOS arba Windows. Dokumentą pasirašysite „Mac“ arba „Windows“ kompiuteriu.",
     "pdfSignVersion": "Versija",
@@ -870,6 +884,18 @@
       "runs_can_write": "Vietiniai vykdymai gali rašyti į šį aplanką, todėl jame negali būti įgūdžio.",
       "network_folder": "Šis aplankas yra tinklo bendrinimo vietoje. Įgūdžiai turi būti šio kompiuterio diske.",
       "path_changed": "Pasikeitė aukštesnis aplankas. Pašalinkite šį aplanką ir pridėkite jį iš naujo."
+    }
+  },
+  "signingDriver": {
+    "title": "Lustinės kortelės tvarkyklė",
+    "description": "Jei stella desktop pati neranda jūsų lustinės kortelės ar žetono tvarkyklės, pasirinkite jos PKCS #11 modulį. Jis įkeliamas tik PDF pasirašymui, atskirame procese.",
+    "choose": "Pasirinkti modulį",
+    "remove": "Pašalinti",
+    "notice": {
+      "action_failed": "Nepavyko. Bandykite dar kartą.",
+      "missing": "Šio failo nebėra.",
+      "needs_update": "Šis modulis neveikia šio „Mac“ procesoriuje. Įdiekite naujausią tvarkyklės versiją.",
+      "not_a_library": "Šis failas nėra PKCS #11 modulis."
     }
   },
   "localLinkedFolders": {

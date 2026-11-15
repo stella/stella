@@ -188,8 +188,43 @@ const STORED_PART_WIRE = {
     readBy: EVERY_PROVIDER,
   },
   subagent: {
-    notStored:
-      "Its persistence policy drops it before storage (`CHAT_PART_PERSISTENCE`).",
+    // A tool-mode run: its child reaches the parent model only as the result
+    // of the call that started it, never through the part.
+    part: {
+      type: "subagent",
+      subagent: {
+        id: "subagent-run-1",
+        name: "browse",
+        parentToolCallId: "call_stored_1",
+        status: "finished",
+        messages: [
+          {
+            id: "subagent-task",
+            role: "user",
+            parts: [{ type: "text", content: `Look up ${PLANTED.subagent}.` }],
+          },
+          {
+            id: "subagent-answer",
+            role: "assistant",
+            parts: [
+              {
+                type: "tool-call",
+                metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+                id: "call_child_1",
+                name: "use-browser",
+                arguments: JSON.stringify({ query: PLANTED.subagent }),
+                input: { query: PLANTED.subagent },
+                output: { title: PLANTED.subagent },
+                state: "complete",
+              },
+              { type: "text", content: `${PLANTED.subagent} signs.` },
+            ],
+          },
+        ],
+      },
+    },
+    readBy: NO_PROVIDER,
+    reason: UI_ONLY,
   },
   text: {
     part: { type: "text", content: `Please brief ${PLANTED.text}.` },
@@ -273,6 +308,7 @@ const HISTORIES = {
     "audio",
     "video",
     "ui-resource",
+    "subagent",
   ],
   image: ["image"],
 } as const satisfies Record<string, readonly StoredPartType[]>;

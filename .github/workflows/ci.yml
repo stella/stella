@@ -3184,6 +3184,16 @@ jobs:
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
+      - name: Test the stella browser host
+        # The runner's Chrome in a desktop session: headful, sandbox on.
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web' && (steps.affected.outputs.flag == '' || contains(needs.ci-plan.outputs.test_scope, '@stll/agent-engine')) }}
+        timeout-minutes: 5
+        env:
+          STELLA_BROWSER_E2E_EXECUTABLE: /opt/google/chrome/chrome
+        run: |
+          command -v dbus-run-session
+          dbus-run-session -- xvfb-run -a bun test packages/agent-engine/src/sidecar/browser/hosts.e2e.test.ts
+
       - name: Upload failed API or rest test output
         if: failure() && steps.test-api-or-rest.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -6350,6 +6360,8 @@ jobs:
       - *ci_image_mirror_login
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
 
       - *setup_bun_cached
 
