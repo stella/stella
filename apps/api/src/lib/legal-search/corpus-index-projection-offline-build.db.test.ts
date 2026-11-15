@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { dbClock } from "@stll/test-kit/db";
 
 import type { Transaction } from "@/api/db/root";
@@ -37,6 +38,7 @@ import {
   type CorpusProjectionOfflineDeliveryOutcome,
   type CorpusProjectionOfflineShard,
   type CorpusProjectionOfflineWorkUnit,
+  requireFreshReadCommittedStartTx,
 } from "@/api/lib/legal-search/corpus-index-projection-offline-build";
 import {
   CORPUS_PROJECTION_OFFLINE_DEFAULT_INGEST_BYTES_PER_SECOND,
@@ -155,6 +157,14 @@ type Model = {
   /** Every delivery: how many revisions, and whether a poisoned one. */
   deliveries: { revisions: number; poisoned: boolean }[];
   reached: Set<CorpusIndexIntentStatus>;
+  /** Every transaction opens in repeatable read, as a misconfigured caller's. */
+  repeatableRead: boolean;
+  /**
+   * After the first transaction that leaves a revision reserved, its entity
+   * switches to single delivery, as a retirement of a shared delivery does.
+   */
+  switchToSingleAfterReserve: boolean;
+  switchedToSingle: string | null;
 };
 
 const crashIf = (model: Model, matches: boolean, at: string) => {
@@ -174,11 +184,27 @@ const transactionRunner =
     const { crash } = model;
     const dies = crash.type === "transaction" && crash.index === index;
     crashIf(model, dies && crash.phase === "before", `transaction ${index}`);
-    return await db.transaction(async (tx) => {
-      const value = await operation(asTestRaw<Transaction>(tx));
+    const value = await db.transaction(async (tx) => {
+      if (model.repeatableRead) {
+        await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
+      }
+      const result = await operation(asTestRaw<Transaction>(tx));
       crashIf(model, dies, `commit of transaction ${index}`);
-      return value;
+      return result;
     });
+    if (model.switchToSingleAfterReserve) {
+      const reserved = await entityIn(model, "reserved");
+      if (reserved !== undefined) {
+        model.switchToSingleAfterReserve = false;
+        model.switchedToSingle = reserved;
+        await db.execute(
+          sql`UPDATE ${corpusIndexProjectionStates}
+            SET append_mode = 'single'
+            WHERE entity_id = ${reserved}`,
+        );
+      }
+    }
+    return value;
   };
 
 /** The database clock moved ahead by the model's virtual offset. */
@@ -362,7 +388,10 @@ const deliverer =
     for (const intent of intents) {
       expect(intent.status).toBe("append_started");
       expect(intent.appendDelivery).toBe("offline_indexer");
-      expect(intent.appendMode).toBe("batchable");
+      // An entity that delivers alone is never in a file with another.
+      if (intents.length > 1) {
+        expect(intent.appendMode).toBe("batchable");
+      }
       expect(intent.expectedDocumentCount).toBe(
         lines.filter((line) => line === intent.id).length,
       );
@@ -807,6 +836,9 @@ const newModel = async (entities = ENTITIES): Promise<Model> => {
     poisoned: new Set(),
     maxShardRevisions: SHARD_REVISIONS,
     deliveries: [],
+    repeatableRead: false,
+    switchToSingleAfterReserve: false,
+    switchedToSingle: null,
   };
 };
 
@@ -1349,6 +1381,96 @@ describe("offline route build", () => {
     expect(run?.progress.proved).toBe(ENTITIES - 1);
     const intents = await readIntents([isolated]);
     expect(intents).toEqual([]);
+  });
+
+  test("an entity switched to single delivery after its reservation is started and delivered alone", async () => {
+    const model = await newModel();
+    model.switchToSingleAfterReserve = true;
+    const run = await runBuild(model, { ...QUIET_RUN, maxShardRevisions: 8 });
+    const single = model.switchedToSingle ?? panic("No entity was switched");
+    expect(run?.progress.proved).toBe(ENTITIES);
+    // The rest together, built from the same page; the single one after, in
+    // a file of its own.
+    expect(model.deliveries.map(({ revisions }) => revisions)).toEqual([
+      ENTITIES - 1,
+      1,
+    ]);
+    const [intent] = await db
+      .select({ requestId: corpusIndexProjectionIntents.appendRequestId })
+      .from(corpusIndexProjectionIntents)
+      .where(eq(corpusIndexProjectionIntents.entityId, single));
+    const [request] = await db
+      .select({ count: sql<number>`count(*)::integer` })
+      .from(corpusIndexProjectionIntents)
+      .where(
+        eq(
+          corpusIndexProjectionIntents.appendRequestId,
+          intent?.requestId ?? panic("Started without a request"),
+        ),
+      );
+    expect(request?.count).toBe(1);
+  });
+
+  test("an offline start runs only first in a fresh read committed transaction", async () => {
+    /** The guard's refusal after `prepare`, or null when it lets the start run. */
+    const guard = async (prepare: (tx: Transaction) => Promise<void>) =>
+      (
+        await Result.tryPromise({
+          try: async () =>
+            await db.transaction(async (raw) => {
+              const tx = asTestRaw<Transaction>(raw);
+              await prepare(tx);
+              await requireFreshReadCommittedStartTx(tx);
+            }),
+          catch: (cause: unknown) =>
+            cause instanceof Error ? cause.message : String(cause),
+        })
+      ).match({ ok: () => null, err: (message) => message });
+    const model = await newModel(1);
+    const entityId = model.entityIds.at(0) ?? panic("No entity");
+    expect(await guard(async () => undefined)).toBeNull();
+    // A read takes no lock that could close a cycle.
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(
+          sql`SELECT entity_id FROM ${corpusIndexProjectionStates} WHERE entity_id = ${entityId}`,
+        );
+      }),
+    ).toBeNull();
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(
+          sql`SELECT entity_id FROM ${corpusIndexProjectionStates} WHERE entity_id = ${entityId} FOR UPDATE`,
+        );
+      }),
+    ).toContain("holds no lock yet");
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(1, 2)`);
+      }),
+    ).toContain("holds no lock yet");
+    expect(
+      await guard(async (tx) => {
+        await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
+      }),
+    ).toContain("read committed");
+
+    // A caller whose transactions run in repeatable read starts nothing.
+    const refused = await newModel();
+    refused.repeatableRead = true;
+    expect(
+      await rejectionOf(
+        runBuild(refused, { ...QUIET_RUN, maxShardRevisions: 8 }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("must run in read committed"),
+    });
+    expect(refused.deliveries).toEqual([]);
+    expect(
+      (await readIntents(refused.entityIds)).filter(
+        ({ status }) => status !== "reserved",
+      ),
+    ).toEqual([]);
   });
 
   test("a second run on the same route is refused while the first holds its lock", async () => {

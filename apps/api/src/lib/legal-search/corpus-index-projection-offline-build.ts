@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 import { rm } from "node:fs/promises";
 
@@ -9,7 +9,10 @@ import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
-import { corpusIndexGenerations } from "@/api/db/schema";
+import {
+  corpusIndexGenerations,
+  corpusIndexProjectionStates,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusProjectionReservationQueueKey } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -101,8 +104,10 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
  * limit. Files are therefore grouped by request cap
  * (`corpusProjectionOfflineShardClass`), so a delivery failure halves exactly
  * what failed together. A retired revision that shared its request leaves its
- * entity in single requests, which only the per-row path sends; the batch
- * never reserves such an entity and the progress counts it as handed over.
+ * entity in single requests, which the per-row path sends; the batch never
+ * reserves such an entity and the progress counts it as handed over. One that
+ * switched to single delivery after the batch reserved it is started in a
+ * request of its own.
  */
 
 type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
@@ -313,6 +318,80 @@ const lockKeyOf = (
   domain: "corpus-projection-offline-build",
   name: `${family}:${generation}:${indexId}`,
 });
+
+/**
+ * Refuse to start offline revisions in a transaction that is not fresh and
+ * read committed. The store's first lock in a start transaction is the
+ * request's advisory lock, which serializes the request's starts; it must be
+ * the transaction's first lock, since row locks taken earlier with plain
+ * `FOR UPDATE` could close a cycle with another start of the same request
+ * that the lock ranks do not see. And the count of what the request already
+ * started is read after that lock, which only read committed sees in full:
+ * a repeatable-read snapshot would predate the wait.
+ *
+ * A transaction that has locked a row holds its own transaction id lock, so
+ * no advisory and no transaction id lock means nothing was locked yet.
+ */
+export const requireFreshReadCommittedStartTx = async (
+  tx: Transaction,
+): Promise<void> => {
+  const [probe] = await tx
+    .select({
+      isolation: sql<string>`current_setting('transaction_isolation')`,
+      locksHeld: sql<number>`(
+        SELECT count(*)::integer
+        FROM pg_locks
+        WHERE pid = pg_backend_pid()
+          AND granted
+          AND locktype IN ('advisory', 'transactionid', 'tuple')
+      )`,
+    })
+    .from(sql`(SELECT 1) AS probe`);
+  if (probe === undefined) {
+    return panic("The start transaction probe returned no row");
+  }
+  if (probe.isolation !== "read committed") {
+    return panic(
+      `An offline start must run in read committed, not ${probe.isolation}`,
+    );
+  }
+  if (probe.locksHeld !== 0) {
+    return panic(
+      "An offline start must take the request's lock first, in a transaction that holds no lock yet",
+    );
+  }
+};
+
+/**
+ * Entities of `leases` whose state now delivers alone. The reservation takes
+ * only batchable entities, but a state can switch to single delivery after
+ * it (a shared delivery of the entity retired), and the offline start does
+ * not refuse such a revision in a larger request, so the run composes its
+ * requests from what the state says when the revision is built.
+ */
+const readSingleDeliveryEntitiesTx = async (
+  tx: Transaction,
+  leases: readonly CorpusProjectionIntentLease[],
+): Promise<Set<string>> => {
+  const first = leases.at(0);
+  if (first === undefined) {
+    return new Set();
+  }
+  const rows = await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, first.family),
+        eq(corpusIndexProjectionStates.generation, first.generation),
+        inArray(corpusIndexProjectionStates.entityId, [
+          ...new Set(leases.map(({ entityId }) => entityId)),
+        ]),
+        eq(corpusIndexProjectionStates.appendMode, "single"),
+      ),
+    );
+  return new Set(rows.map(({ entityId }) => entityId));
+};
 
 /** Expired-lease sweep pages a run takes at its start and every few shards. */
 const SWEEP_MAX_PAGES = 8;
@@ -861,7 +940,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     const { runInTransaction, family, generation, indexId, policy } =
       this.#options;
     const testNow = await this.#testNow();
-    const { page, materials, caps } = await this.#admit(
+    const { page, materials, caps, singles } = await this.#admit(
       { phase: "reserve", revisions: limit },
       async () => {
         const reserved = await runInTransaction(
@@ -881,6 +960,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
             page: reserved,
             materials: { ready: [], rejected: [] },
             caps: new Map<ProjectionRevision, number>(),
+            singles: new Set<string>(),
           };
         }
         return {
@@ -895,6 +975,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
               tx,
               reserved.leases,
             ),
+            singles: await readSingleDeliveryEntitiesTx(tx, reserved.leases),
           }))),
         };
       },
@@ -939,13 +1020,19 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           lease: material.lease,
           documentCount: built.value.documentCount,
           block: `${built.value.parts.join("\n")}\n`,
-          shardClass: corpusProjectionOfflineShardClass(
-            this.#plan,
-            caps.get(material.lease.intentId) ??
-              panic(
-                `Reserved revision has no request cap: ${material.lease.intentId}`,
-              ),
-          ),
+          // A revision whose entity delivers alone starts in a request of
+          // its own, whatever its cap.
+          shardClass:
+            material.lease.appendMode === "single" ||
+            singles.has(material.lease.entityId)
+              ? 1
+              : corpusProjectionOfflineShardClass(
+                  this.#plan,
+                  caps.get(material.lease.intentId) ??
+                    panic(
+                      `Reserved revision has no request cap: ${material.lease.intentId}`,
+                    ),
+                ),
         });
       } else {
         failures.push(
@@ -1029,17 +1116,17 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           // Read after the admission: a governor that held the transaction
           // back has spent start window, and the store judges it so.
           const testNow = await this.#testNow();
-          return await runInTransaction(
-            async (tx) =>
-              await startCorpusProjectionOfflineRequestChunkTx(tx, {
-                request,
-                leases: chunk.map(({ lease, documentCount }) => ({
-                  lease,
-                  expectedDocumentCount: documentCount,
-                })),
-                testNow,
-              }),
-          );
+          return await runInTransaction(async (tx) => {
+            await requireFreshReadCommittedStartTx(tx);
+            return await startCorpusProjectionOfflineRequestChunkTx(tx, {
+              request,
+              leases: chunk.map(({ lease, documentCount }) => ({
+                lease,
+                expectedDocumentCount: documentCount,
+              })),
+              testNow,
+            });
+          });
         },
       );
       requestStartedAt ??= result.requestStartedAt;
