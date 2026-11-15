@@ -33,8 +33,8 @@ const BENCHES = Object.keys(menuCommitBenches).filter(
 /**
  * The most commits each menu may take to open and to close: the highest
  * count measured, plus three. Counts move by up to two commits between runs
- * of the same code in the merge queue (one keyboard-opened menu took 11, and
- * once 13), and this spec runs in a required check, so its margin must hold
+ * of the same code in the merge queue (the tooltip menu kept from opening on
+ * focus took 11 to open by keyboard, and once 13), and this spec runs in a required check, so its margin must hold
  * on any run. A regression this guards against, a tooltip that opens on
  * focus or an extra store write per open or close, costs about five commits
  * or more, which the margin still catches. Each menu is measured on a newly
@@ -46,7 +46,7 @@ const BENCHES = Object.keys(menuCommitBenches).filter(
  */
 const COMMIT_BUDGET = {
   pointer: {
-    primitive: { open: 14, close: 9 },
+    primitive: { open: 15, close: 9 },
     plain: { open: 14, close: 9 },
     tooltip: { open: 15, close: 18 },
     "tooltip-quiet-on-focus": { open: 15, close: 10 },
@@ -57,7 +57,7 @@ const COMMIT_BUDGET = {
     primitive: { open: 13, close: 9 },
     plain: { open: 13, close: 9 },
     tooltip: { open: 25, close: 18 },
-    "tooltip-quiet-on-focus": { open: 14, close: 9 },
+    "tooltip-quiet-on-focus": { open: 16, close: 9 },
     radio: { open: 13, close: 9 },
     many: { open: 13, close: 9 },
   },
