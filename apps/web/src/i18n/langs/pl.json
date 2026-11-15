@@ -2202,8 +2202,8 @@
     "sources": "Źródła:",
     "steerRefused": {
       "cannotSteer": "Ten agent nie przyjmuje wiadomości w trakcie pracy.",
-      "noRun": "Agent jeszcze nie zaczął.",
-      "notPlain": "W trakcie pracy agenta możesz wysłać mu tylko wiadomość tekstową.",
+      "noRun": "Agent nie działa teraz na Twoim komputerze.",
+      "notPlain": "W trakcie pracy agenta możesz wysłać mu tylko wiadomość tekstową bez plików, wysłaną poza trybem anonimizacji.",
       "notTaken": "Agent nie mógł teraz przyjąć twojej wiadomości.",
       "runFull": "Agent nie przyjmie teraz kolejnych wiadomości.",
       "title": "Twoja wiadomość czeka w kolejce, aż agent skończy",

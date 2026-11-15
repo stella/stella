@@ -2202,8 +2202,8 @@
     "sources": "Fontes:",
     "steerRefused": {
       "cannotSteer": "Este agente não aceita mensagens enquanto trabalha.",
-      "noRun": "O agente ainda não começou.",
-      "notPlain": "Enquanto o agente trabalha, você só pode enviar uma mensagem de texto a ele.",
+      "noRun": "O agente não está em execução no seu computador agora.",
+      "notPlain": "Enquanto o agente trabalha, você só pode enviar a ele uma mensagem de texto sem arquivos e fora do modo anonimizado.",
       "notTaken": "O agente não conseguiu receber sua mensagem agora.",
       "runFull": "O agente não pode aceitar mais mensagens agora.",
       "title": "Sua mensagem fica na fila até o agente terminar",
