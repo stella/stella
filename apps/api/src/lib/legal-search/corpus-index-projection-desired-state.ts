@@ -1054,9 +1054,12 @@ export const writeDesiredStates = async (
   const undone = await readUndoneErasuresTx(tx, values);
   const states = corpusIndexProjectionStates;
   // Judged on the row before this write: once its named copy trails by two
-  // changes with other content, `desired_at` keeps the instant that happened,
-  // so the legacy pass can tell a copy an earlier release left behind from one
-  // this release's own writes moved past (see the predicate).
+  // changes with other content, an upsert write keeps `desired_at` at the
+  // instant that happened, so the legacy pass can tell a copy that fell that
+  // far behind before its cutover from one that fell behind after it (see the
+  // predicate). A write that turns the state into an erasure stamps its own
+  // instant, so the erasure's pending time is its own; the undo that follows
+  // it retires the copy here (`readUndoneErasuresTx`).
   const namedCopyTrailsTwoChanges =
     corpusIndexProjectionNamedCopyTrailsTwoChanges({
       desiredAction: states.desiredAction,
@@ -1094,7 +1097,7 @@ export const writeDesiredStates = async (
         {
           desiredAction: sql`excluded.desired_action`,
           desiredEpoch: sql`excluded.desired_epoch`,
-          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} OR ${namedCopyTrailsTwoChanges} THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
+          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} OR (excluded.desired_action = 'upsert' AND ${namedCopyTrailsTwoChanges}) THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
           desiredFingerprint: sql`excluded.desired_fingerprint`,
           desiredIndexId: sql`excluded.desired_index_id`,
           workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,

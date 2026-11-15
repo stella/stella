@@ -294,6 +294,7 @@ export const FAILURE_TAGS = [
   "KsefError",
   "LatestDecisionsError",
   "LegacyChatContentError",
+  "LegacyServedCopyRetireCutoverMismatchError",
   "LegacyWordParseError",
   "LegalBrowseFacetsError",
   "LegalHoldActiveError",
