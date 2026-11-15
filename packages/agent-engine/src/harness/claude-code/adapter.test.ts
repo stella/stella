@@ -1089,6 +1089,9 @@ describe("Claude Code adapter over stream-json stdio", () => {
       parent_tool_use_id: null,
       session_id: users[0]?.["session_id"],
       uuid: expect.any(String),
+      // Taken at the agent's next step; the CLI's default would hold it to
+      // the turn's end.
+      priority: "next",
     });
     const settled = events.findIndex(({ type }) => type === "input.settled");
     expect(events[settled]).toEqual({

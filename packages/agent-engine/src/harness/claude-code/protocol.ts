@@ -365,6 +365,18 @@ export const CLAUDE_CONTROL_REQUESTS = {
 } as const;
 export type ClaudeControlRequestSubtype = keyof typeof CLAUDE_CONTROL_REQUESTS;
 
+/**
+ * When the CLI takes a message written while a turn runs. `next`: at the
+ * agent's next step, after the tool call that runs ends, the way a Codex
+ * steer is taken, so a steer behaves the same on both harnesses. Not `now`,
+ * which takes it at once by cancelling the running tool call (and, unless
+ * they are moved to the background first, running subagents), leaving a
+ * command or a write half done; a member who wants the step cut presses
+ * Stop. Not omitted: without it the CLI defaults to `later`, which holds the
+ * message until the turn ends, so the turn would never take it.
+ */
+export const CLAUDE_STEER_PRIORITY = "next";
+
 /** The control requests Stella sends the CLI. */
 export type ClaudeHostControlRequest =
   | "initialize"

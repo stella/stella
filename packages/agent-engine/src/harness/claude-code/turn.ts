@@ -55,6 +55,7 @@ import {
   AssistantMessageSchema,
   CanUseToolRequestSchema,
   CLAUDE_CONTROL_REQUESTS,
+  CLAUDE_STEER_PRIORITY,
   CLAUDE_STOPPED_TOOL_KINDS,
   type ClaudeControlRequestSubtype,
   type ClaudeResultMessage,
@@ -499,10 +500,10 @@ export class ClaudeCodeTurnSession {
   }
 
   /**
-   * Write the message to the CLI while the turn runs. The CLI queues it and
-   * joins it to the turn at its next step, echoing it back with its uuid
-   * then; a turn whose result arrives first never took it, and the
-   * lifecycle settles it `rejected` with that result.
+   * Write the message to the CLI while the turn runs, at
+   * `CLAUDE_STEER_PRIORITY`. The CLI joins it to the turn at its next step,
+   * echoing it back with its uuid then; a turn whose result arrives first
+   * never took it, and the lifecycle settles it `rejected` with that result.
    */
   private steer({ inputId, text }: HarnessSteerInput) {
     const client = this.client;
@@ -518,6 +519,7 @@ export class ClaudeCodeTurnSession {
       parent_tool_use_id: null,
       session_id: this.sessionId,
       uuid,
+      priority: CLAUDE_STEER_PRIORITY,
     });
   }
 
