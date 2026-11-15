@@ -1,14 +1,1 @@
-{
-  "apps/api": {
-    "count": 1,
-    "files": {
-      "apps/api/src/lib/scheduler/tasks/list-verification-run-reconcile.ts": 1
-    }
-  },
-  "packages/agent-engine": {
-    "count": 1,
-    "files": {
-      "packages/agent-engine/src/harness/skill-folders.ts": 1
-    }
-  }
-}
+{}
