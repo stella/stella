@@ -77,3 +77,21 @@ export const CHAT_TURN_LOG_IS_LIVE = {
   cancelled: false,
   interrupted: false,
 } as const satisfies Record<ChatTurnStatus, boolean>;
+
+/**
+ * The rollout of `handed-over`, an expand/contract change in code: during a
+ * rolling deploy old and new API tasks serve side by side, and a task that
+ * cannot read the status would accept a second turn on the thread or fail
+ * on the row. So every task must read the status (`readers`) and adopt it
+ * (`adopters`) one release before any task writes it. A release is named by
+ * the repository `VERSION` it was cut at; `adopters` is null until adoption
+ * ships. `turn-status-rollout.test.ts` refuses a writer (a `hand-over`
+ * transition outside the state planner) until `VERSION` shows both cut.
+ */
+export const CHAT_TURN_HANDED_OVER_ROLLOUT: {
+  readers: string;
+  adopters: string | null;
+} = {
+  readers: "0.9.84",
+  adopters: null,
+};
