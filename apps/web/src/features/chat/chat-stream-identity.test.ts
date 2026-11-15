@@ -132,7 +132,7 @@ const answerBody = (
           {
             type: EventType.REASONING_MESSAGE_START,
             messageId: `${answerId}-reasoning-${String(steps)}`,
-            role: "assistant",
+            role: "reasoning",
           },
           {
             type: EventType.REASONING_MESSAGE_CONTENT,
@@ -500,8 +500,8 @@ const streamSession = async ({
     initialMessages: session.history,
     connection: {
       connect: (messages, _data, _signal, run) => {
-        if (run === undefined || !messages.every(isUiMessage)) {
-          throw new Error("The client sent no run context or model messages");
+        if (!messages.every(isUiMessage)) {
+          throw new Error("The client sent model messages");
         }
         return keepPostedMessagesInSnapshots(messages, runChunks(run));
       },
