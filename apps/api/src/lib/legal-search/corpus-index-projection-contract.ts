@@ -40,6 +40,19 @@ export const CORPUS_INDEX_APPEND_DELIVERIES = [
 ] as const;
 
 /**
+ * The most revisions one offline request, one indexer file, may hold. A run
+ * pays a process start, a commit and the merges at its exit whatever it
+ * carries, so a request should be as large as its bytes allow (the batch
+ * sizes by bytes below this); a request of one ingest-sized batch (512) would
+ * multiply runs and splits per corpus by sixteen. Sixteen start transactions
+ * of at most 512 rows each (`CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE`, the
+ * bound on one transaction's row locks, parameters and guard work) cover it
+ * inside the offline start window, and a revision that keeps its run from
+ * publishing is alone after at most log2(8192) = 13 halvings.
+ */
+export const CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS = 8192;
+
+/**
  * What a generation-level launch probe must do with each intent state.
  * `applied` still needs the engine census because it may not be the revision
  * referenced by authoritative projection state.

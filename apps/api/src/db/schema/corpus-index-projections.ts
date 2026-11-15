@@ -9,6 +9,7 @@ import {
   CORPUS_INDEX_DESIRED_ACTIONS,
   CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES,
   CORPUS_INDEX_INTENT_STATUSES,
+  CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
   CORPUS_INDEX_PROJECTION_APPEND_MODES,
   CORPUS_INDEX_PROJECTION_FAILURE_KINDS,
   CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS,
@@ -73,6 +74,14 @@ export const corpusIndexProjectionIntents = p.pgTable(
       .text("append_delivery", { enum: CORPUS_INDEX_APPEND_DELIVERIES })
       .default("ingest_api")
       .notNull(),
+    /**
+     * The request an offline revision travels in: one indexer file, started
+     * in one or more transactions. Null for an ingest request, whose
+     * transaction is its request. Set with the start and immutable from then
+     * on; the revisions carrying one identity are exactly the ones delivered
+     * together.
+     */
+    appendRequestId: p.uuid("append_request_id"),
     appendRequestRevisionCount: p.integer("append_request_revision_count"),
     appendCommittedAt: timestamptz("append_committed_at"),
     expectedDocumentCount: p.integer("expected_document_count"),
@@ -193,6 +202,12 @@ export const corpusIndexProjectionIntents = p.pgTable(
       .index("corpus_index_projection_intents_settled_census_idx")
       .on(t.family, t.generation, t.indexId, t.id)
       .where(sql`${t.status} = 'settled'`),
+    // The revisions of one offline request, counted to learn how many were
+    // delivered together and when the request first started.
+    p
+      .index("corpus_index_projection_intents_append_request_idx")
+      .on(t.appendRequestId)
+      .where(sql`${t.appendRequestId} IS NOT NULL`),
     // The absent census's other half: withdrawn revisions the engine must not
     // hold either, read beside the settled ones by the same page.
     p
@@ -236,11 +251,16 @@ export const corpusIndexProjectionIntents = p.pgTable(
     // committed form always carries the barrier it is proven after.
     p.check(
       "corpus_index_projection_intents_append_delivery_shape",
-      sql`${t.appendDelivery} = 'ingest_api' OR (
-        ${t.appendStartedAt} IS NOT NULL
-        AND ${t.expectedDocumentCount} IS NOT NULL
-        AND (${t.appendCommittedAt} IS NULL OR ${t.appendPublishBarrierAt} IS NOT NULL)
-      )`,
+      sql`CASE ${t.appendDelivery}
+        WHEN 'ingest_api' THEN ${t.appendRequestId} IS NULL
+        WHEN 'offline_indexer' THEN
+          ${t.appendStartedAt} IS NOT NULL
+          AND ${t.appendRequestId} IS NOT NULL
+          AND ${t.appendRequestRevisionCount} BETWEEN 1 AND ${sql.raw(String(CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS))}
+          AND ${t.expectedDocumentCount} IS NOT NULL
+          AND (${t.appendCommittedAt} IS NULL OR ${t.appendPublishBarrierAt} IS NOT NULL)
+        ELSE false
+      END`,
     ),
     p.check(
       "corpus_index_projection_intents_epoch_positive",

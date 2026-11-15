@@ -113,6 +113,11 @@ export const CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS = 5000;
  * runner enforces it outside the process that started it, so neither that
  * process nor its death can extend it. It is the same budget a REST append of
  * the generation gets, so the lease a start requires covers it.
+ *
+ * A request started in several transactions has one run, killed by the
+ * deadline of its first start (`requestStartedAt` of the offline start). Every
+ * later revision of it started later, so its own deadline, and the end its
+ * proof waits for, falls after that kill: one deadline is safe for all.
  */
 export const corpusProjectionOfflineIndexerKillDeadline = (
   appendStartedAt: Date,
@@ -121,6 +126,42 @@ export const corpusProjectionOfflineIndexerKillDeadline = (
   new Date(
     finiteInstant(appendStartedAt, "kill deadline").getTime() +
       corpusProjectionAppendIngestBudgetMs(manifest),
+  );
+
+/**
+ * How long after an offline request's first start its later transactions may
+ * still start revisions into it. The run's kill deadline counts from that
+ * first start, so this is the most run time starting can cost: a request of
+ * 8192 revisions takes sixteen transactions of at most 512 rows, each a
+ * short lock wait and one update, far inside it. A transaction past it starts
+ * nothing and leaves its leases reserved for the caller to hand back.
+ */
+export const CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS = 60_000;
+
+/**
+ * Time after a request's kill deadline for recording its revisions: up to
+ * sixteen record transactions of at most 512 rows.
+ */
+export const CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS = 60_000;
+
+/**
+ * The earliest lease expiry a revision may start into an offline request
+ * with, given the request's first start: the shared kill deadline plus the
+ * record margin, so every started revision's lease outlives its run and its
+ * record. A lease that falls short is not started. For a generation with a
+ * 600 s commit window the kill budget is 660 s, so a lease must reach 720 s
+ * past the first start; under the 900 s lease maximum that leaves a batch at
+ * most 180 s between reserving and starting a request's first revisions.
+ */
+export const corpusProjectionOfflineRequestLeaseFloor = (
+  requestStartedAt: Date,
+  manifest: CorpusIndexManifest,
+): Date =>
+  new Date(
+    corpusProjectionOfflineIndexerKillDeadline(
+      requestStartedAt,
+      manifest,
+    ).getTime() + CORPUS_PROJECTION_OFFLINE_RECORD_MARGIN_MS,
   );
 
 /**

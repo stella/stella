@@ -6,12 +6,15 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- one ingest request (`ingest_api`, what every earlier writer does, so the
 -- column default is right for each row an earlier release writes) or a local
 -- indexer run over a file (`offline_indexer`), which stores its document count
--- at the start. An offline revision that an exact census, taken once its
--- indexer had certainly ended, found empty becomes `withdrawn`: terminal, with
--- no delete owed.
+-- at the start. An offline revision also carries the identity of its request,
+-- one file the indexer runs over, which may be started in several short
+-- transactions; every revision of a request records the planned total. An
+-- offline revision that an exact census, taken once its indexer had certainly
+-- ended, found empty becomes `withdrawn`: terminal, with no delete owed.
 --
 -- Everything here only adds: a column with a constant default (no rewrite),
--- two checks on it, a status, and two allowed transitions. The status checks
+-- a nullable column, two checks on them, a status, and two allowed
+-- transitions. The status checks
 -- are replaced by supersets in the statement that drops their predecessors,
 -- NOT VALID; the online repair that validates them already validates them
 -- again, and the new checks are validated by their own online entry. Every
@@ -20,14 +23,20 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- stella-migration-safety: reviewed drop-constraint - The same atomic statement replaces each status check with a superset; every row and every existing writer satisfies it.
 ALTER TABLE "corpus_index_projection_intents"
   ADD COLUMN "append_delivery" text DEFAULT 'ingest_api' NOT NULL,
+  ADD COLUMN "append_request_id" uuid,
   ADD CONSTRAINT "corpus_index_projection_intents_append_delivery_values"
     CHECK ("append_delivery" IN ('ingest_api','offline_indexer')) NOT VALID,
   ADD CONSTRAINT "corpus_index_projection_intents_append_delivery_shape"
-    CHECK ("append_delivery" = 'ingest_api' OR (
-      "append_started_at" IS NOT NULL
-      AND "expected_document_count" IS NOT NULL
-      AND ("append_committed_at" IS NULL OR "append_publish_barrier_at" IS NOT NULL)
-    )) NOT VALID,
+    CHECK (CASE "append_delivery"
+      WHEN 'ingest_api' THEN "append_request_id" IS NULL
+      WHEN 'offline_indexer' THEN
+        "append_started_at" IS NOT NULL
+        AND "append_request_id" IS NOT NULL
+        AND "append_request_revision_count" BETWEEN 1 AND 8192
+        AND "expected_document_count" IS NOT NULL
+        AND ("append_committed_at" IS NULL OR "append_publish_barrier_at" IS NOT NULL)
+      ELSE false
+    END) NOT VALID,
   DROP CONSTRAINT "corpus_index_projection_intents_status_values",
   ADD CONSTRAINT "corpus_index_projection_intents_status_values"
     CHECK ("status" IN ('reserved','append_started','append_committed','applied','cleanup_pending','cleanup_started','cleanup_committed','cleanup_stalled','settled','cancelled','withdrawn')) NOT VALID,
@@ -174,9 +183,10 @@ AS $$
   END
 $$;--> statement-breakpoint
 
--- The delivery a revision started with is immutable from its start, like the
--- start itself: the barrier and the census rule its row is judged by depend
--- on it. A reservation has no start, so the start may set it.
+-- The delivery a revision started with, and the request it travels in, are
+-- immutable from its start, like the start itself: the barrier, the census
+-- rule and the request size its row is judged by depend on them. A
+-- reservation has no start, so the start may set them.
 CREATE OR REPLACE FUNCTION "guard_corpus_index_projection_intent_update"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -199,7 +209,8 @@ BEGIN
     RAISE EXCEPTION 'corpus index append start is immutable once recorded';
   END IF;
   IF OLD."append_started_at" IS NOT NULL
-     AND NEW."append_delivery" IS DISTINCT FROM OLD."append_delivery" THEN
+     AND (NEW."append_delivery", NEW."append_request_id")
+         IS DISTINCT FROM (OLD."append_delivery", OLD."append_request_id") THEN
     RAISE EXCEPTION 'corpus index append delivery is immutable once started';
   END IF;
   IF OLD."append_committed_at" IS NOT NULL
@@ -526,5 +537,6 @@ END;
 $$;--> statement-breakpoint
 
 -- The online phase builds corpus_index_projection_intents_withdrawn_census_idx
--- (the absent census's withdrawn half) concurrently and validates the two
--- delivery checks.
+-- (the absent census's withdrawn half) and
+-- corpus_index_projection_intents_append_request_idx (the revisions of one
+-- offline request) concurrently, and validates the two delivery checks.

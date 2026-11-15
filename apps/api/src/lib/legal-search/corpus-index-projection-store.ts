@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { isUuid } from "@stll/uuid-codec";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -33,6 +34,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
+  CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS,
   type CorpusIndexIntentStatus,
   type CorpusIndexProjectionAppendMode,
   type CorpusIndexProjectionFailureKind,
@@ -48,10 +50,12 @@ import {
   type CorpusProjectionPresenceProof,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
+  CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS,
   corpusProjectionAcceptedAppendCleanupFence,
   corpusProjectionAcceptedAppendProofDeadline,
   corpusProjectionAppendPublishBarrier,
   corpusProjectionOfflineIndexerEndedAt,
+  corpusProjectionOfflineRequestLeaseFloor,
   corpusProjectionUnrecordedAppendCleanupFence,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { lockCorpusIndexProjectionMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
@@ -533,15 +537,43 @@ type StartCorpusProjectionAppendBatchOptions = {
 };
 
 /**
- * How the started revisions travel. An offline start stores, per revision,
- * the documents the indexer's file holds for it.
+ * How the started revisions travel. An ingest request is its own
+ * transaction. An offline request is one indexer file, started in one or
+ * more transactions that all carry its identity and its planned total, with
+ * the documents the file holds for each revision.
  */
 type CorpusProjectionAppendStartDelivery =
   | { type: "ingest_api" }
   | {
       type: "offline_indexer";
       expectedDocumentCounts: ReadonlyMap<ProjectionIntentId, number>;
+      request: CorpusProjectionOfflineRequest;
+      /** The request's first start, when an earlier transaction made one. */
+      requestStartedAt: Date | null;
     };
+
+/** A lease an offline transaction left reserved, and why. */
+type CorpusProjectionOfflineNotStarted = {
+  intentId: ProjectionIntentId;
+  status: "not_started";
+  /**
+   * - `start_window_closed`: the request's first start is past the start
+   *   window (`CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS`).
+   * - `lease_ends_before_run`: the lease would expire before the request's
+   *   kill deadline plus the record margin
+   *   (`corpusProjectionOfflineRequestLeaseFloor`).
+   */
+  reason: "start_window_closed" | "lease_ends_before_run";
+};
+
+export type CorpusProjectionOfflineStart =
+  CorpusProjectionAppendStart | CorpusProjectionOfflineNotStarted;
+
+type AppendStartTransaction = {
+  /** The request's first start after this transaction, or null for none. */
+  requestStartedAt: Date | null;
+  outcomes: CorpusProjectionOfflineStart[];
+};
 
 /**
  * Fence one physical append request and give every included revision one DB
@@ -559,7 +591,11 @@ export const startCorpusProjectionAppendBatchTx = async (
       delivery: { type: "ingest_api" },
       testNow,
     })
-  ).revisions;
+  ).outcomes.map((outcome) =>
+    outcome.status === "not_started"
+      ? panic(`An ingest request left ${outcome.intentId} unstarted`)
+      : outcome,
+  );
 
 type OfflineCorpusProjectionAppendLease = {
   lease: CorpusProjectionIntentLease;
@@ -567,24 +603,61 @@ type OfflineCorpusProjectionAppendLease = {
   expectedDocumentCount: number;
 };
 
-type StartCorpusProjectionOfflineAppendBatchOptions = {
+/** One offline request: one indexer file over revisions of one index. */
+export type CorpusProjectionOfflineRequest = {
+  /** A fresh UUID for this request, never reused, carried by each revision. */
+  requestId: string;
+  /** The revisions the file will hold if every transaction starts them all. */
+  plannedRevisionCount: number;
+};
+
+type StartCorpusProjectionOfflineRequestChunkOptions = {
+  request: CorpusProjectionOfflineRequest;
+  /**
+   * The next leases of the request, at most one transaction's worth
+   * (`CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE`), none started before.
+   */
   leases: readonly OfflineCorpusProjectionAppendLease[];
   testNow?: Date | undefined;
 };
 
 /**
- * Start revisions an offline indexer will deliver from one file, with the
- * document count each holds there. Committed before the file exists, so
- * every document the indexer can write belongs to a started row. The run must
- * be killed by `corpusProjectionOfflineIndexerKillDeadline` of this start; an
- * expired start is then proven by census instead of cleaned up
- * (`recoverExpiredCorpusProjectionIntentsTx`). `startedAt` is the instant
- * every started revision stores, which that deadline counts from.
+ * Start the next leases of one offline request, in one short transaction. A
+ * request of up to `CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS` revisions is
+ * started in as many such transactions as it needs, one after another; each
+ * is the size an ingest request's start is, so no transaction holds more row
+ * locks, parameters or guard work than one ingest start does. All of them run
+ * before the file exists, so every document the indexer can write belongs to
+ * a started row, and the file holds exactly the revisions that started.
+ *
+ * - The request's run is killed by the kill deadline of `requestStartedAt`,
+ *   its first start, which is safe for every revision of it.
+ * - A transaction later than the start window after that first start starts
+ *   nothing; a lease that would expire before the kill deadline plus the
+ *   record margin is not started. Both stay reserved for the caller to hand
+ *   back (`cancelCorpusProjectionReservationTx`).
+ * - A request larger than any of its revisions' caps is refused, against the
+ *   planned total, whichever transaction carries the revision.
+ * - A crash between transactions leaves the started part of the request and
+ *   the rest reserved: the run, if any, holds only the started part, and the
+ *   number delivered together is read from the started rows, never from the
+ *   planned total (`readCorpusProjectionOfflineRequestCapsTx`).
  */
-export const startCorpusProjectionOfflineAppendBatchTx = async (
+export const startCorpusProjectionOfflineRequestChunkTx = async (
   tx: Transaction,
-  { leases, testNow }: StartCorpusProjectionOfflineAppendBatchOptions,
-): Promise<CorpusProjectionOfflineAppendStart> => {
+  { request, leases, testNow }: StartCorpusProjectionOfflineRequestChunkOptions,
+): Promise<AppendStartTransaction> => {
+  const first = leases.at(0)?.lease;
+  if (
+    first === undefined ||
+    !isUuid(request.requestId) ||
+    !Number.isSafeInteger(request.plannedRevisionCount) ||
+    request.plannedRevisionCount < leases.length ||
+    request.plannedRevisionCount > CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS ||
+    leases.some(({ lease }) => lease.indexId !== first.indexId)
+  ) {
+    return panic("Corpus projection offline request is invalid");
+  }
   if (
     leases.some(
       ({ expectedDocumentCount }) =>
@@ -599,11 +672,18 @@ export const startCorpusProjectionOfflineAppendBatchTx = async (
     leases.map(({ lease }) => lease),
   );
   if (
-    leases.some(({ lease }) => leases.length > (caps.get(lease.intentId) ?? 0))
+    leases.some(
+      ({ lease }) =>
+        request.plannedRevisionCount > (caps.get(lease.intentId) ?? 0),
+    )
   ) {
     return panic(
       "An offline request holds a revision past its request cap; read the caps first",
     );
+  }
+  const started = await readOfflineRequestTx(tx, request, first);
+  if (started.count + leases.length > request.plannedRevisionCount) {
+    return panic("An offline request starts more revisions than it planned");
   }
   return await startAppendBatchTx(tx, {
     leases: leases.map(({ lease }) => lease),
@@ -615,35 +695,112 @@ export const startCorpusProjectionOfflineAppendBatchTx = async (
           expectedDocumentCount,
         ]),
       ),
+      request,
+      requestStartedAt: started.firstStartedAt,
     },
     testNow,
   });
 };
 
+const instantOf = (raw: Date | string | null): Date | null => {
+  if (raw === null) {
+    return null;
+  }
+  const value = raw instanceof Date ? raw : new Date(raw);
+  return Number.isFinite(value.getTime())
+    ? value
+    : panic("PostgreSQL returned an invalid projection start");
+};
+
 /**
- * The largest offline request a revision may start in, given the smallest
- * request one of its entity's earlier revisions at the same epoch was
- * withdrawn from: half of it, at least one. An offline run that publishes
- * nothing cannot say which revision, if any, was at fault, so a withdrawal
- * from a request of several revisions charges no one and switches no mode;
- * each one halves the request instead. A revision that keeps its run from
- * publishing is alone after at most floor(log2 N) withdrawals from a request
- * of N, where a withdrawal is charged like any isolated document fault and
- * blocks the entity at the attempt limit. A refused or killed run of many
- * entities leaves each of them in requests of half the size, still batched.
+ * What earlier transactions of one offline request started: how many, and
+ * its first start. Every row must belong to the same index and plan.
+ */
+const readOfflineRequestTx = async (
+  tx: Transaction,
+  request: CorpusProjectionOfflineRequest,
+  lease: CorpusProjectionIntentLease,
+): Promise<{ count: number; firstStartedAt: Date | null }> => {
+  const intents = corpusIndexProjectionIntents;
+  const [row] = await tx
+    .select({
+      count: sql<number>`count(*)::integer`,
+      firstStartedAt: sql<
+        Date | string | null
+      >`min(${intents.appendStartedAt})`,
+      consistent: sql<boolean>`coalesce(bool_and(
+        ${intents.family} = ${lease.family}
+        AND ${intents.generation} = ${lease.generation}
+        AND ${intents.indexId} = ${lease.indexId}
+        AND ${intents.appendRequestRevisionCount} = ${request.plannedRevisionCount}
+      ), true)`,
+    })
+    .from(intents)
+    .where(eq(intents.appendRequestId, request.requestId));
+  if (row === undefined || !row.consistent) {
+    return panic("An offline request's revisions disagree on its plan");
+  }
+  return { count: row.count, firstStartedAt: instantOf(row.firstStartedAt) };
+};
+
+/**
+ * How many revisions each offline request delivered together: the rows that
+ * carry its identity, which are exactly the ones that started, whatever the
+ * plan said. A request's transactions all fall inside its start window, which
+ * ends long before any of its revisions can be decided, so the count is final
+ * by then.
+ */
+const readOfflineDeliveredCountsTx = async (
+  tx: Transaction,
+  requestIds: readonly string[],
+): Promise<Map<string, number>> => {
+  const unique = [...new Set(requestIds)];
+  if (unique.length === 0) {
+    return new Map();
+  }
+  const rows = await tx
+    .select({
+      requestId: corpusIndexProjectionIntents.appendRequestId,
+      delivered: sql<number>`count(*)::integer`,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.appendRequestId, unique))
+    .groupBy(corpusIndexProjectionIntents.appendRequestId);
+  return new Map(
+    rows.map(({ requestId, delivered }) => [
+      requestId ?? panic("An offline request count lost its identity"),
+      delivered,
+    ]),
+  );
+};
+
+/**
+ * The largest offline request a revision may start in, given the fewest
+ * revisions delivered together with one of its entity's earlier revisions at
+ * the same epoch that was withdrawn: half of them, at least one. An offline
+ * run that publishes nothing cannot say which revision, if any, was at fault,
+ * so a withdrawal from a request of several revisions charges no one and
+ * switches no mode; each one halves the request instead. A revision that
+ * keeps its run from publishing is alone after at most floor(log2 N)
+ * withdrawals from a request of N, where a withdrawal is charged like any
+ * isolated document fault and blocks the entity at the attempt limit: at
+ * most floor(log2 N) + 5 deliveries, 18 for a request of 8192. A refused or
+ * killed run of many entities leaves each of them in requests of half the
+ * size, still batched.
  */
 const corpusProjectionOfflineRequestCap = (
-  smallestWithdrawnRequest: number | null,
+  fewestDeliveredWithdrawn: number | null,
 ): number =>
-  smallestWithdrawnRequest === null
-    ? CORPUS_PROJECTION_APPEND_MAX_REVISIONS
-    : Math.max(1, Math.floor(smallestWithdrawnRequest / 2));
+  fewestDeliveredWithdrawn === null
+    ? CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS
+    : Math.max(1, Math.floor(fewestDeliveredWithdrawn / 2));
 
 /**
  * Each lease's request cap (`corpusProjectionOfflineRequestCap`), from the
- * withdrawn revisions of its entity at its epoch. Those rows are history, so
- * the cap survives any crash, and the lease is the entity's only outstanding
- * revision, so it cannot shrink while the lease is held.
+ * withdrawn revisions of its entity at its epoch and the number each one's
+ * request actually delivered. Those rows are history, so the cap survives
+ * any crash, and the lease is the entity's only outstanding revision, so it
+ * cannot shrink while the lease is held.
  */
 export const readCorpusProjectionOfflineRequestCapsTx = async (
   tx: Transaction,
@@ -665,7 +822,7 @@ export const readCorpusProjectionOfflineRequestCapsTx = async (
     .select({
       entityId: corpusIndexProjectionIntents.entityId,
       epoch: corpusIndexProjectionIntents.epoch,
-      smallest: sql<number>`min(${corpusIndexProjectionIntents.appendRequestRevisionCount})::integer`,
+      requestId: corpusIndexProjectionIntents.appendRequestId,
     })
     .from(corpusIndexProjectionIntents)
     .where(
@@ -677,19 +834,28 @@ export const readCorpusProjectionOfflineRequestCapsTx = async (
         ]),
         eq(corpusIndexProjectionIntents.status, "withdrawn"),
       ),
-    )
-    .groupBy(
-      corpusIndexProjectionIntents.entityId,
-      corpusIndexProjectionIntents.epoch,
     );
+  const delivered = await readOfflineDeliveredCountsTx(
+    tx,
+    withdrawn.map(
+      ({ requestId }) =>
+        requestId ?? panic("A withdrawn revision has no offline request"),
+    ),
+  );
+  const fewest = (entityId: string, epoch: bigint): number | null => {
+    const counts = withdrawn
+      .filter((row) => row.entityId === entityId && row.epoch === epoch)
+      .map(
+        ({ requestId }) =>
+          delivered.get(requestId ?? "") ??
+          panic("A withdrawn revision's request has no rows"),
+      );
+    return counts.length === 0 ? null : Math.min(...counts);
+  };
   return new Map(
     leases.map(({ intentId, entityId, epoch }) => [
       intentId,
-      corpusProjectionOfflineRequestCap(
-        withdrawn.find(
-          (row) => row.entityId === entityId && row.epoch === epoch,
-        )?.smallest ?? null,
-      ),
+      corpusProjectionOfflineRequestCap(fewest(entityId, epoch)),
     ]),
   );
 };
@@ -701,6 +867,7 @@ const startDelivery = (delivery: CorpusProjectionAppendStartDelivery) => {
     case "offline_indexer":
       return {
         appendDelivery: delivery.type,
+        appendRequestId: delivery.request.requestId,
         expectedDocumentCount: sqlCaseFragment({
           operand: sql`${corpusIndexProjectionIntents.id}`,
           branches: Array.from(
@@ -717,12 +884,6 @@ const startDelivery = (delivery: CorpusProjectionAppendStartDelivery) => {
   }
 };
 
-export type CorpusProjectionOfflineAppendStart = {
-  /** The start instant, on the PostgreSQL clock, of every started revision. */
-  startedAt: Date;
-  revisions: CorpusProjectionAppendStart[];
-};
-
 const startAppendBatchTx = async (
   tx: Transaction,
   {
@@ -732,7 +893,7 @@ const startAppendBatchTx = async (
   }: StartCorpusProjectionAppendBatchOptions & {
     delivery: CorpusProjectionAppendStartDelivery;
   },
-): Promise<CorpusProjectionOfflineAppendStart> => {
+): Promise<AppendStartTransaction> => {
   // audit: skip - append bookkeeping on the derived public corpus projection
   const first = leases.at(0);
   if (
@@ -800,12 +961,37 @@ const startAppendBatchTx = async (
     .limit(leases.length)
     .for("update");
   const transitionAt = testNow ?? (await readPostgresClock(tx));
+  const offline = delivery.type === "offline_indexer" ? delivery : null;
+  const requestStartedAt = offline?.requestStartedAt ?? transitionAt;
+  if (
+    offline !== null &&
+    transitionAt.getTime() >
+      requestStartedAt.getTime() + CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS
+  ) {
+    return {
+      requestStartedAt: offline.requestStartedAt,
+      outcomes: leases.map(({ intentId }) => ({
+        intentId,
+        status: "not_started",
+        reason: "start_window_closed",
+      })),
+    };
+  }
+  const leaseFloor =
+    offline === null
+      ? null
+      : corpusProjectionOfflineRequestLeaseFloor(requestStartedAt, manifest);
+  const coversRun =
+    leaseFloor === null
+      ? undefined
+      : sql`${corpusIndexProjectionIntents.leaseExpiresAt} >= ${leaseFloor}::timestamptz`;
   const started = await tx
     .update(corpusIndexProjectionIntents)
     .set({
       status: "append_started",
       appendStartedAt: transitionAt,
-      appendRequestRevisionCount: leases.length,
+      appendRequestRevisionCount:
+        offline?.request.plannedRevisionCount ?? leases.length,
       ...startDelivery(delivery),
       updatedAt: transitionAt,
     })
@@ -816,6 +1002,7 @@ const startAppendBatchTx = async (
         eq(corpusIndexProjectionIntents.generation, first.generation),
         eq(corpusIndexProjectionIntents.status, "reserved"),
         sql`${corpusIndexProjectionIntents.leaseExpiresAt} > ${transitionAt}::timestamptz`,
+        coversRun,
         attestedAtAppendStart(unattestedIndexIds),
         sql`EXISTS (
           SELECT 1
@@ -832,7 +1019,14 @@ const startAppendBatchTx = async (
     )
     .returning({ id: corpusIndexProjectionIntents.id });
   const startedIds = new Set(started.map(({ id }) => id));
-  if (started.length > 0 && started.length !== leases.length) {
+  // An ingest request is its transaction, so it counts what started. An
+  // offline request keeps its planned total; what it delivered is counted
+  // from its rows.
+  if (
+    offline === null &&
+    started.length > 0 &&
+    started.length !== leases.length
+  ) {
     await tx
       .update(corpusIndexProjectionIntents)
       .set({ appendRequestRevisionCount: started.length })
@@ -843,6 +1037,8 @@ const startAppendBatchTx = async (
         ),
       );
   }
+  // A lease too short for the run is left reserved, not cancelled: its
+  // entity still wants the revision, and the caller hands it back.
   const cancelled = await tx
     .update(corpusIndexProjectionIntents)
     .set({
@@ -859,29 +1055,63 @@ const startAppendBatchTx = async (
         eq(corpusIndexProjectionIntents.family, first.family),
         eq(corpusIndexProjectionIntents.generation, first.generation),
         eq(corpusIndexProjectionIntents.status, "reserved"),
+        coversRun === undefined
+          ? undefined
+          : or(
+              coversRun,
+              sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= ${transitionAt}::timestamptz`,
+            ),
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
   const cancelledIds = new Set(cancelled.map(({ id }) => id));
-  const revisions = leases.map(({ intentId }) => {
-    if (startedIds.has(intentId)) {
-      return {
-        intentId,
-        status: "started",
-      } satisfies CorpusProjectionAppendStart;
-    }
-    if (cancelledIds.has(intentId)) {
-      return {
-        intentId,
-        status: "stale_cancelled",
-      } satisfies CorpusProjectionAppendStart;
-    }
-    return {
-      intentId,
-      status: "lease_lost",
-    } satisfies CorpusProjectionAppendStart;
-  });
-  return { startedAt: transitionAt, revisions };
+  return {
+    requestStartedAt:
+      offline === null
+        ? null
+        : (offline.requestStartedAt ??
+          (started.length > 0 ? transitionAt : null)),
+    outcomes: leases.map((lease) =>
+      appendStartOutcome(lease, {
+        startedIds,
+        cancelledIds,
+        leaseFloor,
+        transitionAt,
+      }),
+    ),
+  };
+};
+
+/** What one start transaction did with one lease. */
+const appendStartOutcome = (
+  { intentId, leaseExpiresAt }: CorpusProjectionIntentLease,
+  {
+    startedIds,
+    cancelledIds,
+    leaseFloor,
+    transitionAt,
+  }: {
+    startedIds: ReadonlySet<ProjectionIntentId>;
+    cancelledIds: ReadonlySet<ProjectionIntentId>;
+    /** The lease an offline start required, or null for an ingest start. */
+    leaseFloor: Date | null;
+    transitionAt: Date;
+  },
+): CorpusProjectionOfflineStart => {
+  if (startedIds.has(intentId)) {
+    return { intentId, status: "started" };
+  }
+  if (cancelledIds.has(intentId)) {
+    return { intentId, status: "stale_cancelled" };
+  }
+  if (
+    leaseFloor !== null &&
+    leaseExpiresAt.getTime() > transitionAt.getTime() &&
+    leaseExpiresAt.getTime() < leaseFloor.getTime()
+  ) {
+    return { intentId, status: "not_started", reason: "lease_ends_before_run" };
+  }
+  return { intentId, status: "lease_lost" };
 };
 
 /** A multipart revision owns the same lease throughout its sequential requests. */
@@ -1727,7 +1957,18 @@ const settleCommittedCorpusProjectionAppendsTx = async (
     }
     return intent;
   };
-  const context: ProofContext = { states, manifest, timing, transitionAt };
+  const context: ProofContext = {
+    states,
+    manifest,
+    timing,
+    transitionAt,
+    delivered: await readOfflineDeliveredCountsTx(
+      tx,
+      [...intents.values()].flatMap(({ appendRequestId }) =>
+        appendRequestId === null ? [] : [appendRequestId],
+      ),
+    ),
+  };
   const excess: UnprovenCommittedRevision[] = [];
   const decisions: ProofDecision[] = [
     ...proofs.map((proof) =>
@@ -1769,6 +2010,8 @@ type ProofContext = {
   manifest: CorpusIndexManifest;
   timing: CorpusProjectionProofTiming;
   transitionAt: Date;
+  /** Revisions each offline request of the proof delivered together. */
+  delivered: ReadonlyMap<string, number>;
 };
 
 /** Outcomes of a revision this proof can no longer act on, or null. */
@@ -1882,13 +2125,21 @@ const decideUnprovenRevision = (
     panic(`Committed projection intent has no state: ${committed.id}`);
   const offlineFinal = censusFollowsOfflineEnd(context, committed);
   const stillDesired = isStillDesiredProjection(state, committed);
+  // The revisions delivered together with this one: an ingest request's own
+  // count, or for an offline request the rows that actually started, never
+  // its planned total.
+  const deliveredTogether =
+    committed.appendRequestId === null
+      ? committed.appendRequestRevisionCount
+      : (context.delivered.get(committed.appendRequestId) ??
+        panic(`Offline request has no delivered count: ${committed.id}`));
   const charge = (
     rejection: CorpusIndexError["rejection"],
     fault: CorpusProjectionAppendFailureFault = "document",
   ) =>
     appendFailureCharge({
       state,
-      appendRequestRevisionCount: committed.appendRequestRevisionCount,
+      appendRequestRevisionCount: deliveredTogether,
       transitionAt,
       rejection,
       fault,
@@ -1902,7 +2153,7 @@ const decideUnprovenRevision = (
   // its request, it is a document fault like any other. A state that moved on
   // has nothing to retry.
   if (offlineFinal && revision.observedDocumentCount === 0) {
-    const isolated = committed.appendRequestRevisionCount === 1;
+    const isolated = deliveredTogether === 1;
     return {
       type: "withdraw",
       intent: committed,
