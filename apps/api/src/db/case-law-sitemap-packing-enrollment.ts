@@ -19,7 +19,7 @@ import type {
 } from "./online-migration-connection";
 
 const COMPLETE = "complete";
-const SITEMAP_RANGES_MIGRATION = "20261115170000_case_law_sitemap_ranges";
+const SITEMAP_RANGES_MIGRATION = "20261116000000_case_law_sitemap_ranges";
 const COUNTRIES_PER_BATCH = 100;
 const checkpointSchema = v.object({ last_country: v.nullable(v.string()) });
 const countrySchema = v.object({ country: v.string() });
