@@ -1827,6 +1827,14 @@ export const withAggregateLock = async (
 /** The queue claim owns this nonblocking row-lock clause. */
 export const chatCompactionQueueClaimLock = () => sql`FOR UPDATE SKIP LOCKED`;
 
+/**
+ * A sitemap touch fold claims each queued decision with this clause on the
+ * alias `claim`: a share lock that never waits, so a writer still in flight
+ * keeps its touch queued and a later writer waits for the fold to commit.
+ */
+export const caseLawSitemapTouchClaimLock = () =>
+  sql`FOR SHARE OF claim SKIP LOCKED`;
+
 type OpenSigningPageOptions = {
   tx: Transaction;
   sessions: readonly AggregateIdentities["signingSession"][];

@@ -86,7 +86,6 @@ describe.skipIf(!enabled)("sitemap discovery fairness (postgres)", () => {
           "case_law_sitemap_drain_progress",
           "case_law_sitemap_refresh_cursor",
           "case_law_sitemap_shards",
-          "case_law_sitemap_touches",
           "case_law_browse_facet_counts",
           "case_law_coverage_summaries",
           "case_law_sitemap_shard_counts",

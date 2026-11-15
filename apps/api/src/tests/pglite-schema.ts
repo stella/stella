@@ -1431,7 +1431,7 @@ export const installPgliteCaseLawSitemapChanges = async (
           'CREATE TRIGGER "case_law_decisions_sitemap_update"',
         )
           ? latestMigrationStatementContaining(
-              'CREATE TRIGGER "case_law_decisions_sitemap_update"',
+              'TRIGGER "case_law_decisions_sitemap_update"\nAFTER UPDATE',
             )
           : statement,
       ),

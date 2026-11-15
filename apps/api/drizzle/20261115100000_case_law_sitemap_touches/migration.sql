@@ -3,11 +3,14 @@ SET statement_timeout = '30s';--> statement-breakpoint
 
 -- Decisions whose newer updated_at is the only sitemap-relevant change of a
 -- write. Such a write leaves every decision in its shard and every shard's
--- size unchanged, so the refresh folds it into the shard's last modification
--- and deletes the row, instead of recounting the decision's month.
+-- size unchanged, so a fold raises the shard's last modification and deletes
+-- the row, instead of recounting the decision's month. One row per decision:
+-- a decision written again before its fold queues nothing more, so the
+-- queue never holds more rows than there are published decisions.
 CREATE TABLE "case_law_sitemap_touches" (
   "id" bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-  "decision_id" uuid NOT NULL
+  "decision_id" uuid NOT NULL,
+  CONSTRAINT "case_law_sitemap_touches_decision_key" UNIQUE ("decision_id")
 );--> statement-breakpoint
 
 ALTER TABLE "case_law_sitemap_touches" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -22,7 +25,10 @@ CREATE POLICY "case_law_sitemap_touch_owner_access" ON "case_law_sitemap_touches
 REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_touches" FROM stella;--> statement-breakpoint
 
 -- The function runs as its owner, so the writers of case_law_decisions need
--- no privilege on the touch queue.
+-- no privilege on the touch queue. The writer holds the decision's row lock
+-- here, and a fold folds a queued decision only under a share lock on that
+-- row, so a write whose insert meets a queued row is still read by the fold
+-- that deletes it, or waits and queues a new row after that fold commits.
 -- stella-migration-safety: reviewed security-definer - trigger-only function with a fixed search path and PUBLIC execute revoked below; it only appends the updated decision's id to the sitemap touch queue
 CREATE FUNCTION "log_case_law_sitemap_decision_touch"()
 RETURNS trigger
@@ -31,7 +37,8 @@ SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $function$
 BEGIN
-  INSERT INTO public.case_law_sitemap_touches (decision_id) VALUES (NEW.id);
+  INSERT INTO public.case_law_sitemap_touches (decision_id) VALUES (NEW.id)
+  ON CONFLICT ON CONSTRAINT case_law_sitemap_touches_decision_key DO NOTHING;
   RETURN NULL;
 END
 $function$;--> statement-breakpoint
@@ -42,9 +49,7 @@ REVOKE ALL ON FUNCTION "log_case_law_sitemap_decision_touch"() FROM PUBLIC;--> s
 -- the identity, country, date, source, language and language group, or an
 -- updated_at that went back. A published decision that stays published with
 -- all of those equal and a later updated_at only touches its shard.
--- stella-migration-safety: reviewed drop-object - replace the sitemap update trigger atomically so a later updated_at alone is folded rather than recounted; its function and privileges remain unchanged
-DROP TRIGGER "case_law_decisions_sitemap_update" ON "case_law_decisions";--> statement-breakpoint
-CREATE TRIGGER "case_law_decisions_sitemap_update"
+CREATE OR REPLACE TRIGGER "case_law_decisions_sitemap_update"
 AFTER UPDATE OF "id", "country", "decision_date", "source_id", "language", "language_group_key", "updated_at", "metadata", "redacted_at" ON "case_law_decisions"
 FOR EACH ROW
 WHEN (

@@ -2915,8 +2915,9 @@ export const caseLawSitemapChanges = p.pgTable(
  * Decisions whose newer `updated_at` is the only sitemap-relevant change of a
  * write, appended by an owner-run trigger (migration
  * `20261115100000_case_law_sitemap_touches`). Such a write keeps every
- * decision in its shard, so the refresh folds it into the shard's last
- * modification instead of recounting the month. A queue, not a watermark.
+ * decision in its shard, so a fold raises the shard's last modification
+ * instead of recounting the month. One row per decision until its fold; a
+ * queue, not a watermark.
  */
 export const caseLawSitemapTouches = p.pgTable(
   "case_law_sitemap_touches",
@@ -2924,7 +2925,8 @@ export const caseLawSitemapTouches = p.pgTable(
     id: p.bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
   },
-  () => [
+  (t) => [
+    p.unique("case_law_sitemap_touches_decision_key").on(t.decisionId),
     p.pgPolicy("case_law_sitemap_touch_owner_access", {
       for: "all",
       to: "public",

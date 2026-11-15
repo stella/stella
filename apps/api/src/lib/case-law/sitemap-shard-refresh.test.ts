@@ -36,6 +36,7 @@ import type {
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
+  invalidateCaseLawSitemapShardsTx,
   refreshCaseLawSitemapShards,
   shouldSplitSitemapMonth,
   SITEMAP_SHARD_SPLIT_THRESHOLD,
@@ -44,7 +45,6 @@ import {
   sitemapMonthCountSql,
   sitemapPendingMonthsSql,
   sitemapRefreshBudget,
-  sitemapTouchFoldSql,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
 import {
   decisionBucketSqlFor,
@@ -53,6 +53,12 @@ import {
   SITEMAP_ALL_BUCKET,
   SITEMAP_MULTILINGUAL_URL_WEIGHT,
 } from "@/api/lib/case-law/sitemap-shard-sql";
+import {
+  foldCaseLawSitemapTouches,
+  SITEMAP_TOUCH_FOLD_BATCH_LIMIT,
+  sitemapTouchClaimSql,
+  sitemapTouchFoldSql,
+} from "@/api/lib/case-law/sitemap-touch-fold";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   PARTIAL_OBSERVATION_FIELD,
@@ -307,11 +313,36 @@ const refreshUntilDone = async (
     // db-await-in-loop: consecutive scheduler runs, each continuing from the rows still logged
     const { outcome, left } = await refreshOnce(...args);
     if (outcome.type === "refreshed" && left === 0) {
+      await foldAllTouches();
       return { outcome, runs: run + 1 };
     }
   }
   return panic("The refresh never finished");
 };
+
+/** One fold batch in its own transaction, as one governed batch runs. */
+const foldOnce = async (limit = SITEMAP_TOUCH_FOLD_BATCH_LIMIT) =>
+  await db.transaction(
+    async (tx) =>
+      // SAFETY: the PGlite transaction offers the execute and savepoint surface the fold uses.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction stands in for the root one
+      await foldCaseLawSitemapTouches(tx as never, limit),
+  );
+
+/** Fold batches until the queue is empty, as consecutive fold runs would. */
+async function foldAllTouches(limit = SITEMAP_TOUCH_FOLD_BATCH_LIMIT) {
+  for (let batch = 0; batch < 1000; batch += 1) {
+    // db-await-in-loop: consecutive governed batches, each its own transaction
+    const folded = await foldOnce(limit);
+    if (folded.status === "empty") {
+      return;
+    }
+    if (folded.status !== "folded") {
+      return panic(`A fold found the fence ${folded.status}`);
+    }
+  }
+  return panic("The touch queue never drained");
+}
 
 const expectMatchesFullRecount = async () => {
   await refreshUntilDone(refreshDb);
@@ -575,6 +606,111 @@ test(
 
 const queuedTouches = async () => await db.$count(caseLawSitemapTouches);
 
+test(
+  "a decision written again before its fold stays one queued touch",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const id = await insertOne({ decisionDate: "1996-06-06" });
+    await refreshUntilDone(refreshDb);
+    for (const second of [1, 2, 3]) {
+      // db-await-in-loop: three separate forward writes of one decision
+      await db.execute(sql`
+        UPDATE ${caseLawDecisions}
+        SET updated_at = ${`2030-01-01T00:00:0${String(second)}Z`}::timestamptz
+        WHERE id = ${id}
+      `);
+    }
+    expect(await queuedTouches()).toBe(1);
+    await foldAllTouches();
+    expect(await snapshot()).toEqual(await fullRecount());
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a backlog larger than one batch drains over consecutive batches",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const ids = await Promise.all(
+      Array.from({ length: 5 }, async (_, day) =>
+        insertOne({ decisionDate: `1995-05-1${String(day)}` }),
+      ),
+    );
+    await refreshUntilDone(refreshDb);
+    await db.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET updated_at = '2030-02-02T00:00:00Z'::timestamptz
+      WHERE id IN (${sql.join(ids, sql`, `)})
+    `);
+    expect(await queuedTouches()).toBe(5);
+    const batches = [];
+    for (let batch = 0; batch < 4; batch += 1) {
+      // db-await-in-loop: consecutive governed batches, each its own transaction
+      batches.push(await foldOnce(2));
+    }
+    expect(batches.map((folded) => folded.status)).toEqual([
+      "folded",
+      "folded",
+      "folded",
+      "empty",
+    ]);
+    expect(
+      batches.flatMap((folded) =>
+        folded.status === "folded" ? [[folded.folded, folded.full]] : [],
+      ),
+    ).toEqual([
+      [2, true],
+      [2, true],
+      [1, false],
+    ]);
+    expect(await queuedTouches()).toBe(0);
+    expect(await snapshot()).toEqual(await fullRecount());
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a fold after a removal invalidation never lists a retired shard again",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const id = await insertOne({
+      country: "XRV",
+      decisionDate: "1994-04-04",
+      language: "xx",
+    });
+    await refreshUntilDone(refreshDb);
+    await db.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET updated_at = '2030-03-03T00:00:00Z'::timestamptz
+      WHERE id = ${id}
+    `);
+    expect(await queuedTouches()).toBe(1);
+    // A removal retires the country's shards while the touch is queued.
+    await db.transaction(async (tx) => {
+      // SAFETY: the PGlite transaction offers the insert and delete surface the invalidation uses.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction stands in for the root one
+      await invalidateCaseLawSitemapShardsTx(tx as never, "XRV");
+    });
+    const listed = async () =>
+      await db
+        .select({ month: caseLawSitemapShards.month })
+        .from(caseLawSitemapShards)
+        .where(eq(caseLawSitemapShards.country, "XRV"));
+    expect(await listed()).toEqual([]);
+    // The fold only raises listed rows, so it brings back nothing.
+    expect(await foldOnce()).toMatchObject({
+      status: "folded",
+      folded: 1,
+      raised: 0,
+    });
+    expect(await listed()).toEqual([]);
+    // The invalidation's whole-country recount lists it again, current.
+    await expectMatchesFullRecount();
+    expect(await listed()).toEqual([{ month: "04" }]);
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
 /** Whether a recorded run sent a month count. */
 const countedAMonth = (transactions: readonly { sql: string }[][]) =>
   transactions.some((sent) =>
@@ -605,13 +741,23 @@ test(
     expect(await loggedMonths()).toEqual([]);
     expect(await queuedTouches()).toBe(2);
 
+    // The month refresh has nothing to count; the fold raises the shard.
     const recorded = recordingRefreshDb();
     expect(await refreshCaseLawSitemapShards(recorded.db)).toMatchObject({
       type: "refreshed",
       months: 0,
     });
     expect(countedAMonth(recorded.transactions)).toBe(false);
+    expect(await queuedTouches()).toBe(2);
+    expect(await foldOnce()).toEqual({
+      status: "folded",
+      folded: 2,
+      retained: 0,
+      raised: 1,
+      full: false,
+    });
     expect(await queuedTouches()).toBe(0);
+    expect(await foldOnce()).toEqual({ status: "empty" });
     expect(await snapshot()).toEqual(await fullRecount());
     const [listed] = await db
       .select({ lastModifiedAt: caseLawSitemapShards.lastModifiedAt })
@@ -1189,18 +1335,30 @@ for (const target of [
 test(
   "a touch fold reads each touch, decision and shard by key",
   async () => {
-    const { sql: text, params } = new PgDialect().sqlToQuery(
-      sitemapTouchFoldSql(256),
-    );
+    const dialect = new PgDialect();
+    const statements = [
+      sitemapTouchClaimSql(SITEMAP_TOUCH_FOLD_BATCH_LIMIT),
+      sitemapTouchFoldSql({
+        touchIds: ["1", "2"],
+        decisionIds: [removableId, createSafeId<"caseLawDecision">()],
+      }),
+    ].map((statement) => dialect.sqlToQuery(statement));
     const plan = await client.transaction(async (tx) => {
       // Scans are priced by pages touched, as on a corpus of millions.
       await tx.query("SET LOCAL enable_seqscan = off");
       await tx.query("SET LOCAL enable_bitmapscan = off");
       await tx.query("SET LOCAL seq_page_cost = 1000");
       await tx.query("SET LOCAL random_page_cost = 1000");
-      return planLines(
-        await tx.query(`EXPLAIN (COSTS OFF) ${text}`, [...params]),
-      ).join("\n");
+      const plans: string[] = [];
+      for (const { sql: text, params } of statements) {
+        // db-await-in-loop: one EXPLAIN per fold statement, two in all
+        plans.push(
+          planLines(
+            await tx.query(`EXPLAIN (COSTS OFF) ${text}`, [...params]),
+          ).join("\n"),
+        );
+      }
+      return plans.join("\n");
     });
     expect(plan).not.toMatch(/Seq Scan/u);
     expect(plan).toMatch(
@@ -1442,7 +1600,8 @@ type Operation =
   | { kind: "advance"; pick: number }
   | { kind: "country"; pick: number }
   | { kind: "gate" }
-  | { kind: "refresh" };
+  | { kind: "refresh" }
+  | { kind: "fold" };
 
 const operation: fc.Arbitrary<Operation> = fc.oneof(
   fc.record({
@@ -1464,6 +1623,7 @@ const operation: fc.Arbitrary<Operation> = fc.oneof(
   fc.record({ kind: fc.constant("country" as const), pick: fc.nat() }),
   fc.record({ kind: fc.constant("gate" as const) }),
   fc.record({ kind: fc.constant("refresh" as const) }),
+  fc.record({ kind: fc.constant("fold" as const) }),
 );
 
 test(
@@ -1595,6 +1755,10 @@ test(
             .where(eq(caseLawSources.id, closedSourceId));
           return;
         }
+        case "fold":
+          // One small governed batch between writes and month refreshes.
+          await foldOnce(1);
+          return;
         case "refresh":
           await refreshCaseLawSitemapShards(refreshDb, { clock: spentClock() });
           return;
