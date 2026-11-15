@@ -341,25 +341,39 @@ const membershipKey = (entry: ScenarioMembership) =>
 type ScenarioMembershipOptions = {
   base: readonly ScenarioMembership[];
   current: readonly ScenarioMembership[];
-  /**
-   * Whether a handler module is still in the current tree. A measured API
-   * scenario may leave only with its handler: a route deleted whole has
-   * nothing left to measure, while a route that stays keeps its scenario.
-   */
+  /** Whether a handler module is still in the current tree. */
   handlerExists: (file: string) => boolean;
 };
 
+/**
+ * A measured scenario that left the registry. One may leave only with its
+ * route: its handler module is gone from the tree, and no scenario of that
+ * handler is measured anywhere any more, so nothing is left to measure. A
+ * handler that moved keeps a scenario somewhere, and then every case it had
+ * must remain, as for any route that stays.
+ */
 export const scenarioMembershipViolations = ({
   base,
   current,
   handlerExists,
 }: ScenarioMembershipOptions) => {
   const retained = new Set(current.map(membershipKey));
+  const currentApiNames = new Set(
+    current.flatMap((entry) => (entry.kind === "api" ? [entry.name] : [])),
+  );
+  const retiredHandler = (file: string) =>
+    !handlerExists(file) &&
+    base.every(
+      (entry) =>
+        entry.kind !== "api" ||
+        entry.handlerOwner.file !== file ||
+        !currentApiNames.has(entry.name),
+    );
   return base
     .filter(
       (entry) =>
         !retained.has(membershipKey(entry)) &&
-        (entry.kind === "mcp" || handlerExists(entry.handlerOwner.file)),
+        (entry.kind === "mcp" || !retiredHandler(entry.handlerOwner.file)),
     )
     .map(
       (entry) =>

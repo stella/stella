@@ -109,6 +109,29 @@ describe("measured scaling scenario membership", () => {
     ).toEqual([]);
   });
 
+  test("a handler that moved keeps every case it had, even with its old module gone", () => {
+    const moved = apiSource.replace(
+      "handlers/rows/list",
+      "handlers/rows/archive",
+    );
+    const base = readApi(
+      apiSource.replace(
+        apiEntry,
+        () => `${apiEntry}, ${apiEntry.replace('"rows"', '"filtered rows"')}`,
+      ),
+    );
+    expect(base).toHaveLength(2);
+    // Only "rows" survives, under the new module; the old one is gone.
+    const violations = scenarioMembershipViolations({
+      base,
+      current: readApi(moved),
+      handlerExists: (file) => file !== owner.file,
+    });
+    expect(violations).toContain(
+      `previously measured scenario removed: ${JSON.stringify(["api", "filtered rows", owner.file, owner.exportName])}`,
+    );
+  });
+
   test("retargeting a scenario name to a different handler owner is refused", () => {
     const current = readApi(
       apiSource.replace("handlers/rows/list", "handlers/rows/archive"),
