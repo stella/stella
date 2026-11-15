@@ -239,7 +239,7 @@
     "yjs": "catalog:"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "0.97.1",
+    "@anthropic-ai/sdk": "1.7.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1165.0",
     "@electric-sql/pglite": "^0.5.16",
     "@modelcontextprotocol/client": "2.4.0",
