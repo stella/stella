@@ -1,3 +1,6 @@
+import type { TextOptions } from "@tanstack/ai";
+
+import { NETWORK_ERROR_CODE_REASON } from "@/api/lib/observability/failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** The response headers a retry decision reads (`provider-retry-policy.ts`). */
@@ -31,25 +34,123 @@ export const retryHintEvidence = (headers: Headers): RetryHintEvidence => {
   };
 };
 
+/** Socket codes of a request that got no response, Bun's refusal included. */
+export const PROVIDER_TRANSPORT_CODES: ReadonlySet<string> = new Set([
+  ...Object.keys(NETWORK_ERROR_CODE_REASON),
+  "ConnectionRefused",
+]);
+
+/** How deep a rejected send is searched for its socket code. */
+const TRANSPORT_CAUSE_DEPTH = 4;
+
+/** The socket code of a send that got no response, if `error` names one. */
+export const providerTransportCode = (error: unknown): string | undefined => {
+  let current: unknown = error;
+  for (
+    let depth = 0;
+    depth < TRANSPORT_CAUSE_DEPTH && isRecord(current);
+    depth += 1
+  ) {
+    const { code } = current;
+    if (typeof code === "string" && PROVIDER_TRANSPORT_CODES.has(code)) {
+      return code;
+    }
+    current = current["cause"];
+  }
+  return undefined;
+};
+
+const isAbortShaped = (error: unknown): boolean =>
+  isRecord(error) &&
+  (error["name"] === "AbortError" || error["name"] === "TimeoutError");
+
 /**
- * Keeps a provider SDK error's retry hints across TanStack's `RUN_ERROR`
- * projection, which forwards an error's `rawEvent` (else its `error` body)
- * and its status, but none of its response headers. The body stays the
- * evidence it was; the hints join it. An error whose response carried no
- * hint is returned as it is.
+ * What the last request of one adapter call left for the retry decision:
+ * the retry hints of a failed response, or the socket code of a request that
+ * got no response. Neither carries request content.
  */
-export const withRetryHintEvidence = <TError extends object>(
+export type ProviderSendEvidence = RetryHintEvidence & { code?: string };
+
+/** Filled by {@link recordProviderSends} while one adapter call runs. */
+export type ProviderSendRecord = { evidence: ProviderSendEvidence | undefined };
+
+type FetchWrapper = NonNullable<TextOptions["wrapFetch"]>;
+
+/**
+ * A fetch wrapper (TanStack's per-call `wrapFetch`) that records what each
+ * provider request of one adapter call came back with. A provider SDK keeps
+ * a failed response's headers on its error, and a refused or reset
+ * connection under its own error class, but TanStack's `RUN_ERROR`
+ * projection forwards neither: this is where both are still at hand. An
+ * abort the call itself did not ask for is the client's own timeout. Runs
+ * innermost, under any wrapper the call already had.
+ */
+export const recordProviderSends =
+  ({
+    record,
+    signal,
+    outer,
+  }: {
+    record: ProviderSendRecord;
+    signal: AbortSignal | undefined;
+    outer: FetchWrapper | undefined;
+  }): FetchWrapper =>
+  (send) => {
+    const recording: typeof fetch = Object.assign(
+      async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        record.evidence = undefined;
+        try {
+          const response = await send(input, init);
+          if (!response.ok) {
+            const hints = retryHintEvidence(response.headers);
+            record.evidence = hints.headers === undefined ? undefined : hints;
+          }
+          return response;
+        } catch (error) {
+          const code =
+            providerTransportCode(error) ??
+            (isAbortShaped(error) && signal?.aborted !== true
+              ? "ETIMEDOUT"
+              : undefined);
+          record.evidence = code === undefined ? undefined : { code };
+          throw error;
+        }
+      },
+      { preconnect: send.preconnect },
+    );
+    return outer === undefined ? recording : outer(recording);
+  };
+
+/**
+ * `error`, a failure an adapter call threw, with the retry hints its last
+ * response carried as its evidence (`rawEvent`, what a `RUN_ERROR` reads
+ * first). The body stays the evidence it was; the hints join it. An error
+ * the record holds no hint for is returned as it is.
+ */
+export const withSendEvidence = <TError>(
   error: TError,
-  headers: Headers,
+  record: ProviderSendRecord,
 ): TError => {
-  const hints = retryHintEvidence(headers);
-  if (hints.headers === undefined) {
+  const hints = record.evidence;
+  if (
+    hints === undefined ||
+    hints.headers === undefined ||
+    typeof error !== "object" ||
+    error === null ||
+    !Object.isExtensible(error)
+  ) {
     return error;
   }
   const body: unknown = Reflect.get(error, "error");
   Object.defineProperty(error, "rawEvent", {
     configurable: true,
-    value: { ...(isRecord(body) ? body : {}), ...hints },
+    value: {
+      ...(isRecord(body) ? body : {}),
+      headers: hints.headers,
+      ...(hints.isRetryable === undefined
+        ? {}
+        : { isRetryable: hints.isRetryable }),
+    },
   });
   return error;
 };

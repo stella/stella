@@ -11,10 +11,10 @@ import {
   providerCallErrorCode,
 } from "@/api/lib/errors/provider-call-error";
 import { providerRetryDelayMs } from "@/api/lib/errors/provider-retry-delay";
+import { PROVIDER_TRANSPORT_CODES } from "@/api/lib/errors/provider-retry-evidence";
 import { createProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
-import { NETWORK_ERROR_CODE_REASON } from "@/api/lib/observability/failure";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -54,20 +54,15 @@ export const providerRequestIdFrom = (
 /**
  * The classes the provider SDKs raise for a request that got no response:
  * Stainless (OpenAI, Anthropic) and Speakeasy (Mistral, OpenRouter)
- * connection failures and timeouts. A streamed run keeps the class name in
- * its `RUN_ERROR` evidence (`patches/@tanstack%2Fai@0.65.1.patch`).
+ * connection failures and timeouts, as a thrown failure carries them. A
+ * streamed run's `RUN_ERROR` keeps the socket code instead, which the model
+ * factory records from the request (`recordProviderSends`).
  */
 const PROVIDER_TRANSPORT_FAILURE_NAMES: ReadonlySet<string> = new Set([
   "APIConnectionError",
   "APIConnectionTimeoutError",
   "ConnectionError",
   "RequestTimeoutError",
-]);
-
-/** Socket codes of a request that got no response, Bun's refusal included. */
-const PROVIDER_TRANSPORT_CODES: ReadonlySet<string> = new Set([
-  ...Object.keys(NETWORK_ERROR_CODE_REASON),
-  "ConnectionRefused",
 ]);
 
 /** How deep a wrapped failure is searched for its transport class. */

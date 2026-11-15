@@ -67,8 +67,8 @@ const replay = (): ProviderWireReplay => {
 /** Failures every provider SDK retried before Stella turned that off. */
 const SDK_RETRIED_SCENARIOS = ["rate-limit", "server-error"] as const;
 
-/** The client builds the Stainless SDKs make their errors through
- *  `makeStatusError`, where the retry hints join the error. */
+/** The providers whose recorded failures carry retry headers; the model
+ *  factory records them from the response (`recordProviderSends`). */
 const HINTED_PROVIDERS: ReadonlySet<TanStackAIProvider> = new Set([
   "anthropic",
   "openai",

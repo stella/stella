@@ -20,15 +20,16 @@ import { isRecord } from "@/api/lib/type-guards";
  *
  * The SDKs it restates, as installed:
  *
- * - OpenAI and Anthropic (Stainless): two retries; 408, 409, 429, any 5xx,
+ * - OpenAI and Anthropic (the Stainless rules, which TanStack's own HTTP
+ *   client keeps): two retries; 408, 409, 429, any 5xx,
  *   connection failures and timeouts; `x-should-retry` decides first;
  *   `retry-after-ms` or `retry-after` is waited out, otherwise
  *   min(0.5 s * 2^n, 8 s) less up to 25 % jitter.
  * - Bedrock (AWS standard mode): three attempts; throttling, 500/502/503/504,
  *   transient network codes and timeouts.
- * - Google (`@google/genai`), Mistral and OpenRouter (Speakeasy) retry
- *   nothing unless configured; Stella configured OpenRouter to retry 5xx
- *   and connection failures for up to four seconds.
+ * - Google (TanStack's Gemini client), Mistral and OpenRouter (Speakeasy)
+ *   retry nothing unless configured; Stella configured OpenRouter to retry
+ *   5xx and connection failures for up to four seconds.
  *
  * The union is retried with the Stainless schedule, the one the most
  * providers followed: at most {@link PROVIDER_REQUEST_ATTEMPTS} attempts, a

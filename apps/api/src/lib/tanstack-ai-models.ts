@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type {
   BetaOutputConfig,
   BetaThinkingConfigParam,
@@ -13,32 +12,21 @@ import type {
   ContentPart,
   ModelMessage,
 } from "@tanstack/ai";
-import { createAnthropicChatWithClient } from "@tanstack/ai-anthropic";
-import type {
-  AnthropicTextProviderOptions,
-  createAnthropicChat,
-} from "@tanstack/ai-anthropic";
+import { createAnthropicChat } from "@tanstack/ai-anthropic";
+import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
 import { BedrockConverseTextAdapter } from "@tanstack/ai-bedrock";
 import type {
   BedrockConverseProviderOptions,
   ResolvedBedrockAuth,
 } from "@tanstack/ai-bedrock";
-import { GeminiTextAdapter } from "@tanstack/ai-gemini";
-import type {
-  createGeminiChat,
-  GeminiTextProviderOptions,
-} from "@tanstack/ai-gemini";
+import { createGeminiChat } from "@tanstack/ai-gemini";
+import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";
 import { createMistralText } from "@tanstack/ai-mistral";
 import type { MistralTextProviderOptions } from "@tanstack/ai-mistral";
-import { OpenAITextAdapter } from "@tanstack/ai-openai";
-import type {
-  createOpenaiChat,
-  OpenAITextConfig,
-  OpenAITextProviderOptions,
-} from "@tanstack/ai-openai";
+import { createOpenaiChat } from "@tanstack/ai-openai";
+import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import type { OpenRouterTextModelOptions } from "@tanstack/ai-openrouter";
 import { panic, Result } from "better-result";
-import OpenAI from "openai";
 import * as v from "valibot";
 
 import {
@@ -106,7 +94,12 @@ import {
   markProviderAdapterError,
   providerAdapterEvidence,
 } from "@/api/lib/errors/provider-call-failure";
-import { withRetryHintEvidence } from "@/api/lib/errors/provider-retry-evidence";
+import {
+  providerTransportCode,
+  recordProviderSends,
+  withSendEvidence,
+} from "@/api/lib/errors/provider-retry-evidence";
+import type { ProviderSendRecord } from "@/api/lib/errors/provider-retry-evidence";
 import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -678,63 +671,11 @@ const requireCredential = (
   throw missingProviderCredentialError(provider, envVar);
 };
 
-/**
- * `@google/genai` continues an answer that stops with a `CONTINUATION`
- * finish on its own, and reconnects a dropped stream from its last
- * checkpoint: each hop sends the whole request again, below the generation
- * layer. Off, so each request is sent once (`SDK_RETRIES_OFF`). The flag is
- * read by the SDK and never sent.
- */
-const GEMINI_CONTINUATION_OFF = { automaticContinuation: false } as const;
-
-type GeminiChatModel = Parameters<typeof createGeminiChat>[0];
-type GeminiChatOptions = Parameters<GeminiTextAdapter<never>["chatStream"]>[0];
-type GeminiStructuredOptions = Parameters<
-  GeminiTextAdapter<never>["structuredOutput"]
->[0];
-
-const withoutContinuation = <TOptions extends GeminiChatOptions>(
-  options: TOptions,
-): TOptions => ({
-  ...options,
-  modelOptions: { ...options.modelOptions, ...GEMINI_CONTINUATION_OFF },
-});
-
-// Every request path the adapter has goes through these three methods; the
-// interactions path (agentic video) uses a different API with no
-// continuation.
-class SinglePassGeminiTextAdapter<
-  TModel extends GeminiChatModel,
-> extends GeminiTextAdapter<TModel> {
-  override chatStream(options: GeminiChatOptions) {
-    return super.chatStream(withoutContinuation(options));
-  }
-
-  override async structuredOutput(options: GeminiStructuredOptions) {
-    return await super.structuredOutput({
-      ...options,
-      chatOptions: withoutContinuation(options.chatOptions),
-    });
-  }
-
-  override structuredOutputStream(options: GeminiStructuredOptions) {
-    return super.structuredOutputStream({
-      ...options,
-      chatOptions: withoutContinuation(options.chatOptions),
-    });
-  }
-}
-
-const createGeminiChatWithoutContinuation = (
-  model: GeminiChatModel,
-  apiKey: string,
-) => new SinglePassGeminiTextAdapter({ apiKey }, model);
-
 const createExtendedGeminiAdapter = (
   modelId: string,
   apiKey: string,
 ): AnyTextAdapter => {
-  const gemini = extendAdapter(createGeminiChatWithoutContinuation, [
+  const gemini = extendAdapter(createGeminiChat, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
@@ -743,43 +684,148 @@ const createExtendedGeminiAdapter = (
   return gemini(modelId, apiKey);
 };
 
+type AdapterChatOptions = Parameters<AnyTextAdapter["chatStream"]>[0];
+type AdapterRunError = Extract<
+  AdapterYieldChunk,
+  { type: typeof EventType.RUN_ERROR }
+>;
+
+type AdapterLogger = AdapterChatOptions["logger"];
+
+/**
+ * `logger`, also recording the socket code of the failure an adapter logs
+ * as fatal. The Gemini and Bedrock adapters take no `wrapFetch`, and log the
+ * failure they then report as a `RUN_ERROR` without it.
+ */
+const recordingLogger = (
+  logger: AdapterLogger,
+  record: ProviderSendRecord,
+): AdapterLogger =>
+  new Proxy(logger, {
+    get: (target, key) => {
+      if (key === "errors") {
+        const errors: AdapterLogger["errors"] = (message, meta) => {
+          const code = providerTransportCode(meta?.["error"]);
+          if (record.evidence === undefined && code !== undefined) {
+            record.evidence = { code };
+          }
+          target.errors(message, meta);
+        };
+        return errors;
+      }
+      const value: unknown = Reflect.get(target, key, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      const bound: unknown = value.bind(target);
+      return bound;
+    },
+  });
+
+/** `options` with its requests recorded into `record`. */
+const recordedOptions = (
+  options: AdapterChatOptions,
+  record: ProviderSendRecord,
+): AdapterChatOptions => ({
+  ...options,
+  logger: recordingLogger(options.logger, record),
+  wrapFetch: recordProviderSends({
+    record,
+    signal: options.request?.signal ?? options.abortController?.signal,
+    outer: options.wrapFetch,
+  }),
+});
+
+/**
+ * A `RUN_ERROR`'s evidence with what its last request recorded: the retry
+ * hints join the provider's body, and a request that got no response, which
+ * has no body, is its socket code.
+ */
+const runErrorEvidence = (
+  chunk: AdapterRunError,
+  record: ProviderSendRecord,
+): Record<string, unknown> | undefined => {
+  const recorded = record.evidence;
+  if (recorded === undefined) {
+    return isRecord(chunk.rawEvent) ? chunk.rawEvent : undefined;
+  }
+  if (isRecord(chunk.rawEvent)) {
+    return recorded.headers === undefined
+      ? chunk.rawEvent
+      : {
+          ...chunk.rawEvent,
+          headers: recorded.headers,
+          ...(recorded.isRetryable === undefined
+            ? {}
+            : { isRetryable: recorded.isRetryable }),
+        };
+  }
+  if (chunk.rawEvent !== undefined) {
+    return undefined;
+  }
+  return recorded.code === undefined ? undefined : { code: recorded.code };
+};
+
 /**
  * Marks every failure the provider adapter itself raises or reports, so the
  * generation layer tells a provider request that got no response from the
  * same socket failure anywhere else in a run (an MCP connection, a
  * middleware's database or cache call), which it does not retry
- * (`providerFailureKind`).
+ * (`providerFailureKind`). Each call's requests go through
+ * `recordProviderSends`, so the retry hints and the socket code TanStack's
+ * `RUN_ERROR` projection drops join its evidence.
  */
 const withProviderFailureOrigin = (adapter: AnyTextAdapter): AnyTextAdapter => {
   const marked = async function* (
+    record: ProviderSendRecord,
     stream: AsyncIterable<AdapterYieldChunk>,
   ): AsyncIterable<AdapterYieldChunk> {
     try {
       for await (const chunk of stream) {
-        yield chunk.type === EventType.RUN_ERROR && isRecord(chunk.rawEvent)
-          ? { ...chunk, rawEvent: providerAdapterEvidence(chunk.rawEvent) }
-          : chunk;
+        if (chunk.type !== EventType.RUN_ERROR) {
+          yield chunk;
+          continue;
+        }
+        const evidence = runErrorEvidence(chunk, record);
+        yield evidence === undefined
+          ? chunk
+          : { ...chunk, rawEvent: providerAdapterEvidence(evidence) };
       }
     } catch (error) {
-      throw markProviderAdapterError(error);
+      throw markProviderAdapterError(withSendEvidence(error, record));
     }
   };
-  const chatStream: AnyTextAdapter["chatStream"] = (options) =>
-    marked(adapter.chatStream(options));
+  const chatStream: AnyTextAdapter["chatStream"] = (options) => {
+    const record: ProviderSendRecord = { evidence: undefined };
+    return marked(record, adapter.chatStream(recordedOptions(options, record)));
+  };
   const structuredOutput: AnyTextAdapter["structuredOutput"] = async (
     options,
   ) => {
+    const record: ProviderSendRecord = { evidence: undefined };
     try {
-      return await adapter.structuredOutput(options);
+      return await adapter.structuredOutput({
+        ...options,
+        chatOptions: recordedOptions(options.chatOptions, record),
+      });
     } catch (error) {
-      throw markProviderAdapterError(error);
+      throw markProviderAdapterError(withSendEvidence(error, record));
     }
   };
   const originalStream = adapter.structuredOutputStream;
   const structuredOutputStream: AnyTextAdapter["structuredOutputStream"] =
     originalStream === undefined
       ? undefined
-      : (options) => marked(originalStream.call(adapter, options));
+      : (options) => {
+          const record: ProviderSendRecord = { evidence: undefined };
+          return marked(
+            record,
+            originalStream.call(adapter, {
+              ...options,
+              chatOptions: recordedOptions(options.chatOptions, record),
+            }),
+          );
+        };
   return new Proxy(adapter, {
     get: (target, key) => {
       if (key === "chatStream") {
@@ -811,103 +857,40 @@ const withProviderFailureOrigin = (adapter: AnyTextAdapter): AnyTextAdapter => {
  */
 const SDK_RETRIES_OFF = { maxRetries: 0 } as const;
 
-// The Stainless clients (OpenAI, Anthropic) build every status error in this
-// hook, while its response headers are still at hand: the retry hints join
-// the error's evidence, so the generation layer honours them after TanStack
-// has projected the error into a `RUN_ERROR`.
-class RetryHintAnthropic extends Anthropic {
-  protected override makeStatusError(
-    status: number,
-    error: object,
-    message: string | undefined,
-    headers: Headers,
-  ) {
-    return withRetryHintEvidence(
-      super.makeStatusError(status, error, message, headers),
-      headers,
-    );
-  }
-}
-
-class RetryHintOpenAI extends OpenAI {
-  protected override makeStatusError(
-    status: number,
-    error: object,
-    message: string | undefined,
-    headers: Headers,
-  ) {
-    return withRetryHintEvidence(
-      super.makeStatusError(status, error, message, headers),
-      headers,
-    );
-  }
-}
-
-type AnthropicChatModel = Parameters<typeof createAnthropicChat>[0];
-
 type AnthropicAdapterOptions = {
   modelId: string;
   apiKey: string;
   anthropicWorkspaceId: string | undefined;
 };
 
-const createAnthropicChatWithoutRetries = (
-  model: AnthropicChatModel,
-  apiKey: string,
-  anthropicWorkspaceId: string | undefined,
-) =>
-  createAnthropicChatWithClient(
-    model,
-    new RetryHintAnthropic({
-      apiKey,
-      ...anthropicClientOptions(anthropicWorkspaceId),
-      ...SDK_RETRIES_OFF,
-    }),
-  );
-
 const createExtendedAnthropicAdapter = ({
   modelId,
   apiKey,
   anthropicWorkspaceId,
 }: AnthropicAdapterOptions): AnyTextAdapter => {
-  const anthropic = extendAdapter(createAnthropicChatWithoutRetries, [
+  const anthropic = extendAdapter(createAnthropicChat, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
     }),
   ]);
-  return anthropic(modelId, apiKey, anthropicWorkspaceId);
+  return anthropic(modelId, apiKey, {
+    ...anthropicClientOptions(anthropicWorkspaceId),
+    ...SDK_RETRIES_OFF,
+  });
 };
-
-type OpenAIChatModel = Parameters<typeof createOpenaiChat>[0];
-
-class RetryHintOpenAITextAdapter<
-  TModel extends OpenAIChatModel,
-> extends OpenAITextAdapter<TModel> {
-  constructor(config: OpenAITextConfig, model: TModel) {
-    super(config, model);
-    // The adapter builds its client from `config` and takes no client of
-    // its own; this one is built from the same `config`.
-    this.client = new RetryHintOpenAI(config);
-  }
-}
-
-const createOpenaiChatWithoutRetries = (
-  model: OpenAIChatModel,
-  apiKey: string,
-) => new RetryHintOpenAITextAdapter({ apiKey, ...SDK_RETRIES_OFF }, model);
 
 const createExtendedOpenAIAdapter = (
   modelId: string,
   apiKey: string,
 ): AnyTextAdapter => {
-  const openai = extendAdapter(createOpenaiChatWithoutRetries, [
+  const openai = extendAdapter(createOpenaiChat, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
     }),
   ]);
-  return openai(modelId, apiKey);
+  return openai(modelId, apiKey, SDK_RETRIES_OFF);
 };
 
 type OpenRouterAdapterOptions = { modelId: string } & (
