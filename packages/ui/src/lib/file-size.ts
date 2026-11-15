@@ -1,5 +1,3 @@
-import type { useFormatter } from "@/i18n/formatting-context";
-
 export const getFileSizeDisplay = (sizeBytes: number) => {
   if (sizeBytes < 1000) {
     return { unit: "byte", value: sizeBytes };
@@ -16,10 +14,23 @@ export const getFileSizeDisplay = (sizeBytes: number) => {
   return { unit: "gigabyte", value: sizeBytes / (1000 * 1000 * 1000) };
 };
 
+/** Formats a number in the reader's locale, as `use-intl`'s formatter does. */
+type NumberFormatter = {
+  readonly number: (
+    value: number,
+    options: {
+      maximumFractionDigits: number;
+      style: "unit";
+      unit: string;
+      unitDisplay: "short";
+    },
+  ) => string;
+};
+
 /** A file size in the reader's locale, at most one decimal ("1.2 MB"). */
 export const formatFileSize = (
   sizeBytes: number,
-  format: Pick<ReturnType<typeof useFormatter>, "number">,
+  format: NumberFormatter,
 ): string => {
   const size = getFileSizeDisplay(sizeBytes);
   return format.number(size.value, {

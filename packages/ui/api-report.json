@@ -7319,6 +7319,22 @@
         }
       ]
     },
+    "./file-size": {
+      "type": "module",
+      "file": "./src/lib/file-size.d.ts",
+      "exports": [
+        {
+          "name": "formatFileSize",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getFileSizeDisplay",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
     "./form": {
       "type": "module",
       "file": "./src/components/form.d.ts",
@@ -12576,6 +12592,7 @@
     "./src/lib/control-size.d.ts": "declare const CONTROL_SIZE: Readonly<{\n    readonly default: \"default\";\n    readonly lg: \"lg\";\n    readonly sm: \"sm\";\n}>;\ntype ControlSize = (typeof CONTROL_SIZE)[keyof typeof CONTROL_SIZE];\ndeclare const CONTROL_SIZES: readonly (\"default\" | \"lg\" | \"sm\")[];\nexport { CONTROL_SIZE, CONTROL_SIZES, type ControlSize };\n",
     "./src/lib/field-trigger.d.ts": "export declare const FIELD_TRIGGER_CLASS_NAME = \"border-input bg-background text-foreground ring-ring/24 focus-visible:border-ring aria-invalid:border-destructive/36 focus-visible:aria-invalid:border-destructive/64 focus-visible:aria-invalid:ring-destructive/16 dark:bg-input/32 dark:aria-invalid:ring-destructive/24 relative inline-flex min-h-9 w-full min-w-36 items-center justify-center gap-2 rounded-lg border px-[calc(--spacing(3)-1px)] text-start text-base shadow-xs/5 outline-none select-none not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] focus-visible:ring-[3px] data-disabled:pointer-events-none data-disabled:opacity-64 sm:min-h-8 sm:text-sm dark:not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [[data-disabled],:focus-visible,[aria-invalid],[data-pressed]]:shadow-none\";\n",
     "./src/lib/file-picker.d.ts": "type PickedFiles = [\n    File,\n    ...File[]\n];\ntype OpenFilePickerOptions = {\n    accept?: string | undefined;\n    multiple?: boolean | undefined;\n    onPick: (files: PickedFiles) => void;\n};\ndeclare const openFilePicker: ({ accept, multiple, onPick, }: OpenFilePickerOptions) => void;\nexport { openFilePicker, type OpenFilePickerOptions };\n",
+    "./src/lib/file-size.d.ts": "export declare const getFileSizeDisplay: (sizeBytes: number) => {\n    unit: string;\n    value: number;\n};\ntype NumberFormatter = {\n    readonly number: (value: number, options: {\n        maximumFractionDigits: number;\n        style: \"unit\";\n        unit: string;\n        unitDisplay: \"short\";\n    }) => string;\n};\nexport declare const formatFileSize: (sizeBytes: number, format: NumberFormatter) => string;\nexport {};\n",
     "./src/lib/initials.d.ts": "export declare const getInitials: (name: null | string) => string;\n",
     "./src/lib/inline-reorder.d.ts": "type InlineDropEdge = \"bottom\" | \"left\" | \"right\" | \"top\";\nexport type InlineDirection = \"ltr\" | \"rtl\";\nexport type InlineDropPosition = \"after\" | \"before\";\nexport declare const toInlineDropPosition: (edge: InlineDropEdge | null, direction: InlineDirection) => InlineDropPosition | null;\ntype ReorderInlineIdsParams = {\n    draggedId: string;\n    ids: readonly string[];\n    position: InlineDropPosition;\n    targetId: string;\n};\nexport declare const reorderInlineIds: ({ ids, draggedId, targetId, position, }: ReorderInlineIdsParams) => null | string[];\nexport {};\n",
     "./src/lib/matter-colors.d.ts": "import type { CSSProperties } from \"react\";\nexport declare const MATTER_SWATCHES: readonly [\n    \"--option-blue\",\n    \"--option-emerald\",\n    \"--option-amber\",\n    \"--option-violet\",\n    \"--option-red\",\n    \"--option-cyan\",\n    \"--option-orange\",\n    \"--option-teal\"\n];\nexport declare const getMatterSwatch: (id: string) => \"--option-amber\" | \"--option-blue\" | \"--option-cyan\" | \"--option-emerald\" | \"--option-orange\" | \"--option-red\" | \"--option-teal\" | \"--option-violet\";\nexport declare const getMatterColor: (id: string) => string;\nexport declare const getMatterPickerColor: (id: string, color: null | string) => string;\nexport declare const toStoredMatterColor: (color: string) => string;\nexport declare const resolveMatterColor: (id: string, color: null | string) => string;\nexport declare const MATTER_TINT_GROUND: {\n    readonly chrome: \"var(--untinted-sidebar)\";\n    readonly content: \"var(--untinted-background)\";\n};\ntype MatterTintGround = (typeof MATTER_TINT_GROUND)[keyof typeof MATTER_TINT_GROUND];\nexport declare const matterTint: (color: null | string, ground: MatterTintGround) => string;\nexport type MatterChromeStyle = CSSProperties & {\n    \"--matter-background-tint\": string;\n    \"--matter-sidebar-tint\": string;\n};\nexport declare const matterChromeStyle: (color: null | string) => MatterChromeStyle;\nexport {};\n",
