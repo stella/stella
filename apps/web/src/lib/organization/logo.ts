@@ -32,9 +32,19 @@ export const toOrganizationLogo = async (
   const canvas = document.createElement("canvas");
   canvas.width = edge;
   canvas.height = edge;
-  canvas
-    .getContext("2d")
-    ?.drawImage(bitmap, (edge - width) / 2, (edge - height) / 2, width, height);
+  const context = canvas.getContext("2d");
+  if (!context) {
+    // Without a 2D context the canvas stays blank; never save that as a logo.
+    bitmap.close();
+    return null;
+  }
+  context.drawImage(
+    bitmap,
+    (edge - width) / 2,
+    (edge - height) / 2,
+    width,
+    height,
+  );
   bitmap.close();
   // Safari has no WebP encoder and returns PNG, which the rules also allow.
   return canvas.toDataURL("image/webp");

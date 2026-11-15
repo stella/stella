@@ -402,7 +402,7 @@ const OrganizationMenuSection = ({
               <span className="flex min-w-0 items-center gap-1.5">
                 <UserIdentity
                   as="span"
-                  avatarClassName="size-5 shrink-0 text-3xs"
+                  avatarClassName="size-5"
                   className="min-w-0"
                   image={organization.logo}
                   name={organization.name}

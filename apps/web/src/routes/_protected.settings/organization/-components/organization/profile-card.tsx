@@ -33,15 +33,14 @@ import {
   ORGANIZATION_LOGO_ACCEPT,
   toOrganizationLogo,
 } from "@/lib/organization/logo";
-import {
-  organizationKeys,
-  organizationOptions,
-} from "@/lib/organization/queries";
+import { organizationOptions } from "@/lib/organization/queries";
 import { getOrganizationSchema } from "@/lib/organization/utils";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { resourceMutation } from "@/lib/workspace-realtime";
 
 const getNameOnlySchema = () => v.pick(getOrganizationSchema(), ["name"]);
+
+type OrganizationProfileUpdate = { name: string } | { logo: string | null };
 
 export const OrganizationProfileCard = () => {
   const t = useTranslations();
@@ -52,15 +51,15 @@ export const OrganizationProfileCard = () => {
   const [pendingName, setPendingName] = useState<string | null>(null);
   const canChange = usePermissions({ organization: ["update"] });
 
-  const logoMutation = useMutation({
+  // Renames and logo changes are one organization write, so both refresh
+  // every organization reader through the same resource contract.
+  const updateMutation = useMutation({
     mutationFn: resourceMutation({
       mutation: "updateOrganization",
       queryClient,
       scope: { type: "organization" },
-      mutationFn: async (logo: string | null) => {
-        const result = await authClient.organization.update({
-          data: { logo },
-        });
+      mutationFn: async (update: OrganizationProfileUpdate) => {
+        const result = await authClient.organization.update({ data: update });
         readQueryResult(
           result.error
             ? Result.err(toAuthClientError(result.error))
@@ -75,6 +74,13 @@ export const OrganizationProfileCard = () => {
       });
     },
     onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "OrganizationProfileCard.update:failure",
+        scope: {
+          type: "handler",
+          handlerId: "OrganizationProfileCard.update:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -82,7 +88,7 @@ export const OrganizationProfileCard = () => {
   const uploadLogo = async (file: File) => {
     const logo = await toOrganizationLogo(file);
     if (logo) {
-      logoMutation.mutate(logo);
+      updateMutation.mutate({ logo });
     } else {
       notifyUserProblem(t("settings.organization.logoInvalid"));
     }
@@ -109,32 +115,16 @@ export const OrganizationProfileCard = () => {
     if (!pendingName) {
       return undefined;
     }
-    const result = await authClient.organization.update({
-      data: { name: pendingName },
-    });
-
-    if (result.error) {
-      analytics.captureError(toAuthClientError(result.error), {
-        fingerprintKey: "OrganizationProfileCard.performRename:failure",
-        scope: {
-          type: "handler",
-          handlerId: "OrganizationProfileCard.performRename:failure",
-        },
-      });
-      notifyUserError(
-        toAuthClientError(result.error),
-        t("errors.actionFailed"),
-      );
-      // Keep the confirm dialog open so the rename can be retried.
+    const renamed = await Result.tryPromise(
+      async () => await updateMutation.mutateAsync({ name: pendingName }),
+    );
+    if (Result.isError(renamed)) {
+      // The mutation already reported the failure; keep the confirm dialog
+      // open so the rename can be retried.
       return "keep-open" satisfies DestructiveConfirmOutcome;
     }
 
-    await queryClient.invalidateQueries({ queryKey: organizationKeys.root });
     form.reset({ name: pendingName });
-    stellaToast.add({
-      title: t("success.organizationUpdated"),
-      type: "success",
-    });
     setPendingName(null);
     return undefined;
   };
@@ -160,7 +150,7 @@ export const OrganizationProfileCard = () => {
               {canChange ? (
                 <>
                   <Button
-                    loading={logoMutation.isPending}
+                    loading={updateMutation.isPending}
                     onClick={() => {
                       openFilePicker({
                         accept: ORGANIZATION_LOGO_ACCEPT,
@@ -180,9 +170,9 @@ export const OrganizationProfileCard = () => {
                   </Button>
                   {data.logo ? (
                     <Button
-                      disabled={logoMutation.isPending}
+                      disabled={updateMutation.isPending}
                       onClick={() => {
-                        logoMutation.mutate(null);
+                        updateMutation.mutate({ logo: null });
                       }}
                       size="sm"
                       type="button"
