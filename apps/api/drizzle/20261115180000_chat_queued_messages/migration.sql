@@ -37,6 +37,7 @@ CREATE TABLE "chat_queue_holds" (
       END)
 );--> statement-breakpoint
 ALTER TABLE "chat_queued_messages" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "chat_queued_messages" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "chat_queued_messages" ADD CONSTRAINT "chat_queued_messages_organization_id_organization_id_fk"
   FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "chat_queued_messages" ADD CONSTRAINT "chat_queued_messages_workspace_id_workspaces_id_fk"
@@ -48,6 +49,7 @@ ALTER TABLE "chat_queued_messages" ADD CONSTRAINT "chat_queued_messages_thread_i
 ALTER TABLE "chat_queued_messages" ADD CONSTRAINT "chat_queued_messages_workspace_organization_fk"
   FOREIGN KEY ("workspace_id", "organization_id") REFERENCES "workspaces"("id", "organization_id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "chat_queue_holds" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "chat_queue_holds" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "chat_queue_holds" ADD CONSTRAINT "chat_queue_holds_organization_id_organization_id_fk"
   FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "chat_queue_holds" ADD CONSTRAINT "chat_queue_holds_workspace_id_workspaces_id_fk"
@@ -698,4 +700,10 @@ END) AND
 )
       )
   )
-);
+);--> statement-breakpoint
+CREATE POLICY "chat_queued_messages_owner_access" ON "chat_queued_messages" AS PERMISSIVE FOR ALL TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queued_messages'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queued_messages'::regclass));--> statement-breakpoint
+CREATE POLICY "chat_queue_holds_owner_access" ON "chat_queue_holds" AS PERMISSIVE FOR ALL TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queue_holds'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queue_holds'::regclass));

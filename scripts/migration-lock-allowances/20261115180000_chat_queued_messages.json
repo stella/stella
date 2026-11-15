@@ -1,5 +1,5 @@
 {
   "add-foreign-key": "The foreign keys are added to the new, empty chat_queued_messages and chat_queue_holds tables, so they validate no rows. Each SHARE ROW EXCLUSIVE wait on a referenced table (organization, user, workspaces, chat_threads, chat_turns) is bounded by the migration's 1s lock_timeout; a timeout rolls back for the migration runner to retry.",
-  "row-level-security": "Enabling RLS changes only metadata of the two new, empty queue tables, bounded by the 1s lock_timeout and 10s statement_timeout.",
+  "row-level-security": "Enabling and forcing RLS changes only metadata of the two new, empty queue tables, bounded by the 1s lock_timeout and 10s statement_timeout.",
   "create-policy": "The select, insert, update and delete policies are metadata of the two new, empty queue tables, bounded by the 1s lock_timeout and 10s statement_timeout."
 }

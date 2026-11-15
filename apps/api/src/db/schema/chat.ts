@@ -877,6 +877,14 @@ export const chatQueuedMessages = p.pgTable(
       .index("chat_queued_messages_org_user_thread_position_idx")
       .on(table.organizationId, table.userId, table.threadId, table.position),
     p.index("chat_queued_messages_thread_id_idx").on(table.threadId),
+    // The owner connection (the queue's sender, the turn reaper) is held to
+    // RLS too (FORCE), so it is admitted by name.
+    p.pgPolicy("chat_queued_messages_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queued_messages'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queued_messages'::regclass)`,
+    }),
     ...chatQueuedMessagePolicies(),
   ],
 );
@@ -937,6 +945,14 @@ export const chatQueueHolds = p.pgTable(
     p
       .index("chat_queue_holds_org_user_idx")
       .on(table.organizationId, table.userId),
+    // The owner connection (the queue's sender, the turn reaper) is held to
+    // RLS too (FORCE), so it is admitted by name.
+    p.pgPolicy("chat_queue_holds_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queue_holds'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queue_holds'::regclass)`,
+    }),
     ...chatQueueHoldPolicies(),
   ],
 );
