@@ -1873,6 +1873,8 @@ describe("offline route build", () => {
         expect(state.workStatus).not.toBe("blocked");
       }
       // Nothing was halved: the entity's next request may be as large as any.
+      // Read before the transaction: the model clock reads the database.
+      const leaseExpiresAt = await now(model);
       const caps = await db.transaction(
         async (tx) =>
           await readCorpusProjectionOfflineRequestCapsTx(
@@ -1887,7 +1889,7 @@ describe("offline route build", () => {
                 fingerprint: withdrawn.fingerprint,
                 indexId: withdrawn.indexId,
                 leaseToken: Bun.randomUUIDv7(),
-                leaseExpiresAt: await now(model),
+                leaseExpiresAt,
                 appendMode: "batchable",
               },
             ],
