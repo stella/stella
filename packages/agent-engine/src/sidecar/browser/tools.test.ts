@@ -170,6 +170,7 @@ const recorder = (
   const asked: AskedStep[] = [];
   const finished: string[] = [];
   const context = {
+    acts: true,
     approvals,
     approve: async ({
       signal: _signal,
@@ -219,8 +220,55 @@ const parsed = (result: { content: { text: string }[] }): unknown =>
 
 describe("the local browser tools", () => {
   test("list exactly the actions chat knows", () => {
-    expect(localBrowserToolList().map(({ name }) => name)).toEqual([
-      ...CHAT_LOCAL_RUN_BROWSER_ACTIONS,
+    expect(
+      localBrowserToolList({ readOnlyHost: false }).map(({ name }) => name),
+    ).toEqual([...CHAT_LOCAL_RUN_BROWSER_ACTIONS]);
+  });
+
+  test("where a browser that only reads may serve the run, no description promises it downloads", () => {
+    const plain = localBrowserToolList({ readOnlyHost: false });
+    const readOnly = localBrowserToolList({ readOnlyHost: true });
+    for (const [index, tool] of readOnly.entries()) {
+      const before = plain[index]?.description ?? "";
+      expect(tool.description.includes("nothing is downloaded")).toBe(
+        before.includes("A PDF the page downloads is saved") ||
+          before.includes("A PDF the tab shows"),
+      );
+      expect(plain[index]?.description).not.toContain("nothing is downloaded");
+    }
+    expect(
+      readOnly.filter(({ description }) =>
+        description.includes("nothing is downloaded"),
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  test("in a browser that only reads, steps that change a page are refused before anyone is asked", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1"), page("r-2")], { approvals: "ask" });
+    const reading = { ...browser.context, acts: false };
+    await session.call("snapshot", {}, reading);
+    for (const [tool, input] of [
+      ["click", { ref: "L1" }],
+      ["type", { ref: "L1", text: "notice period" }],
+      ["press_key", { key: "Enter", ref: "L1" }],
+      ["select", { option: "All", ref: "L1" }],
+    ] as const) {
+      const refused = await session.call(tool, input, reading);
+      expect(refused.isError).toBe(true);
+      expect(parsed(refused)).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+        hint: expect.stringContaining("open"),
+        refused: "not_available_on_this_browser",
+        status: "error",
+      });
+    }
+    expect(browser.asked).toEqual([]);
+    // Reading still reaches the browser.
+    await session.call("snapshot", {}, reading);
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+      "snapshot",
     ]);
   });
 
@@ -1005,6 +1053,30 @@ describe("keys, options, history and tabs", () => {
     const again = await session.call("go_back", {}, browser.context);
     expect(parsed(again)).toMatchObject({ refused: "no_earlier_page" });
     expect(browser.sent).toHaveLength(3);
+  });
+
+  test("an open that moved the chat to another browser starts its record over: no page of the first is earlier there", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([pageAt("r-1", DECISION_URL), page("r-2")]);
+    const moves = { count: 0 };
+    const context = { ...browser.context, browserMoves: () => moves.count };
+    await session.call("open", { url: DECISION_URL }, context);
+    // The second open lands in the other browser, in a tab with the same id.
+    const send = context.send;
+    const moved = {
+      ...context,
+      send: async (...args: Parameters<typeof send>) => {
+        moves.count += 1;
+        return await send(...args);
+      },
+    };
+    await session.call("open", { url: SEARCH_URL }, moved);
+    const back = await session.call("go_back", {}, context);
+    expect(parsed(back)).toMatchObject({ refused: "no_earlier_page" });
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "open",
+      "open",
+    ]);
   });
 
   test("go_back with no earlier page read in the tab is refused without navigating", async () => {

@@ -150,6 +150,7 @@ const ready = async (bridge: BrowserBridge) =>
   });
 
 const snapshotRequest = {
+  accountOrigin: "https://api.example-stella.com",
   command: { action: "snapshot" },
   controllerId: "thread-1",
   observedTab: null,
