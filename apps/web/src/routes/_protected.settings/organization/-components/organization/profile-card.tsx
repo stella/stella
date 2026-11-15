@@ -1,7 +1,12 @@
 import { useState } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -9,23 +14,32 @@ import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import type { DestructiveConfirmOutcome } from "@stll/ui/destructive-confirm-dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
+import { openFilePicker } from "@stll/ui/file-picker";
 import { Form } from "@stll/ui/form";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
+import { UserIdentityAvatar } from "@/components/user-avatar";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { readQueryResult } from "@/lib/errors/query-result";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import {
+  ORGANIZATION_LOGO_ACCEPT,
+  toOrganizationLogo,
+} from "@/lib/organization/logo";
 import {
   organizationKeys,
   organizationOptions,
 } from "@/lib/organization/queries";
 import { getOrganizationSchema } from "@/lib/organization/utils";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 const getNameOnlySchema = () => v.pick(getOrganizationSchema(), ["name"]);
 
@@ -36,6 +50,43 @@ export const OrganizationProfileCard = () => {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data } = useSuspenseQuery(organizationOptions(activeOrganizationId));
   const [pendingName, setPendingName] = useState<string | null>(null);
+  const canChange = usePermissions({ organization: ["update"] });
+
+  const logoMutation = useMutation({
+    mutationFn: resourceMutation({
+      mutation: "updateOrganization",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (logo: string | null) => {
+        const result = await authClient.organization.update({
+          data: { logo },
+        });
+        readQueryResult(
+          result.error
+            ? Result.err(toAuthClientError(result.error))
+            : Result.ok(),
+        );
+      },
+    }),
+    onSuccess: () => {
+      stellaToast.add({
+        title: t("success.organizationUpdated"),
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
+
+  const uploadLogo = async (file: File) => {
+    const logo = await toOrganizationLogo(file);
+    if (logo) {
+      logoMutation.mutate(logo);
+    } else {
+      notifyUserProblem(t("settings.organization.logoInvalid"));
+    }
+  };
 
   const form = useForm(
     schemaFormOptions({
@@ -100,6 +151,49 @@ export const OrganizationProfileCard = () => {
               detached(form.handleSubmit(), "profile-card.submit");
             }}
           >
+            <div className="flex items-center gap-3">
+              <UserIdentityAvatar
+                className="size-12 text-sm"
+                image={data.logo}
+                name={data.name}
+              />
+              {canChange ? (
+                <>
+                  <Button
+                    loading={logoMutation.isPending}
+                    onClick={() => {
+                      openFilePicker({
+                        accept: ORGANIZATION_LOGO_ACCEPT,
+                        onPick: ([file]) => {
+                          detached(
+                            uploadLogo(file),
+                            "profile-card.upload-logo",
+                          );
+                        },
+                      });
+                    }}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    {t("settings.organization.uploadLogo")}
+                  </Button>
+                  {data.logo ? (
+                    <Button
+                      disabled={logoMutation.isPending}
+                      onClick={() => {
+                        logoMutation.mutate(null);
+                      }}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t("common.remove")}
+                    </Button>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
             <form.Field name="name">
               {(field) => (
                 <Field name={field.name}>
