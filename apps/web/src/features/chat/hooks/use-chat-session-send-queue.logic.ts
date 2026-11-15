@@ -3,11 +3,13 @@ import { panic } from "better-result";
 
 import { CHAT_SEND_MODE, type ChatSendMode } from "@stll/anonymize-chat";
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
+import type { ChatLocalRunSteerRefusal } from "@stll/api-contract/chat-run-target";
 
 import type {
   ChatSendMessageOptions,
   ChatUserMessageInput,
 } from "@/features/chat/chat-runtime";
+import type { TranslationKey } from "@/i18n/types";
 import type {
   ChatEditApplyMode,
   DocxEditRepresentation,
@@ -170,8 +172,8 @@ export const canSendWithoutQueueing = (state: SendQueueState): boolean =>
  *   was queued to be sent anonymized; the turn is stopped and the message
  *   goes once the stop settles, through the send path that keeps its mode.
  *
- * A steer that is not taken falls back to `stop_and_send` (see
- * `steerFallback`).
+ * After "Send now", a steer that is not taken falls back to `stop_and_send`
+ * (see `steerFallback`).
  */
 export type SendNowRoute =
   | { type: "send" }
@@ -202,6 +204,23 @@ export const steerableText = (entry: SteerableEntry): string | null => {
     entry.options?.body?.sendMode === CHAT_SEND_MODE.anonymized;
   return entry.fileCount === 0 && text !== "" && !anonymized ? text : null;
 };
+
+/**
+ * Why a steer left the message queued: what the turn or the API
+ * said (`ChatLocalRunSteerRefusal`), or `message_not_plain` for a message
+ * with files or one sent anonymized, which only goes as a message of its own.
+ */
+export type ChatSteerRefusal = ChatLocalRunSteerRefusal | "message_not_plain";
+
+/** What the member is told about a steer that left the message queued. */
+export const CHAT_STEER_REFUSAL_MESSAGES = {
+  turn_not_running: "chat.steerRefused.turnNotRunning",
+  no_run: "chat.steerRefused.noRun",
+  harness_cannot_steer: "chat.steerRefused.cannotSteer",
+  run_full: "chat.steerRefused.runFull",
+  not_taken: "chat.steerRefused.notTaken",
+  message_not_plain: "chat.steerRefused.notPlain",
+} as const satisfies Record<ChatSteerRefusal, TranslationKey>;
 
 /**
  * Who handed a queued message to the running turn: "Send now" on it

@@ -159,6 +159,7 @@
     "handoffAccount": "هل تريد المتابعة باسم <account>{email}</account> في <organization>{organizationName}</organization>؟",
     "handoffTitle": "المتابعة إلى stella",
     "headline": "وضوح لكل قضية.",
+    "invalidEmailOrPassword": "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
     "invitation": {
       "declined": "تم رفض الدعوة",
       "declinedDescription": "لقد رفضت هذه الدعوة. يمكنك إغلاق هذه الصفحة بأمان.",
@@ -207,6 +208,7 @@
       "useBackupCode": "استخدام رمز احتياطي بدلاً من ذلك"
     },
     "useDifferentEmail": "استخدام بريد إلكتروني مختلف",
+    "useEmailCode": "استخدام رمز عبر البريد الإلكتروني بدلًا من ذلك",
     "usePassword": "استخدام كلمة المرور بدلًا من ذلك",
     "weSentCodeTo": "أرسلنا رمزًا إلى <email>{emailAddress}</email>"
   },
@@ -2200,6 +2202,15 @@
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",
     "sources": "المصادر:",
+    "steerRefused": {
+      "cannotSteer": "هذا الوكيل لا يستقبل الرسائل أثناء عمله.",
+      "noRun": "الوكيل لا يعمل على حاسوبك الآن.",
+      "notPlain": "لا يمكن إرسال سوى رسالة نصية بلا ملفات، وغير مُرسلة في وضع إخفاء الهوية، إلى الوكيل أثناء عمله.",
+      "notTaken": "تعذّر على الوكيل استلام رسالتك الآن.",
+      "runFull": "لا يمكن للوكيل استقبال المزيد من الرسائل الآن.",
+      "title": "رسالتك في قائمة الانتظار حتى ينتهي الوكيل",
+      "turnNotRunning": "الوكيل لا يعمل الآن."
+    },
     "stopFailed": "تعذّر إيقاف الإجابة. حاول مرة أخرى.",
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
