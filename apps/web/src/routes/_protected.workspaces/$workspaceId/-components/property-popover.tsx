@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { PROPERTY_SORT_KINDS } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import {
   CheckCircle2Icon,
@@ -35,7 +36,6 @@ import { PropertyConditions } from "@/components/workspaces/properties/property-
 import { PropertyPopoverTrigger } from "@/components/workspaces/properties/shared";
 import { SortProperty } from "@/components/workspaces/properties/sort-property";
 import { ALL_SORT_DIRECTIONS_AVAILABLE } from "@/components/workspaces/properties/sort-property.logic";
-import { PROPERTY_SORT_KINDS } from "@/components/workspaces/property-utils";
 import type { TableHeader } from "@/components/workspaces/table/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

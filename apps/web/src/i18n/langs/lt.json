@@ -241,6 +241,12 @@
       "showSources": "Rodyti šaltinius",
       "title": "Atraminiai faktai"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# teiginys grindžiamas šiuo faktu} few {# teiginiai grindžiami šiuo faktu} many {# teiginio grindžiama šiuo faktu} other {# teiginių grindžiama šiuo faktu}}",
+      "empty": "Šiame sąraše dar nėra faktų.",
+      "moreClaims": "{count, plural, one {dar # teiginys} few {dar # teiginiai} many {dar # teiginio} other {dar # teiginių}}",
+      "undated": "Be datos"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Atraminiai faktai prieštarauja vienas kitam",
@@ -288,6 +294,8 @@
       "reopened": "Atverta iš naujo, laukiama patikros",
       "reopenedTooltip": "Tikrintojas perklasifikavo tai kaip patikrinamą faktą; tiesioginė patikra pagal registrą dar neatlikta.",
       "sourceCount": "{count, plural, one {# šaltinis} few {# šaltiniai} many {# šaltinių} other {# šaltinio}}",
+      "verdictBy": "Išvadą pateikė {model}",
+      "verdictByGenerativeModel": "Išvadą pateikė generatyvusis modelis; sprendimų modelis jos nenustatė",
       "whyVerdict": "Išvados pagrindimas: atraminiai faktai"
     },
     "claimTypes": {
@@ -405,6 +413,42 @@
       "showNextSteps": "Rodyti tolesnius veiksmus",
       "unlink": "Nutraukti ryšį su: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# teiginys} few {# teiginiai} many {# teiginio} other {# teiginių}}",
+      "claimTitle": "Teiginys",
+      "columns": {
+        "claims": "Teiginiai",
+        "sources": "Šaltinio dokumentai",
+        "statements": "Pareiškimai"
+      },
+      "empty": "Šiame sąraše dar nėra faktų ar patikrintų dokumentų.",
+      "factCount": "{count, plural, one {# faktas} few {# faktai} many {# fakto} other {# faktų}}",
+      "factOverflow": "Rodoma pirmųjų šio sąrašo faktų: {count}.",
+      "filters": {
+        "allSources": "Visi šaltiniai",
+        "allVerdicts": "Visos išvados",
+        "conflicts": "Prieštaravimai",
+        "heldFacts": "Sulaikyti faktai",
+        "source": "Filtruoti pagal šaltinį",
+        "verdict": "Filtruoti pagal išvadą"
+      },
+      "held": "Sulaikyta",
+      "linkedFacts": "{count, plural, one {# susietas faktas} few {# susieti faktai} many {# susieto fakto} other {# susietų faktų}}",
+      "listLabel": "Grafas sąrašo forma",
+      "loadMore": "Įkelti daugiau dokumentų",
+      "noMatch": "Pagal šiuos filtrus nieko nerasta.",
+      "noStatements": "Pagal šį sąrašą dar nepatikrintas nė vienas dokumentas.",
+      "offList": "Nebėra sąraše",
+      "relation": {
+        "conflicts": "Prieštarauja",
+        "governs": "Vadovaujamasis",
+        "record": "Registre",
+        "recordConflict": "Prieštaringas įrašas",
+        "supports": "Patvirtina"
+      },
+      "unlinked": "Faktai, kuriais negrindžiamas joks teiginys",
+      "verifyInReview": "Patikrinti dokumentą"
+    },
     "guidance": {
       "escalate": "Perduoti",
       "manualJudgement": "Žmogaus sprendimas",
@@ -458,6 +502,12 @@
     "matches": {
       "count": "{count, plural, one {# atitikmuo} few {# atitikmenys} many {# atitikmenų} other {# atitikmens}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologija",
+      "graph": "Grafas",
+      "label": "Rodyti sąrašą kaip",
+      "review": "Peržiūra"
     },
     "qualifiers": {
       "heading": "Išlygos",
@@ -547,7 +597,8 @@
       "startFailed": "Nepavyko pradėti tikrinimo",
       "status": {
         "running": "Tikrinama"
-      }
+      },
+      "unreadParts": "{count, plural, one {Nepavyko perskaityti # dokumento dalies, todėl jos teiginiai nepatikrinti.} few {Nepavyko perskaityti # dokumento dalių, todėl jų teiginiai nepatikrinti.} many {Nepavyko perskaityti # dokumento dalies, todėl jų teiginiai nepatikrinti.} other {Nepavyko perskaityti # dokumento dalių, todėl jų teiginiai nepatikrinti.}}"
     },
     "save": {
       "failed": "Neišsaugota",
@@ -1625,6 +1676,8 @@
         "actions": {
           "click": "Spustelėti",
           "fill": "Įvesti tekstą",
+          "find": "Ieškoti puslapyje",
+          "findHeadings": "Išvardyti puslapio antraštes",
           "open": "Atverti svetainę",
           "openNewTab": "Atverti svetainę naujame skirtuke",
           "pressKey": "Paspausti klavišą",
@@ -1873,6 +1926,8 @@
       "folderStateProtected": "Jame yra pačios stella duomenys",
       "folderStateUnlinked": "Nebesusietas",
       "folderStateUnreadable": "Negalima perskaityti",
+      "limitReminderNotify": "Pranešti, kai atsinaujins",
+      "limitReminderScheduled": "Pranešime jums po {time}.",
       "permissionAboveLimit": "Jūsų organizacija to neleidžia",
       "permissionAskDescription": "Pokalbio aplanko failus redaguoja pats; dėl visko kito klausia.",
       "permissionAutoDescription": "Tai, ką laiko saugiu, atlieka pats; dėl kito klausia.",
@@ -1912,6 +1967,24 @@
       "dismiss": "Atmesti ir sustabdyti",
       "secretAnswer": "Atsakymas paslėptas",
       "secretPlaceholder": "Jūsų atsakymas liks paslėptas"
+    },
+    "makeSkill": {
+      "command": "Sukurti įgūdį iš šio pokalbio",
+      "drafted": "Įgūdžio juodraštis paruoštas. Peržiūrėkite jį ir tada įjunkite.",
+      "drafting": "Rengiamas įgūdžio juodraštis iš šio pokalbio…",
+      "emptyThread": "Pirmiausia išsiųskite žinutę, tada iš pokalbio bus galima sukurti įgūdį.",
+      "failed": "Nepavyko sukurti įgūdžio iš šio pokalbio",
+      "review": {
+        "description": "Įgūdžio juodraštyje yra šie vardai. Juos gali matyti visi, turintys prieigą prie šio įgūdžio.",
+        "replaceHint": "Panaikinkite vardo žymėjimą, kad jis būtų pakeistas bendru vietos rezervavimo ženklu.",
+        "role": {
+          "organization": "organizacijos pavadinimas",
+          "person": "asmens vardas"
+        },
+        "saveAll": "Palikti visus ir išsaugoti",
+        "saveReplacing": "Pakeisti nepažymėtus ir išsaugoti",
+        "title": "Išsaugoti šiuos vardus įgūdyje?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# pokalbis laukia jūsų} few {# pokalbiai laukia jūsų} many {# pokalbio laukia jūsų} other {# pokalbių laukia jūsų}}",
@@ -2108,6 +2181,7 @@
     "sendErrorStreamIncomplete": "DI atsakymas nutrūko nepasibaigęs. Bandykite dar kartą.",
     "sendErrorTimedOut": "Pokalbio paslauga laiku neatsakė. Bandykite dar kartą.",
     "sendErrorToolsUnsupported": "Šis modelis negali naudoti įrankių, todėl negali atsakyti į klausimus apie jūsų bylą. Perjunkite į modelį, kuris palaiko įrankius.",
+    "sendErrorTurnTooLarge": "Šis atsakymas tapo per didelis, kad būtų pateiktas visas. Norėdami tęsti, išsiųskite naują žinutę.",
     "sendPrompt": "Siųsti pranešimą",
     "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
@@ -2260,9 +2334,14 @@
       "update_reader_annotation": "Redaguoti paryškinimą ar komentarą",
       "use-browser": "Jūsų naršyklės naudojimas",
       "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
+      "user_message": "Išsiųsta agentui dirbant",
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
+      "browserClick": "Spustelėti „{target}“ puslapyje {url}",
+      "browserPressKey": "Paspausti klavišą {key} elemente „{target}“ puslapyje {url}",
+      "browserSelect": "Pasirinkti „{option}“ elemente „{target}“ puslapyje {url}",
+      "browserType": "Įvesti tekstą į „{target}“ puslapyje {url}",
       "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
       "commandExited": "{command} (išėjimo kodas {code})",
       "consoleLogs": "Konsolės išvestis",
@@ -2272,17 +2351,17 @@
       "input": "Įvestis",
       "interrupted": "Nutraukta nebaigus",
       "localOutput": {
+        "arriving": "Vis dar gaunama iš kompiuterio, kuriame buvo vykdomas šis žingsnis",
         "conversation": "Subagento pokalbis",
         "conversationPrompt": "Užduotis",
         "conversationReport": "Ataskaita",
         "cut": "Rodomi pirmieji {kept} iš {total}",
         "diff": "Failų pakeitimai",
-        "elsewhere": "Atidarykite kompiuteryje, kuriame tai buvo vykdoma",
         "empty": "Išvesties nėra",
-        "failed": "stella darbalaukio programa šiame kompiuteryje negalėjo to parodyti.",
-        "imageTooLarge": "Šio paveikslėlio dydis – {total}. Didesni nei {kept} paveikslėliai šiame kompiuteryje nesaugomi, todėl čia jo parodyti negalima.",
-        "notKept": "Iš šio žingsnio šiame kompiuteryje nieko neišsaugota",
-        "reading": "Skaitoma iš šio kompiuterio"
+        "imageTooLargeToStore": "Šio paveikslėlio dydis – {total}. Didesni nei {kept} paveikslėliai nesaugomi, todėl jo parodyti negalima.",
+        "notCopied": "Į šį pokalbį dar nenukopijuota",
+        "notStored": "Iš šio žingsnio nieko neišsaugota",
+        "runBudgetReached": "Neišsaugota: šis vykdymas jau išsaugojo tiek, kiek leidžiama vienam vykdymui"
       },
       "output": "Išvestis",
       "patternInPath": "{pattern} ({path})",
@@ -2305,6 +2384,10 @@
       "needsInputTitle": "stellai reikia jūsų",
       "replyReadyBody": "stella baigė atsakyti jūsų pokalbyje.",
       "replyReadyTitle": "Atsakymas paruoštas"
+    },
+    "turnPaused": {
+      "continue": "Tęsti",
+      "status": "Pristabdyta po {count, plural, one {# įrankio iškvietimo} few {# įrankio iškvietimų} many {# įrankio iškvietimo} other {# įrankio iškvietimų}}"
     },
     "turnStatus": {
       "answerFailed": "Atsakymo nepavyko užbaigti",
@@ -2958,7 +3041,6 @@
       "dropZone": "Nutempkite įgaliojimą (.docx) čia arba spustelėkite ir pasirinkite failą",
       "extracting": "Nustatomas (-i) įgaliotojas (-ai)…",
       "fileHint": "stella perskaito dokumentą ir automatiškai suranda įgaliotoją (asmenį, kuris suteikia įgaliojimą, o ne advokatą). Prieš patvirtindami peržiūrėkite rezultatą.",
-      "fileTooLarge": "Įgaliojimo failas turi būti ne didesnis kaip 50 MB.",
       "invalidFileType": "Pasirinkite .docx failą.",
       "noOutorganteFound": "Šiame dokumente nepavyko nustatyti nė vieno įgaliotojo.",
       "parseErrorGeneric": "Iš šio dokumento nepavyko nustatyti kontaktų.",
@@ -3338,6 +3420,7 @@
       "invitationRoleNotAllowed": "Negalite pakviesti asmens su šia role. Pasirinkite kitą rolę.",
       "invoiceNumberSeriesMissing": "Nustatykite numatytąją sąskaitų numerių seriją organizacijos nustatymų skiltyje Numerių serijos, tada išrašykite sąskaitą.",
       "invoiceSellerProfileMissing": "Pridėkite pardavėjo profilį organizacijos nustatymų skiltyje Atsiskaitymo profiliai, tada išrašykite sąskaitą.",
+      "legalHoldActive": "Ištrynimas užblokuotas, nes šie įrašai turi būti išsaugoti.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
       "matterContactCapacityExceeded": "Šioje byloje yra daugiau kontaktų, nei galima parodyti. Pašalinkite matomus kontaktų susiejimus, kad būtų parodyti likę kontaktai.",
@@ -3360,6 +3443,11 @@
       "sharepointNotFound": "Šios svetainės, bibliotekos ar failo nebėra arba jis su jumis nebendrinamas.",
       "sharepointReconnectRequired": "Jūsų Microsoft prisijungimas nebegalioja. Iš naujo prijunkite SharePoint ir OneDrive.",
       "sharepointThrottled": "Microsoft riboja užklausas. Netrukus bandykite dar kartą.",
+      "skillFromChatAnonymizedThread": "Iš anonimizuoto pokalbio įgūdžio kol kas sukurti negalima.",
+      "skillFromChatEmptyThread": "Šiame pokalbyje dar nėra nieko, iš ko būtų galima sukurti įgūdį.",
+      "skillFromChatLocalRunThread": "Šis pokalbis vyksta jūsų kompiuteryje, todėl iš jo įgūdis debesyje nekuriamas.",
+      "skillFromChatThreadNotFound": "Šio pokalbio rasti nepavyko.",
+      "skillFromChatWithdrawn": "Šio pokalbio turinys buvo atšauktas, todėl iš jo negalima sukurti įgūdžio.",
       "skillSourceUnreachable": "Nepavyko įkelti įgūdžio šaltinio. Patikrinkite, ar nuoroda veda į viešą „GitHub“ saugyklą, arba bandykite vėliau.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas.",
@@ -5059,6 +5147,7 @@
       "flowRunAwaitingApproval": "Darbo eiga <bdi>{flowName}</bdi> laukia jūsų patvirtinimo",
       "flowRunCompleted": "Darbo eiga <bdi>{flowName}</bdi> baigta",
       "flowRunFailed": "Darbo eiga <bdi>{flowName}</bdi> nepavyko",
+      "localRunLimitReset": "Programavimo agentas jūsų kompiuteryje gali tęsti jūsų pokalbį",
       "mention": "<bdi>{actorName}</bdi> paminėjo jus komentare",
       "reportExportFailed": "Nepavyko eksportuoti ataskaitos",
       "reportExportSucceeded": "Jūsų ataskaita paruošta",
@@ -5812,6 +5901,8 @@
       "auditLogsSentenceDownload": "{resource} atsisiųstas.",
       "auditLogsSentenceExecute": "{resource} paleistas.",
       "auditLogsSentenceIssued": "{resource} išduotas.",
+      "auditLogsSentenceLegalHoldPlaced": "{resource} nustatyta.",
+      "auditLogsSentenceLegalHoldReleased": "{resource} panaikinta.",
       "auditLogsSentenceRedeemed": "{resource} panaudotas.",
       "auditLogsSentenceRefused": "{resource} atmestas.",
       "auditLogsSentenceReview": "{resource} peržiūrėtas.",
@@ -5863,6 +5954,7 @@
         "flow_run": "darbo eigos vykdymas",
         "folio_collab_room": "Folio bendradarbiavimo kambarys",
         "invoice": "sąskaita faktūra",
+        "legal_hold": "teisinio saugojimo prievolė",
         "legal_list": "teisinis sąrašas",
         "legal_list_generation": "teisinio sąrašo kūrimas",
         "legal_list_item": "teisinio sąrašo įrašas",
@@ -6022,7 +6114,13 @@
       "usageStatusTrialing": "Bandomasis laikotarpis",
       "usageUnitCount": "{count, plural, one {# vienetas} few {# vienetai} many {# vienetų} other {# vieneto}}",
       "usageUnitsBalanceTemplate": "Pasiekiama {remaining} vienetų",
-      "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai"
+      "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai",
+      "verificationDecisionModel": {
+        "description": "Tikrinant dokumentą pagal sąrašo faktus, sprendimų modelis parenka kiekvieno teiginio išvadą. Generatyvusis modelis ir toliau randa bei cituoja faktus. Jei sprendimų modelis nėra pakankamai tikras, galioja generatyviojo modelio išvada.",
+        "title": "Dokumentų tikrinimo išvados",
+        "unavailable": "Šiai organizacijai nėra prieinamo sprendimų modelio.",
+        "updated": "Tikrinimo nustatymas atnaujintas"
+      }
     }
   },
   "sharepoint": {
@@ -6263,6 +6361,7 @@
       "previewBody5": "Prieš konvertavimą pardavimas arba įtraukimas į prekybą suteikia Investuotojui teisę į didesnę iš pirkimo kainos arba pajamų, mokėtinų konvertavimo pagrindu, sumą.",
       "previewBody6": "Bendrovė yra tinkamai įsteigta, turi teisę sudaryti šią sutartį ir gaus visus jos vykdymui reikalingus patvirtinimus.",
       "previewBody7": "Ši sutartis apima visą šalių susitarimą ir gali būti keičiama tik raštu, gavus reikiamą sutikimą.",
+      "previewDocument": "Stilių rinkinio peržiūra",
       "previewFailed": "Nepavyko sugeneruoti peržiūros.",
       "previewIntroduction": "Ši sutartis sudaroma tarp „Example Labs Ltd.“ (toliau – Bendrovė) ir parašų puslapyje nurodyto investuotojo (toliau – Investuotojas).",
       "previewLevel1": "Investicija",

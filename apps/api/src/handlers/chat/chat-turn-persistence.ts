@@ -11,6 +11,8 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+
 import { CHAT_TURNS_ORG_RUN_ID_UIDX } from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -19,9 +21,9 @@ import {
   attachTerminalTurnOutcome,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
-  getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
+  CHAT_TURN_STATUS_OF_OUTCOME,
   closeCutShortCalls,
   settleOpenToolCallsForOutcome,
 } from "@/api/handlers/chat/chat-turn-settlement";
@@ -82,7 +84,7 @@ export const OWNER_LOST_OUTCOME = {
   type: "interrupted",
 } as const satisfies ChatTurnOutcome;
 
-const AI_ERROR_RETRYABLE = {
+export const AI_ERROR_RETRYABLE = {
   empty_completion: true,
   // The member signs in or waits on their computer before a retry can help.
   local_runner_needs_login: false,
@@ -90,6 +92,8 @@ const AI_ERROR_RETRYABLE = {
   local_runner_unavailable: true,
   // The same conversation never fits; only a shorter one does.
   local_runner_turn_too_large: false,
+  // The same turn grows the same way; a new message starts a new run.
+  turn_too_large: false,
   // Sending again once the computer is connected can help.
   local_runner_not_reached: true,
   // The relinked computer takes the turn when it is sent again.
@@ -98,6 +102,12 @@ const AI_ERROR_RETRYABLE = {
   local_runner_restoring: true,
   // The turn runs when sent again once the linked folder is back.
   local_runner_folder_unavailable: true,
+  local_runner_no_computer: true,
+  local_runner_harness_unavailable: true,
+  local_runner_model_unavailable: true,
+  local_runner_reasoning_effort_unavailable: true,
+  local_runner_approvals_unavailable: true,
+  local_runner_folder_not_approved: true,
   loop_detected: false,
   deadline_exceeded: true,
   model_unavailable: false,
@@ -122,10 +132,18 @@ export const AI_ERROR_FAILURE_CODE = {
   local_runner_limit_reached: "provider-error",
   local_runner_unavailable: "provider-error",
   local_runner_turn_too_large: "provider-error",
+  // The turn's delivery log refused its output, not the model.
+  turn_too_large: "persistence",
   local_runner_not_reached: "provider-error",
   local_runner_relinked: "provider-error",
   local_runner_restoring: "provider-error",
   local_runner_folder_unavailable: "provider-error",
+  local_runner_no_computer: "provider-error",
+  local_runner_harness_unavailable: "provider-error",
+  local_runner_model_unavailable: "provider-error",
+  local_runner_reasoning_effort_unavailable: "provider-error",
+  local_runner_approvals_unavailable: "provider-error",
+  local_runner_folder_not_approved: "provider-error",
   loop_detected: "provider-error",
   deadline_exceeded: "provider-error",
   model_unavailable: "provider-error",
@@ -1140,7 +1158,7 @@ export const claimChatTurnForExecutionOnTx = async ({
     const awaitingTurn = awaiting.at(0);
     const ownsContinuation =
       awaitingTurn !== undefined &&
-      getAwaitingUserInteractions(
+      memberWaitsOf(
         chatMessageFromPersisted({
           content: awaitingTurn.content,
           id: incomingMessageId,
@@ -1571,7 +1589,11 @@ export const settleChatTurnOnTx = async ({
           settledAt: null,
           status: "awaiting-user" as const,
         };
+      // A paused turn owes nothing and runs nothing: its row settles
+      // completed (`CHAT_TURN_STATUS_OF_OUTCOME`), the stored message carries
+      // the pause, and the user's next message starts the next turn.
       case "completed":
+      case "paused":
         if (assistantMessageId === null) {
           return null;
         }
@@ -1584,7 +1606,7 @@ export const settleChatTurnOnTx = async ({
           interactionType: null,
           interruptionReason: null,
           settledAt,
-          status: "completed" as const,
+          status: CHAT_TURN_STATUS_OF_OUTCOME[outcome.type],
         };
       case "cancelled":
         return {

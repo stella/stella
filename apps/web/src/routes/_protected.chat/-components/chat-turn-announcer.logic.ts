@@ -1,10 +1,11 @@
 import { panic } from "better-result";
 
+import { isMemberAnsweredPart } from "@stll/api-contract/chat-member-wait";
+
 import {
   getAwaitedAssistantMessageId,
   getCurrentApprovalPendingMessageId,
   isApprovalRequestPart,
-  isUserAnswerablePart,
   type PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import type { TranslationKey } from "@/i18n/types";
@@ -88,6 +89,8 @@ const outcomeAnnouncement = (
             interaction: outcome.interaction satisfies never,
           });
       }
+    // A paused turn ended at its budget; its answer offers Continue.
+    case "paused":
     case "completed":
       return { subject: answerId, announcement: "done" };
     case "cancelled":
@@ -154,7 +157,7 @@ export const turnAnnouncement = ({
   const awaited = getAwaitedAssistantMessageId(messages);
   if (awaited !== null) {
     return {
-      subject: waitingCalls(messages, awaited, isUserAnswerablePart),
+      subject: waitingCalls(messages, awaited, isMemberAnsweredPart),
       announcement: "has-question",
     };
   }

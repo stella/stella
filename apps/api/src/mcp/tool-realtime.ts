@@ -47,7 +47,7 @@ export const WRITE_TOOL_REALTIME = {
   save_contact: NO_ROUTE_REALTIME,
   delete_contact: NO_ROUTE_REALTIME,
   save_task: [taskCreateRealtimeUpdates, taskRealtimeUpdates],
-  delete_task: NO_ROUTE_REALTIME,
+  delete_task: [taskRealtimeUpdates],
   link_matter_contact: [workspaceContactRealtimeUpdates],
   save_document: [entityRealtimeUpdates, entityVersionRealtimeUpdates],
   upload_document_version: NO_ROUTE_REALTIME,

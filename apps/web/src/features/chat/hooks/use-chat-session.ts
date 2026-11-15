@@ -48,6 +48,7 @@ import {
   consumePlaybookSaveToolCalls,
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
+  getChatWorkAwaitedAtOpen,
   getCurrentApprovalPendingMessageId,
   isChatClientRequestActive,
   isNonPersistentGrantChatToolName,
@@ -143,9 +144,11 @@ import {
   describeQueuedMessage,
   type QueuedChatEntry,
   reduceSendQueue,
+  sendNowRoute,
   type SendQueueEvent,
   type SendQueueState,
   snapshotChatRequestOptions,
+  steerFallback,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import {
   fetchChatMessage,
@@ -382,6 +385,13 @@ export const useChatSession = ({
     chat.subscribe,
     chat.getSnapshot,
     chat.getSnapshot,
+  );
+  // What the thread already waits on when this page opens it: it resumes only
+  // once the user acts. Read per page open, not per runtime, because the
+  // registry keeps a waiting thread's runtime across a reopen.
+  const workAwaitedAtOpen = useMemo(
+    () => getChatWorkAwaitedAtOpen(chat.getSnapshot().messages),
+    [chat],
   );
   const {
     error: runtimeError,
@@ -866,6 +876,15 @@ export const useChatSession = ({
     ],
   );
 
+  // A turn paused on its budget runs its next step only on the user's word:
+  // Continue sends that word as their next message, which opens a new budget.
+  const continuePausedTurn = useCallback(async () => {
+    await sendMessage({
+      content: t("chat.turnPaused.continue"),
+      id: toSafeId<"chatMessage">(createUuid()),
+    });
+  }, [sendMessage, t]);
+
   const removeQueuedMessage = useCallback(
     (id: string) => {
       applySendQueueEvent({ type: "queued-message-removed", id });
@@ -874,12 +893,48 @@ export const useChatSession = ({
   );
 
   // "Send now" on a queued message: it moves to the front of the queue.
-  // During a turn the turn is stopped, and the queue drain sends it once
-  // the stop settles; with the queue held after a failed turn it is sent
+  // During a turn on the member's computer the turn is handed the message
+  // and goes on with it; a turn that cannot take it is stopped, and the
+  // queue drain sends the message once the stop settles. A turn that ends
+  // before it says leaves the message first in the queue, sent next. Until
+  // the steer settles nothing queued is sent, so a message the turn took
+  // is never sent again. With the queue held after a failed turn it is sent
   // at once, like a manual send.
   const sendQueuedMessageNow = useCallback(
     (id: string) => {
       applySendQueueEvent({ type: "queued-message-promoted", id });
+      const entry = sendQueueRef.current.queue.find(
+        (queued) => queued.id === id,
+      );
+      const route =
+        entry === undefined ? null : sendNowRoute(sendQueueRef.current, entry);
+      if (route?.type === "steer") {
+        if (sendQueueRef.current.steeringIds.includes(id)) {
+          return;
+        }
+        applySendQueueEvent({ type: "steer-started", id });
+        const steer = async () => {
+          const outcome = await chat.steerLocalTurn({
+            inputId: id,
+            text: route.text,
+          });
+          const next = steerFallback(outcome);
+          const dispatched = applySendQueueEvent({
+            type: "steer-settled",
+            id,
+            next,
+          });
+          if (dispatched) {
+            await dispatchQueuedMessage(dispatched).catch(
+              ignoreQueuedDispatchError,
+            );
+          } else if (next === "stop") {
+            stop();
+          }
+        };
+        detached(steer(), "use-chat-session.steer-queued-message");
+        return;
+      }
       if (sendQueueRef.current.isGenerating) {
         stop();
         return;
@@ -894,7 +949,7 @@ export const useChatSession = ({
         );
       }
     },
-    [applySendQueueEvent, dispatchQueuedMessage, stop],
+    [applySendQueueEvent, chat, dispatchQueuedMessage, stop],
   );
 
   const resendLatestMessage = useCallback(
@@ -1847,6 +1902,8 @@ export const useChatSession = ({
 
   return {
     activitySession: chat,
+    approvalIdsAwaitedAtOpen: workAwaitedAtOpen.approvalIds,
+    workAwaitedAtOpen,
     clientStatus: status,
     reconnecting,
     refreshAnswers,
@@ -1858,6 +1915,7 @@ export const useChatSession = ({
     loadOlderError,
     resendLatestMessage,
     sendMessage,
+    continuePausedTurn,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,

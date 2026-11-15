@@ -304,6 +304,13 @@ export const chatThreads = p.pgTable(
     lastReadAt: timestamptz("last_read_at").defaultNow(),
     /** When the reader pinned the chat to the top of their list; null when it is not pinned. */
     pinnedAt: timestamptz("pinned_at"),
+    /**
+     * The largest `chat_turns.ordinal` the thread has given out; null until
+     * it gives out its first. Written only by the insert trigger on
+     * `chat_turns` and the `chat-turn-ordinals` repair, never by a handler
+     * (`no-chat-turn-ordinal-write`).
+     */
+    lastTurnOrdinal: p.integer("last_turn_ordinal"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -609,6 +616,17 @@ export const chatTurns = p.pgTable(
      * starts and kept once the turn settles. Unique in the organization.
      */
     runId: p.text("run_id"),
+    /**
+     * The turn's position in its thread by acceptance: unique in the thread,
+     * larger for a later turn, never given out twice. The database assigns it
+     * as the row is inserted (`assign_chat_turn_ordinal`), under the thread's
+     * lock. Application code never supplies one
+     * (`no-chat-turn-ordinal-write`); a row copied with its number, as a
+     * restore does, keeps it. Null only on a turn stored before the column,
+     * until the `chat-turn-ordinals` repair numbers it. Read turn order
+     * through `lib/chat/turn-order.ts`.
+     */
+    ordinal: p.integer("ordinal"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -761,6 +779,11 @@ export const chatTurns = p.pgTable(
       sql`${table.settledAt} IS NULL OR ${table.settledAt} >= ${table.createdAt}`,
     ),
     p.index("chat_turns_thread_id_idx").on(table.threadId),
+    // A thread's turns by position, newest first on a backward scan with
+    // unnumbered turns last. Built online (indexes-chat-turns-thread-ordinal-uidx).
+    p
+      .uniqueIndex("chat_turns_thread_ordinal_uidx")
+      .on(table.threadId, table.ordinal.asc().nullsFirst()),
     p
       .uniqueIndex("chat_turns_active_thread_uidx")
       .on(table.threadId)

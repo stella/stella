@@ -2,12 +2,16 @@ import { panic, Result } from "better-result";
 import { timingSafeEqual } from "node:crypto";
 import * as v from "valibot";
 
-import { isChatLocalRunBrowserAction } from "@stll/api-contract/chat-local-run-tool";
+import {
+  CHAT_LOCAL_RUN_BROWSER_ACTIONS,
+  isChatLocalRunBrowserAction,
+} from "@stll/api-contract/chat-local-run-tool";
 import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import { LOCAL_BROWSER_MCP_SERVER_NAME } from "../../harness/tool-parts";
 import type { StellaSandboxMcpBinding } from "../../sandbox";
 import type { BrowserBridge } from "./bridge";
+import { createDownloadInbox } from "./download-inbox";
 import {
   type ApproveAction,
   createLocalBrowserSession,
@@ -72,6 +76,8 @@ type BrowserMcpRun = {
   approve: ApproveAction;
   /** Cut when the run is stopped: its browser steps end at once. */
   stopped: AbortSignal;
+  /** The run's folder: a PDF its chat's tab downloads is saved there. */
+  workspaceDir: string;
 };
 
 /** A run calling through an endpoint. */
@@ -248,6 +254,11 @@ const createEndpoints = () => {
       [...endpoints.values()].some(
         (other) => other.serving?.run.threadId === threadId,
       ),
+    /** A run of `threadId` calling through an endpoint now, if any. */
+    runOf: (threadId: string): BrowserMcpRun | null =>
+      [...endpoints.values()]
+        .map((other) => other.serving?.run ?? null)
+        .find((run) => run?.threadId === threadId) ?? null,
     clear: () => {
       for (const { serving } of endpoints.values()) {
         serving?.ended.abort();
@@ -276,14 +287,19 @@ const sessionFor = (
 
 export const startLocalBrowserMcp = ({
   bridge,
+  home,
   version,
 }: {
   bridge: BrowserBridge;
+  /** The member's home folder: Chrome's downloads are taken only from under it. */
+  home: string;
   /** The sidecar's version, reported as the server's. */
   version: string;
 }): LocalBrowserMcp => {
   const endpoints = createEndpoints();
   const sessions = new Map<string, LocalBrowserSession>();
+  const downloads = createDownloadInbox({ home, runOf: endpoints.runOf });
+  bridge.onDownload(downloads.arrive);
   const listener = { host: "" };
 
   const answer = async (
@@ -335,16 +351,20 @@ export const startLocalBrowserMcp = ({
           return rpcError(
             id,
             JSON_RPC_ERROR.invalidParams,
-            "Unknown tool: call open, snapshot, click or type.",
+            `Unknown tool: call one of ${CHAT_LOCAL_RUN_BROWSER_ACTIONS.join(", ")}.`,
           );
         }
         const { arguments: input, name } = params.output;
+        // Downloads announced from here on are this step's own.
+        const since = downloads.mark();
         const result = await whileCalling(
           { id, requestSignal, serving },
           async (signal) =>
             await sessionFor(sessions, held.threadId).call(name, input, {
               approvals: held.approvals,
               approve: held.approve,
+              downloads: async (shownAddress) =>
+                await downloads.take(held, { shownAddress, signal, since }),
               signal,
               send: async (command, observedTab) =>
                 await bridge.request(
@@ -441,6 +461,7 @@ export const startLocalBrowserMcp = ({
       return null;
     }
     bridge.cancel({ controllerId: ended.held.threadId, turnId: runId });
+    downloads.forgetRun(runId);
     if (!endpoints.servesThread(ended.held.threadId)) {
       sessions.delete(ended.held.threadId);
     }
@@ -478,6 +499,7 @@ export const startLocalBrowserMcp = ({
     stop: async () => {
       endpoints.clear();
       sessions.clear();
+      downloads.clear();
       await server.stop(true);
     },
   };

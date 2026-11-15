@@ -241,6 +241,12 @@
       "showSources": "Pokaż źródła",
       "title": "Fakty referencyjne"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# twierdzenie opiera się na tym fakcie} few {# twierdzenia opierają się na tym fakcie} many {# twierdzeń opiera się na tym fakcie} other {# twierdzenia opiera się na tym fakcie}}",
+      "empty": "Ta lista nie ma jeszcze żadnych faktów.",
+      "moreClaims": "{count, plural, one {# kolejne twierdzenie} few {# kolejne twierdzenia} many {# kolejnych twierdzeń} other {# kolejnego twierdzenia}}",
+      "undated": "Bez daty"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Fakty referencyjne są sprzeczne",
@@ -288,6 +294,8 @@
       "reopened": "Otwarto ponownie, oczekuje na sprawdzenie",
       "reopenedTooltip": "Osoba weryfikująca przeklasyfikowała to twierdzenie jako możliwy do sprawdzenia fakt; porównanie z rzeczywistym rejestrem nadal oczekuje na wykonanie.",
       "sourceCount": "{count, plural, one {# źródło} few {# źródła} many {# źródeł} other {# źródła}}",
+      "verdictBy": "Rozstrzygnięcie: {model}",
+      "verdictByGenerativeModel": "Rozstrzygnięcie modelu generatywnego; model decyzyjny go nie ustalił",
       "whyVerdict": "Uzasadnienie rozstrzygnięcia: fakty referencyjne"
     },
     "claimTypes": {
@@ -405,6 +413,42 @@
       "showNextSteps": "Pokaż kolejne kroki",
       "unlink": "Usuń powiązanie: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# twierdzenie} few {# twierdzenia} many {# twierdzeń} other {# twierdzenia}}",
+      "claimTitle": "Twierdzenie",
+      "columns": {
+        "claims": "Twierdzenia",
+        "sources": "Dokumenty źródłowe",
+        "statements": "Oświadczenia"
+      },
+      "empty": "Ta lista nie ma jeszcze żadnych faktów ani zweryfikowanych dokumentów.",
+      "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktów} other {# faktu}}",
+      "factOverflow": "Wyświetlane jest pierwszych {count} faktów z tej listy.",
+      "filters": {
+        "allSources": "Wszystkie źródła",
+        "allVerdicts": "Wszystkie rozstrzygnięcia",
+        "conflicts": "Sprzeczności",
+        "heldFacts": "Wstrzymane fakty",
+        "source": "Filtruj według źródła",
+        "verdict": "Filtruj według rozstrzygnięcia"
+      },
+      "held": "Wstrzymany",
+      "linkedFacts": "{count, plural, one {# powiązany fakt} few {# powiązane fakty} many {# powiązanych faktów} other {# powiązanego faktu}}",
+      "listLabel": "Graf w formie listy",
+      "loadMore": "Załaduj więcej dokumentów",
+      "noMatch": "Nic nie pasuje do tych filtrów.",
+      "noStatements": "Żaden dokument nie został jeszcze zweryfikowany względem tej listy.",
+      "offList": "Nie ma go już na liście",
+      "relation": {
+        "conflicts": "Przeczy",
+        "governs": "Nadrzędny",
+        "record": "W rejestrze",
+        "recordConflict": "Sprzeczny wpis",
+        "supports": "Potwierdza"
+      },
+      "unlinked": "Fakty, na których nie opiera się żadne twierdzenie",
+      "verifyInReview": "Zweryfikuj dokument"
+    },
     "guidance": {
       "escalate": "Przekaż dalej",
       "manualJudgement": "Wymaga decyzji",
@@ -458,6 +502,12 @@
     "matches": {
       "count": "{count, plural, one {# trafienie} few {# trafienia} many {# trafień} other {# trafienia}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologia",
+      "graph": "Graf",
+      "label": "Pokaż listę jako",
+      "review": "Weryfikacja"
     },
     "qualifiers": {
       "heading": "Zastrzeżenia",
@@ -547,7 +597,8 @@
       "startFailed": "Nie udało się rozpocząć weryfikacji",
       "status": {
         "running": "Weryfikowanie"
-      }
+      },
+      "unreadParts": "{count, plural, one {Nie udało się odczytać # części dokumentu, więc jej twierdzenia nie zostały zweryfikowane.} few {Nie udało się odczytać # części dokumentu, więc ich twierdzenia nie zostały zweryfikowane.} many {Nie udało się odczytać # części dokumentu, więc ich twierdzenia nie zostały zweryfikowane.} other {Nie udało się odczytać # części dokumentu, więc ich twierdzenia nie zostały zweryfikowane.}}"
     },
     "save": {
       "failed": "Nie zapisano",
@@ -1625,6 +1676,8 @@
         "actions": {
           "click": "Kliknij",
           "fill": "Wprowadź tekst",
+          "find": "Szukaj na stronie",
+          "findHeadings": "Pokaż nagłówki strony",
           "open": "Otwórz witrynę",
           "openNewTab": "Otwórz witrynę w nowej karcie",
           "pressKey": "Naciśnij klawisz",
@@ -1873,6 +1926,8 @@
       "folderStateProtected": "Zawiera własne dane stelli",
       "folderStateUnlinked": "Już niepołączony",
       "folderStateUnreadable": "Nie można odczytać",
+      "limitReminderNotify": "Powiadom mnie po odnowieniu",
+      "limitReminderScheduled": "Powiadomimy Cię po {time}.",
       "permissionAboveLimit": "Twoja organizacja na to nie pozwala",
       "permissionAskDescription": "Sam edytuje pliki w folderze czatu; o wszystko inne pyta.",
       "permissionAutoDescription": "Sam robi to, co uznaje za bezpieczne; o resztę pyta.",
@@ -1912,6 +1967,24 @@
       "dismiss": "Odrzuć i zatrzymaj",
       "secretAnswer": "Odpowiedź ukryta",
       "secretPlaceholder": "Twoja odpowiedź pozostanie ukryta"
+    },
+    "makeSkill": {
+      "command": "Utwórz umiejętność z tej rozmowy",
+      "drafted": "Szkic umiejętności jest gotowy. Przejrzyj go, a potem go włącz.",
+      "drafting": "Przygotowuję szkic umiejętności z tej rozmowy…",
+      "emptyThread": "Najpierw wyślij wiadomość, potem będzie można utworzyć umiejętność z rozmowy.",
+      "failed": "Nie udało się utworzyć umiejętności z tej rozmowy",
+      "review": {
+        "description": "Szkic umiejętności zawiera te nazwiska i nazwy. Może je zobaczyć każdy, kto ma dostęp do tej umiejętności.",
+        "replaceHint": "Odznacz pozycję, aby zastąpić ją ogólnym symbolem zastępczym.",
+        "role": {
+          "organization": "nazwa organizacji",
+          "person": "imię i nazwisko"
+        },
+        "saveAll": "Zachowaj wszystkie i zapisz",
+        "saveReplacing": "Zastąp odznaczone i zapisz",
+        "title": "Zapisać te nazwiska i nazwy w umiejętności?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# czat czeka na Ciebie} few {# czaty czekają na Ciebie} many {# czatów czeka na Ciebie} other {# czatu czeka na Ciebie}}",
@@ -2108,6 +2181,7 @@
     "sendErrorStreamIncomplete": "Odpowiedź AI urwała się przed zakończeniem. Spróbuj ponownie.",
     "sendErrorTimedOut": "Czat nie odpowiedział na czas. Spróbuj ponownie.",
     "sendErrorToolsUnsupported": "Ten model nie może używać narzędzi, więc nie może odpowiadać na pytania dotyczące Twojej sprawy. Przełącz się na model, który obsługuje narzędzia.",
+    "sendErrorTurnTooLarge": "Ta odpowiedź stała się zbyt duża, aby dostarczyć ją w całości. Wyślij nową wiadomość, aby kontynuować.",
     "sendPrompt": "Wyślij wiadomość",
     "sendQueuedMessageNow": "Wyślij teraz",
     "sendWithoutAnonymization": "Wyślij bez anonimizacji",
@@ -2260,9 +2334,14 @@
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
       "use-browser": "Korzystanie z Twojej przeglądarki",
       "use_connector_secret": "Używanie danych dostępowych łącznika",
+      "user_message": "Wysłano podczas pracy agenta",
       "web_search": "Wyszukiwanie w sieci"
     },
     "toolCall": {
+      "browserClick": "Kliknij „{target}” na stronie {url}",
+      "browserPressKey": "Naciśnij klawisz {key} w „{target}” na stronie {url}",
+      "browserSelect": "Wybierz „{option}” w „{target}” na stronie {url}",
+      "browserType": "Wprowadź tekst w „{target}” na stronie {url}",
       "characterCount": "{count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaku}}",
       "commandExited": "{command} (kod wyjścia {code})",
       "consoleLogs": "Dane wyjściowe konsoli",
@@ -2272,17 +2351,17 @@
       "input": "Dane wejściowe",
       "interrupted": "Przerwano przed ukończeniem",
       "localOutput": {
+        "arriving": "Wciąż napływa z komputera, na którym uruchomiono ten krok",
         "conversation": "Rozmowa subagenta",
         "conversationPrompt": "Zadanie",
         "conversationReport": "Raport",
         "cut": "Wyświetlono pierwsze {kept} z {total}",
         "diff": "Zmiany w plikach",
-        "elsewhere": "Otwórz na komputerze, na którym to uruchomiono",
         "empty": "Brak wyniku",
-        "failed": "Aplikacja desktopowa stella na tym komputerze nie mogła tego wyświetlić.",
-        "imageTooLarge": "Ten obraz ma {total}. Obrazy większe niż {kept} nie są zachowywane na tym komputerze, dlatego nie można go tutaj wyświetlić.",
-        "notKept": "Z tego kroku nic nie zostało zachowane na tym komputerze",
-        "reading": "Odczytywanie z tego komputera"
+        "imageTooLargeToStore": "Ten obraz ma {total}. Obrazy większe niż {kept} nie są zapisywane, dlatego nie można go wyświetlić.",
+        "notCopied": "Jeszcze nie skopiowano do tego czatu",
+        "notStored": "Z tego kroku nic nie zostało zapisane",
+        "runBudgetReached": "Nie zapisano: to uruchomienie zapisało już tyle, ile może zapisać jedno uruchomienie"
       },
       "output": "Wynik",
       "patternInPath": "{pattern} w {path}",
@@ -2305,6 +2384,10 @@
       "needsInputTitle": "stella potrzebuje Twojej reakcji",
       "replyReadyBody": "stella skończyła odpowiadać na czacie.",
       "replyReadyTitle": "Odpowiedź gotowa"
+    },
+    "turnPaused": {
+      "continue": "Kontynuuj",
+      "status": "Wstrzymano po {count, plural, one {# wywołaniu narzędzia} few {# wywołaniach narzędzi} many {# wywołaniach narzędzi} other {# wywołania narzędzia}}"
     },
     "turnStatus": {
       "answerFailed": "Nie udało się dokończyć odpowiedzi",
@@ -2958,7 +3041,6 @@
       "dropZone": "Upuść tutaj pełnomocnictwo (.docx) lub kliknij, aby wybrać plik",
       "extracting": "Wyodrębnianie mocodawcy(-ów)…",
       "fileHint": "stella odczytuje dokument i automatycznie odnajduje mocodawcę (osobę udzielającą pełnomocnictwa, nie prawnika). Przed potwierdzeniem sprawdź wynik.",
-      "fileTooLarge": "Plik pełnomocnictwa nie może przekraczać 50 MB.",
       "invalidFileType": "Wybierz plik .docx.",
       "noOutorganteFound": "Nie udało się zidentyfikować żadnego mocodawcy w tym dokumencie.",
       "parseErrorGeneric": "Nie udało się wyodrębnić kontaktów z tego dokumentu.",
@@ -3338,6 +3420,7 @@
       "invitationRoleNotAllowed": "Nie możesz zaprosić nikogo z tą rolą. Wybierz inną rolę.",
       "invoiceNumberSeriesMissing": "Skonfiguruj domyślną serię numeracji faktur w ustawieniach organizacji w sekcji Serie numeracji, a następnie wystaw fakturę.",
       "invoiceSellerProfileMissing": "Dodaj profil sprzedawcy w ustawieniach organizacji w sekcji Profile rozliczeniowe, a następnie wystaw fakturę.",
+      "legalHoldActive": "Usunięcie jest zablokowane, ponieważ te dane muszą zostać zachowane.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
       "matterContactCapacityExceeded": "Ta sprawa zawiera więcej kontaktów, niż można wyświetlić. Usuń widoczne powiązania z kontaktami, aby wyświetlić pozostałe kontakty.",
@@ -3360,6 +3443,11 @@
       "sharepointNotFound": "Ta witryna, biblioteka lub ten plik już nie istnieje albo nie jest Ci udostępniony.",
       "sharepointReconnectRequired": "Twoje logowanie do Microsoft wygasło. Połącz ponownie SharePoint i OneDrive.",
       "sharepointThrottled": "Microsoft ogranicza liczbę żądań. Spróbuj ponownie za chwilę.",
+      "skillFromChatAnonymizedThread": "Z zanonimizowanej rozmowy nie można jeszcze utworzyć umiejętności.",
+      "skillFromChatEmptyThread": "Ta rozmowa nie zawiera jeszcze niczego, z czego można utworzyć umiejętność.",
+      "skillFromChatLocalRunThread": "Ta rozmowa działa na Twoim komputerze, więc umiejętność nie jest z niej tworzona w chmurze.",
+      "skillFromChatThreadNotFound": "Nie znaleziono tej rozmowy.",
+      "skillFromChatWithdrawn": "Treść tej rozmowy została wycofana, więc nie można utworzyć z niej umiejętności.",
       "skillSourceUnreachable": "Nie udało się wczytać źródła umiejętności. Sprawdź, czy link prowadzi do publicznego repozytorium GitHub, lub spróbuj ponownie później.",
       "thirdPartyBoundaryRefusal": "Żądanie próbowało użyć treści spoza dozwolonego kontekstu obszaru roboczego.",
       "usageLimitExceeded": "Osiągnięto limit użycia.",
@@ -5059,6 +5147,7 @@
       "flowRunAwaitingApproval": "Przepływ pracy <bdi>{flowName}</bdi> czeka na Twoje zatwierdzenie",
       "flowRunCompleted": "Przepływ pracy <bdi>{flowName}</bdi> został zakończony",
       "flowRunFailed": "Przepływ pracy <bdi>{flowName}</bdi> nie powiódł się",
+      "localRunLimitReset": "Agent programistyczny na Twoim komputerze może kontynuować Twój czat",
       "mention": "<bdi>{actorName}</bdi> wspomniał o Tobie w komentarzu",
       "reportExportFailed": "Eksport raportu nie powiódł się",
       "reportExportSucceeded": "Twój raport jest gotowy",
@@ -5812,6 +5901,8 @@
       "auditLogsSentenceDownload": "Pobrano: {resource}.",
       "auditLogsSentenceExecute": "Uruchomiono: {resource}.",
       "auditLogsSentenceIssued": "Wydano: {resource}.",
+      "auditLogsSentenceLegalHoldPlaced": "Nałożono: {resource}.",
+      "auditLogsSentenceLegalHoldReleased": "Zwolniono: {resource}.",
       "auditLogsSentenceRedeemed": "Zrealizowano: {resource}.",
       "auditLogsSentenceRefused": "Odrzucono: {resource}.",
       "auditLogsSentenceReview": "Sprawdzono: {resource}.",
@@ -5863,6 +5954,7 @@
         "flow_run": "uruchomienie przepływu pracy",
         "folio_collab_room": "pokój współpracy Folio",
         "invoice": "faktura",
+        "legal_hold": "obowiązek zachowania danych",
         "legal_list": "lista prawna",
         "legal_list_generation": "generowanie listy prawnej",
         "legal_list_item": "pozycja listy prawnej",
@@ -6022,7 +6114,13 @@
       "usageStatusTrialing": "Okres próbny",
       "usageUnitCount": "{count, plural, one {# jednostka} few {# jednostki} many {# jednostek} other {# jednostki}}",
       "usageUnitsBalanceTemplate": "Dostępne jednostki: {remaining}",
-      "usageUnitsThisPeriod": "Jednostki użycia w tym okresie"
+      "usageUnitsThisPeriod": "Jednostki użycia w tym okresie",
+      "verificationDecisionModel": {
+        "description": "Podczas weryfikacji dokumentu na podstawie faktów z listy model decyzyjny wybiera rozstrzygnięcie dla każdego twierdzenia. Model generatywny nadal wyszukuje i cytuje fakty. Jeśli model decyzyjny nie jest wystarczająco pewny, obowiązuje rozstrzygnięcie modelu generatywnego.",
+        "title": "Rozstrzygnięcia przy weryfikacji dokumentów",
+        "unavailable": "Ta organizacja nie ma dostępnego modelu decyzyjnego.",
+        "updated": "Zaktualizowano ustawienie weryfikacji"
+      }
     }
   },
   "sharepoint": {
@@ -6263,6 +6361,7 @@
       "previewBody5": "Przed konwersją sprzedaż lub wprowadzenie do obrotu uprawnia Inwestora do wyższej z kwot: ceny zakupu albo wpływów należnych na zasadzie po konwersji.",
       "previewBody6": "Spółka została prawidłowo utworzona, jest uprawniona do zawarcia niniejszej umowy i uzyska wszystkie zgody wymagane do jej wykonania.",
       "previewBody7": "Niniejsza umowa zawiera pełne porozumienie stron i może zostać zmieniona wyłącznie na piśmie za wymaganą zgodą.",
+      "previewDocument": "Podgląd zestawu stylów",
       "previewFailed": "Nie udało się wygenerować podglądu.",
       "previewIntroduction": "Niniejsza umowa zostaje zawarta pomiędzy Example Labs Ltd. („Spółka”) a inwestorem wskazanym na stronie podpisów („Inwestor”).",
       "previewLevel1": "Inwestycja",

@@ -74,6 +74,10 @@ export const avtKeys = {
     [...avtKeys.all(workspaceId), "review-history", runId] as const,
   reviewHistory: ({ workspaceId, runId, ...filter }: ReviewHistoryKey) =>
     [...avtKeys.reviewHistoryOfRun(workspaceId, runId), filter] as const,
+  graphAll: (workspaceId: string) =>
+    [...avtKeys.all(workspaceId), "graph"] as const,
+  graph: (workspaceId: string, listId: string) =>
+    [...avtKeys.graphAll(workspaceId), listId] as const,
   history: (workspaceId: string, entityId: string, fileFieldId: string) =>
     [
       ...avtKeys.historyAll(workspaceId),
@@ -311,3 +315,46 @@ export const verificationHistoryOptions = ({
       return false;
     },
   });
+
+/**
+ * A list's verification graph, a page of documents at a time. Every page
+ * carries the list's facts; a document with more claims than a page holds
+ * continues on the next one. Read again whenever it is opened, since the
+ * review it draws moves on.
+ */
+export const verificationGraphOptions = ({
+  workspaceId,
+  listId,
+}: {
+  workspaceId: string;
+  listId: string;
+}) =>
+  // The graph reads the list's facts and their sources live and each claim
+  // as its reviewers see it, so a change to either marks it stale.
+  resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: avtKeys.graph(workspaceId, listId),
+      queryFn: async ({ pageParam, signal }) => {
+        const response = await api
+          .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .verifications.graph.get({
+            query: {
+              listId: toSafeId<"legalList">(listId),
+              ...(pageParam !== null && { cursor: pageParam }),
+            },
+            fetch: { signal },
+          });
+        return unwrapApiResponse(response);
+      },
+      initialPageParam: nullableStringCursorSeed(),
+      getNextPageParam: (page) => page.nextCursor,
+      staleTime: 0,
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.LEGAL_LIST,
+        RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+      ],
+      scope: { type: "workspace", workspaceId },
+    },
+  );

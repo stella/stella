@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { CHAT_RUN_TARGET_KIND } from "@stll/api-contract/chat-run-target";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
@@ -29,6 +30,7 @@ describe("send lifecycle checkpoint indexing", () => {
     for (const turn of ["turn-a", "turn-b"]) {
       const db = createScopedDbMock({});
       const lifecycle = new ChatSendLifecycle({
+        organizationId: toSafeId<"organization">("organization_lifecycle"),
         mode: "raw",
         indexThread: async () => undefined,
         startAdmission: async (options) => {
@@ -87,7 +89,7 @@ describe("send lifecycle checkpoint indexing", () => {
         const outcome = await lifecycle.reserveExecutionPeriod(runId);
         expect(Result.isOk(outcome)).toBe(true);
       }
-      const run = lifecycle.startRun(undefined);
+      const run = lifecycle.startRun(undefined, CHAT_RUN_TARGET_KIND.cloud);
       expect(lifecycle.isClientConnectionAborted(viewer.signal)).toBe(false);
       const response = run.produce(
         (async function* () {
@@ -169,6 +171,7 @@ describe("send lifecycle checkpoint indexing", () => {
       const indexedThreads: string[] = [];
       const threadId = toSafeId<"chatThread">("thread_lifecycle");
       const lifecycle = new ChatSendLifecycle({
+        organizationId: toSafeId<"organization">("organization_lifecycle"),
         mode: "raw",
         indexThread: async (indexedThreadId) => {
           indexedThreads.push(indexedThreadId);
@@ -228,7 +231,9 @@ describe("send lifecycle checkpoint indexing", () => {
         Result.isOk(await lifecycle.reserveExecutionPeriod("run_lifecycle")),
       ).toBe(true);
       const run =
-        phase === "handed-over" ? lifecycle.startRun(undefined) : undefined;
+        phase === "handed-over"
+          ? lifecycle.startRun(undefined, CHAT_RUN_TARGET_KIND.cloud)
+          : undefined;
       admission.abort(
         new ActionAdmissionError({
           message: "Admission lease lost",

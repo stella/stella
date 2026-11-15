@@ -412,6 +412,78 @@
       }
     },
     {
+      "name": "local_runner_no_computer",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_no_computer"
+      },
+      "expected": {
+        "kind": "local_runner_no_computer",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_harness_unavailable",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_harness_unavailable"
+      },
+      "expected": {
+        "kind": "local_runner_harness_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_model_unavailable",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_model_unavailable"
+      },
+      "expected": {
+        "kind": "local_runner_model_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_reasoning_effort_unavailable",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_reasoning_effort_unavailable"
+      },
+      "expected": {
+        "kind": "local_runner_reasoning_effort_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_approvals_unavailable",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_approvals_unavailable"
+      },
+      "expected": {
+        "kind": "local_runner_approvals_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_folder_not_approved",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_folder_not_approved"
+      },
+      "expected": {
+        "kind": "local_runner_folder_not_approved",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
       "name": "local_runner_turn_too_large",
       "origin": "local-runner",
       "evidence": {
@@ -419,6 +491,18 @@
       },
       "expected": {
         "kind": "local_runner_turn_too_large",
+        "status": null,
+        "grade": "client"
+      }
+    },
+    {
+      "name": "turn_too_large",
+      "origin": "run-log",
+      "evidence": {
+        "reason": "chunk-too-large"
+      },
+      "expected": {
+        "kind": "turn_too_large",
         "status": null,
         "grade": "client"
       }

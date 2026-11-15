@@ -88,9 +88,16 @@ describe("background queue workers", () => {
         ].map(([, specifier]) => `${specifier ?? ""}.ts`),
       ),
     );
+    // A document run queue's Worker is built by its owner for the module
+    // that calls `createDocumentRunQueue`, so that module is the one hosted.
     const unhosted = sourceFiles(SRC_DIR)
-      .filter((file) => /new BullMqWorker\b/u.test(readFileSync(file, "utf-8")))
+      .filter((file) =>
+        /new BullMqWorker\b|\bcreateDocumentRunQueue\(/u.test(
+          readFileSync(file, "utf-8"),
+        ),
+      )
       .map((file) => repoRelativePath(SRC_DIR, file))
+      .filter((file) => file !== "lib/queue/document-run-queue.ts")
       .filter((file) => !hosted.has(file));
 
     expect(unhosted).toEqual([]);

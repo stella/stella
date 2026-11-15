@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -13,6 +13,10 @@ import {
   PLAIN_TOOL_NAME,
 } from "@/api/tests/helpers/chat-approval-harness";
 import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
+import {
+  chatWritingRoutinesOf,
+  migrationWritesChatRows,
+} from "@/api/tests/helpers/chat-data-migration-scan";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -78,21 +82,28 @@ const CHAT_DATA_MIGRATIONS: readonly string[] = [
   "20260907170000_folio_block_ids_in_range",
 ];
 
-/** Migrations newer than `since` that write rows of a chat table and are
- *  missing from `CHAT_DATA_MIGRATIONS`. */
-export const findUnlistedChatDataMigrations = (since: string): string[] =>
-  readdirSync(MIGRATIONS_DIR)
+const migrationSourceOf = (migration: string): string =>
+  readFileSync(path.join(MIGRATIONS_DIR, migration, "migration.sql"), "utf-8");
+
+/**
+ * Migrations newer than `since` that, as they run, write rows of a chat
+ * table and are missing from `CHAT_DATA_MIGRATIONS`. What counts as written
+ * is `migrationWritesChatRows`: a routine a migration only defines does not,
+ * a `DO` block, a call of a chat-writing routine and a write that fires a
+ * trigger running one do.
+ */
+export const findUnlistedChatDataMigrations = (since: string): string[] => {
+  const migrations = readdirSync(MIGRATIONS_DIR).filter((name) =>
+    existsSync(path.join(MIGRATIONS_DIR, name, "migration.sql")),
+  );
+  const scan = { tables: SAVED_STATE_TABLES };
+  const known = chatWritingRoutinesOf(migrations.map(migrationSourceOf), scan);
+  return migrations
     .filter((name) => name > since && !CHAT_DATA_MIGRATIONS.includes(name))
     .filter((name) =>
-      statementsOf(name).some((statement) =>
-        SAVED_STATE_TABLES.some((table) =>
-          new RegExp(
-            String.raw`\b(UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+(ONLY\s+)?("?public"?\.)?"?${table}"?(\s|\(|$)`,
-            "imu",
-          ).test(statement),
-        ),
-      ),
+      migrationWritesChatRows(migrationSourceOf(name), { ...scan, known }),
     );
+};
 
 /** A migration's statements with comment lines removed, without the
  *  session settings (`SET ...`) that only bound the deploy. */

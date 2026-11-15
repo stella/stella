@@ -113,6 +113,22 @@ export const resourceQueryOptions = <
 });
 
 export const RESOURCE_MUTATION_CONTRACTS = {
+  // The member's own reminder for when a chat's usage limit resets.
+  changeChatLimitReminder: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/chat/threads/:threadId/limit-reminder",
+      },
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/chat/threads/:threadId/limit-reminder",
+      },
+    ],
+    resources: [RESOURCE_TYPE.CHAT_THREAD],
+  },
   createInvoice: {
     writes: [
       {
@@ -208,6 +224,26 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       RESOURCE_TYPE.AGENT_SKILL_REVISION,
       RESOURCE_TYPE.MCP_CONNECTOR,
     ],
+  },
+  // An administrator turns the decision model on or off for verification
+  // verdicts; the organization's AI configuration read shows the switch.
+  updateVerificationDecisionModel: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/verification-decision-model",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  // A skill drafted from a chat is stored as a new private, disabled skill;
+  // the skills lists refresh. Drafting it is a read and stores nothing.
+  saveSkillDraft: {
+    writes: [
+      { type: "handler-route", method: "POST", route: "/skills/save-draft" },
+    ],
+    resources: [RESOURCE_TYPE.AGENT_SKILL],
   },
   updateNativeTool: {
     writes: [

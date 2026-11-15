@@ -5,7 +5,7 @@ import {
 } from "@stll/api-contract/browser-control";
 
 import { hasAllSiteAccess } from "./access";
-import { readControlOwner } from "./control-owner";
+import { readControlOwner } from "./control-holder";
 import {
   readStellaTabs,
   rememberStellaTab,

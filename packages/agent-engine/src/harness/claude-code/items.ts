@@ -90,10 +90,13 @@ export const claudeMessageHandling = (
 /** What stella does with each pinned `system` subtype. */
 export const claudeSystemHandling = (
   subtype: ClaudeSystemSubtype,
-): "retrying" | "ignore" => {
+): "retrying" | "rerouted" | "ignore" => {
   switch (subtype) {
     case "api_retry":
       return "retrying";
+    case "model_refusal_fallback":
+      // The turn now runs on the fallback model, which it reports.
+      return "rerouted";
     // Each subtype below is dropped on purpose.
     case "init":
       // The session id is chosen before the CLI starts, so `session.started`
@@ -102,7 +105,6 @@ export const claudeSystemHandling = (
     case "permission_denied":
       // An automatic denial; the tool's failed result reports it.
       return "ignore";
-    case "model_refusal_fallback":
     case "model_refusal_no_fallback":
       // The answer text and the turn's result carry the outcome.
       return "ignore";
@@ -234,8 +236,8 @@ const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(["Agent", "Task"]);
 
 /**
  * What a subagent was told when `use` started it, or `null` when the call
- * starts none or carries no prompt. It stays on this computer, with the
- * rest of the subagent's conversation.
+ * starts none or carries no prompt. It is part of the step's content, with
+ * the rest of the subagent's conversation.
  */
 export const subagentPromptOf = ({
   name,
@@ -290,7 +292,7 @@ const nativeDetail = (
 ): ChatLocalRunToolDetail | undefined => {
   if (SUBAGENT_TOOLS.has(name)) {
     // The few words the agent gave the task and the kind of agent it
-    // chose; the prompt stays here.
+    // chose; the prompt is part of the step's content.
     const agentType = optionalStringField(input, "subagent_type");
     return {
       kind: "subagent",
@@ -507,7 +509,7 @@ export const toolResultFor = (
   switch (kind) {
     case "command":
       // The status only: Claude reports no exit code, and the command's
-      // output stays here.
+      // output is the step's content.
       return {
         content: chatLocalRunToolResultContent({
           name: HARNESS_TOOL_NAMES.commandExecution,

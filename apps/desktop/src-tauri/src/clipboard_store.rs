@@ -795,8 +795,9 @@ impl ClipboardStore {
 mod tests {
   use super::*;
   use crate::clipboard::{
-    ClipboardCaptureStatus, ClipboardItem, ClipboardItemRetentionClass,
-    ClipboardRetention, ClipboardSourceApp, ClipboardSourceAppExclusion,
+    ClipboardCaptureStatus, ClipboardItem, ClipboardItemOrigin,
+    ClipboardItemRetentionClass, ClipboardRetention, ClipboardSourceApp,
+    ClipboardSourceAppExclusion,
   };
   use chrono::{DateTime, Utc};
 
@@ -817,6 +818,7 @@ mod tests {
         grouped_at: None,
         id: "item-1".to_string(),
         name: Some("Privileged draft".to_string()),
+        origin: ClipboardItemOrigin::Copied,
         plain_text: "privileged draft text".to_string(),
         retention_class: ClipboardItemRetentionClass::Kept,
         source_app: None,
@@ -851,6 +853,7 @@ mod tests {
             grouped_at: None,
             id: format!("00000000-0000-0000-0000-{index:012}"),
             name: None,
+            origin: ClipboardItemOrigin::Copied,
             plain_text: format!("{index:04}{}", "x".repeat(1020)),
             retention_class: ClipboardItemRetentionClass::History,
             source_app: Some(ClipboardSourceApp {
@@ -951,6 +954,7 @@ mod tests {
         grouped_at: None,
         id: "record".to_string(),
         name: None,
+        origin: ClipboardItemOrigin::Copied,
         plain_text: "capture".to_string(),
         retention_class: ClipboardItemRetentionClass::History,
         source_app: None,
@@ -1024,6 +1028,7 @@ mod tests {
           group_id: None,
           grouped_at: None,
           name: None,
+          origin: ClipboardItemOrigin::Copied,
           plain_text: index.to_string(),
           retention_class: ClipboardItemRetentionClass::History,
           source_app: None,
@@ -1247,6 +1252,40 @@ mod tests {
     assert_eq!(loaded.source_app_exclusions, state.source_app_exclusions);
 
     fs::remove_file(path).unwrap();
+  }
+
+  #[test]
+  fn a_dictation_is_stored_encrypted_and_keeps_its_label() {
+    let path = unique_path();
+    let store = ClipboardStore::new([7; 32], path.clone());
+    let mut state = stored_snapshot_fixture();
+    state.items = vec![ClipboardItem::Text {
+      copied_at: Utc::now(),
+      group_id: None,
+      grouped_at: None,
+      id: "item-7".to_string(),
+      name: None,
+      origin: ClipboardItemOrigin::Dictation,
+      plain_text: "dictated settlement terms".to_string(),
+      retention_class: ClipboardItemRetentionClass::History,
+      source_app: None,
+    }];
+
+    store.persist(&state).unwrap();
+    for file in std::iter::once(path.clone()).chain(
+      fs::read_dir(store.record_directory())
+        .unwrap()
+        .map(|entry| entry.unwrap().path()),
+    ) {
+      let raw = fs::read(&file).unwrap();
+      let raw = String::from_utf8_lossy(&raw);
+      assert!(!raw.contains("dictated settlement terms"), "{file:?}");
+      assert!(!raw.contains("dictation"), "{file:?}");
+    }
+    let loaded = store.load().unwrap().unwrap();
+    assert_eq!(loaded.items, state.items);
+
+    ClipboardStore::remove(&path).unwrap();
   }
 
   #[test]

@@ -45,6 +45,7 @@ const CHAT_THREAD_SETTING_FIELDS = [
   "chatLocalRunTarget",
   "contextMatterIds",
   "dataWorkspaceIds",
+  "limitReminder",
   "pinState",
   "titleChanged",
   "titleSource",
@@ -229,6 +230,7 @@ const VERIFICATION_AUDIT_DETAILS = {
 
 /** Every new audit resource requires an explicit detail policy. */
 export const AUDIT_DETAIL_POLICY = {
+  [AUDIT_RESOURCE_TYPE.LEGAL_HOLD]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.SERVICE_OAUTH_CLIENT]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.LEGAL_RESOLVE]: UNGATED_AUDIT_DETAILS,
@@ -307,6 +309,7 @@ export const AUDIT_DETAIL_POLICY = {
     operations: {
       sample_case_loaded: VERIFICATION_AUDIT_DETAILS,
       sample_case_released: VERIFICATION_AUDIT_DETAILS,
+      verification_chronology_exported: VERIFICATION_AUDIT_DETAILS,
       [SOURCE_KIND_SET_OPERATION]: VERIFICATION_AUDIT_DETAILS,
     },
   },

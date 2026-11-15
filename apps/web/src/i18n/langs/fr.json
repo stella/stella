@@ -241,6 +241,12 @@
       "showSources": "Afficher les sources",
       "title": "Faits d’ancrage"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# affirmation repose sur ce fait} many {# affirmations reposent sur ce fait} other {# affirmations reposent sur ce fait}}",
+      "empty": "Cette liste ne contient encore aucun fait.",
+      "moreClaims": "{count, plural, one {# autre affirmation} many {# autres affirmations} other {# autres affirmations}}",
+      "undated": "Non daté"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
@@ -288,6 +294,8 @@
       "reopened": "Rouverte, vérification en attente",
       "reopenedTooltip": "Un relecteur a requalifié cette affirmation en fait vérifiable ; une vérification en direct du dossier est encore en attente.",
       "sourceCount": "{count, plural, one {# source} other {# sources} many {# sources}}",
+      "verdictBy": "Verdict rendu par {model}",
+      "verdictByGenerativeModel": "Verdict rendu par le modèle génératif ; le modèle de décision ne l’a pas tranché",
       "whyVerdict": "Pourquoi ce verdict : faits d’ancrage"
     },
     "claimTypes": {
@@ -405,6 +413,42 @@
       "showNextSteps": "Afficher les prochaines étapes",
       "unlink": "Dissocier {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# affirmation} many {# affirmations} other {# affirmations}}",
+      "claimTitle": "Affirmation",
+      "columns": {
+        "claims": "Affirmations",
+        "sources": "Documents sources",
+        "statements": "Déclarations"
+      },
+      "empty": "Cette liste ne contient encore aucun fait ni document vérifié.",
+      "factCount": "{count, plural, one {# fait} many {# faits} other {# faits}}",
+      "factOverflow": "Affichage des {count} premiers faits de cette liste.",
+      "filters": {
+        "allSources": "Toutes les sources",
+        "allVerdicts": "Tous les verdicts",
+        "conflicts": "Conflits",
+        "heldFacts": "Faits en attente de relecture",
+        "source": "Filtrer par source",
+        "verdict": "Filtrer par verdict"
+      },
+      "held": "En attente de relecture",
+      "linkedFacts": "{count, plural, one {# fait lié} many {# faits liés} other {# faits liés}}",
+      "listLabel": "Graphe sous forme de liste",
+      "loadMore": "Charger plus de documents",
+      "noMatch": "Aucun élément ne correspond à ces filtres.",
+      "noStatements": "Aucun document n’a encore été vérifié par rapport à cette liste.",
+      "offList": "N’est plus dans la liste",
+      "relation": {
+        "conflicts": "Contredit",
+        "governs": "Fait foi",
+        "record": "Au dossier",
+        "recordConflict": "Enregistrement contradictoire",
+        "supports": "Étaye"
+      },
+      "unlinked": "Faits sur lesquels ne repose aucune affirmation",
+      "verifyInReview": "Vérifier un document"
+    },
     "guidance": {
       "escalate": "Faire remonter",
       "manualJudgement": "Jugement manuel",
@@ -458,6 +502,12 @@
     "matches": {
       "count": "{count, plural, one {# correspondance} other {# correspondances} many {# correspondances}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologie",
+      "graph": "Graphe",
+      "label": "Afficher la liste en",
+      "review": "Examen"
     },
     "qualifiers": {
       "heading": "Réserves",
@@ -547,7 +597,8 @@
       "startFailed": "Impossible de lancer la vérification",
       "status": {
         "running": "Vérification en cours"
-      }
+      },
+      "unreadParts": "{count, plural, one {# partie du document n’a pas pu être lue : ses affirmations n’ont donc pas été vérifiées.} other {# parties du document n’ont pas pu être lues : leurs affirmations n’ont donc pas été vérifiées.} many {# parties du document n’ont pas pu être lues : leurs affirmations n’ont donc pas été vérifiées.}}"
     },
     "save": {
       "failed": "Non enregistré",
@@ -1625,6 +1676,8 @@
         "actions": {
           "click": "Cliquer",
           "fill": "Saisir du texte",
+          "find": "Rechercher dans la page",
+          "findHeadings": "Lister les titres de la page",
           "open": "Ouvrir le site web",
           "openNewTab": "Ouvrir le site web dans un nouvel onglet",
           "pressKey": "Appuyer sur une touche",
@@ -1873,6 +1926,8 @@
       "folderStateProtected": "Contient les données de stella",
       "folderStateUnlinked": "N’est plus lié",
       "folderStateUnreadable": "Illisible",
+      "limitReminderNotify": "Me prévenir une fois réinitialisée",
+      "limitReminderScheduled": "Nous vous préviendrons à partir du {time}.",
       "permissionAboveLimit": "Non autorisé par votre organisation",
       "permissionAskDescription": "Modifie seul les fichiers du dossier de la conversation ; demande avant tout le reste.",
       "permissionAutoDescription": "Fait seul ce qu’il juge sûr ; demande pour le reste.",
@@ -1912,6 +1967,24 @@
       "dismiss": "Ignorer et arrêter",
       "secretAnswer": "Réponse masquée",
       "secretPlaceholder": "Votre réponse reste masquée"
+    },
+    "makeSkill": {
+      "command": "Créer une compétence à partir de cette conversation",
+      "drafted": "Le brouillon de la compétence est prêt. Relisez-le, puis activez-le.",
+      "drafting": "Préparation d'un brouillon de compétence à partir de cette conversation…",
+      "emptyThread": "Envoyez d'abord un message, une compétence pourra ensuite être créée à partir de la conversation.",
+      "failed": "Impossible de créer une compétence à partir de cette conversation",
+      "review": {
+        "description": "Le brouillon de la compétence contient ces noms. Toute personne ayant accès à cette compétence pourra les voir.",
+        "replaceHint": "Décochez un nom pour le remplacer par un espace réservé générique.",
+        "role": {
+          "organization": "nom de l'organisation",
+          "person": "nom de la personne"
+        },
+        "saveAll": "Tout conserver et enregistrer",
+        "saveReplacing": "Remplacer les noms décochés et enregistrer",
+        "title": "Enregistrer ces noms dans la compétence ?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# conversation vous attend} other {# conversations vous attendent} many {# conversations vous attendent}}",
@@ -2108,6 +2181,7 @@
     "sendErrorStreamIncomplete": "La réponse de l’IA a été interrompue avant la fin. Réessayez.",
     "sendErrorTimedOut": "Le service de conversation n’a pas répondu à temps. Réessayez.",
     "sendErrorToolsUnsupported": "Ce modèle ne peut pas utiliser d’outils et ne peut donc pas répondre aux questions sur votre dossier. Passez à un modèle qui prend en charge les outils.",
+    "sendErrorTurnTooLarge": "Cette réponse est devenue trop volumineuse pour être transmise en entier. Envoyez un nouveau message pour continuer.",
     "sendPrompt": "Envoyer le message",
     "sendQueuedMessageNow": "Envoyer maintenant",
     "sendWithoutAnonymization": "Envoyer sans anonymisation",
@@ -2260,9 +2334,14 @@
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
+      "user_message": "Envoyé pendant que l’agent travaillait",
       "web_search": "Recherche web"
     },
     "toolCall": {
+      "browserClick": "Cliquer sur « {target} » sur {url}",
+      "browserPressKey": "Appuyer sur la touche {key} dans « {target} » sur {url}",
+      "browserSelect": "Sélectionner « {option} » dans « {target} » sur {url}",
+      "browserType": "Saisir du texte dans « {target} » sur {url}",
       "characterCount": "{count, plural, one {# caractère} many {# caractères} other {# caractères}}",
       "commandExited": "{command} (code de sortie {code})",
       "consoleLogs": "Sortie de la console",
@@ -2272,17 +2351,17 @@
       "input": "Entrée",
       "interrupted": "Interrompu avant la fin",
       "localOutput": {
+        "arriving": "Toujours en cours de réception depuis l’ordinateur qui a exécuté cette étape",
         "conversation": "Conversation du sous-agent",
         "conversationPrompt": "Tâche",
         "conversationReport": "Rapport",
         "cut": "Affichage des {kept} premiers sur {total}",
         "diff": "Modifications des fichiers",
-        "elsewhere": "Ouvrez-le sur l’ordinateur qui l’a exécuté",
         "empty": "Aucun résultat",
-        "failed": "L’application de bureau stella sur cet ordinateur n’a pas pu l’afficher.",
-        "imageTooLarge": "Cette image fait {total}. Les images de plus de {kept} ne sont pas conservées sur cet ordinateur ; elle ne peut donc pas être affichée ici.",
-        "notKept": "Rien de cette étape n’est conservé sur cet ordinateur",
-        "reading": "Lecture depuis cet ordinateur"
+        "imageTooLargeToStore": "Cette image fait {total}. Les images de plus de {kept} ne sont pas enregistrées ; elle ne peut donc pas être affichée.",
+        "notCopied": "Pas encore copié dans cette conversation",
+        "notStored": "Rien de cette étape n’a été enregistré",
+        "runBudgetReached": "Non enregistré : cette exécution avait déjà enregistré tout ce qu’une exécution peut enregistrer"
       },
       "output": "Résultat",
       "patternInPath": "{pattern} dans {path}",
@@ -2305,6 +2384,10 @@
       "needsInputTitle": "stella a besoin de vous",
       "replyReadyBody": "stella a fini de répondre dans votre conversation.",
       "replyReadyTitle": "Réponse prête"
+    },
+    "turnPaused": {
+      "continue": "Continuer",
+      "status": "En pause après {count, plural, one {# appel d’outil} many {# appels d’outils} other {# appels d’outils}}"
     },
     "turnStatus": {
       "answerFailed": "La réponse n’a pas pu être terminée",
@@ -2958,7 +3041,6 @@
       "dropZone": "Déposez la procuration (.docx) ici ou cliquez pour choisir un fichier",
       "extracting": "Extraction du ou des mandants…",
       "fileHint": "stella lit le document et repère automatiquement le(s) mandant(s) (celui qui donne procuration, pas l'avocat). Vérifiez le résultat avant de confirmer.",
-      "fileTooLarge": "Le fichier de procuration ne doit pas dépasser 50 Mo.",
       "invalidFileType": "Veuillez choisir un fichier .docx.",
       "noOutorganteFound": "Aucun mandant n'a pu être identifié dans ce document.",
       "parseErrorGeneric": "Impossible d'extraire des contacts de ce document.",
@@ -3338,6 +3420,7 @@
       "invitationRoleNotAllowed": "Vous ne pouvez pas inviter une personne avec ce rôle. Choisissez un autre rôle.",
       "invoiceNumberSeriesMissing": "Configurez une série de numérotation par défaut pour les factures dans Séries de numérotation, dans les paramètres de l’organisation, puis émettez la facture.",
       "invoiceSellerProfileMissing": "Ajoutez un profil vendeur dans Profils de facturation, dans les paramètres de l’organisation, puis émettez la facture.",
+      "legalHoldActive": "La suppression est bloquée, car ces documents doivent être conservés.",
       "legalSourceEntityLimitReached": "Ce dossier a atteint la limite d’éléments, le document n’a donc pas pu être créé.",
       "legalSourceFilePropertyMissing": "Il manque une propriété de fichier dans ce dossier, le document n’a donc pas pu être créé.",
       "matterContactCapacityExceeded": "Ce dossier contient plus de contacts qu’il n’est possible d’afficher. Retirez des liens visibles vers des contacts pour afficher les contacts restants.",
@@ -3360,6 +3443,11 @@
       "sharepointNotFound": "Ce site, cette bibliothèque ou ce fichier n’existe plus ou n’est pas partagé avec vous.",
       "sharepointReconnectRequired": "Votre connexion Microsoft a expiré. Reconnectez SharePoint et OneDrive.",
       "sharepointThrottled": "Microsoft limite les requêtes. Réessayez dans quelques instants.",
+      "skillFromChatAnonymizedThread": "Il n'est pas encore possible de créer une compétence à partir d'une conversation anonymisée.",
+      "skillFromChatEmptyThread": "Cette conversation ne contient encore rien à partir de quoi créer une compétence.",
+      "skillFromChatLocalRunThread": "Cette conversation s'exécute sur votre ordinateur : aucune compétence n'en est créée dans le cloud.",
+      "skillFromChatThreadNotFound": "Cette conversation est introuvable.",
+      "skillFromChatWithdrawn": "Le contenu de cette conversation a été retiré : impossible d'en créer une compétence.",
       "skillSourceUnreachable": "La source de la compétence n’a pas pu être chargée. Vérifiez que le lien mène à un dépôt GitHub public, ou réessayez plus tard.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte.",
@@ -5059,6 +5147,7 @@
       "flowRunAwaitingApproval": "Le flux de travail <bdi>{flowName}</bdi> attend votre approbation",
       "flowRunCompleted": "Le flux de travail <bdi>{flowName}</bdi> est terminé",
       "flowRunFailed": "Le flux de travail <bdi>{flowName}</bdi> a échoué",
+      "localRunLimitReset": "L’agent de code de votre ordinateur peut reprendre votre discussion",
       "mention": "<bdi>{actorName}</bdi> vous a mentionné dans un commentaire",
       "reportExportFailed": "Échec de l’export de votre rapport",
       "reportExportSucceeded": "Votre rapport est prêt",
@@ -5812,6 +5901,8 @@
       "auditLogsSentenceDownload": "{resource} téléchargé.",
       "auditLogsSentenceExecute": "{resource} exécuté.",
       "auditLogsSentenceIssued": "{resource} émis.",
+      "auditLogsSentenceLegalHoldPlaced": "{resource} appliquée.",
+      "auditLogsSentenceLegalHoldReleased": "{resource} levée.",
       "auditLogsSentenceRedeemed": "{resource} utilisé.",
       "auditLogsSentenceRefused": "{resource} refusé.",
       "auditLogsSentenceReview": "{resource} vérifié.",
@@ -5863,6 +5954,7 @@
         "flow_run": "exécution du flux de travail",
         "folio_collab_room": "salle de collaboration Folio",
         "invoice": "facture",
+        "legal_hold": "conservation légale",
         "legal_list": "liste juridique",
         "legal_list_generation": "génération de liste juridique",
         "legal_list_item": "entrée de liste juridique",
@@ -6022,7 +6114,13 @@
       "usageStatusTrialing": "Période d'essai",
       "usageUnitCount": "{count, plural, one {# unité} many {# unités} other {# unités}}",
       "usageUnitsBalanceTemplate": "{remaining} unités disponibles",
-      "usageUnitsThisPeriod": "Unités d’utilisation sur cette période"
+      "usageUnitsThisPeriod": "Unités d’utilisation sur cette période",
+      "verificationDecisionModel": {
+        "description": "Lorsqu’un document est vérifié au regard des faits d’une liste, le modèle de décision choisit le verdict de chaque affirmation. Le modèle génératif continue de trouver et de citer les faits. Si le modèle de décision n’est pas assez sûr, le verdict du modèle génératif est conservé.",
+        "title": "Verdicts de la vérification des documents",
+        "unavailable": "Aucun modèle de décision n’est disponible pour cette organisation.",
+        "updated": "Paramètre de vérification mis à jour"
+      }
     }
   },
   "sharepoint": {
@@ -6263,6 +6361,7 @@
       "previewBody5": "Avant la conversion, une vente ou une cotation donne droit à l’Investisseur au montant le plus élevé entre le prix d’achat et le produit payable sur une base convertie.",
       "previewBody6": "La Société est régulièrement constituée, a capacité à conclure le présent contrat et obtiendra toutes les autorisations nécessaires à son exécution.",
       "previewBody7": "Le présent contrat contient l’intégralité de l’accord entre les parties et ne peut être modifié que par écrit avec le consentement requis.",
+      "previewDocument": "Aperçu du jeu de styles",
       "previewFailed": "Impossible de générer l’aperçu.",
       "previewIntroduction": "Le présent contrat est conclu entre Example Labs Ltd. (la « Société ») et l’investisseur désigné sur la page de signature (l’« Investisseur »).",
       "previewLevel1": "Investissement",

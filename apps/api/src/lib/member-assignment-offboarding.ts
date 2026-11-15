@@ -22,6 +22,7 @@ import {
   BILLING_STATUS,
   billingDraftUserSettings,
   chatBrowserSiteGrants,
+  chatLimitReminders,
   chatToolGrants,
   contacts,
   correspondence,
@@ -1772,22 +1773,19 @@ export const removeOrganizationMemberInTransaction = async (
         eq(sharepointConnections.userId, userId),
       ),
     );
-  await tx
-    .delete(chatToolGrants)
-    .where(
-      and(
-        eq(chatToolGrants.organizationId, organizationId),
-        eq(chatToolGrants.userId, userId),
-      ),
-    );
-  await tx
-    .delete(chatBrowserSiteGrants)
-    .where(
-      and(
-        eq(chatBrowserSiteGrants.organizationId, organizationId),
-        eq(chatBrowserSiteGrants.userId, userId),
-      ),
-    );
+  // The member's own chat settings: tool grants, limit reminders and browser
+  // site approvals.
+  for (const table of [
+    chatToolGrants,
+    chatLimitReminders,
+    chatBrowserSiteGrants,
+  ] as const) {
+    await tx
+      .delete(table)
+      .where(
+        and(eq(table.organizationId, organizationId), eq(table.userId, userId)),
+      );
+  }
   await tx
     .delete(mcpOAuthState)
     .where(
@@ -1892,6 +1890,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [sharepointConnections.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
   [chatToolGrants.userId, "cleared"],
+  [chatLimitReminders.userId, "cleared"],
   [chatBrowserSiteGrants.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],

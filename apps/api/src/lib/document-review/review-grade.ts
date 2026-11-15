@@ -131,9 +131,7 @@ type AiGradingDeps = {
  * takes several model calls; the reviewer watching it should see the count
  * move after each one, not once at the end.
  */
-export type OnFindingsGraded = (
-  findings: readonly ReviewFinding[],
-) => Promise<void>;
+type OnFindingsGraded = (findings: readonly ReviewFinding[]) => Promise<void>;
 
 export type BuildFindingsArgs = AiGradingDeps & {
   positions: readonly Position[];

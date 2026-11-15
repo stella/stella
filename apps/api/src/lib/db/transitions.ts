@@ -8,13 +8,16 @@ import {
   isSQLWrapper,
   sql,
 } from "drizzle-orm";
-import type { DriverValueDecoder, GetColumnData, SQL } from "drizzle-orm";
+import type {
+  DriverValueDecoder,
+  GetColumnData,
+  SQL,
+  SQLWrapper,
+} from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type {
   AnyPgColumn,
-  PgAsyncDatabase,
   PgInsertValue,
-  PgQueryResultHKT,
   PgTable,
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
@@ -1042,11 +1045,9 @@ export type TransitionResult<TId, TStatus> =
   | { type: "transitioned"; row: { id: TId; status: TStatus } }
   | { type: "stale" };
 
-export type TransitionTransaction = Pick<
-  PgAsyncDatabase<PgQueryResultHKT>,
-  "execute"
-> &
-  Pick<Transaction, "rollback">;
+export type TransitionTransaction = {
+  execute: (query: SQLWrapper | string) => PromiseLike<unknown>;
+} & Pick<Transaction, "rollback">;
 
 type TransitionArgs<
   TTx extends TransitionTransaction,

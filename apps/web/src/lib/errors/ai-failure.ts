@@ -23,11 +23,11 @@ export const AI_FAILURE_ERROR_KEYS = {
   [AI_FAILURE_CODES.deadline_exceeded]: "errors.apiCodes.aiDeadlineExceeded",
   [AI_FAILURE_CODES.loop_detected]: "chat.sendErrorLoopDetected",
   [AI_FAILURE_CODES.empty_completion]: "chat.sendErrorEmptyCompletion",
+  [AI_FAILURE_CODES.turn_too_large]: "chat.sendErrorTurnTooLarge",
   [AI_FAILURE_CODES.local_runner_needs_login]: "chat.localRun.errorNeedsLogin",
   [AI_FAILURE_CODES.local_runner_limit_reached]:
     "chat.localRun.errorLimitReached",
   [AI_FAILURE_CODES.local_runner_unavailable]: "chat.localRun.errorUnavailable",
-  // The same refusal as a turn the API finds too long before it starts.
   [AI_FAILURE_CODES.local_runner_turn_too_large]:
     "chat.localRun.refusalTooLarge",
   [AI_FAILURE_CODES.local_runner_not_reached]: "chat.localRun.errorNotReached",
@@ -35,6 +35,20 @@ export const AI_FAILURE_ERROR_KEYS = {
   [AI_FAILURE_CODES.local_runner_restoring]: "chat.localRun.errorRestoring",
   [AI_FAILURE_CODES.local_runner_folder_unavailable]:
     "chat.localRun.errorFolderUnavailable",
+  // A turn whose run could not start: the member's message is stored and the
+  // turn failed for what the computer reported then.
+  [AI_FAILURE_CODES.local_runner_no_computer]:
+    "chat.localRun.refusalNoComputer",
+  [AI_FAILURE_CODES.local_runner_harness_unavailable]:
+    "chat.localRun.refusalHarnessUnavailable",
+  [AI_FAILURE_CODES.local_runner_model_unavailable]:
+    "chat.localRun.refusalModelUnavailable",
+  [AI_FAILURE_CODES.local_runner_reasoning_effort_unavailable]:
+    "chat.localRun.refusalReasoningEffortUnavailable",
+  [AI_FAILURE_CODES.local_runner_approvals_unavailable]:
+    "chat.localRun.refusalPermissionUnavailable",
+  [AI_FAILURE_CODES.local_runner_folder_not_approved]:
+    "chat.localRun.refusalFolderNotApproved",
   [AI_FAILURE_CODES.unknown]: "errors.apiCodes.aiUnknown",
   [AI_FAILURE_CODES.role_not_configured]: "capabilityActions.aiMissing",
   [AI_FAILURE_CODES.own_key_required]: "capabilityActions.aiMissing",

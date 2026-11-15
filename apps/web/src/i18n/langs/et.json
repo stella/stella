@@ -241,6 +241,12 @@
       "showSources": "Näita allikaid",
       "title": "Ankurfaktid"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# väide tugineb sellele faktile} other {# väidet tugineb sellele faktile}}",
+      "empty": "Selles loendis pole veel fakte.",
+      "moreClaims": "{count, plural, one {veel # väide} other {veel # väidet}}",
+      "undated": "Kuupäevata"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Ankurfaktid on vastuolus",
@@ -288,6 +294,8 @@
       "reopened": "Uuesti avatud, kontroll ootel",
       "reopenedTooltip": "Kontrollija liigitas selle uuesti kontrollitavaks faktiks; reaalajas registrikontroll on veel ootel.",
       "sourceCount": "{count, plural, one {# allikas} other {# allikat}}",
+      "verdictBy": "Otsuse tegi {model}",
+      "verdictByGenerativeModel": "Otsuse tegi generatiivne mudel; otsustusmudel seda ei otsustanud",
       "whyVerdict": "Otsuse põhjendus: ankurfaktid"
     },
     "claimTypes": {
@@ -405,6 +413,42 @@
       "showNextSteps": "Näita järgmisi samme",
       "unlink": "Tühista seos: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# väide} other {# väidet}}",
+      "claimTitle": "Väide",
+      "columns": {
+        "claims": "Väited",
+        "sources": "Allikdokumendid",
+        "statements": "Avaldused"
+      },
+      "empty": "Selles loendis pole veel fakte ega kontrollitud dokumente.",
+      "factCount": "{count, plural, one {# fakt} other {# fakti}}",
+      "factOverflow": "Kuvatakse selle loendi esimesed {count} fakti.",
+      "filters": {
+        "allSources": "Kõik allikad",
+        "allVerdicts": "Kõik otsused",
+        "conflicts": "Vastuolud",
+        "heldFacts": "Kontrolli ootel faktid",
+        "source": "Filtreeri allika järgi",
+        "verdict": "Filtreeri otsuse järgi"
+      },
+      "held": "Kontrolli ootel",
+      "linkedFacts": "{count, plural, one {# seotud fakt} other {# seotud fakti}}",
+      "listLabel": "Graaf loendina",
+      "loadMore": "Laadi rohkem dokumente",
+      "noMatch": "Nende filtritega ei leitud midagi.",
+      "noStatements": "Selle loendi alusel pole veel ühtegi dokumenti kontrollitud.",
+      "offList": "Pole enam loendis",
+      "relation": {
+        "conflicts": "On vastuolus",
+        "governs": "Aluseks",
+        "record": "Registris",
+        "recordConflict": "Vastuoluline kanne",
+        "supports": "Toetab"
+      },
+      "unlinked": "Faktid, millele ükski väide ei tugine",
+      "verifyInReview": "Kontrolli dokumenti"
+    },
     "guidance": {
       "escalate": "Edasta edasi",
       "manualJudgement": "Inimese otsustus",
@@ -458,6 +502,12 @@
     "matches": {
       "count": "{count, plural, one {# vaste} other {# vastet}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Kronoloogia",
+      "graph": "Graaf",
+      "label": "Näita loendit kujul",
+      "review": "Kontroll"
     },
     "qualifiers": {
       "heading": "Reservatsioonid",
@@ -547,7 +597,8 @@
       "startFailed": "Kontrolli ei õnnestunud käivitada",
       "status": {
         "running": "Kontrollimine"
-      }
+      },
+      "unreadParts": "{count, plural, one {Dokumendi # osa ei õnnestunud lugeda, seega selle väiteid ei kontrollitud.} other {Dokumendi # osa ei õnnestunud lugeda, seega nende väiteid ei kontrollitud.}}"
     },
     "save": {
       "failed": "Salvestamata",
@@ -1625,6 +1676,8 @@
         "actions": {
           "click": "Klõpsa",
           "fill": "Sisesta tekst",
+          "find": "Otsi lehelt",
+          "findHeadings": "Loetle lehe pealkirjad",
           "open": "Ava veebisait",
           "openNewTab": "Ava veebisait uuel vahekaardil",
           "pressKey": "Vajuta klahvi",
@@ -1873,6 +1926,8 @@
       "folderStateProtected": "Sisaldab stella enda andmeid",
       "folderStateUnlinked": "Pole enam lingitud",
       "folderStateUnreadable": "Ei saa lugeda",
+      "limitReminderNotify": "Teavita mind, kui limiit lähtestub",
+      "limitReminderScheduled": "Teavitame sind alates {time}.",
       "permissionAboveLimit": "Sinu organisatsioon seda ei luba",
       "permissionAskDescription": "Muudab vestluse kaustas olevaid faile ise; kõige muu kohta küsib.",
       "permissionAutoDescription": "Teeb ise seda, mida peab ohutuks; ülejäänu kohta küsib.",
@@ -1912,6 +1967,24 @@
       "dismiss": "Jäta kõrvale ja peata",
       "secretAnswer": "Vastus on peidetud",
       "secretPlaceholder": "Teie vastus jääb peidetuks"
+    },
+    "makeSkill": {
+      "command": "Loo sellest vestlusest oskus",
+      "drafted": "Oskuse mustand on valmis. Vaata see üle ja lülita siis sisse.",
+      "drafting": "Koostan sellest vestlusest oskuse mustandit…",
+      "emptyThread": "Saada esmalt sõnum, seejärel saab vestlusest oskuse luua.",
+      "failed": "Sellest vestlusest ei õnnestunud oskust luua",
+      "review": {
+        "description": "Oskuse mustand sisaldab neid nimesid. Neid võib näha igaüks, kellel on sellele oskusele juurdepääs.",
+        "replaceHint": "Eemalda nimelt linnuke, et asendada see üldise kohatäitjaga.",
+        "role": {
+          "organization": "organisatsiooni nimi",
+          "person": "isiku nimi"
+        },
+        "saveAll": "Jäta kõik alles ja salvesta",
+        "saveReplacing": "Asenda märkimata ja salvesta",
+        "title": "Kas salvestada need nimed oskusesse?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# vestlus ootab teid} other {# vestlust ootab teid}}",
@@ -2108,6 +2181,7 @@
     "sendErrorStreamIncomplete": "AI vastus katkes enne, kui see valmis sai. Proovi uuesti.",
     "sendErrorTimedOut": "Vestlusteenus ei vastanud õigel ajal. Proovige uuesti.",
     "sendErrorToolsUnsupported": "See mudel ei saa tööriistu kasutada, seega ei saa see sinu toimiku kohta küsimustele vastata. Vaheta mudelile, mis tööriistu toetab.",
+    "sendErrorTurnTooLarge": "See vastus läks liiga suureks, et seda tervikuna edastada. Jätkamiseks saada uus sõnum.",
     "sendPrompt": "Saada sõnum",
     "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
@@ -2260,9 +2334,14 @@
       "update_reader_annotation": "Muuda esiletõstu või kommentaari",
       "use-browser": "Teie brauseri kasutamine",
       "use_connector_secret": "Konnektori mandaadi kasutamine",
+      "user_message": "Saadetud agendi töö ajal",
       "web_search": "Veebist otsimine"
     },
     "toolCall": {
+      "browserClick": "Klõpsa elemendil „{target}“ lehel {url}",
+      "browserPressKey": "Vajuta klahvi {key} elemendis „{target}“ lehel {url}",
+      "browserSelect": "Vali „{option}“ elemendis „{target}“ lehel {url}",
+      "browserType": "Sisesta tekst väljale „{target}“ lehel {url}",
       "characterCount": "{count, plural, one {# märk} other {# märki}}",
       "commandExited": "{command} (väljumiskood {code})",
       "consoleLogs": "Konsooli väljund",
@@ -2272,17 +2351,17 @@
       "input": "Sisend",
       "interrupted": "Katkes enne lõpetamist",
       "localOutput": {
+        "arriving": "Saabub endiselt arvutist, kus see samm käivitati",
         "conversation": "Alamagendi vestlus",
         "conversationPrompt": "Ülesanne",
         "conversationReport": "Aruanne",
         "cut": "Kuvatakse esimesed {kept} (kokku {total})",
         "diff": "Failimuudatused",
-        "elsewhere": "Avage arvutis, kus see käivitati",
         "empty": "Väljund puudub",
-        "failed": "stella töölauarakendus selles arvutis ei suutnud seda kuvada.",
-        "imageTooLarge": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte selles arvutis ei salvestata, seega ei saa seda siin kuvada.",
-        "notKept": "Sellest sammust pole selles arvutis midagi salvestatud",
-        "reading": "Loetakse sellest arvutist"
+        "imageTooLargeToStore": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte ei salvestata, seega ei saa seda kuvada.",
+        "notCopied": "Sellesse vestlusesse pole veel kopeeritud",
+        "notStored": "Sellest sammust ei salvestatud midagi",
+        "runBudgetReached": "Ei salvestatud: see käivitus oli juba salvestanud nii palju, kui üks käivitus tohib"
       },
       "output": "Väljund",
       "patternInPath": "{pattern} asukohas {path}",
@@ -2305,6 +2384,10 @@
       "needsInputTitle": "stella vajab teie sisendit",
       "replyReadyBody": "stella lõpetas vestluses vastamise.",
       "replyReadyTitle": "Vastus on valmis"
+    },
+    "turnPaused": {
+      "continue": "Jätka",
+      "status": "Peatatud pärast {count, plural, one {# tööriistakutset} other {# tööriistakutset}}"
     },
     "turnStatus": {
       "answerFailed": "Vastust ei õnnestunud lõpetada",
@@ -2958,7 +3041,6 @@
       "dropZone": "Lohista volikiri (.docx) siia või klõpsa faili valimiseks",
       "extracting": "Tuvastame volitaja(id)…",
       "fileHint": "stella loeb dokumendi läbi ja leiab automaatselt volitaja (isiku, kes annab volituse, mitte advokaadi). Enne kinnitamist kontrollige tulemust.",
-      "fileTooLarge": "Volikirja fail peab olema kuni 50 MB.",
       "invalidFileType": "Palun valige .docx-fail.",
       "noOutorganteFound": "Selles dokumendis ei õnnestunud ühtegi volitajat tuvastada.",
       "parseErrorGeneric": "Sellest dokumendist ei õnnestunud kontakte tuvastada.",
@@ -3338,6 +3420,7 @@
       "invitationRoleNotAllowed": "Selle rolliga ei saa kedagi kutsuda. Valige muu roll.",
       "invoiceNumberSeriesMissing": "Seadistage organisatsiooni seadete jaotises Numbriseeriad arvete vaikimisi numbriseeria ja väljastage seejärel arve.",
       "invoiceSellerProfileMissing": "Lisage müüja profiil organisatsiooni seadete jaotises Arveldusprofiilid ja väljastage seejärel arve.",
+      "legalHoldActive": "Kustutamine on blokeeritud, sest need andmed tuleb säilitada.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
       "matterContactCapacityExceeded": "Selles toimikus on rohkem kontakte, kui saab kuvada. Ülejäänud kontaktide kuvamiseks eemaldage nähtavaid kontaktiseoseid.",
@@ -3360,6 +3443,11 @@
       "sharepointNotFound": "See sait, teek või fail ei ole enam olemas või seda ei ole teiega jagatud.",
       "sharepointReconnectRequired": "Teie Microsofti sisselogimine on aegunud. Ühendage SharePoint ja OneDrive uuesti.",
       "sharepointThrottled": "Microsoft piirab päringuid. Proovige varsti uuesti.",
+      "skillFromChatAnonymizedThread": "Anonüümitud vestlusest ei saa veel oskust luua.",
+      "skillFromChatEmptyThread": "Selles vestluses pole veel midagi, millest oskust luua.",
+      "skillFromChatLocalRunThread": "See vestlus töötab sinu arvutis, seega ei looda sellest pilves oskust.",
+      "skillFromChatThreadNotFound": "Seda vestlust ei leitud.",
+      "skillFromChatWithdrawn": "Selle vestluse sisu on tagasi võetud, seega ei saa sellest oskust luua.",
       "skillSourceUnreachable": "Oskuse allikat ei saanud laadida. Kontrollige, kas link viitab avalikule GitHubi hoidlale, või proovige hiljem uuesti.",
       "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
       "usageLimitExceeded": "Kasutuslimiit on täis.",
@@ -5059,6 +5147,7 @@
       "flowRunAwaitingApproval": "Töövoog <bdi>{flowName}</bdi> ootab teie kinnitust",
       "flowRunCompleted": "Töövoog <bdi>{flowName}</bdi> on lõpetatud",
       "flowRunFailed": "Töövoog <bdi>{flowName}</bdi> ebaõnnestus",
+      "localRunLimitReset": "Sinu arvutis töötav programmeerimisagent saab vestlust jätkata",
       "mention": "<bdi>{actorName}</bdi> mainis teid kommentaaris",
       "reportExportFailed": "Aruande eksportimine ebaõnnestus",
       "reportExportSucceeded": "Teie aruanne on valmis",
@@ -5812,6 +5901,8 @@
       "auditLogsSentenceDownload": "{resource} laaditi alla.",
       "auditLogsSentenceExecute": "{resource} käivitati.",
       "auditLogsSentenceIssued": "{resource} väljastati.",
+      "auditLogsSentenceLegalHoldPlaced": "{resource} kehtestati.",
+      "auditLogsSentenceLegalHoldReleased": "{resource} lõpetati.",
       "auditLogsSentenceRedeemed": "{resource} lunastati.",
       "auditLogsSentenceRefused": "{resource} lükati tagasi.",
       "auditLogsSentenceReview": "{resource} vaadati üle.",
@@ -5863,6 +5954,7 @@
         "flow_run": "töövoo käivitus",
         "folio_collab_room": "Folio koostööruum",
         "invoice": "arve",
+        "legal_hold": "õiguslik säilitamiskohustus",
         "legal_list": "õigusnimekiri",
         "legal_list_generation": "õigusnimekirja loomine",
         "legal_list_item": "õigusnimekirja kirje",
@@ -6022,7 +6114,13 @@
       "usageStatusTrialing": "Prooviperiood",
       "usageUnitCount": "{count, plural, one {# ühik} other {# ühikut}}",
       "usageUnitsBalanceTemplate": "Saadaval on {remaining} ühikut",
-      "usageUnitsThisPeriod": "Selle perioodi kasutusühikud"
+      "usageUnitsThisPeriod": "Selle perioodi kasutusühikud",
+      "verificationDecisionModel": {
+        "description": "Kui dokumenti kontrollitakse loendi faktide põhjal, valib otsustusmudel iga väite otsuse. Generatiivne mudel leiab ja tsiteerib fakte endiselt. Kui otsustusmudel pole piisavalt kindel, jääb kehtima generatiivse mudeli otsus.",
+        "title": "Dokumentide kontrollimise otsused",
+        "unavailable": "Sellel organisatsioonil pole ühtegi otsustusmudelit saadaval.",
+        "updated": "Kontrollimise seadistus on uuendatud"
+      }
     }
   },
   "sharepoint": {
@@ -6263,6 +6361,7 @@
       "previewBody5": "Enne konverteerimist annab müük või börsil noteerimine investorile õiguse saada kas ostuhind või konverteerimise alusel makstav tulu, olenevalt sellest, kumb on suurem.",
       "previewBody6": "Äriühing on nõuetekohaselt asutatud, tal on õigus käesolev leping sõlmida ning ta hangib selle täitmiseks kõik vajalikud heakskiidud.",
       "previewBody7": "Käesolev leping sisaldab poolte täielikku kokkulepet ja seda võib muuta üksnes kirjalikult nõutava nõusoleku alusel.",
+      "previewDocument": "Stiilikomplekti eelvaade",
       "previewFailed": "Eelvaadet ei õnnestunud luua.",
       "previewIntroduction": "Käesolev leping sõlmitakse ettevõtte Example Labs Ltd. (edaspidi „äriühing“) ja allkirjalehel nimetatud investori (edaspidi „investor“) vahel.",
       "previewLevel1": "Investeering",

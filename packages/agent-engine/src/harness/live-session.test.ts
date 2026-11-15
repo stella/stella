@@ -174,6 +174,9 @@ const lifecycleKeeping = (session: KeptSession | null) => {
     respond: () => {
       throw new Error("no interaction in this test");
     },
+    steer: () => {
+      throw new Error("no interaction in this test");
+    },
     interrupt: async () => {
       await Promise.resolve();
     },
@@ -191,7 +194,7 @@ describe("a turn's end", () => {
   test("hands a completed turn's kept process to the caller once", async () => {
     const live = kept(1).session;
     const { process, lifecycle, turn } = lifecycleKeeping(live);
-    lifecycle.emit({ type: "turn.completed", usage: null });
+    lifecycle.emit({ type: "turn.completed", usage: null, boundary: null });
     await drain(turn.events);
     const released: HarnessLiveSession | null = await turn.release();
     expect(released).toBe(live.session);
@@ -205,7 +208,7 @@ describe("a turn's end", () => {
   test("a kept process nobody released is ended with the turn", async () => {
     const live = kept(1);
     const { lifecycle, turn } = lifecycleKeeping(live.session);
-    lifecycle.emit({ type: "turn.completed", usage: null });
+    lifecycle.emit({ type: "turn.completed", usage: null, boundary: null });
     await turn.dispose();
     expect(live.process.asked).toEqual(["stopBackground", "closeInput"]);
   });
@@ -247,6 +250,9 @@ describe("a turn's end", () => {
       respond: () => {
         throw new Error("no interaction in this test");
       },
+      steer: () => {
+        throw new Error("no interaction in this test");
+      },
       interrupt: async () => {
         await Promise.resolve();
       },
@@ -258,7 +264,7 @@ describe("a turn's end", () => {
 
   test("a completed turn with nothing in the background closes as before", async () => {
     const { process, lifecycle, turn } = lifecycleKeeping(null);
-    lifecycle.emit({ type: "turn.completed", usage: null });
+    lifecycle.emit({ type: "turn.completed", usage: null, boundary: null });
     expect(await turn.release()).toBeNull();
     expect(process.asked).toEqual(["stopBackground", "closeInput"]);
   });

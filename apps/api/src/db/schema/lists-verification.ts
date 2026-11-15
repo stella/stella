@@ -1,8 +1,11 @@
+import {
+  CARRY_OUTCOMES,
+  MATCHED_CARRY_OUTCOMES,
+} from "@/api/lib/document-review/carry-outcomes";
 import { FACT_DATE_PRECISIONS } from "@/api/lib/lists/fact-details";
 import {
   CLAIM_ANCHOR_TYPES,
   CLAIM_ASSERTED_ON_SOURCES,
-  CLAIM_CARRY_OUTCOMES,
   CLAIM_DATE_SOURCES,
   CLAIM_FRAMINGS,
   CLAIM_REVIEW_EVENT_KINDS,
@@ -10,7 +13,7 @@ import {
   CLAIM_STATE,
   CLAIM_STATES,
   CLAIM_TYPES,
-  MATCHED_CLAIM_CARRY_OUTCOMES,
+  LLM_VERDICT,
   PARAGRAPH_NUMBERINGS,
   SCORED_CLAIM_STATES,
   VERIFICATION_LIMITS,
@@ -25,8 +28,10 @@ import type {
   ClaimReviewEventPayload,
   ClaimReviewReasonRule,
   RecordConflict,
+  VerdictProvenance,
   VerificationEvidence,
   VerificationScope,
+  VerificationUnreadPart,
 } from "@/api/lib/lists/verification/contract";
 import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
 
@@ -71,8 +76,8 @@ const CLAIM_FRAMING_SQL_VALUES = quoted(CLAIM_FRAMINGS);
 const CLAIM_STATE_SQL_VALUES = quoted(CLAIM_STATES);
 const SCORED_CLAIM_STATE_SQL_VALUES = quoted(SCORED_CLAIM_STATES);
 const REVIEW_EVENT_KIND_SQL_VALUES = quoted(CLAIM_REVIEW_EVENT_KINDS);
-const CARRY_OUTCOME_SQL_VALUES = quoted(CLAIM_CARRY_OUTCOMES);
-const MATCHED_CARRY_OUTCOME_SQL_VALUES = quoted(MATCHED_CLAIM_CARRY_OUTCOMES);
+const CARRY_OUTCOME_SQL_VALUES = quoted(CARRY_OUTCOMES);
+const MATCHED_CARRY_OUTCOME_SQL_VALUES = quoted(MATCHED_CARRY_OUTCOMES);
 const reviewKindsWhereReason = (rules: readonly ClaimReviewReasonRule[]) =>
   quoted(
     CLAIM_REVIEW_EVENT_KINDS.filter((kind) =>
@@ -146,6 +151,12 @@ export const legalListVerificationRuns = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     startedAt: timestamptz("started_at"),
     finishedAt: timestamptz("finished_at"),
+    // Text a completed run could not read: an extraction call kept failing
+    // after its retries. Edges only, never text. Empty when all was read.
+    unreadParts: jsonb("unread_parts")
+      .$type<VerificationUnreadPart[]>()
+      .notNull()
+      .default([]),
   },
   (table) => [
     ...entityFeatureGateChecks(table),
@@ -174,6 +185,21 @@ export const legalListVerificationRuns = p.pgTable(
         table.createdAt.desc(),
         table.id.desc(),
       ),
+    // The latest finished run of each document checked against a list, for
+    // the list's verification graph, without reading the pinned evidence of
+    // every run. Built online (indexes-legal-list-verification-runs-list-
+    // document-idx).
+    p
+      .index("legal_list_verification_runs_list_document_idx")
+      .on(
+        table.workspaceId,
+        sql`(${table.evidence} ->> 'listId')`,
+        table.entityId,
+        table.fileFieldId,
+        table.createdAt.desc(),
+        table.id.desc(),
+      )
+      .where(sql`${table.status} = 'completed'`),
     // At most one unfinished run per document; makes a lost race impossible.
     p
       .uniqueIndex("legal_list_verification_runs_active_document_uidx")
@@ -390,6 +416,10 @@ export const legalListClaims = p.pgTable(
     score: p.smallint(),
     text: p.varchar({ length: VERIFICATION_LIMITS.CLAIM_TEXT_MAX }).notNull(),
     anchor: jsonb().$type<ClaimAnchor>().notNull(),
+    // The printed number of the paragraph the claim sits in, read once when
+    // the run stored it; null when the document's numbering is unclear, the
+    // claim sits outside any numbered paragraph, or the run predates it.
+    paragraphNumber: p.integer("paragraph_number"),
     refs: jsonb().$type<ClaimRef[]>().notNull().default([]),
     recordConflict: jsonb("record_conflict").$type<RecordConflict>(),
     // Caveats the grader gave with the verdict. Qualifiers computed from the
@@ -408,6 +438,9 @@ export const legalListClaims = p.pgTable(
       .text("asserted_on_source", { enum: CLAIM_ASSERTED_ON_SOURCES })
       .notNull()
       .default("pending"),
+    // Who decided the verdict: the language model, or the decision model
+    // when the organization turned it on (`verdict-decider.ts`).
+    decider: jsonb().$type<VerdictProvenance>().notNull().default(LLM_VERDICT),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -661,7 +694,7 @@ export const legalListClaimCarryOutcomes = p.pgTable(
     sourceRunId:
       safeUuid<"legalListVerificationRun">("source_run_id").notNull(),
     sourceClaimId: safeUuid<"legalListClaim">("source_claim_id").notNull(),
-    outcome: p.text("outcome", { enum: CLAIM_CARRY_OUTCOMES }).notNull(),
+    outcome: p.text("outcome", { enum: CARRY_OUTCOMES }).notNull(),
     // The matching claim of this run; null when nothing matched.
     targetClaimId: safeUuid<"legalListClaim">("target_claim_id"),
   },

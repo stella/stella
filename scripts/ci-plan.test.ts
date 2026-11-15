@@ -4504,6 +4504,24 @@ test.each([1, 2, 3, 4])(
   },
 );
 
+test("production route-smoke coverage has one unfiltered network owner", () => {
+  const steps = jobSteps(ciJobs["e2e-production-shard"]);
+  const routeRuns = steps.filter(
+    ({ run }) =>
+      run?.includes("test:e2e") &&
+      (run.includes("--project=route-smoke") ||
+        run.includes("test:e2e -- route-smoke.spec.ts")),
+  );
+  expect(routeRuns).toHaveLength(1);
+  const [routeRun] = routeRuns;
+  expect(routeRun?.name).toBe("Check route network baseline");
+  expect(routeRun?.run).toContain("test:e2e -- route-smoke.spec.ts");
+  expect(routeRun?.run).not.toContain("--grep-invert");
+  expect(routeRun?.run).not.toContain("--pass-with-no-tests");
+  expect(routeRun?.env?.["E2E_EXECUTION_PROFILE"]).toBe("network-baseline");
+  expect(routeRun?.if).toContain("matrix.shard == 'network-baseline'");
+});
+
 test("every production Playwright shard total comes from the matrix shard source", () => {
   const steps = jobSteps(ciJobs["e2e-production-shard"]);
   const countStep = steps.find(
@@ -4516,7 +4534,7 @@ test("every production Playwright shard total comes from the matrix shard source
   const invocationLines = steps.flatMap(({ run }) =>
     (run ?? "").split("\n").filter((line) => line.includes("--shard=")),
   );
-  expect(invocationLines).toHaveLength(3);
+  expect(invocationLines).toHaveLength(2);
   expect(invocationLines.every((line) => line.includes(shardArgument))).toBe(
     true,
   );

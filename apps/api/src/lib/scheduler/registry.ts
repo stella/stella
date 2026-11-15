@@ -72,9 +72,17 @@ import {
   refreshCaseLawSitemapShardsTask,
 } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import {
+  FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK,
+  foldCaseLawSitemapTouchesTask,
+} from "@/api/lib/scheduler/tasks/case-law-sitemap-touch-fold";
+import {
   REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK,
   refreshCaseLawSourceArrivalsTask,
 } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
+import {
+  SEND_CHAT_LIMIT_REMINDERS_TASK,
+  sendChatLimitReminders,
+} from "@/api/lib/scheduler/tasks/chat-limit-reminders";
 import {
   SWEEP_CHAT_RUN_LOGS_TASK,
   sweepChatRunLogs,
@@ -282,6 +290,7 @@ const SCHEDULER_TASKS = {
   [RECEIVE_EMAIL_DELIVERABILITY_TASK]: receiveEmailDeliverability,
   [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
+  [SEND_CHAT_LIMIT_REMINDERS_TASK]: sendChatLimitReminders,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
   [DISPATCH_NATIVE_EXTRACTION_TASK]: dispatchNativeExtraction,
@@ -296,6 +305,7 @@ const SCHEDULER_TASKS = {
   [RECONCILE_CASE_LAW_RAW_ROWS_TASK]: reconcileCaseLawRawRowsTask,
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
+  [FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK]: foldCaseLawSitemapTouchesTask,
   [FOLD_CASE_LAW_POPULATION_COUNTS_TASK]: foldCaseLawPopulationCountsTask,
   [SEED_CASE_LAW_POPULATION_COUNTS_TASK]: seedCaseLawPopulationCountsTask,
   [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,

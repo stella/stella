@@ -241,6 +241,12 @@
       "showSources": "Zobrazit zdroje",
       "title": "Referenční fakta"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# tvrzení se opírá o tento fakt} few {# tvrzení se opírají o tento fakt} many {# tvrzení se opírá o tento fakt} other {# tvrzení se opírá o tento fakt}}",
+      "empty": "Tento seznam zatím nemá žádná fakta.",
+      "moreClaims": "{count, plural, one {# další tvrzení} few {# další tvrzení} many {# dalšího tvrzení} other {# dalších tvrzení}}",
+      "undated": "Bez data"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Referenční fakta si odporují",
@@ -288,6 +294,8 @@
       "reopened": "Znovu otevřeno, čeká na kontrolu",
       "reopenedTooltip": "Kontrolující osoba překlasifikovala toto tvrzení jako ověřitelné; porovnání se živými záznamy dosud neproběhlo.",
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroje} other {# zdrojů}}",
+      "verdictBy": "Závěr určil {model}",
+      "verdictByGenerativeModel": "Závěr určil generativní model; rozhodovací model jej neurčil",
       "whyVerdict": "Odůvodnění závěru: referenční fakta"
     },
     "claimTypes": {
@@ -405,6 +413,42 @@
       "showNextSteps": "Zobrazit další kroky",
       "unlink": "Zrušit propojení: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# tvrzení} few {# tvrzení} many {# tvrzení} other {# tvrzení}}",
+      "claimTitle": "Tvrzení",
+      "columns": {
+        "claims": "Tvrzení",
+        "sources": "Zdrojové dokumenty",
+        "statements": "Prohlášení"
+      },
+      "empty": "Tento seznam zatím nemá žádná fakta ani ověřené dokumenty.",
+      "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktu} other {# faktů}}",
+      "factOverflow": "Zobrazuje se prvních {count} faktů tohoto seznamu.",
+      "filters": {
+        "allSources": "Všechny zdroje",
+        "allVerdicts": "Všechny závěry",
+        "conflicts": "Rozpory",
+        "heldFacts": "Pozastavená fakta",
+        "source": "Filtrovat podle zdroje",
+        "verdict": "Filtrovat podle závěru"
+      },
+      "held": "Pozastaveno",
+      "linkedFacts": "{count, plural, one {# propojený fakt} few {# propojené fakty} many {# propojeného faktu} other {# propojených faktů}}",
+      "listLabel": "Graf jako seznam",
+      "loadMore": "Načíst další dokumenty",
+      "noMatch": "Těmto filtrům nic neodpovídá.",
+      "noStatements": "Vůči tomuto seznamu zatím nebyl ověřen žádný dokument.",
+      "offList": "Už není v seznamu",
+      "relation": {
+        "conflicts": "Odporuje",
+        "governs": "Rozhodující",
+        "record": "V záznamech",
+        "recordConflict": "Rozporný záznam",
+        "supports": "Podporuje"
+      },
+      "unlinked": "Fakta, o která se neopírá žádné tvrzení",
+      "verifyInReview": "Ověřit dokument"
+    },
     "guidance": {
       "escalate": "Předat dál",
       "manualJudgement": "Vyžaduje úsudek",
@@ -458,6 +502,12 @@
     "matches": {
       "count": "{count, plural, one {# shoda} few {# shody} other {# shod} many {# shody}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologie",
+      "graph": "Graf",
+      "label": "Zobrazit seznam jako",
+      "review": "Kontrola"
     },
     "qualifiers": {
       "heading": "Výhrady",
@@ -547,7 +597,8 @@
       "startFailed": "Ověření se nepodařilo spustit",
       "status": {
         "running": "Ověřování"
-      }
+      },
+      "unreadParts": "{count, plural, one {# část dokumentu se nepodařilo přečíst, její tvrzení proto nebyla ověřena.} few {# části dokumentu se nepodařilo přečíst, jejich tvrzení proto nebyla ověřena.} many {# části dokumentu se nepodařilo přečíst, jejich tvrzení proto nebyla ověřena.} other {# částí dokumentu se nepodařilo přečíst, jejich tvrzení proto nebyla ověřena.}}"
     },
     "save": {
       "failed": "Neuloženo",
@@ -1625,6 +1676,8 @@
         "actions": {
           "click": "Kliknout",
           "fill": "Zadat text",
+          "find": "Najít na stránce",
+          "findHeadings": "Zobrazit nadpisy stránky",
           "open": "Otevřít web",
           "openNewTab": "Otevřít web na nové kartě",
           "pressKey": "Stisknout klávesu",
@@ -1873,6 +1926,8 @@
       "folderStateProtected": "Obsahuje vlastní data stelly",
       "folderStateUnlinked": "Už není propojená",
       "folderStateUnreadable": "Nelze přečíst",
+      "limitReminderNotify": "Upozornit mě, až se obnoví",
+      "limitReminderScheduled": "Upozorníme vás po {time}.",
       "permissionAboveLimit": "Vaše organizace to nepovoluje",
       "permissionAskDescription": "Soubory ve složce chatu upravuje sám; na vše ostatní se zeptá.",
       "permissionAutoDescription": "Co považuje za bezpečné, udělá sám; na zbytek se zeptá.",
@@ -1912,6 +1967,24 @@
       "dismiss": "Zamítnout a zastavit",
       "secretAnswer": "Odpověď je skrytá",
       "secretPlaceholder": "Vaše odpověď zůstane skrytá"
+    },
+    "makeSkill": {
+      "command": "Vytvořit dovednost z této konverzace",
+      "drafted": "Návrh dovednosti je připraven. Zkontrolujte ho a pak ho zapněte.",
+      "drafting": "Připravuji návrh dovednosti z této konverzace…",
+      "emptyThread": "Nejprve odešlete zprávu, poté bude možné z konverzace vytvořit dovednost.",
+      "failed": "Z této konverzace se nepodařilo vytvořit dovednost",
+      "review": {
+        "description": "Návrh dovednosti obsahuje tato jména. Může je vidět kdokoli, kdo má k této dovednosti přístup.",
+        "replaceHint": "Zrušte zaškrtnutí jména a nahradí se obecným zástupným textem.",
+        "role": {
+          "organization": "název organizace",
+          "person": "jméno osoby"
+        },
+        "saveAll": "Ponechat vše a uložit",
+        "saveReplacing": "Nahradit nezaškrtnutá a uložit",
+        "title": "Uložit tato jména v dovednosti?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {Na vás čeká # chat} few {Na vás čekají # chaty} many {Na vás čeká # chatu} other {Na vás čeká # chatů}}",
@@ -2108,6 +2181,7 @@
     "sendErrorStreamIncomplete": "Odpověď AI se přerušila dřív, než byla dokončena. Zkuste to znovu.",
     "sendErrorTimedOut": "Chat neodpověděl včas. Zkuste to znovu.",
     "sendErrorToolsUnsupported": "Tento model neumí používat nástroje, takže nemůže odpovídat na otázky k vašemu spisu. Přepněte na model, který nástroje podporuje.",
+    "sendErrorTurnTooLarge": "Tato odpověď je příliš velká na to, aby se dala doručit celá. Pokračujte novou zprávou.",
     "sendPrompt": "Odeslat zprávu",
     "sendQueuedMessageNow": "Odeslat hned",
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
@@ -2260,9 +2334,14 @@
       "update_reader_annotation": "Upravit zvýraznění nebo komentář",
       "use-browser": "Používání vašeho prohlížeče",
       "use_connector_secret": "Použití přístupového údaje konektoru",
+      "user_message": "Odesláno během práce agenta",
       "web_search": "Vyhledávání na webu"
     },
     "toolCall": {
+      "browserClick": "Kliknout na „{target}“ na stránce {url}",
+      "browserPressKey": "Stisknout klávesu {key} v „{target}“ na stránce {url}",
+      "browserSelect": "Vybrat „{option}“ v „{target}“ na stránce {url}",
+      "browserType": "Zadat text do „{target}“ na stránce {url}",
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znaků} many {# znaku}}",
       "commandExited": "{command} (návratový kód {code})",
       "consoleLogs": "Výstup konzole",
@@ -2272,17 +2351,17 @@
       "input": "Vstup",
       "interrupted": "Přerušeno před dokončením",
       "localOutput": {
+        "arriving": "Stále se přenáší z počítače, na kterém krok běžel",
         "conversation": "Konverzace dílčího agenta",
         "conversationPrompt": "Zadání",
         "conversationReport": "Zpráva",
         "cut": "Zobrazeno prvních {kept} z {total}",
         "diff": "Změny souborů",
-        "elsewhere": "Otevřete na počítači, kde krok běžel",
         "empty": "Žádný výstup",
-        "failed": "Desktopová aplikace stella na tomto počítači to nedokázala zobrazit.",
-        "imageTooLarge": "Tento obrázek má {total}. Obrázky větší než {kept} se na tomto počítači neukládají, proto jej zde nelze zobrazit.",
-        "notKept": "Z tohoto kroku není na tomto počítači nic uloženo",
-        "reading": "Načítání z tohoto počítače"
+        "imageTooLargeToStore": "Tento obrázek má {total}. Obrázky větší než {kept} se neukládají, proto jej nelze zobrazit.",
+        "notCopied": "Do tohoto chatu zatím nebylo zkopírováno",
+        "notStored": "Z tohoto kroku nebylo nic uloženo",
+        "runBudgetReached": "Neuloženo: tento běh už uložil tolik, kolik jeden běh smí"
       },
       "output": "Výstup",
       "patternInPath": "{pattern} v {path}",
@@ -2305,6 +2384,10 @@
       "needsInputTitle": "stella potřebuje váš vstup",
       "replyReadyBody": "stella dokončila odpověď ve vašem chatu.",
       "replyReadyTitle": "Odpověď je hotová"
+    },
+    "turnPaused": {
+      "continue": "Pokračovat",
+      "status": "Pozastaveno po {count, plural, one {# volání nástroje} few {# voláních nástrojů} many {# volání nástroje} other {# voláních nástrojů}}"
     },
     "turnStatus": {
       "answerFailed": "Odpověď se nepodařilo dokončit",
@@ -2958,7 +3041,6 @@
       "dropZone": "Přetáhněte sem plnou moc (.docx), nebo klikněte a vyberte soubor",
       "extracting": "Zjišťujeme zmocnitele…",
       "fileHint": "stella přečte dokument a automaticky najde zmocnitele (toho, kdo uděluje plnou moc, ne advokáta). Před potvrzením výsledek zkontrolujte.",
-      "fileTooLarge": "Soubor plné moci musí mít nejvýše 50 MB.",
       "invalidFileType": "Vyberte prosím soubor .docx.",
       "noOutorganteFound": "V tomto dokumentu se nepodařilo identifikovat žádného zmocnitele.",
       "parseErrorGeneric": "Z tohoto dokumentu se nepodařilo extrahovat kontakty.",
@@ -3338,6 +3420,7 @@
       "invitationRoleNotAllowed": "S touto rolí nemůžete nikoho pozvat. Vyberte jinou roli.",
       "invoiceNumberSeriesMissing": "Nastavte výchozí číselnou řadu pro faktury v nastavení organizace v části Číselné řady a poté fakturu vystavte.",
       "invoiceSellerProfileMissing": "Přidejte profil dodavatele v nastavení organizace v části Fakturační profily a poté fakturu vystavte.",
+      "legalHoldActive": "Smazání je zablokováno, protože tyto záznamy musí být zachovány.",
       "legalSourceEntityLimitReached": "Tento spis dosáhl limitu položek, takže dokument nelze vytvořit.",
       "legalSourceFilePropertyMissing": "V tomto spisu chybí vlastnost souboru, takže dokument nelze vytvořit.",
       "matterContactCapacityExceeded": "Tento spis obsahuje více kontaktů, než lze zobrazit. Odebráním viditelných propojení s kontakty zobrazíte zbývající kontakty.",
@@ -3360,6 +3443,11 @@
       "sharepointNotFound": "Tento web, knihovna nebo soubor již neexistuje nebo s vámi není sdílen.",
       "sharepointReconnectRequired": "Platnost vašeho přihlášení k Microsoftu vypršela. Připojte SharePoint a OneDrive znovu.",
       "sharepointThrottled": "Microsoft omezuje počet požadavků. Zkuste to brzy znovu.",
+      "skillFromChatAnonymizedThread": "Z anonymizované konverzace zatím nelze vytvořit dovednost.",
+      "skillFromChatEmptyThread": "Tato konverzace zatím neobsahuje nic, z čeho by šlo vytvořit dovednost.",
+      "skillFromChatLocalRunThread": "Tato konverzace běží na vašem počítači, proto se z ní dovednost v cloudu nevytváří.",
+      "skillFromChatThreadNotFound": "Tuto konverzaci se nepodařilo najít.",
+      "skillFromChatWithdrawn": "Obsah této konverzace byl stažen, proto z ní nelze vytvořit dovednost.",
       "skillSourceUnreachable": "Zdroj dovednosti se nepodařilo načíst. Zkontrolujte, že odkaz vede na veřejný repozitář GitHub, nebo to zkuste později.",
       "thirdPartyBoundaryRefusal": "Požadavek se pokusil použít obsah mimo povolený kontext pracovního prostoru.",
       "usageLimitExceeded": "Byl dosažen limit využití.",
@@ -5059,6 +5147,7 @@
       "flowRunAwaitingApproval": "Pracovní postup <bdi>{flowName}</bdi> čeká na vaše schválení",
       "flowRunCompleted": "Pracovní postup <bdi>{flowName}</bdi> byl dokončen",
       "flowRunFailed": "Pracovní postup <bdi>{flowName}</bdi> selhal",
+      "localRunLimitReset": "Programovací agent ve vašem počítači může pokračovat ve vašem chatu",
       "mention": "<bdi>{actorName}</bdi> vás zmínil v komentáři",
       "reportExportFailed": "Export vaší zprávy se nezdařil",
       "reportExportSucceeded": "Vaše zpráva je připravena",
@@ -5812,6 +5901,8 @@
       "auditLogsSentenceDownload": "Staženo: {resource}.",
       "auditLogsSentenceExecute": "Spuštěno: {resource}.",
       "auditLogsSentenceIssued": "Vydáno: {resource}.",
+      "auditLogsSentenceLegalHoldPlaced": "Nastaveno: {resource}.",
+      "auditLogsSentenceLegalHoldReleased": "Uvolněno: {resource}.",
       "auditLogsSentenceRedeemed": "Uplatněno: {resource}.",
       "auditLogsSentenceRefused": "Odmítnuto: {resource}.",
       "auditLogsSentenceReview": "Zkontrolováno: {resource}.",
@@ -5863,6 +5954,7 @@
         "flow_run": "spuštění pracovního postupu",
         "folio_collab_room": "místnost spolupráce Folio",
         "invoice": "faktura",
+        "legal_hold": "právní pozastavení",
         "legal_list": "právní seznam",
         "legal_list_generation": "vytvoření právního seznamu",
         "legal_list_item": "položka právního seznamu",
@@ -6022,7 +6114,13 @@
       "usageStatusTrialing": "Zkušební verze",
       "usageUnitCount": "{count, plural, one {# jednotka} few {# jednotky} other {# jednotek} many {# jednotky}}",
       "usageUnitsBalanceTemplate": "K dispozici je {remaining} jednotek",
-      "usageUnitsThisPeriod": "Jednotky využití za toto období"
+      "usageUnitsThisPeriod": "Jednotky využití za toto období",
+      "verificationDecisionModel": {
+        "description": "Při ověřování dokumentu podle faktů ze seznamu zvolí závěr ke každému tvrzení rozhodovací model. Fakta i nadále vyhledá a ocituje generativní model. Pokud si rozhodovací model není dost jistý, platí závěr generativního modelu.",
+        "title": "Závěry při ověřování dokumentů",
+        "unavailable": "Této organizaci není k dispozici žádný rozhodovací model.",
+        "updated": "Nastavení ověřování bylo aktualizováno"
+      }
     }
   },
   "sharepoint": {
@@ -6263,6 +6361,7 @@
       "previewBody5": "Před konverzí opravňuje prodej nebo uvedení na burzu Investora k vyšší z částek, tedy ke kupní ceně nebo výnosu splatnému po konverzi.",
       "previewBody6": "Společnost je řádně založena, má oprávnění uzavřít tuto smlouvu a získá všechna schválení potřebná k jejímu plnění.",
       "previewBody7": "Tato smlouva obsahuje úplnou dohodu mezi stranami a lze ji změnit pouze písemně s požadovaným souhlasem.",
+      "previewDocument": "Náhled sady stylů",
       "previewFailed": "Náhled se nepodařilo vytvořit.",
       "previewIntroduction": "Tato smlouva se uzavírá mezi společností Example Labs Ltd. (dále jen „Společnost“) a investorem uvedeným na podpisové straně (dále jen „Investor“).",
       "previewLevel1": "Investice",

@@ -13,12 +13,10 @@ import {
 import {
   CHAT_TOOL_DECLINED_ERROR,
   chatToolExecutor,
-  isBrowserResolvedChatToolCall,
-  isHarnessChatToolCall,
   isUnsupportedChatPart,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
-import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import type { SupersededToolResultsOptions } from "@stll/api-contract/chat-tool-result-retention";
 import {
   GENERATED_VISUAL_MIME_TYPE,
@@ -41,7 +39,6 @@ import {
   retainToolResultsInMessages,
   retainToolResultsInParts,
 } from "@/api/handlers/chat/tool-result-retention";
-import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type {
   ChatAttachmentMetadata,
   ChatAttachmentPart,
@@ -986,65 +983,6 @@ const CHAT_PART_POLICY = {
 export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
   CHAT_PART_POLICY[part.type].providerVisibility === "model";
 
-/**
- * Whether a client-executed tool call still awaits its client resolution.
- * Input readiness alone cannot identify its executor: sequential server calls
- * can remain input-complete behind an unanswered approval.
- */
-const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
-  "approval-requested": false,
-  // Only an approved client-executed call: `isApprovedClientCallAwaitingResult`.
-  "approval-responded": false,
-  // A terminal stream can end while the provider has only announced a call or
-  // is still emitting its JSON arguments. Neither state carries usable input,
-  // so neither may take durable turn ownership.
-  "awaiting-input": false,
-  complete: false,
-  error: false,
-  "input-complete": true,
-  "input-streaming": false,
-} as const satisfies Record<TanStackToolCallState, boolean>;
-
-/** A tool call as stored, or as read back over the API. */
-type ApprovableToolCall = {
-  type: "tool-call";
-  state: TanStackToolCallState;
-  approval?: { approved?: boolean };
-  metadata?: unknown;
-  output?: unknown;
-};
-
-/**
- * An approved client-executed call whose result has not arrived. Resuming the
- * approval hands the call to the client, so it stays `approval-responded` with
- * input only until the client posts its result.
- */
-export const isApprovedClientCallAwaitingResult = (
-  part: ApprovableToolCall,
-): boolean =>
-  part.state === "approval-responded" &&
-  part.approval?.approved === true &&
-  part.output === undefined &&
-  chatToolExecutor(part) === "client";
-
-const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
-  name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool";
-
-/**
- * A blocking question a harness on the member's computer asked and still
- * waits on. Every other harness call is reported with its result; the
- * question's call stays open until its answer reaches the run.
- */
-const isAwaitedHarnessQuestionCall = (part: ChatToolCallPart): boolean => {
-  // A harness names its own tools; the chat registry's names do not cover them.
-  const name: string = part.name;
-  return (
-    part.state === "input-complete" &&
-    name === CHAT_LOCAL_RUN_QUESTION_TOOL &&
-    isHarnessChatToolCall(part)
-  );
-};
-
 export type AwaitingUserInteraction = Extract<
   NonNullable<ChatMessageMetadata["turnOutcome"]>,
   { type: "awaiting-user" }
@@ -1193,48 +1131,6 @@ export const cancelPendingChatToolCalls = (
   return { ...message, parts: [...parts, ...results] };
 };
 
-/**
- * Every approval-requested call remains actionable. A chat turn is owned by
- * its assistant message, not by whichever pending approval happened to arrive
- * first in the stream.
- */
-export const getAwaitingUserInteractions = (
-  message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
-): AwaitingUserInteraction[] => {
-  const turnOutcome = message?.metadata?.turnOutcome;
-  if (
-    message?.role !== "assistant" ||
-    (turnOutcome !== undefined && turnOutcome.type !== "awaiting-user")
-  ) {
-    return [];
-  }
-  const interactions: AwaitingUserInteraction[] = [];
-  for (const part of message.parts) {
-    if (part.type !== "tool-call") {
-      continue;
-    }
-    if (part.state === "approval-requested") {
-      interactions.push({ type: "approval", toolCallId: part.id });
-      continue;
-    }
-    if (isAwaitedHarnessQuestionCall(part)) {
-      interactions.push({ type: "harness-question", toolCallId: part.id });
-      continue;
-    }
-    if (
-      (CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
-        isBrowserResolvedChatToolCall(part)) ||
-      isApprovedClientCallAwaitingResult(part)
-    ) {
-      interactions.push({
-        type: clientToolInteractionType(part.name),
-        toolCallId: part.id,
-      });
-    }
-  }
-  return interactions;
-};
-
 /** The tools whose calls in `message` await an approval. */
 export const getAwaitedApprovalToolNames = (
   message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
@@ -1243,7 +1139,7 @@ export const getAwaitedApprovalToolNames = (
     return new Set();
   }
   const awaitedCallIds = new Set(
-    getAwaitingUserInteractions(message).flatMap((interaction) =>
+    memberWaitsOf(message).flatMap((interaction) =>
       interaction.type === "approval" ? [interaction.toolCallId] : [],
     ),
   );
@@ -1258,8 +1154,7 @@ export const getAwaitedApprovalToolNames = (
 
 export const getAwaitingUserInteraction = (
   message: Pick<ChatMessage, "parts" | "role"> | null,
-): AwaitingUserInteraction | null =>
-  getAwaitingUserInteractions(message).at(0) ?? null;
+): AwaitingUserInteraction | null => memberWaitsOf(message).at(0) ?? null;
 
 /**
  * Whether an incoming tool-call state answers an awaited interaction:
@@ -1314,7 +1209,7 @@ const CLIENT_INTERACTION_RESOLUTION = {
 >;
 
 type GetResumedUserInteractionOptions = {
-  /** Interactions the persisted turn awaits (`getAwaitingUserInteractions`). */
+  /** Interactions the persisted turn awaits (`memberWaitsOf`). */
   awaited: readonly AwaitingUserInteraction[];
   message: Pick<ChatMessage, "parts" | "role">;
 };
@@ -2341,11 +2236,16 @@ const persistedToolInputFromChatPart = (
   if (part.input === undefined) {
     return { rawArguments: part.arguments, status: "raw" };
   }
-  // Keep the argument text only when the parsed input cannot reproduce it.
+  // Successful inputs are canonicalized by their schema. Failed calls keep
+  // the model's exact rejected text, alongside the parsed preview shown live.
+  const preserveFailedArguments =
+    part.state === "error" && JSON.stringify(part.input) !== part.arguments;
   const reproduced = Result.try((): unknown => JSON.parse(part.arguments));
   return proveParsedToolInput(
     part.input,
-    reproduced.isOk() && deepEquals(reproduced.value, part.input)
+    !preserveFailedArguments &&
+      reproduced.isOk() &&
+      deepEquals(reproduced.value, part.input)
       ? undefined
       : part.arguments,
   );
@@ -2463,6 +2363,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
+  metadata.turnSpend === undefined &&
   metadata.turnTiming === undefined &&
   metadata.turnModel === undefined &&
   metadata.usage === undefined;

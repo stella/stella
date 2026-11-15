@@ -136,6 +136,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
+  "apps/api/src/lib/queue/**/*.ts",
   "apps/api/src/lib/imports/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/email/correspondence/**/*.ts",
@@ -143,6 +144,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/extraction-runs/**/*.ts",
   "apps/api/src/lib/feature-access/**/*.ts",
   "apps/api/src/lib/kill-switches/**/*.ts",
+  "apps/api/src/lib/workspaces/legal-holds/**/*.ts",
   "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/github/**/*.ts",
@@ -356,6 +358,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // append/read/close failure only from a rejection, and the throw is what
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
+  // Wraps that StreamDurability adapter for a chat turn: the SDK still reads a
+  // delivery failure only from a rejection, now carrying its AI error kind.
+  "apps/api/src/handlers/chat/chat-delivery-failure.ts",
   // Drizzle rolls back transaction callbacks through rejection; returning a
   // Result would commit their writes instead of preserving the original refusal.
   "apps/api/src/lib/db/transaction-abort.ts",
@@ -537,6 +542,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
     reason:
       "Chrome extension worker and popup: chrome.* APIs fail by rejection and the injected page script cannot import better-result; the worker turns failures into protocol error codes at its message boundary. Enrol once chrome.* calls sit behind Result.tryPromise.",
     unit: "apps/extension/src/entrypoints",
+  },
+  {
+    reason:
+      "Chrome extension offscreen document: its chrome.runtime message listener is the runtime boundary, answering the worker with typed reads. Enrol together with apps/extension/src/entrypoints.",
+    unit: "apps/extension/src/entrypoints/offscreen",
   },
   {
     reason:

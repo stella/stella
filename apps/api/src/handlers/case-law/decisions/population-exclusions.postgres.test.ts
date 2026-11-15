@@ -100,7 +100,7 @@ const withExclusionFixture = async (
             ]) {
               const config = getViewConfig(view);
               await tx.execute(
-                sql`CREATE VIEW ${schema}.${sql.identifier(config.name)} AS (${sql.raw(dialect.sqlToQuery(config.query).sql)})`,
+                sql`CREATE VIEW ${schema}.${sql.identifier(config.name)} AS (${sql.raw(dialect.sqlToQuery(config.query ?? panic("Declared view must include a query")).sql)})`,
               );
             }
             const includedSourceId = createSafeId<"caseLawSource">();
@@ -162,6 +162,7 @@ const withExclusionFixture = async (
               // db-await-in-loop: finish the two-source production seed in bounded batches.
               const [row] = await tx.execute(
                 sql`SELECT done FROM ${schema}.seed_case_law_population_counts(2048)`,
+                "objects",
               );
               seeded = row?.["done"] === true;
             }

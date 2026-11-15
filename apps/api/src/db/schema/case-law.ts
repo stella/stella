@@ -912,9 +912,9 @@ export const caseLawDecisions = p.pgTable(
     indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
     /**
-     * Monotonic fence captured by final-generation projection intents. Any
-     * desired-state transaction increments it before changing the projection,
-     * so a worker leased against an older value cannot publish stale content.
+     * Monotonic order of the decision's projection desired-state changes. No
+     * generation's desired epoch exceeds it; leases are fenced by their own
+     * generation's desired state. Bookkeeping: writing it keeps `updated_at`.
      */
     projectionEpoch: p
       .bigint("projection_epoch", { mode: "bigint" })
@@ -2903,6 +2903,31 @@ export const caseLawSitemapChanges = p.pgTable(
       .unique("case_law_sitemap_changes_month_xact_key")
       .on(t.country, t.year, t.month, t.xact),
     p.pgPolicy("case_law_sitemap_change_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+  ],
+);
+
+/**
+ * Decisions whose newer `updated_at` is the only sitemap-relevant change of a
+ * write, appended by an owner-run trigger (migration
+ * `20261115100000_case_law_sitemap_touches`). Such a write keeps every
+ * decision in its shard, so a fold raises the shard's last modification
+ * instead of recounting the month. One row per decision until its fold; a
+ * queue, not a watermark.
+ */
+export const caseLawSitemapTouches = p.pgTable(
+  "case_law_sitemap_touches",
+  {
+    id: p.bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+  },
+  (t) => [
+    p.unique("case_law_sitemap_touches_decision_key").on(t.decisionId),
+    p.pgPolicy("case_law_sitemap_touch_owner_access", {
       for: "all",
       to: "public",
       using: sql`true`,

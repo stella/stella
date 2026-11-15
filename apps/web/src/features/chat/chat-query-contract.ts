@@ -255,6 +255,17 @@ export const chatKeys = {
     userId: string,
     threadId: string,
   ) => [...chatKeys.all, activeOrganizationId, userId, "tool-grants", threadId],
+  limitReminder: (
+    activeOrganizationId: string,
+    userId: string,
+    threadKey: string,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "limit-reminder",
+    threadKey,
+  ],
   localFilesUndo: (
     activeOrganizationId: string,
     userId: string,
@@ -283,27 +294,31 @@ export const chatKeys = {
     ...chatKeys.backgroundTaskCounts(activeOrganizationId, userId),
     threadId,
   ],
-  localRunStepOutput: ({
+  /** Every stored step of one thread, as a fork's copy completes them. */
+  localRunStepOutputs: ({
     activeOrganizationId,
     userId,
-    callId,
+    threadId,
   }: {
     activeOrganizationId: string;
     userId: string;
-    callId: string;
+    threadId: string;
   }) => [
     ...chatKeys.all,
     activeOrganizationId,
     userId,
     "local-run-step-output",
-    callId,
+    threadId,
   ],
-  /** An image a step viewed, read whole: another read than its text. */
-  localRunStepImage: (key: {
+  localRunStepOutput: ({
+    callId,
+    ...thread
+  }: {
     activeOrganizationId: string;
     userId: string;
+    threadId: string;
     callId: string;
-  }) => [...chatKeys.localRunStepOutput(key), "image"],
+  }) => [...chatKeys.localRunStepOutputs(thread), callId],
   browserSiteGrants: (activeOrganizationId: string, userId: string) => [
     ...chatKeys.all,
     activeOrganizationId,
