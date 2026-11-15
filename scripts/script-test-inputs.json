@@ -54,6 +54,7 @@
       "scripts/check-release-dependency-audit.sh"
     ],
     "scripts/check-release-receipt-coverage.test.ts": ["**"],
+    "scripts/check-release-source-on-main.test.ts": ["**"],
     "scripts/check-repeated-sql-fingerprints-ledger.test.ts": ["**"],
     "scripts/check-resolutions-only-change.test.ts": ["**"],
     "scripts/check-rust-test-determinism.test.ts": ["**"],
@@ -67,6 +68,7 @@
     "scripts/check-test-state-baseline.test.ts": ["**"],
     "scripts/check-tracked-cloud-reports.test.ts": ["**"],
     "scripts/check-tracked-symlinks.test.ts": ["**"],
+    "scripts/check-workflow-pr-write-token.test.ts": ["**"],
     "scripts/child-output-buffer.test.ts": ["**"],
     "scripts/ci-affected-selection.test.ts": ["**"],
     "scripts/ci-api-bootstrap.test.ts": ["**"],
