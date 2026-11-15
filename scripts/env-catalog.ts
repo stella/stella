@@ -1553,6 +1553,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",
+  // The pre-push signature check reads the registered signing keys from this
+  // folder instead of the GitHub account (its tests).
+  "SIGNING_KEYS_DIR",
   "STAND_IN_ENDPOINT",
   "FAKE_SIDECAR_LOG",
   // Invocation-local handoff values are removed before test/native entry points run.
