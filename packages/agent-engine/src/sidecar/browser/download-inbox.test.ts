@@ -356,3 +356,107 @@ describe("a document the tab shows", () => {
     expect(await readShown(inbox)).toMatchObject({ status: "saved" });
   });
 });
+
+describe("downloads and the runs of a chat", () => {
+  const RUN_2 = { ...RUN, runId: "run-2", workspaceDir: "/unused-run-2" };
+  const ANNEX = "https://fixture-library.test/decisions/42/annex";
+
+  /** An inbox whose held run is `held.run`; each save is judged by `onSave`. */
+  const runsInbox = () => {
+    const held: { run: typeof RUN | null } = { run: RUN };
+    const hooks = { onSave: (_sourceUrl: string): void => undefined };
+    const inbox = createDownloadInbox({
+      clock: manualClock().clock,
+      home: "/unused-home",
+      receive: async (download, { workspaceDir }) => {
+        hooks.onSave(download.sourceUrl);
+        return await Promise.resolve({
+          bytes: 10,
+          path: `${workspaceDir}/Downloads/file.pdf`,
+          sourceUrl: download.sourceUrl,
+          status: "saved" as const,
+        });
+      },
+      runOf: () => held.run,
+    });
+    return { held, hooks, inbox };
+  };
+
+  const take = async (
+    inbox: ReturnType<typeof runsInbox>["inbox"],
+    run: typeof RUN,
+  ) =>
+    await inbox.take(run, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+
+  test("a download saved for one run is handed only to that run, and goes with it", async () => {
+    const { inbox } = runsInbox();
+    inbox.arrive(settled("d-1"));
+
+    // A later run of the chat asks first: run 1's file is not in its folder.
+    expect((await take(inbox, RUN_2)).downloads).toEqual([]);
+    expect((await take(inbox, RUN)).downloads).toEqual([
+      expect.objectContaining({
+        path: "/unused-run-folder/Downloads/file.pdf",
+      }),
+    ]);
+
+    // Saved for run 1, which then ends: it goes with that run.
+    inbox.arrive(settled("d-2"));
+    inbox.forgetRun(RUN.runId);
+    expect((await take(inbox, RUN)).downloads).toEqual([]);
+    expect((await take(inbox, RUN_2)).downloads).toEqual([]);
+  });
+
+  test("a download that arrived between runs is saved into the run that takes it", async () => {
+    const { held, inbox } = runsInbox();
+    held.run = null;
+    inbox.arrive(settled("d-1"));
+
+    expect((await take(inbox, RUN_2)).downloads).toEqual([
+      expect.objectContaining({ path: "/unused-run-2/Downloads/file.pdf" }),
+    ]);
+  });
+
+  test("a download that settles while a result waits for another is counted as saving, then listed", async () => {
+    const { held, hooks, inbox } = runsInbox();
+    // A arrives between runs, so the result saves it while it is taken.
+    held.run = null;
+    inbox.arrive(settled("d-a", PDF_ADDRESS));
+    held.run = RUN;
+    inbox.arrive(started("d-b", RUN.threadId, ANNEX));
+    // B settles exactly while the result waits for A's save.
+    hooks.onSave = (sourceUrl) => {
+      if (sourceUrl === PDF_ADDRESS) {
+        inbox.arrive(settled("d-b", ANNEX, ANNEX));
+      }
+    };
+
+    const first = await inbox.take(RUN, {
+      shownAddress: ANNEX,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(first.downloads.map(({ sourceUrl }) => sourceUrl)).toEqual([
+      PDF_ADDRESS,
+    ]);
+    expect(first).toMatchObject({ saving: 1, shownSaving: true });
+
+    const next = await take(inbox, RUN);
+    expect(next.downloads.map(({ sourceUrl }) => sourceUrl)).toEqual([ANNEX]);
+    expect(next).toMatchObject({ saving: 0, shownSaving: false });
+  });
+
+  test("a start announced for one run is not counted as saving by another", async () => {
+    const { inbox } = runsInbox();
+    inbox.arrive(started("d-1", RUN.threadId, PDF_ADDRESS));
+
+    expect(await take(inbox, RUN_2)).toMatchObject({ saving: 0 });
+    expect(await take(inbox, RUN)).toMatchObject({ saving: 1 });
+    inbox.forgetRun(RUN.runId);
+    expect(await take(inbox, RUN)).toMatchObject({ saving: 0 });
+  });
+});

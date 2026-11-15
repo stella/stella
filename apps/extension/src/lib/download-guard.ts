@@ -280,7 +280,7 @@ const reserveDelivery = (
 ): DesktopDownloadVerdict => {
   const verdict = desktopDownloadVerdict(download, runningDeliveries());
   if (verdict.type === "deliver") {
-    deliveries.set(
+    holdDelivery(
       download.id,
       newDelivery(chatId, {
         shownDocument: null,
@@ -523,6 +523,65 @@ const cancelDownload = async (downloadId: number): Promise<void> => {
 };
 
 /**
+ * How long a delivery may run before it is stopped: one Chrome never
+ * settles (a stalled response) would otherwise keep its slot for good.
+ */
+export const DELIVERY_TIMEOUT_MS = 10 * 60_000;
+
+/** Runs `task` after `ms`; the returned function cancels it. */
+type DeliveryTimer = (task: () => void, ms: number) => () => void;
+
+let deliveryTimer: DeliveryTimer = (task, ms) => {
+  const timer = setTimeout(task, ms);
+  return () => {
+    clearTimeout(timer);
+  };
+};
+
+/** Where the guard sets its delivery deadlines; a test passes its own clock. */
+export const setDeliveryTimer = (timer: DeliveryTimer): void => {
+  deliveryTimer = timer;
+};
+
+/** Each held delivery's deadline, by download id. */
+const deliveryDeadlines = new Map<number, () => void>();
+
+/**
+ * A delivery past its deadline: its slot and bytes are freed, the chat
+ * hears it was interrupted, and Chrome stops the download.
+ */
+const expireDelivery = async (downloadId: number): Promise<void> => {
+  const delivery = deliveries.get(downloadId);
+  dropDelivery(downloadId);
+  if (delivery === undefined) {
+    return;
+  }
+  await releaseShownBytes(delivery);
+  reportStopped(delivery, BROWSER_DOWNLOAD_STOP_REASON.interrupted);
+  await cancelDownload(downloadId);
+};
+
+/** Holds a delivery under its download id, with one deadline from its first hold. */
+const holdDelivery = (downloadId: number, delivery: Delivery): void => {
+  deliveries.set(downloadId, delivery);
+  if (!deliveryDeadlines.has(downloadId)) {
+    deliveryDeadlines.set(
+      downloadId,
+      deliveryTimer(() => {
+        expireDelivery(downloadId).catch(() => undefined);
+      }, DELIVERY_TIMEOUT_MS),
+    );
+  }
+};
+
+/** Frees a delivery's slot and ends its deadline; every exit goes through it. */
+const dropDelivery = (downloadId: number): void => {
+  deliveries.delete(downloadId);
+  deliveryDeadlines.get(downloadId)?.();
+  deliveryDeadlines.delete(downloadId);
+};
+
+/**
  * The shown PDF save a download of this extension's is, moved to the
  * deliveries under its download id; null when it is none. Matched by the
  * `blob:` address the save asked Chrome for, which only the extension
@@ -542,7 +601,7 @@ const claimShownSave = (
     return null;
   }
   startingShownSaves.delete(starting.deliveryId);
-  deliveries.set(download.id, starting);
+  holdDelivery(download.id, starting);
   return starting;
 };
 
@@ -559,7 +618,7 @@ const refuseShownSave = async (
   delivery: Delivery,
   fetchedUrl: string,
 ): Promise<void> => {
-  deliveries.delete(downloadId);
+  dropDelivery(downloadId);
   await releaseShownBytes(delivery);
   reportStopped(
     {
@@ -603,7 +662,7 @@ const judgeOwnDownload = async (
     return;
   }
   if (download.totalBytes > BROWSER_CONTROL_LIMITS.downloadBytes) {
-    deliveries.delete(download.id);
+    dropDelivery(download.id);
     await releaseShownBytes(delivery);
     reportStopped(delivery, BROWSER_DOWNLOAD_STOP_REASON.tooLarge);
     await cancelDownload(download.id);
@@ -631,7 +690,7 @@ const runJudgement = async (
       ? await readDownloadReceiver(download)
       : NO_DOWNLOAD_RECEIVER;
   const release = () => {
-    deliveries.delete(download.id);
+    dropDelivery(download.id);
   };
   const current = await chrome.downloads.search({ id: download.id }).then(
     ([item]) => item,
@@ -800,7 +859,7 @@ export const reportDeliveredDownload = async (
   if (settled !== "complete" && settled !== "interrupted") {
     return;
   }
-  deliveries.delete(delta.id);
+  dropDelivery(delta.id);
   const [item] = await chrome.downloads.search({ id: delta.id });
   if (item?.state !== "complete" || item.filename === "") {
     await releaseShownBytes(delivery);

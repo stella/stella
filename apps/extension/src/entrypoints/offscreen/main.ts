@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 
 import {
-  readShownPdf,
+  answerShownPdfRead,
   SHOWN_PDF_READER_PORT,
   takeShownPdfReaderRequest,
 } from "../../lib/shown-pdf-reader";
@@ -29,14 +29,13 @@ chrome.runtime.onConnect.addListener((port) => {
     }
     switch (request.type) {
       case "read":
-        readShownPdf(request.url, request.maxBytes)
-          .then((answer) => {
-            port.postMessage(answer);
-            return undefined;
-          })
-          .catch(() => {
-            port.disconnect();
-          });
+        // A worker that stopped waiting closed the port; then the answer's
+        // bytes are freed.
+        answerShownPdfRead(request, (answer) => {
+          port.postMessage(answer);
+        }).catch(() => {
+          port.disconnect();
+        });
         return;
       case "release":
         URL.revokeObjectURL(request.downloadUrl);

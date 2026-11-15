@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { readShownPdf, takeShownPdfReaderRequest } from "./shown-pdf-reader";
+import {
+  answerShownPdfRead,
+  createOffscreenShownPdfReader,
+  readShownPdf,
+  type ShownPdfRead,
+  takeShownPdfReaderRequest,
+} from "./shown-pdf-reader";
 
 const PDF_BYTES = "%PDF-1.7\nfixture\n%%EOF\n";
 
@@ -194,5 +200,225 @@ describe("reading a shown PDF for its save", () => {
       reason: "interrupted",
       type: "refused",
     });
+  });
+});
+
+describe("the read's deadline", () => {
+  test("a body that stalls ends as interrupted once the deadline passes", async () => {
+    const sent = Promise.withResolvers<undefined>();
+    const site = serve(
+      () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start: (controller) => {
+              // One chunk, then nothing more: the stream never ends.
+              controller.enqueue(new TextEncoder().encode("%PDF-"));
+              sent.resolve(undefined);
+            },
+          }),
+          { headers: { "content-type": "application/pdf" } },
+        ),
+    );
+    const deadline = new AbortController();
+
+    const reading = readShownPdf(`${site.origin}/decisions/42`, 1024, {
+      deadline: deadline.signal,
+    });
+    await sent.promise;
+    deadline.abort();
+
+    expect(await reading).toEqual({ reason: "interrupted", type: "refused" });
+  });
+});
+
+describe("answering a read in the offscreen document", () => {
+  const READ: ShownPdfRead = {
+    bytes: 5,
+    downloadUrl: `blob:chrome-extension://${EXTENSION_ID}/1`,
+    fetchedUrl: "https://fixture-library.test/decisions/42",
+    type: "read",
+  };
+  const request = {
+    maxBytes: 1024,
+    url: "https://fixture-library.test/decisions/42",
+  };
+  const closedPort = () => {
+    throw new TypeError("Attempting to use a disconnected port object");
+  };
+
+  test("bytes nobody can be told about are freed at once", async () => {
+    const revoked: string[] = [];
+    await answerShownPdfRead(request, closedPort, {
+      read: async () => await Promise.resolve(READ),
+      revoke: (downloadUrl) => {
+        revoked.push(downloadUrl);
+      },
+    });
+    expect(revoked).toEqual([READ.downloadUrl]);
+  });
+
+  test("an answer posted keeps its bytes, and a refusal has none to free", async () => {
+    const posted: ShownPdfRead[] = [];
+    const revoked: string[] = [];
+    const revoke = (downloadUrl: string) => {
+      revoked.push(downloadUrl);
+    };
+    await answerShownPdfRead(
+      request,
+      (answer) => {
+        posted.push(answer);
+      },
+      { read: async () => await Promise.resolve(READ), revoke },
+    );
+    await answerShownPdfRead(request, closedPort, {
+      read: async () =>
+        await Promise.resolve<ShownPdfRead>({
+          reason: "redirected",
+          type: "refused",
+        }),
+      revoke,
+    });
+    expect(posted).toEqual([READ]);
+    expect(revoked).toEqual([]);
+  });
+});
+
+describe("the worker's reader", () => {
+  const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
+
+  afterEach(() => {
+    if (originalChrome) {
+      Object.defineProperty(globalThis, "chrome", originalChrome);
+    } else {
+      Reflect.deleteProperty(globalThis, "chrome");
+    }
+  });
+
+  type FakePort = {
+    answer: (message: unknown) => void;
+    close: () => void;
+    disconnected: boolean;
+    posted: unknown[];
+  };
+
+  /**
+   * The offscreen document is open; each port the worker opens is kept so
+   * a test can answer, close or ignore it. Timers run only when a test
+   * runs them out.
+   */
+  const installReader = () => {
+    const ports: FakePort[] = [];
+    const opened = Promise.withResolvers<undefined>();
+    Object.defineProperty(globalThis, "chrome", {
+      configurable: true,
+      value: {
+        runtime: {
+          connect: () => {
+            const messageListeners: ((message: unknown) => void)[] = [];
+            const disconnectListeners: (() => void)[] = [];
+            const port: FakePort = {
+              answer: (message) => {
+                for (const listener of messageListeners) {
+                  listener(message);
+                }
+              },
+              close: () => {
+                for (const listener of disconnectListeners) {
+                  listener();
+                }
+              },
+              disconnected: false,
+              posted: [],
+            };
+            ports.push(port);
+            opened.resolve(undefined);
+            return {
+              disconnect: () => {
+                port.disconnected = true;
+              },
+              onDisconnect: {
+                addListener: (listener: () => void) => {
+                  disconnectListeners.push(listener);
+                },
+              },
+              onMessage: {
+                addListener: (listener: (message: unknown) => void) => {
+                  messageListeners.push(listener);
+                },
+              },
+              postMessage: (message: unknown) => {
+                port.posted.push(message);
+              },
+            };
+          },
+          getContexts: async () => await Promise.resolve([{}]),
+        },
+      },
+    });
+    const timers: { ms: number; task: () => void }[] = [];
+    const reader = createOffscreenShownPdfReader((task, ms) => {
+      const timer = { ms, task };
+      timers.push(timer);
+      return () => {
+        const index = timers.indexOf(timer);
+        if (index !== -1) {
+          timers.splice(index, 1);
+        }
+      };
+    });
+    return { opened: opened.promise, ports, reader, timers };
+  };
+
+  const ADDRESS = "https://fixture-library.test/decisions/42";
+
+  test("a document that never answers frees the read at its deadline", async () => {
+    const { opened, ports, reader, timers } = installReader();
+
+    const reading = reader.read(ADDRESS, 1024);
+    await opened;
+    expect(timers).toHaveLength(1);
+    for (const { task } of [...timers]) {
+      task();
+    }
+
+    expect(await reading).toEqual({ reason: "interrupted", type: "refused" });
+    expect(ports[0]?.disconnected).toBe(true);
+  });
+
+  test("a document that closes the port, or is gone, ends the read as interrupted", async () => {
+    const { opened, ports, reader, timers } = installReader();
+
+    const reading = reader.read(ADDRESS, 1024);
+    await opened;
+    ports[0]?.close();
+
+    expect(await reading).toEqual({ reason: "interrupted", type: "refused" });
+    expect(timers).toEqual([]);
+  });
+
+  test("an answer is taken, its deadline ended and the port closed", async () => {
+    const { opened, ports, reader, timers } = installReader();
+    const answer: ShownPdfRead = {
+      bytes: 5,
+      downloadUrl: `blob:chrome-extension://${EXTENSION_ID}/2`,
+      fetchedUrl: ADDRESS,
+      type: "read",
+    };
+
+    const reading = reader.read(ADDRESS, 1024);
+    await opened;
+    expect(ports[0]?.posted).toEqual([
+      {
+        maxBytes: 1024,
+        target: "stella-shown-pdf-reader",
+        type: "read",
+        url: ADDRESS,
+      },
+    ]);
+    ports[0]?.answer(answer);
+
+    expect(await reading).toEqual(answer);
+    expect(timers).toEqual([]);
+    expect(ports[0]?.disconnected).toBe(true);
   });
 });

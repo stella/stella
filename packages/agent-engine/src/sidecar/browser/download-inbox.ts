@@ -46,15 +46,31 @@ const MAX_KNOWN_ADDRESSES = 64;
 /** The run a result is taken for: whose folder downloads land in. */
 type InboxRun = { runId: string; threadId: string; workspaceDir: string };
 
-/** A settled download until a result hands it out; see `shownDocument` on the bridge's report. */
+/**
+ * A settled download until a result hands it out; see `shownDocument` on
+ * the bridge's report. One saved while a run was held belongs to that
+ * run: its path is relative to that run's folder, so only that run's
+ * results hand it out. One that arrived between runs waits for the next
+ * run to take it, which saves it into its own folder.
+ */
 type HeldDownload = { shownDocument: string | null } & (
-  | { type: "saving"; outcome: Promise<BrowserDownloadOutcome> }
+  | {
+      type: "saving";
+      outcome: Promise<BrowserDownloadOutcome>;
+      runId: string;
+    }
   | { type: "waiting"; download: BrowserDownload }
 );
+
+/** Whether `run`'s result may hand out `entry`. */
+const heldFor = (entry: HeldDownload, runId: string): boolean =>
+  entry.type === "waiting" || entry.runId === runId;
 
 type Started = {
   /** When it was announced, in the inbox's clock. */
   at: number;
+  /** The run held when it was announced, whose folder it will land in; null between runs. */
+  runId: string | null;
   /** The address of the shown PDF it saves; null for a page's download. */
   shownDocument: string | null;
   /** Its place in the order downloads were announced. */
@@ -154,6 +170,12 @@ export const createDownloadInbox = ({
       workspaceDir: run.workspaceDir,
     });
 
+  /** The downloads still saving that `runId`'s results may count. */
+  const savingFor = (chat: ChatDownloads, runId: string): Started[] =>
+    [...chat.started.values()].filter(
+      (started) => started.runId === null || started.runId === runId,
+    );
+
   /** Whether a download announced after `since` is still saving. */
   const stillSaving = (chat: ChatDownloads, since: number): boolean =>
     [...chat.started.values()].some(({ sequence }) => sequence > since);
@@ -224,6 +246,7 @@ export const createDownloadInbox = ({
           announced += 1;
           chat.started.set(report.deliveryId, {
             at: clock.now(),
+            runId: runOf(report.controllerId)?.runId ?? null,
             sequence: announced,
             shownDocument:
               report.shownDocument === null
@@ -241,6 +264,7 @@ export const createDownloadInbox = ({
               ? { download: report.download, shownDocument, type: "waiting" }
               : {
                   outcome: receive(report.download, run),
+                  runId: run.runId,
                   shownDocument,
                   type: "saving",
                 };
@@ -267,12 +291,21 @@ export const createDownloadInbox = ({
     ): Promise<TakenDownloads> => {
       await settle(run.threadId, since, signal);
       const chat = chatOf(run.threadId);
-      const held = chat.held;
-      chat.held = [];
+      const held = chat.held.filter((entry) => heldFor(entry, run.runId));
+      chat.held = chat.held.filter((entry) => !heldFor(entry, run.runId));
       const expired = clock.now() - STARTED_DOWNLOAD_TTL_MS;
       chat.started = new Map(
         [...chat.started].filter(([, { at }]) => at >= expired),
       );
+      // Read now, with the held list: a download that settles while this
+      // result waits for the ones it holds is counted as still saving here
+      // and listed by the next result, never lost between the two.
+      const shownDocument =
+        shownAddress === null ? null : browserDocumentAddress(shownAddress);
+      const saving = savingFor(chat, run.runId);
+      const shownSaving =
+        shownDocument !== null &&
+        saving.some((started) => started.shownDocument === shownDocument);
       const settled = await Promise.all(
         held.map(async (entry) => {
           switch (entry.type) {
@@ -293,27 +326,31 @@ export const createDownloadInbox = ({
         }),
       );
       remember(run.runId, settled);
-      const shownDocument =
-        shownAddress === null ? null : browserDocumentAddress(shownAddress);
       return {
         downloads: settled.map(({ outcome }) => outcome),
-        saving: chat.started.size,
-        shownSaving:
-          shownDocument !== null &&
-          [...chat.started.values()].some(
-            (started) => started.shownDocument === shownDocument,
-          ),
+        saving: saving.length,
+        shownSaving,
         shown:
-          shownAddress === null
+          shownDocument === null
             ? null
-            : (known
-                .get(run.runId)
-                ?.get(browserDocumentAddress(shownAddress)) ?? null),
+            : (known.get(run.runId)?.get(shownDocument) ?? null),
       };
     },
-    /** The run ended: what its documents became is forgotten. */
+    /**
+     * The run ended: what its documents became is forgotten, and what it
+     * saved but no result of it handed out goes with it, since its paths
+     * are relative to that run's folder.
+     */
     forgetRun: (runId: string) => {
       known.delete(runId);
+      for (const chat of chats.values()) {
+        chat.held = chat.held.filter(
+          (entry) => entry.type === "waiting" || entry.runId !== runId,
+        );
+        chat.started = new Map(
+          [...chat.started].filter(([, started]) => started.runId !== runId),
+        );
+      }
     },
     clear: () => {
       chats.clear();

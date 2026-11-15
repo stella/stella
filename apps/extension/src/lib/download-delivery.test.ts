@@ -8,12 +8,14 @@ import {
 } from "@stll/api-contract/browser-control";
 
 import {
+  DELIVERY_TIMEOUT_MS,
   desktopDownloadVerdict,
   holdDownloadForJudgement,
   loadDownloadScope,
   MAX_RUNNING_DELIVERIES,
   reportDeliveredDownload,
   saveShownPdf,
+  setDeliveryTimer,
   setDownloadReporter,
   setDownloadScope,
   setShownPdfReader,
@@ -33,6 +35,7 @@ afterEach(() => {
     read: async () => ({ reason: "interrupted", type: "refused" }),
     release: async () => undefined,
   });
+  setDeliveryTimer(() => () => undefined);
   if (originalChrome) {
     Object.defineProperty(globalThis, "chrome", originalChrome);
   } else {
@@ -65,6 +68,8 @@ const installFakeChrome = (holder: Holder) => {
   // What Chrome does when the extension asks it to download: by default it
   // answers with a new download id.
   const chromeDownloads = {
+    /** Called when the guard asks Chrome to stop a download. */
+    onCancel: (): void => undefined,
     start: async (
       _options: chrome.downloads.DownloadOptions,
     ): Promise<number> => {
@@ -104,6 +109,7 @@ const installFakeChrome = (holder: Holder) => {
         },
         cancel: async (id: number) => {
           events.push(`cancel:${id}`);
+          chromeDownloads.onCancel();
           // Chrome stops only a download still running.
           const item = items.get(id);
           if (item !== undefined && item.state !== "complete") {
@@ -176,6 +182,18 @@ const installFakeChrome = (holder: Holder) => {
     reads: new Array<{ maxBytes: number; url: string }>(),
     releases: new Array<string>(),
   };
+  /** Each delivery deadline set and not yet ended. */
+  const deliveryTimers: { ms: number; task: () => void }[] = [];
+  setDeliveryTimer((task, ms) => {
+    const timer = { ms, task };
+    deliveryTimers.push(timer);
+    return () => {
+      const index = deliveryTimers.indexOf(timer);
+      if (index !== -1) {
+        deliveryTimers.splice(index, 1);
+      }
+    };
+  });
   setShownPdfReader({
     read: async (url, maxBytes) => {
       reader.reads.push({ maxBytes, url });
@@ -192,6 +210,7 @@ const installFakeChrome = (holder: Holder) => {
   return {
     chromeDownloads,
     deliveries,
+    deliveryTimers,
     events,
     items,
     reader,
@@ -788,6 +807,41 @@ describe("a PDF chat's tab shows", () => {
     expect(fake.reader.releases.toSorted()).toEqual(
       [first?.url ?? "", second?.url ?? ""].toSorted(),
     );
+  });
+
+  test("a save Chrome never settles is stopped at its deadline, its slot and bytes freed", async () => {
+    const fake = installFakeChrome(DESKTOP_CHAT);
+    await saveShownPdf(shownPdf());
+    const [stalled] = savesOf(fake);
+    expect(fake.deliveryTimers.map(({ ms }) => ms)).toEqual([
+      DELIVERY_TIMEOUT_MS,
+    ]);
+    const stopped = Promise.withResolvers<undefined>();
+    fake.chromeDownloads.onCancel = () => {
+      stopped.resolve(undefined);
+    };
+
+    for (const { task } of [...fake.deliveryTimers]) {
+      task();
+    }
+    await stopped.promise;
+
+    expect(fake.events).toContain(`cancel:${String(stalled?.id ?? 0)}`);
+    expect(fake.reports.map(({ download }) => download)).toEqual([
+      expect.objectContaining({ outcome: "stopped", reason: "interrupted" }),
+    ]);
+    expect(fake.reader.releases).toEqual([stalled?.url ?? ""]);
+    expect(fake.deliveryTimers).toEqual([]);
+  });
+
+  test("a save that settles ends its deadline", async () => {
+    const fake = installFakeChrome(DESKTOP_CHAT);
+    await saveShownPdf(shownPdf());
+    const [save] = savesOf(fake);
+    fake.items.set(save?.id ?? 0, ownDownload(save?.id ?? 0, save?.url ?? ""));
+    await finish(fake.items, save?.id ?? 0, `${DOWNLOADS}/staged.pdf`);
+
+    expect(fake.deliveryTimers).toEqual([]);
   });
 
   test("a download of the extension's that no save explains is stopped", async () => {

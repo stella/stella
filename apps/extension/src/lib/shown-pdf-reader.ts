@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import { BROWSER_DOWNLOAD_STOP_REASON } from "@stll/api-contract/browser-control";
@@ -124,21 +125,80 @@ const isRedirect = (response: Response): boolean =>
   (response.status >= 300 && response.status < 400);
 
 /**
+ * How long one read may take, its request and its whole body together. A
+ * read past it ends as interrupted, so a slow stream never holds one of
+ * the chat's delivery slots for long.
+ */
+export const SHOWN_PDF_READ_TIMEOUT_MS = 120_000;
+
+/**
+ * How long the worker waits for the reader's answer: the read's own
+ * deadline and a margin for the document to start. Past it the worker
+ * stops waiting, whatever the document still does.
+ */
+const READER_ANSWER_TIMEOUT_MS = SHOWN_PDF_READ_TIMEOUT_MS + 15_000;
+
+type ReadOptions = {
+  /** Aborts the request and its body; the read then ends as interrupted. */
+  deadline?: AbortSignal;
+  /** The offscreen document's `fetch`. */
+  fetcher?: typeof fetch;
+};
+
+/** Reads the body, at most `maxBytes` of it, until done or the deadline. */
+const readBody = async (
+  body: NonNullable<Response["body"]>,
+  maxBytes: number,
+  deadline: AbortSignal,
+): Promise<
+  { type: "bytes"; chunks: BlobPart[]; total: number } | ShownPdfRead
+> => {
+  const chunks: BlobPart[] = [];
+  let total = 0;
+  const reader = body.getReader();
+  try {
+    for (;;) {
+      // await-in-loop: one chunk at a time, so a large file stops early.
+      const chunk = await reader.read().catch(() => null);
+      if (chunk === null || deadline.aborted) {
+        return refusedRead(STOP.interrupted);
+      }
+      if (chunk.done) {
+        return { chunks, total, type: "bytes" };
+      }
+      total += chunk.value.byteLength;
+      if (total > maxBytes) {
+        return refusedRead(STOP.tooLarge);
+      }
+      chunks.push(chunk.value);
+    }
+  } finally {
+    // Stops the response on every early exit; after the end it does nothing.
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+};
+
+/**
  * Fetches `url` once and keeps at most `maxBytes` of it as a `blob:`
- * address. Runs in the offscreen document; `fetcher` is that document's
- * `fetch`. The HTTP cache is used when it holds the response, so an
- * address a site serves once can still be saved when the tab's response
- * was cached.
+ * address, within one deadline for the request and its body. Runs in the
+ * offscreen document. The HTTP cache is used when it holds the response,
+ * so an address a site serves once can still be saved when the tab's
+ * response was cached.
  */
 export const readShownPdf = async (
   url: string,
   maxBytes: number,
-  fetcher: typeof fetch = fetch,
+  {
+    deadline = AbortSignal.timeout(SHOWN_PDF_READ_TIMEOUT_MS),
+    fetcher = fetch,
+  }: ReadOptions = {},
 ): Promise<ShownPdfRead> => {
   const response = await fetcher(url, {
     cache: "force-cache",
     credentials: "include",
     redirect: "manual",
+    signal: deadline,
   }).catch(() => null);
   if (response === null) {
     return refusedRead(STOP.interrupted);
@@ -152,33 +212,45 @@ export const readShownPdf = async (
     await body?.cancel().catch(() => undefined);
     return refusedRead(STOP.interrupted);
   }
-  const reader = body.getReader();
-  const chunks: BlobPart[] = [];
-  let total = 0;
-  for (;;) {
-    // await-in-loop: one chunk at a time, so a large file stops early.
-    const chunk = await reader.read().catch(() => null);
-    if (chunk === null) {
-      return refusedRead(STOP.interrupted);
-    }
-    if (chunk.done) {
-      break;
-    }
-    total += chunk.value.byteLength;
-    if (total > maxBytes) {
-      await reader.cancel().catch(() => undefined);
-      return refusedRead(STOP.tooLarge);
-    }
-    chunks.push(chunk.value);
+  const read = await readBody(body, maxBytes, deadline);
+  if (read.type !== "bytes") {
+    return read;
   }
   return {
-    bytes: total,
+    bytes: read.total,
     downloadUrl: URL.createObjectURL(
-      new Blob(chunks, { type: "application/pdf" }),
+      new Blob(read.chunks, { type: "application/pdf" }),
     ),
     fetchedUrl: response.url === "" ? url : response.url,
     type: "read",
   };
+};
+
+/**
+ * Answers one read in the offscreen document. When the answer cannot be
+ * posted (the worker stopped waiting and closed the port), the bytes it
+ * kept are freed at once: nobody will ask for them.
+ */
+export const answerShownPdfRead = async (
+  request: { maxBytes: number; url: string },
+  post: (answer: ShownPdfRead) => void,
+  {
+    read = readShownPdf,
+    revoke = URL.revokeObjectURL,
+  }: {
+    read?: (url: string, maxBytes: number) => Promise<ShownPdfRead>;
+    revoke?: (downloadUrl: string) => void;
+  } = {},
+): Promise<void> => {
+  const answer = await read(request.url, request.maxBytes).catch(
+    (): ShownPdfRead => refusedRead(STOP.interrupted),
+  );
+  const posted = Result.try(() => {
+    post(answer);
+  });
+  if (Result.isError(posted) && answer.type === "read") {
+    revoke(answer.downloadUrl);
+  }
 };
 
 /** How the worker reaches the reader; the download guard holds one. */
@@ -213,39 +285,61 @@ const ensureOffscreenDocument = async (): Promise<void> => {
   await creating;
 };
 
-/**
- * Sends one request to the offscreen document over a port of its own and
- * resolves with the first answer, or undefined once the document closes
- * the port without one.
- */
-const askReader = async (request: ShownPdfReaderRequest): Promise<unknown> => {
-  await ensureOffscreenDocument();
-  return await new Promise<unknown>((resolve) => {
-    const port = chrome.runtime.connect({ name: SHOWN_PDF_READER_PORT });
-    port.onMessage.addListener((answer: unknown) => {
-      resolve(answer);
-      port.disconnect();
-    });
-    port.onDisconnect.addListener(() => {
-      resolve(undefined);
-    });
-    port.postMessage(request);
-  });
+/** Runs `task` after `ms`; the returned function cancels it. */
+type ReaderTimer = (task: () => void, ms: number) => () => void;
+
+const systemReaderTimer: ReaderTimer = (task, ms) => {
+  const timer = setTimeout(task, ms);
+  return () => {
+    clearTimeout(timer);
+  };
 };
 
-/** The worker's reader: the offscreen document, over a port per request. */
-export const offscreenShownPdfReader: ShownPdfReader = {
-  read: async (url, maxBytes) => {
-    const answer = await askReader({
-      maxBytes,
-      target: TARGET,
-      type: "read",
-      url,
+/**
+ * The worker's reader: the offscreen document, over a port per request.
+ * Each request resolves with the first answer, or with none once the
+ * document closes the port (it refused, or it is gone) or the answer
+ * deadline passes; then the port is closed, so a late answer frees its
+ * own bytes.
+ */
+export const createOffscreenShownPdfReader = (
+  timer: ReaderTimer = systemReaderTimer,
+): ShownPdfReader => {
+  const ask = async (request: ShownPdfReaderRequest): Promise<unknown> => {
+    await ensureOffscreenDocument();
+    return await new Promise<unknown>((resolve) => {
+      const port = chrome.runtime.connect({ name: SHOWN_PDF_READER_PORT });
+      const finish = (answer: unknown) => {
+        cancelTimer();
+        resolve(answer);
+      };
+      const cancelTimer = timer(() => {
+        finish(undefined);
+        port.disconnect();
+      }, READER_ANSWER_TIMEOUT_MS);
+      port.onMessage.addListener((answer: unknown) => {
+        finish(answer);
+        port.disconnect();
+      });
+      port.onDisconnect.addListener(() => {
+        finish(undefined);
+      });
+      port.postMessage(request);
     });
-    const parsed = v.safeParse(shownPdfReadSchema, answer);
-    return parsed.success ? parsed.output : refusedRead(STOP.interrupted);
-  },
-  release: async (downloadUrl) => {
-    await askReader({ downloadUrl, target: TARGET, type: "release" });
-  },
+  };
+  return {
+    read: async (url, maxBytes) => {
+      const answer = await ask({
+        maxBytes,
+        target: TARGET,
+        type: "read",
+        url,
+      });
+      const parsed = v.safeParse(shownPdfReadSchema, answer);
+      return parsed.success ? parsed.output : refusedRead(STOP.interrupted);
+    },
+    release: async (downloadUrl) => {
+      await ask({ downloadUrl, target: TARGET, type: "release" });
+    },
+  };
 };
