@@ -50,6 +50,8 @@ import {
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_LEASE_MAX_MS,
   type CorpusProjectionIntentLease,
+  type CorpusProjectionOfflineRequest,
+  type CorpusProjectionOfflineStart,
   proveAcceptedCorpusProjectionAppendsTx,
   readCorpusProjectionOfflineRequestCapsTx,
   readProvableCorpusProjectionAppendsTx,
@@ -402,7 +404,7 @@ const startShard = async (
     lease,
     expectedDocumentCount: documentsOf(model.entityIds.indexOf(lease.entityId)),
   }));
-  const request = {
+  const request: CorpusProjectionOfflineRequest = {
     requestId: Bun.randomUUIDv7(),
     plannedRevisionCount: counts.length,
   };
@@ -1392,7 +1394,7 @@ describe("offline request caps", () => {
     const model = await newModel();
     const leases = await reserve(model, ENTITIES_PER_RUN);
     const counts = leases.map((lease) => ({ lease, expectedDocumentCount: 1 }));
-    const request = {
+    const request: CorpusProjectionOfflineRequest = {
       requestId: Bun.randomUUIDv7(),
       plannedRevisionCount: ENTITIES_PER_RUN,
     };
@@ -1418,7 +1420,7 @@ describe("offline request caps", () => {
     model.offsetMs += CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS + 1000;
     const late = await chunk(counts.slice(2));
     expect(late.outcomes).toEqual(
-      counts.slice(2).map(({ lease }) => ({
+      counts.slice(2).map(({ lease }): CorpusProjectionOfflineStart => ({
         intentId: lease.intentId,
         status: "not_started",
         reason: "start_window_closed",
@@ -1478,7 +1480,7 @@ describe("offline request caps", () => {
     const startedAt = await now(model);
     // Across the whole request: each lease alone fits its transaction, but
     // the planned total of two passes both caps.
-    const request = {
+    const request: CorpusProjectionOfflineRequest = {
       requestId: Bun.randomUUIDv7(),
       plannedRevisionCount: 2,
     };
@@ -1506,7 +1508,7 @@ describe("offline request caps", () => {
       lease,
       expectedDocumentCount: 1,
     }));
-    const request = {
+    const request: CorpusProjectionOfflineRequest = {
       requestId: Bun.randomUUIDv7(),
       plannedRevisionCount: MODEL_START_CHUNK,
     };
@@ -1571,7 +1573,7 @@ describe("offline request caps", () => {
       panic("Expected one projection lease");
     }
     // Planned with three more that never started: it travelled alone.
-    const request = {
+    const request: CorpusProjectionOfflineRequest = {
       requestId: Bun.randomUUIDv7(),
       plannedRevisionCount: ENTITIES_PER_RUN,
     };

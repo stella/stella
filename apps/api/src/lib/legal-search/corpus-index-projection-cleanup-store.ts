@@ -1893,25 +1893,14 @@ const commitExpiredOfflineAppendsTx = async (
     }),
     fallback: sql`${corpusIndexProjectionIntents.appendPublishBarrierAt}`,
   });
-  const committed = await tx
-    .update(corpusIndexProjectionIntents)
-    .set({
-      status: "append_committed",
-      leaseToken: null,
-      leaseExpiresAt: null,
-      appendCommittedAt: transitionAt,
-      appendPublishBarrierAt: barrierSql,
-      // No `last_error`: a revision this census applies must stay restorable
-      // like any other (`corpusIndexProjectionRevisionIsRestorable`).
-      updatedAt: transitionAt,
-    })
-    .where(
-      and(
-        inArray(
-          corpusIndexProjectionIntents.id,
-          rows.map(({ id }) => id),
-        ),
-        eq(corpusIndexProjectionIntents.status, "append_started"),
+  const committed = await transitionBatch({
+    tx,
+    spec: CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE,
+    ids: rows.map(({ id }) => id),
+    options: {
+      to: "append_committed",
+      from: ["append_started"],
+      guard: and(
         eq(corpusIndexProjectionIntents.appendDelivery, "offline_indexer"),
         isNotNull(corpusIndexProjectionIntents.expectedDocumentCount),
         sql`EXISTS (
@@ -1926,8 +1915,20 @@ const commitExpiredOfflineAppendsTx = async (
             AND state.desired_index_id = ${corpusIndexProjectionIntents.indexId}
         )`,
       ),
-    )
-    .returning({ id: corpusIndexProjectionIntents.id });
+      set: {
+        leaseToken: null,
+        leaseExpiresAt: null,
+        appendCommittedAt: transitionAt,
+        appendPublishBarrierAt: barrierSql,
+        // No `last_error`: a revision this census applies must stay
+        // restorable like any other (`corpusIndexProjectionRevisionIsRestorable`).
+        updatedAt: transitionAt,
+      },
+    },
+    // Bookkeeping on the derived public corpus projection: no tenant data
+    // and no actor.
+    recordTransitionAuditEvent: () => undefined,
+  });
   return new Set(committed.map(({ id }) => id));
 };
 

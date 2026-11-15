@@ -243,7 +243,8 @@ const READER_ANNOTATION_LOCK_NAMESPACE = 0x0f_10_cc_af;
 // aggregate history, in organization ID order (see lockLegalHoldOrganizations).
 const LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE = 19_054;
 const BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE = 0x0f_10_cc_b6;
-const CORPUS_PROJECTION_OFFLINE_REQUEST_LOCK_NAMESPACE = 0x0f_10_cc_b7;
+// The corpus projection offline request aggregate's namespace.
+const OFFLINE_REQUEST = 0x0f_10_cc_b7;
 
 const chatOwnerStoredContentEgressKey = ({
   organizationId,
@@ -1383,12 +1384,16 @@ const rowStatement = (
     sql`, `,
   )} FROM ${sql.identifier("public")}.${sql.identifier(resource.table)} WHERE ${sql.join(keys, sql` AND `)} ${sql.raw(`FOR ${mode.toUpperCase()}`)} ${wait === "nowait" ? sql`NOWAIT` : sql``}`;
 };
-const corpusProjectionOfflineRequestResource = (
-  requestId: AggregateIdentities["corpusProjectionOfflineRequest"],
-) => ({
-  first: sql`${CORPUS_PROJECTION_OFFLINE_REQUEST_LOCK_NAMESPACE}::integer`,
-  second: sql`hashtext(${requestId})`,
-  order: ["corpusProjectionOfflineRequest", requestId],
+/** The second key and lock order of an aggregate one string identifies. */
+const hashedId = ({
+  aggregate,
+  id,
+}: {
+  aggregate: AggregateName;
+  id: string;
+}) => ({
+  second: sql`hashtext(${id})`,
+  order: [aggregate, id],
 });
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
@@ -1586,7 +1591,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         ],
       };
     case "corpusProjectionOfflineRequest":
-      return corpusProjectionOfflineRequestResource(options.id);
+      return { first: sql`${OFFLINE_REQUEST}::integer`, ...hashedId(options) };
     default:
       options satisfies never;
       return panic("Unknown advisory aggregate");
