@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 9,
+  "reason": "The chat queue's store writes queued messages, their positions and holds. The queue routes record the enqueue, edit and removal of a message on the thread in the same transaction, and a sent message is recorded where the send stores it; renumbering positions, holds and their release, and a reorder of the member's own queue change no stored content."
+}

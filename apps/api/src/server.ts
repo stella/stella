@@ -13,6 +13,7 @@ import { startFeatureAccessGrantsRefresh } from "@/api/env-feature-access";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import { startChatQueueSender } from "@/api/handlers/chat/queue/chat-queue-sender";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview-cache";
 import { createHttpApp } from "@/api/http/app";
@@ -261,6 +262,7 @@ const startServer = async (): Promise<void> => {
 
   // Before the listener opens, so no runner upgrade finds the gateway absent.
   await startDesktopRunnerGateway();
+  const stopChatQueueSender = startChatQueueSender();
 
   const server = Bun.serve({
     port: getApiPort(),
@@ -301,6 +303,7 @@ const startServer = async (): Promise<void> => {
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
       closeBackgroundWorkers: async () => {
+        stopChatQueueSender();
         await stopFeatureAccessGrantsRefresh?.();
         await backgroundWorkers.close();
       },

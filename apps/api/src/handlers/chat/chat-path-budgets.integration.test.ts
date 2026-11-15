@@ -103,8 +103,9 @@ const CHAT_PATH_BUDGETS = {
   /** One older page. */
   olderPage: { measured: { pageBytes: 14_365, statements: 6 } },
   /** A send up to its first delivery-log append: the thread and history
-   *  reads, the turn's acceptance and claim, the run's setup. */
-  sendUntilStream: { measured: { statements: 63 } },
+   *  reads, the turn's acceptance (which releases a held queue) and claim,
+   *  the run's setup. */
+  sendUntilStream: { measured: { statements: 64 } },
   /** The streamed answer: delivery-log appends batch deltas, so a delta
    *  costs a share of one append, and its SSE event a fixed frame. */
   streamedText: {

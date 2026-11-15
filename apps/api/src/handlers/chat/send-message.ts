@@ -25,6 +25,7 @@ import {
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
 import {
   CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
   CHAT_RUN_TARGET_KIND,
@@ -119,7 +120,10 @@ import {
   isChatTurnRunIdTaken,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
-import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import type {
+  ChatTurnExecution,
+  ChatTurnSource,
+} from "@/api/handlers/chat/chat-turn-persistence";
 import {
   CHAT_TURN_BOUNDARY_MODE,
   ChatTurnRun,
@@ -1396,6 +1400,8 @@ const keepThreadRunTarget = async ({
 };
 
 type AcceptIncomingTurnOptions = {
+  /** Who asked for the turn: the member, or their queue sending for them. */
+  source: ChatTurnSource;
   accessibleSet: ReadonlySet<string>;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   body: ChatSendRequest;
@@ -1415,6 +1421,7 @@ type AcceptIncomingTurnOptions = {
 
 /** Persists the incoming message and establishes the turn's durable owner. */
 const acceptIncomingTurn = async ({
+  source,
   accessibleSet,
   accessibleWorkspaceIds,
   body,
@@ -1621,12 +1628,24 @@ const acceptIncomingTurn = async ({
       latestMessagePlan.persistencePlan.type !== "none"
         ? createChatTurnAcceptance({
             organizationId,
+            source,
             threadId: body.threadId,
             userId,
             userMessageId: parsedMessage.message.id,
             workspaceId,
           })
         : undefined;
+    // A queued message is sent only as a new turn that takes it from the
+    // queue; one that would not store a new turn is not the queue's to send.
+    if (source.type === "queue" && turnAcceptance === undefined) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          code: CHAT_QUEUE_ERROR_CODE.notDue,
+          message: "The queued message is not the next one the queue may send",
+        }),
+      );
+    }
     const persistenceProps = {
       acceptedSendMode: body.sendMode,
       recordAuditEvent,
@@ -2903,6 +2922,10 @@ export const createSendMessage = (
         yield* Result.await(lifecycle.checkAdmission());
 
         const acceptedTurnResult = await acceptIncomingTurn({
+          source:
+            session.startedFromQueue === undefined
+              ? { type: "member" }
+              : { type: "queue", ...session.startedFromQueue },
           managedAIResidency,
           accessibleSet,
           accessibleWorkspaceIds,
@@ -3109,6 +3132,10 @@ export const createSendMessage = (
           toolWorkspaceIds,
           workspaceStatusById,
         });
+        // A turn the server started from the member's queue says so on
+        // every event its tools record.
+        const chatAuditSource =
+          session.startedFromQueue === undefined ? "chat" : "chat_queue";
         // Reads the assistant makes without an approval, such as a skill
         // loaded by `load-skill`.
         const recordReadAuditEvent = createAuditRecorder({
@@ -3121,7 +3148,7 @@ export const createSendMessage = (
             trigger: {
               type: "user_dispatch",
               userId: user.id,
-              source: "chat",
+              source: chatAuditSource,
               sourceId: body.threadId,
             },
             runId: parsedMessage.message.id,
@@ -3208,7 +3235,7 @@ export const createSendMessage = (
               trigger: {
                 type: "user_dispatch",
                 userId: user.id,
-                source: "chat",
+                source: chatAuditSource,
                 sourceId: body.threadId,
               },
               runId: parsedMessage.message.id,

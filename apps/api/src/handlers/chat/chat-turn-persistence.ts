@@ -41,6 +41,7 @@ import type {
 } from "@/api/handlers/chat/chat-turn-state";
 import { isChatHistorySnapshotCurrentOnTx } from "@/api/handlers/chat/history-window";
 import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
+import { holdChatQueueAfterTurnOnTx } from "@/api/handlers/chat/queue/chat-queue-gate";
 import type {
   ChatMessageRole,
   ChatTurnOutcome,
@@ -158,8 +159,24 @@ export const AI_ERROR_FAILURE_CODE = {
   unknown: "provider-error",
 } as const satisfies Record<AIErrorKind, ChatTurnFailureCode>;
 
+/**
+ * Who asked for a turn. A member's own request releases a held queue, as
+ * typing a message does; a message the server sends from the queue is taken
+ * from it in the acceptance transaction, only while the queue's gate is open
+ * for it at the revision the sender read.
+ */
+export type ChatTurnSource =
+  | { type: "member" }
+  | {
+      type: "queue";
+      queuedMessageId: SafeId<"chatMessage">;
+      revision: number;
+      whileWaiting: "queue" | "replace";
+    };
+
 export type ChatTurnAcceptance = {
   id: SafeId<"chatTurn">;
+  source: ChatTurnSource;
   organizationId: SafeId<"organization">;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
@@ -218,15 +235,24 @@ const databaseNow = () => sql<Date>`now()`;
  */
 const CHAT_RUN_OWNER_COLUMNS = {
   organizationId: chatTurns.organizationId,
+  threadId: chatTurns.threadId,
   userId: chatTurns.userId,
 } as const;
 
 const recordChatRunOwners = (
   pings: ChatRunPings,
-  rows: readonly { organizationId: SafeId<"organization">; userId: string }[],
+  rows: readonly {
+    organizationId: SafeId<"organization">;
+    threadId: SafeId<"chatThread">;
+    userId: string;
+  }[],
 ): void => {
-  for (const { organizationId, userId } of rows) {
-    pings.changed({ organizationId, userId: brandPersistedUserId(userId) });
+  for (const { organizationId, threadId, userId } of rows) {
+    pings.changed({
+      organizationId,
+      threadId,
+      userId: brandPersistedUserId(userId),
+    });
   }
 };
 
@@ -251,12 +277,14 @@ const nextChatTurnRunLeaseExpiry = () =>
 
 export const createChatTurnAcceptance = ({
   organizationId,
+  source,
   threadId,
   userId,
   userMessageId,
   workspaceId,
 }: Omit<ChatTurnAcceptance, "id">): ChatTurnAcceptance => ({
   id: createSafeId<"chatTurn">(),
+  source,
   organizationId,
   threadId,
   userId,
@@ -264,7 +292,8 @@ export const createChatTurnAcceptance = ({
   workspaceId,
 });
 
-const lockChatThreadForTurnOnTx = async ({
+/** Lock the thread every write of its turns and its queue serializes on. */
+export const lockChatThreadForTurnOnTx = async ({
   threadId,
   tx,
 }: {
@@ -450,6 +479,12 @@ const interruptExpiredRunningChatTurnOnTx = async ({
     await settleInterruptedContinuationOnTx({
       outcome: OWNER_LOST_OUTCOME,
       threadId,
+      tx,
+    });
+    await holdChatQueueAfterTurnOnTx({
+      outcome: OWNER_LOST_OUTCOME.type,
+      threadId,
+      turnId: interruptedTurn.id,
       tx,
     });
   }
@@ -718,6 +753,7 @@ export const insertChatTurnAcceptanceOnTx = async ({
     .returning({ id: chatTurns.id });
   pings.changed({
     organizationId: acceptance.organizationId,
+    threadId: acceptance.threadId,
     userId: acceptance.userId,
   });
   return inserted.length === 1
@@ -1274,7 +1310,7 @@ export const claimChatTurnForExecutionOnTx = async ({
       userMessageId,
       workspaceId,
     });
-    pings.changed({ organizationId, userId });
+    pings.changed({ organizationId, threadId, userId });
     return { executionId, id: legacyTurnId };
   }
 
@@ -1686,6 +1722,12 @@ export const settleChatTurnOnTx = async ({
     await closeChatRunLogOnTx({
       organizationId: settled.organizationId,
       runId: settled.runId,
+      turnId: settled.id,
+      tx,
+    });
+    await holdChatQueueAfterTurnOnTx({
+      outcome: outcome.type,
+      threadId: settled.threadId,
       turnId: settled.id,
       tx,
     });

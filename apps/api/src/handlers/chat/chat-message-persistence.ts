@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
+import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -30,6 +31,7 @@ import type {
   ChatTurnExecution,
   ChatTurnExecutionClaim,
   ChatTurnRefusal,
+  ChatTurnSource,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import {
   ChatTurnDroppedPartsError,
@@ -44,6 +46,10 @@ import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import { planAssistantFinishPersistence } from "@/api/handlers/chat/persist-message";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
+import {
+  releaseChatQueueOnTx,
+  takeQueuedChatMessageOnTx,
+} from "@/api/handlers/chat/queue/chat-queue-gate";
 import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
 import type {
   ChatMessageMetadata,
@@ -1215,6 +1221,45 @@ const refuseChatTurn = (refusal: ChatTurnRefusal): HandlerError<409> =>
     message: CHAT_TURN_REFUSAL_MESSAGE[refusal],
   });
 
+const queuedMessageNotDue = (): HandlerError<409> =>
+  new HandlerError({
+    status: 409,
+    code: CHAT_QUEUE_ERROR_CODE.notDue,
+    message: "The queued message is not the next one the queue may send",
+  });
+
+/**
+ * A member's own turn releases the thread's held queue: it is the member's
+ * next word, so the queue waits behind it instead. A queued message must be
+ * the due head of an open gate, and leaves the queue in this transaction.
+ */
+const takeTurnSourceOnTx = async ({
+  source,
+  threadId,
+  tx,
+}: {
+  source: ChatTurnSource;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<"taken" | "not-due"> => {
+  switch (source.type) {
+    case "member":
+      await releaseChatQueueOnTx({ threadId, tx });
+      return "taken";
+    case "queue":
+      return await takeQueuedChatMessageOnTx({
+        id: source.queuedMessageId,
+        revision: source.revision,
+        threadId,
+        tx,
+        whileWaiting: source.whileWaiting,
+      });
+    default:
+      source satisfies never;
+      return panic("Unhandled chat turn source");
+  }
+};
+
 /**
  * Persist a new user message, create its durable turn, and claim execution
  * before releasing the thread lock. No other sender can observe and supersede
@@ -1241,6 +1286,15 @@ export const persistAcceptedMessageWithClaim = async ({
         });
         if (reservation !== "reserved") {
           return Result.err(refuseTurn(reservation));
+        }
+        if (
+          (await takeTurnSourceOnTx({
+            source: turnAcceptance.source,
+            threadId: turnAcceptance.threadId,
+            tx,
+          })) === "not-due"
+        ) {
+          return Result.err(queuedMessageNotDue());
         }
         const persistenceResult = await runPersistMessage({
           ...persistenceProps,

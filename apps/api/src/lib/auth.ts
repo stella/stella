@@ -3719,7 +3719,13 @@ const hasSyntheticSessionAuthority = async (current: {
   );
 };
 
-type ResolvedIdentity = {
+/**
+ * A member a credential proved. Built only here, by the request resolvers,
+ * and by the chat queue's sender (`lib/chat/queued-turn-member.ts`), which
+ * proves the member from a fresh membership lookup; the `queued-turn-member`
+ * ownership row confines both this type and `resolveValidateAuth`.
+ */
+export type ResolvedIdentity = {
   userId: SafeId<"user">;
   email: string;
   sessionId: string;
@@ -3929,6 +3935,11 @@ type ResolveValidateAuthOptions = {
   initialWorkspaceId: SafeId<"workspace"> | null;
   request: Request;
   server: ResolveRequestMemberOptions["server"];
+  /**
+   * How the member's audit events say the work started, when not by the
+   * member's own request (the server sending a message they queued).
+   */
+  execution?: AuditExecutionContext;
 };
 
 /**
@@ -3939,6 +3950,7 @@ type ResolveValidateAuthOptions = {
  * hand a handler a context the others would not.
  */
 export const resolveValidateAuth = async ({
+  execution,
   identity,
   initialWorkspaceId,
   request,
@@ -4087,6 +4099,7 @@ export const resolveValidateAuth = async ({
     userId,
     request,
     server,
+    ...(execution === undefined ? {} : { execution }),
   };
 
   const caller: SessionMemberCaller = {
