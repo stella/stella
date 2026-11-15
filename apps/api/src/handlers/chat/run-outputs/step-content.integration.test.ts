@@ -54,7 +54,6 @@ import {
   type DesktopRunnerDb,
   readOpenRunChatThread,
 } from "@/api/lib/desktop-runner/store";
-import { ImageDerivativeError } from "@/api/lib/files/image-derivative";
 import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/constants";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -248,7 +247,7 @@ const read = async (run: SeededRun, key: string) => {
 
 const threadFiles = async (threadId: SafeId<"chatThread">) =>
   await testDb
-    .select({ id: userFiles.id })
+    .select({ id: userFiles.id, thumbnailFileId: userFiles.thumbnailFileId })
     .from(userFiles)
     .where(eq(userFiles.threadId, threadId));
 
@@ -316,15 +315,6 @@ beforeAll(async () => {
       Result.ok(await readOpenRunChatThread(testDb, options)),
     control: stepControl,
     uploads: {
-      // No thumbnail: `uploadUserFile` reserves a cleanup intent for the
-      // image and another for its thumbnail in two statements of one
-      // callsite, which a measured request refuses.
-      generateImageThumbnail: async () =>
-        await Promise.resolve(
-          Result.err(
-            new ImageDerivativeError({ message: "No thumbnail in this test" }),
-          ),
-        ),
       organizationFileUsageDb:
         asTestRaw<UploadUserFileDependencies["organizationFileUsageDb"]>(
           testDb,
@@ -352,12 +342,6 @@ beforeAll(async () => {
     control: stepControl,
     now: () => late.now,
     uploads: {
-      generateImageThumbnail: async () =>
-        await Promise.resolve(
-          Result.err(
-            new ImageDerivativeError({ message: "No thumbnail in this test" }),
-          ),
-        ),
       organizationFileUsageDb:
         asTestRaw<UploadUserFileDependencies["organizationFileUsageDb"]>(
           testDb,
@@ -465,6 +449,11 @@ describe("a run sending what a step produced", () => {
       totalBytes: PNG.byteLength,
       file: { fileName: "shot.png", mimeType: "image/png" },
     });
+    // Stored with its thumbnail: the image and the thumbnail are reserved in
+    // one statement, as this measured request requires.
+    expect(await threadFiles(run.threadId)).toEqual([
+      { id: expect.any(String), thumbnailFileId: expect.any(String) },
+    ]);
     // The step sent again keeps its image, and the second copy is removed.
     expect(await stateOf(await send())).toBe("stored");
     expect(await read(run, key)).toEqual(stored);
