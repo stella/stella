@@ -8,7 +8,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 RUN bun build apps/skill-runner/src/handler.ts --target=node --format=esm \
     --outfile /app/handler.mjs
 
-FROM public.ecr.aws/lambda/nodejs:22-arm64@sha256:3f965c1858f13651484a71587f2fa58717c1b906c33c26d79e1bd88783cc600b
+FROM public.ecr.aws/lambda/nodejs:26.2026.11.10.03@sha256:991ffeb2b1067c2d9ed71dc5378427e0f4fbac14a16e75e7417cb2bca8384eb3
 # The languages skills' scripts are written in: Bun (TypeScript) and Python.
 RUN dnf install -y python3 && dnf clean all && rm -rf /var/cache/dnf
 COPY --from=builder /usr/local/bin/bun /usr/local/bin/bun
