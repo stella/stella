@@ -208,10 +208,10 @@ const sortLeasesByReadiness = <Row extends MaterialRow>(
       continue;
     }
     const { descriptor, material } = project(row);
-    if (
+    const stale =
       !stateMatchesLease(state, lease) ||
-      !descriptorMatchesLease(descriptor, lease)
-    ) {
+      !descriptorMatchesLease(descriptor, lease);
+    if (stale) {
       rejected.push(rejection(lease, "stale", "canonical input changed"));
       continue;
     }

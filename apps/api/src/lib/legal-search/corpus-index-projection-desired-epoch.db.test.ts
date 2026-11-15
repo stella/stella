@@ -42,8 +42,10 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { bootstrapCorpusProjectionDesiredStateBatchTx } from "@/api/lib/legal-search/corpus-index-projection-bootstrap";
+import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
   advanceCorpusProjectionDesiredStateTx,
+  corpusProjectionDesiredStateHolds,
   ensureCorpusProjectionDesiredStateTx,
   lockActiveCorpusProjectionSourceByIdTx,
   reconcileCorpusProjectionDesiredStateTx,
@@ -396,6 +398,19 @@ test("a generation whose desired epoch trails the canonical one is current to ev
   expect(materials.ready.map(({ lease }) => lease.intentId)).toEqual([
     INTENT_ID,
   ]);
+  // The shared rule agrees with the builder: the content the builder derives
+  // is what the trailing state holds, at any canonical epoch not behind it.
+  const material = materials.ready.at(0) ?? panic("No ready material");
+  if (material.family !== "case_law") {
+    return panic("A case-law lease read another family");
+  }
+  const derived = deriveCorpusIndexProjectionDescriptor(
+    material.manifest,
+    material.input,
+  );
+  expect(corpusProjectionDesiredStateHolds(plain, 2n, derived)).toBe(true);
+  expect(corpusProjectionDesiredStateHolds(plain, 1n, derived)).toBe(true);
+  expect(corpusProjectionDesiredStateHolds(plain, 0n, derived)).toBe(false);
 
   // Trailing never hides drift: a content change moves every generation.
   await runInTransaction(async (tx) => {
@@ -529,14 +544,11 @@ const applyStep = async (
   }
 };
 
-const PROPERTY =
-  "a generation's desired content follows its own content, and no projection write moves the decision's freshness";
-
 test(
-  PROPERTY,
+  "a generation's desired content follows its own content, and no projection write moves the decision's freshness",
   async () => {
     await assertProperty(
-      PROPERTY,
+      "a generation's desired content follows its own content, and no projection write moves the decision's freshness",
       fc.asyncProperty(
         fc.array(stepArb, { minLength: 1, maxLength: 8 }),
         async (steps) => {
