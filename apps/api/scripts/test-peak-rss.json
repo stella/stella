@@ -16328,14 +16328,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/desktop-runner/output-keys.test.ts": {
-      "peakMb": 182,
-      "baselineMb": 182,
-      "source": {
-        "runId": "43667897818",
-        "job": "measure-1"
-      }
-    },
     "src/lib/desktop-runner/step-content-answer.test.ts": {
       "peakMb": 211,
       "baselineMb": 211,
@@ -16350,14 +16342,6 @@
       "source": {
         "runId": "43667897818",
         "job": "measure-3"
-      }
-    },
-    "src/lib/desktop-runner/step-output-grants.test.ts": {
-      "peakMb": 182,
-      "baselineMb": 182,
-      "source": {
-        "runId": "43667897818",
-        "job": "measure-1"
       }
     },
     "src/lib/destructive-effect-chunks.test.ts": {
