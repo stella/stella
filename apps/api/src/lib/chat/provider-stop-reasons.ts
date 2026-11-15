@@ -99,6 +99,7 @@ const GOOGLE = {
   // The model wrote a tool call that could not be parsed or was not
   // offered: nothing usable came back, which is not an empty answer.
   MALFORMED_FUNCTION_CALL: "failed",
+  MALFORMED_RESPONSE: "failed",
   UNEXPECTED_TOOL_CALL: "failed",
   TOO_MANY_TOOL_CALLS: "failed",
   LANGUAGE: "failed",

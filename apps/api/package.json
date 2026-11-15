@@ -113,7 +113,7 @@
     "@embedpdf/pdfium": "2.15.1",
     "@firecrawl/anydoc": "0.2.4",
     "@gdp-ts/core": "0.1.0",
-    "@google/genai": "^2.32.0",
+    "@google/genai": "^3.0.0",
     "@jitl/quickjs-wasmfile-release-asyncify": "0.32.0",
     "@libpdf/core": "catalog:",
     "@litko/yara-x": "^0.12.0",

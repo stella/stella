@@ -1,3 +1,4 @@
+import { FinishReason as GeminiFinishReason } from "@google/genai";
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import {
@@ -192,6 +193,24 @@ describe("a provider stop reason", () => {
       }
     }
     expect(endings).toEqual(expected);
+  });
+
+  test("malformed Google output fails even after streaming visible text", async () => {
+    for (const reason of [
+      GeminiFinishReason.MALFORMED_FUNCTION_CALL,
+      GeminiFinishReason.MALFORMED_RESPONSE,
+    ]) {
+      const chunks = await decide("google", [
+        started,
+        delta,
+        finishedWith(reason),
+      ]);
+      expect(chunks.at(-1)).toMatchObject({
+        type: EventType.RUN_ERROR,
+        code: PROVIDER_STOPPED_CODE,
+        metadata: { stopReason: reason },
+      });
+    }
   });
 
   test("a Google continuation leaves a partial answer unfinished", async () => {
