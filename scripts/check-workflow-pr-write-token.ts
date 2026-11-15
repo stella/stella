@@ -263,7 +263,7 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
         "the approval rests on the pinned called workflow, not on the job condition",
     },
     calls:
-      "stella/.github/.github/workflows/pr-lint.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804",
+      "stella/.github/.github/workflows/pr-lint.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa",
     privileges: { write: ["pull-requests"], secrets: [] },
   },
   ".github/workflows/publish-npm.yml:release-*": {
@@ -279,7 +279,7 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
       ],
     },
     calls:
-      "stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804",
+      "stella/.github/.github/workflows/npm-independent-release.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa",
     privileges: {
       write: ["contents", "id-token"],
       secrets: ["STELLA_RELEASE_APP_ID", "STELLA_RELEASE_APP_PRIVATE_KEY"],
