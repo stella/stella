@@ -160,7 +160,7 @@ describe("scoped transaction deadline", () => {
   };
 
   const enforced: TransactionDeadline = {
-    timeoutMs: TRANSACTION_DEADLINE.request.timeoutMs,
+    timeoutMs: TRANSACTION_DEADLINE.request.timeoutMs, // timeout under test
     mode: TRANSACTION_DEADLINE_MODE.enforce,
   };
 
