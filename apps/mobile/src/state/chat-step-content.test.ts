@@ -175,6 +175,36 @@ describe("a coding agent's step content on the phone", () => {
     expect(server.asked.map(({ start }) => start)).toEqual([0, 9, 9]);
   });
 
+  test("a subagent's conversation is read whole, however long one entry is", async () => {
+    const entry = (role: string, text: string) =>
+      `${JSON.stringify({ role, text })}\n`;
+    const kept = `${entry("prompt", "Summarize the lease. ".repeat(40))}${entry("report", "Clause 4.")}`;
+    const bytes = new TextEncoder().encode(kept);
+    const server = serving((start) => {
+      const window = chatLocalRunStepContentWindow(bytes, start, 64);
+      return {
+        state: "stored",
+        kind: "conversation",
+        totalBytes: bytes.byteLength,
+        storedBytes: bytes.byteLength,
+        start: window.start,
+        text: new TextDecoder().decode(
+          bytes.subarray(window.start, window.end),
+        ),
+        nextStart: window.nextStart,
+      };
+    });
+    // The first entry alone is longer than a window.
+    expect(kept.indexOf("\n")).toBeGreaterThan(64);
+    const read = await readOnce(server, STEP_CONTENT_UNREAD);
+    expect(read).toMatchObject({
+      type: "read",
+      view: { status: "text", kind: "conversation", text: kept },
+    });
+    expect(hasMoreStepText(read.view)).toBe(false);
+    expect(server.asked.length).toBeGreaterThan(1);
+  });
+
   test("a step still arriving, or a first read that failed, is read again from its start", async () => {
     const answers: (ChatLocalRunStepContent | null)[] = [
       null,

@@ -84,7 +84,20 @@ export const stepContentPath = ({
 const userFileContentPath = (fileId: string) =>
   `/v1/user-files/${encodeURIComponent(fileId)}/content`;
 
-/** The next read of a step, from where `read` leaves it (`nextStart`). */
+/**
+ * Whether a text is read whole in one go: a subagent's conversation shows
+ * only whole entries, and one entry may be longer than a window, so it is
+ * read to its end as the web reads it. A command's output or a diff is read
+ * one window at a time.
+ */
+const readsWhole = (view: LocalRunStepOutputView): boolean =>
+  view.status === "text" && view.kind === "conversation";
+
+/**
+ * The next read of a step, from where `read` leaves it (`nextStart`): one
+ * window, or for a conversation every window to its end. A read that fails
+ * keeps every window that answered before it.
+ */
 export const readStepContent = async ({
   callId,
   fetch,
@@ -98,39 +111,40 @@ export const readStepContent = async ({
   readonly source: AccessTokenSource;
   readonly threadId: string;
 }): Promise<StepContentRead> => {
-  const answered = await Result.gen(async function* () {
-    const content = yield* Result.await(
-      requestApi({
-        fetch,
-        path: stepContentPath({
-          callId,
-          start: nextStart(read.view),
-          threadId,
-        }),
-        schema: chatLocalRunStepContentSchema,
-        source,
-      }),
-    );
-    const view = foldLocalRunStepOutput(read.view, content);
-    if (
-      content.state !== CHAT_LOCAL_RUN_STEP_CONTENT_STATE.stored ||
-      content.kind !== "image"
-    ) {
-      return Result.ok({ view, image: null });
+  let { view } = read;
+  for (;;) {
+    const content = await requestApi({
+      fetch,
+      path: stepContentPath({ callId, start: nextStart(view), threadId }),
+      schema: chatLocalRunStepContentSchema,
+      source,
+    });
+    if (Result.isError(content)) {
+      return { type: "failed", view, image: read.image, error: content.error };
     }
-    const image = yield* Result.await(
-      stepImageSource({ fileUrl: content.file.url, source }),
-    );
-    return Result.ok({ view, image });
-  });
-  return Result.isOk(answered)
-    ? { type: "read", ...answered.value }
-    : {
-        type: "failed",
-        view: read.view,
-        image: read.image,
-        error: answered.error,
-      };
+    view = foldLocalRunStepOutput(view, content.value);
+    if (
+      content.value.state === CHAT_LOCAL_RUN_STEP_CONTENT_STATE.stored &&
+      content.value.kind === "image"
+    ) {
+      const image = await stepImageSource({
+        fileUrl: content.value.file.url,
+        source,
+      });
+      // An image with no way to load it shows nothing it answered.
+      return Result.isError(image)
+        ? {
+            type: "failed",
+            view: read.view,
+            image: read.image,
+            error: image.error,
+          }
+        : { type: "read", view, image: image.value };
+    }
+    if (!readsWhole(view) || !hasMoreStepText(view)) {
+      return { type: "read", view, image: null };
+    }
+  }
 };
 
 /** The address and token the phone loads a stored step's image with. */

@@ -48,8 +48,9 @@ const CONTENT_MAX_HEIGHT = 320;
  * What a coding agent's settled step produced on the person's computer, as
  * stella stores it with the conversation and the web shows it: a command's
  * output, a change's diff, a subagent's conversation as the answer's
- * markdown, the image a step viewed, or why there is nothing to show. A text
- * opens on its first window; the rest comes when the person asks for it.
+ * markdown, the image a step viewed, or why there is nothing to show. An
+ * output or a diff opens on its first window, the rest coming when the person
+ * asks for it; a conversation opens whole.
  */
 export const StepContentView = ({
   callId,
