@@ -5,6 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { parseTimeEntryListPage } from "@stll/api-contract/time-entries";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { memberHasPermissions } from "@stll/permissions";
+import { createTestClock } from "@stll/test-kit";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -104,6 +105,8 @@ const createFixture = () => {
 type Fixture = ReturnType<typeof createFixture>;
 type Actor = Fixture["actors"][number];
 
+const clock = createTestClock();
+
 const seedFixture = async (db: GatedTestDb, fixture: Fixture) => {
   const {
     organizationId,
@@ -120,16 +123,16 @@ const seedFixture = async (db: GatedTestDb, fixture: Fixture) => {
       id,
       name: "Billing permission fixture",
       slug: id,
-      createdAt: new Date(),
+      createdAt: new Date(clock.now()),
     })),
   );
   await recordNewOrganizationAccessState(db, {
     organizationId,
-    now: new Date(),
+    now: new Date(clock.now()),
   });
   await recordNewOrganizationAccessState(db, {
     organizationId: otherOrganizationId,
-    now: new Date(),
+    now: new Date(clock.now()),
   });
   await db.insert(user).values(
     actors.map(({ userId }) => ({
@@ -146,7 +149,7 @@ const seedFixture = async (db: GatedTestDb, fixture: Fixture) => {
       organizationId,
       userId,
       role,
-      createdAt: new Date(),
+      createdAt: new Date(clock.now()),
     })),
   );
   await db.insert(member).values({
@@ -154,7 +157,7 @@ const seedFixture = async (db: GatedTestDb, fixture: Fixture) => {
     organizationId: otherOrganizationId,
     userId: owner.userId,
     role: "owner",
-    createdAt: new Date(),
+    createdAt: new Date(clock.now()),
   });
   await db.insert(featureEnrolments).values(
     actors.map(({ userId }) => ({
@@ -349,13 +352,15 @@ const assertMonetaryAdmission = async ({
     actor.billingAccess || actor.role === "owner" || actor.role === "admin";
   let routes = 0;
   for (const { definition, path } of apiApp.routes) {
-    const config = getSafeHandlerAccessMetadata(
+    const metadata = getSafeHandlerAccessMetadata(
       "handler" in definition ? definition.handler : undefined,
     );
+    const permissions = metadata?.permissions;
     if (
-      config === undefined ||
-      config.access !== "read" ||
-      !config.permissions.billing?.includes("read")
+      metadata === undefined ||
+      permissions === undefined ||
+      definition.config["access"] !== "read" ||
+      !permissions.billing?.includes("read")
     ) {
       continue;
     }
@@ -366,7 +371,7 @@ const assertMonetaryAdmission = async ({
           memberRole: context.memberRole,
           readEmail: () => context.user.email,
         },
-        config,
+        config: { accountAccess: metadata.accountAccess, permissions },
       }),
       path,
     ).toBe(
@@ -374,7 +379,7 @@ const assertMonetaryAdmission = async ({
         memberHasPermissions({
           role: actor.role,
           billingAccess: true,
-          permissions: config.permissions,
+          permissions,
         })
         ? "allowed"
         : "permission_required",

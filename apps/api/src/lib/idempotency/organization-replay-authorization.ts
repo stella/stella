@@ -70,7 +70,11 @@ export const authorizeOrganizationPermissionReplay = async (
       current === undefined ||
       !isMemberRole(current.role) ||
       !hasMemberPermission(
-        withCurrentMemberRole(memberRole, current.role),
+        withCurrentMemberRole({
+          authority: memberRole,
+          role: current.role,
+          billingAccess: current.billingAccess,
+        }),
         permissions,
       )
     ) {

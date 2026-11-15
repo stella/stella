@@ -123,6 +123,7 @@ if (!databaseUrl || !enabled) {
             organizationId,
             authorization: {
               role: authorization.role,
+              billingAccess: authorization.billingAccess,
               workspace: authorization.workspace,
               email: authorization.email,
               emailVerified: authorization.emailVerified,
