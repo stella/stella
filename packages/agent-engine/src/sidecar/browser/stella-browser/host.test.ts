@@ -73,9 +73,17 @@ const startedPids = (lines: readonly string[]) =>
   });
 
 const start = ({
+  answerSlowly = false,
   chatIdleMs,
+  firstAnswerMs,
   slowStart = false,
-}: { chatIdleMs?: number; slowStart?: boolean } = {}) => {
+}: {
+  /** The stand-in answers its first message two seconds late. */
+  answerSlowly?: boolean;
+  chatIdleMs?: number;
+  firstAnswerMs?: number;
+  slowStart?: boolean;
+} = {}) => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-browser-host-"));
   cleanups.push(() => {
     rmSync(root, { force: true, recursive: true });
@@ -90,6 +98,7 @@ const start = ({
   const lines: string[] = [];
   const host = createStellaBrowserHost({
     ...(chatIdleMs === undefined ? {} : { chatIdleMs }),
+    ...(firstAnswerMs === undefined ? {} : { firstAnswerMs }),
     environment: { PATH: process.env["PATH"] },
     home: null,
     log: (line) => {
@@ -97,7 +106,12 @@ const start = ({
     },
     platform: process.platform,
     profileRoot: path.join(root, "browser-profiles"),
-    testHooks: { args: [], browserLog: null, executable, methodLog: null },
+    testHooks: {
+      args: answerSlowly ? ["--answer-first-slowly"] : [],
+      browserLog: null,
+      executable,
+      methodLog: null,
+    },
   });
   cleanups.push(host.stop);
   /** Every message the stand-in browsers received, by account profile. */
@@ -530,6 +544,43 @@ describe("the stella browser host", () => {
       description: "chat 1's window to be closed again",
       timeoutMs: 10_000,
     });
+  });
+
+  test("waits out a browser slow to answer its first message, as a cold start is", async () => {
+    // The stand-in stays silent for two seconds; the deadline allows five.
+    const { send } = start({ answerSlowly: true, firstAnswerMs: 5000 });
+    expect(await send(OPEN)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+    });
+  });
+
+  test("ends a browser that does not answer within the first-answer deadline", async () => {
+    const { lines, methods, send } = start({
+      answerSlowly: true,
+      firstAnswerMs: 300,
+    });
+    expect(await send(OPEN)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.disconnected,
+      message: "The stella browser started but did not answer. Try again.",
+    });
+    expect(lines).toContain("the stella browser did not start: no-answer");
+    expect(methods()).toContain("Browser.close");
+    expect(methods()).not.toContain("Target.createTarget");
+  });
+
+  test("stopping while the browser has not answered yet ends the wait at once", async () => {
+    // The default deadline; the stand-in would answer after two seconds.
+    const { host, lines, methods, send } = start({ answerSlowly: true });
+    const opening = send(OPEN);
+    await waitFor(
+      () => (methods().includes("Browser.getVersion") ? true : undefined),
+      { description: "the browser to be asked", timeoutMs: 10_000 },
+    );
+    await host.stop();
+    expect(await opening).toMatchObject({ status: "error" });
+    // The stop ended the wait: the browser's answer never came.
+    expect(lines).toContain("the stella browser did not start: no-answer");
+    expect(methods()).toContain("Browser.close");
   });
 
   test("stopping while the browser starts closes it, and starts none again", async () => {

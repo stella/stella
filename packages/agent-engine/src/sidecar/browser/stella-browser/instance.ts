@@ -22,7 +22,14 @@ import {
 /** From this version on, Chrome honours the debugging pipe only on a profile of its own. */
 const MIN_BROWSER_MAJOR = 136;
 
-const VERSION_TIMEOUT_MS = 20_000;
+/**
+ * How long a started browser may take to answer at all. A cold start on a
+ * loaded computer can stay silent for over 20 seconds (its first run on a
+ * new profile sets the profile up, and asks the session bus about the
+ * desktop); the wait still ends, and a browser that has not answered by
+ * then is ended. The holder stopping ends the wait at once.
+ */
+const FIRST_ANSWER_TIMEOUT_MS = 60_000;
 const CLOSE_WAIT_MS = 5000;
 const TERM_WAIT_MS = 5000;
 
@@ -70,7 +77,13 @@ export const startBrowserInstance = async ({
   profile,
   testArgs,
   errorLog = null,
+  firstAnswerMs = FIRST_ANSWER_TIMEOUT_MS,
+  signal,
 }: {
+  /** How long the browser may take to answer at all; shorter only in tests. */
+  firstAnswerMs?: number;
+  /** Aborts when the holder stops: a browser still starting is ended. */
+  signal: AbortSignal;
   environment: Record<string, string>;
   executable: string;
   /** Each protocol method as it is sent, for the test hooks. */
@@ -166,7 +179,7 @@ export const startBrowserInstance = async ({
   const version = await client.send(
     "Browser.getVersion",
     {},
-    { timeoutMs: VERSION_TIMEOUT_MS },
+    { signal, timeoutMs: firstAnswerMs },
   );
   if (Result.isError(version)) {
     await close();

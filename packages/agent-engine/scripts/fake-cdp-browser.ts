@@ -20,6 +20,10 @@ const profile = process.argv
   .find((arg) => arg.startsWith(PROFILE_FLAG))
   ?.slice(PROFILE_FLAG.length);
 const log = profile === undefined ? undefined : `${profile}/fake-cdp.log`;
+/** With `--answer-first-slowly`, a cold start: its first answer comes two seconds late. */
+const firstAnswerDelay = process.argv.includes("--answer-first-slowly")
+  ? 2000
+  : 0;
 const input = createReadStream("", { fd: 3 });
 const output = createWriteStream("", { fd: 4 });
 
@@ -248,6 +252,12 @@ input.on("data", (chunk: Buffer | string) => {
     }
     if (result === "hang") {
       return;
+    }
+    if (method === "Browser.getVersion" && firstAnswerDelay > 0) {
+      setTimeout(() => {
+        send({ id, result });
+      }, firstAnswerDelay);
+      continue;
     }
     if (result === "unreadable") {
       send({

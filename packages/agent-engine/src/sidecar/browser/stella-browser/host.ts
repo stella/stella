@@ -157,6 +157,8 @@ export type StellaBrowserHostOptions = {
   processes?: BrowserProcesses;
   /** How long a chat's tabs stay after its last run called; tests shorten it. */
   chatIdleMs?: number;
+  /** How long a started browser may take to answer at all; tests shorten it. */
+  firstAnswerMs?: number;
 };
 
 type Running = {
@@ -361,6 +363,7 @@ const isStopped = (signal: AbortSignal): boolean => signal.aborted;
 const startFor = async (
   {
     environment,
+    firstAnswerMs,
     home,
     log,
     platform,
@@ -369,7 +372,10 @@ const startFor = async (
     testHooks,
   }: StellaBrowserHostOptions,
   memberKey: string,
-  recordMethod: (method: CdpMethod) => void,
+  {
+    recordMethod,
+    signal,
+  }: { recordMethod: (method: CdpMethod) => void; signal: AbortSignal },
 ): Promise<BrowserInstance | BrowserControlResult> => {
   const browser =
     testHooks?.executable ??
@@ -388,9 +394,11 @@ const startFor = async (
     environment: browserEnvironment(environment),
     errorLog: testHooks?.browserLog ?? null,
     executable: browser,
+    ...(firstAnswerMs === undefined ? {} : { firstAnswerMs }),
     onMethod: recordMethod,
     processes,
     profile: profile.value,
+    signal,
     testArgs: testHooks?.args ?? [],
   });
   if (Result.isError(started)) {
@@ -435,6 +443,12 @@ const idleClocks = (idleMs: number, expire: (controllerId: string) => void) => {
   };
 };
 
+/** The one browser start under way: every open meanwhile joins or waits for it. */
+type Starting = {
+  memberKey: string;
+  started: Promise<Running | BrowserControlResult>;
+};
+
 export const createStellaBrowserHost = (
   options: StellaBrowserHostOptions,
 ): StellaBrowserHost => {
@@ -443,17 +457,18 @@ export const createStellaBrowserHost = (
     log(`stella browser background work failed: ${task}`);
   });
   let running: Running | null = null;
-  let starting: {
-    memberKey: string;
-    started: Promise<Running | BrowserControlResult>;
-  } | null = null;
-  let stopped = false;
+  let starting: Starting | null = null;
+  /** Aborts when the holder stops: a browser still starting stops waiting. */
+  const stopping = new AbortController();
   /** Opens under way: the browser stays while one may still make a tab. */
   let opening = 0;
   const queues = chatQueues();
   /** How often each chat was released: a command from before a release leaves nothing open. */
   const releases = new Map<string, number>();
-  const recordMethod = methodRecorder(testHooks?.methodLog ?? null);
+  const startWith = {
+    recordMethod: methodRecorder(testHooks?.methodLog ?? null),
+    signal: stopping.signal,
+  };
 
   const closeRunning = async () => {
     const current = running;
@@ -464,12 +479,12 @@ export const createStellaBrowserHost = (
   const launch = async (
     memberKey: string,
   ): Promise<Running | BrowserControlResult> => {
-    const started = await startFor(options, memberKey, recordMethod);
+    const started = await startFor(options, memberKey, startWith);
     if ("status" in started) {
       return started;
     }
     // The holder began to stop while the browser started: it closes again.
-    if (stopped) {
+    if (isStopped(stopping.signal)) {
       await started.close();
       return disconnected(STOPPED);
     }
@@ -513,7 +528,7 @@ export const createStellaBrowserHost = (
         ? joined
         : await ensureRunning(apiOrigin);
     }
-    if (stopped) {
+    if (isStopped(stopping.signal)) {
       return disconnected(STOPPED);
     }
     if (running?.memberKey === memberKey && !running.instance.isGone()) {
@@ -657,7 +672,7 @@ export const createStellaBrowserHost = (
       idle.start(controllerId);
     },
     stop: async () => {
-      stopped = true;
+      stopping.abort();
       idle.stopAll();
       // A browser still starting closes as soon as it has (see `launch`).
       await starting?.started;
