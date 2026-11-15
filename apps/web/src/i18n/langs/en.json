@@ -294,6 +294,8 @@
       "reopened": "Re-opened, check pending",
       "reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.",
       "sourceCount": "{count, plural, one {# source} other {# sources}}",
+      "verdictBy": "Verdict by {model}",
+      "verdictByGenerativeModel": "Verdict by the generative model; the decision model did not settle it",
       "whyVerdict": "Why this verdict: anchor facts"
     },
     "claimTypes": {
@@ -2348,17 +2350,17 @@
       "input": "Input",
       "interrupted": "Interrupted before finishing",
       "localOutput": {
+        "arriving": "Still arriving from the computer that ran this step",
         "conversation": "Subagent conversation",
         "conversationPrompt": "Task given",
         "conversationReport": "Report",
         "cut": "Showing the first {kept} of {total}",
         "diff": "File changes",
-        "elsewhere": "Open on the computer that ran it",
         "empty": "No output",
-        "failed": "The stella desktop app on this computer could not show this.",
-        "imageTooLarge": "This image is {total}. Images over {kept} are not kept on this computer, so it cannot be shown here.",
-        "notKept": "Nothing from this step is kept on this computer",
-        "reading": "Reading from this computer"
+        "imageTooLargeToStore": "This image is {total}. Images over {kept} are not stored, so it cannot be shown.",
+        "notCopied": "Not copied to this chat yet",
+        "notStored": "Nothing from this step was stored",
+        "runBudgetReached": "Not stored: this run had already stored as much as one run may"
       },
       "output": "Output",
       "patternInPath": "{pattern} in {path}",
@@ -2381,6 +2383,10 @@
       "needsInputTitle": "stella needs your input",
       "replyReadyBody": "stella finished answering in your chat.",
       "replyReadyTitle": "Reply ready"
+    },
+    "turnPaused": {
+      "continue": "Keep going",
+      "status": "Paused after {count, plural, one {# tool call} other {# tool calls}}"
     },
     "turnStatus": {
       "answerFailed": "The answer could not be finished",
@@ -3413,6 +3419,7 @@
       "invitationRoleNotAllowed": "You cannot invite someone with this role. Choose another role.",
       "invoiceNumberSeriesMissing": "Set up a default invoice number series under Number series in organization settings, then issue the invoice.",
       "invoiceSellerProfileMissing": "Add a seller profile under Billing profiles in organization settings, then issue the invoice.",
+      "legalHoldActive": "Deletion is blocked because these records must be preserved.",
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
       "matterContactCapacityExceeded": "This matter has more contacts than can be displayed. Remove visible contact links to reveal the remaining contacts.",
@@ -5893,6 +5900,8 @@
       "auditLogsSentenceDownload": "Downloaded {resource}.",
       "auditLogsSentenceExecute": "Ran {resource}.",
       "auditLogsSentenceIssued": "Issued {resource}.",
+      "auditLogsSentenceLegalHoldPlaced": "Placed {resource}.",
+      "auditLogsSentenceLegalHoldReleased": "Released {resource}.",
       "auditLogsSentenceRedeemed": "Redeemed {resource}.",
       "auditLogsSentenceRefused": "Refused {resource}.",
       "auditLogsSentenceReview": "Reviewed {resource}.",
@@ -5944,6 +5953,7 @@
         "flow_run": "workflow run",
         "folio_collab_room": "Folio collaboration room",
         "invoice": "invoice",
+        "legal_hold": "legal hold",
         "legal_list": "legal list",
         "legal_list_generation": "legal list generation",
         "legal_list_item": "legal list item",
@@ -6103,7 +6113,13 @@
       "usageStatusTrialing": "Trialing",
       "usageUnitCount": "{count, plural, one {# unit} other {# units}}",
       "usageUnitsBalanceTemplate": "{remaining} units available",
-      "usageUnitsThisPeriod": "Usage units this period"
+      "usageUnitsThisPeriod": "Usage units this period",
+      "verificationDecisionModel": {
+        "description": "When a document is verified against a list's facts, the decision model chooses each claim's verdict. The generative model still finds and cites the facts. Where the decision model is not confident enough, the generative model's verdict stands.",
+        "title": "Verdicts in document verification",
+        "unavailable": "No decision model is available to this organization.",
+        "updated": "Verification setting updated"
+      }
     }
   },
   "sharepoint": {

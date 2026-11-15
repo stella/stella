@@ -223,13 +223,29 @@
       "browserPressKey": "Pulsar la tecla {key} en «{target}» en {url}",
       "browserSelect": "Seleccionar «{option}» en «{target}» en {url}",
       "browserType": "Introducir texto en «{target}» en {url}",
-      "opensOnComputer": "Ábrelo en el ordenador que lo ejecutó",
       "status": {
         "needs_approval": "Esperando aprobación",
         "running": "En curso",
         "failed": "Falló",
         "interrupted": "Detenido"
-      }
+      },
+      "output": {
+        "command": "Salida",
+        "diff": "Cambios en archivos",
+        "conversation": "Conversación del subagente",
+        "conversationPrompt": "Tarea",
+        "conversationReport": "Informe",
+        "cut": "Se muestran los primeros {kept} de {total}",
+        "empty": "Sin salida",
+        "arriving": "Todavía está llegando desde el ordenador que ejecutó este paso",
+        "notCopied": "Aún no se ha copiado a este chat",
+        "notStored": "No se guardó nada de este paso",
+        "runBudgetReached": "No se guardó: esta ejecución ya había guardado todo lo que puede guardar una ejecución",
+        "imageTooLargeToStore": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan, por lo que no se puede mostrar.",
+        "loadFailed": "No se ha podido cargar.",
+        "showMore": "Mostrar más"
+      },
+      "sessionNotResumed": "El agente de programación de tu ordenador no pudo retomar donde lo había dejado, así que continuó a partir de los mensajes de este chat."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas} many {# fuentes consultadas}}",
@@ -239,6 +255,7 @@
     },
     "stepCount": "{count, plural, one {# paso} other {# pasos} many {# pasos}}",
     "reasoning": "Razonamiento",
+    "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación.",
     "failure": {
       "aiDeadlineExceeded": "La IA no respondió a tiempo. Inténtalo de nuevo en un momento.",
       "aiOutputInvalid": "La respuesta de IA tenía un formato inesperado. Inténtalo de nuevo.",
@@ -296,7 +313,8 @@
       "tomorrow": "Mañana",
       "week": "Esta semana",
       "later": "Más adelante",
-      "none": "Sin vencimiento"
+      "none": "Sin vencimiento",
+      "closed": "Hechas o canceladas"
     },
     "markDone": "Marcar como hecha",
     "reopen": "Reabrir",
@@ -310,7 +328,43 @@
     "doneAssigning": "Hecho",
     "someone": "Alguien",
     "membersFailed": "No se pudieron cargar los miembros del asunto.",
-    "assignFailed": "No se pudo asignar la tarea. Inténtelo de nuevo."
+    "assignFailed": "No se pudo asignar la tarea. Inténtelo de nuevo.",
+    "statusTitle": "Estado",
+    "priorityTitle": "Prioridad",
+    "priority": {
+      "none": "Ninguna",
+      "urgent": "Urgente",
+      "high": "Alta",
+      "medium": "Media",
+      "low": "Baja"
+    },
+    "subtasks": "Subtareas",
+    "linked": "Elementos vinculados",
+    "delete": "Eliminar tarea",
+    "deleteTitle": "¿Eliminar la tarea?",
+    "deleteMessage": "¿Está seguro de que desea eliminar «{name}»? Esta acción no se puede deshacer.",
+    "cancel": "Cancelar",
+    "saveFailed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
+    "readOnly": "Esta tarea procede de un calendario conectado y no se puede cambiar aquí.",
+    "untitled": "Tarea sin título",
+    "loadOneFailed": "No se pudo cargar esta tarea.",
+    "filter": "Filtrar",
+    "whoseTitle": "Asignadas a",
+    "whose": {
+      "mine": "Mí",
+      "everyone": "Cualquiera",
+      "unassigned": "Nadie"
+    },
+    "showTitle": "Mostrar",
+    "show": {
+      "open": "Abiertas",
+      "overdue": "Vencidas",
+      "all": "Todas, también las hechas"
+    },
+    "emptyFilteredTitle": "No hay tareas",
+    "emptyFilteredDescription": "Las tareas que coincidan con este filtro aparecerán aquí.",
+    "loadMore": "Cargar más",
+    "loadMoreFailed": "No se pudieron cargar más tareas."
   },
   "matters": {
     "emptyTitle": "Aún no hay asuntos",

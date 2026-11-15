@@ -223,13 +223,29 @@
       "browserPressKey": "Stisknout klávesu {key} v „{target}“ na stránce {url}",
       "browserSelect": "Vybrat „{option}“ v „{target}“ na stránce {url}",
       "browserType": "Zadat text do „{target}“ na stránce {url}",
-      "opensOnComputer": "Otevřete na počítači, kde krok běžel",
       "status": {
         "needs_approval": "Čekání na schválení",
         "running": "Rozpracovaný",
         "failed": "Selhalo",
         "interrupted": "Zastaveno"
-      }
+      },
+      "output": {
+        "command": "Výstup",
+        "diff": "Změny souborů",
+        "conversation": "Konverzace dílčího agenta",
+        "conversationPrompt": "Zadání",
+        "conversationReport": "Zpráva",
+        "cut": "Zobrazeno prvních {kept} z {total}",
+        "empty": "Žádný výstup",
+        "arriving": "Stále se přenáší z počítače, na kterém krok běžel",
+        "notCopied": "Do tohoto chatu zatím nebylo zkopírováno",
+        "notStored": "Z tohoto kroku nebylo nic uloženo",
+        "runBudgetReached": "Neuloženo: tento běh už uložil tolik, kolik jeden běh smí",
+        "imageTooLargeToStore": "Tento obrázek má {total}. Obrázky větší než {kept} se neukládají, proto jej nelze zobrazit.",
+        "loadFailed": "Nepodařilo se načíst.",
+        "showMore": "Zobrazit více"
+      },
+      "sessionNotResumed": "Programovací agent ve vašem počítači nemohl navázat tam, kde skončil, a tak pokračoval podle zpráv v tomto chatu."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# prověřený zdroj} few {# prověřené zdroje} other {# prověřených zdrojů} many {# prověřeného zdroje}}",
@@ -239,6 +255,7 @@
     },
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# kroků}}",
     "reasoning": "Uvažování",
+    "historyTrimmed": "Starší zprávy se nepodařilo shrnout, a tak tato odpověď vychází jen z poslední části konverzace.",
     "failure": {
       "aiDeadlineExceeded": "AI neodpověděla včas. Zkuste to za chvíli znovu.",
       "aiOutputInvalid": "Odpověď AI měla neočekávaný formát. Zkuste to znovu.",
@@ -296,7 +313,8 @@
       "tomorrow": "Zítra",
       "week": "Tento týden",
       "later": "Později",
-      "none": "Bez termínu"
+      "none": "Bez termínu",
+      "closed": "Hotové nebo zrušené"
     },
     "markDone": "Označit jako hotové",
     "reopen": "Znovu otevřít",
@@ -310,7 +328,43 @@
     "doneAssigning": "Hotovo",
     "someone": "Někdo",
     "membersFailed": "Členy spisu se nepodařilo načíst.",
-    "assignFailed": "Úkol se nepodařilo přidělit. Zkuste to znovu."
+    "assignFailed": "Úkol se nepodařilo přidělit. Zkuste to znovu.",
+    "statusTitle": "Stav",
+    "priorityTitle": "Priorita",
+    "priority": {
+      "none": "Žádná",
+      "urgent": "Urgentní",
+      "high": "Vysoká",
+      "medium": "Střední",
+      "low": "Nízká"
+    },
+    "subtasks": "Podúkoly",
+    "linked": "Propojené položky",
+    "delete": "Smazat úkol",
+    "deleteTitle": "Smazat úkol?",
+    "deleteMessage": "Opravdu chcete smazat „{name}“? Tuto akci nelze vrátit zpět.",
+    "cancel": "Zrušit",
+    "saveFailed": "Změnu se nepodařilo uložit. Zkuste to znovu.",
+    "readOnly": "Tento úkol pochází z propojeného kalendáře a zde jej nelze měnit.",
+    "untitled": "Úkol bez názvu",
+    "loadOneFailed": "Úkol se nepodařilo načíst.",
+    "filter": "Filtr",
+    "whoseTitle": "Přiřazeno",
+    "whose": {
+      "mine": "Mně",
+      "everyone": "Komukoli",
+      "unassigned": "Nikomu"
+    },
+    "showTitle": "Zobrazit",
+    "show": {
+      "open": "Otevřené",
+      "overdue": "Po termínu",
+      "all": "Všechny, i hotové"
+    },
+    "emptyFilteredTitle": "Žádné úkoly",
+    "emptyFilteredDescription": "Úkoly odpovídající tomuto filtru se zobrazí zde.",
+    "loadMore": "Načíst další",
+    "loadMoreFailed": "Další úkoly se nepodařilo načíst."
   },
   "matters": {
     "emptyTitle": "Zatím žádné spisy",

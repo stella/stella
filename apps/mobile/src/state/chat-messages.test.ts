@@ -107,6 +107,7 @@ describe("what a thread shows of a stored message", () => {
       ],
       files: [{ name: "", mimeType: "" }],
       drafts: [],
+      contextNotice: null,
     });
   });
 
@@ -176,6 +177,7 @@ describe("what a thread shows of a stored message", () => {
         { name: "Stamp.png", mimeType: "image/png" },
       ],
       drafts: [],
+      contextNotice: null,
     });
   });
 
@@ -203,7 +205,29 @@ describe("what a thread shows of a stored message", () => {
       blocks: [],
       files: [{ name: "Lease.pdf", mimeType: "application/pdf" }],
       drafts: [],
+      contextNotice: null,
     });
+  });
+
+  test("says what an answer's context left out, and nothing of a notice it does not know", () => {
+    const answer = (metadata: unknown) =>
+      toChatEntry({
+        id: "m5",
+        role: "assistant",
+        createdAt: "2026-10-20T10:00:00.000Z",
+        parts: [{ type: "text", content: "Done." }],
+        metadata,
+      })?.contextNotice;
+    expect(answer({ contextNotice: { type: "session-not-resumed" } })).toEqual({
+      type: "session-not-resumed",
+    });
+    expect(answer({ contextNotice: { type: "history-trimmed" } })).toEqual({
+      type: "history-trimmed",
+    });
+    expect(
+      answer({ contextNotice: { type: "from-a-newer-server" } }),
+    ).toBeNull();
+    expect(answer(undefined)).toBeNull();
   });
 
   test("leaves out system messages and messages with nothing to draw", () => {
@@ -315,6 +339,7 @@ describe("reading a thread", () => {
       blocks: [],
       files: [],
       drafts: [],
+      contextNotice: null,
     });
     expect(
       prependOlderPage(

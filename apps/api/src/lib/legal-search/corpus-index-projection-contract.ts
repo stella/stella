@@ -59,6 +59,49 @@ export const CORPUS_INDEX_APPEND_CANCEL_REASON = {
   groupNotAttested: "projection index group was not attested at append start",
 } as const;
 
+/**
+ * What the index still holds of a revision a projection state names, by the
+ * revision's status. Readers address the named revision whatever its status,
+ * so this decides whether the entity is served.
+ *
+ * `intact_until_claimed` is `cleanup_pending`, which holds two cases: a
+ * revision preparation or an erasure queued is whole, while one sent back
+ * after a cleanup claim (a lost lease, a reissue, a reopened settlement) may
+ * already be deleted. Only the cleanup claim increments `cleanup_attempts`,
+ * before it can issue a delete, and nothing resets it, so the counter tells
+ * the two apart. `never_named`: a state names only an applied revision, and
+ * these statuses come before it or instead of it.
+ */
+const CORPUS_INDEX_NAMED_REVISION_COPY = {
+  reserved: "never_named",
+  append_started: "never_named",
+  append_committed: "never_named",
+  applied: "intact",
+  cleanup_pending: "intact_until_claimed",
+  cleanup_started: "delete_unproven",
+  cleanup_committed: "delete_unproven",
+  cleanup_stalled: "delete_unproven",
+  settled: "deleted",
+  cancelled: "never_named",
+} as const satisfies Record<
+  CorpusIndexIntentStatus,
+  | "never_named"
+  | "intact"
+  | "intact_until_claimed"
+  | "delete_unproven"
+  | "deleted"
+>;
+
+type CorpusIndexNamedRevisionCopy =
+  (typeof CORPUS_INDEX_NAMED_REVISION_COPY)[CorpusIndexIntentStatus];
+
+export const corpusIndexIntentStatusesWithCopy = (
+  copy: CorpusIndexNamedRevisionCopy,
+): CorpusIndexIntentStatus[] =>
+  CORPUS_INDEX_INTENT_STATUSES.filter(
+    (status) => CORPUS_INDEX_NAMED_REVISION_COPY[status] === copy,
+  );
+
 /** Phases that can create or expose one exact append revision. */
 export const CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES = [
   "reserved",
@@ -119,7 +162,10 @@ export const CORPUS_INDEX_INTENT_TRANSITIONS = {
   append_started: ["append_committed", "cleanup_pending"],
   append_committed: ["applied", "cleanup_pending"],
   applied: ["cleanup_pending"],
-  cleanup_pending: ["cleanup_started"],
+  // `applied` is the cleanup claim's restore of a revision queued while its
+  // state still served it and before any delete reached it
+  // (`corpusIndexProjectionRevisionIsRestorable`).
+  cleanup_pending: ["cleanup_started", "applied"],
   cleanup_started: ["cleanup_pending", "cleanup_committed"],
   // A delete settles unless revisions it targeted were written after it, which
   // no delete can reach: those go back to cleanup for a new delete, a bounded

@@ -50,7 +50,7 @@ export type DocxFolioCitation = {
   text: string;
 };
 
-export type ReviewDocxFolioCitation = DocxFolioCitation & {
+type ReviewDocxFolioCitation = DocxFolioCitation & {
   kind: "docx-folio";
   fileFieldId: SafeId<"field">;
   statement: string;
@@ -59,7 +59,7 @@ export type ReviewDocxFolioCitation = DocxFolioCitation & {
 // Bates citations are already validated by `normalizeJustification`, which
 // checks the file-specific Bates prefix and positive page number. Keep that
 // trusted locator together with its owning field for source resolution.
-export type PdfBatesCitation = {
+type PdfBatesCitation = {
   kind: "pdf-bates";
   fileFieldId: SafeId<"field">;
   bates: string;

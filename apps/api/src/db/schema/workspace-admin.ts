@@ -343,6 +343,15 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .default(true),
     /**
+     * Whether Anchor Verification asks the decision model for each claim's
+     * verdict (`lists/verification/verdict-decider.ts`). Default off: the
+     * language model that grades a claim decides its verdict alone.
+     */
+    verificationDecisionModelEnabled: p
+      .boolean("verification_decision_model_enabled")
+      .notNull()
+      .default(false),
+    /**
      * Org-level enablement for the delegated SharePoint / OneDrive
      * connection. Default-off (fail closed): even where the deployment
      * feature flag is on, an org must explicitly opt in before its members

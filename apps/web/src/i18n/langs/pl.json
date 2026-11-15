@@ -294,6 +294,8 @@
       "reopened": "Otwarto ponownie, oczekuje na sprawdzenie",
       "reopenedTooltip": "Osoba weryfikująca przeklasyfikowała to twierdzenie jako możliwy do sprawdzenia fakt; porównanie z rzeczywistym rejestrem nadal oczekuje na wykonanie.",
       "sourceCount": "{count, plural, one {# źródło} few {# źródła} many {# źródeł} other {# źródła}}",
+      "verdictBy": "Rozstrzygnięcie: {model}",
+      "verdictByGenerativeModel": "Rozstrzygnięcie modelu generatywnego; model decyzyjny go nie ustalił",
       "whyVerdict": "Uzasadnienie rozstrzygnięcia: fakty referencyjne"
     },
     "claimTypes": {
@@ -2348,17 +2350,17 @@
       "input": "Dane wejściowe",
       "interrupted": "Przerwano przed ukończeniem",
       "localOutput": {
+        "arriving": "Wciąż napływa z komputera, na którym uruchomiono ten krok",
         "conversation": "Rozmowa subagenta",
         "conversationPrompt": "Zadanie",
         "conversationReport": "Raport",
         "cut": "Wyświetlono pierwsze {kept} z {total}",
         "diff": "Zmiany w plikach",
-        "elsewhere": "Otwórz na komputerze, na którym to uruchomiono",
         "empty": "Brak wyniku",
-        "failed": "Aplikacja desktopowa stella na tym komputerze nie mogła tego wyświetlić.",
-        "imageTooLarge": "Ten obraz ma {total}. Obrazy większe niż {kept} nie są zachowywane na tym komputerze, dlatego nie można go tutaj wyświetlić.",
-        "notKept": "Z tego kroku nic nie zostało zachowane na tym komputerze",
-        "reading": "Odczytywanie z tego komputera"
+        "imageTooLargeToStore": "Ten obraz ma {total}. Obrazy większe niż {kept} nie są zapisywane, dlatego nie można go wyświetlić.",
+        "notCopied": "Jeszcze nie skopiowano do tego czatu",
+        "notStored": "Z tego kroku nic nie zostało zapisane",
+        "runBudgetReached": "Nie zapisano: to uruchomienie zapisało już tyle, ile może zapisać jedno uruchomienie"
       },
       "output": "Wynik",
       "patternInPath": "{pattern} w {path}",
@@ -2381,6 +2383,10 @@
       "needsInputTitle": "stella potrzebuje Twojej reakcji",
       "replyReadyBody": "stella skończyła odpowiadać na czacie.",
       "replyReadyTitle": "Odpowiedź gotowa"
+    },
+    "turnPaused": {
+      "continue": "Kontynuuj",
+      "status": "Wstrzymano po {count, plural, one {# wywołaniu narzędzia} few {# wywołaniach narzędzi} many {# wywołaniach narzędzi} other {# wywołania narzędzia}}"
     },
     "turnStatus": {
       "answerFailed": "Nie udało się dokończyć odpowiedzi",
@@ -3413,6 +3419,7 @@
       "invitationRoleNotAllowed": "Nie możesz zaprosić nikogo z tą rolą. Wybierz inną rolę.",
       "invoiceNumberSeriesMissing": "Skonfiguruj domyślną serię numeracji faktur w ustawieniach organizacji w sekcji Serie numeracji, a następnie wystaw fakturę.",
       "invoiceSellerProfileMissing": "Dodaj profil sprzedawcy w ustawieniach organizacji w sekcji Profile rozliczeniowe, a następnie wystaw fakturę.",
+      "legalHoldActive": "Usunięcie jest zablokowane, ponieważ te dane muszą zostać zachowane.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
       "matterContactCapacityExceeded": "Ta sprawa zawiera więcej kontaktów, niż można wyświetlić. Usuń widoczne powiązania z kontaktami, aby wyświetlić pozostałe kontakty.",
@@ -5893,6 +5900,8 @@
       "auditLogsSentenceDownload": "Pobrano: {resource}.",
       "auditLogsSentenceExecute": "Uruchomiono: {resource}.",
       "auditLogsSentenceIssued": "Wydano: {resource}.",
+      "auditLogsSentenceLegalHoldPlaced": "Nałożono: {resource}.",
+      "auditLogsSentenceLegalHoldReleased": "Zwolniono: {resource}.",
       "auditLogsSentenceRedeemed": "Zrealizowano: {resource}.",
       "auditLogsSentenceRefused": "Odrzucono: {resource}.",
       "auditLogsSentenceReview": "Sprawdzono: {resource}.",
@@ -5944,6 +5953,7 @@
         "flow_run": "uruchomienie przepływu pracy",
         "folio_collab_room": "pokój współpracy Folio",
         "invoice": "faktura",
+        "legal_hold": "obowiązek zachowania danych",
         "legal_list": "lista prawna",
         "legal_list_generation": "generowanie listy prawnej",
         "legal_list_item": "pozycja listy prawnej",
@@ -6103,7 +6113,13 @@
       "usageStatusTrialing": "Okres próbny",
       "usageUnitCount": "{count, plural, one {# jednostka} few {# jednostki} many {# jednostek} other {# jednostki}}",
       "usageUnitsBalanceTemplate": "Dostępne jednostki: {remaining}",
-      "usageUnitsThisPeriod": "Jednostki użycia w tym okresie"
+      "usageUnitsThisPeriod": "Jednostki użycia w tym okresie",
+      "verificationDecisionModel": {
+        "description": "Podczas weryfikacji dokumentu na podstawie faktów z listy model decyzyjny wybiera rozstrzygnięcie dla każdego twierdzenia. Model generatywny nadal wyszukuje i cytuje fakty. Jeśli model decyzyjny nie jest wystarczająco pewny, obowiązuje rozstrzygnięcie modelu generatywnego.",
+        "title": "Rozstrzygnięcia przy weryfikacji dokumentów",
+        "unavailable": "Ta organizacja nie ma dostępnego modelu decyzyjnego.",
+        "updated": "Zaktualizowano ustawienie weryfikacji"
+      }
     }
   },
   "sharepoint": {

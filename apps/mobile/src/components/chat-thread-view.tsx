@@ -22,6 +22,7 @@ import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
 import { ThreadMatter } from "@/components/thread-matter";
+import { ThreadSteps } from "@/components/thread-steps";
 import { useChatTurn } from "@/components/use-chat-turn";
 import type { LiveTurn } from "@/components/use-chat-turn";
 import { useMarkChatReadWhileOpen } from "@/components/use-mark-chat-read";
@@ -97,21 +98,23 @@ export const ChatThreadView = ({
 
   return (
     <ThreadMatter value={matterId}>
-      <Suspense
-        fallback={
-          <ActivityIndicator color={colors.accent} style={styles.fill} />
-        }
-      >
-        <LoadedThread
-          load={load}
-          matterId={matterId}
-          onReload={reload}
-          refreshing={refreshing}
-          shareId={shareId}
-          source={source}
-          threadId={threadId}
-        />
-      </Suspense>
+      <ThreadSteps value={{ source, threadId }}>
+        <Suspense
+          fallback={
+            <ActivityIndicator color={colors.accent} style={styles.fill} />
+          }
+        >
+          <LoadedThread
+            load={load}
+            matterId={matterId}
+            onReload={reload}
+            refreshing={refreshing}
+            shareId={shareId}
+            source={source}
+            threadId={threadId}
+          />
+        </Suspense>
+      </ThreadSteps>
     </ThreadMatter>
   );
 };

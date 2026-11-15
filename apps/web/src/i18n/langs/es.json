@@ -294,6 +294,8 @@
       "reopened": "Reabierta, comprobación pendiente",
       "reopenedTooltip": "Un revisor la reclasificó como hecho comprobable; aún está pendiente la comprobación en vivo del registro.",
       "sourceCount": "{count, plural, one {# fuente} other {# fuentes} many {# fuentes}}",
+      "verdictBy": "Resultado de {model}",
+      "verdictByGenerativeModel": "Resultado del modelo generativo; el modelo de decisión no lo determinó",
       "whyVerdict": "Motivo de este resultado: hechos de referencia"
     },
     "claimTypes": {
@@ -2348,17 +2350,17 @@
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
       "localOutput": {
+        "arriving": "Todavía está llegando desde el ordenador que ejecutó este paso",
         "conversation": "Conversación del subagente",
         "conversationPrompt": "Tarea",
         "conversationReport": "Informe",
         "cut": "Se muestran los primeros {kept} de {total}",
         "diff": "Cambios en archivos",
-        "elsewhere": "Ábrelo en el ordenador que lo ejecutó",
         "empty": "Sin salida",
-        "failed": "La aplicación de escritorio de stella en este ordenador no pudo mostrarlo.",
-        "imageTooLarge": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan en este ordenador, por lo que no se puede mostrar aquí.",
-        "notKept": "No se guardó nada de este paso en este ordenador",
-        "reading": "Leyendo desde este ordenador"
+        "imageTooLargeToStore": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan, por lo que no se puede mostrar.",
+        "notCopied": "Aún no se ha copiado a este chat",
+        "notStored": "No se guardó nada de este paso",
+        "runBudgetReached": "No se guardó: esta ejecución ya había guardado todo lo que puede guardar una ejecución"
       },
       "output": "Salida",
       "patternInPath": "{pattern} en {path}",
@@ -2381,6 +2383,10 @@
       "needsInputTitle": "stella necesita tu respuesta",
       "replyReadyBody": "stella terminó de responder en tu chat.",
       "replyReadyTitle": "Respuesta lista"
+    },
+    "turnPaused": {
+      "continue": "Continuar",
+      "status": "En pausa tras {count, plural, one {# llamada a herramienta} many {# llamadas a herramientas} other {# llamadas a herramientas}}"
     },
     "turnStatus": {
       "answerFailed": "No se pudo terminar la respuesta",
@@ -3413,6 +3419,7 @@
       "invitationRoleNotAllowed": "No puede invitar a nadie con este rol. Elija otro rol.",
       "invoiceNumberSeriesMissing": "Configure una serie de numeración predeterminada para facturas en Series de numeración, en la configuración de la organización, y después emita la factura.",
       "invoiceSellerProfileMissing": "Añada un perfil de vendedor en Perfiles de facturación, en la configuración de la organización, y después emita la factura.",
+      "legalHoldActive": "La eliminación está bloqueada porque estos registros deben conservarse.",
       "legalSourceEntityLimitReached": "Este asunto ha alcanzado el límite de elementos, por lo que no se pudo crear el documento.",
       "legalSourceFilePropertyMissing": "A este asunto le falta una propiedad de archivo, por lo que no se pudo crear el documento.",
       "matterContactCapacityExceeded": "Este asunto contiene más contactos de los que se pueden mostrar. Elimine vínculos visibles con contactos para mostrar los contactos restantes.",
@@ -5893,6 +5900,8 @@
       "auditLogsSentenceDownload": "Se descargó {resource}.",
       "auditLogsSentenceExecute": "Se ejecutó {resource}.",
       "auditLogsSentenceIssued": "Se emitió {resource}.",
+      "auditLogsSentenceLegalHoldPlaced": "Se aplicó {resource}.",
+      "auditLogsSentenceLegalHoldReleased": "Se levantó {resource}.",
       "auditLogsSentenceRedeemed": "Se canjeó {resource}.",
       "auditLogsSentenceRefused": "Se rechazó {resource}.",
       "auditLogsSentenceReview": "Se revisó {resource}.",
@@ -5944,6 +5953,7 @@
         "flow_run": "ejecución del flujo de trabajo",
         "folio_collab_room": "sala colaborativa Folio",
         "invoice": "factura",
+        "legal_hold": "retención legal",
         "legal_list": "lista jurídica",
         "legal_list_generation": "generación de lista jurídica",
         "legal_list_item": "entrada de lista jurídica",
@@ -6103,7 +6113,13 @@
       "usageStatusTrialing": "En prueba",
       "usageUnitCount": "{count, plural, one {# unidad} many {# unidades} other {# unidades}}",
       "usageUnitsBalanceTemplate": "{remaining} unidades disponibles",
-      "usageUnitsThisPeriod": "Unidades de uso de este periodo"
+      "usageUnitsThisPeriod": "Unidades de uso de este periodo",
+      "verificationDecisionModel": {
+        "description": "Al verificar un documento con los hechos de una lista, el modelo de decisión elige el resultado de cada afirmación. El modelo generativo sigue encontrando y citando los hechos. Si el modelo de decisión no está lo bastante seguro, se mantiene el resultado del modelo generativo.",
+        "title": "Resultados de la verificación de documentos",
+        "unavailable": "Esta organización no tiene ningún modelo de decisión disponible.",
+        "updated": "Ajuste de verificación actualizado"
+      }
     }
   },
   "sharepoint": {

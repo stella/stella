@@ -26,6 +26,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Field, FieldLabel } from "@stll/ui/field";
+import { formatFileSize } from "@stll/ui/file-size";
 import { Form } from "@stll/ui/form";
 import { XIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
@@ -72,7 +73,6 @@ import { ConfidencePhrase, HeldStatus } from "@/features/avt/state-chip";
 import { useStartFactExtraction } from "@/features/avt/use-start-fact-extraction";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { formatFileSize } from "@/lib/file-size";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";

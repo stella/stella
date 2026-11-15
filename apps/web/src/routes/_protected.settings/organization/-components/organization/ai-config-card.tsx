@@ -23,6 +23,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { detached } from "@/lib/detached";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 import { aiConfigOptions } from "@/lib/organization/ai-config-queries";
+import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
@@ -40,6 +41,7 @@ import { OrganizationInstructionsCard } from "./organization-instructions-card";
 import { PromptCachingCard } from "./prompt-caching-card";
 import { useAIConfigForm } from "./use-ai-config-form";
 import type { AIConfigReadState } from "./use-ai-config-form";
+import { VerificationDecisionModelCard } from "./verification-decision-model-card";
 import { WebSearchKeysCard } from "./web-search-keys-card";
 
 export const AIConfigCard = () => (
@@ -210,6 +212,16 @@ const LeaveGuard = ({ blocker }: LeaveGuardProps) => {
   );
 };
 
+/** Shown only where Anchor Verification is offered to the organization. */
+const VerificationDecisionModelSection = ({
+  setting,
+}: {
+  setting: OrganizationAIConfig["verificationDecisionModel"];
+}) =>
+  useCallerFeatureEnabled(CALLER_FEATURE.verification) ? (
+    <VerificationDecisionModelCard setting={setting} />
+  ) : null;
+
 type AuxiliaryCardsProps = {
   form: AIConfigFormState;
 };
@@ -306,6 +318,11 @@ export const AIConfigForm = ({
       {settingsError && <SettingsError error={settingsError} />}
       {form.feedback.status !== "error" && (
         <AISettingsSectionFeedback feedback={form.feedback} />
+      )}
+      {readState.status === "ready" && (
+        <VerificationDecisionModelSection
+          setting={readState.config.verificationDecisionModel}
+        />
       )}
       <OrganizationInstructionsCard />
       <AuxiliaryCards form={form} />

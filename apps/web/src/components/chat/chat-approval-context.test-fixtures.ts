@@ -11,6 +11,7 @@ const ignore = () => undefined;
 
 export const testChatApprovalContextValue = {
   activeOrganizationId: "test-active-organization",
+  approvalIdsAwaitedAtOpen: new Set(),
   alwaysApprovedTools: new Set(),
   conversationApprovedTools: new Set(),
   confirmStoredApprovalGrant: async () => await Promise.resolve(false),

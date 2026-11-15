@@ -2,6 +2,11 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { AIErrorKind } from "@stll/api-contract/ai-errors";
+import {
+  CHAT_CONTEXT_NOTICE_METADATA_KEY,
+  chatContextNoticeSchema,
+} from "@stll/api-contract/chat-context-notice";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -41,7 +46,10 @@ const messageSchema = v.object({
   role: v.string(),
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
   parts: v.array(partSchema),
-  /** Read for whether the message's turn waits for the person, or failed. */
+  /**
+   * Read for whether the message's turn waits for the person or failed, and
+   * for the answer's context notice.
+   */
   metadata: v.optional(v.unknown()),
 });
 
@@ -71,6 +79,27 @@ export type ChatEntry = {
   readonly drafts: readonly ChatDraftDocument[];
   /** Why the answer's turn failed; absent for one that did not. */
   readonly failure?: AIErrorKind;
+  /** What the answer's context left out, as the web says it too. */
+  readonly contextNotice: ChatContextNotice | null;
+};
+
+const contextNoticeMetadataSchema = v.object({
+  [CHAT_CONTEXT_NOTICE_METADATA_KEY]: v.nullable(chatContextNoticeSchema),
+});
+
+/**
+ * The context notice a stored message's or a stream event's metadata states:
+ * the notice, `null` where the stream withdraws one an earlier attempt
+ * streamed, or undefined where it says nothing of one. A notice this build
+ * does not know says nothing, so it does not fail the thread.
+ */
+export const contextNoticeIn = (
+  metadata: unknown,
+): ChatContextNotice | null | undefined => {
+  const parsed = v.safeParse(contextNoticeMetadataSchema, metadata);
+  return parsed.success
+    ? parsed.output[CHAT_CONTEXT_NOTICE_METADATA_KEY]
+    : undefined;
 };
 
 /**
@@ -149,6 +178,10 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     blocks,
     files,
     drafts,
+    contextNotice:
+      message.role === "assistant"
+        ? (contextNoticeIn(message.metadata) ?? null)
+        : null,
     ...(failure === undefined ? {} : { failure }),
   };
 };
@@ -198,6 +231,7 @@ export const sentEntry = ({
   // The thread names each file; its bytes have gone with the message.
   files: files.map(({ mimeType, name }) => ({ mimeType, name })),
   drafts: [],
+  contextNotice: null,
 });
 
 /**

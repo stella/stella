@@ -70,6 +70,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "DELETE /v1/skills/:skillId/proposals/:proposalId": "crud",
   "DELETE /v1/skills/:skillId/resources": "crud",
   "DELETE /v1/style-sets/:styleSetId": "crud",
+  "DELETE /v1/tasks/:workspaceId/:taskId": "crud",
   "DELETE /v1/tasks/:workspaceId/assignees": "crud",
   "DELETE /v1/tasks/:workspaceId/links": "crud",
   "DELETE /v1/template-categories/:categoryId": "crud",
@@ -161,7 +162,6 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/chat/link-icons/:hostname": "crud",
   "GET /v1/chat/link-icons/exact": "crud",
   "GET /v1/chat/local-runners": "crud",
-  "GET /v1/chat/local-runs/:runId/step-output-grant": "crud",
   "PUT /v1/chat/local-runners/:desktopId/folders/:linkId/approval": "crud",
   "GET /v1/chat/mcp-apps/:app": "crud",
   "GET /v1/chat/model-options": "crud",
@@ -759,6 +759,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/organization-settings/practice-jurisdictions": "crud",
   "POST /v1/organization-settings/preview": "crud",
   "POST /v1/organization-settings/sanctions-monitoring": "crud",
+  "POST /v1/organization-settings/verification-decision-model": "crud",
   "POST /v1/organization-settings/web-search-key": "crud",
   "POST /v1/pdf-signing-handoffs/redeem": "crud",
   "POST /v1/organizations": "crud",
@@ -960,6 +961,11 @@ export const ROUTE_LATENCY_CLASSES = {
   "PUT /v1/workspaces/:workspaceId/anonymization-terms": "crud",
   "PUT /v1/workspaces/:workspaceId/contacts": "crud",
   "PUT /v1/workspaces/:workspaceId/members": "crud",
+  "POST /v1/entities/:workspaceId/entity/:entityId/legal-holds": "crud",
+  "POST /v1/entities/:workspaceId/entity/:entityId/legal-holds/:holdId/release":
+    "crud",
+  "POST /v1/workspaces/:workspaceId/legal-holds": "crud",
+  "POST /v1/workspaces/:workspaceId/legal-holds/:holdId/release": "crud",
 } as const satisfies Record<ApiRouteKey, RequestClass>;
 
 const DECLARED_CLASSES = new Map(Object.entries(ROUTE_LATENCY_CLASSES));

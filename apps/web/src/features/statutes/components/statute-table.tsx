@@ -78,7 +78,7 @@ import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 import { EM_DASH, formatValidityDate } from "@/lib/statutes/statute-format";
 
 /** The icon each statute column wears in its header menu and the chooser. */
-export const STATUTE_COLUMN_ICONS = {
+const STATUTE_COLUMN_ICONS = {
   act: ScrollTextIcon,
   type: ShapesIcon,
   validity: CircleDotIcon,
