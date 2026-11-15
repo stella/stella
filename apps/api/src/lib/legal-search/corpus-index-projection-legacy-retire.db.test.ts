@@ -240,6 +240,74 @@ describe("the one-off pass over copies the previous release left served", () => 
     await stillServed(later);
   });
 
+  test("only a succeeded withdrawal is evidence", async () => {
+    const otherOperation = await servedEntity();
+    const failedWithdrawal = await servedEntity();
+    await run(sql`
+      INSERT INTO case_law_index_jobs (
+        id, decision_id, operation, status, error_message
+      ) VALUES
+        (${caseLaw.uuid()}, ${otherOperation.entityId}, 'index', 'succeeded', NULL),
+        (${caseLaw.uuid()}, ${failedWithdrawal.entityId}, 'withdraw', 'failed',
+          'withdrawal failed')
+    `);
+    for (const { entityId } of [otherOperation, failedWithdrawal]) {
+      // db-await-in-loop: two desired changes per entity, in order
+      await changeDesired(entityId, 2, { action: "erase" });
+      // db-await-in-loop: two desired changes per entity, in order
+      await changeDesired(entityId, 3, {
+        action: "upsert",
+        fingerprint: fingerprint(1),
+      });
+    }
+
+    const result = await pass(await cutoverAt(), null, 16);
+    expect(result.outcomes).toMatchObject({ retired: 0 });
+    expect(result.keptUnproven).toBe(2);
+    await stillServed(otherOperation);
+    await stillServed(failedWithdrawal);
+  });
+
+  test("keeps a copy with evidence whose replacement append is blocked", async () => {
+    const parked = await erasedThenUndone(fingerprint(1));
+    // The replacement's append failed for good: nothing delivers it until an
+    // operator unparks it.
+    await run(sql`
+      UPDATE corpus_index_projection_states
+      SET work_status = 'blocked', retry_not_before = NULL,
+          failure_attempts = 1, last_failure_kind = 'revision_too_large',
+          last_failure_message = 'projection revision exceeds the request limit'
+      WHERE entity_id = ${parked.entityId}
+    `);
+    const instant = await cutoverAt();
+    for (const mode of ["count", "retire"] as const) {
+      // db-await-in-loop: one run per mode, the same decision in both
+      const result = await pass(instant, null, 16, mode);
+      expect(result.outcomes).toMatchObject({ retired: 0 });
+      expect(result.keptBlocked).toBe(1);
+      expect(result.keptUnproven).toBe(0);
+    }
+    await stillServed(parked);
+  });
+
+  test("refuses a cursor whose cutover is not an instant", async () => {
+    await erasedThenUndone(fingerprint(1));
+    const instant = await cutoverAt();
+    const refusal = await passResult(
+      instant,
+      {
+        cutoverAt: "not an instant",
+        indexId: "case_law_v5_cs_sk",
+        updatedAt: "2026-11-15 00:00:00+00",
+        entityId: "00000000-0000-4000-8000-000000000000",
+      },
+      16,
+    );
+    expect(refusal.isErr() ? refusal.error : null).toBeInstanceOf(
+      LegacyServedCopyRetireCutoverMismatchError,
+    );
+  });
+
   test("never retires a legislation copy, which records no withdrawal", async () => {
     const served = await legislation.servedEntity();
     await legislation.changeDesired(served.entityId, 2, { action: "erase" });

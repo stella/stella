@@ -36,7 +36,10 @@ export type LegacyServedCopyRetireCursor = {
   entityId: string;
 };
 
-/** A call resumed a walk under another cutover than the one it started with. */
+/**
+ * A call resumed a walk under another cutover than the one it started with,
+ * or from a cursor whose cutover is not an instant.
+ */
 export class LegacyServedCopyRetireCutoverMismatchError extends TaggedError(
   "LegacyServedCopyRetireCutoverMismatchError",
 )<{ message: string; cursorCutoverAt: string; cutoverAt: string }> {}
@@ -70,8 +73,9 @@ const LEGACY_RETIRE_OUTCOMES = [
   "skipped_canonical_epoch",
 ] as const;
 type LegacyRetireOutcome = (typeof LEGACY_RETIRE_OUTCOMES)[number];
-/** Every decision the pass takes per state: an outcome, or kept unproven. */
-type LegacyRetireDecision = LegacyRetireOutcome | "kept_unproven";
+/** Every decision the pass takes per state: an outcome, or a counted keep. */
+type LegacyRetireDecision =
+  LegacyRetireOutcome | "kept_unproven" | "kept_blocked";
 
 export type LegacyServedCopyRetirePage = {
   /** States this call read from the index. */
@@ -86,7 +90,8 @@ export type LegacyServedCopyRetirePage = {
    * because the state's desired epoch no longer matches its canonical row,
    * so the state guard refuses every write of it (a generation that only
    * takes erasures keeps such states). A skipped state is not retried by this
-   * walk. Together with `keptUnproven`, every scanned state is counted once.
+   * walk. Together with `keptUnproven` and `keptBlocked`, every scanned
+   * state is counted once.
    */
   outcomes: Record<LegacyRetireOutcome, number>;
   /**
@@ -95,6 +100,13 @@ export type LegacyServedCopyRetirePage = {
    * here for the runner's report.
    */
   keptUnproven: number;
+  /**
+   * Copies with that evidence whose state's append is `blocked`: nothing
+   * delivers a replacement until an operator unparks it, so retiring the
+   * copy would leave the entity unserved. Kept served, in both modes, and
+   * counted here for the runner's report.
+   */
+  keptBlocked: number;
   /** The skipped states, for the runner's log. */
   skipped: readonly { entityId: string; reason: "canonical_epoch" }[];
   /** Where the next call starts; `null` once the walk is complete. */
@@ -129,7 +141,7 @@ const countOutcomes = (
 };
 
 const requireDecision = (value: string): LegacyRetireDecision =>
-  value === "kept_unproven"
+  value === "kept_unproven" || value === "kept_blocked"
     ? value
     : (LEGACY_RETIRE_OUTCOMES.find((outcome) => outcome === value) ??
       panic(`Unknown legacy retire outcome: ${value}`));
@@ -249,7 +261,10 @@ export const legacyServedCopyRetirePageQuery = ({
  * superseded copy from an ordinary pending replacement, and keeping a copy
  * served until its replacement lands is the safe direction, so the copy is
  * kept and counted in `keptUnproven`. Only case law records erasures that way;
- * the pass never retires a legislation copy.
+ * the pass never retires a legislation copy. A candidate with evidence whose
+ * append is `blocked` is kept too (`keptBlocked`): of the work statuses, only
+ * `blocked` leaves the entity off every append queue, so retiring its copy
+ * would leave it unserved with no replacement coming.
  *
  * The pass, the writer's rule and their inputs are deleted once the pass has
  * run in every registered generation.
@@ -275,18 +290,23 @@ export const retireLegacyUnprovenServedCopiesTx = async (
   if (!Number.isInteger(limit) || limit < 1 || limit > LEGACY_RETIRE_MAX_PAGE) {
     return panic("Legacy served-copy retire page size is invalid");
   }
-  if (
-    after !== null &&
-    !Temporal.Instant.from(after.cutoverAt).equals(cutoverAt)
-  ) {
-    return Result.err(
-      new LegacyServedCopyRetireCutoverMismatchError({
-        message:
-          "Legacy served-copy retire resumed under another cutover than its cursor",
-        cursorCutoverAt: after.cutoverAt,
-        cutoverAt: cutoverAt.toString(),
-      }),
+  if (after !== null) {
+    const cursorCutover = Result.try(() =>
+      Temporal.Instant.from(after.cutoverAt),
     );
+    if (
+      Result.isError(cursorCutover) ||
+      !cursorCutover.value.equals(cutoverAt)
+    ) {
+      return Result.err(
+        new LegacyServedCopyRetireCutoverMismatchError({
+          message:
+            "Legacy served-copy retire resumed under another cutover than its cursor",
+          cursorCutoverAt: after.cutoverAt,
+          cutoverAt: cutoverAt.toString(),
+        }),
+      );
+    }
   }
   const cutover = sql`${cutoverAt.toString()}::timestamptz`;
   const [clock] = executedRows(
@@ -318,6 +338,7 @@ export const retireLegacyUnprovenServedCopiesTx = async (
       scanned: 0,
       outcomes: countOutcomes([], 0),
       keptUnproven: 0,
+      keptBlocked: 0,
       skipped: [],
       next: null,
     });
@@ -361,6 +382,8 @@ export const retireLegacyUnprovenServedCopiesTx = async (
             THEN 'kept_after_cutover'
           WHEN NOT ${erasureRecordedInWindow(family, cutover)}
             THEN 'kept_unproven'
+          WHEN ${states.workStatus} = 'blocked'
+            THEN 'kept_blocked'
           WHEN ${canonicalProjectionEpoch(family)} IS DISTINCT FROM ${states.desiredEpoch}
             THEN 'skipped_canonical_epoch'
           ELSE 'retired'
@@ -397,6 +420,8 @@ export const retireLegacyUnprovenServedCopiesTx = async (
       page.length - decided.length,
     ),
     keptUnproven: decided.filter(({ outcome }) => outcome === "kept_unproven")
+      .length,
+    keptBlocked: decided.filter(({ outcome }) => outcome === "kept_blocked")
       .length,
     skipped: decided.flatMap(({ entityId, outcome }) =>
       outcome === "skipped_canonical_epoch"
