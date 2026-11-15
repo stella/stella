@@ -1314,13 +1314,14 @@ const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
  * Whether a cut of the turn, by its kind, stops the computer's turn. After
  * each of them nobody reads the run any more, so each does.
  */
-const LOCAL_RUN_CUT_STOPS_COMPUTER = {
-  "member-stop": true,
-  "owner-lost": true,
-  "production-failed": true,
-  "admission-lost": true,
-  other: true,
-} as const satisfies Record<ChatTurnRunCut, boolean>;
+const LOCAL_RUN_CUT_STOPS_COMPUTER: Readonly<Record<ChatTurnRunCut, boolean>> =
+  {
+    "member-stop": true,
+    "owner-lost": true,
+    "production-failed": true,
+    "admission-lost": true,
+    other: true,
+  };
 
 /**
  * Tells the chat while its run waits for the computer to pick it up, once it
