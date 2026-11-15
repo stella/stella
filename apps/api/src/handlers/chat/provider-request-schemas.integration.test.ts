@@ -321,7 +321,7 @@ const REASONING_REPLAY_PATHS: Partial<
     "messages[].content[].signature",
     "messages[].content[].thinking",
   ],
-  google: ["contents[].parts[].thoughtSignature"],
+  google: ["contents[].parts[].thought", "contents[].parts[].thoughtSignature"],
   openai: ["input[].encrypted_content", "input[].summary"],
 };
 
