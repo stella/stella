@@ -128,6 +128,8 @@ import {
 } from "@/features/chat/chat-queue";
 import {
   canQueueMessage,
+  CHAT_STEER_REFUSAL_MESSAGES,
+  type ChatSteerRefusal,
   composerDraftOfParts,
   isQueueInsteadRefusal,
   messagePartsOf,
@@ -955,6 +957,18 @@ export const useChatSession = ({
     [refreshQueue, t],
   );
 
+  // A steer that left the message queued says why; the queue shows it.
+  const notifySteerRefused = useCallback(
+    (reason: ChatSteerRefusal) => {
+      stellaToast.add({
+        title: t("chat.steerRefused.title"),
+        description: t(CHAT_STEER_REFUSAL_MESSAGES[reason]),
+        type: "info",
+      });
+    },
+    [t],
+  );
+
   /**
    * Hand `text` to the turn running on the member's computer under `id`. A
    * turn that does not take it leaves `onNotTaken` to place the message.
@@ -967,14 +981,18 @@ export const useChatSession = ({
             inputId: input.id,
             text: input.text,
           });
-          if (outcome !== "steered") {
-            await onNotTaken();
+          if (outcome.type === "steered") {
+            return;
           }
+          if (outcome.type === "refused") {
+            notifySteerRefused(outcome.reason);
+          }
+          await onNotTaken();
         })(),
         "use-chat-session.steer",
       );
     },
-    [chat],
+    [chat, notifySteerRefused],
   );
 
   /**
@@ -1013,7 +1031,12 @@ export const useChatSession = ({
             withRequestSnapshots(options),
           );
           if (text === null) {
-            return await enqueueMessage(message, options);
+            // Files or anonymized: only ever a message of its own.
+            const queued = await enqueueMessage(message, options);
+            if (queued.kind === "sent") {
+              notifySteerRefused("message_not_plain");
+            }
+            return queued;
           }
           if (state.type === "waiting_on_member") {
             // The shown approval is declined, explicitly, as the member's
@@ -1084,6 +1107,7 @@ export const useChatSession = ({
     [
       chat,
       enqueueMessage,
+      notifySteerRefused,
       resolveToolApproval,
       restoreIntoComposer,
       steerTurn,
@@ -1137,7 +1161,7 @@ export const useChatSession = ({
                 text: route.text,
               });
               await writeQueue(async () =>
-                outcome === "steered"
+                outcome.type === "steered"
                   ? await removeFromQueue(id)
                   : await sendQueuedChatMessageNow(threadRef.threadId, id),
               );
@@ -2251,18 +2275,27 @@ export const useChatSession = ({
     steerOnResumeRef.current = null;
     detached(
       (async () => {
-        if (
-          (await chat.steerLocalTurn({
-            inputId: steered.id,
-            text: steered.text,
-          })) === "steered"
-        ) {
-          await writeQueue(async () => await removeFromQueue(steered.id));
+        const outcome = await chat.steerLocalTurn({
+          inputId: steered.id,
+          text: steered.text,
+        });
+        switch (outcome.type) {
+          case "steered":
+            await writeQueue(async () => await removeFromQueue(steered.id));
+            return;
+          case "refused":
+            notifySteerRefused(outcome.reason);
+            return;
+          case "unsettled":
+            return;
+          default:
+            outcome satisfies never;
+            panic("Unhandled steer outcome");
         }
       })(),
       "use-chat-session.steer-on-resume",
     );
-  }, [chat, removeFromQueue, turnRunning, writeQueue]);
+  }, [chat, notifySteerRefused, removeFromQueue, turnRunning, writeQueue]);
 
   // The server sends the first queued message as a turn of its own, which
   // this page did not start: once that message has left the queue (not

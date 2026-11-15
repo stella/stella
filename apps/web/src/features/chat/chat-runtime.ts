@@ -34,6 +34,7 @@ import {
   type ChatLocalRunSteerEvent,
   chatLocalRunSteerEventSchema,
   type ChatLocalRunSteerOutcome,
+  type ChatLocalRunSteerRefusal,
 } from "@stll/api-contract/chat-run-target";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -210,9 +211,32 @@ const CHAT_RUNTIME_BRAND: unique symbol = Symbol("StellaChatRuntime");
 /**
  * What became of a message handed to a turn running on the member's
  * computer: the turn took it (`steered`), the turn runs on and did not
- * (`refused`), or nothing settled it before the turn ended (`unsettled`).
+ * (`refused`, with why), or nothing settled it before the turn ended
+ * (`unsettled`).
  */
-export type ChatSteerOutcome = ChatLocalRunSteerEvent["status"] | "unsettled";
+export type ChatSteerOutcome =
+  | { type: "steered" }
+  | { type: "refused"; reason: ChatLocalRunSteerRefusal }
+  | { type: "unsettled" };
+
+const STEER_UNSETTLED = {
+  type: "unsettled",
+} as const satisfies ChatSteerOutcome;
+
+/** What the turn's stream says became of a steer. */
+const steerOutcomeOfEvent = ({
+  status,
+}: ChatLocalRunSteerEvent): ChatSteerOutcome => {
+  switch (status) {
+    case "steered":
+      return { type: "steered" };
+    case "refused":
+      return { type: "refused", reason: "not_taken" };
+    default:
+      status satisfies never;
+      return panic("Unhandled steer status");
+  }
+};
 
 export type ChatActivitySession = {
   readonly reportedUnknownActivityTypes: Set<string>;
@@ -588,7 +612,7 @@ export const createChatRuntime = ({
   /** The request ended: no steer still waiting can hear from its turn. */
   const settleOpenSteers = () => {
     for (const inputId of [...pendingSteers.keys()]) {
-      settleSteer(inputId, "unsettled");
+      settleSteer(inputId, STEER_UNSETTLED);
     }
   };
   /** The server refused the latest request for a turn it had already
@@ -1154,7 +1178,7 @@ export const createChatRuntime = ({
         // A malformed or unknown one settles nothing; the turn's end does.
         const steer = v.safeParse(chatLocalRunSteerEventSchema, value);
         if (steer.success) {
-          settleSteer(steer.output.inputId, steer.output.status);
+          settleSteer(steer.output.inputId, steerOutcomeOfEvent(steer.output));
         }
         return;
       }
@@ -1576,11 +1600,11 @@ export const createChatRuntime = ({
     const running = () =>
       loadingGeneration === loading && snapshot.isLoading && !isStoppedTurn();
     if (!running()) {
-      return "unsettled";
+      return STEER_UNSETTLED;
     }
-    // A cloud turn takes nothing mid-turn: it is stopped and started again.
+    // A cloud turn takes nothing mid-turn.
     if (context?.getRunTarget?.().kind !== "local") {
-      return "refused";
+      return { type: "refused", reason: "harness_cannot_steer" };
     }
     const settled = new Promise<ChatSteerOutcome>((resolve) => {
       pendingSteers.set(inputId, resolve);
@@ -1594,7 +1618,7 @@ export const createChatRuntime = ({
       await requestAnswered.promise;
       const steeredTurn = turnId;
       if (!running() || steeredTurn === null) {
-        settleSteer(inputId, "unsettled");
+        settleSteer(inputId, STEER_UNSETTLED);
         return;
       }
       const sent = await Result.tryPromise(
@@ -1619,11 +1643,17 @@ export const createChatRuntime = ({
         captureRuntimeError(sent.value.error);
         return;
       }
-      if (sent.value.value === "queued") {
+      const outcome = sent.value.value;
+      if (outcome.type === "queued") {
         return;
       }
-      // Only a turn that still runs is one the caller can stop and restart.
-      settleSteer(inputId, running() ? "refused" : "unsettled");
+      // Only a turn that still runs is one that refused it.
+      settleSteer(
+        inputId,
+        running()
+          ? { type: "refused", reason: outcome.reason }
+          : STEER_UNSETTLED,
+      );
     };
     detached(send(), "chat-runtime.steer-local-turn");
     return await settled;

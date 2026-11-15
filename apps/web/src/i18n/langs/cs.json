@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upravit pomocí AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Funkce AI nejsou pro tento účet dostupné.",
       "accountRestricted": "Nastavení poskytovatele AI není pro tento účet dostupné.",
       "configUnreadable": "Konfiguraci poskytovatele AI nelze načíst. Požádejte správce organizace o nové připojení.",
       "cta": "Otevřít nastavení AI",
@@ -159,6 +160,7 @@
     "handoffAccount": "Pokračovat jako <account>{email}</account> v organizaci <organization>{organizationName}</organization>?",
     "handoffTitle": "Pokračovat v aplikaci stella",
     "headline": "Jasno v každém případě.",
+    "invalidEmailOrPassword": "Nesprávný e-mail nebo heslo.",
     "invitation": {
       "declined": "Pozvánka odmítnuta",
       "declinedDescription": "Odmítli jste tuto pozvánku. Můžete tuto stránku zavřít.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Použít místo toho záložní kód"
     },
     "useDifferentEmail": "Použít jiný e-mail",
+    "useEmailCode": "Přihlásit se raději kódem z e-mailu",
     "usePassword": "Přihlásit se raději heslem",
     "weSentCodeTo": "Kód jsme odeslali na <email>{emailAddress}</email>"
   },
@@ -2217,6 +2220,15 @@
     "sourcePlaceholder": "Chatovat o {title}",
     "sourcePlaceholderAction": "Chatovat o",
     "sources": "Zdroje:",
+    "steerRefused": {
+      "cannotSteer": "Tento agent během práce nepřijímá zprávy.",
+      "noRun": "Agent teď na vašem počítači neběží.",
+      "notPlain": "Agentovi lze během práce poslat jen textovou zprávu bez souborů, neodeslanou v anonymizovaném režimu.",
+      "notTaken": "Agent teď vaši zprávu nemohl přijmout.",
+      "runFull": "Agent teď další zprávy nepřijme.",
+      "title": "Zpráva čeká ve frontě, dokud agent neskončí",
+      "turnNotRunning": "Agent právě nepracuje."
+    },
     "stopFailed": "Odpověď se nepodařilo zastavit. Zkuste to znovu.",
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",

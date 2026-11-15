@@ -1,11 +1,14 @@
 import { expect, test } from "bun:test";
 
-test("the popup renders a bundled stella symbol instead of a letter", async () => {
+import { EXTENSION_ICONS } from "../wxt.config";
+
+test("the popup mark is the extension's own icon", async () => {
   const popup = await Bun.file(
     new URL("../src/entrypoints/popup/index.html", import.meta.url),
   ).text();
-  const mark = /<div class="mark"[^>]*>([\s\S]*?)<\/div>/u.exec(popup)?.at(1);
-  expect(mark).toBeDefined();
-  expect(mark).toMatch(/<img\b[^>]*\bsrc="\/brand\/stella-symbol\.svg"/u);
-  expect(mark?.trim()).not.toMatch(/^[Ss§]$/u);
+  const marks = [...popup.matchAll(/<img\b[^>]*\bclass="mark"[^>]*>/gu)];
+  expect(marks).toHaveLength(1);
+  const source = /\bsrc="([^"]+)"/u.exec(marks.at(0)?.[0] ?? "")?.at(1);
+  // The largest manifest icon, so it stays sharp at the mark's size.
+  expect(source).toBe(`/${EXTENSION_ICONS[128]}`);
 });

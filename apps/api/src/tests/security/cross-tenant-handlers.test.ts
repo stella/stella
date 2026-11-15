@@ -2989,7 +2989,9 @@ const isolationCases: IsolationCase[] = [
       expect(getStatusCode(result)).toBe(404);
     },
     expectPositive: (result) => {
-      expect(result).toEqual({ steer: "unavailable" });
+      expect(result).toEqual({
+        steer: { type: "refused", reason: "turn_not_running" },
+      });
     },
   },
   {

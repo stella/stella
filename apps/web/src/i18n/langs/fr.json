@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Options de réécriture",
     "editWithAI": "Modifier avec l’IA",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Les fonctionnalités d’IA ne sont pas disponibles pour ce compte.",
       "accountRestricted": "Les paramètres du fournisseur d’IA ne sont pas disponibles pour ce compte.",
       "configUnreadable": "La configuration du fournisseur d’IA ne peut pas être lue. Demandez à un administrateur de l’organisation de le reconnecter.",
       "cta": "Ouvrir les paramètres IA",
@@ -159,6 +160,7 @@
     "handoffAccount": "Continuer en tant que <account>{email}</account> dans <organization>{organizationName}</organization> ?",
     "handoffTitle": "Continuer vers stella",
     "headline": "La clarté pour chaque affaire.",
+    "invalidEmailOrPassword": "Adresse e-mail ou mot de passe incorrect.",
     "invitation": {
       "declined": "Invitation refusée",
       "declinedDescription": "Vous avez refusé cette invitation. Vous pouvez fermer cette page.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Utiliser plutôt un code de secours"
     },
     "useDifferentEmail": "Utiliser une autre adresse e-mail",
+    "useEmailCode": "Utiliser plutôt un code reçu par e-mail",
     "usePassword": "Utiliser plutôt un mot de passe",
     "weSentCodeTo": "Nous avons envoyé un code à <email>{emailAddress}</email>"
   },
@@ -2217,6 +2220,15 @@
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",
     "sources": "Sources :",
+    "steerRefused": {
+      "cannotSteer": "Cet agent n’accepte pas de messages pendant qu’il travaille.",
+      "noRun": "L’agent ne tourne pas sur votre ordinateur en ce moment.",
+      "notPlain": "Pendant que l’agent travaille, vous ne pouvez lui envoyer qu’un message texte sans fichiers, non envoyé en mode anonymisé.",
+      "notTaken": "L’agent n’a pas pu prendre votre message pour le moment.",
+      "runFull": "L’agent ne peut pas accepter d’autres messages pour le moment.",
+      "title": "Votre message attend que l’agent ait terminé",
+      "turnNotRunning": "L’agent ne travaille pas en ce moment."
+    },
     "stopFailed": "Impossible d'arrêter la réponse. Réessayez.",
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",

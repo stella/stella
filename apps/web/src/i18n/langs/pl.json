@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Opcje przeredagowania",
     "editWithAI": "Edytuj z AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Funkcje AI są niedostępne dla tego konta.",
       "accountRestricted": "Ustawienia dostawcy AI są niedostępne dla tego konta.",
       "configUnreadable": "Nie można odczytać konfiguracji dostawcy AI. Poproś administratora organizacji o ponowne połączenie.",
       "cta": "Otwórz ustawienia AI",
@@ -159,6 +160,7 @@
     "handoffAccount": "Kontynuować jako <account>{email}</account> w organizacji <organization>{organizationName}</organization>?",
     "handoffTitle": "Przejdź do stella",
     "headline": "Jasność w każdej sprawie.",
+    "invalidEmailOrPassword": "Nieprawidłowy adres e-mail lub hasło.",
     "invitation": {
       "declined": "Zaproszenie odrzucone",
       "declinedDescription": "Odrzuciłeś to zaproszenie. Możesz bezpiecznie zamknąć tę stronę.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Użyj zamiast tego kodu zapasowego"
     },
     "useDifferentEmail": "Użyj innego adresu e-mail",
+    "useEmailCode": "Użyj kodu z e-maila",
     "usePassword": "Użyj hasła",
     "weSentCodeTo": "Wysłaliśmy kod na adres <email>{emailAddress}</email>"
   },
@@ -2217,6 +2220,15 @@
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",
     "sources": "Źródła:",
+    "steerRefused": {
+      "cannotSteer": "Ten agent nie przyjmuje wiadomości w trakcie pracy.",
+      "noRun": "Agent nie działa teraz na Twoim komputerze.",
+      "notPlain": "W trakcie pracy agenta możesz wysłać mu tylko wiadomość tekstową bez plików, wysłaną poza trybem anonimizacji.",
+      "notTaken": "Agent nie mógł teraz przyjąć twojej wiadomości.",
+      "runFull": "Agent nie przyjmie teraz kolejnych wiadomości.",
+      "title": "Twoja wiadomość czeka w kolejce, aż agent skończy",
+      "turnNotRunning": "Agent w tej chwili nie pracuje."
+    },
     "stopFailed": "Nie udało się zatrzymać odpowiedzi. Spróbuj ponownie.",
     "stopResponse": "Zatrzymaj",
     "stopped": "Zatrzymano",

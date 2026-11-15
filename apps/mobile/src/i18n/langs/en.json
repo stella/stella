@@ -246,7 +246,8 @@
         "loadFailed": "Couldn't load.",
         "showMore": "Show more"
       },
-      "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat."
+      "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat.",
+      "steered": "Sent while the agent was working"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}",
@@ -285,6 +286,14 @@
       "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.",
       "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.",
       "sendErrorTurnTooLarge": "This reply grew too large to deliver in full. Send a new message to continue."
+    },
+    "steerPrompt": "Send to the agent while it works",
+    "steerRefused": {
+      "turnNotRunning": "The agent is not working right now.",
+      "noRun": "The agent is not running on your computer right now.",
+      "cannotSteer": "This agent cannot take messages while it works.",
+      "runFull": "The agent cannot take more messages right now.",
+      "notTaken": "The agent could not take your message just now."
     }
   },
   "tasks": {

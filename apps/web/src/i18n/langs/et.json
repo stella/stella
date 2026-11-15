@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Tehisintellekti funktsioonid pole selle konto jaoks saadaval.",
       "accountRestricted": "Tehisintellekti pakkuja seaded pole selle konto jaoks saadaval.",
       "configUnreadable": "Tehisintellekti pakkuja seadistust ei saa lugeda. Paluge organisatsiooni administraatoril see uuesti ühendada.",
       "cta": "Ava AI seaded",
@@ -159,6 +160,7 @@
     "handoffAccount": "Kas jätkata kasutajana <account>{email}</account> organisatsioonis <organization>{organizationName}</organization>?",
     "handoffTitle": "Jätka stellasse",
     "headline": "Selgus igas asjas.",
+    "invalidEmailOrPassword": "Vale e-posti aadress või parool.",
     "invitation": {
       "declined": "Kutse tagasi lükatud",
       "declinedDescription": "Olete selle kutse tagasi lükanud. Võite selle lehe sulgeda.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Kasuta selle asemel varukoodi"
     },
     "useDifferentEmail": "Kasuta teist e-posti aadressi",
+    "useEmailCode": "Kasuta hoopis e-posti koodi",
     "usePassword": "Kasuta hoopis parooli",
     "weSentCodeTo": "Saatsime koodi aadressile <email>{emailAddress}</email>"
   },
@@ -2217,6 +2220,15 @@
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
     "sources": "Allikad:",
+    "steerRefused": {
+      "cannotSteer": "See agent ei võta töö ajal sõnumeid vastu.",
+      "noRun": "Agent ei tööta praegu sinu arvutis.",
+      "notPlain": "Töö ajal saad agendile saata ainult failideta tekstisõnumi, mida ei saadeta anonüümitud režiimis.",
+      "notTaken": "Agent ei saanud sinu sõnumit praegu vastu võtta.",
+      "runFull": "Agent ei saa praegu rohkem sõnumeid vastu võtta.",
+      "title": "Sinu sõnum ootab järjekorras, kuni agent lõpetab",
+      "turnNotRunning": "Agent praegu ei tööta."
+    },
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
