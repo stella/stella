@@ -220,7 +220,6 @@
     "./chat-local-run-step-content.fixtures": "./src/chat-local-run-step-content.fixtures.json",
     "./chat-local-run-step-content-view": "./src/chat-local-run-step-content-view.ts",
     "./chat-local-run-step-output": "./src/chat-local-run-step-output.ts",
-    "./chat-local-run-step-output.fixtures": "./src/chat-local-run-step-output.fixtures.json",
     "./agent-harness": "./src/agent-harness.ts",
     "./document-ocr-availability": "./src/document-ocr-availability.ts",
     "./mcp-app-messages": "./src/mcp-app-messages.json",

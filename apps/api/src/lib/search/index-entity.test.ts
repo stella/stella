@@ -605,7 +605,10 @@ test("indexes every reference the document's live versions carry", async () => {
 
 test("drops the reference of a version that was deleted", async () => {
   versionRows = [
-    { ...stampedVersion(movedStamp, 2), deletedAt: new Date() },
+    {
+      ...stampedVersion(movedStamp, 2),
+      deletedAt: new Date("2026-04-30T09:00:00.000Z"),
+    },
     stampedVersion(firstStamp, 1),
   ];
 

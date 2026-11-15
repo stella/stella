@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import type { CarryOutcome } from "@/api/lib/document-review/carry-outcomes";
 import {
   planClaimCarry,
   sameReviewedVerdict,
@@ -10,7 +11,6 @@ import type {
   CarryDecision,
 } from "@/api/lib/lists/verification/carry-over";
 import type {
-  ClaimCarryOutcome,
   ClaimReviewEventKind,
   RecordConflict,
   StoredClaimReviewEventPayload,
@@ -151,7 +151,7 @@ const OUTCOME_OF = {
   "words-changed": "text-changed",
   "fresh-grade": null,
   redundant: "carried",
-} as const satisfies Record<CarryDecision, ClaimCarryOutcome | null>;
+} as const satisfies Record<CarryDecision, CarryOutcome | null>;
 
 const decisionsOf = (plan: ReturnType<typeof planClaimCarry>) =>
   plan?.decisions.map(({ decision }) => decision) ?? null;
@@ -193,7 +193,7 @@ describe("which review actions follow a claim to the next run", () => {
         } else {
           const decision: CarryDecision = expected[variant];
           expect(decisionsOf(plan)).toEqual([decision]);
-          expect<ClaimCarryOutcome | null | undefined>(plan?.outcome).toBe(
+          expect<CarryOutcome | null | undefined>(plan?.outcome).toBe(
             OUTCOME_OF[decision],
           );
         }

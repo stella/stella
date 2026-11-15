@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
@@ -21,7 +21,6 @@ import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
 import { chatLimitReminderScalingScenario } from "./chat-limit-reminder";
 import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunStepContentScalingScenario } from "./chat-local-run-step-content";
-import { chatLocalRunStepOutputGrantScalingScenario } from "./chat-local-run-step-output-grant";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
 import { chatPinnedThreadsScalingScenario } from "./chat-threads";
@@ -106,7 +105,6 @@ const measuredApiScenarios = [
   chatLocalRunnersScalingScenario,
   chatLocalFilesUndoScalingScenario,
   chatBackgroundTasksScalingScenario,
-  chatLocalRunStepOutputGrantScalingScenario,
   chatLocalRunStepContentScalingScenario,
   chatActiveRunsScalingScenario,
   chatPinnedThreadsScalingScenario,
@@ -210,6 +208,7 @@ test("previously measured scenarios retain their handler or tool identity", asyn
       scenarioMembershipViolations({
         base: readScenarioRegistry({ ...registry, readSource: readBaseSource }),
         current,
+        handlerExists: (file) => existsSync(path.join(repoRoot, file)),
       }),
     ).toEqual([]);
   }
