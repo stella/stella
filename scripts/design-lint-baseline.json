@@ -1394,7 +1394,6 @@
     "packages/cli/src/auth/login.ts": 1,
     "packages/scripts/src/i18n-lint.ts": 2,
     "packages/template-conditions/src/index.ts": 1,
-    "scripts/rc-bailouts.ts": 1,
     "scripts/typecheck-baseline.ts": 1
   },
   "react/no-children-prop": {
