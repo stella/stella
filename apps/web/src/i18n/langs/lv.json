@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Pārrakstīšanas iespējas",
     "editWithAI": "Rediģēt ar AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "AI funkcijas šim kontam nav pieejamas.",
       "accountRestricted": "AI pakalpojumu sniedzēja iestatījumi šim kontam nav pieejami.",
       "configUnreadable": "AI pakalpojumu sniedzēja konfigurāciju nevar nolasīt. Lūdziet organizācijas administratoram to savienot atkārtoti.",
       "cta": "Atvērt AI iestatījumus",

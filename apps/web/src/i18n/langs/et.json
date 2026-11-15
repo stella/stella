@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Tehisintellekti funktsioonid pole selle konto jaoks saadaval.",
       "accountRestricted": "Tehisintellekti pakkuja seaded pole selle konto jaoks saadaval.",
       "configUnreadable": "Tehisintellekti pakkuja seadistust ei saa lugeda. Paluge organisatsiooni administraatoril see uuesti ühendada.",
       "cta": "Ava AI seaded",

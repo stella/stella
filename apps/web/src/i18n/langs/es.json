@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Opciones de reescritura",
     "editWithAI": "Editar con IA",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Las funciones de IA no están disponibles para esta cuenta.",
       "accountRestricted": "La configuración del proveedor de IA no está disponible para esta cuenta.",
       "configUnreadable": "No se puede leer la configuración del proveedor de IA. Pide a un administrador de la organización que vuelva a conectarlo.",
       "cta": "Abrir ajustes de IA",

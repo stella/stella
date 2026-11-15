@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Rewrite options",
     "editWithAI": "Edit with AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "AI features are not available for this account.",
       "accountRestricted": "AI provider settings are unavailable for this account.",
       "configUnreadable": "The AI provider configuration cannot be read. Ask an organization admin to reconnect it.",
       "cta": "Open AI settings",

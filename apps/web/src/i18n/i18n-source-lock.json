@@ -59,6 +59,7 @@
   "agentSetup.title": "Use stella in your AI assistant",
   "ai.chooseRewriteInstruction": "Rewrite options",
   "ai.editWithAI": "Edit with AI",
+  "ai.keyRequired.accountFeaturesUnavailable": "AI features are not available for this account.",
   "ai.keyRequired.accountRestricted": "AI provider settings are unavailable for this account.",
   "ai.keyRequired.configUnreadable": "The AI provider configuration cannot be read. Ask an organization admin to reconnect it.",
   "ai.keyRequired.cta": "Open AI settings",

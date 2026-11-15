@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Átírási lehetőségek",
     "editWithAI": "Szerkesztés AI-val",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Az AI-funkciók nem érhetők el ehhez a fiókhoz.",
       "accountRestricted": "Az AI-szolgáltató beállításai nem érhetők el ehhez a fiókhoz.",
       "configUnreadable": "Az AI-szolgáltató konfigurációja nem olvasható. Kérje meg a szervezet egyik rendszergazdáját, hogy csatlakoztassa újra.",
       "cta": "AI-beállítások megnyitása",
