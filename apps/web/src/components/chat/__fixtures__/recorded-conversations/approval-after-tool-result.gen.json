@@ -110,6 +110,9 @@
                     "model": "gpt-5.4-mini",
                     "provider": "openai"
                   },
+                  "turnSpend": {
+                    "promptTokens": 3
+                  },
                   "refContext": {
                     "refs": [],
                     "version": 2,
@@ -800,6 +803,9 @@
                   "turnModel": {
                     "model": "gpt-5.4-mini",
                     "provider": "openai"
+                  },
+                  "turnSpend": {
+                    "promptTokens": 4
                   },
                   "refContext": {
                     "refs": [],
@@ -1648,6 +1654,9 @@
                   "turnModel": {
                     "model": "gpt-5.4-mini",
                     "provider": "openai"
+                  },
+                  "turnSpend": {
+                    "promptTokens": 5
                   },
                   "refContext": {
                     "refs": [],

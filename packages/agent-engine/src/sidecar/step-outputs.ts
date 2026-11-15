@@ -28,9 +28,9 @@ import {
  * kind's share of them (`CHAT_LOCAL_RUN_STEP_MAX_BYTES`): a command's output,
  * a diff or a subagent's conversation as UTF-8 text, a viewed image as its
  * own bytes. A kept file is what is sent to stella (`step-uploads.ts`). The
- * desktop also reads the same layout to serve a step to a page on this
- * computer, whatever the bytes are, so it bounds an answer by the largest
- * share only: no file written here may hold more than its own.
+ * desktop app reads the same layout to send what a run handed over at its
+ * end, whatever the bytes are, so it bounds a step by the largest share
+ * only: no file written here may hold more than its own.
  */
 
 const PRIVATE_FILE_MODE = 0o600;

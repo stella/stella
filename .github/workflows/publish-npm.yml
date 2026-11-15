@@ -10,7 +10,8 @@ defaults:
 # implemented with the pinned stella/.github release tooling.
 #
 # Shared libraries publish from version bumps on main. The CLI remains gated on
-# the exact stable Release Artifacts production job receipt and its RC SHA.
+# the exact stable Release Artifacts production job receipt and its RC SHA; its
+# workspace dependencies that npm lacks at that SHA publish with it, first.
 # RC runs publish no npm versions. Build, lifecycle, pack, and canary commands
 # run without OIDC; only the reusable release jobs receive id-token and
 # contents-write permissions.
@@ -379,9 +380,10 @@ jobs:
           set -euo pipefail
           # Historical sources can predate the selector. Use current tooling
           # with source manifests to resolve a named dispatch dependency closure.
-          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
-            pkgs=(cli)
-          elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PACKAGE" != "all" ]]; then
+          # A CLI release (a release run or a cli dispatch) also packs every
+          # workspace dependency of the CLI whose version npm lacks, so the
+          # smoke installs this release's tarballs and they publish first.
+          if [[ "$EVENT_NAME" == "workflow_run" || ( "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PACKAGE" != "all" ) ]]; then
             selection="$(bun .pack-tooling/scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE" "$GITHUB_WORKSPACE")"
             mapfile -t pkgs <<< "$selection"
           else

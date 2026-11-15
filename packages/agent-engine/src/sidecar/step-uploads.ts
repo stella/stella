@@ -1,5 +1,12 @@
-import { panic, Result } from "better-result";
-import { mkdir, opendir, readFile, rm, writeFile } from "node:fs/promises";
+import { panic, Result, type UnhandledException } from "better-result";
+import {
+  mkdir,
+  opendir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -9,6 +16,7 @@ import {
   chatLocalRunStepContentUploadedSchema,
   chatLocalRunStepContentUploadPath,
   chatLocalRunStepKeySchema,
+  type ChatLocalRunStepsAwaited,
 } from "@stll/api-contract/chat-local-run-step-content";
 
 import { readKeptStepOutput } from "./step-outputs";
@@ -22,9 +30,15 @@ import { readKeptStepOutput } from "./step-outputs";
  *
  * One step is sent at a time. A step the API settled, or refused for good,
  * leaves the folder; one that could not be sent (no network, the API away, a
- * token being renewed) stays and is sent with the next. The folder is removed
- * when the run ends, sent or not: a run that is over takes nothing more, so
- * what a computer could not send by then is not stored.
+ * token being renewed) stays and is sent with the next.
+ *
+ * A run that is over takes nothing more, except the steps it named while it
+ * was still going. So a run's end stops the sending and names what is left
+ * (`leave`): the folder of those markers is handed over under another name
+ * (`awaitedDir`), and with their kept files they stay on this computer for
+ * the desktop app to send once the API can be reached again. The folder's
+ * name says whose it is: this module's while the run goes, the desktop
+ * app's after. A run that ends without naming anything leaves no folder.
  */
 
 const PRIVATE_FILE_MODE = 0o600;
@@ -142,6 +156,8 @@ const systemTimer: StepUploadTimer = (ms) => {
 type StepUploadsOptions = {
   /** The folder of markers, one per step still to send; the run's own. */
   pendingDir: string;
+  /** What the folder is renamed to once the run named what is left in it. */
+  awaitedDir: string;
   /** The kept file of a step (`stepOutputPath` by step key). */
   keptFile: (stepKey: string) => string;
   upload: UploadStepContent;
@@ -172,13 +188,29 @@ export type StepUploads = {
    * cannot be reached, `waitMs` passed or `signal` is aborted.
    */
   drain: (options: DrainOptions) => Promise<void>;
-  /** End for good: nothing more is sent, and what waited is dropped. */
+  /**
+   * The run ends: stop sending and answer the steps still waiting, at most
+   * `max` of them and a count of the rest. The steps answered are handed
+   * over in `awaitedDir`, to be sent after the run; the rest are dropped.
+   * Nothing is sent from here afterwards. A folder that cannot be listed or
+   * handed over is an error, and is dropped with the run.
+   */
+  leave: (
+    max: number,
+  ) => Promise<Result<ChatLocalRunStepsAwaited, UnhandledException>>;
+  /**
+   * Take back what `leave` handed over: its announcement was not taken, so
+   * nothing awaits those steps and nobody is to send them.
+   */
+  withdraw: () => Promise<void>;
+  /** End for good: nothing more is sent, and what still waited is dropped. */
   close: () => Promise<void>;
 };
 
 /** Sends a run's kept steps, one at a time, from a folder of markers. */
 export const createStepUploads = ({
   pendingDir,
+  awaitedDir,
   keptFile,
   upload,
   log,
@@ -340,6 +372,34 @@ export const createStepUploads = ({
     stops.removeEventListener("abort", stop);
   };
 
+  /**
+   * Keep at most `max` markers, drop every other entry, count them, and hand
+   * the folder over when it still holds a marker.
+   */
+  const leftIn = async (max: number): Promise<ChatLocalRunStepsAwaited> => {
+    await mkdir(pendingDir, { recursive: true, mode: PRIVATE_FOLDER_MODE });
+    const stepKeys: string[] = [];
+    let more = 0;
+    for await (const entry of await opendir(pendingDir)) {
+      const isMarker =
+        entry.isFile() && v.is(chatLocalRunStepKeySchema, entry.name);
+      if (isMarker && stepKeys.length < max) {
+        stepKeys.push(entry.name);
+        continue;
+      }
+      more += isMarker ? 1 : 0;
+      await rm(markerOf(entry.name), { recursive: true, force: true });
+    }
+    if (stepKeys.length > 0) {
+      // A run's id is its own: nothing else is ever handed over there.
+      await rm(awaitedDir, { recursive: true, force: true });
+      await rename(pendingDir, awaitedDir);
+    } else {
+      await rm(pendingDir, { recursive: true, force: true });
+    }
+    return { stepKeys, more };
+  };
+
   return {
     send: async ({ stepKey, kind }, waitMs) => {
       if (closed.signal.aborted) {
@@ -367,6 +427,14 @@ export const createStepUploads = ({
       }
     },
     drain,
+    leave: async (max) => {
+      closed.abort();
+      await flight;
+      return await Result.tryPromise(async () => await leftIn(max));
+    },
+    withdraw: async () => {
+      await rm(awaitedDir, { recursive: true, force: true });
+    },
     close: async () => {
       closed.abort();
       await flight;

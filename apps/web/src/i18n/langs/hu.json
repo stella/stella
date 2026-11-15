@@ -294,6 +294,8 @@
       "reopened": "Újranyitva, ellenőrzésre vár",
       "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
       "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
+      "verdictBy": "A következtetést a(z) {model} hozta",
+      "verdictByGenerativeModel": "A következtetést a generatív modell hozta; a döntési modell nem döntötte el",
       "whyVerdict": "A következtetés indoka: referenciatények"
     },
     "claimTypes": {
@@ -2348,17 +2350,17 @@
       "input": "Bemenet",
       "interrupted": "Befejezés előtt megszakadt",
       "localOutput": {
+        "arriving": "Még érkezik arról a számítógépről, amelyen a lépés futott",
         "conversation": "Az alügynök beszélgetése",
         "conversationPrompt": "Feladat",
         "conversationReport": "Jelentés",
         "cut": "Az első {kept} látható, összesen {total}",
         "diff": "Fájlmódosítások",
-        "elsewhere": "Nyissa meg azon a számítógépen, amelyen futott",
         "empty": "Nincs kimenet",
-        "failed": "A stella asztali alkalmazás ezen a számítógépen nem tudta megjeleníteni.",
-        "imageTooLarge": "Ez a kép {total} méretű. A {kept} méretnél nagyobb képeket ez a számítógép nem őrzi meg, ezért itt nem jeleníthető meg.",
-        "notKept": "Ebből a lépésből semmi sincs megőrizve ezen a számítógépen",
-        "reading": "Olvasás erről a számítógépről"
+        "imageTooLargeToStore": "Ez a kép {total} méretű. A {kept} méretnél nagyobb képek nem kerülnek mentésre, ezért nem jeleníthető meg.",
+        "notCopied": "Még nincs átmásolva ebbe a csevegésbe",
+        "notStored": "Ebből a lépésből semmi sem lett mentve",
+        "runBudgetReached": "Nincs mentve: ez a futtatás már annyit mentett, amennyit egy futtatás menthet"
       },
       "output": "Kimenet",
       "patternInPath": "{pattern} itt: {path}",
@@ -2381,6 +2383,10 @@
       "needsInputTitle": "A stellának szüksége van Önre",
       "replyReadyBody": "A stella befejezte a választ a csevegésben.",
       "replyReadyTitle": "Kész a válasz"
+    },
+    "turnPaused": {
+      "continue": "Folytatás",
+      "status": "Szüneteltetve {count, plural, one {# eszközhívás} other {# eszközhívás}} után"
     },
     "turnStatus": {
       "answerFailed": "A választ nem sikerült befejezni",
@@ -3413,6 +3419,7 @@
       "invitationRoleNotAllowed": "Ezzel a szerepkörrel nem hívhat meg senkit. Válasszon másik szerepkört.",
       "invoiceNumberSeriesMissing": "Állítson be alapértelmezett számsorozatot a számlákhoz a szervezeti beállítások Számsorozatok részében, majd állítsa ki a számlát.",
       "invoiceSellerProfileMissing": "Hozzon létre eladói profilt a szervezeti beállítások Számlázási profilok részében, majd állítsa ki a számlát.",
+      "legalHoldActive": "A törlés le van tiltva, mert ezeket az adatokat meg kell őrizni.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
       "matterContactCapacityExceeded": "Ez az ügy több kapcsolatot tartalmaz, mint amennyi megjeleníthető. A többi kapcsolat megjelenítéséhez szüntesse meg néhány látható kapcsolat ügyhöz rendelését.",
@@ -5893,6 +5900,8 @@
       "auditLogsSentenceDownload": "{resource} letöltve.",
       "auditLogsSentenceExecute": "{resource} futtatva.",
       "auditLogsSentenceIssued": "{resource} kiadva.",
+      "auditLogsSentenceLegalHoldPlaced": "{resource} elrendelve.",
+      "auditLogsSentenceLegalHoldReleased": "{resource} feloldva.",
       "auditLogsSentenceRedeemed": "{resource} beváltva.",
       "auditLogsSentenceRefused": "{resource} elutasítva.",
       "auditLogsSentenceReview": "{resource} ellenőrizve.",
@@ -5944,6 +5953,7 @@
         "flow_run": "munkafolyamat futtatása",
         "folio_collab_room": "Folio együttműködési szoba",
         "invoice": "számla",
+        "legal_hold": "jogi megőrzés",
         "legal_list": "jogi lista",
         "legal_list_generation": "jogi lista létrehozása",
         "legal_list_item": "jogi lista tétele",
@@ -6103,7 +6113,13 @@
       "usageStatusTrialing": "Próbaidőszak",
       "usageUnitCount": "{count, plural, one {# egység} other {# egység}}",
       "usageUnitsBalanceTemplate": "{remaining} egység elérhető",
-      "usageUnitsThisPeriod": "Használati egységek ebben az időszakban"
+      "usageUnitsThisPeriod": "Használati egységek ebben az időszakban",
+      "verificationDecisionModel": {
+        "description": "Amikor egy dokumentumot egy lista tényei alapján ellenőriz, a döntési modell választja ki az egyes állítások következtetését. A tényeket továbbra is a generatív modell keresi meg és idézi. Ha a döntési modell nem elég biztos, a generatív modell következtetése marad érvényben.",
+        "title": "Következtetések a dokumentumok ellenőrzésekor",
+        "unavailable": "Ennek a szervezetnek nincs elérhető döntési modellje.",
+        "updated": "Az ellenőrzési beállítás frissült"
+      }
     }
   },
   "sharepoint": {

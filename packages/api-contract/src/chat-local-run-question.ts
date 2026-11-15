@@ -185,6 +185,19 @@ export const answersInOwnWords = (
 ): boolean =>
   question.options.length === 0 || (question.allowsFreeText && draft.ownWords);
 
+/**
+ * How a question's options are laid out, on the web and the phone alike.
+ * `list`: one option per row with its description beneath, so the member
+ * reads what each option means before picking one. `chips`: no option has a
+ * description, so the labels wrap in one row.
+ */
+export const localRunOptionLayout = (
+  question: ChatLocalRunQuestion,
+): "list" | "chips" =>
+  question.options.some(({ description }) => description !== "")
+    ? "list"
+    : "chips";
+
 /** Pick an option, or drop it again: one of a single choice, any of several. */
 export const toggleLocalRunOption = (
   question: ChatLocalRunQuestion,

@@ -90,10 +90,13 @@ export const claudeMessageHandling = (
 /** What stella does with each pinned `system` subtype. */
 export const claudeSystemHandling = (
   subtype: ClaudeSystemSubtype,
-): "retrying" | "ignore" => {
+): "retrying" | "rerouted" | "ignore" => {
   switch (subtype) {
     case "api_retry":
       return "retrying";
+    case "model_refusal_fallback":
+      // The turn now runs on the fallback model, which it reports.
+      return "rerouted";
     // Each subtype below is dropped on purpose.
     case "init":
       // The session id is chosen before the CLI starts, so `session.started`
@@ -102,7 +105,6 @@ export const claudeSystemHandling = (
     case "permission_denied":
       // An automatic denial; the tool's failed result reports it.
       return "ignore";
-    case "model_refusal_fallback":
     case "model_refusal_no_fallback":
       // The answer text and the turn's result carry the outcome.
       return "ignore";

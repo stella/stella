@@ -294,6 +294,74 @@ describe("chat thread messages", () => {
     }
   });
 
+  test("a paused answer says where it stopped and offers Continue only as the latest answer", () => {
+    const paused = {
+      id: "assistant-paused",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-call",
+          id: "call-1",
+          // An external tool name keeps the output untyped.
+          name: "mcp__external-lookup",
+          arguments: '{"query":"court fees"}',
+          state: "complete",
+          output: { result: "Court fees" },
+        },
+      ],
+      metadata: {
+        turnOutcome: { type: "paused", reason: "tool-calls", toolCalls: 3 },
+      },
+    } satisfies ChatUIMessage;
+    const status = messages.chat.turnPaused.status.replace(
+      "{count, plural, one {# tool call} other {# tool calls}}",
+      "3 tool calls",
+    );
+    const render = (thread: ChatUIMessage[]) =>
+      renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={structuredClone(thread)}
+          onAskUserSubmit={() => {}}
+          onContinuePausedTurn={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          onResend={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+    // The fixture's copy must be what the page renders for three tool calls.
+    expect(status).toBe("Paused after 3 tool calls");
+
+    const latest = render([paused]);
+    expect(renderedText(latest)).toContain(status);
+    expect(latest).toContain(
+      `>${messages.chat.turnPaused.continue}</span></button>`,
+    );
+
+    const continued = render([
+      paused,
+      {
+        id: "user-continue",
+        role: "user",
+        parts: [{ type: "text", content: messages.chat.turnPaused.continue }],
+      },
+      {
+        id: "assistant-after",
+        role: "assistant",
+        parts: [{ type: "text", content: "Found the court fees" }],
+        metadata: { turnOutcome: { type: "completed" } },
+      },
+    ]);
+    expect(renderedText(continued)).toContain(status);
+    expect(continued).not.toContain(
+      `>${messages.chat.turnPaused.continue}</span></button>`,
+    );
+  });
+
   test("renders every reloaded admission refusal with its recovery action", () => {
     for (const code of Object.values(ACTION_ADMISSION_CODES)) {
       const refusal = {

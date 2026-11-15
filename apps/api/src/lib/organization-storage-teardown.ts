@@ -24,6 +24,7 @@ import {
   hostedCustomerErasures,
   invoiceLines,
   invoices,
+  legalHolds,
   pendingUploads,
   propertyDependencies,
   styleSets,
@@ -38,10 +39,11 @@ import type { OrganizationAuditExportRefusalCode } from "@/api/lib/account-expor
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import {
-  lockOrganizationObjectIntentsForLifecycle,
   preserveBufferObjectCleanupIntents,
   releaseObjectCleanupIntentsForLifecycle,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { lockOrganizationObjectIntentsForLifecycle } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   createFileKey,
@@ -63,6 +65,7 @@ import {
 } from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -156,6 +159,11 @@ export const WORKSPACE_DELETION_RETAINED_TABLES = [
 ] as const;
 
 type RetainedTable = (typeof WORKSPACE_DELETION_RETAINED_TABLES)[number];
+
+// Rows whose restrictive references refuse a matter or item deletion while
+// they are active: the deletion's own hold check refuses first, and the delete
+// backstop trigger removes released rows together with their matter or item.
+export const WORKSPACE_DELETION_BLOCKING_TABLES = [legalHolds] as const;
 
 const cascadesFrom = (child: PgTable, parent: PgTable) =>
   child !== parent &&
@@ -905,6 +913,14 @@ export const recordOrganizationStorageTeardown = async ({
   tx,
 }: OrganizationTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
   await lockOrganizationForLifecycle(tx, organizationId);
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "organization" },
+  });
+  if (hold.isErr()) {
+    abortTransaction(hold.error);
+  }
   await releaseObjectCleanupIntentsForLifecycle(tx, {
     organizationId,
     type: "organization",
@@ -1018,6 +1034,15 @@ export const completeWorkspaceDeletion = async ({
   tx,
   workspaceId,
 }: WorkspaceStorageTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
+  await lockOrganizationObjectIntentsForLifecycle(tx, organizationId);
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "matter", workspaceId },
+  });
+  if (hold.isErr()) {
+    abortTransaction(hold.error);
+  }
   const teardown = await recordWorkspaceStorageTeardown({
     organizationId,
     ...(pagesMax === undefined ? {} : { pagesMax }),

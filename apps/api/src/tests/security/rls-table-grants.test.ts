@@ -183,6 +183,10 @@ const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
   // Account export ledger: request transactions create and transition rows;
   // only the table owner deletes them, during account erasure.
   "account_exports",
+  // Legal holds: request transactions place and release holds; a hold row is
+  // removed only by the delete backstop after release, never by the request
+  // role.
+  "legal_holds",
 ]);
 const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
 
@@ -220,6 +224,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "case_law_ranking_signal_changes",
   "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
+  "case_law_sitemap_touches",
   // Coverage populations: owner-maintained, read only by the public-law reader.
   "case_law_population_counts",
   "case_law_population_deltas",

@@ -7,11 +7,48 @@ import { ALL_PACKAGE_ORDER, LIBRARY_PACKAGE_ORDER } from "./publish-packages";
 
 type PublishEvent = "push" | "workflow_run" | "workflow_dispatch";
 
+/** Whether npm serves an exact package version; `unknown` when unreadable. */
+export type RegistryVersionState = "published" | "absent" | "unknown";
+
+export type ReadRegistryVersion = (
+  name: string,
+  version: string,
+) => RegistryVersionState;
+
+const NPM_VIEW_TIMEOUT_MS = 60_000;
+
+/** `npm view <name>@<version> version`: E404 means npm lacks that version. */
+export const npmRegistryVersion = (
+  name: string,
+  version: string,
+  npm = "npm",
+): RegistryVersionState => {
+  const view = Bun.spawnSync(
+    [npm, "view", `${name}@${version}`, "version", "--json"],
+    { stderr: "pipe", stdout: "pipe", timeout: NPM_VIEW_TIMEOUT_MS },
+  );
+  const stdout = view.stdout.toString().trim();
+  if (view.exitCode === 0) {
+    if (stdout === "") {
+      return "absent";
+    }
+    try {
+      return JSON.parse(stdout) === version ? "published" : "unknown";
+    } catch {
+      return "unknown";
+    }
+  }
+  return /\bE404\b/u.test(`${view.stderr.toString()}\n${stdout}`)
+    ? "absent"
+    : "unknown";
+};
+
 type PublishPackageSelectionOptions = {
   eventName: PublishEvent;
   manualPackage: string;
   changedPaths: readonly string[];
   readManifest?: (directory: string) => string;
+  readRegistryVersion?: ReadRegistryVersion;
 };
 
 const isKnownPackage = (
@@ -57,14 +94,59 @@ const readSourceManifest = (directory: string) =>
     "utf-8",
   );
 
+const manifestVersion = (source: string): string | undefined => {
+  const manifest: unknown = JSON.parse(source);
+  const version =
+    typeof manifest === "object" && manifest !== null
+      ? Reflect.get(manifest, "version")
+      : undefined;
+  return typeof version === "string" ? version : undefined;
+};
+
+type CliReleaseSelectionOptions = {
+  readManifest: (directory: string) => string;
+  readRegistryVersion: ReadRegistryVersion;
+};
+
+/**
+ * A CLI release packs the CLI and every package of its workspace dependency
+ * closure whose source version npm does not serve yet, dependencies first.
+ * Those are the packages this release bumps: the plain-Node smoke installs
+ * them from this release's tarballs, and their publish jobs run before the
+ * CLI's. A package npm already serves comes from the registry, so a run
+ * resumed after a partial publish packs only what is left. An unreadable
+ * answer packs the package: publishing an existing version is a no-op.
+ */
+export const selectCliReleasePackages = ({
+  readManifest,
+  readRegistryVersion,
+}: CliReleaseSelectionOptions): readonly string[] =>
+  expandPublishPackages({
+    selected: ["cli"],
+    graph: readNpmReleaseGraph({ roots: ["cli"], readManifest }),
+  }).filter((directory) => {
+    if (directory === "cli") {
+      return true;
+    }
+    const version = manifestVersion(readManifest(directory));
+    return (
+      version === undefined ||
+      readRegistryVersion(`@stll/${directory}`, version) !== "published"
+    );
+  });
+
 export const selectPublishPackages = ({
   eventName,
   manualPackage,
   changedPaths,
   readManifest = readSourceManifest,
+  readRegistryVersion = npmRegistryVersion,
 }: PublishPackageSelectionOptions): readonly string[] => {
-  if (eventName === "workflow_run") {
-    return ["cli"];
+  if (
+    eventName === "workflow_run" ||
+    (eventName === "workflow_dispatch" && manualPackage === "cli")
+  ) {
+    return selectCliReleasePackages({ readManifest, readRegistryVersion });
   }
 
   if (eventName === "workflow_dispatch") {
@@ -135,7 +217,12 @@ if (import.meta.main) {
     panic(`Unsupported event '${eventName ?? ""}'.`);
   }
 
-  if (eventName === "workflow_dispatch" && manualPackage !== "all") {
+  // A release run and a named dispatch read the checked-out source's
+  // manifests with this tooling, which can be newer than that source.
+  if (
+    eventName === "workflow_run" ||
+    (eventName === "workflow_dispatch" && manualPackage !== "all")
+  ) {
     const sourceRoot = Bun.argv.at(4) ?? process.cwd();
     for (const packageName of selectPublishPackages({
       eventName,
