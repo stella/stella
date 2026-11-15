@@ -845,7 +845,7 @@ const readPreflight = async (
 /** Hears of a PDF a read found the tab showing; the transport decides what follows. */
 type PdfShownHandler = (shown: ShownPdf) => Promise<void>;
 
-const SAVE_NOTHING: PdfShownHandler = () => Promise.resolve();
+const SAVE_NOTHING: PdfShownHandler = async () => await Promise.resolve();
 
 /**
  * What the tab's top document is, asked of that very document: a read
