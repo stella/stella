@@ -1140,6 +1140,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PUT /v1/organization-settings/members/:memberId/billing-access": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PUT /v1/playbooks/:playbookId": {
     type: "non-replay",
     reason: "current-state",

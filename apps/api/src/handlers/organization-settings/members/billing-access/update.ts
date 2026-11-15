@@ -1,9 +1,12 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { setMemberBillingAccess } from "@/api/lib/auth";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 export const createMemberBillingAccessHandler = (
   changeAccess: typeof setMemberBillingAccess = setMemberBillingAccess,
@@ -11,6 +14,8 @@ export const createMemberBillingAccessHandler = (
   createSafeRootHandler(
     {
       contract: "patch",
+      // The member's permissions change; their open role reads refresh.
+      realtime: organizationResourceSetUpdates(RESOURCE_TYPE.ORGANIZATION),
       description:
         "Set a member's additional billing visibility in the active organization. Only owners and admins may change it. Their role grants billing visibility independently of this field.",
       permissions: { member: ["update"] },
