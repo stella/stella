@@ -244,7 +244,8 @@
         "imageTooLargeToStore": "This image is {total}. Images over {kept} are not stored, so it cannot be shown.",
         "loadFailed": "Couldn't load.",
         "showMore": "Show more"
-      }
+      },
+      "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}",
@@ -253,7 +254,8 @@
       "analyses": "{count, plural, one {# analysis} other {# analyses}}"
     },
     "stepCount": "{count, plural, one {# step} other {# steps}}",
-    "reasoning": "Reasoning trace"
+    "reasoning": "Reasoning trace",
+    "historyTrimmed": "Earlier messages could not be summarized, so this answer only took the most recent part of the conversation into account."
   },
   "tasks": {
     "emptyTitle": "No open tasks",

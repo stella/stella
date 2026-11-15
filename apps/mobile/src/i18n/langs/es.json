@@ -244,7 +244,8 @@
         "imageTooLargeToStore": "Esta imagen ocupa {total}. Las imágenes de más de {kept} no se guardan, por lo que no se puede mostrar.",
         "loadFailed": "No se ha podido cargar.",
         "showMore": "Mostrar más"
-      }
+      },
+      "sessionNotResumed": "El agente de programación de tu ordenador no pudo retomar donde lo había dejado, así que continuó a partir de los mensajes de este chat."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas} many {# fuentes consultadas}}",
@@ -253,7 +254,8 @@
       "analyses": "{count, plural, one {# análisis} other {# análisis} many {# análisis}}"
     },
     "stepCount": "{count, plural, one {# paso} other {# pasos} many {# pasos}}",
-    "reasoning": "Razonamiento"
+    "reasoning": "Razonamiento",
+    "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación."
   },
   "tasks": {
     "emptyTitle": "No hay tareas abiertas",

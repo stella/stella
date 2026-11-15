@@ -266,3 +266,28 @@ describe("Codex items that only add to what chat shows", () => {
     });
   });
 });
+
+describe("the model a Codex turn ran on", () => {
+  test("a reroute of this turn names the model it moved to; one of another turn is not this turn's", async () => {
+    const events = await eventsOf((notify) => {
+      notify("model/rerouted", {
+        threadId: MAIN_THREAD,
+        turnId: "turn-earlier",
+        fromModel: "gpt-asked",
+        toModel: "gpt-other-turn",
+        reason: "highRiskCyberActivity",
+      });
+      notify("model/rerouted", {
+        threadId: MAIN_THREAD,
+        turnId: MAIN_TURN,
+        fromModel: "gpt-asked",
+        toModel: "gpt-rerouted",
+        reason: "highRiskCyberActivity",
+      });
+    });
+    expect(events.filter(({ type }) => type === "model.rerouted")).toEqual([
+      { type: "model.rerouted", model: "gpt-rerouted" },
+    ]);
+    expect(events.at(-1)?.type).toBe("turn.completed");
+  });
+});

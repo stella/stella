@@ -7,12 +7,10 @@ import { expect, test } from "bun:test";
 
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 
-// `patches/@tanstack%2Fai@0.65.1.patch` makes `StreamProcessor` write
-// `TOOL_CALL_END.input` into the tool-call part's `arguments` even when
-// argument deltas were streamed. Unpatched, the part keeps the raw wire
-// string next to the normalized `input`, so a strict-mode OpenAI call
-// persists with the widened `null`s the persistence validator rejects.
-// Both tests go red when a version bump drops the patch; delete them with it.
+// The v1 stream processor writes normalized TOOL_CALL_END input back into
+// both persisted arguments and input, even after raw argument deltas. Keep
+// this boundary explicit: OpenAI strict-mode placeholders must not survive
+// beside the normalized input after an SDK upgrade.
 
 const TOOL_NAME = "spawn";
 const WIDENED_ARGUMENTS = '{"task":"list matters","context":null}';
@@ -267,6 +265,7 @@ test("an OpenAI strict-mode null on an optional field never reaches the persiste
 
   const chunks: AdapterYieldChunk[] = [];
   for await (const chunk of adapter.chatStream({
+    threadId: "thread-1",
     logger: resolveDebugOption(false),
     messages: [{ role: "user", content: "List my matters." }],
     model: adapter.model,
@@ -282,10 +281,9 @@ test("an OpenAI strict-mode null on an optional field never reaches the persiste
   expect(streamedArguments).toBe(WIDENED_ARGUMENTS);
 
   const part = persistToolCallPart(chunks);
-  expect(part.input).toEqual(NORMALIZED_INPUT);
-  // Named, so the chat mutation matrix can count this as the kill for the
-  // patch: the chat pipeline re-derives `arguments` from the validated input
-  // too, so no end-to-end scenario can see the patch on its own.
+  // Name the processor boundary before other assertions: v1 derives input
+  // from these finalized arguments, so the same fault can break both.
+  // The chat pipeline also re-derives arguments from validated input.
   const violations = violationsOf(
     CHAT_ORACLE.providerWireToolArguments,
     Bun.deepEquals(JSON.parse(part.arguments), NORMALIZED_INPUT)
@@ -297,4 +295,5 @@ test("an OpenAI strict-mode null on an optional field never reaches the persiste
       `The persisted arguments keep the wire string: ${JSON.stringify(violations)}`,
     );
   }
+  expect(part.input).toEqual(NORMALIZED_INPUT);
 });

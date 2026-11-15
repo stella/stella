@@ -69,6 +69,7 @@ test("cleanup retries until one retired revision settles", () => {
   expect(CORPUS_INDEX_INTENT_TRANSITIONS.applied).toEqual(["cleanup_pending"]);
   expect(CORPUS_INDEX_INTENT_TRANSITIONS.cleanup_pending).toEqual([
     "cleanup_started",
+    "applied",
   ]);
   expect(CORPUS_INDEX_INTENT_TRANSITIONS.cleanup_started).toEqual([
     "cleanup_pending",

@@ -244,7 +244,8 @@
         "imageTooLargeToStore": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte ei salvestata, seega ei saa seda kuvada.",
         "loadFailed": "Laadimine ebaõnnestus.",
         "showMore": "Näita rohkem"
-      }
+      },
+      "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}",
@@ -253,7 +254,8 @@
       "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}"
     },
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
-    "reasoning": "Arutlus"
+    "reasoning": "Arutlus",
+    "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa."
   },
   "tasks": {
     "emptyTitle": "Avatud ülesandeid pole",

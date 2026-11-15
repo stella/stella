@@ -476,16 +476,40 @@ export const agUiSendMessageBodySchema = v.union([
   v.strictObject({
     ...agUiEnvelopeCommonProperties,
     forwardedProps: noResumeBodySchema,
-    data: noResumeBodySchema,
+    // Older clients duplicated forwardedProps here; v1 sends only the canonical field.
+    data: v.exactOptional(noResumeBodySchema),
   }),
   v.strictObject({
     ...agUiEnvelopeCommonProperties,
     forwardedProps: nativeAssistantContinuationBodySchema,
-    data: nativeAssistantContinuationBodySchema,
+    data: v.exactOptional(nativeAssistantContinuationBodySchema),
     parentRunId: agUiRunIdSchema,
     resume: agUiResumeSchema,
   }),
 ]);
+
+/** Correlate the native envelope with the strictly parsed application input.
+ * v1 omits the deprecated data alias; older clients must send the same input in it. */
+export const hasAgUiEnvelopeCorrelationMismatch = (
+  transport: v.InferOutput<typeof agUiSendMessageBodySchema>,
+): boolean => {
+  const body = transport.forwardedProps;
+  return (
+    transport.threadId !== body.threadId ||
+    transport.runId !== body.runId ||
+    ("parentRunId" in transport ? transport.parentRunId : undefined) !==
+      ("parentRunId" in body ? body.parentRunId : undefined) ||
+    !deepEquals(
+      "resume" in transport ? transport.resume : undefined,
+      "resume" in body ? body.resume : undefined,
+    ) ||
+    (transport.data !== undefined && !deepEquals(transport.data, body)) ||
+    !transport.messages.some(
+      (message) =>
+        message.id === body.message.id && message.role === body.message.role,
+    )
+  );
+};
 
 type RawIncomingMessage = v.InferOutput<typeof rawMessageSchema>;
 type AgUiResume = v.InferOutput<typeof agUiResumeSchema>;
@@ -1976,11 +2000,10 @@ const validateToolCallInput = ({
  * may have sent arguments the tool's schema rejects, or named a tool the run
  * does not register, and then gone on to recover. Input the schema accepts is
  * stored canonical, as for any call. Other input is stored exactly as the
- * model sent it, since every later request replays it to the model: `input`
- * holds it only when it is a JSON object whose text is the `arguments`
- * verbatim, and is left out otherwise (a primitive, other spacing, text that
- * is not JSON), so the raw `arguments` are what gets stored. The error output
- * itself must still be well formed.
+ * model sent it, since every later request replays it to the model. Parsed
+ * JSON objects stay visible as `input`; v3 storage retains the exact raw
+ * `arguments` alongside them when serialization differs. Primitives and
+ * malformed JSON remain raw-only. The error output must still be well formed.
  */
 const validateErrorToolCallPart = ({
   part,
@@ -1999,7 +2022,7 @@ const validateErrorToolCallPart = ({
   const input =
     canonicalInput !== undefined && Result.isOk(canonicalInput)
       ? { type: "present" as const, value: canonicalInput.value }
-      : verbatimToolInput(part.arguments);
+      : failedToolInput(part.arguments);
   const call: Record<string, unknown> = { ...part };
   const candidate: unknown = {
     ...Object.fromEntries(
@@ -2037,16 +2060,15 @@ const validateErrorToolCallPart = ({
   }
 };
 
-/** `argumentsText` as an input object, when the object's JSON is exactly
- *  that text, so storing the object loses nothing of what the model sent. */
-const verbatimToolInput = (
+/** Preserve the SDK's parsed input for a failed call without claiming that
+ *  it meets the tool schema. Its terminal error prevents execution. */
+const failedToolInput = (
   argumentsText: string,
 ): { type: "absent" } | { type: "present"; value: object } => {
   const parsed = Result.try((): unknown => parseJsonUnknown(argumentsText));
   return Result.isOk(parsed) &&
     typeof parsed.value === "object" &&
-    parsed.value !== null &&
-    JSON.stringify(parsed.value) === argumentsText
+    parsed.value !== null
     ? { type: "present", value: parsed.value }
     : { type: "absent" };
 };

@@ -266,6 +266,7 @@ const createRedactor = (scope: SkillPathScope) => {
       case "text.completed":
       case "reasoning.completed":
       case "interaction.resolved":
+      case "model.rerouted":
       case "turn.completed":
       case "turn.interrupted":
         return event;

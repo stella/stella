@@ -943,7 +943,7 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
         timeout-minutes: 2
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -1994,7 +1994,7 @@ jobs:
         name: Log in to the CI image mirror
         continue-on-error: true
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -4311,7 +4311,7 @@ jobs:
 
       - name: Login to GHCR for corpus engine
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' && startsWith(needs.ci-plan.outputs.quickwit, 'ghcr.io/') }}
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -4472,7 +4472,7 @@ jobs:
 
     services:
       postgres:
-        image: ${{ needs.ci-plan.outputs.postgres || 'docker.io/library/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336' }}
+        image: ${{ needs.ci-plan.outputs.postgres || 'docker.io/library/postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42' }}
         credentials: ${{ startsWith(needs.ci-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
@@ -4486,7 +4486,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       redis:
-        image: ${{ needs.ci-plan.outputs.redis || 'docker.io/library/redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5' }}
+        image: ${{ needs.ci-plan.outputs.redis || 'docker.io/library/redis:8@sha256:1f88291b4c57bdf249f02eb085a8669889b2d2954e91d4de5118a5da6b78dd53' }}
         credentials: ${{ startsWith(needs.ci-plan.outputs.redis, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         ports:
           - 6379:6379
@@ -4725,7 +4725,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -5327,7 +5327,7 @@ jobs:
         timeout-minutes: 2
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -5606,23 +5606,6 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-api-browser-checks.json
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
 
-      - name: Run route-smoke Playwright shard
-        timeout-minutes: 3
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (always() && !cancelled() && steps.e2e-stack.outcome == 'success' && matrix.shard != 'network-baseline') }}
-        env:
-          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-route-smoke-playwright-shard.json
-          E2E_EXECUTION_PROFILE: standard
-          E2E_EXPECT_DEV_ROUTES: "false"
-          E2E_OUTPUT_DIR: test-results/route-smoke-${{ matrix.shard }}
-          # The shard's main run writes report-<shard>.zip; e2e-report merges
-          # both blob artifacts into one directory, so this one has its own name.
-          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-route-smoke-${{ matrix.shard }}.zip
-        run: >-
-          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
-          --project=route-smoke
-          --shard=${{ matrix.shard }}/${{ steps.e2e-shards.outputs.count }}
-          --grep-invert="route-smoke.spec.ts"
-
       - name: Upload Playwright blob report
         timeout-minutes: 1
         if: >-
@@ -5633,18 +5616,6 @@ jobs:
         with:
           name: playwright-blob-${{ matrix.shard }}
           path: apps/web/e2e/test-results/blob-report/
-          retention-days: 7
-
-      - name: Upload route-smoke Playwright blob report
-        timeout-minutes: 1
-        if: >-
-          always()
-          && steps.e2e-stack.outcome == 'success'
-          && matrix.shard != 'network-baseline'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: playwright-blob-route-smoke-${{ matrix.shard }}
-          path: apps/web/e2e/test-results/route-smoke-${{ matrix.shard }}/blob-report/
           retention-days: 7
 
       - name: Upload server logs

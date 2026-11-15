@@ -226,6 +226,12 @@ export type HarnessEvent =
   | { type: "interaction.resolved"; requestId: string }
   /** A transient provider error the harness is retrying on its own. */
   | { type: "retrying"; message: string }
+  /**
+   * The provider runs the turn on another model than the one asked for:
+   * Codex rerouted it, or Claude Code retried it on its fallback model after
+   * a refusal. What the turn reports from here on names this model.
+   */
+  | { type: "model.rerouted"; model: string }
   | { type: "turn.completed"; usage: HarnessUsage | null }
   | { type: "turn.interrupted" }
   | { type: "turn.failed"; failure: HarnessFailure };

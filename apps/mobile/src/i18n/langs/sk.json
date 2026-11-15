@@ -244,7 +244,8 @@
         "imageTooLargeToStore": "Tento obrázok má {total}. Obrázky väčšie ako {kept} sa neukladajú, preto ho nemožno zobraziť.",
         "loadFailed": "Nepodarilo sa načítať.",
         "showMore": "Zobraziť viac"
-      }
+      },
+      "sessionNotResumed": "Programovací agent vo vašom počítači nemohol nadviazať tam, kde skončil, preto pokračoval podľa správ v tomto chate."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}",
@@ -253,7 +254,8 @@
       "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
-    "reasoning": "Uvažovanie"
+    "reasoning": "Uvažovanie",
+    "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie."
   },
   "tasks": {
     "emptyTitle": "Žiadne otvorené úlohy",

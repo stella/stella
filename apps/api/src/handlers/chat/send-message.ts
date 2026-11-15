@@ -100,6 +100,7 @@ import {
   CHAT_RUN_MODE,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
+  hasAgUiEnvelopeCorrelationMismatch,
   parseMessage,
   requireUserMessageContent,
   resolveTurnBrowserExtension,
@@ -2467,10 +2468,6 @@ export const createSendMessage = (
       const body = transportBody.forwardedProps;
       const parentRunId = "parentRunId" in body ? body.parentRunId : undefined;
       const resume = "resume" in body ? body.resume : undefined;
-      const transportParentRunId =
-        "parentRunId" in transportBody ? transportBody.parentRunId : undefined;
-      const transportResume =
-        "resume" in transportBody ? transportBody.resume : undefined;
       let acceptedLifecycle: ChatSendLifecycle | undefined = undefined;
       const isClientConnectionAborted = () =>
         acceptedLifecycle === undefined
@@ -2493,18 +2490,7 @@ export const createSendMessage = (
         task: "chat",
       });
 
-      const hasEnvelopeCorrelationMismatch = (): boolean =>
-        transportBody.threadId !== body.threadId ||
-        transportBody.runId !== body.runId ||
-        transportParentRunId !== parentRunId ||
-        !deepEquals(transportResume, resume) ||
-        !deepEquals(transportBody.data, body) ||
-        !transportBody.messages.some(
-          (message) =>
-            message.id === body.message.id &&
-            message.role === body.message.role,
-        );
-      if (hasEnvelopeCorrelationMismatch()) {
+      if (hasAgUiEnvelopeCorrelationMismatch(transportBody)) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -2668,13 +2654,14 @@ export const createSendMessage = (
         : (body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE);
       const docxEditRepresentation =
         body.docxEditRepresentation ?? DEFAULT_DOCX_EDIT_REPRESENTATION;
+      const activeFile = body.activeFile;
       const activeFileEntity =
-        body.activeFile?.supportsDocxEdits === true && workspaceId !== null
+        activeFile?.supportsDocxEdits === true && workspaceId !== null
           ? yield* Result.await(
               safeDb((tx) =>
                 tx.query.entities.findFirst({
                   where: {
-                    id: { eq: body.activeFile?.entityId },
+                    id: { eq: activeFile.entityId },
                     workspaceId: { eq: workspaceId },
                   },
                   columns: { currentVersionId: true },

@@ -262,14 +262,15 @@ export const UNRESOLVED_CALL_ERROR =
   "This call never returned a result: its turn ended before one was stored.";
 
 /**
- * Which open states the engine reads as a call still waiting on the client
- * once it is handed the call without a result: it then asks the client again
- * instead of running the model. An approval decision is answered by the
+ * Which unresolved states need an explicit closing result before context
+ * selection and provider-history validation. The v1 engine ignores older
+ * execution batches, but those earlier boundaries still need a balanced
+ * transcript with the stored call's outcome. An approval decision is answered by the
  * engine itself (a denial) or already closed by `settleOpenToolCallsForOutcome`
  * (an approval without its result). A call whose input never completed is not
  * handed to the engine at all.
  */
-const ENGINE_ASKS_CLIENT_AGAIN = {
+const CALL_NEEDS_CLOSING_RESULT = {
   "approval-requested": true,
   "approval-responded": false,
   "awaiting-input": false,
@@ -280,16 +281,17 @@ const ENGINE_ASKS_CLIENT_AGAIN = {
 } as const satisfies Record<ToolCallState, boolean>;
 
 /**
- * Close every call on a message the run does not resume that the engine
- * would otherwise ask the client about again. Such a call belongs to a turn
- * that already ended, so nobody can answer it any more.
+ * Close unresolved calls on a message the run does not resume. Such a call
+ * belongs to a turn that already ended, so nobody can answer it any more.
+ * Keep its explicit outcome for the context and provider-history boundaries,
+ * before the SDK's own request-local orphan cleanup.
  *
  * Each closing result joins its step's results: before the first stored
  * result after its call, or at the end of the message. The engine ends a
  * model message at a result, so a result right after its call would split
  * the step's calls into two model messages.
  */
-const closeUnresolvedCallsForEngine = (
+const closeUnresolvedCallsForHistory = (
   parts: readonly ChatPart[],
 ): ChatPart[] => {
   const closed: ChatPart[] = [];
@@ -303,7 +305,7 @@ const closeUnresolvedCallsForEngine = (
     if (
       part.type !== "tool-call" ||
       hasStoredResult(part, parts) ||
-      !ENGINE_ASKS_CLIENT_AGAIN[part.state]
+      !CALL_NEEDS_CLOSING_RESULT[part.state]
     ) {
       continue;
     }
@@ -417,7 +419,7 @@ export const settleHistoryForRun = ({
     if (message.role !== "assistant" || message.id === resumedMessageId) {
       return message;
     }
-    const parts = closeUnresolvedCallsForEngine(
+    const parts = closeUnresolvedCallsForHistory(
       settleOpenToolCallsForOutcome({
         outcome: "interrupted",
         parts: message.parts,

@@ -92,7 +92,7 @@ const createProbeFinishAdapter = (finish: ProbeFinish): AnyTextAdapter => ({
   },
   async *chatStream({ runId, threadId }) {
     const resolvedRunId = runId ?? "run-1";
-    const resolvedThreadId = threadId ?? "thread-1";
+    const resolvedThreadId = threadId;
     const messageId = "provider-message-1";
     yield {
       type: EventType.RUN_STARTED,

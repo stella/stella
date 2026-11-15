@@ -73,7 +73,7 @@ const searchForeverAdapter = ({
       yield {
         type: EventType.RUN_STARTED,
         runId: runId ?? "run-1",
-        threadId: threadId ?? "thread-1",
+        threadId,
         model,
         timestamp,
       } satisfies AdapterYieldChunk;
@@ -124,7 +124,7 @@ const searchForeverAdapter = ({
       yield {
         type: EventType.RUN_FINISHED,
         runId: runId ?? "run-1",
-        threadId: threadId ?? "thread-1",
+        threadId,
         finishReason: "tool_calls",
         model,
         timestamp,

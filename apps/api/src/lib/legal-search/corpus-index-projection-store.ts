@@ -5,7 +5,6 @@ import {
   eq,
   gt,
   inArray,
-  isNotNull,
   notInArray,
   or,
   type SQL,
@@ -126,11 +125,6 @@ const corpusProjectionStateLockOrder = () => [
   asc(corpusIndexProjectionStates.entityId),
 ];
 
-const corpusProjectionStateQueueOrder = () => [
-  asc(corpusIndexProjectionStates.updatedAt),
-  asc(corpusIndexProjectionStates.entityId),
-];
-
 const readPostgresClock = async (tx: Transaction): Promise<Date> => {
   const rows = await tx
     .select({ value: sql<Date | string>`clock_timestamp()` })
@@ -145,8 +139,10 @@ const readPostgresClock = async (tx: Transaction): Promise<Date> => {
 
 /**
  * Reserve exact append attempts only after every earlier revision for the
- * entity is terminal. This enforces delete-old, settle, then append-new; the
- * operator controls how often and how broadly this bounded primitive runs.
+ * entity is terminal. The revision a state serves is not terminal, so a
+ * replacement waits here, served at its current revision; nothing queues a
+ * served revision for cleanup to make room. The operator controls how often
+ * and how broadly this bounded primitive runs.
  */
 export const reserveCorpusProjectionIntentsTx = async <
   Family extends CorpusFamily,
@@ -283,139 +279,6 @@ export const reserveCorpusProjectionIntentsTx = async <
     });
   }
   return leases;
-};
-
-export type CorpusProjectionReplacementCleanup = {
-  intentId: ProjectionIntentId;
-  family: CorpusFamily;
-  generation: string;
-  entityId: string;
-  indexId: string;
-};
-
-type PrepareCorpusProjectionReplacementsOptions<Family extends CorpusFamily> =
-  CorpusProjectionAppendScopedWorkOptions<Family> & {
-    generation: string;
-    limit: number;
-    testNow?: Date;
-  };
-
-/**
- * Move current but superseded revisions to cleanup before a replacement can
- * be reserved. Applied revisions are known published, so no unknown-append
- * delay is needed; delete settlement remains mandatory.
- */
-export const prepareCorpusProjectionReplacementsTx = async <
-  Family extends CorpusFamily,
->(
-  tx: Transaction,
-  {
-    family,
-    generation,
-    limit: requestedLimit,
-    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
-    testNow,
-  }: PrepareCorpusProjectionReplacementsOptions<Family>,
-): Promise<CorpusProjectionReplacementCleanup[]> => {
-  const limit = validateBatchSize(requestedLimit);
-  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
-  const manifest = await lockActiveCorpusProjectionManifestForMutation(
-    tx,
-    family,
-    generation,
-  );
-  const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
-  const candidates = await tx
-    .select({
-      intentId: corpusIndexProjectionStates.appliedRevision,
-      entityId: corpusIndexProjectionStates.entityId,
-      indexId: corpusIndexProjectionStates.appliedIndexId,
-    })
-    .from(corpusIndexProjectionStates)
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.family, family),
-        eq(corpusIndexProjectionStates.generation, generation),
-        scopedEntityIds === null
-          ? undefined
-          : inArray(corpusIndexProjectionStates.entityId, scopedEntityIds),
-        scopedIndexId === null
-          ? undefined
-          : eq(corpusIndexProjectionStates.desiredIndexId, scopedIndexId),
-        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
-        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
-        isNotNull(corpusIndexProjectionStates.appliedRevision),
-        isNotNull(corpusIndexProjectionStates.appliedIndexId),
-        sql`${corpusIndexProjectionStates.desiredEpoch} > ${corpusIndexProjectionStates.appliedEpoch}`,
-      ),
-    )
-    .orderBy(...corpusProjectionStateQueueOrder())
-    .limit(limit)
-    .for("update", {
-      of: corpusIndexProjectionStates,
-      skipLocked: true,
-    });
-  if (candidates.length === 0) {
-    return [];
-  }
-  const cleanups = candidates.map((candidate) => {
-    if (candidate.intentId === null || candidate.indexId === null) {
-      return panic(
-        `Applied projection state is missing its exact revision: ${family}/${generation}/${candidate.entityId}`,
-      );
-    }
-    return {
-      intentId: candidate.intentId,
-      family,
-      generation,
-      entityId: candidate.entityId,
-      indexId: candidate.indexId,
-    } satisfies CorpusProjectionReplacementCleanup;
-  });
-  const intentIds = cleanups.map(({ intentId }) => intentId);
-  await tx
-    .select({ id: corpusIndexProjectionIntents.id })
-    .from(corpusIndexProjectionIntents)
-    .where(inArray(corpusIndexProjectionIntents.id, intentIds))
-    .orderBy(asc(corpusIndexProjectionIntents.id))
-    .limit(limit)
-    .for("update");
-  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
-  // Rotate every inspected row to the pending queue's tail. A revision that
-  // cleanup already owns can then reduce this batch's result, but it cannot
-  // leave a fixed old prefix that hides later replacements.
-  await tx
-    .update(corpusIndexProjectionStates)
-    .set({ updatedAt: transitionAt })
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.family, family),
-        eq(corpusIndexProjectionStates.generation, generation),
-        inArray(
-          corpusIndexProjectionStates.entityId,
-          cleanups.map(({ entityId }) => entityId),
-        ),
-      ),
-    );
-  const updated = await tx
-    .update(corpusIndexProjectionIntents)
-    .set({
-      status: "cleanup_pending",
-      leaseToken: null,
-      leaseExpiresAt: null,
-      ...corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt),
-      lastError: null,
-      updatedAt: transitionAt,
-    })
-    .where(
-      and(
-        inArray(corpusIndexProjectionIntents.id, intentIds),
-        eq(corpusIndexProjectionIntents.status, "applied"),
-      ),
-    )
-    .returning({ id: corpusIndexProjectionIntents.id });
-  const updatedIds = new Set(updated.map(({ id }) => id));
-  return cleanups.filter(({ intentId }) => updatedIds.has(intentId));
 };
 
 /**

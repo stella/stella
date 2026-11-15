@@ -79,6 +79,7 @@ import {
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   corpusIndexProjectionAppendIsUnblocked,
+  corpusIndexProjectionCleanupIsDue,
   corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionNeedsWork,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
@@ -3908,10 +3909,12 @@ export const corpusProjectionReservationQueue = (
 
 /**
  * State rows precede their revisions in the projection lock order. Settling a
- * revision writes its state row through a trigger, so settlement takes these
- * first and cannot wait on replacement preparation over one revision.
+ * revision writes its entity's state row: through a trigger when the state
+ * still names it, and to wake a state that stopped naming it and waits for it
+ * to settle. Settlement takes these first, so it never waits on a writer that
+ * holds a state and then its revision.
  */
-export const lockCorpusProjectionStatesByAppliedRevision = async (
+export const lockCorpusProjectionStatesOfRevisions = async (
   tx: Transaction,
   revisionIds: readonly SafeId<"corpusIndexProjectionIntent">[],
 ) =>
@@ -3919,7 +3922,15 @@ export const lockCorpusProjectionStatesByAppliedRevision = async (
     .select({ entityId: corpusIndexProjectionStates.entityId })
     .from(corpusIndexProjectionStates)
     .where(
-      inArray(corpusIndexProjectionStates.appliedRevision, [...revisionIds]),
+      sql`(${corpusIndexProjectionStates.family}, ${corpusIndexProjectionStates.generation}, ${corpusIndexProjectionStates.entityId})
+        IN (${tx
+          .select({
+            family: corpusIndexProjectionIntents.family,
+            generation: corpusIndexProjectionIntents.generation,
+            entityId: corpusIndexProjectionIntents.entityId,
+          })
+          .from(corpusIndexProjectionIntents)
+          .where(inArray(corpusIndexProjectionIntents.id, [...revisionIds]))})`,
     )
     .orderBy(
       asc(corpusIndexProjectionStates.family),
@@ -3927,6 +3938,98 @@ export const lockCorpusProjectionStatesByAppliedRevision = async (
       asc(corpusIndexProjectionStates.entityId),
     )
     .limit(revisionIds.length)
+    .for("update");
+
+type CorpusProjectionServingStatesOptions = {
+  family: CorpusFamily;
+  generation: string;
+  entityIds: readonly string[];
+};
+
+/**
+ * The states serving a cleanup page, in entity order, skipping any another
+ * transaction holds: the claim decides whether a revision is served only
+ * under its state's lock, and never waits for one.
+ */
+export const lockCorpusProjectionServingStatesForCleanup = async (
+  tx: Transaction,
+  { family, generation, entityIds }: CorpusProjectionServingStatesOptions,
+) =>
+  await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        inArray(corpusIndexProjectionStates.entityId, [...entityIds]),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionStates.entityId))
+    .limit(entityIds.length)
+    .for("update", { skipLocked: true });
+
+/**
+ * One generation's states by entity, in entity order, waiting for any another
+ * transaction holds. For an operator pass that reads its page unlocked and
+ * decides under these locks.
+ */
+export const lockCorpusProjectionStatesByEntity = async (
+  tx: Transaction,
+  { family, generation, entityIds }: CorpusProjectionServingStatesOptions,
+) =>
+  await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        inArray(corpusIndexProjectionStates.entityId, [...entityIds]),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionStates.entityId))
+    .limit(entityIds.length)
+    .for("update");
+
+/**
+ * Cleanup candidates still pending and still due, after their states,
+ * skipping held rows. The page that found them was read without locks, so a
+ * row may have been claimed and requeued with a later fence since; such a row
+ * stays queued for a later claim.
+ */
+export const lockPendingCorpusProjectionCleanups = async (
+  tx: Transaction,
+  intentIds: readonly SafeId<"corpusIndexProjectionIntent">[],
+) =>
+  await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, [...intentIds]),
+        eq(corpusIndexProjectionIntents.status, "cleanup_pending"),
+        corpusIndexProjectionCleanupIsDue({
+          cleanupNotBefore: corpusIndexProjectionIntents.cleanupNotBefore,
+          leaseExpiresAt: corpusIndexProjectionIntents.leaseExpiresAt,
+        }),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(intentIds.length)
+    .for("update", { skipLocked: true });
+
+/** Revisions a desired-state writer retires, after the states it holds. */
+export const lockCorpusProjectionRevisionsAfterStates = async (
+  tx: Transaction,
+  intentIds: readonly SafeId<"corpusIndexProjectionIntent">[],
+) =>
+  await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.id, [...intentIds]))
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(intentIds.length)
     .for("update");
 
 type CorpusProjectionAcceptedRowsOptions = {
