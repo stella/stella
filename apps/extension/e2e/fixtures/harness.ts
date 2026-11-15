@@ -123,8 +123,10 @@ type ExtensionHarness = {
  * that records every extension message it receives.
  */
 export const launchExtensionHarness = async ({
+  colorScheme = "light",
   serveLoopback,
 }: {
+  colorScheme?: "dark" | "light";
   serveLoopback?: (url: string) => string | undefined;
 } = {}): Promise<ExtensionHarness> => {
   const server = createServer((request, response) => {
@@ -155,6 +157,7 @@ export const launchExtensionHarness = async ({
       `--load-extension=${extensionPath}`,
     ],
     channel: "chromium",
+    colorScheme,
     headless: true,
   });
   const close = async () => {
@@ -356,7 +359,7 @@ export const readOn = async (
   until: (window: BrowserControlSnapshot) => boolean,
 ): Promise<BrowserControlSnapshot[]> => {
   const windows = [snapshot];
-  for (let current = snapshot; !until(current); ) {
+  for (let current = snapshot; !until(current);) {
     const { next } = current.window;
     if (next === undefined) {
       return panic("The page ended before the window looked for.");
