@@ -2200,6 +2200,15 @@
     "sourcePlaceholderAction": "Czat o",
     "sources": "Źródła:",
     "steerPrompt": "Wyślij do agenta w trakcie pracy",
+    "steerRefused": {
+      "cannotSteer": "Ten agent nie przyjmuje wiadomości w trakcie pracy.",
+      "noRun": "Agent jeszcze nie zaczął.",
+      "notPlain": "W trakcie pracy agenta możesz wysłać mu tylko wiadomość tekstową.",
+      "notTaken": "Agent nie mógł teraz przyjąć twojej wiadomości.",
+      "runFull": "Agent nie przyjmie teraz kolejnych wiadomości.",
+      "title": "Twoja wiadomość czeka w kolejce, aż agent skończy",
+      "turnNotRunning": "Agent w tej chwili nie pracuje."
+    },
     "stopFailed": "Nie udało się zatrzymać odpowiedzi. Spróbuj ponownie.",
     "stopResponse": "Zatrzymaj",
     "stopped": "Zatrzymano",

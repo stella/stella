@@ -2200,6 +2200,15 @@
     "sourcePlaceholderAction": "Vestle teemal",
     "sources": "Allikad:",
     "steerPrompt": "Saada agendile töö ajal",
+    "steerRefused": {
+      "cannotSteer": "See agent ei võta töö ajal sõnumeid vastu.",
+      "noRun": "Agent pole veel alustanud.",
+      "notPlain": "Töö ajal saad agendile saata ainult tekstisõnumi.",
+      "notTaken": "Agent ei saanud sinu sõnumit praegu vastu võtta.",
+      "runFull": "Agent ei saa praegu rohkem sõnumeid vastu võtta.",
+      "title": "Sinu sõnum ootab järjekorras, kuni agent lõpetab",
+      "turnNotRunning": "Agent praegu ei tööta."
+    },
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",

@@ -22,9 +22,10 @@ const config = {
     "your computer, so the turn goes on with it instead of stopping. " +
     "Idempotent on `inputId`. `queued`: the computer was handed the " +
     "message, and the turn's stream says whether its harness took it. " +
-    "`unavailable`: the turn does not run, does not run on a computer, or " +
-    "its harness takes no message mid-turn; send it as a new message. A " +
-    "turn outside the thread, or one you cannot see, is a 404.",
+    "`refused` with a `reason`: `turn_not_running`, `no_run` (no run on a " +
+    "computer yet, or it ended), `harness_cannot_steer` or `run_full`; " +
+    "queue the message as the next one. A turn outside the thread, or one " +
+    "you cannot see, is a 404.",
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "realtime_stream" },
@@ -60,7 +61,7 @@ const steerChatTurn = createSafeRootHandler(
       );
     }
     if (turn.status !== "running") {
-      return answer("unavailable");
+      return answer({ type: "refused", reason: "turn_not_running" });
     }
     const steered = await getDesktopRunnerControl().control.steerChatTurn({
       owner: {

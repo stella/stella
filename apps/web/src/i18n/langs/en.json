@@ -2200,6 +2200,15 @@
     "sourcePlaceholderAction": "Chat about",
     "sources": "Sources:",
     "steerPrompt": "Send to the agent while it works",
+    "steerRefused": {
+      "cannotSteer": "This agent cannot take messages while it works.",
+      "noRun": "The agent has not started yet.",
+      "notPlain": "Only a text message can go to the agent while it works.",
+      "notTaken": "The agent could not take your message just now.",
+      "runFull": "The agent cannot take more messages right now.",
+      "title": "Your message is queued until the agent finishes",
+      "turnNotRunning": "The agent is not working right now."
+    },
     "stopFailed": "Couldn't stop the answer. Try again.",
     "stopResponse": "Stop",
     "stopped": "Stopped",

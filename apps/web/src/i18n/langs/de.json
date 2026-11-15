@@ -2200,6 +2200,15 @@
     "sourcePlaceholderAction": "Chat über",
     "sources": "Quellen:",
     "steerPrompt": "An den Agenten senden, während er arbeitet",
+    "steerRefused": {
+      "cannotSteer": "Dieser Agent nimmt während der Arbeit keine Nachrichten an.",
+      "noRun": "Der Agent hat noch nicht begonnen.",
+      "notPlain": "Während der Agent arbeitet, können Sie ihm nur eine Textnachricht senden.",
+      "notTaken": "Der Agent konnte Ihre Nachricht gerade nicht annehmen.",
+      "runFull": "Der Agent nimmt gerade keine weiteren Nachrichten an.",
+      "title": "Ihre Nachricht wartet, bis der Agent fertig ist",
+      "turnNotRunning": "Der Agent arbeitet gerade nicht."
+    },
     "stopFailed": "Die Antwort konnte nicht gestoppt werden. Versuchen Sie es erneut.",
     "stopResponse": "Stoppen",
     "stopped": "Gestoppt",

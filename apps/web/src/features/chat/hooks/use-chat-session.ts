@@ -151,6 +151,8 @@ import type { PlaybookPaneMode } from "@/features/chat/hooks/use-chat-session-pl
 import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/use-chat-session-reader-annotation-write.logic";
 import {
   canSendWithoutQueueing,
+  CHAT_STEER_REFUSAL_MESSAGES,
+  type ChatSteerRefusal,
   createInitialSendQueueState,
   describeQueuedMessage,
   type QueuedChatEntry,
@@ -160,6 +162,7 @@ import {
   type SendQueueState,
   snapshotChatRequestOptions,
   steerFallback,
+  type SteerOrigin,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import {
   fetchChatMessage,
@@ -856,16 +859,30 @@ export const useChatSession = ({
     [applySendQueueEvent, sendChatMessage],
   );
 
-  // "Send now" on a queued message: it moves to the front of the queue.
-  // During a turn on the member's computer the turn is handed the message
-  // and goes on with it; a turn that cannot take it is stopped, and the
-  // queue drain sends the message once the stop settles. A turn that ends
-  // before it says leaves the message first in the queue, sent next. Until
-  // the steer settles nothing queued is sent, so a message the turn took
-  // is never sent again. With the queue held after a failed turn it is sent
-  // at once, like a manual send.
-  const sendQueuedMessageNow = useCallback(
-    (id: string) => {
+  // A steer that left the message queued says why; the queue shows it.
+  const notifySteerRefused = useCallback(
+    (reason: ChatSteerRefusal) => {
+      stellaToast.add({
+        title: t("chat.steerRefused.title"),
+        description: t(CHAT_STEER_REFUSAL_MESSAGES[reason]),
+        type: "info",
+      });
+    },
+    [t],
+  );
+
+  // Hand a queued message to the running turn; it moves to the front of the
+  // queue. During a turn on the member's computer the turn is handed the
+  // message and goes on with it. One that cannot take it is stopped after
+  // "Send now", and the queue drain sends the message once the stop
+  // settles; after an explicit steer the turn runs on and the message waits
+  // for its end, with a notice. A turn that ends before it says leaves the
+  // message first in the queue, sent next. Until the steer settles nothing
+  // queued is sent, so a message the turn took is never sent again. With
+  // the queue held after a failed turn it is sent at once, like a manual
+  // send.
+  const handQueuedMessageToTurn = useCallback(
+    (id: string, origin: SteerOrigin) => {
       applySendQueueEvent({ type: "queued-message-promoted", id });
       const entry = sendQueueRef.current.queue.find(
         (queued) => queued.id === id,
@@ -882,12 +899,15 @@ export const useChatSession = ({
             inputId: id,
             text: route.text,
           });
-          const next = steerFallback(outcome);
+          const next = steerFallback(outcome.type, origin);
           const dispatched = applySendQueueEvent({
             type: "steer-settled",
             id,
             next,
           });
+          if (outcome.type === "refused" && next === "keep") {
+            notifySteerRefused(outcome.reason);
+          }
           if (dispatched) {
             await dispatchQueuedMessage(dispatched).catch(
               ignoreQueuedDispatchError,
@@ -900,6 +920,10 @@ export const useChatSession = ({
         return;
       }
       if (sendQueueRef.current.isGenerating) {
+        if (origin === "steer") {
+          notifySteerRefused("message_not_plain");
+          return;
+        }
         stop();
         return;
       }
@@ -913,7 +937,20 @@ export const useChatSession = ({
         );
       }
     },
-    [applySendQueueEvent, chat, dispatchQueuedMessage, stop],
+    [
+      applySendQueueEvent,
+      chat,
+      dispatchQueuedMessage,
+      notifySteerRefused,
+      stop,
+    ],
+  );
+
+  const sendQueuedMessageNow = useCallback(
+    (id: string) => {
+      handQueuedMessageToTurn(id, "send_now");
+    },
+    [handQueuedMessageToTurn],
   );
 
   /** What the thread is doing, as the send routing reads it. */
@@ -952,7 +989,10 @@ export const useChatSession = ({
       );
       switch (intent) {
         case CHAT_SEND_INTENT.steer:
-          sendQueuedMessageNow(enqueueMessage(message, requestOptions));
+          handQueuedMessageToTurn(
+            enqueueMessage(message, requestOptions),
+            "steer",
+          );
           return;
         case CHAT_SEND_INTENT.queue:
           enqueueMessage(message, requestOptions);
@@ -989,8 +1029,8 @@ export const useChatSession = ({
       conversationId,
       dispatchQueuedMessage,
       enqueueMessage,
+      handQueuedMessageToTurn,
       sendChatMessage,
-      sendQueuedMessageNow,
       threadSendState,
       withRequestSnapshots,
     ],

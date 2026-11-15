@@ -2200,6 +2200,15 @@
     "sourcePlaceholderAction": "Chatovať o",
     "sources": "Zdroje:",
     "steerPrompt": "Poslať agentovi počas práce",
+    "steerRefused": {
+      "cannotSteer": "Tento agent počas práce neprijíma správy.",
+      "noRun": "Agent ešte nezačal.",
+      "notPlain": "Agentovi možno počas práce poslať len textovú správu.",
+      "notTaken": "Agent teraz vašu správu nemohol prijať.",
+      "runFull": "Agent teraz ďalšie správy neprijme.",
+      "title": "Správa čaká v poradí, kým agent neskončí",
+      "turnNotRunning": "Agent práve nepracuje."
+    },
     "stopFailed": "Odpoveď sa nepodarilo zastaviť. Skúste to znova.",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",

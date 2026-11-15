@@ -2200,6 +2200,15 @@
     "sourcePlaceholderAction": "Csevegés erről:",
     "sources": "Források:",
     "steerPrompt": "Küldés az ügynöknek munka közben",
+    "steerRefused": {
+      "cannotSteer": "Ez az ügynök munka közben nem fogad üzeneteket.",
+      "noRun": "Az ügynök még nem kezdett hozzá.",
+      "notPlain": "Munka közben csak szöveges üzenetet küldhet az ügynöknek.",
+      "notTaken": "Az ügynök most nem tudta fogadni az üzenetét.",
+      "runFull": "Az ügynök most nem fogad több üzenetet.",
+      "title": "Az üzenete a sorban vár, amíg az ügynök végez",
+      "turnNotRunning": "Az ügynök jelenleg nem dolgozik."
+    },
     "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",

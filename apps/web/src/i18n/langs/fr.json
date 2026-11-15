@@ -2200,6 +2200,15 @@
     "sourcePlaceholderAction": "Discuter de",
     "sources": "Sources :",
     "steerPrompt": "Envoyer à l’agent pendant qu’il travaille",
+    "steerRefused": {
+      "cannotSteer": "Cet agent n’accepte pas de messages pendant qu’il travaille.",
+      "noRun": "L’agent n’a pas encore commencé.",
+      "notPlain": "Pendant que l’agent travaille, vous ne pouvez lui envoyer qu’un message texte.",
+      "notTaken": "L’agent n’a pas pu prendre votre message pour le moment.",
+      "runFull": "L’agent ne peut pas accepter d’autres messages pour le moment.",
+      "title": "Votre message attend que l’agent ait terminé",
+      "turnNotRunning": "L’agent ne travaille pas en ce moment."
+    },
     "stopFailed": "Impossible d'arrêter la réponse. Réessayez.",
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",

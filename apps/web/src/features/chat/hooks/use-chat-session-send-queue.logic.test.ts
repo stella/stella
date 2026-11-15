@@ -603,7 +603,8 @@ describe("send now while a turn runs", () => {
   });
 
   test("a steered message leaves the queue, so the turn's end sends the next one", () => {
-    expect(steerFallback("steered")).toBe("remove");
+    expect(steerFallback("steered", "send_now")).toBe("remove");
+    expect(steerFallback("steered", "steer")).toBe("remove");
     const steered = reduceSendQueue(promotedSecond(), {
       type: "queued-message-removed",
       id: "b",
@@ -615,7 +616,8 @@ describe("send now while a turn runs", () => {
   });
 
   test("a steer the turn ended without answering keeps the message first, sent at the turn's end", () => {
-    expect(steerFallback("unsettled")).toBe("keep");
+    expect(steerFallback("unsettled", "send_now")).toBe("keep");
+    expect(steerFallback("unsettled", "steer")).toBe("keep");
 
     const { dispatchedEntry, state } = applyRenderTick(
       promotedSecond(),
@@ -624,6 +626,26 @@ describe("send now while a turn runs", () => {
     );
     expect(dispatchedEntry?.id).toBe("b");
     expect(state.queue.map(({ id }) => id)).toEqual(["a"]);
+  });
+
+  test("a refused steer stops the turn only after Send now; an explicit steer keeps the message queued", () => {
+    expect(steerFallback("refused", "send_now")).toBe("stop");
+    expect(steerFallback("refused", "steer")).toBe("keep");
+
+    const steering = reduceSendQueue(promotedSecond(), {
+      type: "steer-started",
+      id: "b",
+    }).state;
+    const kept = reduceSendQueue(steering, {
+      type: "steer-settled",
+      id: "b",
+      next: steerFallback("refused", "steer"),
+    });
+    // The turn runs on; the message waits first in the queue for its end.
+    expect(kept.dispatchedEntry).toBeNull();
+    expect(kept.state.queue.map(({ id }) => id)).toEqual(["b", "a"]);
+    const { dispatchedEntry } = applyRenderTick(kept.state, false, "ready");
+    expect(dispatchedEntry?.id).toBe("b");
   });
 
   test("a turn that ends while its steer is open sends nothing until the steer settles", () => {
