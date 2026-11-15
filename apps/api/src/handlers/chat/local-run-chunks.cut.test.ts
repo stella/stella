@@ -71,7 +71,7 @@ describe("a cut of a local turn", () => {
       await read.next();
       cut.abort(REASON_OF_CUT[kind]);
       // The consumer learns of the cut from the run and stops reading.
-      await read.return(undefined);
+      await read.return?.(undefined);
 
       expect(computer.queued.interrupts).toBe(INTERRUPTS_OF_CUT[kind]);
     });
@@ -80,7 +80,7 @@ describe("a cut of a local turn", () => {
   test("a consumer that stops reading without a cut interrupts once", async () => {
     const { computer, read } = startRead();
     await read.next();
-    await read.return(undefined);
+    await read.return?.(undefined);
 
     expect(computer.queued.interrupts).toBe(1);
   });
