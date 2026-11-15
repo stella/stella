@@ -3569,7 +3569,7 @@ export const realtimeAuthorizers = {
  * it (no explicit eviction needed) and never leaks across requests, so a
  * revoked session is still re-checked in full on the very next request.
  *
- * `memberCallerFromIdentity`'s return type is intentionally left for TypeScript
+ * `resolveValidateAuth`'s return type is intentionally left for TypeScript
  * to infer (no hand-written `ValidateAuthValue`/`ValidateAuthResolution`
  * annotation). `scopedDb`/`safeDb` come from the membership-scoped database
  * factories, which are generic over the concrete transaction type; annotating
@@ -3580,7 +3580,7 @@ export const realtimeAuthorizers = {
  * Letting inference flow keeps the real (wide) transaction type, which is
  * what every handler's `ctx.scopedDb`/`ctx.safeDb` callback expects.
  */
-type ResolveValidateAuthOptions = {
+type ResolveRequestMemberOptions = {
   getSession?: AuthSessionReader | undefined;
   request: Request;
   /** The matched route pattern, which decides whether an API access token may open it. */
@@ -3750,7 +3750,7 @@ const resolveSessionIdentity = async ({
   initialWorkspaceId,
   responseHeaders,
 }: Omit<
-  ResolveValidateAuthOptions,
+  ResolveRequestMemberOptions,
   "route" | "server"
 >): Promise<IdentityResolution> => {
   const { sessionResult, memberAuthorizationResult } =
@@ -3817,7 +3817,7 @@ const resolveAccessTokenIdentity = async ({
   route,
   initialWorkspaceId,
   responseHeaders,
-}: Omit<ResolveValidateAuthOptions, "getSession" | "server"> & {
+}: Omit<ResolveRequestMemberOptions, "getSession" | "server"> & {
   token: string;
 }): Promise<IdentityResolution> => {
   const authenticated = await authenticateApiAccessToken(token, {
@@ -3924,11 +3924,11 @@ const resolveAccessTokenIdentity = async ({
   };
 };
 
-type MemberCallerFromIdentityOptions = {
+type ResolveValidateAuthOptions = {
   identity: ResolvedIdentity;
   initialWorkspaceId: SafeId<"workspace"> | null;
   request: Request;
-  server: ResolveValidateAuthOptions["server"];
+  server: ResolveRequestMemberOptions["server"];
 };
 
 /**
@@ -3938,12 +3938,12 @@ type MemberCallerFromIdentityOptions = {
  * recorder. Every way a member is proved builds it here, so none of them can
  * hand a handler a context the others would not.
  */
-export const memberCallerFromIdentity = async ({
+export const resolveValidateAuth = async ({
   identity,
   initialWorkspaceId,
   request,
   server,
-}: MemberCallerFromIdentityOptions) => {
+}: ResolveValidateAuthOptions) => {
   const {
     authorization,
     email,
@@ -4122,14 +4122,14 @@ export const memberCallerFromIdentity = async ({
   return { ok: true as const, value: caller };
 };
 
-const resolveValidateAuth = async ({
+const resolveRequestMember = async ({
   getSession,
   request,
   route,
   server,
   initialWorkspaceId,
   responseHeaders,
-}: ResolveValidateAuthOptions) => {
+}: ResolveRequestMemberOptions) => {
   // Told apart by shape, never by fallback: a request carrying a JWT bearer
   // is judged on that token alone, so a rejected token cannot fall through to
   // a browser session that happens to ride along.
@@ -4152,7 +4152,7 @@ const resolveValidateAuth = async ({
   if (!resolved.ok) {
     return resolved;
   }
-  return await memberCallerFromIdentity({
+  return await resolveValidateAuth({
     identity: resolved.identity,
     initialWorkspaceId,
     request,
@@ -4163,7 +4163,7 @@ const resolveValidateAuth = async ({
 /** The member a browser session proved for this request. */
 export type ValidateAuthValue = SessionMemberCaller;
 
-type ValidateAuthResolution = Awaited<ReturnType<typeof resolveValidateAuth>>;
+type ValidateAuthResolution = Awaited<ReturnType<typeof resolveRequestMember>>;
 
 const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
   const validateAuthResolutionCache = new WeakMap<
@@ -4187,7 +4187,7 @@ const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
       validateAuthResolutionCache,
       request,
       async () =>
-        await resolveValidateAuth({
+        await resolveRequestMember({
           getSession,
           request,
           route,

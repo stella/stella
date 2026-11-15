@@ -8,8 +8,8 @@ import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import {
   createMemberAuthenticator,
-  memberCallerFromIdentity,
   resolveMemberAuthorization,
+  resolveValidateAuth,
 } from "@/api/lib/auth";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
@@ -86,7 +86,7 @@ if (!databaseUrl || !enabled) {
           .from(user)
           .where(eq(user.id, userId));
         if (storedSession === undefined || storedUser === undefined) {
-          return panic("The fixture session must be stored");
+          panic("The fixture session must be stored");
         }
 
         const viaRequest = await createMemberAuthenticator({
@@ -96,7 +96,7 @@ if (!databaseUrl || !enabled) {
           }),
         })(requestContext(), {});
         if (!viaRequest.ok) {
-          return panic("The fixture member must authenticate");
+          panic("The fixture member must authenticate");
         }
 
         const authorization = await resolveMemberAuthorization(
@@ -104,9 +104,9 @@ if (!databaseUrl || !enabled) {
           db,
         );
         if (authorization === null || !isMemberRole(authorization.role)) {
-          return panic("The fixture member must have a role");
+          panic("The fixture member must have a role");
         }
-        const viaIdentity = await memberCallerFromIdentity({
+        const viaIdentity = await resolveValidateAuth({
           identity: {
             userId,
             email: storedUser.email,
@@ -128,7 +128,7 @@ if (!databaseUrl || !enabled) {
           server: null,
         });
         if (!viaIdentity.ok) {
-          return panic("The fixture identity must build a member context");
+          panic("The fixture identity must build a member context");
         }
 
         const requestCaller = viaRequest.caller;
