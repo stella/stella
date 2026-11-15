@@ -1,7 +1,11 @@
+import { panic } from "better-result";
+
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
   publishedCaseLawDecisionIndexPredicateSql,
 } from "@/api/lib/case-law/published-decisions-sql";
+
+import countryDatePublishedIndexes from "./online-migration-entries/indexes-case-law-decisions-country-date-published-idx";
 
 const PUBLISHED_PREDICATE = publishedCaseLawDecisionIndexPredicateSql();
 const PUBLISHED_DEFINITION =
@@ -29,3 +33,11 @@ export const SITEMAP_LANGUAGE_GROUP_INDEX = {
   definitionBody: `ON public.case_law_decisions USING btree (country, language_group_key, id, language, source_id) WHERE ${PUBLISHED_DEFINITION}`,
   isUnique: false,
 } as const;
+
+/**
+ * The index a sitemap file's range is read from: the date index the browse
+ * walk owns, whose key (date, then id) a split month's ranges are cut on.
+ */
+export const SITEMAP_RANGE_INDEX =
+  countryDatePublishedIndexes.values[0] ??
+  panic("The country date index declaration is missing");
