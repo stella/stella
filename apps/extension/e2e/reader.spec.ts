@@ -7,7 +7,6 @@ import {
   BROWSER_CONTROL_TARGET_METADATA,
   ELEMENT_REFERENCE_SHADOW_SEGMENT,
 } from "@stll/api-contract/browser-control";
-
 import {
   type FindRequest,
   type PageOperation,
@@ -15,13 +14,16 @@ import {
   type ReaderPosition,
   type ReadRequest,
   SNAPSHOT_PURPOSE,
-} from "../src/lib/page-script";
-import { frameFoundSchema, frameReadSchema } from "../src/lib/page-window";
+} from "@stll/browser-page/page-script";
+import {
+  frameFoundSchema,
+  frameReadSchema,
+} from "@stll/browser-page/page-window";
 import {
   IDENTITY_PROVIDER_HOSTS,
   SIGN_IN_MESSAGE,
   SIGN_IN_POLICY,
-} from "../src/lib/sign-in-policy";
+} from "@stll/browser-page/sign-in-policy";
 
 /**
  * The page script against a real page in Chromium, without the extension:

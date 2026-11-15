@@ -930,6 +930,10 @@ const performAction = async ({
 }) => {
   switch (action.type) {
     case "send": {
+      // A plain send never replaces a turn that waits on the member: it is
+      // queued, and "Send now" on it sends it over the wait, as the recorded
+      // conversation did.
+      const overWait = live.session().turnAwaitsMember;
       // What the composer hands the session on submit.
       await act(async () => {
         pendingActions.push(
@@ -944,6 +948,19 @@ const performAction = async ({
         );
         await sleep(0);
       });
+      if (overWait) {
+        const queued = live
+          .session()
+          .queuedMessages.find(
+            ({ message }) => message.id === action.messageId,
+          );
+        expect(queued).toBeDefined();
+        act(() => {
+          if (queued !== undefined) {
+            live.session().sendQueuedMessageNow(queued.id);
+          }
+        });
+      }
       return;
     }
     case "approve": {
@@ -1274,6 +1291,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "select-matters": OUTSIDE_THE_CONVERSATION,
   "select-model": notRecorded(
     "The recorder scripts one model; a model switch needs a second one.",
+  ),
+  queue: notRecorded(
+    "The recorder has no send queue; it lives in the session hook this replay renders.",
   ),
   send: recordedAs(({ type }) => type === "send"),
   "submit-connector-request": notRecorded(

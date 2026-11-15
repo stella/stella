@@ -10,6 +10,7 @@ import {
   CREATE_DOCUMENT_TOOL_NAME,
   isBrowserResolvedChatToolCall,
   isChatPastedTextPart,
+  isHarnessChatToolCall,
 } from "@stll/api-contract/chat";
 import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
 import type { LocalRunToolTitleKind } from "@stll/api-contract/chat-local-run-steps";
@@ -745,6 +746,27 @@ export const openMemberWaitKeys = ({
       ? []
       : [`interrupt:${localRunQuestion.interruptId}`]),
   ];
+};
+
+/**
+ * The approvals a turn on the member's computer waits on, by approval id:
+ * the unanswered cards of the awaited assistant message for calls its
+ * harness made. A cloud turn's card is never among them.
+ */
+export const openHarnessApprovalRequestIds = (
+  messages: readonly PersistedChatMessage[],
+): readonly string[] => {
+  const awaited = findAwaitedAssistantMessage(messages, isApprovalRequestPart);
+  if (awaited === null) {
+    return [];
+  }
+  return awaited.parts.flatMap((part) =>
+    isApprovalPart(part) &&
+    part.state === "approval-requested" &&
+    isHarnessChatToolCall(part)
+      ? [part.approval.id]
+      : [],
+  );
 };
 
 /**

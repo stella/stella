@@ -2093,6 +2093,7 @@
       "noResults": "Nav atbilstošu prasmju",
       "tryOne": "Izmēģini vienu no tiem"
     },
+    "queuePrompt": "Sūtīt, kad aģents pabeigs",
     "queuedAttachmentCount": "{count, plural, zero {# pielikumu} one {# pielikums} other {# pielikumi}}",
     "queuedNotice": "Rindā: tiks nosūtīts, kad pabeigsies pašreizējā atbilde",
     "reasoning": "Argumentācija",
@@ -6031,6 +6032,7 @@
         "title": "Programmēšanas aģenti dalībnieku datoros",
         "updated": "Programmēšanas aģentu atļaujas atjauninātas"
       },
+      "logoInvalid": "Izvēlieties PNG, JPEG vai WebP attēlu, kas nepārsniedz 5 MB.",
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
       "membersDescription": "Pārvaldiet, kam ir piekļuve šai organizācijai, un gaidošos uzaicinājumus",
@@ -6079,6 +6081,7 @@
         "title": "Laika josla",
         "updated": "Laika josla atjaunināta"
       },
+      "uploadLogo": "Augšupielādēt logotipu",
       "usage": "Lietojums",
       "usageDescription": "Šīs organizācijas lietojuma limiti un tiesību statuss",
       "usageEmptyDescription": "Konfigurējiet lietojuma tiesības, lai šai organizācijai iespējotu mērītas AI funkcijas.",

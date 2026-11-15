@@ -41,6 +41,7 @@ const start = async (at: ReturnType<typeof place>, platform: NodeJS.Platform) =>
     home: at.home,
     log: () => undefined,
     platform,
+    stellaBrowser: null,
     version: "1.4.0",
   });
 
@@ -82,6 +83,36 @@ test("offers the browser once Chrome can start the host", async () => {
         ),
       ),
     ).toBe(true);
+    await started.browser.stop();
+  } finally {
+    rmSync(at.root, { force: true, recursive: true });
+  }
+});
+
+test("with the stella browser on, offers the tools without the extension's host, and starts no browser until a run opens a page", async () => {
+  const at = place();
+  try {
+    // No Chrome profile: the extension's host cannot be registered.
+    const started = await startHolderBrowser({
+      command: ["/usr/bin/true"],
+      dir: at.dir,
+      endpoint: at.endpoint,
+      extraExtensionIds: [],
+      home: at.home,
+      log: () => undefined,
+      platform: "linux",
+      stellaBrowser: {
+        environment: {},
+        profileRoot: path.join(at.root, "browser"),
+        testHooks: null,
+      },
+      version: "1.4.0",
+    });
+    if (started.type !== "started") {
+      throw new TypeError(`The browser did not start: ${started.reason}`);
+    }
+    expect(existsSync(browserEndpointFor(at.endpoint))).toBe(false);
+    expect(existsSync(path.join(at.root, "browser"))).toBe(false);
     await started.browser.stop();
   } finally {
     rmSync(at.root, { force: true, recursive: true });

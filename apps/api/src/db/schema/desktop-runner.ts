@@ -9,6 +9,7 @@ import {
   CHAT_LOCAL_RUN_STEP_CONTENT_KINDS,
   CHAT_LOCAL_RUN_STEP_CONTENT_ROW_OUTCOMES,
 } from "@stll/api-contract/chat-local-run-step-content";
+import { DESKTOP_RUNNER_MAX_HARNESS_BOUNDARY_LENGTH } from "@stll/api-contract/desktop-runner";
 
 import {
   chatLocalRunStepContentPolicies,
@@ -179,6 +180,14 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     /** The harness session a later run on this desktop may resume. */
     harnessSessionId: p.varchar("harness_session_id", { length: 256 }),
     /**
+     * Where the run's completed turn ended in that session (a Codex turn id,
+     * a Claude Code transcript entry): a later run may continue the session
+     * from there as a new one. Set only by a completed `run.finished`.
+     */
+    harnessBoundary: p.varchar("harness_boundary", {
+      length: DESKTOP_RUNNER_MAX_HARNESS_BOUNDARY_LENGTH,
+    }),
+    /**
      * No longer written or read: the output key a run once got for reading
      * its step outputs on the computer, encrypted for its organization.
      * Dropped in a later release, once no running API task selects it.
@@ -302,6 +311,10 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     p.check(
       "desktop_runner_runs_lost_reason_check",
       sql`(${table.lostReason} IS NULL OR ${table.state} = 'lost') AND (${table.lostReason} IS NULL OR ${table.lostReason} IN (${sqlValues(DESKTOP_RUNNER_LOST_REASONS)}))`,
+    ),
+    p.check(
+      "desktop_runner_runs_harness_boundary_check",
+      sql`${table.harnessBoundary} IS NULL OR (${table.state} = 'finished' AND ${table.outcome} = 'completed' AND ${table.harnessSessionId} IS NOT NULL)`,
     ),
     p.check(
       "desktop_runner_runs_ack_seq_check",

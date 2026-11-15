@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Signatur",
     "pdfSignCertificate": "Signaturzertifikat",
     "pdfSignDocument": "Dokument",
+    "pdfSignDownloadDriver": "Treiber herunterladen",
+    "pdfSignDriverMissing": "Eine Karte im Kartenleser braucht den {vendor}-Treiber, der nicht installiert ist. Installieren Sie ihn, um mit dieser Karte zu signieren.",
+    "pdfSignDriverNeedsUpdate": "Der installierte {vendor}-Treiber läuft nicht auf dem Prozessor dieses Macs. Installieren Sie die aktuelle Version, um mit dieser Karte zu signieren.",
     "pdfSignErrorCode": "Fehlercode: {code}",
     "pdfSignErrors": {
       "authenticationRequired": "Ihr Schlüsselbund benötigt Ihre Erlaubnis für dieses Zertifikat. Versuchen Sie es erneut und erlauben Sie den Zugriff.",
@@ -118,6 +121,9 @@
       "startAgain": "Das Signieren konnte nicht fortgesetzt werden. Starten Sie das Signieren in stella erneut.",
       "temporarilyUnavailable": "stella konnte das Signieren gerade nicht abschließen. Versuchen Sie es erneut.",
       "tokenNotPresent": "Die Chipkarte oder der Token ist nicht verbunden. Verbinden Sie sie und versuchen Sie es erneut.",
+      "tokenSigningFailed": "Die Chipkarte oder der Token hat das Dokument nicht signiert.",
+      "tokenTimeout": "Die Chipkarte oder der Token hat nicht rechtzeitig geantwortet. Versuchen Sie es erneut.",
+      "tokenUnreadable": "Die Chipkarte oder der Token konnte nicht gelesen werden. Versuchen Sie es erneut.",
       "unsupportedAlgorithm": "Mit dem Schlüssel dieses Zertifikats lässt sich die für dieses Dokument nötige Signatur nicht erstellen. Wählen Sie ein anderes Zertifikat.",
       "wouldBreakSignatures": "Eine Signatur würde die Signaturen, die dieses PDF bereits trägt, ungültig machen."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Akte",
     "pdfSignNoIdentities": "In Ihrem Schlüsselbund ist kein Signaturzertifikat verfügbar.",
     "pdfSignNoIdentitiesCertificateStore": "In Ihrem Zertifikatspeicher ist kein Signaturzertifikat verfügbar.",
+    "pdfSignOnToken": "Gespeichert auf: {tokenLabel}",
+    "pdfSignPin": "PIN",
+    "pdfSignPinFinalTry": "Eine weitere falsche PIN sperrt die Karte oder den Token.",
+    "pdfSignPinLow": "Es wurde bereits eine falsche PIN eingegeben. Prüfen Sie die PIN sorgfältig.",
+    "pdfSignPinPad": "Geben Sie die PIN am Kartenleser ein, um {documentName} zu signieren.",
+    "pdfSignPinPrompt": "Geben Sie die PIN Ihrer Karte oder Ihres Tokens ein, um {documentName} zu signieren.",
+    "pdfSignRescanCards": "Karten erneut suchen",
     "pdfSignRetry": "Erneut versuchen",
     "pdfSignServer": "Angefordert von",
     "pdfSignSign": "Signieren",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Sichtbarer Stempel auf Seite {pageNumber}",
     "pdfSignSubtitle": "Der private Schlüssel bleibt im Schlüsselbund; nur die Signatur verlässt diesen Computer.",
     "pdfSignSubtitleCertificateStore": "Der private Schlüssel bleibt im Zertifikatspeicher; nur die Signatur verlässt diesen Computer.",
+    "pdfSignSubtitleToken": "Der private Schlüssel bleibt auf Ihrer Chipkarte oder Ihrem Token; nur die Signatur verlässt diesen Computer.",
     "pdfSignTitle": "Dieses PDF signieren?",
     "pdfSignUnsupported": "Zum Signieren wird macOS oder Windows benötigt. Öffnen Sie das Dokument auf einem Mac oder einem Windows-PC.",
     "pdfSignVersion": "Version",
@@ -870,6 +884,18 @@
       "runs_can_write": "Lokale Ausführungen können in diesen Ordner schreiben, daher kann er keinen Skill enthalten.",
       "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Skills müssen auf dem eigenen Laufwerk dieses Computers liegen.",
       "path_changed": "Ein übergeordneter Ordner hat sich geändert. Entfernen Sie diesen Ordner und fügen Sie ihn erneut hinzu."
+    }
+  },
+  "signingDriver": {
+    "title": "Chipkartentreiber",
+    "description": "Findet stella desktop den Treiber Ihrer Chipkarte oder Ihres Tokens nicht selbst, wählen Sie sein PKCS #11-Modul aus. Es wird nur zum Signieren von PDFs geladen, in einem eigenen Prozess.",
+    "choose": "Modul auswählen",
+    "remove": "Entfernen",
+    "notice": {
+      "action_failed": "Das hat nicht funktioniert. Versuchen Sie es erneut.",
+      "missing": "Diese Datei ist nicht mehr vorhanden.",
+      "needs_update": "Dieses Modul läuft nicht auf dem Prozessor dieses Macs. Installieren Sie die aktuelle Version des Treibers.",
+      "not_a_library": "Diese Datei ist kein PKCS #11-Modul."
     }
   },
   "localLinkedFolders": {

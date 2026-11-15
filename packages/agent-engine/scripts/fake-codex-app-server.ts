@@ -138,6 +138,10 @@ const userAgent = (version: string) =>
 export const FAKE_OUTDATED_VERSION = "0.150.0";
 export const FAKE_THREAD_ID = "thread-a";
 export const FAKE_RESUMED_THREAD_ID = "thread-old";
+/** The thread `thread/fork` makes of the resumed one. */
+export const FAKE_FORKED_THREAD_ID = "thread-forked";
+/** The turn of the resumed thread a fork keeps through. */
+export const FAKE_FORK_BOUNDARY = "019a5e1c-7f3d-7c2a-9b4e-2f6d8a1c3e5b";
 const FAKE_TURN_ID = "turn-1";
 /** The server name the holder registers the browser tools under. */
 const FAKE_BROWSER_SERVER = "stella_browser";
@@ -337,6 +341,8 @@ const continuation = (outcome: FakeStep[]): FakeStep[] => [
 /** What the approval scenarios answer once the command ran. */
 const FAKE_APPROVED_ANSWER = "Removed draft.md.";
 const FAKE_DENIED_ANSWER = "Left it in place.";
+/** What `steered_over_approval` answers the message steered over its request. */
+const FAKE_STEERED_OVER_APPROVAL = "Left the draft and checked the annex.";
 
 /** The command the approval scenarios ask to run, and the request for it. */
 const removeDraft = (reason: string | null): FakeStep[] => [
@@ -1081,6 +1087,36 @@ export const FAKE_SCENARIOS = {
     item("completed", agentMessage("m-steer", "Checked the annex as well.")),
     completed(),
   ],
+  /**
+   * A command asks for approval; the member declines it with a message
+   * steered into the turn, and the turn answers the message.
+   */
+  steered_over_approval: [
+    ...freshTurn(),
+    ...removeDraft("Deletes a file"),
+    {
+      byDecision: {
+        // Approved, the message never follows: the turn answers as
+        // `approval_outcome` does.
+        approved: [
+          item("completed", agentMessage("m-2", FAKE_APPROVED_ANSWER)),
+          completed(),
+        ],
+        denied: [
+          { expect: "turn/steer", result: { turnId: FAKE_TURN_ID } },
+          item("completed", {
+            ...command("call-rm", "declined"),
+            command: "rm draft.md",
+          }),
+          item(
+            "completed",
+            agentMessage("m-steer", FAKE_STEERED_OVER_APPROVAL),
+          ),
+          completed(),
+        ],
+      },
+    },
+  ],
   /** The turn is no longer the active one when the steer arrives. */
   steer_refused: [
     ...freshTurn(),
@@ -1161,6 +1197,51 @@ export const FAKE_SCENARIOS = {
     {
       notify: "turn/completed",
       params: { threadId: FAKE_RESUMED_THREAD_ID, turn: turn("completed") },
+    },
+  ],
+  fork_ok: [
+    ...handshake(),
+    {
+      expect: "thread/fork",
+      result: { thread: { id: FAKE_FORKED_THREAD_ID } },
+    },
+    ...startTurn(),
+    {
+      notify: "turn/completed",
+      params: { threadId: FAKE_FORKED_THREAD_ID, turn: turn("completed") },
+    },
+  ],
+  fork_missing: [
+    ...handshake(),
+    {
+      expect: "thread/fork",
+      error: {
+        code: -32_600,
+        message: `no rollout found for thread id ${FAKE_RESUMED_THREAD_ID}`,
+      },
+    },
+    { expect: "thread/start", result: { thread: { id: FAKE_THREAD_ID } } },
+    ...startTurn(),
+    completed(),
+  ],
+  fork_archived: [
+    ...handshake(),
+    {
+      expect: "thread/fork",
+      error: {
+        code: -32_600,
+        message: `session ${FAKE_RESUMED_THREAD_ID} is archived`,
+      },
+    },
+    { expect: "thread/unarchive", result: {} },
+    {
+      expect: "thread/fork",
+      result: { thread: { id: FAKE_FORKED_THREAD_ID } },
+    },
+    ...startTurn(),
+    {
+      notify: "turn/completed",
+      params: { threadId: FAKE_FORKED_THREAD_ID, turn: turn("completed") },
     },
   ],
   resume_archived: [
@@ -1753,6 +1834,12 @@ const playBrowse = async ({ threadStart, write, log }: PlayBrowseOptions) => {
   });
   // Kept on this computer, for the test to see what the agent read.
   log({ pageCanaries: browsed.read });
+  if (browsed.notes !== undefined) {
+    log({ readScenario: browsed.notes });
+  }
+  if (browsed.continued !== undefined) {
+    log({ continuedScenario: browsed.continued });
+  }
   const notifyItem = (phase: "started" | "completed", body: object) => {
     write({
       method: `item/${phase}`,

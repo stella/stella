@@ -19,18 +19,13 @@ import {
   parseBrowserControlResult,
   parseElementReference,
 } from "@stll/api-contract/browser-control";
-import { sleep } from "@stll/concurrency/sleep";
-
-import { browserControlError } from "./browser-control-result";
-import type { CommandBudget } from "./command-budget";
-import { readBrowserController } from "./controller";
-import { isControllableFrame, parseControllableUrl } from "./origin-policy";
+import { browserControlError } from "@stll/browser-page/browser-control-result";
 import {
   type FindRequest,
   type PageOperation,
   pageScript,
   SNAPSHOT_PURPOSE,
-} from "./page-script";
+} from "@stll/browser-page/page-script";
 import {
   findInPage,
   frameFoundSchema,
@@ -39,8 +34,7 @@ import {
   type PageReadFailure,
   type ReaderFrame,
   readPageWindow,
-} from "./page-window";
-import { shownDocumentOf, type ShownPdf } from "./shown-document";
+} from "@stll/browser-page/page-window";
 import {
   IDENTITY_PROVIDER_HOSTS,
   isIdentityProviderUrl,
@@ -48,13 +42,19 @@ import {
   SIGN_IN_MESSAGE,
   SIGN_IN_POLICY,
   type SignInPolicy,
-} from "./sign-in-policy";
+} from "@stll/browser-page/sign-in-policy";
 import {
   checkCommandIdentity,
   type LiveTopDocument,
   type SnapshotState,
   type TopDocument,
-} from "./snapshot-guard";
+} from "@stll/browser-page/snapshot-guard";
+import { sleep } from "@stll/concurrency/sleep";
+
+import type { CommandBudget } from "./command-budget";
+import { readBrowserController } from "./controller";
+import { isControllableFrame, parseControllableUrl } from "./origin-policy";
+import { shownDocumentOf, type ShownPdf } from "./shown-document";
 import { readStellaTabs } from "./stella-tabs";
 import { BROWSER_CONTROLLED_TAB_STORAGE_KEY } from "./storage-keys";
 import {

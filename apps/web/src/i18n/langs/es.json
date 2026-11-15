@@ -2093,6 +2093,7 @@
       "noResults": "Sin habilidades coincidentes",
       "tryOne": "Prueba uno de estos para empezar"
     },
+    "queuePrompt": "Enviar cuando el agente termine",
     "queuedAttachmentCount": "{count, plural, one {# adjunto} many {# adjuntos} other {# adjuntos}}",
     "queuedNotice": "En cola: se enviará cuando termine la respuesta actual",
     "reasoning": "Razonamiento",
@@ -6031,6 +6032,7 @@
         "title": "Agentes de programación en los ordenadores de los miembros",
         "updated": "Permisos de los agentes de programación actualizados"
       },
+      "logoInvalid": "Elige una imagen PNG, JPEG o WebP de hasta 5 MB.",
       "matterNumbering": "Numeración de asuntos",
       "matterNumberingDescription": "Configura cómo se generan los números de referencia de los asuntos nuevos",
       "membersDescription": "Gestiona quién tiene acceso a esta organización y las invitaciones pendientes",
@@ -6079,6 +6081,7 @@
         "title": "Zona horaria",
         "updated": "Zona horaria actualizada"
       },
+      "uploadLogo": "Subir logotipo",
       "usage": "Uso",
       "usageDescription": "Límites de uso y estado de la autorización de esta organización",
       "usageEmptyDescription": "Configura una autorización de uso para habilitar funciones de IA medidas en esta organización.",

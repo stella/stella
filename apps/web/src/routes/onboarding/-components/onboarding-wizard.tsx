@@ -1,4 +1,11 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import {
+  addTransitionType,
+  startTransition,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
@@ -61,7 +68,10 @@ import {
   isCatalogueEntryAvailableDuringOnboarding,
   reconcileCatalogueSlugsForJurisdictions,
 } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
-import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-layout";
+import {
+  ONBOARDING_TRANSITION_TYPE,
+  OnboardingLayout,
+} from "@/routes/onboarding/-components/onboarding-layout";
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
 import { AIStep } from "@/routes/onboarding/-components/steps/ai-step";
 import { CatalogueStep } from "@/routes/onboarding/-components/steps/catalogue-step";
@@ -126,6 +136,16 @@ export const OnboardingWizard = () => {
     nativeToolView.type === "items" ? nativeToolView.items : undefined;
   const userEmail = sessionData?.user.email ?? "";
   const [step, setStep] = useState<Step>("organization");
+  const navigateStep = (nextStep: Step) => {
+    startTransition(() => {
+      addTransitionType(
+        STEP_TO_PROGRESS[nextStep] > STEP_TO_PROGRESS[step]
+          ? ONBOARDING_TRANSITION_TYPE.forward
+          : ONBOARDING_TRANSITION_TYPE.backward,
+      );
+      setStep(nextStep);
+    });
+  };
   const [catalogueFocusedSlug, setCatalogueFocusedSlug] = useState<
     string | null
   >(null);
@@ -243,7 +263,7 @@ export const OnboardingWizard = () => {
       ],
     }));
     setCatalogueFocusedSlug(null);
-    setStep("catalogue");
+    navigateStep("catalogue");
   };
 
   const setCatalogueSlugRemoved = (slug: string, removed: boolean) => {
@@ -494,7 +514,11 @@ export const OnboardingWizard = () => {
       }
 
       setIsCreating(false);
-      setStep("download");
+      // Setup only ever moves on to the download step.
+      startTransition(() => {
+        addTransitionType(ONBOARDING_TRANSITION_TYPE.forward);
+        setStep("download");
+      });
     },
     [
       analytics,
@@ -590,7 +614,7 @@ export const OnboardingWizard = () => {
                 orgName: name,
               }));
               setPreviewOrgName(name);
-              setStep("jurisdiction");
+              navigateStep("jurisdiction");
             }}
           />
         </OnboardingLayout>
@@ -601,7 +625,7 @@ export const OnboardingWizard = () => {
       return (
         <OnboardingLayout
           currentStep={STEP_TO_PROGRESS.jurisdiction}
-          onBack={() => setStep("organization")}
+          onBack={() => navigateStep("organization")}
           preview={preview}
           totalSteps={TOTAL_STEPS}
         >
@@ -621,7 +645,7 @@ export const OnboardingWizard = () => {
               }));
               setJurisdictionSuggestionApplied(true);
               setCatalogueFocusedSlug(null);
-              setStep("catalogue");
+              navigateStep("catalogue");
             }}
           />
         </OnboardingLayout>
@@ -632,7 +656,7 @@ export const OnboardingWizard = () => {
       return (
         <OnboardingLayout
           currentStep={STEP_TO_PROGRESS.catalogue}
-          onBack={() => setStep("jurisdiction")}
+          onBack={() => navigateStep("jurisdiction")}
           preview={preview}
           totalSteps={TOTAL_STEPS}
         >
@@ -648,7 +672,7 @@ export const OnboardingWizard = () => {
               });
             }}
             onFocusChange={setCatalogueFocusedSlug}
-            onNext={() => setStep("ai")}
+            onNext={() => navigateStep("ai")}
             onRemove={(slug) => {
               setCatalogueSlugRemoved(slug, true);
               setData((d) => ({
@@ -662,7 +686,7 @@ export const OnboardingWizard = () => {
             onSkip={() => {
               markCatalogueSlugsRemoved(data.catalogueSlugs);
               setData((d) => ({ ...d, catalogueSlugs: [] }));
-              setStep("ai");
+              navigateStep("ai");
             }}
             practiceJurisdictions={data.practiceJurisdictions}
             selectedSlugs={data.catalogueSlugs}
@@ -680,7 +704,7 @@ export const OnboardingWizard = () => {
           currentStep={STEP_TO_PROGRESS.invite}
           preview={preview}
           totalSteps={TOTAL_STEPS}
-          {...(isCreating ? {} : { onBack: () => setStep("ai") })}
+          {...(isCreating ? {} : { onBack: () => navigateStep("ai") })}
         >
           <InviteStep
             isSubmitting={isCreating}
@@ -703,12 +727,12 @@ export const OnboardingWizard = () => {
       return (
         <OnboardingLayout
           currentStep={STEP_TO_PROGRESS.ai}
-          onBack={() => setStep("catalogue")}
+          onBack={() => navigateStep("catalogue")}
           preview={preview}
           totalSteps={TOTAL_STEPS}
         >
           <AIStep
-            onNext={() => setStep("invite")}
+            onNext={() => navigateStep("invite")}
             onPreviewChange={setPreviewAiProviders}
             onProvidersChange={(aiProviders) => {
               setData((d) => ({ ...d, aiProviders }));
@@ -719,7 +743,7 @@ export const OnboardingWizard = () => {
                 aiProviders: [createProviderCredentialDraft()],
               }));
               setPreviewAiProviders([]);
-              setStep("invite");
+              navigateStep("invite");
             }}
             providers={data.aiProviders}
           />

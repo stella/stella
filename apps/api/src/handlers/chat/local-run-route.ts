@@ -7,6 +7,7 @@ import type {
 import {
   DESKTOP_RUNNER_LINKED_FOLDER_STATE,
   type DesktopRunnerApprovalMode,
+  type DesktopRunnerHarnessCapability,
   type DesktopRunnerHarnessReport,
   type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
@@ -26,6 +27,8 @@ type LocalRunDestination = {
   model: string;
   reasoningEffort: DesktopRunnerReasoningEffort | null;
   approvals: DesktopRunnerApprovalMode;
+  /** What the harness on that computer reports it can do now. */
+  capabilities: readonly DesktopRunnerHarnessCapability[];
   /** The folder linked on that computer the run works in, if any. */
   linkedFolderId: string | null;
 };
@@ -126,6 +129,7 @@ export const routeLocalRun = async ({
           model: target.model,
           reasoningEffort: target.reasoningEffort,
           approvals: target.approvals,
+          capabilities: desktop.harness.capabilities,
           linkedFolderId: folder?.linkId ?? null,
         },
       });
