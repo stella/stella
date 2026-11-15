@@ -90,6 +90,17 @@ export const ORGANIZATION_SLUG_RULES = {
   pattern: /^[a-z0-9\x2d]+$/u,
 } as const;
 
+/**
+ * A logo is stored as a small raster data URL the client downscales before
+ * saving, so it renders on every page without a file route. SVG is excluded
+ * because it can carry script.
+ */
+export const ORGANIZATION_LOGO_RULES = {
+  edge: 96,
+  maxLength: 60_000,
+  pattern: /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/u,
+} as const;
+
 /** Random bytes behind an opaque organization slug. */
 export const ORGANIZATION_OPAQUE_SLUG_BYTES = 10;
 const OPAQUE_SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";

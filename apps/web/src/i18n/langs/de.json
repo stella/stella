@@ -6032,6 +6032,7 @@
         "title": "Coding-Agenten auf den Computern der Mitglieder",
         "updated": "Berechtigungen der Coding-Agenten aktualisiert"
       },
+      "logoInvalid": "Wählen Sie ein PNG-, JPEG- oder WebP-Bild mit höchstens 5 MB.",
       "matterNumbering": "Aktennummerierung",
       "matterNumberingDescription": "Konfigurieren Sie, wie neue Aktenzeichen erzeugt werden",
       "membersDescription": "Verwalten Sie, wer Zugriff auf diese Organisation hat, sowie ausstehende Einladungen",
@@ -6080,6 +6081,7 @@
         "title": "Zeitzone",
         "updated": "Zeitzone aktualisiert"
       },
+      "uploadLogo": "Logo hochladen",
       "usage": "Nutzung",
       "usageDescription": "Nutzungslimits und Berechtigungsstatus für diese Organisation",
       "usageEmptyDescription": "Konfigurieren Sie eine Nutzungsberechtigung, um gemessene KI-Funktionen für diese Organisation zu aktivieren.",

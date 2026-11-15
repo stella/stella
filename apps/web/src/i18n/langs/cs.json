@@ -6032,6 +6032,7 @@
         "title": "Programovací agenti v počítačích členů",
         "updated": "Oprávnění programovacích agentů byla aktualizována"
       },
+      "logoInvalid": "Vyberte obrázek PNG, JPEG nebo WebP o velikosti do 5 MB.",
       "matterNumbering": "Číslování spisů",
       "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",
       "membersDescription": "Spravujte, kdo má přístup k této organizaci, a čekající pozvánky",
@@ -6080,6 +6081,7 @@
         "title": "Časové pásmo",
         "updated": "Časové pásmo bylo aktualizováno"
       },
+      "uploadLogo": "Nahrát logo",
       "usage": "Využití",
       "usageDescription": "Limity využití a stav oprávnění pro tuto organizaci",
       "usageEmptyDescription": "Nakonfigurujte oprávnění k využití, aby organizace mohla používat měřené funkce AI.",

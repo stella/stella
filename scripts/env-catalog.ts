@@ -1514,6 +1514,11 @@ export const TOOLING_ENV_KEYS = new Set([
   // API contract's limits and hands it to the crate at compile time.
   "STELLA_EDITABLE_DOCUMENT_MAX_BYTES",
   "APPLE_TEAM_ID",
+  // The release workflow's Developer ID; the desktop's PKCS #11 helper build
+  // signs the helper with it before Tauri bundles the app.
+  "APPLE_SIGNING_IDENTITY",
+  // The ignored SoftHSM2 test of the PKCS #11 helper names the module to load.
+  "SOFTHSM2_MODULE",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",

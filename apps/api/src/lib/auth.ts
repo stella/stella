@@ -190,6 +190,7 @@ import {
   OAUTH_DISABLED_PATHS,
 } from "@/api/lib/auth/oauth-registration-policy";
 import { currentOrganizationCreationTransaction } from "@/api/lib/auth/organization-creation-transaction";
+import { requireOrganizationLogo } from "@/api/lib/auth/organization-logo-hooks";
 import { withBatchedOrganizationMemberships } from "@/api/lib/auth/organization-membership-adapter";
 import {
   beforeOrganizationSlugCreation,
@@ -1868,8 +1869,12 @@ export const createAuth = (
     roles,
     organizationHooks: {
       ...organizationLifecycleHooks,
-      beforeUpdateOrganization: beforeOrganizationSlugUpdate,
+      async beforeUpdateOrganization(update) {
+        requireOrganizationLogo(update.organization.logo);
+        await beforeOrganizationSlugUpdate(update);
+      },
       async beforeCreateOrganization({ user, organization: org }) {
+        requireOrganizationLogo(org.logo);
         await beforeOrganizationSlugCreation({ slug: org.slug });
         requireDemoAccountAccess(
           checkConfiguredDemoAccountAccess({
