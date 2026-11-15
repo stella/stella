@@ -1345,13 +1345,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::reserveCorpusProjectionIntentsTx",
-    "writes": {
-      "insert:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::startCorpusProjectionAppendTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 2

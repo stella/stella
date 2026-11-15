@@ -3826,6 +3826,24 @@ type CorpusProjectionReservationQueueOptions = {
   scopedIndexId: string | null;
   /** Physical indexes no append may reach yet (`unattestedCorpusIndexIdsTx`). */
   excludedIndexIds: readonly string[];
+  /**
+   * Start the walk after this queue key, exclusively. The key is the queue's
+   * own order, `coalesce(retry_not_before, updated_at)` as PostgreSQL text
+   * (exact to the microsecond) and the entity id, so a walker resumes where
+   * it stopped instead of reading its own unproven backlog again.
+   */
+  after?: CorpusProjectionReservationQueueKey | null;
+  /**
+   * Only entities that may travel with others. One a failed shared append
+   * isolated keeps to single requests, which only the per-row path sends.
+   */
+  batchableOnly?: boolean;
+};
+
+/** One position in the reservation queue's order. */
+export type CorpusProjectionReservationQueueKey = {
+  runnableAt: string;
+  entityId: string;
 };
 
 /**
@@ -3842,6 +3860,8 @@ export const corpusProjectionReservationQueue = (
     scopedEntityIds,
     scopedIndexId,
     excludedIndexIds,
+    after = null,
+    batchableOnly = false,
   }: CorpusProjectionReservationQueueOptions,
 ) => {
   const runnableAt = sql<Date>`coalesce(
@@ -3850,6 +3870,7 @@ export const corpusProjectionReservationQueue = (
   )`;
   return tx
     .select({
+      runnableAt: sql<string>`(${runnableAt})::text`,
       entityId: corpusIndexProjectionStates.entityId,
       epoch: corpusIndexProjectionStates.desiredEpoch,
       fingerprint: corpusIndexProjectionStates.desiredFingerprint,
@@ -3892,6 +3913,12 @@ export const corpusProjectionReservationQueue = (
           "retry_scheduled",
           "repair_scheduled",
         ]),
+        batchableOnly
+          ? eq(corpusIndexProjectionStates.appendMode, "batchable")
+          : undefined,
+        after === null
+          ? undefined
+          : sql`(${runnableAt}, ${corpusIndexProjectionStates.entityId}) > (${after.runnableAt}::timestamptz, ${after.entityId})`,
         lte(runnableAt, eligibilityAt),
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
         pendingDesiredState,

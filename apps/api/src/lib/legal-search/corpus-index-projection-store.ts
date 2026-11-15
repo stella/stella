@@ -21,6 +21,7 @@ import {
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
   corpusProjectionReservationQueue,
+  type CorpusProjectionReservationQueueKey,
   lockCorpusProjectionAcceptedRows,
 } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -42,6 +43,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   type CorpusProjectionPresenceCensus,
   type CorpusProjectionPresenceProof,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -149,6 +151,59 @@ export const reserveCorpusProjectionIntentsTx = async <
   Family extends CorpusFamily,
 >(
   tx: Transaction,
+  options: ReserveCorpusProjectionIntentsOptions<Family>,
+): Promise<CorpusProjectionIntentLease[]> =>
+  (await reserveFromQueueTx(tx, options, { after: null, batchableOnly: false }))
+    .leases;
+
+type ReserveCorpusProjectionRoutePageOptions<Family extends CorpusFamily> =
+  Omit<ReserveCorpusProjectionIntentsOptions<Family>, "scope"> & {
+    indexId: string;
+    /** The previous page's `cursor`, or null to walk from the queue's head. */
+    after: CorpusProjectionReservationQueueKey | null;
+  };
+
+export type CorpusProjectionRoutePage = {
+  leases: CorpusProjectionIntentLease[];
+  /**
+   * The last queue position this page read, whether or not it reserved it;
+   * the next page starts after it. Null only when the walk has read nothing
+   * yet. A page that read nothing returns the cursor it was given.
+   */
+  cursor: CorpusProjectionReservationQueueKey | null;
+  /** The page read fewer candidates than its limit: the walk is at its end. */
+  exhausted: boolean;
+};
+
+/**
+ * One page of a walk over one route's reservation queue, for a producer that
+ * reserves many pages in a row. The reservation is the per-row path's own
+ * (same queue, same per-entity claim, same leases); the page only starts
+ * after the previous page's last position, so reserved and unproven entities
+ * at the head of the queue are not read again on every page. Correctness
+ * still rests on the claim, not the cursor: a state whose position moves
+ * behind the cursor is left to the per-row path, which owns completeness.
+ * Only batchable entities are taken; one isolated into single requests stays
+ * with the per-row path.
+ */
+export const reserveCorpusProjectionRoutePageTx = async <
+  Family extends CorpusFamily,
+>(
+  tx: Transaction,
+  {
+    indexId,
+    after,
+    ...options
+  }: ReserveCorpusProjectionRoutePageOptions<Family>,
+): Promise<CorpusProjectionRoutePage> =>
+  await reserveFromQueueTx(
+    tx,
+    { ...options, scope: { type: "route", indexId } },
+    { after, batchableOnly: true },
+  );
+
+const reserveFromQueueTx = async <Family extends CorpusFamily>(
+  tx: Transaction,
   {
     family,
     generation,
@@ -159,7 +214,15 @@ export const reserveCorpusProjectionIntentsTx = async <
     newIntentId = () => createSafeId<"corpusIndexProjectionIntent">(),
     newLeaseToken = () => Bun.randomUUIDv7(),
   }: ReserveCorpusProjectionIntentsOptions<Family>,
-): Promise<CorpusProjectionIntentLease[]> => {
+  {
+    after,
+    batchableOnly,
+  }: {
+    after: CorpusProjectionReservationQueueKey | null;
+    batchableOnly: boolean;
+  },
+): Promise<CorpusProjectionRoutePage> => {
+  // audit: skip - reservation bookkeeping on the derived public corpus projection
   const limit = validateBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
@@ -171,7 +234,7 @@ export const reserveCorpusProjectionIntentsTx = async <
   const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
   const excludedIndexIds = await unattestedCorpusIndexIdsTx(tx, manifest);
   if (scopedIndexId !== null && excludedIndexIds.includes(scopedIndexId)) {
-    return [];
+    return { leases: [], cursor: after, exhausted: true };
   }
   const eligibilityAt = testNow ?? (await readPostgresClock(tx));
   const candidates = await corpusProjectionReservationQueue(tx, {
@@ -182,10 +245,18 @@ export const reserveCorpusProjectionIntentsTx = async <
     scopedEntityIds,
     scopedIndexId,
     excludedIndexIds,
+    after,
+    batchableOnly,
   });
 
+  const last = candidates.at(-1);
+  const cursor =
+    last === undefined
+      ? after
+      : { runnableAt: last.runnableAt, entityId: last.entityId };
+  const exhausted = candidates.length < limit;
   if (candidates.length === 0) {
-    return [];
+    return { leases: [], cursor, exhausted };
   }
   const leaseExpiresAt =
     testNow === undefined
@@ -279,7 +350,7 @@ export const reserveCorpusProjectionIntentsTx = async <
       appendMode: reservation.appendMode,
     });
   }
-  return leases;
+  return { leases, cursor, exhausted };
 };
 
 /**
@@ -482,11 +553,13 @@ export const startCorpusProjectionAppendBatchTx = async (
   tx: Transaction,
   { leases, testNow }: StartCorpusProjectionAppendBatchOptions,
 ): Promise<CorpusProjectionAppendStart[]> =>
-  await startAppendBatchTx(tx, {
-    leases,
-    delivery: { type: "ingest_api" },
-    testNow,
-  });
+  (
+    await startAppendBatchTx(tx, {
+      leases,
+      delivery: { type: "ingest_api" },
+      testNow,
+    })
+  ).revisions;
 
 type OfflineCorpusProjectionAppendLease = {
   lease: CorpusProjectionIntentLease;
@@ -505,12 +578,13 @@ type StartCorpusProjectionOfflineAppendBatchOptions = {
  * every document the indexer can write belongs to a started row. The run must
  * be killed by `corpusProjectionOfflineIndexerKillDeadline` of this start; an
  * expired start is then proven by census instead of cleaned up
- * (`recoverExpiredCorpusProjectionIntentsTx`).
+ * (`recoverExpiredCorpusProjectionIntentsTx`). `startedAt` is the instant
+ * every started revision stores, which that deadline counts from.
  */
 export const startCorpusProjectionOfflineAppendBatchTx = async (
   tx: Transaction,
   { leases, testNow }: StartCorpusProjectionOfflineAppendBatchOptions,
-): Promise<CorpusProjectionAppendStart[]> => {
+): Promise<CorpusProjectionOfflineAppendStart> => {
   if (
     leases.some(
       ({ expectedDocumentCount }) =>
@@ -558,6 +632,12 @@ const startDelivery = (delivery: CorpusProjectionAppendStartDelivery) => {
   }
 };
 
+export type CorpusProjectionOfflineAppendStart = {
+  /** The start instant, on the PostgreSQL clock, of every started revision. */
+  startedAt: Date;
+  revisions: CorpusProjectionAppendStart[];
+};
+
 const startAppendBatchTx = async (
   tx: Transaction,
   {
@@ -567,7 +647,7 @@ const startAppendBatchTx = async (
   }: StartCorpusProjectionAppendBatchOptions & {
     delivery: CorpusProjectionAppendStartDelivery;
   },
-): Promise<CorpusProjectionAppendStart[]> => {
+): Promise<CorpusProjectionOfflineAppendStart> => {
   // audit: skip - append bookkeeping on the derived public corpus projection
   const first = leases.at(0);
   if (
@@ -698,7 +778,7 @@ const startAppendBatchTx = async (
     )
     .returning({ id: corpusIndexProjectionIntents.id });
   const cancelledIds = new Set(cancelled.map(({ id }) => id));
-  return leases.map(({ intentId }) => {
+  const revisions = leases.map(({ intentId }) => {
     if (startedIds.has(intentId)) {
       return {
         intentId,
@@ -716,6 +796,7 @@ const startAppendBatchTx = async (
       status: "lease_lost",
     } satisfies CorpusProjectionAppendStart;
   });
+  return { startedAt: transitionAt, revisions };
 };
 
 /** A multipart revision owns the same lease throughout its sequential requests. */
@@ -2005,6 +2086,93 @@ export const readProvableCorpusProjectionAppendsTx = async <
         documentCount ??
         panic(`Committed projection intent has no document count: ${revision}`),
     })),
+    censusStart,
+  };
+};
+
+type ReadCommittedCorpusProjectionRevisionsOptions = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+  /** The revisions a caller wrote and wants decided, at most one census. */
+  revisions: readonly ProjectionIntentId[];
+  testNow?: Date | undefined;
+};
+
+export type CommittedCorpusProjectionRevisions = {
+  /** Committed and past their barrier: what one census may decide now. */
+  provable: { revision: ProjectionIntentId; documentCount: number }[];
+  /** Committed, with a barrier still ahead. */
+  unpublished: ProjectionIntentId[];
+  /** No longer committed: decided, erased or recovered by another actor. */
+  settled: ProjectionIntentId[];
+  /** Read before the revisions, so before any census of them. */
+  censusStart: CorpusProjectionCensusStart;
+};
+
+/**
+ * The state of revisions a caller names, for a proof of exactly those: the
+ * offline build proves the revisions it delivered rather than whichever the
+ * index's oldest barriers name. Plain reads, like the proof cycle's: the
+ * proof transaction re-checks each revision under its locks.
+ */
+export const readCommittedCorpusProjectionRevisionsTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    indexId,
+    revisions,
+    testNow,
+  }: ReadCommittedCorpusProjectionRevisionsOptions,
+): Promise<CommittedCorpusProjectionRevisions> => {
+  if (
+    revisions.length === 0 ||
+    revisions.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS ||
+    new Set(revisions).size !== revisions.length
+  ) {
+    return panic(
+      `A committed revision read must name 1 to ${CORPUS_PROJECTION_DELETE_MAX_REVISIONS} unique revisions`,
+    );
+  }
+  const censusStart = new CorpusProjectionCensusStart(
+    CENSUS_START_CONSTRUCTION,
+    testNow ?? (await readPostgresClock(tx)),
+  );
+  const rows = await tx
+    .select({
+      revision: corpusIndexProjectionIntents.id,
+      documentCount: corpusIndexProjectionIntents.expectedDocumentCount,
+      published: sql<boolean>`${corpusIndexProjectionIntents.appendPublishBarrierAt} <= ${censusStart.at}::timestamptz`,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, [...revisions]),
+        eq(corpusIndexProjectionIntents.family, family),
+        eq(corpusIndexProjectionIntents.generation, generation),
+        eq(corpusIndexProjectionIntents.indexId, indexId),
+        eq(corpusIndexProjectionIntents.status, "append_committed"),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(revisions.length);
+  const committed = new Set(rows.map(({ revision }) => revision));
+  return {
+    provable: rows
+      .filter(({ published }) => published)
+      .map(({ revision, documentCount }) => ({
+        revision,
+        documentCount:
+          documentCount ??
+          panic(
+            `Committed projection intent has no document count: ${revision}`,
+          ),
+      })),
+    unpublished: rows
+      .filter(({ published }) => !published)
+      .map(({ revision }) => revision),
+    settled: revisions.filter((revision) => !committed.has(revision)),
     censusStart,
   };
 };
