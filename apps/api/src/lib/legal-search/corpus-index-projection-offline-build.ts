@@ -406,8 +406,8 @@ export type CorpusProjectionOfflineBuildProgress = {
   awaitingProof: number;
   /**
    * Revisions of the route, by any actor, still started or committed and
-   * undecided, counted (up to a cap) once a pass reserved nothing. Zero
-   * whenever the run ends `drained`.
+   * undecided, counted once a pass reserved nothing. Zero whenever the run
+   * ends `drained`.
    */
   outstanding: number;
   censusFailures: number;
@@ -537,11 +537,6 @@ const SWEEP_MAX_PAGES = 8;
 const SWEEP_EVERY_SHARDS = 8;
 /** Proof cycles a run takes at its start for an earlier run's revisions. */
 const RECOVERY_PROOF_MAX_PASSES = 8;
-/**
- * The most outstanding revisions of a route one statement counts before a
- * run may call it drained; the count only has to tell zero from more.
- */
-const CORPUS_PROJECTION_OFFLINE_OUTSTANDING_COUNT_CAP = 10_000;
 /**
  * Rounds of sweep and recovery a run spends settling what is outstanding on
  * its route before it reports `drained`; a round that settles nothing ends
@@ -961,29 +956,27 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
 
   /**
    * Revisions of the route started or committed and not decided yet, by any
-   * actor, up to a cap: one bounded statement.
+   * actor: one count over the in-flight and proof indexes, one row back.
    */
   async #countOutstanding(): Promise<number> {
     const { runInTransaction, family, generation, indexId } = this.#options;
-    const [row] = await runInTransaction(async (tx) => {
-      const outstanding = tx
-        .select({ id: corpusIndexProjectionIntents.id })
-        .from(corpusIndexProjectionIntents)
-        .where(
-          and(
-            eq(corpusIndexProjectionIntents.family, family),
-            eq(corpusIndexProjectionIntents.generation, generation),
-            eq(corpusIndexProjectionIntents.indexId, indexId),
-            inArray(corpusIndexProjectionIntents.status, [
-              "append_started",
-              "append_committed",
-            ]),
+    const [row] = await runInTransaction(
+      async (tx) =>
+        await tx
+          .select({ count: count() })
+          .from(corpusIndexProjectionIntents)
+          .where(
+            and(
+              eq(corpusIndexProjectionIntents.family, family),
+              eq(corpusIndexProjectionIntents.generation, generation),
+              eq(corpusIndexProjectionIntents.indexId, indexId),
+              inArray(corpusIndexProjectionIntents.status, [
+                "append_started",
+                "append_committed",
+              ]),
+            ),
           ),
-        )
-        .limit(CORPUS_PROJECTION_OFFLINE_OUTSTANDING_COUNT_CAP)
-        .as("outstanding");
-      return await tx.select({ count: count() }).from(outstanding);
-    });
+    );
     return row?.count ?? 0;
   }
 
