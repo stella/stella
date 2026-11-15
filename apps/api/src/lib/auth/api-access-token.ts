@@ -290,6 +290,20 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/older-messages/list.ts",
   },
+  // What a coding agent's step on the person's computer produced, as stella
+  // stores it with the conversation, and a chat file such as the image a
+  // step viewed. Both read only the caller's own threads: the step's row
+  // joins its thread, the file its thread and owner.
+  "GET /v1/chat/threads/:threadId/local-run-steps/:callId/content": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/local-run-step-content.ts",
+    uncataloged: "chat_thread_ui",
+  },
+  "GET /v1/user-files/:fileId/content": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/user-files/read-content.ts",
+    uncataloged: "upload_mechanics",
+  },
   // A message goes up with the files attached to it, as the web sends them:
   // each file rides in the message as a data URL part, and the handler scans
   // and stores it (`uploadMessageFiles`) under the thread, matter and

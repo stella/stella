@@ -339,6 +339,7 @@ describe("drawing an answer from its events", () => {
         description: "Check the lease",
         agentType: null,
         status: "done",
+        conversationCallId: "agent",
         stepCount: 1,
         steps: [
           {
@@ -347,6 +348,7 @@ describe("drawing an answer from its events", () => {
             titleKind: null,
             subtitle: { type: "text", text: "rg lease" },
             status: "done",
+            contentCallId: "step",
           },
         ],
       },
@@ -360,6 +362,7 @@ describe("drawing an answer from its events", () => {
             titleKind: null,
             subtitle: { type: "text", text: "ls" },
             status: "done",
+            contentCallId: "loose",
           },
           { type: "tool", label: "list_templates", status: "running" },
         ],

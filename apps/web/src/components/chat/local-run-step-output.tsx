@@ -8,6 +8,12 @@ import {
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE,
   chatLocalRunStepContentCap,
 } from "@stll/api-contract/chat-local-run-step-content";
+import {
+  diffLines,
+  type DiffLineTone,
+  localRunConversationEntries,
+  type LocalRunStepOutputView,
+} from "@stll/api-contract/chat-local-run-step-content-view";
 import type { ChatLocalRunConversationEntry } from "@stll/api-contract/chat-local-run-step-output";
 import {
   type LocalRunStepOutputKind,
@@ -15,6 +21,7 @@ import {
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import { Button } from "@stll/ui/button";
+import { formatFileSize } from "@stll/ui/file-size";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
@@ -23,17 +30,10 @@ import { isRunningToolPart } from "@/components/chat/chat-ui-tools";
 import { CopyControl } from "@/components/copy-control";
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { localRunStepOutputOptions } from "@/features/chat/local-run-step-output";
-import {
-  diffLines,
-  type DiffLineTone,
-  localRunConversationEntries,
-  type LocalRunStepOutputView,
-} from "@/features/chat/local-run-step-output.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { formatFileSize } from "@/lib/file-size";
 import { queryView } from "@/lib/query-view.logic";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";

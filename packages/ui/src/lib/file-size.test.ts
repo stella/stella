@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { getFileSizeDisplay } from "@/lib/file-size";
+import { getFileSizeDisplay } from "./file-size";
 
 describe("file size display", () => {
   test("selects a readable decimal unit", () => {

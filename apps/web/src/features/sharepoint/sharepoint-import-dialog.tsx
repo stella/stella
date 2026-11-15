@@ -31,6 +31,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { formatFileSize } from "@stll/ui/file-size";
 import {
   ChevronRightIcon,
   GlobeIcon,
@@ -69,7 +70,6 @@ import {
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { formatFileSize } from "@/lib/file-size";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 

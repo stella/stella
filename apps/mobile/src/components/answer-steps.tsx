@@ -10,6 +10,7 @@ import { Text } from "@stll/ui/text";
 
 import { keyedBy } from "@/components/keyed";
 import { useLocalRunSubtitleText } from "@/components/local-run-subtitle";
+import { StepContentView } from "@/components/step-content";
 import { ChevronDownIcon, ChevronRightIcon } from "@/icons.gen";
 import type { AnswerBlock, AnswerStep } from "@/state/chat-answer";
 import { useAppColors } from "@/theme";
@@ -90,9 +91,10 @@ const SUBAGENT_STATUS_KEYS = {
 /**
  * A subagent a coding agent started on the person's computer, as the web's
  * card shows it: what it was started for, the kind of agent, how many steps
- * it took and its one status, with the steps it took inside. It is open
- * while the subagent works and folded once it settles, until the person
- * taps it; from then on it stays as they left it.
+ * it took and its one status, with its own conversation, once it ended, and
+ * the steps it took inside. It is open while the subagent works and folded
+ * once it settles, until the person taps it; from then on it stays as they
+ * left it.
  */
 export const AnswerSubagent = ({
   block,
@@ -103,9 +105,10 @@ export const AnswerSubagent = ({
   const colors = useAppColors();
   const [chosen, setChosen] = useState<"open" | "closed" | null>(null);
   const hasSteps = block.steps.length > 0;
+  const opens = hasSteps || block.conversationCallId !== null;
   const working =
     block.status === "running" || block.status === "needs_approval";
-  const open = hasSteps && (chosen === null ? working : chosen === "open");
+  const open = opens && (chosen === null ? working : chosen === "open");
   const statusKey = SUBAGENT_STATUS_KEYS[block.status];
   const facts = [
     block.agentType,
@@ -115,7 +118,7 @@ export const AnswerSubagent = ({
   const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
   const header = (
     <>
-      {hasSteps ? <Chevron color={colors.muted} size={14} /> : null}
+      {opens ? <Chevron color={colors.muted} size={14} /> : null}
       <View style={styles.subagentText}>
         <Text numberOfLines={1} style={[styles.label, { color: colors.text }]}>
           {t("localRun.title.subagent")}
@@ -146,7 +149,7 @@ export const AnswerSubagent = ({
 
   return (
     <View style={styles.run}>
-      {hasSteps ? (
+      {opens ? (
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
@@ -161,7 +164,14 @@ export const AnswerSubagent = ({
       ) : (
         <View style={frame}>{header}</View>
       )}
-      {open ? <StepList steps={block.steps} /> : null}
+      {/* Read from stella only once the person opens it. */}
+      {open && block.conversationCallId !== null ? (
+        <StepContentView
+          callId={block.conversationCallId}
+          name={block.description ?? ""}
+        />
+      ) : null}
+      {open && hasSteps ? <StepList steps={block.steps} /> : null}
     </View>
   );
 };
@@ -193,8 +203,26 @@ const useStepTitle = () => {
 const StepList = ({ steps }: { steps: readonly AnswerStep[] }) => {
   const colors = useAppColors();
   const stepTitle = useStepTitle();
+
+  return (
+    <View style={[styles.steps, { borderColor: colors.border }]}>
+      {keyedBy(steps, stepTitle).map(({ item: step, key }) => (
+        <StepRow key={key} step={step} title={stepTitle(step)} />
+      ))}
+    </View>
+  );
+};
+
+/**
+ * One step: its title and what it was about. A coding agent's settled step
+ * that produced something (a command's output, a diff, an image) opens
+ * onto it, as its row does on the web.
+ */
+const StepRow = ({ step, title }: { step: AnswerStep; title: string }) => {
+  const colors = useAppColors();
   const localRunSubtitleText = useLocalRunSubtitleText();
-  const about = (step: AnswerStep): string | null => {
+  const [open, setOpen] = useState(false);
+  const about = (): string | null => {
     switch (step.type) {
       case "reasoning":
         return step.text === "" ? null : step.text;
@@ -208,34 +236,51 @@ const StepList = ({ steps }: { steps: readonly AnswerStep[] }) => {
         return panic("Unhandled answer step");
     }
   };
+  const detail = about();
+  const contentCallId = step.type === "local" ? step.contentCallId : null;
+  const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
+  const label = (
+    <Text
+      style={[
+        styles.label,
+        {
+          color:
+            step.type !== "reasoning" && step.status === "failed"
+              ? colors.muted
+              : colors.text,
+        },
+      ]}
+    >
+      {title}
+    </Text>
+  );
 
   return (
-    <View style={[styles.steps, { borderColor: colors.border }]}>
-      {keyedBy(steps, stepTitle).map(({ item: step, key }) => {
-        const detail = about(step);
-        return (
-          <View key={key} style={styles.step}>
-            <Text
-              style={[
-                styles.label,
-                {
-                  color:
-                    step.type !== "reasoning" && step.status === "failed"
-                      ? colors.muted
-                      : colors.text,
-                },
-              ]}
-            >
-              {stepTitle(step)}
-            </Text>
-            {detail === null || detail === "" ? null : (
-              <Text selectable style={[styles.detail, { color: colors.muted }]}>
-                {detail}
-              </Text>
-            )}
-          </View>
-        );
-      })}
+    <View style={styles.step}>
+      {contentCallId === null ? (
+        label
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+          hitSlop={6}
+          onPress={() => {
+            setOpen((shown) => !shown);
+          }}
+          style={styles.opens}
+        >
+          {label}
+          <Chevron color={colors.muted} size={14} />
+        </Pressable>
+      )}
+      {detail === null || detail === "" ? null : (
+        <Text selectable style={[styles.detail, { color: colors.muted }]}>
+          {detail}
+        </Text>
+      )}
+      {open && contentCallId !== null ? (
+        <StepContentView callId={contentCallId} name={detail ?? ""} />
+      ) : null}
     </View>
   );
 };
@@ -253,6 +298,11 @@ const styles = StyleSheet.create({
   run: {
     alignItems: "flex-start",
     gap: 6,
+  },
+  opens: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4,
   },
   step: {
     gap: 2,

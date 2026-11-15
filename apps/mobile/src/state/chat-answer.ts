@@ -11,6 +11,7 @@ import {
   isLocalRunInterruptedOutput,
   type LocalRunStepCall,
   localRunStepFailed,
+  localRunStepOutputKind,
   type LocalRunStepStanding,
   localRunSubagentGroups,
   type LocalRunSubagentStatus,
@@ -66,6 +67,12 @@ export type AnswerStep =
       readonly titleKind: LocalRunToolTitleKind | null;
       readonly subtitle: LocalRunToolSubtitle | null;
       readonly status: StepStatus;
+      /**
+       * The call whose stored content (a command's output, a diff, an image
+       * it viewed) the step opens onto; null for a step still running, and
+       * for one that produced nothing to open.
+       */
+      readonly contentCallId: string | null;
     }
   | { readonly type: "reasoning"; readonly text: string };
 
@@ -94,6 +101,11 @@ export type AnswerBlock =
       readonly description: string | null;
       readonly agentType: string | null;
       readonly status: LocalRunSubagentStatus;
+      /**
+       * The call its own conversation (what it was told, wrote and reported)
+       * is read by, once it ended with a result; null while it works.
+       */
+      readonly conversationCallId: string | null;
       /** Every step it took, one that waits on an approval included. */
       readonly stepCount: number;
       /**
@@ -121,8 +133,28 @@ const toStep = (part: AnswerPart): AnswerStep => {
   });
   return local === null
     ? { type: "tool", label, status }
-    : { type: "local", label, status, ...local };
+    : {
+        type: "local",
+        label,
+        status,
+        ...local,
+        contentCallId: contentCallId(part),
+      };
 };
+
+/**
+ * The call a step's stored content is read by: only a call that ended with
+ * a result, as the web offers it, of a kind a coding agent's step stores.
+ */
+const contentCallId = (part: AnswerPart): string | null =>
+  typeof part.id === "string" &&
+  part.output !== undefined &&
+  localRunStepOutputKind({
+    name: typeof part.name === "string" ? part.name : "",
+    input: part.input,
+  }) !== null
+    ? part.id
+    : null;
 
 /** A call runs until it completes; it failed when it errored or said so. */
 const stepStatus = (part: AnswerPart): StepStatus => {
@@ -240,6 +272,7 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
         own: ownStanding,
         steps: taken.map(({ part }) => stepStanding(part)),
       }),
+      conversationCallId: contentCallId(own),
       stepCount: taken.length,
       steps: taken
         .filter((step) => groups.rowIn.has(step.id))

@@ -228,6 +228,22 @@
         "running": "Töös",
         "failed": "Ebaõnnestus",
         "interrupted": "Peatatud"
+      },
+      "output": {
+        "command": "Väljund",
+        "diff": "Failimuudatused",
+        "conversation": "Alamagendi vestlus",
+        "conversationPrompt": "Ülesanne",
+        "conversationReport": "Aruanne",
+        "cut": "Kuvatakse esimesed {kept} (kokku {total})",
+        "empty": "Väljund puudub",
+        "arriving": "Saabub endiselt arvutist, kus see samm käivitati",
+        "notCopied": "Sellesse vestlusesse pole veel kopeeritud",
+        "notStored": "Sellest sammust ei salvestatud midagi",
+        "runBudgetReached": "Ei salvestatud: see käivitus oli juba salvestanud nii palju, kui üks käivitus tohib",
+        "imageTooLargeToStore": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte ei salvestata, seega ei saa seda kuvada.",
+        "loadFailed": "Laadimine ebaõnnestus.",
+        "showMore": "Näita rohkem"
       }
     },
     "processSummary": {

@@ -228,6 +228,22 @@
         "running": "W toku",
         "failed": "Niepowodzenie",
         "interrupted": "Zatrzymano"
+      },
+      "output": {
+        "command": "Wynik",
+        "diff": "Zmiany w plikach",
+        "conversation": "Rozmowa subagenta",
+        "conversationPrompt": "Zadanie",
+        "conversationReport": "Raport",
+        "cut": "Wyświetlono pierwsze {kept} z {total}",
+        "empty": "Brak wyniku",
+        "arriving": "Wciąż napływa z komputera, na którym uruchomiono ten krok",
+        "notCopied": "Jeszcze nie skopiowano do tego czatu",
+        "notStored": "Z tego kroku nic nie zostało zapisane",
+        "runBudgetReached": "Nie zapisano: to uruchomienie zapisało już tyle, ile może zapisać jedno uruchomienie",
+        "imageTooLargeToStore": "Ten obraz ma {total}. Obrazy większe niż {kept} nie są zapisywane, dlatego nie można go wyświetlić.",
+        "loadFailed": "Nie udało się wczytać.",
+        "showMore": "Pokaż więcej"
       }
     },
     "processSummary": {
