@@ -475,6 +475,78 @@ export const buildCaseLawProjectionConvergenceMetric = (status: string) => ({
   status,
 });
 
+export const CORPUS_PROJECTION_UNSERVED_METRIC = {
+  entities: "CorpusProjectionUnservedEntities",
+  oldestAgeSeconds: "CorpusProjectionUnservedOldestAgeSeconds",
+} as const;
+
+/** `at_least` when the count stopped at its cap. */
+type CorpusProjectionUnservedCountBound = "exact" | "at_least";
+
+/** A generation's record sums its indexes; an index record names one. */
+type CorpusProjectionUnservedMetricScope =
+  { type: "generation" } | { type: "index"; indexId: string };
+
+/** An unknown age emits no age field: a lower bound would read as the age. */
+type CorpusProjectionUnservedMetricAge =
+  { type: "measured"; seconds: number } | { type: "unknown" };
+
+type CorpusProjectionUnservedMetricInput = {
+  family: string;
+  generation: string;
+  kind: "at_risk" | "absent";
+  scope: CorpusProjectionUnservedMetricScope;
+  entities: number;
+  countBound: CorpusProjectionUnservedCountBound;
+  oldestAge: CorpusProjectionUnservedMetricAge;
+};
+
+const unservedMetricScopeFields = (
+  scope: CorpusProjectionUnservedMetricScope,
+) => {
+  switch (scope.type) {
+    case "generation":
+      return { scope: scope.type };
+    case "index":
+      return { scope: scope.type, indexId: scope.indexId };
+    default:
+      scope satisfies never;
+      return panic("Unhandled unserved metric scope");
+  }
+};
+
+const unservedMetricAgeFields = (age: CorpusProjectionUnservedMetricAge) => {
+  switch (age.type) {
+    case "measured":
+      return {
+        [CORPUS_PROJECTION_UNSERVED_METRIC.oldestAgeSeconds]: age.seconds,
+      };
+    case "unknown":
+      return {};
+    default:
+      age satisfies never;
+      return panic("Unhandled unserved metric age");
+  }
+};
+
+export const buildCorpusProjectionUnservedMetric = ({
+  family,
+  generation,
+  kind,
+  scope,
+  entities,
+  countBound,
+  oldestAge,
+}: CorpusProjectionUnservedMetricInput) => ({
+  [CORPUS_PROJECTION_UNSERVED_METRIC.entities]: entities,
+  ...unservedMetricAgeFields(oldestAge),
+  family,
+  generation,
+  kind,
+  ...unservedMetricScopeFields(scope),
+  countBound,
+});
+
 export const REQUEST_CLASSES = [
   "ai",
   "crud",

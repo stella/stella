@@ -90,6 +90,7 @@ export { default as indexes_contacts_data_box_ids_idx } from "./online-migration
 export { default as indexes_contacts_org_id_unique } from "./online-migration-entries/indexes-contacts-org-id-unique";
 export { default as indexes_corpus_index_projection_intents_proof_idx } from "./online-migration-entries/indexes-corpus-index-projection-intents-proof-idx";
 export { default as indexes_corpus_index_projection_states_append_route_idx } from "./online-migration-entries/indexes-corpus-index-projection-states-append-route-idx";
+export { default as indexes_corpus_projection_unserved_gauge } from "./online-migration-entries/indexes-corpus-projection-unserved-gauge";
 export { default as indexes_correspondence_attachments_ws_entity_idx } from "./online-migration-entries/indexes-correspondence-attachments-ws-entity-idx";
 export { default as indexes_correspondence_ws_source_entity_uidx } from "./online-migration-entries/indexes-correspondence-ws-source-entity-uidx";
 export { default as indexes_document_outstanding_date_index } from "./online-migration-entries/indexes-document-outstanding-date-index";
