@@ -6031,6 +6031,7 @@
         "title": "Programavimo agentai narių kompiuteriuose",
         "updated": "Programavimo agentų leidimai atnaujinti"
       },
+      "logoInvalid": "Pasirinkite iki 5 MB dydžio PNG, JPEG arba WebP paveikslėlį.",
       "matterNumbering": "Bylų numeravimas",
       "matterNumberingDescription": "Nustatykite, kaip generuojami naujų bylų numeriai",
       "membersDescription": "Tvarkykite, kas turi prieigą prie šios organizacijos, ir laukiančius kvietimus",
@@ -6079,6 +6080,7 @@
         "title": "Laiko juosta",
         "updated": "Laiko juosta atnaujinta"
       },
+      "uploadLogo": "Įkelti logotipą",
       "usage": "Naudojimas",
       "usageDescription": "Šios organizacijos naudojimo limitai ir teisės būsena",
       "usageEmptyDescription": "Sukonfigūruokite naudojimo teisę, kad šiai organizacijai būtų įjungtos matuojamos DI funkcijos.",
