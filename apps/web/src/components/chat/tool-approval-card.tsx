@@ -16,7 +16,6 @@ import { browserSiteGrantHost } from "@stll/api-contract/browser-site-grants";
 import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import {
   localRunProposedPlan,
-  localRunToolSubtitleText,
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import {
@@ -70,6 +69,7 @@ import type {
   PendingApprovalToolPart,
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
+import { useLocalRunSubtitleText } from "@/components/chat/local-run-subtitle";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import {
   describeProposedDocxEdits,
@@ -565,6 +565,16 @@ const approvalTitleKey = (name: ApprovalToolName, part: ApprovalToolPart) => {
     : LOCAL_RUN_TITLE_KEYS[titleKind];
 };
 
+/**
+ * A card the thread already waited on when the page opened is the user's to
+ * answer: answering it on its own would resume tool work on a reopened thread
+ * with no one asking.
+ */
+const awaitedAtOpen = (
+  approvalId: string | null,
+  approvalIdsAwaitedAtOpen: ReadonlySet<string>,
+) => approvalId !== null && approvalIdsAwaitedAtOpen.has(approvalId);
+
 export const ToolApprovalCard = ({
   action,
   activeFileName,
@@ -574,6 +584,7 @@ export const ToolApprovalCard = ({
 }: ToolApprovalCardProps) => {
   const {
     activeOrganizationId,
+    approvalIdsAwaitedAtOpen,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -647,6 +658,7 @@ export const ToolApprovalCard = ({
       : async () => await browserApproval.confirmSiteGrant(part.id);
   const shouldAutoApprove =
     !isBlocked &&
+    !awaitedAtOpen(approvalId, approvalIdsAwaitedAtOpen) &&
     !requiresPerCallChatApproval(name) &&
     (isGrantAutoApproval ||
       browserApproval.isReadsAutoApproval ||
@@ -948,9 +960,9 @@ const ToolApprovalSummary = ({
 
 /**
  * What a coding agent on the member's computer asks to do, as its step row
- * names it (a command, file names, a web search's query), so the member
- * approves the step itself rather than a tool name. Nothing for any other
- * tool.
+ * names it (a command, file names, a web search's query, the key a browser
+ * step presses on which element of which page), so the member approves the
+ * step itself rather than a tool name. Nothing for any other tool.
  */
 const LocalRunToolSummary = ({
   input,
@@ -959,15 +971,9 @@ const LocalRunToolSummary = ({
   input: unknown;
   name: string;
 }) => {
-  const t = useTranslations();
+  const localRunSubtitleText = useLocalRunSubtitleText();
   const view = localRunToolView({ name, input, output: undefined });
-  const subtitle =
-    view === null
-      ? null
-      : localRunToolSubtitleText(view.subtitle, {
-          patternInPath: (values) => t("chat.toolCall.patternInPath", values),
-          commandExited: (values) => t("chat.toolCall.commandExited", values),
-        });
+  const subtitle = view === null ? null : localRunSubtitleText(view.subtitle);
   if (subtitle === null || subtitle === "") {
     return null;
   }

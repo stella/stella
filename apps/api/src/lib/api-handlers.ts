@@ -159,6 +159,8 @@ import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
+import { legalHoldViewerFromContext } from "@/api/lib/workspaces/legal-holds/projection";
+import { legalHoldRefusalForViewer } from "@/api/lib/workspaces/legal-holds/refusal";
 import { recordWriteContract } from "@/api/lib/write-contract/write-contract";
 import type { WriteContract } from "@/api/lib/write-contract/write-contract";
 // Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
@@ -1086,7 +1088,15 @@ const runSafeHandlerInDeliveryScope = async <
         telemetry: safeErrorTelemetryDisposition(statusCode, handlerError.code),
       });
 
-      return toErrorStatus(statusCode, safeErrorBody(handlerError));
+      return toErrorStatus(
+        statusCode,
+        safeErrorBody(
+          legalHoldRefusalForViewer(
+            handlerError,
+            legalHoldViewerFromContext(ctx),
+          ),
+        ),
+      );
     }
 
     if (DatabaseError.is(error)) {
@@ -1158,7 +1168,15 @@ const runSafeHandlerInDeliveryScope = async <
           handlerError.code,
         ),
       });
-      return toErrorStatus(handlerError.status, safeErrorBody(handlerError));
+      return toErrorStatus(
+        handlerError.status,
+        safeErrorBody(
+          legalHoldRefusalForViewer(
+            handlerError,
+            legalHoldViewerFromContext(ctx),
+          ),
+        ),
+      );
     }
 
     logAndCaptureSafeError({

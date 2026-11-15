@@ -13,7 +13,6 @@ import {
 import type { CorpusProjectionAppendWorkScope } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   type AcceptedCorpusProjectionAppendProof,
-  type CorpusProjectionProofTiming,
   proveAcceptedCorpusProjectionAppendsTx,
   readProvableCorpusProjectionAppendsTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
@@ -25,16 +24,14 @@ type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
 export const CORPUS_PROJECTION_PROOF_CYCLE_MAX_REVISIONS =
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS;
 
-const PROOF_CYCLE_TIMING = {
-  type: "after_barrier",
-} as const satisfies CorpusProjectionProofTiming;
-
 type CorpusProjectionProofCounts = {
   /** Committed revisions whose barrier had passed, read for this cycle. */
   claimed: number;
   applied: number;
   /** Not exactly present at the proof deadline; queued for cleanup. */
   retired: number;
+  /** Offline, and empty once its indexer had ended; no cleanup owed. */
+  withdrawn: number;
   /** Not exactly present yet; a later cycle censuses them again. */
   waiting: number;
   staleCleanupPending: number;
@@ -68,6 +65,7 @@ const countProofOutcomes = (
   const counts = {
     applied: 0,
     retired: 0,
+    withdrawn: 0,
     waiting: 0,
     staleCleanupPending: 0,
     blocked: 0,
@@ -80,6 +78,9 @@ const countProofOutcomes = (
         break;
       case "unproven_cleanup_pending":
         counts.retired += 1;
+        break;
+      case "withdrawn":
+        counts.withdrawn += 1;
         break;
       case "awaiting_publication":
         counts.waiting += 1;
@@ -122,7 +123,9 @@ type ExecuteCorpusProjectionProofCycleOptions<Family extends CorpusFamily> = {
  * cycle censuses again. A failed census settles nothing either: the documents
  * may well be published, so the revisions wait for a census that answers. The
  * append cycle runs it before it reserves, so a revision recorded as accepted
- * converges without another caller.
+ * converges without another caller. The read dates the census by the database
+ * clock, so an offline revision's count counts as final only when its indexer
+ * had certainly ended before the census looked.
  */
 export const executeCorpusProjectionProofCycle = async <
   Family extends CorpusFamily,
@@ -149,7 +152,7 @@ export const executeCorpusProjectionProofCycle = async <
   if (provable === null) {
     return { status: "idle", afterIndexId };
   }
-  const { indexId, revisions } = provable;
+  const { indexId, revisions, censusStart } = provable;
   const census = await proveCorpusProjectionRevisionsPresent({
     client,
     indexId,
@@ -169,7 +172,7 @@ export const executeCorpusProjectionProofCycle = async <
       await proveAcceptedCorpusProjectionAppendsTx(tx, {
         indexId,
         census: census.value,
-        timing: PROOF_CYCLE_TIMING,
+        timing: { type: "after_barrier", censusStart },
         testNow,
       }),
   );

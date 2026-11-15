@@ -145,6 +145,7 @@ export type HandlerErrorMissingRequiredField = {
  */
 export type HandlerErrorValidationIssue = {
   path: string;
+  code?: string | undefined;
   message: string;
 };
 

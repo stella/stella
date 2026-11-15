@@ -25,13 +25,26 @@ export const decisionPrice = ({ provider, region }: DecisionPriceOptions) => {
   };
 };
 
+/**
+ * What a decision is for, which sets how sure the model must be. `verdict`
+ * replaces a generative model's claim verdict, so it asks for more than a
+ * first-pass classification does.
+ */
+export type DecisionConfidencePurpose = "default" | "polarity" | "verdict";
+
+const JEV_FLOORS = {
+  default: 0.6,
+  polarity: 0.7,
+  verdict: 0.8,
+} as const satisfies Record<DecisionConfidencePurpose, number>;
+
 /** Floors are calibrated per model. Luna starts conservatively until evaluated. */
 export const decisionConfidenceFloor = (
   model: string,
-  purpose: "default" | "polarity" = "default",
+  purpose: DecisionConfidencePurpose = "default",
 ): number => {
   if (model === "jev" || model.startsWith("jev-")) {
-    return purpose === "polarity" ? 0.7 : 0.6;
+    return JEV_FLOORS[purpose];
   }
   // Luna and uncalibrated model ids use the conservative floor.
   return 0.8;

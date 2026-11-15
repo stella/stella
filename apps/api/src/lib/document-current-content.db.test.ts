@@ -246,7 +246,7 @@ test("current content requires a live current version and matter", async () => {
     expect(await readCurrent(tx)).toHaveLength(1);
     await tx
       .update(entityVersions)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: new Date("2026-04-30T09:00:00.000Z") })
       .where(eq(entityVersions.id, ids.entityVersionA1));
     expect(await readCurrent(tx)).toEqual([]);
     await tx
@@ -320,7 +320,7 @@ test.each(["exact", "legacy"] as const)(
         .where(eq(entities.id, ids.entityA1));
       await tx
         .update(entityVersions)
-        .set({ deletedAt: new Date() })
+        .set({ deletedAt: new Date("2026-04-30T09:00:00.000Z") })
         .where(eq(entityVersions.id, ids.entityVersionA1));
       expect(await readCurrent(tx)).toEqual([]);
       await tx

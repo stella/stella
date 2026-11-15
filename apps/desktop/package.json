@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tauri build --config src-tauri/tauri.sidecar.conf.json",
     "build:sidecar": "bun run --cwd ../../packages/agent-engine build:sidecar",
+    "build:pkcs11-helper": "bun scripts/build-pkcs11-helper.ts",
     "build:view": "vite build",
     "clean": "git clean -xdf .cache .turbo dist node_modules src-tauri/target",
     "dev": "tauri dev",
@@ -39,7 +40,7 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.4",
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@stll/agent-engine": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",

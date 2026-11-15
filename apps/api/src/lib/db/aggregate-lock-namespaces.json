@@ -8,6 +8,7 @@
   "chatStoredContentEgress": "0x0f10ccb3::integer",
   "chatToolGrants": "hashtext('chat.tool-grants')",
   "contactCapacity": "hashtext('contact_capacity')",
+  "corpusProjectionOfflineRequest": "0x0f10ccb7::integer",
   "definitionCap": "0x0f10ccab::integer",
   "desktopBatch": "0x0f10ccac::integer",
   "desktopRunnerCapacity": "hashtext('desktop-runner-capacity')",

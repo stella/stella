@@ -124,15 +124,21 @@ const CHAT_PATH_BUDGETS = {
     measured: {
       replayedBytes: 15_166,
       replayedStatements: 9,
-      snapshotBytes: 3672,
+      // Native source metadata adds 151 bytes to the compacted snapshot.
+      snapshotBytes: 3823,
       snapshotStatements: 13,
     },
+    // Preserve the pre-migration ceiling: ceil(3672 * 1.15).
+    limits: { snapshotBytes: 4223 },
   },
   /** The Stop route on a running turn. */
   stop: { measured: { statements: 6 } },
 } as const satisfies Record<
   string,
-  { measured: Readonly<Record<string, number>> }
+  {
+    measured: Readonly<Record<string, number>>;
+    limits?: Readonly<Record<string, number>>;
+  }
 >;
 
 /**
@@ -201,12 +207,14 @@ const withHeadroom = (name: string, value: number): number => {
   return panic(`No headroom rule for ${name}`);
 };
 
-/** A path's budget getter: each measurement plus its headroom. */
+/** Explicit ceilings stay fixed; other measurements retain their headroom. */
 const budgetOf = <TPath extends keyof typeof CHAT_PATH_BUDGETS>(
   path: TPath,
 ) => {
-  const measured: Readonly<Record<string, number>> =
-    CHAT_PATH_BUDGETS[path].measured;
+  const budget = CHAT_PATH_BUDGETS[path];
+  const measured: Readonly<Record<string, number>> = budget.measured;
+  const limits: Readonly<Record<string, number>> =
+    "limits" in budget ? budget.limits : {};
   return (
     name: Extract<keyof (typeof CHAT_PATH_BUDGETS)[TPath]["measured"], string>,
   ) => {
@@ -214,7 +222,7 @@ const budgetOf = <TPath extends keyof typeof CHAT_PATH_BUDGETS>(
     if (value === undefined) {
       return panic(`No ${name} measurement for ${path}`);
     }
-    return withHeadroom(name, value);
+    return limits[name] ?? withHeadroom(name, value);
   };
 };
 

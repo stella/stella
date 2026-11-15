@@ -294,6 +294,8 @@
       "reopened": "Uuesti avatud, kontroll ootel",
       "reopenedTooltip": "Kontrollija liigitas selle uuesti kontrollitavaks faktiks; reaalajas registrikontroll on veel ootel.",
       "sourceCount": "{count, plural, one {# allikas} other {# allikat}}",
+      "verdictBy": "Otsuse tegi {model}",
+      "verdictByGenerativeModel": "Otsuse tegi generatiivne mudel; otsustusmudel seda ei otsustanud",
       "whyVerdict": "Otsuse põhjendus: ankurfaktid"
     },
     "claimTypes": {
@@ -2332,9 +2334,14 @@
       "update_reader_annotation": "Muuda esiletõstu või kommentaari",
       "use-browser": "Teie brauseri kasutamine",
       "use_connector_secret": "Konnektori mandaadi kasutamine",
+      "user_message": "Saadetud agendi töö ajal",
       "web_search": "Veebist otsimine"
     },
     "toolCall": {
+      "browserClick": "Klõpsa elemendil „{target}“ lehel {url}",
+      "browserPressKey": "Vajuta klahvi {key} elemendis „{target}“ lehel {url}",
+      "browserSelect": "Vali „{option}“ elemendis „{target}“ lehel {url}",
+      "browserType": "Sisesta tekst väljale „{target}“ lehel {url}",
       "characterCount": "{count, plural, one {# märk} other {# märki}}",
       "commandExited": "{command} (väljumiskood {code})",
       "consoleLogs": "Konsooli väljund",
@@ -2344,17 +2351,17 @@
       "input": "Sisend",
       "interrupted": "Katkes enne lõpetamist",
       "localOutput": {
+        "arriving": "Saabub endiselt arvutist, kus see samm käivitati",
         "conversation": "Alamagendi vestlus",
         "conversationPrompt": "Ülesanne",
         "conversationReport": "Aruanne",
         "cut": "Kuvatakse esimesed {kept} (kokku {total})",
         "diff": "Failimuudatused",
-        "elsewhere": "Avage arvutis, kus see käivitati",
         "empty": "Väljund puudub",
-        "failed": "stella töölauarakendus selles arvutis ei suutnud seda kuvada.",
-        "imageTooLarge": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte selles arvutis ei salvestata, seega ei saa seda siin kuvada.",
-        "notKept": "Sellest sammust pole selles arvutis midagi salvestatud",
-        "reading": "Loetakse sellest arvutist"
+        "imageTooLargeToStore": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte ei salvestata, seega ei saa seda kuvada.",
+        "notCopied": "Sellesse vestlusesse pole veel kopeeritud",
+        "notStored": "Sellest sammust ei salvestatud midagi",
+        "runBudgetReached": "Ei salvestatud: see käivitus oli juba salvestanud nii palju, kui üks käivitus tohib"
       },
       "output": "Väljund",
       "patternInPath": "{pattern} asukohas {path}",
@@ -2377,6 +2384,10 @@
       "needsInputTitle": "stella vajab teie sisendit",
       "replyReadyBody": "stella lõpetas vestluses vastamise.",
       "replyReadyTitle": "Vastus on valmis"
+    },
+    "turnPaused": {
+      "continue": "Jätka",
+      "status": "Peatatud pärast {count, plural, one {# tööriistakutset} other {# tööriistakutset}}"
     },
     "turnStatus": {
       "answerFailed": "Vastust ei õnnestunud lõpetada",
@@ -3409,6 +3420,7 @@
       "invitationRoleNotAllowed": "Selle rolliga ei saa kedagi kutsuda. Valige muu roll.",
       "invoiceNumberSeriesMissing": "Seadistage organisatsiooni seadete jaotises Numbriseeriad arvete vaikimisi numbriseeria ja väljastage seejärel arve.",
       "invoiceSellerProfileMissing": "Lisage müüja profiil organisatsiooni seadete jaotises Arveldusprofiilid ja väljastage seejärel arve.",
+      "legalHoldActive": "Kustutamine on blokeeritud, sest need andmed tuleb säilitada.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
       "matterContactCapacityExceeded": "Selles toimikus on rohkem kontakte, kui saab kuvada. Ülejäänud kontaktide kuvamiseks eemaldage nähtavaid kontaktiseoseid.",
@@ -5889,6 +5901,8 @@
       "auditLogsSentenceDownload": "{resource} laaditi alla.",
       "auditLogsSentenceExecute": "{resource} käivitati.",
       "auditLogsSentenceIssued": "{resource} väljastati.",
+      "auditLogsSentenceLegalHoldPlaced": "{resource} kehtestati.",
+      "auditLogsSentenceLegalHoldReleased": "{resource} lõpetati.",
       "auditLogsSentenceRedeemed": "{resource} lunastati.",
       "auditLogsSentenceRefused": "{resource} lükati tagasi.",
       "auditLogsSentenceReview": "{resource} vaadati üle.",
@@ -5940,6 +5954,7 @@
         "flow_run": "töövoo käivitus",
         "folio_collab_room": "Folio koostööruum",
         "invoice": "arve",
+        "legal_hold": "õiguslik säilitamiskohustus",
         "legal_list": "õigusnimekiri",
         "legal_list_generation": "õigusnimekirja loomine",
         "legal_list_item": "õigusnimekirja kirje",
@@ -6099,7 +6114,13 @@
       "usageStatusTrialing": "Prooviperiood",
       "usageUnitCount": "{count, plural, one {# ühik} other {# ühikut}}",
       "usageUnitsBalanceTemplate": "Saadaval on {remaining} ühikut",
-      "usageUnitsThisPeriod": "Selle perioodi kasutusühikud"
+      "usageUnitsThisPeriod": "Selle perioodi kasutusühikud",
+      "verificationDecisionModel": {
+        "description": "Kui dokumenti kontrollitakse loendi faktide põhjal, valib otsustusmudel iga väite otsuse. Generatiivne mudel leiab ja tsiteerib fakte endiselt. Kui otsustusmudel pole piisavalt kindel, jääb kehtima generatiivse mudeli otsus.",
+        "title": "Dokumentide kontrollimise otsused",
+        "unavailable": "Sellel organisatsioonil pole ühtegi otsustusmudelit saadaval.",
+        "updated": "Kontrollimise seadistus on uuendatud"
+      }
     }
   },
   "sharepoint": {
@@ -6340,6 +6361,7 @@
       "previewBody5": "Enne konverteerimist annab müük või börsil noteerimine investorile õiguse saada kas ostuhind või konverteerimise alusel makstav tulu, olenevalt sellest, kumb on suurem.",
       "previewBody6": "Äriühing on nõuetekohaselt asutatud, tal on õigus käesolev leping sõlmida ning ta hangib selle täitmiseks kõik vajalikud heakskiidud.",
       "previewBody7": "Käesolev leping sisaldab poolte täielikku kokkulepet ja seda võib muuta üksnes kirjalikult nõutava nõusoleku alusel.",
+      "previewDocument": "Stiilikomplekti eelvaade",
       "previewFailed": "Eelvaadet ei õnnestunud luua.",
       "previewIntroduction": "Käesolev leping sõlmitakse ettevõtte Example Labs Ltd. (edaspidi „äriühing“) ja allkirjalehel nimetatud investori (edaspidi „investor“) vahel.",
       "previewLevel1": "Investeering",

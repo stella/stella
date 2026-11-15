@@ -19,11 +19,12 @@ import type { AppServerClient } from "./app-server-client";
 import { SkillsListResponseSchema, ThreadResponseSchema } from "./protocol";
 
 /**
- * Opening the Codex thread a turn runs in: a new one, or the native session
- * the caller asked to resume. Resume reads metadata only (stella holds the
- * transcript) and unarchives an archived session first. When the session
- * cannot be resumed, a new thread starts and the outcome says why, so the
- * turn falls back to the portable transcript visibly.
+ * Opening the Codex thread a turn runs in: a new one, the native session
+ * the caller asked to resume, or a fork of it through an earlier turn. Both
+ * read metadata only (stella holds the transcript) and unarchive an archived
+ * session first. When the session cannot be reopened, a new thread starts
+ * and the outcome says why, so the turn falls back to the portable
+ * transcript visibly.
  */
 
 const SANDBOX_MODE = {
@@ -291,6 +292,72 @@ const startThread = async (
   return Result.ok({ threadId, continuation });
 };
 
+/** How a turn's thread carries on a session Codex already holds. */
+type Reopening = {
+  method: "thread/resume" | "thread/fork";
+  threadId: string;
+  /** What the method takes beside the thread and its settings. */
+  params: Readonly<Record<string, unknown>>;
+  /** What the turn reports once the method answered. */
+  opened: HarnessContinuation;
+};
+
+/**
+ * Reopen a stored thread: resume it, or fork it into a new one. Both load
+ * the thread from its rollout with this turn's settings, never the stored
+ * ones, and an archived thread is unarchived first. A refusal starts a new
+ * thread and says why, so the turn falls back to the transcript visibly.
+ */
+const reopenThread = async (
+  client: AppServerClient,
+  params: ReturnType<typeof threadParams>,
+  { method, threadId, params: extra, opened }: Reopening,
+): Promise<Result<OpenedThread, HarnessStartError>> => {
+  const reopen = async () =>
+    await client.request(method, {
+      threadId,
+      ...extra,
+      excludeTurns: true,
+      ...params,
+    });
+  let reopened = await reopen();
+  if (Result.isError(reopened) && ARCHIVED.test(reopened.error.message)) {
+    const unarchived = await client.request("thread/unarchive", { threadId });
+    if (Result.isOk(unarchived)) {
+      reopened = await reopen();
+    }
+  }
+  if (Result.isOk(reopened)) {
+    const reopenedId = threadIdOf(reopened.value);
+    if (reopenedId === null) {
+      return Result.err(
+        new HarnessStartError({
+          reason: "protocol_violation",
+          message: `The harness answered ${method} with an unexpected shape.`,
+        }),
+      );
+    }
+    return Result.ok({ threadId: reopenedId, continuation: opened });
+  }
+  // Only a refusal falls back to a new session: a closed or silent harness
+  // cannot start one either.
+  if (reopened.error.reason !== "rejected") {
+    return Result.err(
+      new HarnessStartError({
+        reason: "harness_unavailable",
+        message: reopened.error.message,
+      }),
+    );
+  }
+  return startThread(client, params, {
+    type: "resume_unavailable",
+    reason: SESSION_MISSING.test(reopened.error.message)
+      ? "session_not_found"
+      : "resume_rejected",
+    message: reopened.error.message,
+  });
+};
+
 export const openThread = async (
   client: AppServerClient,
   input: HarnessTurnInput,
@@ -300,54 +367,30 @@ export const openThread = async (
     return disabledSkills;
   }
   const params = threadParams(input, disabledSkills.value);
-  if (input.continuation.type !== "resume") {
-    return startThread(client, params, { type: "fresh" });
+  const { continuation } = input;
+  switch (continuation.type) {
+    case "fresh":
+      return startThread(client, params, { type: "fresh" });
+    case "resume":
+      return reopenThread(client, params, {
+        method: "thread/resume",
+        threadId: continuation.sessionId,
+        params: {},
+        opened: { type: "resumed" },
+      });
+    case "fork":
+      // Through the boundary turn, inclusive; the source thread stays as
+      // it was.
+      return reopenThread(client, params, {
+        method: "thread/fork",
+        threadId: continuation.sessionId,
+        params: { lastTurnId: continuation.boundary },
+        opened: { type: "forked" },
+      });
+    case "live":
+      return panic("Codex adapter: a live turn continues in its own process");
+    default:
+      continuation satisfies never;
+      return panic("Unknown continuation request");
   }
-  const threadId = input.continuation.sessionId;
-  const resume = async () =>
-    await client.request("thread/resume", {
-      threadId,
-      excludeTurns: true,
-      ...params,
-    });
-  let resumed = await resume();
-  if (Result.isError(resumed) && ARCHIVED.test(resumed.error.message)) {
-    const unarchived = await client.request("thread/unarchive", { threadId });
-    if (Result.isOk(unarchived)) {
-      resumed = await resume();
-    }
-  }
-  if (Result.isOk(resumed)) {
-    const resumedId = threadIdOf(resumed.value);
-    if (resumedId === null) {
-      return Result.err(
-        new HarnessStartError({
-          reason: "protocol_violation",
-          message:
-            "The harness answered thread/resume with an unexpected shape.",
-        }),
-      );
-    }
-    return Result.ok({
-      threadId: resumedId,
-      continuation: { type: "resumed" },
-    });
-  }
-  // Only a refusal falls back to a new session: a closed or silent harness
-  // cannot start one either.
-  if (resumed.error.reason !== "rejected") {
-    return Result.err(
-      new HarnessStartError({
-        reason: "harness_unavailable",
-        message: resumed.error.message,
-      }),
-    );
-  }
-  return startThread(client, params, {
-    type: "resume_unavailable",
-    reason: SESSION_MISSING.test(resumed.error.message)
-      ? "session_not_found"
-      : "resume_rejected",
-    message: resumed.error.message,
-  });
 };

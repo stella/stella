@@ -67,7 +67,6 @@ import {
   type CorpusProjectionAppendAbandonResult,
   type CorpusProjectionIntentLease,
   type CorpusProjectionReservationFailure,
-  prepareCorpusProjectionReplacementsTx,
   proveAcceptedCorpusProjectionAppendsTx,
   recordAcceptedCorpusProjectionAppendsTx,
   reserveCorpusProjectionIntentsTx,
@@ -220,7 +219,6 @@ export type CorpusProjectionAppendCycleResult = {
     | "append_blocked"
     | "engine_unavailable";
   cycleRetryDelayMs: number | null;
-  replacementCleanupScheduled: number;
   reserved: number;
   applied: number;
   staleCleanupPending: number;
@@ -237,19 +235,16 @@ export type CorpusProjectionAppendCycleResult = {
 };
 
 type EmptyResultOptions = {
-  replacementCleanupScheduled: number;
   proof: CorpusProjectionProofCycleResult;
   timing: CorpusProjectionAppendCycleTiming;
 };
 
 const emptyResult = ({
-  replacementCleanupScheduled,
   proof,
   timing,
 }: EmptyResultOptions): CorpusProjectionAppendCycleResult => ({
   status: "idle",
   cycleRetryDelayMs: null,
-  replacementCleanupScheduled,
   proof,
   timing,
   reserved: 0,
@@ -720,11 +715,23 @@ export const advanceCorpusProjectionAppendTails = <
   return { flush, tails: nextTails, leaseMarginReached };
 };
 
-/** The synchronous half of a prepared entry: payload in, append request out. */
-const prepareProjectionEntry = (
+/**
+ * One reserved revision's documents as NDJSON, independent of how the block
+ * is delivered. `parts` split it at document boundaries within the ingest
+ * request ceiling (one document alone may exceed it); joined with newlines
+ * they are the whole block.
+ */
+type ProjectionRevisionBlock = {
+  material: CorpusProjectionMaterial;
+  documentCount: number;
+  parts: readonly [string, ...string[]];
+};
+
+/** A revision's documents, serialized once and checked against the ceilings. */
+const buildProjectionRevisionBlock = (
   material: CorpusProjectionMaterial,
   payload: LoadedCorpusProjectionPayload,
-): Result<PreparedProjectionEntry, PreparedProjectionFailure> => {
+): Result<ProjectionRevisionBlock, PreparedProjectionFailure> => {
   const built = (() => {
     switch (material.family) {
       case "case_law":
@@ -768,21 +775,32 @@ const prepareProjectionEntry = (
     }
     return panic(planned.error.message);
   }
-  const request = planned.value.at(0);
-  if (request === undefined) {
+  const [first, ...rest] = planned.value.map(({ ndjson }) => ndjson);
+  if (first === undefined) {
     return panic("Projection revision did not produce an append request");
   }
   return Result.ok({
     material,
     documentCount: entry.documents.length,
-    indexId: material.lease.indexId,
-    ndjson: request.ndjson,
-    ndjsonBytes: Buffer.byteLength(request.ndjson, "utf-8") + 1,
-    parts: planned.value.map(({ ndjson }) => ndjson),
-    leaseExpiresAtMs: material.lease.leaseExpiresAt.getTime(),
-    appendMode: material.lease.appendMode,
+    parts: [first, ...rest],
   });
 };
+
+/** REST delivery of a revision block: its first request and its lease. */
+const planProjectionRevisionRequest = ({
+  material,
+  documentCount,
+  parts,
+}: ProjectionRevisionBlock): PreparedProjectionEntry => ({
+  material,
+  documentCount,
+  indexId: material.lease.indexId,
+  ndjson: parts[0],
+  ndjsonBytes: Buffer.byteLength(parts[0], "utf-8") + 1,
+  parts,
+  leaseExpiresAtMs: material.lease.leaseExpiresAt.getTime(),
+  appendMode: material.lease.appendMode,
+});
 
 type BuildPreparedEntryOptions = {
   runInTransaction: ProjectionTransactionRunner;
@@ -800,9 +818,9 @@ const buildPreparedEntry = async ({
 }: BuildPreparedEntryOptions): Promise<
   Result<PreparedProjectionEntry, PreparedProjectionFailure>
 > => {
-  // As in `prepareProjectionEntry`: without the `catch` mapper the cause is
-  // wrapped, and every budget failure would classify as a transient
-  // `payload_unavailable` and retry forever instead of blocking.
+  // Without the `catch` mapper the cause is wrapped, and every budget failure
+  // would classify as a transient `payload_unavailable` and retry forever
+  // instead of blocking.
   const payload = await Result.tryPromise({
     try: async () => await payloadReader(runInTransaction, material),
     catch: (cause: unknown) => cause,
@@ -820,7 +838,10 @@ const buildPreparedEntry = async ({
   // The build is synchronous, so one span covers all of it and the spans of
   // concurrent revisions cannot overlap.
   const buildStartedAt = Temporal.Now.instant().epochMilliseconds;
-  const prepared = prepareProjectionEntry(material, payload.value.value);
+  const prepared = buildProjectionRevisionBlock(
+    material,
+    payload.value.value,
+  ).map(planProjectionRevisionRequest);
   recordBuildMs(Temporal.Now.instant().epochMilliseconds - buildStartedAt);
   return prepared;
 };
@@ -1053,6 +1074,10 @@ const acceptAndProveProjectionAppend = async ({
           break;
         case "awaiting_publication":
           return panic(`A waited request left ${outcome.intentId} unproven`);
+        // Only an offline revision censused after its indexer ended is
+        // withdrawn, and a waited request is never offline.
+        case "withdrawn":
+          return panic(`A waited request withdrew ${outcome.intentId}`);
         default:
           outcome satisfies never;
           return panic(`Unhandled inline proof: ${String(outcome)}`);
@@ -1782,43 +1807,27 @@ export const executeCorpusProjectionAppendCycle = async <
   if (family === "case_law") {
     await drainCaseLawRankingSignalChanges({ runInTransaction });
   }
-  const { replacements, leases } = await measured(
+  const leases = await measured(
     async () =>
-      await runInTransaction(async (tx) => ({
-        replacements: await prepareCorpusProjectionReplacementsTx(tx, {
-          family,
-          generation,
-          scope,
-          limit,
-        }),
-        leases: await reserveCorpusProjectionIntentsTx(tx, {
-          family,
-          generation,
-          scope,
-          limit,
-          leaseMs,
-        }),
-      })),
+      await runInTransaction(
+        async (tx) =>
+          await reserveCorpusProjectionIntentsTx(tx, {
+            family,
+            generation,
+            scope,
+            limit,
+            leaseMs,
+          }),
+      ),
     (elapsedMs) => {
       timing.reservationMs += elapsedMs;
     },
   );
   if (leases.length === 0) {
-    return withProofFailure(
-      emptyResult({
-        replacementCleanupScheduled: replacements.length,
-        proof,
-        timing,
-      }),
-      proofFailure,
-    );
+    return withProofFailure(emptyResult({ proof, timing }), proofFailure);
   }
   const result: CorpusProjectionAppendCycleResult = {
-    ...emptyResult({
-      replacementCleanupScheduled: replacements.length,
-      proof,
-      timing,
-    }),
+    ...emptyResult({ proof, timing }),
     status: "completed",
     reserved: leases.length,
   };

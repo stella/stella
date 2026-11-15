@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   CHAT_LOCAL_RUN_TOOL_LIMITS,
@@ -21,15 +21,50 @@ import {
 type ApprovalDecision = (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
 
 /**
- * What the member is asked: the kind of step, the element's role and
- * accessible name, and the page's address. Never text read from the page
- * beyond the element's name.
+ * What the member is asked, in the harness's words: the kind of step, the
+ * key or option, the element's role and accessible name, and the page's
+ * address. Never text read from the page beyond the element's name. Chat
+ * shows the question in the member's language from the call's `asked`.
  */
-const approvalReason = ({ action, name, role, url }: BrowserApprovalRequest) =>
-  chatLocalRunShownText(
-    `${action === "click" ? "Click" : "Type into"} the ${role} "${name}" on ${url}`,
-    CHAT_LOCAL_RUN_TOOL_LIMITS.approval,
-  );
+const approvalReason = (asked: BrowserApprovalRequest): string => {
+  const element = `the ${asked.role} "${asked.name}" on ${asked.url}`;
+  const reason = (() => {
+    switch (asked.action) {
+      case "click":
+        return `Click ${element}`;
+      case "type":
+        return `Type into ${element}`;
+      case "press_key":
+        return `Press ${asked.key} in ${element}`;
+      case "select":
+        return `Choose "${asked.option}" in ${element}`;
+      default:
+        asked satisfies never;
+        return panic("Unhandled browser approval");
+    }
+  })();
+  return chatLocalRunShownText(reason, CHAT_LOCAL_RUN_TOOL_LIMITS.approval);
+};
+
+/** The approval's call, as chat keeps it: the step and what it is about. */
+const approvalCall = (asked: BrowserApprovalRequest) => {
+  const about = { name: asked.name, role: asked.role, url: asked.url };
+  switch (asked.action) {
+    case "click":
+    case "type":
+      return { action: asked.action, asked: about };
+    case "press_key":
+      return { action: asked.action, asked: { ...about, key: asked.key } };
+    case "select":
+      return {
+        action: asked.action,
+        asked: { ...about, option: asked.option },
+      };
+    default:
+      asked satisfies never;
+      return panic("Unhandled browser approval");
+  }
+};
 
 /**
  * A run's approvals for browser steps. The browser tools ask while the
@@ -48,7 +83,7 @@ export const createActionApprovals = () => {
     const requestId = `browser-step-${crypto.randomUUID()}`;
     const toolCall = nativeToolCall(requestId, {
       name: HARNESS_TOOL_NAMES.browser,
-      input: { action: asked.action },
+      input: approvalCall(asked),
     });
     const complete = (status: ChatLocalRunToolStatus) => {
       side.push({

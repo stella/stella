@@ -27,13 +27,13 @@ import {
   type ChatLocalRunQuestion,
   EMPTY_LOCAL_RUN_QUESTION_DRAFT,
   localRunAnswersOf,
+  localRunOptionLayout,
   type LocalRunQuestionDraft,
   type LocalRunQuestionPause,
   toggleLocalRunOption,
 } from "@stll/api-contract/chat-local-run-question";
 import {
   localRunProposedPlan,
-  localRunToolSubtitleText,
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
@@ -48,6 +48,7 @@ import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
 
+import { useLocalRunSubtitleText } from "@/components/local-run-subtitle";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
@@ -450,6 +451,7 @@ const ApprovalRow = ({
   threadId: string;
 }) => {
   const t = useTranslations("chat");
+  const localRunSubtitleText = useLocalRunSubtitleText();
   const { end } = useSession();
   const [granting, setGranting] = useState<ChatToolGrantScope>();
   const [failure, setFailure] = useState<WriteFailure | null>(null);
@@ -471,11 +473,7 @@ const ApprovalRow = ({
       : (localRunProposedPlan({
           name: approval.toolName,
           input: approval.input,
-        }) ??
-        localRunToolSubtitleText(local.subtitle, {
-          patternInPath: (values) => t("localRun.patternInPath", values),
-          commandExited: (values) => t("localRun.commandExited", values),
-        }));
+        }) ?? localRunSubtitleText(local.subtitle));
   const title = (() => {
     if (local === null) {
       return humanizeIdentifier(approval.toolName);
@@ -690,10 +688,6 @@ const QuestionField = ({
 }) => {
   const t = useTranslations("chat");
   const ownWords = answersInOwnWords(question, draft);
-  const pickedDescriptions = question.options.filter(
-    ({ description, label }) =>
-      description !== "" && draft.picked.includes(label),
-  );
 
   return (
     <View className="gap-2">
@@ -737,22 +731,32 @@ const QuestionField = ({
           ) : null}
         </View>
       ) : (
-        <View className="flex-row flex-wrap gap-2">
+        <View
+          className={
+            localRunOptionLayout(question) === "list"
+              ? "items-start gap-2"
+              : "flex-row flex-wrap gap-2"
+          }
+        >
           {question.options.map((option) => (
-            <Button
-              disabled={busy}
-              key={option.label}
-              onPress={() => {
-                onChange((current) =>
-                  toggleLocalRunOption(question, current, option.label),
-                );
-              }}
-              selected={draft.picked.includes(option.label)}
-              size="sm"
-              variant="outline"
-            >
-              {option.label}
-            </Button>
+            <View className="items-start gap-1" key={option.label}>
+              <Button
+                disabled={busy}
+                onPress={() => {
+                  onChange((current) =>
+                    toggleLocalRunOption(question, current, option.label),
+                  );
+                }}
+                selected={draft.picked.includes(option.label)}
+                size="sm"
+                variant="outline"
+              >
+                {option.label}
+              </Button>
+              {option.description === "" ? null : (
+                <Text variant="caption">{option.description}</Text>
+              )}
+            </View>
           ))}
           {question.allowsFreeText ? (
             <Button
@@ -768,13 +772,6 @@ const QuestionField = ({
           ) : null}
         </View>
       )}
-      {ownWords
-        ? null
-        : pickedDescriptions.map(({ description, label }) => (
-            <Text key={label} variant="caption">
-              {description}
-            </Text>
-          ))}
     </View>
   );
 };

@@ -15,6 +15,8 @@ import { PdfPages } from "./pdf-pages";
 
 type DocumentViewProps = {
   kind: "docx" | "pdf";
+  /** The document's name, as the screen titles it. */
+  fileName: string;
   /** The file's size in bytes, which `readChunk` serves in slices. */
   size: number;
   /** The app's language, for the few words folio shows itself. */
@@ -109,6 +111,7 @@ const CANVAS = "linear-gradient(var(--muted), var(--muted)) var(--background)";
  */
 const DocumentView = ({
   kind,
+  fileName,
   size,
   locale,
   appearance,
@@ -227,6 +230,7 @@ const DocumentView = ({
           <DocxPages
             bytes={bytes}
             editable={editable}
+            fileName={fileName}
             locale={locale}
             onEditRequest={() => {
               onEditRequest();

@@ -294,6 +294,8 @@
       "reopened": "Znovu otvorené, čaká na kontrolu",
       "reopenedTooltip": "Kontrolujúca osoba preklasifikovala toto tvrdenie ako overiteľný fakt; porovnanie so živými záznamami zatiaľ neprebehlo.",
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdrojov} other {# zdroja}}",
+      "verdictBy": "Záver určil {model}",
+      "verdictByGenerativeModel": "Záver určil generatívny model; rozhodovací model ho neurčil",
       "whyVerdict": "Odôvodnenie záveru: referenčné fakty"
     },
     "claimTypes": {
@@ -2332,9 +2334,14 @@
       "update_reader_annotation": "Upraviť zvýraznenie alebo komentár",
       "use-browser": "Používanie vášho prehliadača",
       "use_connector_secret": "Použitie prístupového údaja konektora",
+      "user_message": "Odoslané počas práce agenta",
       "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {
+      "browserClick": "Kliknúť na „{target}“ na stránke {url}",
+      "browserPressKey": "Stlačiť kláves {key} v „{target}“ na stránke {url}",
+      "browserSelect": "Vybrať „{option}“ v „{target}“ na stránke {url}",
+      "browserType": "Zadať text do „{target}“ na stránke {url}",
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov} many {# znaku}}",
       "commandExited": "{command} (návratový kód {code})",
       "consoleLogs": "Výstup konzoly",
@@ -2344,17 +2351,17 @@
       "input": "Vstup",
       "interrupted": "Prerušené pred dokončením",
       "localOutput": {
+        "arriving": "Stále sa prenáša z počítača, na ktorom krok bežal",
         "conversation": "Konverzácia čiastkového agenta",
         "conversationPrompt": "Zadanie",
         "conversationReport": "Správa",
         "cut": "Zobrazuje sa prvých {kept} z {total}",
         "diff": "Zmeny súborov",
-        "elsewhere": "Otvorte na počítači, kde krok bežal",
         "empty": "Žiadny výstup",
-        "failed": "Desktopová aplikácia stella na tomto počítači to nedokázala zobraziť.",
-        "imageTooLarge": "Tento obrázok má {total}. Obrázky väčšie ako {kept} sa na tomto počítači neukladajú, preto ho tu nemožno zobraziť.",
-        "notKept": "Z tohto kroku nie je na tomto počítači nič uložené",
-        "reading": "Načítava sa z tohto počítača"
+        "imageTooLargeToStore": "Tento obrázok má {total}. Obrázky väčšie ako {kept} sa neukladajú, preto ho nemožno zobraziť.",
+        "notCopied": "Do tohto chatu zatiaľ nebolo skopírované",
+        "notStored": "Z tohto kroku nebolo nič uložené",
+        "runBudgetReached": "Neuložené: tento beh už uložil toľko, koľko smie jeden beh"
       },
       "output": "Výstup",
       "patternInPath": "{pattern} v {path}",
@@ -2377,6 +2384,10 @@
       "needsInputTitle": "stella potrebuje váš vstup",
       "replyReadyBody": "stella dokončila odpoveď vo vašom chate.",
       "replyReadyTitle": "Odpoveď je hotová"
+    },
+    "turnPaused": {
+      "continue": "Pokračovať",
+      "status": "Pozastavené po {count, plural, one {# volaní nástroja} few {# volaniach nástrojov} many {# volania nástroja} other {# volaniach nástrojov}}"
     },
     "turnStatus": {
       "answerFailed": "Odpoveď sa nepodarilo dokončiť",
@@ -3409,6 +3420,7 @@
       "invitationRoleNotAllowed": "S touto rolou nemôžete nikoho pozvať. Vyberte inú rolu.",
       "invoiceNumberSeriesMissing": "Nastavte predvolený číselný rad pre faktúry v nastaveniach organizácie v časti Číselné rady a potom faktúru vystavte.",
       "invoiceSellerProfileMissing": "Pridajte profil dodávateľa v nastaveniach organizácie v časti Fakturačné profily a potom faktúru vystavte.",
+      "legalHoldActive": "Vymazanie je zablokované, pretože tieto záznamy musia byť zachované.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
       "matterContactCapacityExceeded": "Tento spis obsahuje viac kontaktov, než možno zobraziť. Odstránením viditeľných prepojení s kontaktmi zobrazíte zostávajúce kontakty.",
@@ -5889,6 +5901,8 @@
       "auditLogsSentenceDownload": "Stiahnuté: {resource}.",
       "auditLogsSentenceExecute": "Spustené: {resource}.",
       "auditLogsSentenceIssued": "Vydané: {resource}.",
+      "auditLogsSentenceLegalHoldPlaced": "Nastavené: {resource}.",
+      "auditLogsSentenceLegalHoldReleased": "Uvoľnené: {resource}.",
       "auditLogsSentenceRedeemed": "Uplatnené: {resource}.",
       "auditLogsSentenceRefused": "Odmietnuté: {resource}.",
       "auditLogsSentenceReview": "Skontrolované: {resource}.",
@@ -5940,6 +5954,7 @@
         "flow_run": "spustenie pracovného postupu",
         "folio_collab_room": "miestnosť spolupráce Folio",
         "invoice": "faktúra",
+        "legal_hold": "právne zadržanie",
         "legal_list": "právny zoznam",
         "legal_list_generation": "vytvorenie právneho zoznamu",
         "legal_list_item": "položka právneho zoznamu",
@@ -6099,7 +6114,13 @@
       "usageStatusTrialing": "Skúšobná verzia",
       "usageUnitCount": "{count, plural, one {# jednotka} few {# jednotky} other {# jednotiek} many {# jednotky}}",
       "usageUnitsBalanceTemplate": "K dispozícii je {remaining} jednotiek",
-      "usageUnitsThisPeriod": "Jednotky využitia za toto obdobie"
+      "usageUnitsThisPeriod": "Jednotky využitia za toto obdobie",
+      "verificationDecisionModel": {
+        "description": "Pri overovaní dokumentu podľa faktov zo zoznamu zvolí záver ku každému tvrdeniu rozhodovací model. Fakty aj naďalej vyhľadá a ocituje generatívny model. Ak si rozhodovací model nie je dosť istý, platí záver generatívneho modelu.",
+        "title": "Závery pri overovaní dokumentov",
+        "unavailable": "Tejto organizácii nie je k dispozícii žiadny rozhodovací model.",
+        "updated": "Nastavenie overovania bolo aktualizované"
+      }
     }
   },
   "sharepoint": {
@@ -6340,6 +6361,7 @@
       "previewBody5": "Pred konverziou predaj alebo uvedenie na burzu oprávňuje Investora na vyššiu z kúpnej ceny alebo výnosu splatného na konvertovanom základe.",
       "previewBody6": "Spoločnosť je riadne založená, má oprávnenie uzavrieť túto zmluvu a získa všetky schválenia potrebné na jej plnenie.",
       "previewBody7": "Táto zmluva obsahuje úplnú dohodu medzi stranami a možno ju meniť iba písomne s požadovaným súhlasom.",
+      "previewDocument": "Náhľad sady štýlov",
       "previewFailed": "Náhľad sa nepodarilo vytvoriť.",
       "previewIntroduction": "Táto zmluva sa uzatvára medzi spoločnosťou Example Labs Ltd. (ďalej len „Spoločnosť“) a investorom uvedeným na podpisovej strane (ďalej len „Investor“).",
       "previewLevel1": "Investícia",

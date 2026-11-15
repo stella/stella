@@ -43,7 +43,7 @@ export type OrsrRawLegalForm = OrsrRawTemporal & {
   item?: OrsrRawCodelistRef;
 };
 
-export type OrsrRawDeliveryAddress = {
+type OrsrRawDeliveryAddress = {
   postalCode?: string;
   postOfficeBox?: string;
   recipient?: string;
@@ -62,7 +62,7 @@ export type OrsrRawAddress = OrsrRawTemporal & {
   deliveryAddress?: OrsrRawDeliveryAddress;
 };
 
-export type OrsrRawCurrency = {
+type OrsrRawCurrency = {
   item?: OrsrRawCodelistRef | string;
 };
 
@@ -81,25 +81,25 @@ export type OrsrRawDeposit = OrsrRawTemporal & {
   currency?: OrsrRawCurrency;
 };
 
-export type OrsrRawIdentifier = OrsrRawTemporal & {
+type OrsrRawIdentifier = OrsrRawTemporal & {
   identifierType?: OrsrRawWrappedCodelist;
   identifierValue?: string;
 };
 
-export type OrsrRawPersonName = {
+type OrsrRawPersonName = {
   formattedName?: string;
   legalName?: string;
 };
 
-export type OrsrRawPhysicalPerson = {
+type OrsrRawPhysicalPerson = {
   personName?: OrsrRawPersonName;
 };
 
-export type OrsrRawCorporateBodyRef = {
+type OrsrRawCorporateBodyRef = {
   corporateBodyFullName?: string;
 };
 
-export type OrsrRawPersonData = {
+type OrsrRawPersonData = {
   physicalPerson?: OrsrRawPhysicalPerson | null;
   corporateBody?: OrsrRawCorporateBodyRef | null;
   physicalAddress?: OrsrRawAddress[];
@@ -121,9 +121,9 @@ export type OrsrRawStakeholderMember = OrsrRawTemporal & {
   functionTerminationDate?: string | null;
 };
 
-export type OrsrRawStatutoryBodyType = OrsrRawValueTemporal;
+type OrsrRawStatutoryBodyType = OrsrRawValueTemporal;
 
-export type OrsrRawAuthorization = OrsrRawValueTemporal;
+type OrsrRawAuthorization = OrsrRawValueTemporal;
 
 // A legal-status event (merger, dissolution, liquidation) recorded on the
 // full extract.
