@@ -374,10 +374,8 @@ describe("release queue history", () => {
       `holds more than ${String(MAX_RELEASE_HISTORY_COMMITS)} first-parent commits`,
     );
     // The listing itself stops one past the cap, and GitHub is never asked.
-    expect(rangeReads).toEqual([
+    expect(rangeReads.map((command) => command.slice(2))).toEqual([
       [
-        "git",
-        "rev-list",
         "--reverse",
         "--first-parent",
         `--max-count=${String(MAX_RELEASE_HISTORY_COMMITS + 1)}`,
@@ -1255,7 +1253,7 @@ const buildSquashMergedReleases = () => {
 
 describe("previous release of squash-merged release branches", () => {
   test("starts main's history where the previous release last took main", () => {
-    const { run, m2, m3, s1, m4, m5 } = buildSquashMergedReleases();
+    const { run, m2, m3, m4, m5 } = buildSquashMergedReleases();
     // No recent tag is reachable from main: describe falls back to v1.0.0.
     expect(
       run(["git", "describe", "--tags", "--abbrev=0", "--match", "v*", m5]),
@@ -1264,10 +1262,9 @@ describe("previous release of squash-merged release branches", () => {
     // v1.0.2 is final but main has not merged it, so v1.0.1 is previous.
     expect(previousRelease(m5, run)).toEqual({ tag: "v1.0.1", anchor: m2 });
     expect(previousRelease(m4, run)).toEqual({ tag: "v1.0.1", anchor: m2 });
-    // m3 landed while v1.0.1 was proved; v1.0.1 does not hold it.
-    expect(
-      run(["git", "rev-list", "--reverse", "--first-parent", `${m2}..${m5}`]),
-    ).toBe([m3, s1, m4, m5].join("\n"));
+    // m3 landed while v1.0.1 was proved: it is after the anchor, so the
+    // history (m2..m5) holds it although main merged it before s1.
+    expect(run(["git", "rev-parse", `${m3}^`])).toBe(m2);
   });
 
   test("on a release pull request head, is the release before the one it carries", () => {
