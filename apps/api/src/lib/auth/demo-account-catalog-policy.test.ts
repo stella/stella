@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import type { statements } from "@stll/permissions";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
@@ -14,6 +15,8 @@ import {
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const configSchema = v.object({
   permissions: v.optional(v.record(v.string(), v.array(v.string()))),
@@ -311,46 +314,42 @@ describe("handler account policy census", () => {
   });
 
   test("standard operations apply account access before their implementation", async () => {
-    const previousEmail = env.DEMO_ACCOUNT_EMAIL;
-    env.DEMO_ACCOUNT_EMAIL = "account@example.test";
+    testState.setConfig("DEMO_ACCOUNT_EMAIL", "account@example.test");
     const definitionSchema = v.object({ handler: v.function() });
-    try {
-      for (const endpoint of (await discoverSafeHandlers()).endpoints) {
-        if (!REVIEWED_STANDARD_OPERATIONS.some((id) => id === endpoint.id)) {
-          continue;
-        }
-        const module = v.parse(
-          v.record(v.string(), v.unknown()),
-          await import(
-            new URL(`../../../../../${endpoint.file}`, import.meta.url).href
-          ),
-        );
-        const { handler } = v.parse(
-          definitionSchema,
-          module[endpoint.exportName ?? "default"],
-        );
-        const context = createTestHandlerContext({
-          audit: NO_AUDIT,
-          safeDb: NO_DB,
-          scopedDb: NO_DB,
-          user: { email: "account@example.test" },
-        });
-        // Feature-gated operations admit the enrolled caller, so the account
-        // check is what refuses them.
-        const response = await handler({
-          ...context,
-          featureAccessSnapshot: enrolledTimeBillingSnapshot({
-            userId: context.user.id,
-            organizationId: context.session.activeOrganizationId,
-          }),
-        });
-        expect(response, endpoint.id).toMatchObject({
-          code: 403,
-          response: { code: "account_access_unavailable" },
-        });
+
+    for (const endpoint of (await discoverSafeHandlers()).endpoints) {
+      if (!REVIEWED_STANDARD_OPERATIONS.some((id) => id === endpoint.id)) {
+        continue;
       }
-    } finally {
-      env.DEMO_ACCOUNT_EMAIL = previousEmail;
+      const module = v.parse(
+        v.record(v.string(), v.unknown()),
+        await import(
+          new URL(`../../../../../${endpoint.file}`, import.meta.url).href
+        ),
+      );
+      const { handler } = v.parse(
+        definitionSchema,
+        module[endpoint.exportName ?? "default"],
+      );
+      const context = createTestHandlerContext({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
+        user: { email: "account@example.test" },
+      });
+      // Feature-gated operations admit the enrolled caller, so the account
+      // check is what refuses them.
+      const response = await handler({
+        ...context,
+        featureAccessSnapshot: enrolledTimeBillingSnapshot({
+          userId: context.user.id,
+          organizationId: context.session.activeOrganizationId,
+        }),
+      });
+      expect(response, endpoint.id).toMatchObject({
+        code: 403,
+        response: { code: "account_access_unavailable" },
+      });
     }
   });
 });

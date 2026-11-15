@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -23,6 +25,8 @@ import {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 /**
  * Case-law question columns are organization data and every answer run spends
@@ -198,57 +202,47 @@ describe("an answer run is priced before it claims cells", () => {
   };
 
   test("refuses the run at the case-law price, before the queue is touched", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    const previousProvider = env.AI_PROVIDER;
-    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    env.AI_PROVIDER = "anthropic";
-    env.ANTHROPIC_API_KEY = "sk-test";
-    try {
-      let transactions = 0;
-      const unentitledDb: SafeDb = async <T>(
-        fn: (tx: Transaction) => Promise<T>,
-      ): Promise<Result<T, SafeDbError>> => {
-        transactions += 1;
-        return Result.ok(await fn(asTestRaw<Transaction>(noEntitlementTx)));
-      };
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
 
-      const result = await runResearchAnswers.handler(
-        asTestRaw({
-          ...contextForRole("owner"),
-          body: {
-            decisionIds: [
-              toSafeId<"caseLawDecision">(
-                "019e7000-0000-7000-8000-0000000000a1",
-              ),
-            ],
-          },
-          safeDb: unentitledDb,
-        }),
-      );
+    let transactions = 0;
+    const unentitledDb: SafeDb = async <T>(
+      fn: (tx: Transaction) => Promise<T>,
+    ): Promise<Result<T, SafeDbError>> => {
+      transactions += 1;
+      return Result.ok(await fn(asTestRaw<Transaction>(noEntitlementTx)));
+    };
 
-      if (!("code" in result)) {
-        throw new Error("expected the pre-flight to return a status response");
-      }
-      expect({ code: result.code, body: result.response }).toEqual({
-        code: 402,
+    const result = await runResearchAnswers.handler(
+      asTestRaw({
+        ...contextForRole("owner"),
         body: {
-          code: "usage_limit_exceeded",
-          message: "Organisation has no active usage entitlement",
-          reason: "no_entitlement",
-          // 8 units for `case_law`, times the 1.5 standard-tier multiplier:
-          // the chat meter the neighbouring endpoints declare would cost 2.
-          required: 12,
-          available: 0,
+          decisionIds: [
+            toSafeId<"caseLawDecision">("019e7000-0000-7000-8000-0000000000a1"),
+          ],
         },
-      });
-      // Only the pre-flight read: the handler body, which claims the cells,
-      // never opened a transaction of its own.
-      expect(transactions).toBe(1);
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-      env.AI_PROVIDER = previousProvider;
-      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+        safeDb: unentitledDb,
+      }),
+    );
+
+    if (!("code" in result)) {
+      throw new Error("expected the pre-flight to return a status response");
     }
+    expect({ code: result.code, body: result.response }).toEqual({
+      code: 402,
+      body: {
+        code: "usage_limit_exceeded",
+        message: "Organisation has no active usage entitlement",
+        reason: "no_entitlement",
+        // 8 units for `case_law`, times the 1.5 standard-tier multiplier:
+        // the chat meter the neighbouring endpoints declare would cost 2.
+        required: 12,
+        available: 0,
+      },
+    });
+    // Only the pre-flight read: the handler body, which claims the cells,
+    // never opened a transaction of its own.
+    expect(transactions).toBe(1);
   });
 });

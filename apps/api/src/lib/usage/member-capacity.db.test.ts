@@ -6,16 +6,10 @@
  */
 
 import { Result } from "better-result";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
 import { DAY_IN_MS } from "@stll/time";
 
 import { invitation, member, organization, user } from "@/api/db/auth-schema";
@@ -63,16 +57,12 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 let testDb: TestDatabase;
 
-const envBefore = env.FEATURE_ORG_ACCESS_STATE;
-
-afterEach(() => {
-  env.FEATURE_ORG_ACCESS_STATE = envBefore;
-});
-
 const enforce = () => {
-  env.FEATURE_ORG_ACCESS_STATE = true;
+  testState.setConfig("FEATURE_ORG_ACCESS_STATE", true);
 };
 
 type PriceBasis = (typeof USAGE_POLICY_PRICE_BASES)[number];
@@ -227,7 +217,7 @@ const tryAddMember = async (
   return "refused";
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
 });
 
@@ -439,7 +429,7 @@ describe("checkMemberAdmission", () => {
   });
 
   test("refuses readably where the database bound applies, whatever the flag", async () => {
-    env.FEATURE_ORG_ACCESS_STATE = false;
+    testState.setConfig("FEATURE_ORG_ACCESS_STATE", false);
     await withRolledBackTx(async (tx) => {
       const organizationId = await insertOrganization(tx, {
         state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
@@ -462,7 +452,7 @@ describe("checkMemberAdmission", () => {
   });
 
   test("admits as before where no policy sets a member bound, with the flag off", async () => {
-    env.FEATURE_ORG_ACCESS_STATE = false;
+    testState.setConfig("FEATURE_ORG_ACCESS_STATE", false);
     await withRolledBackTx(async (tx) => {
       const organizationId = await insertOrganization(tx, {
         state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
@@ -579,7 +569,7 @@ describe("checkMemberCapacityChange", () => {
   });
 
   test("never refuses an organization on self-managed keys or a change to no bound", async () => {
-    env.FEATURE_ORG_ACCESS_STATE = false;
+    testState.setConfig("FEATURE_ORG_ACCESS_STATE", false);
     await withRolledBackTx(async (tx) => {
       const selfManaged = await insertOrganization(tx, {
         state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
@@ -639,7 +629,7 @@ describe("AI access for members", () => {
       }),
     );
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     const owner = asTestRaw<Transaction>(testDb);
     assignedUserId = await insertUser(owner);
     unassignedUserId = await insertUser(owner);
