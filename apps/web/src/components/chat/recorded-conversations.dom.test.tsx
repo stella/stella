@@ -930,10 +930,9 @@ const performAction = async ({
 }) => {
   switch (action.type) {
     case "send": {
-      // A plain send never replaces a turn that waits on the member: it is
-      // queued, and "Send now" on it sends it over the wait, as the recorded
-      // conversation did.
-      const overWait = live.session().turnAwaitsMember;
+      // A recorded send never goes over a turn that waits on the member: the
+      // server refuses that, and the page queues it instead.
+      expect(live.session().turnAwaitsMember).toBe(false);
       // What the composer hands the session on submit.
       await act(async () => {
         pendingActions.push(
@@ -948,19 +947,6 @@ const performAction = async ({
         );
         await sleep(0);
       });
-      if (overWait) {
-        const queued = live
-          .session()
-          .queuedMessages.find(
-            ({ message }) => message.id === action.messageId,
-          );
-        expect(queued).toBeDefined();
-        act(() => {
-          if (queued !== undefined) {
-            live.session().sendQueuedMessageNow(queued.id);
-          }
-        });
-      }
       return;
     }
     case "approve": {
@@ -1313,14 +1299,6 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
 const SCENARIOS = readdirSync(FIXTURE_DIR)
   .filter((file) => file.endsWith(RECORDING_EXTENSION))
   .map((file) => file.slice(0, -RECORDING_EXTENSION.length));
-/** Conversations where a new message replaces a turn that still waits on a
- *  card. */
-const SUPERSEDE_SCENARIOS = new Set([
-  "supersede-approval",
-  "supersede-approval-then-grant",
-  "supersede-ask-user",
-]);
-
 /** A stored interrupt without a readable binding kind. */
 const UNBOUND_INTERRUPT = "unbound";
 
@@ -1392,39 +1370,6 @@ describe("a recorded conversation, rendered", () => {
       recorded.toSorted(compareCodeUnit),
     );
   });
-
-  test.each([...SUPERSEDE_SCENARIOS])(
-    "%s sends the new message and never answers the replaced card",
-    async (scenario) => {
-      const { recording, server } = await replay(scenario);
-      const sends = recording.steps.flatMap(({ action }) =>
-        action.type === "send" ? [action.messageId] : [],
-      );
-      const replaced = storedToolCalls(recording).find(
-        ({ id }) => id === "call-1",
-      );
-      // The fixture must reach the fault: a second message typed while
-      // call-1 waited.
-      expect(sends).toHaveLength(2);
-      expect(replaced).toBeDefined();
-      const posted = JSON.stringify(server.posted.map(({ body }) => body));
-      expect(posted).toContain(sends.at(1) ?? "");
-      const answered = server.posted.flatMap(({ body }) =>
-        resumedInterrupts(body),
-      );
-      expect(
-        answered.filter((id) => id === replaced?.approval?.id),
-        finding(RENDER_ORACLE.grantAnswersOnce, scenario),
-      ).toEqual([]);
-      // The replaced card shows what the server stored and offers nothing.
-      const shown = readScreen(document.body);
-      expect(shown.actionable).not.toContain("call-1");
-      expect(shown.actionable).not.toContain("ask-user-1");
-      if (replaced?.approval !== undefined) {
-        expect(shown.denied).toContain("call-1");
-      }
-    },
-  );
 
   test("a conversation grant answers each matching approval exactly once, without a click", async () => {
     const { recording, server } = await replay("conversation-grant");
