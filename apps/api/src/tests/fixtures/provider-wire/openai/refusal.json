@@ -21,6 +21,9 @@
             ],
             "store": false,
             "max_output_tokens": 128000,
+            "prompt_cache_options": {
+              "mode": "explicit"
+            },
             "service_tier": "default",
             "model": "gpt-6-sol",
             "input": [
