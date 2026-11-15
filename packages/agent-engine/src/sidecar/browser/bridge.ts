@@ -9,15 +9,15 @@ import {
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
-  type BrowserControlCommand,
   type BrowserControlErrorCode,
   type BrowserControlResult,
   type BrowserDesktopRequest,
+  type BrowserDesktopResponse,
   type BrowserDownload,
-  type BrowserObservedTab,
   parseBrowserDesktopResponse,
 } from "@stll/api-contract/browser-control";
 
+import type { BrowserHostCancel, BrowserHostRequest } from "./browser-host";
 import { type LocalBrowserResult, localBrowserResult } from "./local-result";
 
 /**
@@ -50,18 +50,9 @@ type BrowserBridgeStatus =
   | { type: "waiting" }
   | { type: "ready"; protocolVersion: number };
 
-type BrowserBridgeRequest = {
-  command: BrowserControlCommand;
-  /** The chat the agent runs in; the extension keeps one tab per chat. */
-  controllerId: string;
-  observedTab: BrowserObservedTab | null;
-  toolCallId: string;
-  /** The run; the extension's per-turn budgets count by it. */
-  turnId: string;
-};
+type BrowserBridgeRequest = BrowserHostRequest;
 
-/** Which command to stop: the chat's controller and its run. */
-type BrowserBridgeCancel = { controllerId: string; turnId: string };
+type BrowserBridgeCancel = BrowserHostCancel;
 
 export type BrowserBridge = {
   readonly endpoint: string;
@@ -79,12 +70,28 @@ export type BrowserBridge = {
   stop: () => Promise<void>;
 };
 
-/** A download a chat's tab started, reported by the extension unasked. */
-export type BrowserBridgeDownload = {
-  /** The chat it belongs to, as the chat's commands named it. */
-  controllerId: string;
-  download: BrowserDownload;
-};
+/**
+ * A download a chat takes, reported by the extension unasked: when Chrome
+ * starts saving it, and once it settles. Both carry the same delivery id;
+ * a download stopped before it started is only reported settled.
+ */
+export type BrowserBridgeDownload =
+  | {
+      type: "started";
+      /** The chat it belongs to, as the chat's commands named it. */
+      controllerId: string;
+      deliveryId: string;
+      /** The address of the PDF the tab showed, when this saves one; else null. */
+      shownDocument: string | null;
+    }
+  | {
+      type: "settled";
+      controllerId: string;
+      deliveryId: string;
+      download: BrowserDownload;
+      /** The address of the PDF the tab showed, when this saved one; else null. */
+      shownDocument: string | null;
+    };
 
 type BrowserDownloadListener = (report: BrowserBridgeDownload) => void;
 
@@ -279,11 +286,33 @@ const downloadRelay = () => {
     set: (next: BrowserDownloadListener) => {
       listener = next;
     },
-    emit: ({ controllerId, download }: BrowserBridgeDownload) => {
-      listener({ controllerId, download });
+    emit: (report: BrowserBridgeDownload) => {
+      listener(report);
     },
   };
 };
+
+/** A download message from the extension, as the listener gets it. */
+const downloadReport = (
+  response: Extract<
+    BrowserDesktopResponse,
+    { type: "download" | "download-started" }
+  >,
+): BrowserBridgeDownload =>
+  response.type === "download"
+    ? {
+        controllerId: response.controllerId,
+        deliveryId: response.deliveryId,
+        download: response.download,
+        shownDocument: response.shownDocument,
+        type: "settled",
+      }
+    : {
+        controllerId: response.controllerId,
+        deliveryId: response.deliveryId,
+        shownDocument: response.shownDocument,
+        type: "started",
+      };
 
 const hostStatus = (host: Host | null): BrowserBridgeStatus => {
   if (host === null) {
@@ -372,8 +401,9 @@ export const startBrowserBridge = async ({
         pending.get(response.requestId)?.(response.result);
         return;
       }
+      case "download-started":
       case "download":
-        downloads.emit(response);
+        downloads.emit(downloadReport(response));
         return;
       default:
         response satisfies never;

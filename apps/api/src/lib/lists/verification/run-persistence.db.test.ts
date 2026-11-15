@@ -99,9 +99,22 @@ test("completion pins source text and claims once", async () => {
       refs: [],
     },
   ] satisfies (typeof legalListClaims.$inferInsert)[];
+  const unreadParts = [
+    {
+      start: { blockId: "P1", offset: 13 },
+      end: { blockId: "P1", offset: 25 },
+    },
+  ];
 
   await scopedQuery([workspaceId], organizationId, async (tx) => {
-    await completeVerificationRun({ tx, runId, workspaceId, blocks, claims });
+    await completeVerificationRun({
+      tx,
+      runId,
+      workspaceId,
+      blocks,
+      claims,
+      unreadParts,
+    });
   });
   await scopedQuery([workspaceId], organizationId, async (tx) => {
     await completeVerificationRun({
@@ -110,6 +123,7 @@ test("completion pins source text and claims once", async () => {
       workspaceId,
       blocks: [{ ...blocks[0], text: "Changed on replay." }],
       claims,
+      unreadParts: [],
     });
   });
 
@@ -118,7 +132,10 @@ test("completion pins source text and claims once", async () => {
     organizationId,
     async (tx) => ({
       run: await tx
-        .select({ status: legalListVerificationRuns.status })
+        .select({
+          status: legalListVerificationRuns.status,
+          unreadParts: legalListVerificationRuns.unreadParts,
+        })
         .from(legalListVerificationRuns)
         .where(eq(legalListVerificationRuns.id, runId)),
       blocks: await tx
@@ -140,7 +157,8 @@ test("completion pins source text and claims once", async () => {
         .where(eq(legalListClaims.runId, runId)),
     }),
   );
-  expect(stored.run).toEqual([{ status: "completed" }]);
+  // The first completion's unread text stands; a replay changes nothing.
+  expect(stored.run).toEqual([{ status: "completed", unreadParts }]);
   expect(stored.blocks).toEqual([
     expect.objectContaining({
       runId,
@@ -209,6 +227,7 @@ test("completion keeps source text when no claims are found", async () => {
         tx,
         runId: emptyRunId,
         workspaceId,
+        unreadParts: [],
         blocks: [
           {
             id: "p1",
@@ -302,6 +321,7 @@ test("failed transitions audit only the changed row and roll back with it", asyn
       tx,
       runId: failedRunId,
       workspaceId,
+      unreadParts: [],
       blocks: [],
       claims: [],
     });

@@ -159,6 +159,7 @@
     "handoffAccount": "Folytatja <account>{email}</account> fiókkal a(z) <organization>{organizationName}</organization> szervezetben?",
     "handoffTitle": "Tovább a Stellába",
     "headline": "Tisztán látás minden ügyben.",
+    "invalidEmailOrPassword": "Hibás e-mail-cím vagy jelszó.",
     "invitation": {
       "declined": "Meghívó elutasítva",
       "declinedDescription": "Elutasította ezt a meghívót. Biztonságosan bezárhatja ezt az oldalt.",
@@ -207,6 +208,7 @@
       "useBackupCode": "Inkább biztonsági kód használata"
     },
     "useDifferentEmail": "Másik e-mail-cím használata",
+    "useEmailCode": "Bejelentkezés e-mailben kapott kóddal",
     "usePassword": "Bejelentkezés jelszóval",
     "weSentCodeTo": "Kódot küldtünk a következő címre: <email>{emailAddress}</email>"
   },
@@ -294,6 +296,8 @@
       "reopened": "Újranyitva, ellenőrzésre vár",
       "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
       "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
+      "verdictBy": "A következtetést a(z) {model} hozta",
+      "verdictByGenerativeModel": "A következtetést a generatív modell hozta; a döntési modell nem döntötte el",
       "whyVerdict": "A következtetés indoka: referenciatények"
     },
     "claimTypes": {
@@ -595,7 +599,8 @@
       "startFailed": "Az ellenőrzést nem sikerült elindítani",
       "status": {
         "running": "Ellenőrzés folyamatban"
-      }
+      },
+      "unreadParts": "{count, plural, one {Az irat # részét nem sikerült beolvasni, ezért az abban szereplő állításokat nem ellenőriztük.} other {Az irat # részét nem sikerült beolvasni, ezért az azokban szereplő állításokat nem ellenőriztük.}}"
     },
     "save": {
       "failed": "Nincs mentve",
@@ -1673,6 +1678,8 @@
         "actions": {
           "click": "Kattintás",
           "fill": "Szöveg beírása",
+          "find": "Keresés az oldalon",
+          "findHeadings": "Az oldal címsorainak listázása",
           "open": "Webhely megnyitása",
           "openNewTab": "Webhely megnyitása új lapon",
           "pressKey": "Billentyű lenyomása",
@@ -1963,6 +1970,24 @@
       "secretAnswer": "Rejtett válasz",
       "secretPlaceholder": "Az Ön válasza rejtve marad"
     },
+    "makeSkill": {
+      "command": "Készség létrehozása ebből a beszélgetésből",
+      "drafted": "A készség vázlata elkészült. Nézze át, majd kapcsolja be.",
+      "drafting": "Készségvázlat készül ebből a beszélgetésből…",
+      "emptyThread": "Először küldjön egy üzenetet, utána a beszélgetésből készség hozható létre.",
+      "failed": "Ebből a beszélgetésből nem sikerült készséget létrehozni",
+      "review": {
+        "description": "A készség vázlata tartalmazza ezeket a neveket. Bárki láthatja őket, aki hozzáfér ehhez a készséghez.",
+        "replaceHint": "Vegye ki a pipát egy név elől, hogy általános helyőrzőre cserélje.",
+        "role": {
+          "organization": "szervezet neve",
+          "person": "személy neve"
+        },
+        "saveAll": "Az összes megtartása és mentés",
+        "saveReplacing": "A nem jelöltek cseréje és mentés",
+        "title": "Mentsük ezeket a neveket a készségbe?"
+      }
+    },
     "matterRuns": {
       "needsYou": "{count, plural, one {# csevegés vár Önre} other {# csevegés vár Önre}}",
       "waitsOn": {
@@ -2070,6 +2095,7 @@
       "noResults": "Nincs egyező készség",
       "tryOne": "Kezdésként próbálja ki valamelyiket"
     },
+    "queuePrompt": "Küldés, amikor az ügynök végzett",
     "queuedAttachmentCount": "{count, plural, one {# melléklet} other {# melléklet}}",
     "queuedNotice": "Sorba állítva – a jelenlegi válasz befejeztével küldjük el",
     "reasoning": "Érvelés",
@@ -2176,6 +2202,15 @@
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
     "sources": "Források:",
+    "steerRefused": {
+      "cannotSteer": "Ez az ügynök munka közben nem fogad üzeneteket.",
+      "noRun": "Az ügynök most nem fut a számítógépén.",
+      "notPlain": "Munka közben csak fájlok nélküli, nem anonimizált módban küldött szöveges üzenetet küldhet az ügynöknek.",
+      "notTaken": "Az ügynök most nem tudta fogadni az üzenetét.",
+      "runFull": "Az ügynök most nem fogad több üzenetet.",
+      "title": "Az üzenete a sorban vár, amíg az ügynök végez",
+      "turnNotRunning": "Az ügynök jelenleg nem dolgozik."
+    },
     "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
@@ -2311,9 +2346,14 @@
       "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
+      "user_message": "Az ügynök munkája közben elküldve",
       "web_search": "Keresés az interneten"
     },
     "toolCall": {
+      "browserClick": "Kattintás erre: „{target}” ({url})",
+      "browserPressKey": "{key} billentyű lenyomása itt: „{target}” ({url})",
+      "browserSelect": "„{option}” kiválasztása itt: „{target}” ({url})",
+      "browserType": "Szöveg beírása ide: „{target}” ({url})",
       "characterCount": "{count, plural, one {# karakter} other {# karakter}}",
       "commandExited": "{command} (kilépési kód: {code})",
       "consoleLogs": "Konzolkimenet",
@@ -2323,17 +2363,17 @@
       "input": "Bemenet",
       "interrupted": "Befejezés előtt megszakadt",
       "localOutput": {
+        "arriving": "Még érkezik arról a számítógépről, amelyen a lépés futott",
         "conversation": "Az alügynök beszélgetése",
         "conversationPrompt": "Feladat",
         "conversationReport": "Jelentés",
         "cut": "Az első {kept} látható, összesen {total}",
         "diff": "Fájlmódosítások",
-        "elsewhere": "Nyissa meg azon a számítógépen, amelyen futott",
         "empty": "Nincs kimenet",
-        "failed": "A stella asztali alkalmazás ezen a számítógépen nem tudta megjeleníteni.",
-        "imageTooLarge": "Ez a kép {total} méretű. A {kept} méretnél nagyobb képeket ez a számítógép nem őrzi meg, ezért itt nem jeleníthető meg.",
-        "notKept": "Ebből a lépésből semmi sincs megőrizve ezen a számítógépen",
-        "reading": "Olvasás erről a számítógépről"
+        "imageTooLargeToStore": "Ez a kép {total} méretű. A {kept} méretnél nagyobb képek nem kerülnek mentésre, ezért nem jeleníthető meg.",
+        "notCopied": "Még nincs átmásolva ebbe a csevegésbe",
+        "notStored": "Ebből a lépésből semmi sem lett mentve",
+        "runBudgetReached": "Nincs mentve: ez a futtatás már annyit mentett, amennyit egy futtatás menthet"
       },
       "output": "Kimenet",
       "patternInPath": "{pattern} itt: {path}",
@@ -2356,6 +2396,10 @@
       "needsInputTitle": "A stellának szüksége van Önre",
       "replyReadyBody": "A stella befejezte a választ a csevegésben.",
       "replyReadyTitle": "Kész a válasz"
+    },
+    "turnPaused": {
+      "continue": "Folytatás",
+      "status": "Szüneteltetve {count, plural, one {# eszközhívás} other {# eszközhívás}} után"
     },
     "turnStatus": {
       "answerFailed": "A választ nem sikerült befejezni",
@@ -3009,7 +3053,6 @@
       "dropZone": "Húzza ide a meghatalmazást (.docx), vagy kattintson a fájl kiválasztásához",
       "extracting": "Meghatalmazó(k) kinyerése…",
       "fileHint": "A stella beolvassa a dokumentumot, és automatikusan megkeresi a meghatalmazót (aki a meghatalmazást adja, nem az ügyvédet). Megerősítés előtt ellenőrizze az eredményt.",
-      "fileTooLarge": "A meghatalmazás fájlja legfeljebb 50 MB lehet.",
       "invalidFileType": "Válasszon egy .docx fájlt.",
       "noOutorganteFound": "Ebben a dokumentumban nem sikerült meghatalmazót azonosítani.",
       "parseErrorGeneric": "Ebből a dokumentumból nem sikerült kapcsolatokat kinyerni.",
@@ -3389,6 +3432,7 @@
       "invitationRoleNotAllowed": "Ezzel a szerepkörrel nem hívhat meg senkit. Válasszon másik szerepkört.",
       "invoiceNumberSeriesMissing": "Állítson be alapértelmezett számsorozatot a számlákhoz a szervezeti beállítások Számsorozatok részében, majd állítsa ki a számlát.",
       "invoiceSellerProfileMissing": "Hozzon létre eladói profilt a szervezeti beállítások Számlázási profilok részében, majd állítsa ki a számlát.",
+      "legalHoldActive": "A törlés le van tiltva, mert ezeket az adatokat meg kell őrizni.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
       "matterContactCapacityExceeded": "Ez az ügy több kapcsolatot tartalmaz, mint amennyi megjeleníthető. A többi kapcsolat megjelenítéséhez szüntesse meg néhány látható kapcsolat ügyhöz rendelését.",
@@ -3411,6 +3455,11 @@
       "sharepointNotFound": "Ez a webhely, dokumentumtár vagy fájl már nem létezik, vagy nincs megosztva Önnel.",
       "sharepointReconnectRequired": "A Microsoft-bejelentkezése lejárt. Csatlakoztassa újra a SharePointot és a OneDrive-ot.",
       "sharepointThrottled": "A Microsoft korlátozza a kéréseket. Próbálja újra rövidesen.",
+      "skillFromChatAnonymizedThread": "Anonimizált beszélgetésből egyelőre nem hozható létre készség.",
+      "skillFromChatEmptyThread": "Ebben a beszélgetésben még nincs semmi, amiből készség hozható létre.",
+      "skillFromChatLocalRunThread": "Ez a beszélgetés az Ön számítógépén fut, ezért a felhőben nem készül belőle készség.",
+      "skillFromChatThreadNotFound": "Ez a beszélgetés nem található.",
+      "skillFromChatWithdrawn": "A beszélgetés tartalmát visszavonták, ezért abból nem hozható létre készség.",
       "skillSourceUnreachable": "A készség forrását nem sikerült betölteni. Ellenőrizze, hogy a hivatkozás nyilvános GitHub-tárolóra mutat-e, vagy próbálja újra később.",
       "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
       "usageLimitExceeded": "Elérte a használati korlátot.",
@@ -5864,6 +5913,8 @@
       "auditLogsSentenceDownload": "{resource} letöltve.",
       "auditLogsSentenceExecute": "{resource} futtatva.",
       "auditLogsSentenceIssued": "{resource} kiadva.",
+      "auditLogsSentenceLegalHoldPlaced": "{resource} elrendelve.",
+      "auditLogsSentenceLegalHoldReleased": "{resource} feloldva.",
       "auditLogsSentenceRedeemed": "{resource} beváltva.",
       "auditLogsSentenceRefused": "{resource} elutasítva.",
       "auditLogsSentenceReview": "{resource} ellenőrizve.",
@@ -5915,6 +5966,7 @@
         "flow_run": "munkafolyamat futtatása",
         "folio_collab_room": "Folio együttműködési szoba",
         "invoice": "számla",
+        "legal_hold": "jogi megőrzés",
         "legal_list": "jogi lista",
         "legal_list_generation": "jogi lista létrehozása",
         "legal_list_item": "jogi lista tétele",
@@ -5991,6 +6043,7 @@
         "title": "Kódoló ügynökök a tagok számítógépein",
         "updated": "A kódoló ügynökök engedélyei frissítve"
       },
+      "logoInvalid": "Válasszon legfeljebb 5 MB méretű PNG-, JPEG- vagy WebP-képet.",
       "matterNumbering": "Ügyszámozás",
       "matterNumberingDescription": "Beállíthatja, hogyan generálódjanak az új ügyek hivatkozási számai",
       "membersDescription": "Kezelje, kik férhetnek hozzá ehhez a szervezethez, és a függőben lévő meghívókat",
@@ -6039,6 +6092,7 @@
         "title": "Időzóna",
         "updated": "Időzóna frissítve"
       },
+      "uploadLogo": "Logó feltöltése",
       "usage": "Használat",
       "usageDescription": "Használati korlátok és jogosultsági állapot ehhez a szervezethez",
       "usageEmptyDescription": "Állíts be használati jogosultságot, hogy a szervezet használhassa a mért AI-funkciókat.",
@@ -6074,7 +6128,13 @@
       "usageStatusTrialing": "Próbaidőszak",
       "usageUnitCount": "{count, plural, one {# egység} other {# egység}}",
       "usageUnitsBalanceTemplate": "{remaining} egység elérhető",
-      "usageUnitsThisPeriod": "Használati egységek ebben az időszakban"
+      "usageUnitsThisPeriod": "Használati egységek ebben az időszakban",
+      "verificationDecisionModel": {
+        "description": "Amikor egy dokumentumot egy lista tényei alapján ellenőriz, a döntési modell választja ki az egyes állítások következtetését. A tényeket továbbra is a generatív modell keresi meg és idézi. Ha a döntési modell nem elég biztos, a generatív modell következtetése marad érvényben.",
+        "title": "Következtetések a dokumentumok ellenőrzésekor",
+        "unavailable": "Ennek a szervezetnek nincs elérhető döntési modellje.",
+        "updated": "Az ellenőrzési beállítás frissült"
+      }
     }
   },
   "sharepoint": {
@@ -6315,6 +6375,7 @@
       "previewBody5": "Az átváltás előtt történő értékesítés vagy tőzsdei bevezetés esetén a Befektetőt a vételár vagy az átváltás alapján fizetendő bevétel közül a magasabb összeg illeti meg.",
       "previewBody6": "A Társaság szabályszerűen megalakult, jogosult e megállapodás megkötésére, és beszerzi a teljesítéséhez szükséges valamennyi jóváhagyást.",
       "previewBody7": "E megállapodás tartalmazza a felek teljes megállapodását, és kizárólag írásban, a szükséges hozzájárulással módosítható.",
+      "previewDocument": "Stíluskészlet előnézete",
       "previewFailed": "Az előnézetet nem sikerült létrehozni.",
       "previewIntroduction": "E megállapodás az Example Labs Ltd. (a „Társaság”) és az aláírási oldalon megnevezett befektető (a „Befektető”) között jön létre.",
       "previewLevel1": "Befektetés",

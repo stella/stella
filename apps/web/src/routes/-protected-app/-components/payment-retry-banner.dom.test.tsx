@@ -81,14 +81,11 @@ const renderBanner = (queryClient: InstanceType<typeof QueryClient>) => {
     React.createElement(
       QueryClientProvider,
       { client: queryClient },
-      React.createElement(IntlProvider, {
-        locale: "en",
-        messages,
-        timeZone: "UTC",
-        children: React.createElement(BannerForOrganization, {
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        {React.createElement(BannerForOrganization, {
           organizationId: "org-a",
-        }),
-      }),
+        })}
+      </IntlProvider>,
     ),
   );
   return {
@@ -98,14 +95,11 @@ const renderBanner = (queryClient: InstanceType<typeof QueryClient>) => {
         React.createElement(
           QueryClientProvider,
           { client: queryClient },
-          React.createElement(IntlProvider, {
-            locale: "en",
-            messages,
-            timeZone: "UTC",
-            children: React.createElement(BannerForOrganization, {
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            {React.createElement(BannerForOrganization, {
               organizationId,
-            }),
-          }),
+            })}
+          </IntlProvider>,
         ),
       ),
   };

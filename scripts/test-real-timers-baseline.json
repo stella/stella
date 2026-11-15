@@ -394,11 +394,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/uploads/finalize-admission.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/workflow-queue.test.ts": {
     "count": 1,
     "owner": "api",
@@ -449,11 +444,6 @@
     "owner": "collab",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/desktop/tests/AgentSubscriptionsSection.dom.test.tsx": {
-    "count": 2,
-    "owner": "desktop",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/desktop/tests/desktop-events.test.ts": {
     "count": 1,
     "owner": "desktop",
@@ -501,11 +491,6 @@
   },
   "apps/web/src/components/action-admission-outcome.dom.test.tsx": {
     "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/components/ai-suggestions/docx-suggestion-cache.test.ts": {
-    "count": 3,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -559,11 +544,6 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/web/src/components/inspector/markdown-file-viewer.dom.test.tsx": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/web/src/components/inspector/maximize-tab.test.ts": {
     "count": 1,
     "owner": "web",
@@ -576,11 +556,6 @@
   },
   "apps/web/src/components/legal-reader/legal-reader-ai-chat.dom.test.tsx": {
     "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/components/legal-reader/reference-peek.dom.test.tsx": {
-    "count": 2,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -635,7 +610,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx": {
-    "count": 6,
+    "count": 5,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -650,11 +625,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/features/chat/chat-runtime-stop.test.ts": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/features/chat/chat-runtime-version-skew.test.ts": {
     "count": 1,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"

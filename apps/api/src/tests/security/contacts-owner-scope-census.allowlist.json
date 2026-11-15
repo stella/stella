@@ -78,7 +78,7 @@
   "apps/api/src/handlers/contacts/bulk/delete.ts::names-contacts-table": {
     "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only. Its locking read is `lockOwnedContactsForBulkDelete` on that same transaction.",
     "sites": {
-      "bulkDeleteContacts.txResult.deletedContacts": 1
+      "bulkDeleteContactsInTransaction.deletedContacts": 1
     }
   },
   "apps/api/src/handlers/contacts/create.ts::names-contacts-table": {

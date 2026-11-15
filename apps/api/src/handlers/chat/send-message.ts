@@ -8,6 +8,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_INPUT_REFUSAL_CODE,
+  CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -23,6 +24,8 @@ import {
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
 import {
   CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
   CHAT_RUN_TARGET_KIND,
@@ -49,7 +52,6 @@ import type { TurnBrowserExtension } from "@/api/handlers/chat/browser-extension
 import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
-  getAwaitingUserInteractions,
   getResumedUserInteraction,
   isChatPart,
   toPersistableChatMessage,
@@ -100,6 +102,7 @@ import {
   CHAT_RUN_MODE,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
+  hasAgUiEnvelopeCorrelationMismatch,
   parseMessage,
   requireUserMessageContent,
   resolveTurnBrowserExtension,
@@ -117,10 +120,14 @@ import {
   isChatTurnRunIdTaken,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
-import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import type {
+  ChatTurnExecution,
+  ChatTurnSource,
+} from "@/api/handlers/chat/chat-turn-persistence";
 import {
   CHAT_TURN_BOUNDARY_MODE,
   ChatTurnRun,
+  chatTurnRunBoundOf,
   countChatTurnSettlement,
   processChatTurnOwnership,
 } from "@/api/handlers/chat/chat-turn-run";
@@ -355,6 +362,8 @@ import {
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { previewVisual } from "@/api/lib/visual-preview";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -559,6 +568,7 @@ type ChatSendLifecycleOptions = {
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
   /** The boundary mode the turn's settlement is counted under. */
   mode: ChatTurnObservation["mode"];
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
@@ -893,7 +903,7 @@ export class ChatSendLifecycle {
     ) {
       return false;
     }
-    const interaction = getAwaitingUserInteractions(this.checkpoint).at(0);
+    const interaction = memberWaitsOf(this.checkpoint).at(0);
     if (interaction === undefined) {
       return false;
     }
@@ -930,7 +940,10 @@ export class ChatSendLifecycle {
    * run gets nothing of the request, so it behaves the same once the request
    * is gone.
    */
-  startRun(connectors: LoadedExternalMcpTools | undefined): ChatTurnRun {
+  startRun(
+    connectors: LoadedExternalMcpTools | undefined,
+    runsOn: ChatRunTarget["kind"],
+  ): ChatTurnRun {
     if (this.claimedTurn.status !== "preflight") {
       return panic("Cannot start a run for a turn this send does not hold");
     }
@@ -939,7 +952,7 @@ export class ChatSendLifecycle {
       admission: this.admission,
       checkpoint: this.checkpoint,
       connectors,
-      deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
+      bound: chatTurnRunBoundOf(runsOn),
       mode: this.options.mode,
       owner: {
         indexThread: this.options.indexThread,
@@ -1161,6 +1174,7 @@ export class ChatSendLifecycle {
       }
       if (this.pendingSideEffects !== undefined) {
         const rollbackResult = await this.options.rollbackSideEffects({
+          organizationId: this.options.organizationId,
           recordAuditEvent: this.options.recordAuditEvent,
           safeDb: this.options.safeDb,
           threadId: this.options.threadId,
@@ -1386,6 +1400,8 @@ const keepThreadRunTarget = async ({
 };
 
 type AcceptIncomingTurnOptions = {
+  /** Who asked for the turn: the member, or their queue sending for them. */
+  source: ChatTurnSource;
   accessibleSet: ReadonlySet<string>;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   body: ChatSendRequest;
@@ -1405,6 +1421,7 @@ type AcceptIncomingTurnOptions = {
 
 /** Persists the incoming message and establishes the turn's durable owner. */
 const acceptIncomingTurn = async ({
+  source,
   accessibleSet,
   accessibleWorkspaceIds,
   body,
@@ -1611,12 +1628,24 @@ const acceptIncomingTurn = async ({
       latestMessagePlan.persistencePlan.type !== "none"
         ? createChatTurnAcceptance({
             organizationId,
+            source,
             threadId: body.threadId,
             userId,
             userMessageId: parsedMessage.message.id,
             workspaceId,
           })
         : undefined;
+    // A queued message is sent only as a new turn that takes it from the
+    // queue; one that would not store a new turn is not the queue's to send.
+    if (source.type === "queue" && turnAcceptance === undefined) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          code: CHAT_QUEUE_ERROR_CODE.notDue,
+          message: "The queued message is not the next one the queue may send",
+        }),
+      );
+    }
     const persistenceProps = {
       acceptedSendMode: body.sendMode,
       recordAuditEvent,
@@ -1658,7 +1687,7 @@ const acceptIncomingTurn = async ({
           acceptedTurnId: null,
           continuationInteraction:
             getResumedUserInteraction({
-              awaited: getAwaitingUserInteractions(
+              awaited: memberWaitsOf(
                 validationThreadState.persistedMessage === null
                   ? null
                   : chatMessageFromPersisted({
@@ -1860,6 +1889,11 @@ type PrepareValidatedIncomingMessageOptions = {
 };
 
 /** Validates the provider-facing message and adopts thread/file rollback ownership. */
+/** An upload a legal hold refused answers with the shared hold refusal. */
+const uploadRefusal = <UploadError>(
+  error: UploadError | LegalHoldActiveError,
+) => (LegalHoldActiveError.is(error) ? legalHoldRefusal(error) : error);
+
 const prepareValidatedIncomingMessage = async ({
   dependencies: { caseLawDb, loadWebSearchProviders, uploadMessageFiles },
   authorization: {
@@ -2263,7 +2297,7 @@ const prepareValidatedIncomingMessage = async ({
       // The upload helper already cleans a partial upload (and a newly
       // created thread) before returning an error.
       lifecycle.releaseSideEffects();
-      return Result.err(uploadResult.error);
+      return Result.err(uploadRefusal(uploadResult.error));
     }
     lifecycle.trackUploadedFiles(uploadResult.value.uploadedFiles);
 
@@ -2444,6 +2478,7 @@ export const createSendMessage = (
       safeDb,
       scopedDb,
       session,
+      set,
       usageLane,
       user,
     }) {
@@ -2454,10 +2489,6 @@ export const createSendMessage = (
       const body = transportBody.forwardedProps;
       const parentRunId = "parentRunId" in body ? body.parentRunId : undefined;
       const resume = "resume" in body ? body.resume : undefined;
-      const transportParentRunId =
-        "parentRunId" in transportBody ? transportBody.parentRunId : undefined;
-      const transportResume =
-        "resume" in transportBody ? transportBody.resume : undefined;
       let acceptedLifecycle: ChatSendLifecycle | undefined = undefined;
       const isClientConnectionAborted = () =>
         acceptedLifecycle === undefined
@@ -2480,18 +2511,7 @@ export const createSendMessage = (
         task: "chat",
       });
 
-      const hasEnvelopeCorrelationMismatch = (): boolean =>
-        transportBody.threadId !== body.threadId ||
-        transportBody.runId !== body.runId ||
-        transportParentRunId !== parentRunId ||
-        !deepEquals(transportResume, resume) ||
-        !deepEquals(transportBody.data, body) ||
-        !transportBody.messages.some(
-          (message) =>
-            message.id === body.message.id &&
-            message.role === body.message.role,
-        );
-      if (hasEnvelopeCorrelationMismatch()) {
+      if (hasAgUiEnvelopeCorrelationMismatch(transportBody)) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -2655,13 +2675,14 @@ export const createSendMessage = (
         : (body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE);
       const docxEditRepresentation =
         body.docxEditRepresentation ?? DEFAULT_DOCX_EDIT_REPRESENTATION;
+      const activeFile = body.activeFile;
       const activeFileEntity =
-        body.activeFile?.supportsDocxEdits === true && workspaceId !== null
+        activeFile?.supportsDocxEdits === true && workspaceId !== null
           ? yield* Result.await(
               safeDb((tx) =>
                 tx.query.entities.findFirst({
                   where: {
-                    id: { eq: body.activeFile?.entityId },
+                    id: { eq: activeFile.entityId },
                     workspaceId: { eq: workspaceId },
                   },
                   columns: { currentVersionId: true },
@@ -2747,6 +2768,7 @@ export const createSendMessage = (
         indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
         mode: CHAT_TURN_BOUNDARY_MODE[body.sendMode],
+        organizationId: session.activeOrganizationId,
         recordAuditEvent,
         safeDb,
         scopedDb,
@@ -2833,8 +2855,10 @@ export const createSendMessage = (
           webSearchProviders,
         } = preparedIncomingMessage;
 
-        // A turn bound for a computer is routed before it is admitted or
-        // stored: a computer that cannot take it refuses the send.
+        // Whether a turn may be asked to run on a computer at all. Which
+        // computer takes it is decided once the turn is stored, as its run
+        // starts, so a computer that cannot take it fails the turn the
+        // member's message is stored with.
         const localRun = yield* Result.await(
           resolveChatLocalRun({
             runTarget: body.runTarget,
@@ -2898,6 +2922,10 @@ export const createSendMessage = (
         yield* Result.await(lifecycle.checkAdmission());
 
         const acceptedTurnResult = await acceptIncomingTurn({
+          source:
+            session.startedFromQueue === undefined
+              ? { type: "member" }
+              : { type: "queue", ...session.startedFromQueue },
           managedAIResidency,
           accessibleSet,
           accessibleWorkspaceIds,
@@ -2929,6 +2957,12 @@ export const createSendMessage = (
           toolWorkspaceIds,
           turnExecution,
         } = acceptedTurnResult.value;
+        // From here the member's message and its turn are stored, so every
+        // answer names the turn, a refusal included: a client then knows
+        // from the response alone that the thread holds what it sent. A
+        // stream refused before it opens (`ChatTurnFailureResponse`) gets the
+        // header from here too.
+        set.headers[CHAT_TURN_ID_HEADER] = turnExecution.id;
 
         const skillBindingScope = yield* Result.await(
           settleInternalPreflight(
@@ -3098,6 +3132,10 @@ export const createSendMessage = (
           toolWorkspaceIds,
           workspaceStatusById,
         });
+        // A turn the server started from the member's queue says so on
+        // every event its tools record.
+        const chatAuditSource =
+          session.startedFromQueue === undefined ? "chat" : "chat_queue";
         // Reads the assistant makes without an approval, such as a skill
         // loaded by `load-skill`.
         const recordReadAuditEvent = createAuditRecorder({
@@ -3110,7 +3148,7 @@ export const createSendMessage = (
             trigger: {
               type: "user_dispatch",
               userId: user.id,
-              source: "chat",
+              source: chatAuditSource,
               sourceId: body.threadId,
             },
             runId: parsedMessage.message.id,
@@ -3197,7 +3235,7 @@ export const createSendMessage = (
               trigger: {
                 type: "user_dispatch",
                 userId: user.id,
-                source: "chat",
+                source: chatAuditSource,
                 sourceId: body.threadId,
               },
               runId: parsedMessage.message.id,
@@ -3509,7 +3547,10 @@ export const createSendMessage = (
               // The run owns the turn and the loaded connectors from here.
               // Agent runs load none for streaming, so the send's cleanup
               // closes any validation-only load.
-              const run = lifecycle.startRun(externalMcpTools);
+              const run = lifecycle.startRun(
+                externalMcpTools,
+                body.runTarget?.kind ?? CHAT_RUN_TARGET_KIND.cloud,
+              );
               try {
                 // The streamed turn's persistence: every expected failure
                 // comes back as a `Result` naming the turn row's failure code,

@@ -12,7 +12,7 @@ import type { ApiError } from "@/state/api-request";
 import { sendRefusal } from "@/state/chat-attachments";
 import type { ChatDraft, SendRefusal } from "@/state/chat-attachments";
 import { sentEntry } from "@/state/chat-messages";
-import type { ChatEntry } from "@/state/chat-messages";
+import type { ChatEntry, ChatRetry } from "@/state/chat-messages";
 import { continuationOf } from "@/state/chat-pending-input";
 import type { PendingAnswer, PendingInput } from "@/state/chat-pending-input";
 import {
@@ -22,6 +22,7 @@ import {
   EMPTY_ANSWER,
   joinChatTurn,
   probeChatTurn,
+  regenerateChatTurn,
   sendChatMessage,
 } from "@/state/chat-stream";
 import type {
@@ -36,12 +37,21 @@ import type {
  * A turn on screen: the message it answers (when this phone sent it), the
  * answer so far, and the stored message it continues, when it resumes a
  * paused turn. That message stays on screen above what the new run adds.
+ * A turn that answers the latest message again `replaces` the stored
+ * answer that failed, which leaves the screen while it runs.
  */
 export type LiveTurn = {
   readonly question: ChatEntry | undefined;
   readonly answer: StreamedAnswer;
   readonly startedAt: string;
   readonly continues: string | undefined;
+  readonly replaces: string | undefined;
+};
+
+/** How a new turn stands to a stored message: adding to it, or in its place. */
+type StoredLink = {
+  readonly type: "continues" | "replaces";
+  readonly messageId: string;
 };
 
 /** What a paused turn waits for, when this phone can give it. */
@@ -167,7 +177,10 @@ export const useChatTurn = ({
       return false;
     }
     setSendError(undefined);
-    const opened = turn.open(undefined, pending.messageId);
+    const opened = turn.open(undefined, {
+      type: "continues",
+      messageId: pending.messageId,
+    });
     start(
       opened,
       async () =>
@@ -193,6 +206,42 @@ export const useChatTurn = ({
           signal: opened.controller.signal,
         }),
       onRefused,
+    );
+    return true;
+  };
+
+  /**
+   * Answers the thread's latest message again once its answer failed,
+   * unless a turn is still answering. A refusal before the server named a
+   * turn is shown where a send's is; the message stays in the thread.
+   */
+  const regenerate = (retry: ChatRetry): boolean => {
+    if (connection.current !== null) {
+      return false;
+    }
+    setSendError(undefined);
+    const opened = turn.open(undefined, {
+      type: "replaces",
+      messageId: retry.answerId,
+    });
+    start(
+      opened,
+      async () =>
+        await regenerateChatTurn({
+          ...thread,
+          anonymized,
+          fetch: streamingFetch,
+          onEvent: turn.applyEvent,
+          onTurn: (accepted) => {
+            turn.accept(opened, accepted);
+          },
+          retry,
+          runId: randomUUID(),
+          signal: opened.controller.signal,
+        }),
+      (error) => {
+        setSendError(sendRefusal(error, false));
+      },
     );
     return true;
   };
@@ -265,6 +314,7 @@ export const useChatTurn = ({
     canStop: turn.turnId !== undefined,
     follow,
     live: turn.live,
+    regenerate,
     send,
     sendError,
     stop,
@@ -419,6 +469,7 @@ function useLiveTurn(activeTurnId: string | null) {
           answer: EMPTY_ANSWER,
           startedAt: nowIso(),
           continues: undefined,
+          replaces: undefined,
         },
   );
   const [busy, setBusy] = useState(activeTurnId !== null);
@@ -445,9 +496,9 @@ function useLiveTurn(activeTurnId: string | null) {
     },
     /**
      * A new turn, replacing any still connected: one answering `question`,
-     * or one that `continues` a paused message.
+     * or one linked to a stored message, which it continues or replaces.
      */
-    open: (question: ChatEntry | undefined, continues?: string): Connection => {
+    open: (question: ChatEntry | undefined, link?: StoredLink): Connection => {
       connection.current?.controller.abort();
       const opened = newConnection(undefined);
       connection.current = opened;
@@ -457,7 +508,8 @@ function useLiveTurn(activeTurnId: string | null) {
         question,
         answer: EMPTY_ANSWER,
         startedAt: nowIso(),
-        continues,
+        continues: link?.type === "continues" ? link.messageId : undefined,
+        replaces: link?.type === "replaces" ? link.messageId : undefined,
       });
       setBusy(true);
       setTurnId(undefined);
@@ -475,6 +527,7 @@ function useLiveTurn(activeTurnId: string | null) {
         answer: EMPTY_ANSWER,
         startedAt: nowIso(),
         continues,
+        replaces: undefined,
       });
       setBusy(true);
       setTurnId(known);

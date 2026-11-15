@@ -13,7 +13,7 @@ import {
   stripStamp,
 } from "@/api/lib/docx-stamp";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -108,16 +108,21 @@ const isWellFormedXml = (xml: string): boolean =>
 // ── Tests ───────────────────────────────────────────────
 
 describe("isStampableDocx", () => {
-  test("returns true for DOCX under 50 MB", () => {
+  test("returns true for DOCX up to the document limit", () => {
     expect(isStampableDocx(DOCX_MIME, 1024)).toBe(true);
+    expect(isStampableDocx(DOCX_MIME, FILE_SIZE_LIMIT_BYTES.document)).toBe(
+      true,
+    );
   });
 
   test("returns false for non-DOCX mime type", () => {
     expect(isStampableDocx("application/pdf", 1024)).toBe(false);
   });
 
-  test("returns false for files over 50 MB", () => {
-    expect(isStampableDocx(DOCX_MIME, 51 * 1024 * 1024)).toBe(false);
+  test("returns false for files over the document limit", () => {
+    expect(isStampableDocx(DOCX_MIME, FILE_SIZE_LIMIT_BYTES.document + 1)).toBe(
+      false,
+    );
   });
 });
 

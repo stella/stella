@@ -20,6 +20,7 @@ import {
   type HarnessAdapter,
   type HarnessAuth,
   type HarnessCapability,
+  type HarnessContinuationRequest,
   type HarnessImageMediaType,
   type HarnessInputFile,
   type HarnessInputFileType,
@@ -34,9 +35,11 @@ import {
   type HarnessUsageLimit,
 } from "../adapter";
 import {
+  type HarnessBoundary,
   type HarnessContinuation,
   type HarnessSessionId,
   harnessSessionId,
+  sessionHoldsHistory,
 } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
 import { sandboxReads } from "../sandbox-reads";
@@ -121,6 +124,11 @@ const CLAUDE_CODE_CAPABILITIES: Readonly<Record<HarnessCapability, boolean>> = {
   resume: true,
   // The turn's images and PDFs open the user message as content blocks.
   image_input: true,
+  // A user message written while the turn runs joins it at the next step.
+  steer: true,
+  // `--fork-session --resume-session-at` copies the session through one
+  // transcript entry into a new session.
+  fork: true,
 };
 
 /** Claude reads images and PDFs as model input. */
@@ -400,6 +408,9 @@ const PROTOCOL_ARGS = [
   "",
   // Only the MCP servers stella registers.
   "--strict-mcp-config",
+  // A user message written mid-turn is echoed back with its uuid once the
+  // turn takes it, which is how a steer learns it was taken.
+  "--replay-user-messages",
 ] as const;
 
 /**
@@ -409,8 +420,9 @@ const PROTOCOL_ARGS = [
 const DEFAULT_MODEL_ROW = "default";
 /** A name in an allow rule and a tool prefix; kept to plain characters. */
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
-/** Missing-session refusals, in the CLI's wording. */
-const SESSION_MISSING = /no conversation found/iu;
+/** Missing-session refusals, in the CLI's wording: the session, or the entry a fork keeps through. */
+const SESSION_MISSING =
+  /no conversation found|no message found with message\.uuid/iu;
 
 const validateOptions = (options: ClaudeCodeHarnessAdapterOptions) => {
   if (!path.isAbsolute(options.launch.executable)) {
@@ -700,7 +712,36 @@ const probe = async (
 
 type SessionTarget =
   | { type: "fresh"; sessionId: HarnessSessionId }
-  | { type: "resume"; sessionId: HarnessSessionId };
+  | { type: "resume"; sessionId: HarnessSessionId }
+  /** `sessionId` is the new session's, chosen here; `source` stays as it was. */
+  | {
+      type: "fork";
+      sessionId: HarnessSessionId;
+      source: HarnessSessionId;
+      boundary: HarnessBoundary;
+    };
+
+const sessionArgs = (target: SessionTarget): string[] => {
+  switch (target.type) {
+    case "fresh":
+      return ["--session-id", target.sessionId];
+    case "resume":
+      return ["--resume", target.sessionId];
+    case "fork":
+      return [
+        "--session-id",
+        target.sessionId,
+        "--fork-session",
+        "--resume",
+        target.source,
+        "--resume-session-at",
+        target.boundary,
+      ];
+    default:
+      target satisfies never;
+      return panic("Unknown Claude Code session target");
+  }
+};
 
 const turnArgs = (
   options: ClaudeCodeHarnessAdapterOptions,
@@ -725,8 +766,7 @@ const turnArgs = (
     browserServerName: input.browser?.serverName ?? null,
     serverName: input.mcp.serverName,
   }),
-  target.type === "fresh" ? "--session-id" : "--resume",
-  target.sessionId,
+  ...sessionArgs(target),
   "--model",
   input.model,
   ...(input.reasoningEffort === null
@@ -853,6 +893,41 @@ const startError = (failure: OpenFailure): HarnessStartError =>
     ? failure.error
     : new HarnessStartError(failure.failure);
 
+/**
+ * The session a new process opens for `request`, and what the turn reports
+ * once it did. A fork gets a session id of its own up front, so the turn
+ * names its session before the CLI does.
+ */
+const openingOf = (
+  request: HarnessContinuationRequest,
+  fresh: () => SessionTarget,
+): { target: SessionTarget; continuation: HarnessContinuation } => {
+  switch (request.type) {
+    case "fresh":
+      return { target: fresh(), continuation: { type: "fresh" } };
+    case "resume":
+      return {
+        target: { type: "resume", sessionId: request.sessionId },
+        continuation: { type: "resumed" },
+      };
+    case "fork":
+      return {
+        target: {
+          type: "fork",
+          sessionId: harnessSessionId(crypto.randomUUID()),
+          source: request.sessionId,
+          boundary: request.boundary,
+        },
+        continuation: { type: "forked" },
+      };
+    case "live":
+      return panic("Claude Code adapter: a live turn continues in its process");
+    default:
+      request satisfies never;
+      return panic("Unknown continuation request");
+  }
+};
+
 const openTurn = async (
   options: ClaudeCodeHarnessAdapterOptions,
   input: HarnessTurnInput,
@@ -863,16 +938,11 @@ const openTurn = async (
     type: "fresh",
     sessionId: harnessSessionId(crypto.randomUUID()),
   });
-  let target: SessionTarget =
-    input.continuation.type === "resume"
-      ? { type: "resume", sessionId: input.continuation.sessionId }
-      : fresh();
-  let continuation: HarnessContinuation =
-    target.type === "resume" ? { type: "resumed" } : { type: "fresh" };
+  let { target, continuation } = openingOf(input.continuation, fresh);
   let opened = await openSession(options, input, target, skills);
   if (
     Result.isError(opened) &&
-    target.type === "resume" &&
+    target.type !== "fresh" &&
     opened.error.type === "connect" &&
     opened.error.failure.reason === "start_rejected"
   ) {
@@ -891,10 +961,9 @@ const openTurn = async (
     return Result.err(startError(opened.error));
   }
   const { session, client, cli } = opened.value;
-  const prompt =
-    continuation.type === "resumed"
-      ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
-      : Result.ok(standalone);
+  const prompt = sessionHoldsHistory(continuation)
+    ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
+    : Result.ok(standalone);
   if (Result.isError(prompt)) {
     session.abandon();
     await client.kill();
@@ -995,6 +1064,7 @@ const processTurn = (
   return {
     events: turn.events,
     respond: turn.respond,
+    steer: turn.steer,
     interrupt: turn.interrupt,
     release: async () => {
       const kept = await turn.release();

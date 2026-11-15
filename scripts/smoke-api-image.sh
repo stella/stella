@@ -59,8 +59,8 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-postgres_image=${POSTGRES_IMAGE:-postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336}
-redis_image=${REDIS_IMAGE:-redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5}
+postgres_image=${POSTGRES_IMAGE:-postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42}
+redis_image=${REDIS_IMAGE:-redis:8@sha256:1f88291b4c57bdf249f02eb085a8669889b2d2954e91d4de5118a5da6b78dd53}
 # Pull the service images up front, retried: a registry hiccup is not a
 # release failure.
 for service_image in "$postgres_image" "$redis_image"; do

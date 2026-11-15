@@ -36,9 +36,12 @@ export const TANSTACK_CHAT_MIDDLEWARE_SEAM = {
   onConfig: "nonterminal",
   onError: "terminal",
   onFinish: "terminal",
+  onGuardToolCall: "nonterminal",
   onInterruptBoundary: "nonterminal",
   onInterruptResolution: "nonterminal",
   onIteration: "nonterminal",
+  // A pre-output model failure can retry; only onError terminates the run.
+  onModelError: "nonterminal",
   onShouldContinue: "nonterminal",
   onStart: "nonterminal",
   onStructuredOutputConfig: "nonterminal",

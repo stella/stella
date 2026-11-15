@@ -43,13 +43,20 @@ const config = {
     "`day`, `month` or `year` precision stored as its first day and its " +
     "`source`: the words, or the grader when they name no complete date), " +
     "or `none`. " +
+    "`decider` says who decided the verdict: `llm` (with a `fallback` " +
+    "reason when the organization's decision model was asked and its " +
+    "answer was not used), or `decision-model` with its `model`, its " +
+    "`confidence` and the state it `replaced`. " +
     "`carryOver` says what the run took from the previous run of the same " +
     "document and list. Notes and fact links follow a claim with the same " +
     "words or with edited words in the same paragraph or page; other " +
     "decisions follow only the same words with an unchanged verdict. It " +
     "counts the reviewed claims that came across whole and lists the rest " +
     "(`text-changed`, `verdict-changed`, `unmatched`, `ambiguous`); null " +
-    "when there was nothing to carry.",
+    "when there was nothing to carry. `unreadParts` lists the text a " +
+    "completed run could not read (each from `start` to `end`, a block id " +
+    "and an offset): no claim was looked for there, so verify the document " +
+    "again to read it; empty when the run read everything.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",

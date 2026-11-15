@@ -403,14 +403,15 @@ const snapshotResult = (tabId: number, revision: string) =>
     snapshot: {
       contentTrust: "untrusted-web-content",
       elements: [],
+      elementsLeftOut: false,
+      facts: { meta: [] },
       revision,
       tabId,
       tabs: [{ active: true, tabId, url: "https://example.com/" }],
       text: "",
-      textOffset: 0,
-      textTotalChars: 0,
       title: "Example",
       url: "https://example.com/",
+      window: { cursor: "r1.window", fromPercent: 0, toPercent: 100 },
     },
     status: "success",
   }) satisfies BrowserControlResult;

@@ -11,6 +11,7 @@ type PopupActionDependencies = {
   readActiveTab: () => Promise<PopupTab | null>;
   pair: (tab: PopupTab | null) => Promise<void>;
   adopt: (tab: PopupTab | null) => Promise<void>;
+  openStella: () => Promise<void>;
   disconnect: () => Promise<void>;
   revoke: () => Promise<void>;
   render: () => Promise<void>;
@@ -41,6 +42,11 @@ export const runPopupAction = async (
       return;
     case "adopt":
       await deps.adopt(await deps.readActiveTab());
+      return;
+    // The popup then shows what the tab now in front offers, such as connect.
+    case "open-stella":
+      await deps.openStella();
+      await deps.render();
       return;
     case "disconnect":
       await deps.disconnect();

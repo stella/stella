@@ -18,6 +18,7 @@ import type { FactScoring } from "@/api/lib/lists/fact-details";
 import type { FactTier } from "@/api/lib/lists/source-kind";
 import { CLAIM_STATES } from "@/api/lib/lists/verification/contract";
 import type {
+  ClaimFactRelation,
   ClaimRef,
   ClaimState,
   ClaimVerdict,
@@ -133,6 +134,19 @@ const SYSTEM_QUALIFIER_RULES = {
   (facts: readonly FactStanding[]) => boolean
 >;
 
+/**
+ * Whether a scored verdict rests on a fact it cites under each relation. A
+ * fact that supports or conflicts with the claim decides the verdict; one
+ * cited as `record` is context that does neither, so it never gives the
+ * verdict a footing (a document cited for context does not make a claim
+ * resting on testimony any less testimony-only).
+ */
+const RESTS_ON_RELATION = {
+  supports: true,
+  conflicts: true,
+  record: false,
+} as const satisfies Record<ClaimFactRelation, boolean>;
+
 type RestingTarget = {
   verdict: ClaimVerdict;
   refs: readonly ClaimRef[];
@@ -140,9 +154,12 @@ type RestingTarget = {
 
 /**
  * The facts the verdict a reviewer sees rests on: the facts a scored verdict
- * cites, or the record a reviewer chose to govern a record conflict. Missing
- * coverage, a set-aside claim and an unresolved conflict rest on none. An
- * override is an annotation beside the verdict and does not change this.
+ * cites as supporting or conflicting with the claim (never the ones it cites
+ * only as context), or the record a reviewer chose to govern a record
+ * conflict. Every qualifier computed from a verdict's footing reads this one
+ * set. Missing coverage, a set-aside claim and an unresolved conflict rest on
+ * none. An override is an annotation beside the verdict and does not change
+ * this.
  */
 export const restingFactIds = (
   { verdict, refs }: RestingTarget,
@@ -152,7 +169,9 @@ export const restingFactIds = (
     case "supported":
     case "tension":
     case "contradicted": {
-      return refs.map((ref) => ref.factEntityId);
+      return refs
+        .filter((ref) => RESTS_ON_RELATION[ref.rel])
+        .map((ref) => ref.factEntityId);
     }
     case "nocover":
     case "notverifiable": {

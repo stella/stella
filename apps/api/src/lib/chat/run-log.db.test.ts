@@ -127,6 +127,7 @@ const seedRunningTurn = async (): Promise<{
     }),
   });
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: ids.orgA,
     threadId,
     userId: ids.userA1,
@@ -491,7 +492,7 @@ describe("chat run log database contract", () => {
       const safeDb = toSafeDbMock(scopedDbA);
       const run = new ChatTurnRun({
         connectors: undefined,
-        deadlineMs: 60_000,
+        bound: { type: "provider-deadline", deadlineMs: 60_000 },
         heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
         mode: "raw",
         ownership: new ChatTurnOwnership(),
@@ -1127,7 +1128,7 @@ describe("chat run log database contract", () => {
     const log = logFor(seeded);
     const run = new ChatTurnRun({
       connectors: undefined,
-      deadlineMs: 60_000,
+      bound: { type: "provider-deadline", deadlineMs: 60_000 },
       heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
       mode: "raw",
       ownership: new ChatTurnOwnership(),

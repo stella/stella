@@ -153,10 +153,18 @@ by the RC run.
    captures (see `apps/landing/public/media/products/README.md`).
 2. Run `bun run release:maintenance`. It derives the next patch version from
    the newest final `vX.Y.Z` tag, applies pending changesets, writes `VERSION`
-   and `docs/changelog/vX.Y.Z.md`, creates one release commit on
+   and `docs/changelog/vX.Y.Z.md`, moves the desktop support floor (see
+   [Desktop Support](#desktop-support)), creates one release commit on
    `release/vX.Y.Z`, and opens `chore: release vX.Y.Z` into `main`. An earlier
    open release pull request blocks another cut. The command runs the existing
-   pre-cut heavy, dependency-audit, npm-publish-lag and deploy-env-contract gates before writing.
+   pre-cut heavy, dependency-audit, npm-publish-lag, deploy-env-contract and
+   desktop-support-floor gates before writing. The heavy gate passes when
+   `main/heavy` and `main/pr-depth` are green on the base commit. When neither
+   has failed there, it also accepts the proof the release health check applies
+   to `main` commits that carry no release-candidate tag: a merge-group receipt
+   that `scripts/check-release-receipt-coverage.sh` reports as covering them.
+   Any other answer keeps both statuses required. This proof is for the cut
+   only; finalization still requires both statuses on the RC commit (step 5).
    The npm gate checks that same newest final tag, regardless of main's
    `VERSION`. When `VERSION` is ahead of every final tag, a release pull request
    merged before its final tag; the cut then takes the next patch after
@@ -213,7 +221,12 @@ by the RC run.
    Stable npm publication checks out the exact RC-proved release SHA, builds
    and packs the CLI using the unchanged version-codegen and trusted-publishing
    workflow, then runs the plain-Node smoke and production compatibility canary
-   on that tarball. Package versions remain Changesets-owned. Desktop reruns
+   on that tarball. It also packs every workspace dependency of the CLI whose
+   version at that SHA npm does not serve yet: the smoke and canary install
+   those from this release's tarballs, and they publish before the CLI, in
+   dependency order. Dependencies npm already serves come from the registry,
+   so a rerun after a partial publish resumes with what is left.
+   Package versions remain Changesets-owned. Desktop reruns
    resume the build or carry-forward path and its publication steps. GitHub
    Latest advances only after the desktop assets are ready.
 10. Squash-merge the release pull request through the ordinary queue once its
@@ -352,3 +365,39 @@ the CLI's generated protocol, revision, and capability requirements, and every
 packaged CLI scope must exist in the API's OAuth and MCP scope sets. The
 canaried tarball's SHA-256 checksum is verified again in the isolated OIDC
 publishing job, so npm receives those exact bytes.
+
+## Desktop Support
+
+A desktop build is supported until a newer build has been published for 30
+days. The API then refuses it: its requests are answered with HTTP 426 and
+`client_too_old`, naming the minimum version.
+
+- The floor is `minimumVersion` in
+  `apps/api/src/lib/mcp-connectors/desktop-support-floor.json`: the newest
+  desktop build published at least `supportDays` days ago. A release that
+  republished the previous desktop build (see
+  `scripts/detect-desktop-release-changes.sh`) is never the floor, so the floor
+  cannot exceed the build the updater offers.
+- `bun run release:maintenance` moves the floor: it computes the version as of
+  the cut and writes the file in the release commit, so no one raises it by
+  hand. Publication times come from
+  `apps/landing/src/data/changelog-release-dates.json`, desktop builds from the
+  tags in the checkout.
+- The pre-cut gate `scripts/check-desktop-support-floor.ts` refuses only what
+  the cut cannot repair: a committed floor that is no promoted release or lies
+  above every published desktop build, publication times that do not parse, and
+  a checkout without the tags. A floor that is due to move passes, in the cut
+  and in the release rehearsal. The release candidate check admits the file
+  only when it names a promoted release.
+- A refused desktop learns it when it opens a document or links an account.
+  Opening a document runs the updater, which installs the newest build; when
+  none installs, the desktop says that it needs an update. A refused account
+  link says the same on the web page that started it. Edit sessions the desktop
+  already holds keep saving and finishing, so no edit waits on the update. The
+  updater reads the public download feed, not the connected server, so it works
+  against a self-hosted server too.
+- Where an administrator turned in-app updates off (`DisableUpdates`), the
+  administrator deploys a supported build; see
+  `apps/desktop/docs/managed-deployment.md`.
+- Desktop builds before 0.9.59 send no version and are not refused. A build made
+  from a checkout reports the workspace version `0.0.1` and is always accepted.

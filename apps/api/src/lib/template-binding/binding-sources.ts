@@ -129,12 +129,3 @@ export const fieldSourceToolInputSchema = v.union([
 ]);
 
 export type FieldSource = v.InferOutput<typeof fieldSourceSchema>;
-
-/**
- * Validate a {@link FieldSource}: a known `kind`, a `field` key allowed for
- * that kind, and (where applicable) a valid `role`/`ref`. Built-in field keys
- * are checked against the per-kind allow-lists; when the registry lands this
- * widens to also accept property ids.
- */
-export const isFieldSource = (value: unknown): value is FieldSource =>
-  v.is(fieldSourceSchema, value);

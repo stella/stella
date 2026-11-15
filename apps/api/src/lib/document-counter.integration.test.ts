@@ -437,7 +437,7 @@ describe("matter read", () => {
         entityId,
         versionNumber: 2,
         stamp: "STAMPED-COUNT/2026/001.v2",
-        deletedAt: new Date(),
+        deletedAt: new Date("2026-04-30T09:00:00.000Z"),
       },
       {
         id: createSafeId<"entityVersion">(),

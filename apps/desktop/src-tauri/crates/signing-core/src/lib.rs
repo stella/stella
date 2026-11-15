@@ -9,12 +9,15 @@
 //! [`SigningErrorCode`], the codes the dialog has wording for.
 
 mod certificate;
+mod chain;
 mod ecdsa;
 mod failure;
 mod identity;
 mod prompt_owner;
 mod spki;
 
+pub use certificate::subject_display_name;
+pub use chain::issuer_chain;
 pub use ecdsa::ecdsa_signature_der;
 pub use failure::SigningErrorCode;
 pub use identity::{

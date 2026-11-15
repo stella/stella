@@ -207,7 +207,7 @@
       "behaviour": "The snapshot folds a run's per-iteration assistant messages into the turn's one message.",
       "status": "active",
       "file": "src/handlers/chat/stream-message-identity.ts",
-      "search": "      messages: mergeSnapshotAssistantMessages({\n        existingMessageIds,\n        mapMessageId,\n        messages: chunk.messages,\n        snapshotMessageIds,\n      }),",
+      "search": "      messages: mergeSnapshotAssistantMessages({\n        existingMessageIds,\n        mapMessageId,\n        messages: chunk.messages,\n        snapshotMessageIds,\n        snapshotOwners,\n      }),",
       "replace": "      messages: chunk.messages,",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
@@ -484,8 +484,8 @@
       "behaviour": "A tool call's stored arguments are the adapter's normalized input, not the raw wire string.",
       "status": "active",
       "file": "../../node_modules/@tanstack/ai/dist/esm/activities/chat/stream/processor.js",
-      "search": "if (serializedInput !== void 0) existingToolCall.arguments = serializedInput;",
-      "replace": "void serializedInput;",
+      "search": "existingToolCall.arguments = final.args;",
+      "replace": "void final.args;",
       "scenario": {
         "file": "src/handlers/chat/tool-call-end-arguments.test.ts",
         "test": "an OpenAI strict-mode null on an optional field never reaches the persisted arguments"
@@ -649,16 +649,16 @@
     {
       "id": "engine-closes-unanswerable-calls",
       "fix": "#3885",
-      "behaviour": "The engine is handed an ended turn's open calls with a result, so it runs the model instead of asking the client about them again.",
+      "behaviour": "An ended turn's open calls receive closing results before context selection and provider-history validation, so a fork can continue with balanced tool history.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-settlement.ts",
-      "search": "      !ENGINE_ASKS_CLIENT_AGAIN[part.state]",
+      "search": "      !CALL_NEEDS_CLOSING_RESULT[part.state]",
       "replace": "      true",
       "scenario": {
-        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
-        "test": "continues a fork taken while a question waits"
+        "file": "src/handlers/chat/chat-turn-settlement.test.ts",
+        "test": "a batch with an unanswered call keeps its calls in one step"
       },
-      "oracle": "chat.client.no-errors"
+      "oracle": "chat.provider.transcript-settled"
     },
     {
       "id": "run-continues-stored-thread",
@@ -764,8 +764,8 @@
       "behaviour": "A turn's run does not end when the request that started it ends: only its deadline, a stop, or its response closing cut it short.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
-      "search": "const run = lifecycle.startRun(externalMcpTools);",
-      "replace": "const run = lifecycle.startRun(externalMcpTools); request.signal.addEventListener(\"abort\", () => { run.control.abortController.abort(); });",
+      "search": "const run = lifecycle.startRun(\n                externalMcpTools,\n                body.runTarget?.kind ?? CHAT_RUN_TARGET_KIND.cloud,\n              );",
+      "replace": "const run = lifecycle.startRun(\n                externalMcpTools,\n                body.runTarget?.kind ?? CHAT_RUN_TARGET_KIND.cloud,\n              ); request.signal.addEventListener(\"abort\", () => { run.control.abortController.abort(); });",
       "scenario": {
         "file": "src/handlers/chat/chat-turn-run.integration.test.ts",
         "test": "runs an approved call to completion after its request is torn down, with nobody reading"

@@ -306,6 +306,7 @@ const runTask = async ({
     timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
     chat: (abortController) =>
       streamChatChunks({
+        threadId: Bun.randomUUIDv7(),
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: task.prompt }],

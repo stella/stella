@@ -45,7 +45,7 @@ import {
 } from "@/components/sidebar";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
-import { UserIdentityAvatar } from "@/components/user-avatar";
+import { UserIdentity, UserIdentityAvatar } from "@/components/user-avatar";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useSignOut } from "@/hooks/use-sign-out";
@@ -400,9 +400,14 @@ const OrganizationMenuSection = ({
               value={organization.id}
             >
               <span className="flex min-w-0 items-center gap-1.5">
-                <TruncatedText render={<BidiText as="span" />}>
-                  {organization.name}
-                </TruncatedText>
+                <UserIdentity
+                  as="span"
+                  avatarClassName="size-5"
+                  className="min-w-0"
+                  image={organization.logo}
+                  name={organization.name}
+                  nameClassName="text-base font-normal sm:text-sm"
+                />
                 {organization.id === activeOrganization.id && (
                   <OrganizationRoleBadge role={role} />
                 )}

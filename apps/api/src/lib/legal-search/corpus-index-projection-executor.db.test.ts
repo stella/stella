@@ -189,6 +189,7 @@ const runLegislationCycle = async ({
     payloadReadConcurrency: 2,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    proofAfterIndexId: null,
     payloadReader: async () => Result.ok({ text, ast: null }),
   });
 };
@@ -250,6 +251,7 @@ const runCycle = async (
     payloadReadConcurrency: 4,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    proofAfterIndexId: null,
   });
 
 beforeAll(async () => {

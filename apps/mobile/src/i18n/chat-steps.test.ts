@@ -3,8 +3,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { AI_ERROR_KINDS } from "@stll/api-contract/ai-errors";
 import { CHAT_TOOL_LABELS } from "@stll/api-contract/chat-tool-activity";
 import { UI_LOCALES } from "@stll/locales";
+
+import { CHAT_FAILURE_KEYS } from "@/state/chat-failure";
 
 import { CATALOGS } from "./catalogs";
 import type { MobileMessages } from "./catalogs";
@@ -41,8 +44,8 @@ const WEB_TITLE_KEYS: Readonly<Record<string, readonly string[]>> = {
 
 /**
  * Where the web keeps each phrase of a coding agent's own steps: the title
- * of each kind, the two sentences that place a value, and a subagent's
- * status.
+ * of each kind, the sentences that place a value, a subagent's status, and
+ * what a step's stored content says as it opens.
  */
 const WEB_LOCAL_RUN_KEYS = {
   title: {
@@ -57,14 +60,91 @@ const WEB_LOCAL_RUN_KEYS = {
   },
   patternInPath: ["chat", "toolCall", "patternInPath"],
   commandExited: ["chat", "toolCall", "commandExited"],
-  opensOnComputer: ["chat", "toolCall", "localOutput", "elsewhere"],
+  browserClick: ["chat", "toolCall", "browserClick"],
+  browserType: ["chat", "toolCall", "browserType"],
+  browserPressKey: ["chat", "toolCall", "browserPressKey"],
+  browserSelect: ["chat", "toolCall", "browserSelect"],
   status: {
     needs_approval: ["chat", "turnStatus", "waitingForApproval"],
     running: ["tasks", "statusValues", "in_progress"],
     failed: ["common", "failed"],
     interrupted: ["chat", "stopped"],
   },
+  output: {
+    command: ["chat", "toolCall", "output"],
+    diff: ["chat", "toolCall", "localOutput", "diff"],
+    conversation: ["chat", "toolCall", "localOutput", "conversation"],
+    conversationPrompt: [
+      "chat",
+      "toolCall",
+      "localOutput",
+      "conversationPrompt",
+    ],
+    conversationReport: [
+      "chat",
+      "toolCall",
+      "localOutput",
+      "conversationReport",
+    ],
+    cut: ["chat", "toolCall", "localOutput", "cut"],
+    empty: ["chat", "toolCall", "localOutput", "empty"],
+    arriving: ["chat", "toolCall", "localOutput", "arriving"],
+    notCopied: ["chat", "toolCall", "localOutput", "notCopied"],
+    notStored: ["chat", "toolCall", "localOutput", "notStored"],
+    runBudgetReached: ["chat", "toolCall", "localOutput", "runBudgetReached"],
+    imageTooLargeToStore: [
+      "chat",
+      "toolCall",
+      "localOutput",
+      "imageTooLargeToStore",
+    ],
+    loadFailed: ["common", "loadFailed"],
+    showMore: ["common", "showMore"],
+  },
+  sessionNotResumed: ["chat", "localRun", "sessionNotResumed"],
 } as const satisfies WebKeysOf<MobileMessages["chat"]["localRun"]>;
+
+/** Where the web keeps the reason each failed turn gives (`AI_FAILURE_ERROR_KEYS`). */
+const WEB_FAILURE_KEYS = {
+  aiDeadlineExceeded: ["errors", "apiCodes", "aiDeadlineExceeded"],
+  aiOutputInvalid: ["errors", "apiCodes", "aiOutputInvalid"],
+  aiOutputModerated: ["errors", "apiCodes", "aiOutputModerated"],
+  aiUnknown: ["errors", "apiCodes", "aiUnknown"],
+  errorFolderUnavailable: ["chat", "localRun", "errorFolderUnavailable"],
+  errorLimitReached: ["chat", "localRun", "errorLimitReached"],
+  errorNeedsLogin: ["chat", "localRun", "errorNeedsLogin"],
+  errorNotReached: ["chat", "localRun", "errorNotReached"],
+  errorRelinked: ["chat", "localRun", "errorRelinked"],
+  errorRestoring: ["chat", "localRun", "errorRestoring"],
+  errorUnavailable: ["chat", "localRun", "errorUnavailable"],
+  refusalFolderNotApproved: ["chat", "localRun", "refusalFolderNotApproved"],
+  refusalHarnessUnavailable: ["chat", "localRun", "refusalHarnessUnavailable"],
+  refusalModelUnavailable: ["chat", "localRun", "refusalModelUnavailable"],
+  refusalNoComputer: ["chat", "localRun", "refusalNoComputer"],
+  refusalPermissionUnavailable: [
+    "chat",
+    "localRun",
+    "refusalPermissionUnavailable",
+  ],
+  refusalReasoningEffortUnavailable: [
+    "chat",
+    "localRun",
+    "refusalReasoningEffortUnavailable",
+  ],
+  refusalTooLarge: ["chat", "localRun", "refusalTooLarge"],
+  sendErrorEmptyCompletion: ["chat", "sendErrorEmptyCompletion"],
+  sendErrorLoopDetected: ["chat", "sendErrorLoopDetected"],
+  sendErrorModelUnavailable: ["chat", "sendErrorModelUnavailable"],
+  sendErrorProviderBilling: ["chat", "sendErrorProviderBilling"],
+  sendErrorProviderCredentialsRejected: [
+    "chat",
+    "sendErrorProviderCredentialsRejected",
+  ],
+  sendErrorProviderUnavailable: ["chat", "sendErrorProviderUnavailable"],
+  sendErrorQuotaExhausted: ["chat", "sendErrorQuotaExhausted"],
+  sendErrorStreamIncomplete: ["chat", "sendErrorStreamIncomplete"],
+  sendErrorTurnTooLarge: ["chat", "sendErrorTurnTooLarge"],
+} as const satisfies WebKeysOf<MobileMessages["chat"]["failure"]>;
 
 /** A catalogue node with a web key path in place of each message. */
 type WebKeysOf<TNode> = {
@@ -102,6 +182,35 @@ describe("an answer's steps", () => {
     expect(at(web, ["chat", "processSummary"])).toEqual(chat.processSummary);
     expect(at(web, ["common", "stepCount"])).toBe(chat.stepCount);
     expect(at(web, ["chat", "reasoning"])).toBe(chat.reasoning);
+    expect(at(web, ["chat", "historyTrimmed"])).toBe(chat.historyTrimmed);
     expect(webMessages(web, WEB_LOCAL_RUN_KEYS)).toEqual(chat.localRun);
+  });
+});
+
+// A failed answer reads as on the web: the same reason for each kind of
+// failure, under the web's button that sends the message again.
+describe("a failed answer", () => {
+  test.each(UI_LOCALES)("says why in %s as the web does", (locale) => {
+    const web = webCatalog(locale);
+    const { chat } = CATALOGS[locale];
+    expect(webMessages(web, WEB_FAILURE_KEYS)).toEqual(chat.failure);
+    expect(at(web, ["chat", "resend"])).toBe(chat.resend);
+  });
+
+  test("gives each failure kind the text the web gives it", () => {
+    const webSource = readFileSync(
+      path.join(REPO_ROOT, "apps/web/src/lib/errors/ai-failure.ts"),
+      "utf-8",
+    );
+    for (const kind of AI_ERROR_KINDS) {
+      const webKey = new RegExp(
+        String.raw`\[AI_FAILURE_CODES\.${kind}\]:\s*"([\w.]+)"`,
+        "u",
+      ).exec(webSource)?.[1];
+      expect({ kind, webKey }).toEqual({
+        kind,
+        webKey: WEB_FAILURE_KEYS[CHAT_FAILURE_KEYS[kind]].join("."),
+      });
+    }
   });
 });

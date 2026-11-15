@@ -95,7 +95,9 @@ test("a sitemap month and a shard page read the heap only for the page's rows", 
     const view = getViewConfig(publishedCaseLawDecisions);
     await db.execute(
       sql`CREATE VIEW ${sql.identifier(view.name)} AS (${sql.raw(
-        new PgDialect().sqlToQuery(view.query).sql,
+        new PgDialect().sqlToQuery(
+          view.query ?? panic("Declared view must include a query"),
+        ).sql,
       )})`,
     );
     await db.execute(sql`

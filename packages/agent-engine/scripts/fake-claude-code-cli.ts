@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { CLAUDE_STEER_PRIORITY } from "../src/harness/claude-code/protocol";
 import { browseAsAgent, claudeMcpEndpoints } from "./fake-browser";
 import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
@@ -33,6 +34,11 @@ export type FakeStep =
     }
   /** Wait for the client's next user message. */
   | { expectUser: true }
+  /**
+   * Wait for the client's next user message and echo it back with its uuid,
+   * as the CLI does once a message written mid-turn joins the turn.
+   */
+  | { echoUser: true }
   | { emit: object }
   /** Send a control request and wait for the client's response. */
   | { control: object }
@@ -66,6 +72,8 @@ export const FAKE_CLAUDE_VERSION = "2.1.309";
 /** The server name the holder registers the browser tools under. */
 const FAKE_BROWSER_SERVER = "stella_browser";
 export const FAKE_RESUMED_SESSION_ID = "4f1d2c3b-5a6e-4b7c-8d9e-0f1a2b3c4d5e";
+/** A transcript entry of the resumed session a fork keeps through. */
+export const FAKE_FORK_BOUNDARY = "7c2e9a41-3b5d-4f6e-8a1c-2d3e4f5a6b7c";
 
 const SUBSCRIPTION = {
   email: "user@example.test",
@@ -284,6 +292,8 @@ export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
 /** What `approval_outcome` answers once the command ran, or did not. */
 const FAKE_APPROVED_ANSWER = "Removed draft.md.";
 const FAKE_DENIED_ANSWER = "Left the draft in place.";
+/** What `steered_over_approval` answers the message steered over its request. */
+const FAKE_STEERED_OVER_APPROVAL = "Left the draft and checked the annex.";
 
 export const FAKE_APPROVAL_REASON = "\u001B[33mDeletes a file\u001B[0m";
 
@@ -1102,6 +1112,58 @@ export const FAKE_SCENARIOS = {
     { sleep: 50 },
     result(),
   ],
+  /** A message written mid-turn joins the turn after the running tool. */
+  steered: [
+    ...freshTurn(),
+    assistant("msg-1", [toolUse("call-long", "Bash", { command: "ls" })]),
+    { echoUser: true },
+    toolResult("call-long", "notes.md"),
+    assistant("msg-2", [{ type: "text", text: "Checked the annex as well." }]),
+    result(),
+  ],
+  /**
+   * A command asks for approval; the member declines it with a message
+   * written mid-turn, and the turn answers the message.
+   */
+  steered_over_approval: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-rm", "Bash", { command: "rm draft.md" }),
+    ]),
+    canUseTool(
+      "call-rm",
+      "Bash",
+      { command: "rm draft.md" },
+      { decision_reason: FAKE_APPROVAL_REASON },
+    ),
+    {
+      byDecision: {
+        // Approved, the message never follows: the turn answers as
+        // `approval_outcome` does.
+        approved: [
+          toolResult("call-rm", ""),
+          assistant("msg-2", [{ type: "text", text: FAKE_APPROVED_ANSWER }]),
+          result(),
+        ],
+        denied: [
+          { echoUser: true },
+          toolResult("call-rm", "The user denied this action.", true),
+          assistant("msg-2", [
+            { type: "text", text: FAKE_STEERED_OVER_APPROVAL },
+          ]),
+          result(),
+        ],
+      },
+    },
+  ],
+  /** The turn ends before it takes the message written mid-turn. */
+  steer_too_late: [
+    ...freshTurn(),
+    assistant("msg-1", [toolUse("call-long", "Bash", { command: "ls" })]),
+    { expectUser: true },
+    toolResult("call-long", "notes.md"),
+    result(),
+  ],
   interrupt: [
     ...freshTurn(),
     assistant("msg-1", [
@@ -1133,6 +1195,25 @@ export const FAKE_SCENARIOS = {
     fresh: [...freshTurn(), result()],
   },
   resume_ok: [...freshTurn(), result()],
+  /** The resumed session holds no entry with the boundary's uuid. */
+  fork_missing: {
+    resume: [
+      {
+        emit: {
+          type: "result",
+          subtype: "error_during_execution",
+          is_error: true,
+          num_turns: 0,
+          session_id: FAKE_RESUMED_SESSION_ID,
+          errors: [
+            `No message found with message.uuid of: ${FAKE_FORK_BOUNDARY}`,
+          ],
+        },
+      },
+      { exit: 1 },
+    ],
+    fresh: [...freshTurn(), result()],
+  },
   signed_out: [initialize({ tokenSource: "none", apiProvider: "firstParty" })],
   /** A key from a Console sign-in would bill the API, not the plan. */
   api_key: [
@@ -1334,6 +1415,25 @@ export type FakeScenarioName = keyof typeof FAKE_SCENARIOS;
 const isScenario = (name: string): name is FakeScenarioName =>
   Object.hasOwn(FAKE_SCENARIOS, name);
 
+/**
+ * The CLI's own refusals of its session flags, as the pinned version words
+ * them: it writes the error and exits before any protocol message.
+ */
+const refusedSessionArgs = (args: readonly string[]): string | null => {
+  const resumes = args.includes("--resume");
+  if (args.includes("--resume-session-at") && !resumes) {
+    return "Error: --resume-session-at requires --resume";
+  }
+  if (
+    args.includes("--session-id") &&
+    resumes &&
+    !args.includes("--fork-session")
+  ) {
+    return "Error: --session-id can only be used with --continue or --resume if --fork-session is also specified.";
+  }
+  return null;
+};
+
 export const stepsFor = (
   scenario: FakeScenario,
   args: readonly string[],
@@ -1406,6 +1506,91 @@ const PermissionAnswerSchema = v.looseObject({
   }),
 });
 
+/** The control response an `expect` step answers its request with. */
+const controlAnswer = (
+  step: Extract<FakeStep, { expect: string }>,
+  requestId: string | undefined,
+  request: Record<string, unknown>,
+) =>
+  step.error === undefined
+    ? {
+        subtype: "success",
+        request_id: requestId,
+        response: step.respond?.(request) ?? step.response ?? {},
+      }
+    : { subtype: "error", request_id: requestId, error: step.error };
+
+type PlayBrowseOptions = {
+  /** The servers `mcp_set_servers` registered. */
+  registeredServers: unknown;
+  write: (message: object) => void;
+  log: (entry: object) => void;
+};
+
+/** The `browse` step: each call the agent made, then its answer. */
+const playBrowse = async ({
+  registeredServers,
+  write,
+  log,
+}: PlayBrowseOptions) => {
+  const browsed = await browseAsAgent({
+    browserServer: FAKE_BROWSER_SERVER,
+    endpoints: claudeMcpEndpoints(registeredServers),
+    stellaServer: FAKE_STELLA_SERVER,
+  });
+  // Kept on this computer, for the test to see what the agent read.
+  log({ pageCanaries: browsed.read });
+  for (const call of browsed.steps) {
+    write({
+      type: "assistant",
+      message: {
+        id: `msg-${call.id}`,
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: call.id,
+            name: `mcp__${call.server}__${call.tool}`,
+            input: call.arguments,
+          },
+        ],
+        stop_reason: null,
+      },
+      parent_tool_use_id: null,
+      session_id: "s",
+      uuid: `msg-${call.id}-uuid`,
+    });
+    write({
+      type: "user",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: call.id,
+            content: [{ type: "text", text: call.text }],
+            is_error: call.isError,
+          },
+        ],
+      },
+      parent_tool_use_id: null,
+      session_id: "s",
+    });
+  }
+  write({
+    type: "assistant",
+    message: {
+      id: "msg-browse-answer",
+      role: "assistant",
+      content: [{ type: "text", text: browsed.answer }],
+      stop_reason: null,
+    },
+    parent_tool_use_id: null,
+    session_id: "s",
+    uuid: "msg-browse-answer-uuid",
+  });
+};
+
 export const run = async (
   steps: readonly FakeStep[],
   log: (entry: object) => void,
@@ -1451,24 +1636,31 @@ export const run = async (
       }
       write({
         type: "control_response",
-        response:
-          step.error === undefined
-            ? {
-                subtype: "success",
-                request_id: message.request_id,
-                response:
-                  step.respond?.(message.request) ?? step.response ?? {},
-              }
-            : {
-                subtype: "error",
-                request_id: message.request_id,
-                error: step.error,
-              },
+        response: controlAnswer(step, message.request_id, message.request),
       });
     } else if ("expectUser" in step) {
       if ((await take("users")) === null) {
         return;
       }
+    } else if ("echoUser" in step) {
+      const message = await take("users");
+      if (message === null) {
+        return;
+      }
+      // A steer is taken at the agent's next step; any other priority would
+      // play differently on the real CLI.
+      if (message["priority"] !== CLAUDE_STEER_PRIORITY) {
+        log({ steerPriority: message["priority"] ?? null });
+        process.exit(95);
+      }
+      write({
+        type: "user",
+        message: message["message"],
+        parent_tool_use_id: null,
+        session_id: "s",
+        uuid: message["uuid"],
+        isReplay: true,
+      });
     } else if ("emit" in step) {
       write(step.emit);
     } else if ("control" in step) {
@@ -1499,62 +1691,7 @@ export const run = async (
     } else if ("sleep" in step) {
       await Bun.sleep(step.sleep);
     } else if ("browse" in step) {
-      const browsed = await browseAsAgent({
-        browserServer: FAKE_BROWSER_SERVER,
-        endpoints: claudeMcpEndpoints(registeredServers),
-        stellaServer: FAKE_STELLA_SERVER,
-      });
-      // Kept on this computer, for the test to see what the agent read.
-      log({ pageCanaries: browsed.read });
-      for (const call of browsed.steps) {
-        write({
-          type: "assistant",
-          message: {
-            id: `msg-${call.id}`,
-            role: "assistant",
-            content: [
-              {
-                type: "tool_use",
-                id: call.id,
-                name: `mcp__${call.server}__${call.tool}`,
-                input: call.arguments,
-              },
-            ],
-            stop_reason: null,
-          },
-          parent_tool_use_id: null,
-          session_id: "s",
-          uuid: `msg-${call.id}-uuid`,
-        });
-        write({
-          type: "user",
-          message: {
-            role: "user",
-            content: [
-              {
-                type: "tool_result",
-                tool_use_id: call.id,
-                content: [{ type: "text", text: call.text }],
-                is_error: call.isError,
-              },
-            ],
-          },
-          parent_tool_use_id: null,
-          session_id: "s",
-        });
-      }
-      write({
-        type: "assistant",
-        message: {
-          id: "msg-browse-answer",
-          role: "assistant",
-          content: [{ type: "text", text: browsed.answer }],
-          stop_reason: null,
-        },
-        parent_tool_use_id: null,
-        session_id: "s",
-        uuid: "msg-browse-answer-uuid",
-      });
+      await playBrowse({ registeredServers, write, log });
     } else {
       process.exit(step.exit);
     }
@@ -1600,6 +1737,12 @@ if (import.meta.main) {
   if (!isScenario(scenario)) {
     log({ unknownScenario: scenario });
     process.exit(98);
+  }
+  const refused = refusedSessionArgs(args);
+  if (refused !== null) {
+    log({ refused });
+    process.stderr.write(`${refused}\n`);
+    process.exit(1);
   }
   await run(stepsFor(FAKE_SCENARIOS[scenario], args), log);
   process.exit(0);

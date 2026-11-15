@@ -103,6 +103,13 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.noUserContent,
   },
+  // Why a thread's queue waits: no content of the member's.
+  chat_queue_holds: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.noUserContent,
+  },
+  // A message the member wrote and queued: their content before it is sent.
+  chat_queued_messages: { type: "exported" },
   chat_threads: { type: "exported" },
   chat_tool_grants: {
     type: "exempt",

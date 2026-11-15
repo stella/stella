@@ -652,7 +652,8 @@ const checkZipUncompressedLimit = (
     ? Result.ok()
     : rejectSkillPackage("Skill pack uncompressed content is too large");
 
-const parseSkillFiles = (
+/** Validate a skill folder's files into the package every install path stores. */
+export const parseSkillFiles = (
   files: readonly SkillFile[],
 ): Result<ParsedSkillPackage, HandlerError> => {
   const validated = validateSkillPackage({

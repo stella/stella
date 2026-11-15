@@ -51,6 +51,7 @@ import {
 } from "@/api/lib/scheduler/tasks/case-law-raw-storage";
 import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
+import { FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-touch-fold";
 import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
 import { SEND_CHAT_LIMIT_REMINDERS_TASK } from "@/api/lib/scheduler/tasks/chat-limit-reminders";
 import { SWEEP_CHAT_RUN_LOGS_TASK } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
@@ -421,6 +422,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
     reads: { budget: "scheduled.caseLaw.refreshSitemapShards" },
+  },
+  {
+    description:
+      "Fold newer case-law decision timestamps into the public sitemap shards",
+    id: SCHEDULER_BACKFILL_IDS.sitemapTouches,
+    firstRun: "on-registration",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK,
+    reads: "load-governed",
   },
   {
     // Hourly: nothing alarms on these gauges at a finer resolution, and a

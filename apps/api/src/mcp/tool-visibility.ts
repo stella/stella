@@ -36,7 +36,7 @@ export const isMcpToolVisibleTo = <
 >(
   definition: TDefinition,
   audience: TAudience,
-): definition is TDefinition & McpToolVisibleTo<TDefinition, TAudience> => {
+): definition is McpToolVisibleTo<TDefinition, TAudience> => {
   if (!("_meta" in definition) || definition._meta === undefined) {
     return true;
   }
