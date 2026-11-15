@@ -3672,6 +3672,96 @@ describe("chat turns on a computer", () => {
       ).toBeNull();
     });
 
+    /**
+     * Accept an edit of turn `turnId`'s answer as the revisions handler
+     * does: the revision keeps the replaced text.
+     */
+    const reviseAnswerOf = async (
+      chatThreadId: SafeId<"chatThread">,
+      turnId: SafeId<"chatTurn">,
+    ) => {
+      const [answered] = await db
+        .select({ id: chatMessages.id, content: chatMessages.content })
+        .from(chatMessages)
+        .innerJoin(chatTurns, eq(chatTurns.assistantMessageId, chatMessages.id))
+        .where(eq(chatTurns.id, turnId));
+      const answer = answered ?? panic("the turn stored no answer");
+      await db.insert(chatMessageRevisions).values({
+        messageId: answer.id,
+        threadId: chatThreadId,
+        revision: 0,
+        content: answer.content,
+        edit: {
+          type: "ai_span",
+          start: 17,
+          end: 27,
+          instruction: "Say it holds none",
+          model: CHAT_MODEL,
+          keySource: "instance",
+        },
+        createdBy: ids.userA1,
+      });
+    };
+
+    test("a revision of an answer the edit replaces does not stop the fork", async () => {
+      await whileForking(async () => {
+        const { chatThreadId, firstTurnId } = await answeredThread(
+          "codex-session-fork-later-revised",
+        );
+        const secondTurnId = await startTurn(chatThreadId);
+        await runTurn(
+          chatThreadId,
+          secondTurnId,
+          "codex-session-fork-later-revised",
+        );
+        // The second answer was revised; the edit of the message it
+        // answered replaces it, so the fork never holds it.
+        await reviseAnswerOf(chatThreadId, secondTurnId);
+        const edited = await replayFrom(
+          chatThreadId,
+          await askedBy(secondTurnId),
+          "Work on the other matter",
+        );
+        expect(
+          await runTurnStart(chatThreadId, edited, "codex-session-new"),
+        ).toEqual({
+          sessionId: "codex-session-fork-later-revised",
+          forkBoundary: boundaryOf(firstTurnId),
+        });
+      });
+    });
+
+    test("a revision of an answer before the forked-from one starts fresh", async () => {
+      await whileForking(async () => {
+        const { chatThreadId, firstTurnId } = await answeredThread(
+          "codex-session-fork-early-revised",
+        );
+        const secondTurnId = await startTurn(chatThreadId);
+        await runTurn(
+          chatThreadId,
+          secondTurnId,
+          "codex-session-fork-early-revised",
+        );
+        const thirdTurnId = await startTurn(chatThreadId);
+        await runTurn(
+          chatThreadId,
+          thirdTurnId,
+          "codex-session-fork-early-revised",
+        );
+        // The session at the second answer holds the first answer's old
+        // text.
+        await reviseAnswerOf(chatThreadId, firstTurnId);
+        const edited = await replayFrom(
+          chatThreadId,
+          await askedBy(thirdTurnId),
+          "Work on the other matter",
+        );
+        expect(
+          await runTurnStart(chatThreadId, edited, "codex-session-new"),
+        ).toEqual({ sessionId: null, forkBoundary: null });
+      });
+    });
+
     test("a plain follow-up resumes the session whole on a harness that can fork", async () => {
       await whileForking(async () => {
         const { chatThreadId } = await answeredThread(
@@ -3805,30 +3895,7 @@ describe("chat turns on a computer", () => {
           secondTurnId,
           "codex-session-fork-revised",
         );
-        const [answered] = await db
-          .select({ id: chatMessages.id, content: chatMessages.content })
-          .from(chatMessages)
-          .innerJoin(
-            chatTurns,
-            eq(chatTurns.assistantMessageId, chatMessages.id),
-          )
-          .where(eq(chatTurns.id, revised.firstTurnId));
-        const answer = answered ?? panic("the first turn stored no answer");
-        await db.insert(chatMessageRevisions).values({
-          messageId: answer.id,
-          threadId: revised.chatThreadId,
-          revision: 0,
-          content: answer.content,
-          edit: {
-            type: "ai_span",
-            start: 17,
-            end: 27,
-            instruction: "Say it holds none",
-            model: CHAT_MODEL,
-            keySource: "instance",
-          },
-          createdBy: ids.userA1,
-        });
+        await reviseAnswerOf(revised.chatThreadId, revised.firstTurnId);
         const again = await replayFrom(
           revised.chatThreadId,
           await askedBy(secondTurnId),

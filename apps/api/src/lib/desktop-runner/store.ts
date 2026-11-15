@@ -2430,10 +2430,12 @@ export type ChatRunSession =
  *   is not changed, so a retried start forks the same prefix again.
  * - Fresh, for anything else: an answer from the cloud or from another
  *   computer, harness or folder in its place, or a harness that cannot fork.
- *   A revision of any message of the thread since the continued run's turn
- *   began starts fresh too, because the session holds the text it replaced
- *   (no revision is accepted while a turn runs). A fork is another thread
- *   and holds no run, so it starts fresh.
+ *   A revision since the continued run's turn began of any message before
+ *   the one this turn answers starts fresh too, because the session holds
+ *   the text it replaced (no revision is accepted while a turn runs). An
+ *   edit or a regeneration writes no revision, and the revisions of the
+ *   messages it deletes go with them. A fork is another thread and holds no
+ *   run, so it starts fresh.
  */
 export const readChatRunSession = async (
   db: Pick<DesktopRunnerDb, "select">,
@@ -2484,30 +2486,37 @@ export const readChatRunSession = async (
     .orderBy(desc(runs.createdAt), desc(runs.runId))
     .limit(1)
     .as("newest_run");
-  // The message right before the one this turn answers, in the thread's
-  // order: the answer this turn continues. The boundary is the asking
-  // message's own row, read in the database by id.
+  // The thread's messages before the one this turn answers, in the
+  // thread's order: what a continued session holds. The boundary is the
+  // asking message's own row, read in the database by id.
+  const beforeAsking = sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select m.created_at, m.id from chat_messages m join chat_turns t on t.user_message_id = m.id and t.thread_id = m.thread_id where t.id = ${chat.turnId} and t.thread_id = ${chat.threadId})`;
+  // The message right before the one this turn answers: the answer this
+  // turn continues.
   const continued = db
     .select({ id: chatMessages.id })
     .from(chatMessages)
-    .where(
-      and(
-        eq(chatMessages.threadId, chat.threadId),
-        sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select m.created_at, m.id from chat_messages m join chat_turns t on t.user_message_id = m.id and t.thread_id = m.thread_id where t.id = ${chat.turnId} and t.thread_id = ${chat.threadId})`,
-      ),
-    )
+    .where(and(eq(chatMessages.threadId, chat.threadId), beforeAsking))
     .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
     .limit(1);
-  // No revision since the continued turn began. Both times are the
-  // database's own: the turn's start, read by id.
+  // No message the session holds was revised since the continued turn
+  // began; a revision of a message an edit replaced is not in it. Both
+  // times are the database's own: the turn's start, read by id.
   const unrevisedSince = (turnId: SQLWrapper) =>
     notExists(
       db
         .select({ id: chatMessageRevisions.id })
         .from(chatMessageRevisions)
+        .innerJoin(
+          chatMessages,
+          and(
+            eq(chatMessages.id, chatMessageRevisions.messageId),
+            eq(chatMessages.threadId, chatMessageRevisions.threadId),
+          ),
+        )
         .where(
           and(
             eq(chatMessageRevisions.threadId, chat.threadId),
+            beforeAsking,
             sql`${chatMessageRevisions.createdAt} >= (select t.created_at from chat_turns t where t.id = ${turnId})`,
           ),
         ),
