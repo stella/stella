@@ -340,7 +340,7 @@ const reportStopped = (
  * the tab's network rules, so a redirect is judged here. Chrome reports
  * only the address a download ended on, not the hops before it.
  */
-export const shownSaveMayKeep = (
+const shownSaveMayKeep = (
   shownDocument: string,
   fetchedUrl: string,
 ): boolean => {
