@@ -8,6 +8,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_INPUT_REFUSAL_CODE,
+  CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -2458,6 +2459,7 @@ export const createSendMessage = (
       safeDb,
       scopedDb,
       session,
+      set,
       usageLane,
       user,
     }) {
@@ -2834,8 +2836,10 @@ export const createSendMessage = (
           webSearchProviders,
         } = preparedIncomingMessage;
 
-        // A turn bound for a computer is routed before it is admitted or
-        // stored: a computer that cannot take it refuses the send.
+        // Whether a turn may be asked to run on a computer at all. Which
+        // computer takes it is decided once the turn is stored, as its run
+        // starts, so a computer that cannot take it fails the turn the
+        // member's message is stored with.
         const localRun = yield* Result.await(
           resolveChatLocalRun({
             runTarget: body.runTarget,
@@ -2930,6 +2934,12 @@ export const createSendMessage = (
           toolWorkspaceIds,
           turnExecution,
         } = acceptedTurnResult.value;
+        // From here the member's message and its turn are stored, so every
+        // answer names the turn, a refusal included: a client then knows
+        // from the response alone that the thread holds what it sent. A
+        // stream refused before it opens (`ChatTurnFailureResponse`) gets the
+        // header from here too.
+        set.headers[CHAT_TURN_ID_HEADER] = turnExecution.id;
 
         const skillBindingScope = yield* Result.await(
           settleInternalPreflight(

@@ -674,12 +674,14 @@ const readChatStream = async ({
           signal: controller.signal,
         });
         clearTimeout(connectTimer);
-        if (!response.ok || response.body === null) {
-          return response.status;
-        }
+        // A refusal names the turn too once the server has stored the
+        // message, so the thread, not the draft, holds what was sent.
         const turnId = response.headers.get(CHAT_TURN_ID_HEADER);
         if (turnId !== null) {
           onTurn?.(turnId);
+        }
+        if (!response.ok || response.body === null) {
+          return response.status;
         }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();

@@ -772,6 +772,41 @@ describe("sending a message", () => {
     ).toBe(409);
   });
 
+  test("names the turn of a send refused after the server stored it, and none before", async () => {
+    const send = async (response: Response) => {
+      const named: string[] = [];
+      const { fetch } = streamingFetch(() => response);
+      const sent = await sendChatMessage({
+        anonymized: false,
+        fetch,
+        matterId: undefined,
+        messageId: MESSAGE_ID,
+        onEvent: () => {},
+        onTurn: (turnId) => {
+          named.push(turnId);
+        },
+        runId: "run-1",
+        signal: new AbortController().signal,
+        source: sourceFor(),
+        text: "Hello",
+        threadId: THREAD_ID,
+      });
+      expect(Result.isError(sent)).toBe(true);
+      return named;
+    };
+    // Accepted, then refused: the thread holds the message.
+    expect(
+      await send(
+        new Response("{}", {
+          status: 429,
+          headers: { [CHAT_TURN_ID_HEADER]: TURN_ID },
+        }),
+      ),
+    ).toEqual([TURN_ID]);
+    // Refused before anything was stored.
+    expect(await send(new Response("{}", { status: 409 }))).toEqual([]);
+  });
+
   test("ends quietly on abort, keeping the last event id it read", async () => {
     const controller = new AbortController();
     const encoder = new TextEncoder();
