@@ -22,7 +22,8 @@ const PROTOCOL_LOG_VARIABLE = "STELLA_AGENT_PROTOCOL_LOG";
 const BROWSER_EXTENSION_IDS_VARIABLE = "STELLA_BROWSER_EXTENSION_IDS";
 /**
  * Set to `1` to let runs use the stella browser (`browser/stella-browser`)
- * when no extension is connected: a development switch, off by default.
+ * when no extension is connected: a development switch, off by default and
+ * off for good in release builds (`scripts/sidecar-defines.ts`).
  */
 const STELLA_BROWSER_DEV_VARIABLE = "STELLA_BROWSER_DEV_HOST";
 /**
@@ -103,7 +104,9 @@ export const homeFolder = (): string | null => {
 
 /** Whether the development switch lets runs use the stella browser. */
 export const stellaBrowserDevHost = (): boolean =>
-  process.env[STELLA_BROWSER_DEV_VARIABLE] === "1";
+  // A literal key: the sidecar build replaces exactly this expression with
+  // "0", so a release build never starts the stella browser.
+  process.env["STELLA_BROWSER_DEV_HOST"] === "1";
 
 /** What a test set for the stella browser; see `STELLA_BROWSER_TEST_HOOKS_VARIABLE`. */
 export type StellaBrowserTestHooks = {

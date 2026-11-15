@@ -34,10 +34,10 @@ const rebuildPaths = () => {
 const MetafileSchema = v.object({ inputs: v.record(v.string(), v.unknown()) });
 
 /**
- * A program that prints the stella browser test hooks the environment
- * sets, bundled as the sidecar is (minified, with the given defines), and
- * run with every hook set: what a build does with them, not what its
- * source says.
+ * A program that prints the stella browser's switch and test hooks as the
+ * environment sets them, bundled as the sidecar is (minified, with the
+ * given defines), and run with the switch on and every hook set: what a
+ * build does with them, not what its source says.
  */
 const hooksSeenBy = async (define: Record<string, string>) => {
   const dir = mkdtempSync(path.join(tmpdir(), "stella-sidecar-defines-"));
@@ -45,7 +45,7 @@ const hooksSeenBy = async (define: Record<string, string>) => {
     const entry = path.join(dir, "entry.ts");
     writeFileSync(
       entry,
-      `import { stellaBrowserTestHooks } from ${JSON.stringify(path.join(PACKAGE_DIR, "src/sidecar/env.ts"))};\nconsole.log(JSON.stringify(stellaBrowserTestHooks()));\n`,
+      `import { stellaBrowserDevHost, stellaBrowserTestHooks } from ${JSON.stringify(path.join(PACKAGE_DIR, "src/sidecar/env.ts"))};\nconsole.log(JSON.stringify({ devHost: stellaBrowserDevHost(), hooks: stellaBrowserTestHooks() }));\n`,
     );
     const built = await Bun.build({
       define,
@@ -59,6 +59,7 @@ const hooksSeenBy = async (define: Record<string, string>) => {
     const ran = Bun.spawnSync([process.execPath, output], {
       env: {
         PATH: process.env["PATH"] ?? "",
+        STELLA_BROWSER_DEV_HOST: "1",
         STELLA_BROWSER_TEST_EXECUTABLE: "/opt/browser/browser",
         STELLA_BROWSER_TEST_HOOKS: "1",
         STELLA_BROWSER_TEST_HOST_RULES: "MAP * 127.0.0.1",
@@ -76,10 +77,13 @@ const hooksSeenBy = async (define: Record<string, string>) => {
   }
 };
 
-describe("the stella browser's test hooks", () => {
+describe("the stella browser's switch and test hooks", () => {
   test("are dead code in a release build, whatever the environment sets", async () => {
     const release = await hooksSeenBy(sidecarDefines("1.0.0"));
-    expect(release.printed).toBe("null");
+    expect(JSON.parse(release.printed)).toEqual({
+      devHost: false,
+      hooks: null,
+    });
     expect(release.code).not.toContain("ignore-certificate-errors-spki-list");
     expect(release.code).not.toContain("host-resolver-rules");
   });
@@ -87,7 +91,8 @@ describe("the stella browser's test hooks", () => {
   test("are read where the build keeps them, so the release check can fail", async () => {
     const kept = await hooksSeenBy({});
     expect(JSON.parse(kept.printed)).toMatchObject({
-      executable: "/opt/browser/browser",
+      devHost: true,
+      hooks: { executable: "/opt/browser/browser" },
     });
   });
 });

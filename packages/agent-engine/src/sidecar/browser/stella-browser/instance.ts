@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { rmSync } from "node:fs";
 import * as v from "valibot";
 
 import { type CdpClient, type CdpMethod, createCdpClient } from "./cdp-client";
@@ -9,6 +8,7 @@ import {
   type BrowserProcesses,
   type BrowserProfile,
   clearOrphan,
+  forgetInstance,
   spawnBrowser,
   writeInstance,
 } from "./launch";
@@ -144,7 +144,7 @@ export const startBrowserInstance = async ({
     pipe.close();
     client.disconnect();
     await terminate();
-    rmSync(profile.instanceFile, { force: true });
+    forgetInstance(profile.instanceFile, pid);
     return end;
   });
   const close = async () => {

@@ -179,6 +179,16 @@ const readInstance = (file: string): InstanceRecord | null => {
   return parsed.success ? parsed.output : null;
 };
 
+/**
+ * Removes the record only while it still names `browserPid`: a browser that
+ * ends after another has started on the profile leaves the newer record.
+ */
+export const forgetInstance = (file: string, browserPid: number): void => {
+  if (readInstance(file)?.browserPid === browserPid) {
+    rmSync(file, { force: true });
+  }
+};
+
 /** Records which holder runs which browser on the profile, readable by this user only. */
 export const writeInstance = (file: string, record: InstanceRecord): void => {
   const temporary = `${file}.${String(process.pid)}.tmp`;
@@ -301,8 +311,15 @@ export const clearOrphan = async ({
       }
       continue;
     }
-    const holder = instance?.browserPid === pid ? instance.holderPid : null;
-    if (holder !== null && holder !== process.pid && processes.alive(holder)) {
+    // Only a browser the record names, and whose holder is gone, is ended:
+    // one the lock alone names may be a live holder's whose record went.
+    if (instance?.browserPid !== pid) {
+      return { type: "in-use" };
+    }
+    if (
+      instance.holderPid !== process.pid &&
+      processes.alive(instance.holderPid)
+    ) {
       return { type: "in-use" };
     }
     processes.signal(pid, "SIGTERM");

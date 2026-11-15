@@ -22,6 +22,7 @@ import {
   browserEnvironment,
   type BrowserProcesses,
   clearOrphan,
+  forgetInstance,
   prepareProfile,
   singletonLockPid,
   spawnBrowser,
@@ -332,6 +333,31 @@ describe("a browser left on the profile", () => {
     );
     expect(singletonLockPid(profile.profileDir)).toBeNull();
     expect(signals).toEqual([]);
+  });
+
+  test("named only by Chrome's lock, with no record of the holder that started it, is in use and not ended", async () => {
+    const profile = profileIn(tempRoot());
+    symlinkSync(
+      `${hostname()}-5151`,
+      path.join(profile.profileDir, "SingletonLock"),
+    );
+    const { processes, signals } = fakeProcesses({
+      5151: { line: ours(profile.profileDir) },
+    });
+    expect(await clearOrphan({ processes, profile, waits: WAITS })).toEqual({
+      type: "in-use",
+    });
+    expect(signals).toEqual([]);
+  });
+
+  test("a record is forgotten only while it still names the browser that ended", () => {
+    const profile = profileIn(tempRoot());
+    writeInstance(profile.instanceFile, { browserPid: 5252, holderPid: 4141 });
+    // An older browser ending after the newer one started keeps its record.
+    forgetInstance(profile.instanceFile, 4242);
+    expect(existsSync(profile.instanceFile)).toBe(true);
+    forgetInstance(profile.instanceFile, 5252);
+    expect(existsSync(profile.instanceFile)).toBe(false);
   });
 
   test("a recorded browser id another process took since is not ended", async () => {
