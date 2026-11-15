@@ -5475,23 +5475,23 @@ describe("chat turns on a computer", () => {
     return { desktopId, desktop };
   };
 
-  /** A local turn of `chatThreadId` on `desktopId`, served as a send serves it. */
+  /**
+   * A local turn of `chatThreadId`, served as a send serves it; the run
+   * picks the member's most recently seen computer.
+   */
   const serveLocalTurn = async (
     chatThreadId: SafeId<"chatThread">,
-    desktopId: string,
     responseMessageId: SafeId<"chatMessage">,
   ) =>
     await serveTurn(
-      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
-        {
-          chatRunId: Bun.randomUUIDv7(),
-          chatTurnId: turnOf(chatThreadId),
-          messages: [{ role: "user", content: "Review the lease" }],
-          instructions: "You are stella.",
-          resume: undefined,
-          abortSignal: new AbortController().signal,
-        },
-      ),
+      createLocalChatRun(contextFor(chatThreadId), START_PLAN).stream({
+        chatRunId: Bun.randomUUIDv7(),
+        chatTurnId: turnOf(chatThreadId),
+        messages: [{ role: "user", content: "Review the lease" }],
+        instructions: "You are stella.",
+        resume: undefined,
+        abortSignal: new AbortController().signal,
+      }),
       responseMessageId,
     );
 
@@ -5507,10 +5507,10 @@ describe("chat turns on a computer", () => {
   const STEER_TEXT = "Also check the annex.";
 
   test("a message a running turn takes is stored in its answer where the harness took it, with the text the API sent, as streamed", async () => {
-    const { desktopId, desktop } = await steerableComputer();
+    const { desktop } = await steerableComputer();
     const chatThreadId = await newThread();
     const responseMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
-    const served = serveLocalTurn(chatThreadId, desktopId, responseMessageId);
+    const served = serveLocalTurn(chatThreadId, responseMessageId);
     const start = await desktop.receive("run.start");
     desktop.send({ type: "run.accepted", runId: start.runId });
 
@@ -5619,10 +5619,10 @@ describe("chat turns on a computer", () => {
   });
 
   test("a message the harness does not take is reported refused and leaves the answer as it was", async () => {
-    const { desktopId, desktop } = await steerableComputer();
+    const { desktop } = await steerableComputer();
     const chatThreadId = await newThread();
     const responseMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
-    const served = serveLocalTurn(chatThreadId, desktopId, responseMessageId);
+    const served = serveLocalTurn(chatThreadId, responseMessageId);
     const start = await desktop.receive("run.start");
     desktop.send({ type: "run.accepted", runId: start.runId });
     const inputId = Bun.randomUUIDv7();
@@ -5663,10 +5663,9 @@ describe("chat turns on a computer", () => {
 
   test("a turn whose harness takes no message mid-turn, or that has no open run, is never handed one", async () => {
     const chatThreadId = await newThread();
-    const { desktopId, desktop } = shared();
+    const { desktop } = shared();
     const served = serveLocalTurn(
       chatThreadId,
-      desktopId,
       toSafeId<"chatMessage">(Bun.randomUUIDv7()),
     );
     const start = await desktop.receive("run.start");

@@ -1214,7 +1214,6 @@ const createRunSteers = (context: LocalRunContext, runnerRunId: string) => {
         type: EventType.TOOL_CALL_START,
         toolCallId,
         toolCallName: CHAT_LOCAL_RUN_STEER_TOOL,
-        toolName: CHAT_LOCAL_RUN_STEER_TOOL,
         metadata: {
           [CHAT_TOOL_EXECUTOR_METADATA_KEY]: CHAT_TOOL_EXECUTOR.harness,
         },
@@ -1231,7 +1230,6 @@ const createRunSteers = (context: LocalRunContext, runnerRunId: string) => {
         type: EventType.TOOL_CALL_END,
         toolCallId,
         toolCallName: CHAT_LOCAL_RUN_STEER_TOOL,
-        toolName: CHAT_LOCAL_RUN_STEER_TOOL,
         input,
         timestamp: nowMs(),
       }),
