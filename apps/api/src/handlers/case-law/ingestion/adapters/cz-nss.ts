@@ -1250,31 +1250,11 @@ const CZ_NSS_SOURCE_FIELDS = [
   "datumpredlozenirs",
   "datumrozhodnutirs",
   "rozhodnutonapursnss",
-  "nssjudikat",
-  "nsssesit",
-  "nssrok",
-  "vyhledavanidlehesel",
-  "rozpornaprejudikatura",
-  "nadpis",
-  "vztahkpredpisům",
-  "datumvydanivsbnss",
-  "pravnivetaan",
 ] as const;
 
 type CzNssSourceField = (typeof CZ_NSS_SOURCE_FIELDS)[number];
 
 type CzNssPublisherRecord = Readonly<Record<CzNssSourceField, unknown>>;
-
-type CzNssPublisherFieldMap = {
-  readonly [TField in keyof CzNssPublisherRecord]: {
-    readonly disposition: "stored";
-    readonly target: {
-      readonly type: "metadata";
-      readonly key: "publisherFields";
-      readonly path: readonly [TField];
-    };
-  };
-};
 
 const publisherField = <const TField extends CzNssSourceField>(field: TField) =>
   ({
@@ -1497,10 +1477,7 @@ const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
   datumpredlozenirs: publisherField("datumpredlozenirs"),
   datumrozhodnutirs: publisherField("datumrozhodnutirs"),
   rozhodnutonapursnss: publisherField("rozhodnutonapursnss"),
-} as const satisfies CzNssPublisherFieldMap satisfies Record<
-  keyof CzNssPublisherRecord,
-  SourceFieldDisposition
->;
+} as const satisfies Record<keyof CzNssPublisherRecord, SourceFieldDisposition>;
 
 /** How the portal names each field it prints on a detail page. */
 const CZ_NSS_FIELD_ID_RE = /data-field-id="(?<field>[^"]+)"/giu;
@@ -1542,7 +1519,6 @@ type CzNssDetailValues = {
   nssReporterIssue: string | undefined;
   nssReporterYear: string | undefined;
   nssReporterNumber: string | undefined;
-  publisherMetadata?: ReturnType<typeof extractNssPublisherMetadata>;
   ecli: string | undefined;
   judge: string | undefined;
   senate: string | undefined;
@@ -1686,6 +1662,7 @@ type DetailFieldEvidence = {
 };
 export type CzNssDetailMetadata = CzNssDetailValues & {
   detailFieldEvidence?: DetailFieldEvidence[];
+  publisherMetadata?: ReturnType<typeof extractNssPublisherMetadata>;
 };
 
 type ExtractDetailFieldTextOptions = {
