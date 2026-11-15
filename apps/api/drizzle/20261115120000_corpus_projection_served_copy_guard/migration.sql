@@ -85,9 +85,10 @@ BEGIN
       -- A restore is not a new append: the state's desired epoch has moved
       -- past this revision, which is why it was queued. It is admitted only
       -- for a revision no delete can have reached, which the state still
-      -- names at its own epoch, and which exactly one desired change
-      -- separates from the desired state. A change of the desired value
-      -- needs a strictly newer epoch, so an erasure and its undo take two.
+      -- names at its own epoch, and which either exactly one desired change
+      -- separates from the desired state (a change of the desired value
+      -- needs a strictly newer epoch, so an erasure and its undo take two)
+      -- or whose content is exactly what the state desires.
       IF NOT (
         OLD."cleanup_attempts" = 0
         AND NEW."cleanup_attempts" = 0
@@ -102,7 +103,14 @@ BEGIN
         AND state."desired_action" = 'upsert'
         AND state."applied_action" = 'upsert'
         AND state."applied_epoch" = NEW."epoch"
-        AND state."desired_epoch" = NEW."epoch" + 1
+        AND state."desired_epoch" > NEW."epoch"
+        AND (
+          state."desired_epoch" = NEW."epoch" + 1
+          OR (
+            state."desired_fingerprint" = NEW."fingerprint"
+            AND state."desired_index_id" = NEW."index_id"
+          )
+        )
       FOR UPDATE;
       IF NOT FOUND THEN
         RAISE EXCEPTION 'only a revision its unchanged upsert state still names can be restored';

@@ -10,6 +10,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { corpusProjectionCleanupClaimPage } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
+import { legacyServedCopyRetirePageQuery } from "@/api/lib/legal-search/corpus-index-projection-legacy-retire";
 import { caseLawWaitingReplacementsQuery } from "@/api/lib/observability/case-law-freshness-metrics";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -217,6 +218,48 @@ test("the cleanup claim reads one page of its queue, however many served revisio
   expect(large.rows).toBe(LIMIT);
   expect(large.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.25));
   expect(large.buffers / large.rows).toBeLessThanOrEqual(25);
+}, 600_000);
+
+// timeout: seeds and vacuums thousands of rows in PGlite, with no signal to await.
+test("the one-off legacy pass reads one page of the replacement index", async () => {
+  await seedServed({
+    first: 1,
+    count: CONVERGED,
+    waiting: false,
+    queuedAt: null,
+  });
+  await seedServed({
+    first: CONVERGED + 1,
+    count: 1000,
+    waiting: true,
+    queuedAt: null,
+  });
+  await analyze();
+  for (const after of [
+    null,
+    {
+      indexId: INDEX_ID,
+      updatedAt: "2026-07-15 00:05:00+00",
+      entityId: "00000000-0000-4000-8000-000000000000",
+    },
+  ]) {
+    // db-await-in-loop: one plan per cursor shape
+    const page = await explain(() =>
+      legacyServedCopyRetirePageQuery({
+        family: "case_law",
+        generation: GENERATION,
+        after,
+        limit: LIMIT,
+      }),
+    );
+    const text = page.lines.join("\n");
+    expect(text).not.toContain("Seq Scan");
+    expect(text).toContain(
+      "corpus_index_projection_states_replacement_route_idx",
+    );
+    expect(page.rows).toBe(LIMIT);
+    expect(page.buffers / page.rows).toBeLessThanOrEqual(25);
+  }
 }, 600_000);
 
 // timeout: seeds and vacuums thousands of rows in PGlite, with no signal to await.

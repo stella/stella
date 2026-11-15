@@ -515,7 +515,6 @@ const readStates = async (run: ModelRun) =>
       desiredAction: corpusIndexProjectionStates.desiredAction,
       appliedAction: corpusIndexProjectionStates.appliedAction,
       appliedRevision: corpusIndexProjectionStates.appliedRevision,
-      desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
       workStatus: corpusIndexProjectionStates.workStatus,
     })
     .from(corpusIndexProjectionStates)
@@ -574,8 +573,7 @@ const claimCleanup = async (run: ModelRun) => {
   run.servedClaims +=
     claim.restoredIntentIds.length +
     claim.claimed.served_after_delete +
-    claim.claimed.served_unproven +
-    claim.claimed.served_unproven_same_content;
+    claim.claimed.served_unproven;
   const leaseToken = claim.leases.at(0)?.leaseToken;
   if (leaseToken === undefined) {
     return;
@@ -786,20 +784,6 @@ const applyCommand = async (run: ModelRun, next: Command) => {
 const repairedEntity = (run: ModelRun, step: Command): string | null =>
   step.type === "repair" ? entityOf(run, step.entity) : null;
 
-/**
- * A desired write that leaves more than one change between the served copy
- * and the desired state retires the copy: an erasure undone in between cannot
- * be ruled out from the epochs alone. One change never does.
- */
-const retiredAsUnproven = (
-  step: Command,
-  servedBefore: { epoch: bigint },
-  stateAfter: { appliedRevision: string | null; desiredEpoch: bigint },
-) =>
-  (step.type === "change" || step.type === "undo_erase") &&
-  stateAfter.appliedRevision === null &&
-  stateAfter.desiredEpoch >= servedBefore.epoch + 2n;
-
 const assertStepInvariants = (
   run: ModelRun,
   before: Snapshot,
@@ -825,8 +809,7 @@ const assertStepInvariants = (
     if (
       servedBefore !== null &&
       state?.desiredAction === "upsert" &&
-      repairedEntity(run, step) !== entityId &&
-      !retiredAsUnproven(step, servedBefore, state)
+      repairedEntity(run, step) !== entityId
     ) {
       expect({ step: step.type, served: servedAfter !== null }).toEqual({
         step: step.type,

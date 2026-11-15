@@ -163,19 +163,15 @@ type ClaimCorpusProjectionCleanupOptions<Family extends CorpusFamily> =
  *   may already be gone and holding the cleanup back would only keep the
  *   entity hidden. It settles and the entity is appended again.
  * - `served_unproven`: never claimed, but more than one desired change
- *   separates it from the desired state, so an erasure undone in between
- *   cannot be ruled out and the copy may be the pre-erasure one. Deleting it
- *   is the safe direction; the entity is appended anew.
- * - `served_unproven_same_content`: two or more desired epochs behind, but
- *   the desired fingerprint and index equal the copy's, so the epochs moved
- *   with no content change in this generation. Claimed alike, and counted
- *   apart so that class stays visible.
+ *   separates it from the desired state and its content differs from what
+ *   the state desires, so an erasure undone in between cannot be ruled out
+ *   and the copy may be the pre-erasure one. Deleting it is the safe
+ *   direction; the entity is appended anew.
  */
 const CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS = [
   "unserved",
   "served_after_delete",
   "served_unproven",
-  "served_unproven_same_content",
 ] as const;
 type CorpusProjectionCleanupClaimKind =
   (typeof CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS)[number];
@@ -281,7 +277,6 @@ const noCleanupClaims = () =>
     unserved: 0,
     served_after_delete: 0,
     served_unproven: 0,
-    served_unproven_same_content: 0,
   }) satisfies Record<CorpusProjectionCleanupClaimKind, number>;
 
 type CleanupPageRow = Awaited<
@@ -406,20 +401,19 @@ const decideCleanupCandidatesTx = async (
         WHEN ${corpusIndexProjectionRevisionIsRestorable({
           ...served,
           revisionEpoch: corpusIndexProjectionIntents.epoch,
+          revisionFingerprint: corpusIndexProjectionIntents.fingerprint,
+          revisionIndexId: corpusIndexProjectionIntents.indexId,
           cleanupAttempts: corpusIndexProjectionIntents.cleanupAttempts,
           revisionAppliedAt: corpusIndexProjectionIntents.appliedAt,
           lastError: corpusIndexProjectionIntents.lastError,
           appliedEpoch: corpusIndexProjectionStates.appliedEpoch,
           desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
+          desiredFingerprint: corpusIndexProjectionStates.desiredFingerprint,
+          desiredIndexId: corpusIndexProjectionStates.desiredIndexId,
         })}
           THEN ${CLEANUP_CANDIDATE_RESTORE satisfies CorpusProjectionCleanupDisposition}
         WHEN ${corpusIndexProjectionIntents.cleanupAttempts} > 0
           THEN ${"served_after_delete" satisfies CorpusProjectionCleanupDisposition}
-        WHEN ${corpusIndexProjectionStates.desiredEpoch} >= ${corpusIndexProjectionIntents.epoch} + 2
-          AND (${corpusIndexProjectionStates.desiredFingerprint}, ${corpusIndexProjectionStates.desiredIndexId})
-            IS NOT DISTINCT FROM
-            (${corpusIndexProjectionIntents.fingerprint}, ${corpusIndexProjectionIntents.indexId})
-          THEN ${"served_unproven_same_content" satisfies CorpusProjectionCleanupDisposition}
         ELSE ${"served_unproven" satisfies CorpusProjectionCleanupDisposition}
       END`,
     })
@@ -578,8 +572,7 @@ export const claimCorpusProjectionCleanupTx = async <
   if (
     restoredIntentIds.length > 0 ||
     claimed.served_after_delete > 0 ||
-    claimed.served_unproven > 0 ||
-    claimed.served_unproven_same_content > 0
+    claimed.served_unproven > 0
   ) {
     logger.warn("corpus_projection.cleanup_served_revisions", {
       family,
@@ -588,7 +581,6 @@ export const claimCorpusProjectionCleanupTx = async <
       restored: restoredIntentIds.length,
       claimed_after_delete: claimed.served_after_delete,
       claimed_unproven: claimed.served_unproven,
-      claimed_unproven_unchanged: claimed.served_unproven_same_content,
     });
   }
   return {

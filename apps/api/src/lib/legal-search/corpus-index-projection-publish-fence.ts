@@ -135,11 +135,6 @@ export const corpusProjectionAcceptedAppendCleanupFence = (
   cleanupFence(publishBarrier(manifest), transitionAt);
 
 /**
- * The same fence for the statement that records an acceptance, which cannot
- * read the `append_committed_at` it is writing. The transition is later than
- * the acceptance it stands in for, so the barrier stays sound.
- */
-/**
  * Where a state that stopped naming `retiredRevision` goes in the append
  * walk's queue, which is ordered by `coalesce(retry_not_before, updated_at)`
  * and reads only what is runnable now: the revision's cleanup fence plus the
@@ -163,6 +158,11 @@ export const corpusProjectionRetiredRevisionRunnableAt = (
       .maturation_period,
   )}::double precision * interval '1 millisecond')`;
 
+/**
+ * The same fence for the statement that records an acceptance, which cannot
+ * read the `append_committed_at` it is writing. The transition is later than
+ * the acceptance it stands in for, so the barrier stays sound.
+ */
 export const corpusProjectionUnrecordedAppendCleanupFence = (
   manifest: CorpusIndexManifest,
   transitionAt: Date | SQL,

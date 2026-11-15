@@ -90,11 +90,15 @@ export const corpusIndexProjectionStateServesRevision = ({
 
 type CorpusProjectionRestoreColumns = CorpusProjectionServedColumns & {
   revisionEpoch: SQLWrapper;
+  revisionFingerprint: SQLWrapper;
+  revisionIndexId: SQLWrapper;
   cleanupAttempts: SQLWrapper;
   revisionAppliedAt: SQLWrapper;
   lastError: SQLWrapper;
   appliedEpoch: SQLWrapper;
   desiredEpoch: SQLWrapper;
+  desiredFingerprint: SQLWrapper;
+  desiredIndexId: SQLWrapper;
 };
 
 /**
@@ -107,22 +111,30 @@ type CorpusProjectionRestoreColumns = CorpusProjectionServedColumns & {
  * - `last_error IS NULL` and `applied_at IS NOT NULL`: replacement
  *   preparation queued it from `applied`; erasure, drift repair and every
  *   other cleanup writer record why.
- * - `desired_epoch = epoch + 1`: exactly one desired change separates the
- *   revision from the desired state. The state guard admits a change of the
- *   desired action, fingerprint or index only at a strictly newer epoch, so an
- *   erasure and its undo take two epochs, and preparation queued the revision
- *   only once the desired epoch had passed it, so no change came after the
- *   queueing. Any longer gap is not restored.
+ * - and either of:
+ *   - `desired_epoch = epoch + 1`: exactly one desired change separates the
+ *     revision from the desired state. The state guard admits a change of the
+ *     desired action, fingerprint or index only at a strictly newer epoch, so
+ *     an erasure and its undo take two epochs, and preparation queued the
+ *     revision only once the desired epoch had passed it, so no change came
+ *     after the queueing;
+ *   - the desired fingerprint and index equal the revision's: the copy holds
+ *     exactly what the state desires, whatever came in between.
  *
- * The database guard on `cleanup_pending -> applied` repeats this predicate.
+ * Anything else is not restored. The database guard on
+ * `cleanup_pending -> applied` repeats this predicate.
  */
 export const corpusIndexProjectionRevisionIsRestorable = ({
   revisionEpoch,
+  revisionFingerprint,
+  revisionIndexId,
   cleanupAttempts,
   revisionAppliedAt,
   lastError,
   appliedEpoch,
   desiredEpoch,
+  desiredFingerprint,
+  desiredIndexId,
   ...served
 }: CorpusProjectionRestoreColumns) => sql`(
   ${corpusIndexProjectionStateServesRevision(served)}
@@ -130,7 +142,14 @@ export const corpusIndexProjectionRevisionIsRestorable = ({
   AND ${revisionAppliedAt} IS NOT NULL
   AND ${lastError} IS NULL
   AND ${appliedEpoch} = ${revisionEpoch}
-  AND ${desiredEpoch} = ${revisionEpoch} + 1
+  AND ${desiredEpoch} > ${revisionEpoch}
+  AND (
+    ${desiredEpoch} = ${revisionEpoch} + 1
+    OR (
+      ${desiredFingerprint} = ${revisionFingerprint}
+      AND ${desiredIndexId} = ${revisionIndexId}
+    )
+  )
 )`;
 
 /**
