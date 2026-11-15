@@ -30,6 +30,7 @@ import type {
   ChatTurnOutcome,
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { findTranscriptProblems } from "@/api/tests/helpers/provider-request-transcript";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
@@ -453,11 +454,17 @@ describe("the settled history the engine converts", () => {
       resumedMessageId: undefined,
     });
 
+    const violations = violationsOf(
+      CHAT_ORACLE.providerTranscriptSettled,
+      findTranscriptProblems(modelRequest(parts)),
+    );
+    if (violations.length > 0) {
+      panic(`The settled history is unbalanced: ${JSON.stringify(violations)}`);
+    }
     expect(history[0]?.parts).toEqual([
       ...parts,
       errorToolResult("question", UNRESOLVED_CALL_ERROR),
     ]);
-    expect(findTranscriptProblems(modelRequest(parts))).toEqual([]);
   });
 
   test("a denial in a step the message goes on past is answered in that step of the provider's copy", () => {
