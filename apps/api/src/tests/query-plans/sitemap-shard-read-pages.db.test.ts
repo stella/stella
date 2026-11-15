@@ -284,7 +284,7 @@ test("a sitemap file reads a bounded number of pages per decision, whatever its 
       expect(new Set(listed).size).toBe(listed.length);
       const conditions = getShardConditions(month);
       if (!Array.isArray(conditions)) {
-        return panic("The pages fixture's month must be valid");
+        panic("The pages fixture's month must be valid");
       }
       // Every listed document of the month, read whole and without a cut.
       // db-await-in-loop: one oracle read per fixture month, two in all
