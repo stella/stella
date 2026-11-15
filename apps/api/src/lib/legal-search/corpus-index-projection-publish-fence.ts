@@ -11,14 +11,27 @@ import {
 
 type AcceptedAppendBarrierOrigin = { type: "accepted"; acceptedAt: SQL };
 type UnknownAppendBarrierOrigin = { type: "unknown"; appendStartedAt: Date };
+type OfflineExitedBarrierOrigin = { type: "offline_exited"; exitedBy: Date };
+type OfflineUnendedBarrierOrigin = {
+  type: "offline_unended";
+  appendStartedAt: Date;
+};
 
 /**
  * Where a revision's barrier counts from. An acceptance in hand owes only the
  * publish delay. An append whose outcome is unknown counts from its start and
  * may still be inside its request, so it also owes the request's budget.
+ *
+ * An offline indexer publishes before it exits and nothing after, so a run
+ * known to have exited owes nothing (`offline_exited`). One whose exit nobody
+ * saw has certainly ended at its kill deadline plus the end margin
+ * (`offline_unended`), with no commit window after it.
  */
 type CorpusProjectionAppendBarrierOrigin =
-  AcceptedAppendBarrierOrigin | UnknownAppendBarrierOrigin;
+  | AcceptedAppendBarrierOrigin
+  | UnknownAppendBarrierOrigin
+  | OfflineExitedBarrierOrigin
+  | OfflineUnendedBarrierOrigin;
 
 /**
  * One owner of the rule that separates "the engine accepted this append"
@@ -44,7 +57,10 @@ export function corpusProjectionAppendPublishBarrier(
   manifest: CorpusIndexManifest,
 ): SQL;
 export function corpusProjectionAppendPublishBarrier(
-  origin: UnknownAppendBarrierOrigin,
+  origin:
+    | UnknownAppendBarrierOrigin
+    | OfflineExitedBarrierOrigin
+    | OfflineUnendedBarrierOrigin,
   manifest: CorpusIndexManifest,
 ): Date;
 export function corpusProjectionAppendPublishBarrier(
@@ -66,11 +82,64 @@ export function corpusProjectionAppendPublishBarrier(
           publishDelayMs,
       );
     }
+    case "offline_exited":
+      return finiteInstant(origin.exitedBy, "barrier");
+    case "offline_unended":
+      return corpusProjectionOfflineIndexerEndedAt(
+        origin.appendStartedAt,
+        manifest,
+      );
     default:
       origin satisfies never;
       return panic(`Unhandled append barrier origin: ${String(origin)}`);
   }
 }
+
+const finiteInstant = (instant: Date, contract: string): Date =>
+  Number.isFinite(instant.getTime())
+    ? instant
+    : panic(`Corpus projection append ${contract} contract is invalid`);
+
+/**
+ * Clock skew between the database and the indexer's host, plus the commit of
+ * a publish in flight at the kill: what the database clock must pass beyond
+ * the kill deadline before the run has certainly ended.
+ */
+export const CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS = 5000;
+
+/**
+ * The instant, on the database clock, by which an offline indexer run that
+ * delivers a revision started at `appendStartedAt` must have been killed. Its
+ * runner enforces it outside the process that started it, so neither that
+ * process nor its death can extend it. It is the same budget a REST append of
+ * the generation gets, so the lease a start requires covers it.
+ */
+export const corpusProjectionOfflineIndexerKillDeadline = (
+  appendStartedAt: Date,
+  manifest: CorpusIndexManifest,
+): Date =>
+  new Date(
+    finiteInstant(appendStartedAt, "kill deadline").getTime() +
+      corpusProjectionAppendIngestBudgetMs(manifest),
+  );
+
+/**
+ * From when, on the database clock, no write of an offline run delivering a
+ * revision started at `appendStartedAt` can still appear: a killed indexer
+ * publishes nothing after the kill, and leaves only whole splits it had
+ * published before. A census that starts no earlier than this sees all of the
+ * revision it will ever see, so its count is final.
+ */
+export const corpusProjectionOfflineIndexerEndedAt = (
+  appendStartedAt: Date,
+  manifest: CorpusIndexManifest,
+): Date =>
+  new Date(
+    corpusProjectionOfflineIndexerKillDeadline(
+      appendStartedAt,
+      manifest,
+    ).getTime() + CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
+  );
 
 const publishBarrier = (manifest: CorpusIndexManifest): SQL =>
   corpusProjectionAppendPublishBarrier(
@@ -100,13 +169,25 @@ export const corpusProjectionAcceptedAppendProofDeadline = (
 };
 
 /**
+ * An accepted revision's barrier: the one its acceptance stored, or, for a
+ * revision applied in the transaction that accepted it, the one counted from
+ * that acceptance. An ingest request stores exactly that count, so the two
+ * agree for it; an offline revision stores the barrier its delivery earned,
+ * which owes no commit window (`offline_exited`, `offline_unended`). The
+ * stored barrier is immutable, so every writer that fences an accepted
+ * revision reads it here rather than counting a second one.
+ */
+const acceptedRevisionBarrier = (manifest: CorpusIndexManifest): SQL =>
+  sql`coalesce(${corpusIndexProjectionIntents.appendPublishBarrierAt}, ${publishBarrier(manifest)})`;
+
+/**
  * Whether the engine has certainly published an accepted append. Only a
  * published revision may be observed: an earlier census reads a queued
  * append's absence as drift and repairs a revision that is merely late.
  */
 export const corpusProjectionAppendIsPublished = (
   manifest: CorpusIndexManifest,
-): SQL => sql`${publishBarrier(manifest)} <= clock_timestamp()`;
+): SQL => sql`${acceptedRevisionBarrier(manifest)} <= clock_timestamp()`;
 
 type CorpusProjectionCleanupFence = {
   appendPublishBarrierAt: SQL;
@@ -132,7 +213,7 @@ export const corpusProjectionAcceptedAppendCleanupFence = (
   manifest: CorpusIndexManifest,
   transitionAt: Date | SQL,
 ): CorpusProjectionCleanupFence =>
-  cleanupFence(publishBarrier(manifest), transitionAt);
+  cleanupFence(acceptedRevisionBarrier(manifest), transitionAt);
 
 /**
  * The same fence for the statement that records an acceptance, which cannot

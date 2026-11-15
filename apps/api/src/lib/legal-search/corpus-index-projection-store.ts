@@ -49,6 +49,7 @@ import {
   corpusProjectionAcceptedAppendCleanupFence,
   corpusProjectionAcceptedAppendProofDeadline,
   corpusProjectionAppendPublishBarrier,
+  corpusProjectionOfflineIndexerEndedAt,
   corpusProjectionUnrecordedAppendCleanupFence,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { lockCorpusIndexProjectionMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
@@ -457,8 +458,19 @@ export type CorpusProjectionAppendStart = {
 
 type StartCorpusProjectionAppendBatchOptions = {
   leases: readonly CorpusProjectionIntentLease[];
-  testNow?: Date;
+  testNow?: Date | undefined;
 };
+
+/**
+ * How the started revisions travel. An offline start stores, per revision,
+ * the documents the indexer's file holds for it.
+ */
+type CorpusProjectionAppendStartDelivery =
+  | { type: "ingest_api" }
+  | {
+      type: "offline_indexer";
+      expectedDocumentCounts: ReadonlyMap<ProjectionIntentId, number>;
+    };
 
 /**
  * Fence one physical append request and give every included revision one DB
@@ -469,7 +481,94 @@ type StartCorpusProjectionAppendBatchOptions = {
 export const startCorpusProjectionAppendBatchTx = async (
   tx: Transaction,
   { leases, testNow }: StartCorpusProjectionAppendBatchOptions,
+): Promise<CorpusProjectionAppendStart[]> =>
+  await startAppendBatchTx(tx, {
+    leases,
+    delivery: { type: "ingest_api" },
+    testNow,
+  });
+
+type OfflineCorpusProjectionAppendLease = {
+  lease: CorpusProjectionIntentLease;
+  /** Documents the indexer's file holds for this revision. */
+  expectedDocumentCount: number;
+};
+
+type StartCorpusProjectionOfflineAppendBatchOptions = {
+  leases: readonly OfflineCorpusProjectionAppendLease[];
+  testNow?: Date | undefined;
+};
+
+/**
+ * Start revisions an offline indexer will deliver from one file, with the
+ * document count each holds there. Committed before the file exists, so
+ * every document the indexer can write belongs to a started row. The run must
+ * be killed by `corpusProjectionOfflineIndexerKillDeadline` of this start; an
+ * expired start is then proven by census instead of cleaned up
+ * (`recoverExpiredCorpusProjectionIntentsTx`).
+ */
+export const startCorpusProjectionOfflineAppendBatchTx = async (
+  tx: Transaction,
+  { leases, testNow }: StartCorpusProjectionOfflineAppendBatchOptions,
 ): Promise<CorpusProjectionAppendStart[]> => {
+  if (
+    leases.some(
+      ({ expectedDocumentCount }) =>
+        !Number.isSafeInteger(expectedDocumentCount) ||
+        expectedDocumentCount < 1,
+    )
+  ) {
+    return panic("Projection append document count must be a positive integer");
+  }
+  return await startAppendBatchTx(tx, {
+    leases: leases.map(({ lease }) => lease),
+    delivery: {
+      type: "offline_indexer",
+      expectedDocumentCounts: new Map(
+        leases.map(({ lease, expectedDocumentCount }) => [
+          lease.intentId,
+          expectedDocumentCount,
+        ]),
+      ),
+    },
+    testNow,
+  });
+};
+
+const startDelivery = (delivery: CorpusProjectionAppendStartDelivery) => {
+  switch (delivery.type) {
+    case "ingest_api":
+      return { appendDelivery: delivery.type };
+    case "offline_indexer":
+      return {
+        appendDelivery: delivery.type,
+        expectedDocumentCount: sqlCaseFragment({
+          operand: sql`${corpusIndexProjectionIntents.id}`,
+          branches: Array.from(
+            delivery.expectedDocumentCounts,
+            ([intentId, count]) =>
+              sql`WHEN ${intentId}::uuid THEN ${count}::integer`,
+          ),
+          fallback: sql`${corpusIndexProjectionIntents.expectedDocumentCount}`,
+        }),
+      };
+    default:
+      delivery satisfies never;
+      return panic(`Unhandled append delivery: ${String(delivery)}`);
+  }
+};
+
+const startAppendBatchTx = async (
+  tx: Transaction,
+  {
+    leases,
+    delivery,
+    testNow,
+  }: StartCorpusProjectionAppendBatchOptions & {
+    delivery: CorpusProjectionAppendStartDelivery;
+  },
+): Promise<CorpusProjectionAppendStart[]> => {
+  // audit: skip - append bookkeeping on the derived public corpus projection
   const first = leases.at(0);
   if (
     first === undefined ||
@@ -542,6 +641,7 @@ export const startCorpusProjectionAppendBatchTx = async (
       status: "append_started",
       appendStartedAt: transitionAt,
       appendRequestRevisionCount: leases.length,
+      ...startDelivery(delivery),
       updatedAt: transitionAt,
     })
     .where(
@@ -1047,6 +1147,7 @@ export const unparkCorpusProjectionAppendTx = async (
 
 const ACCEPTED_STATUS = "append_committed" satisfies CorpusIndexIntentStatus;
 const APPLIED_STATUS = "applied" satisfies CorpusIndexIntentStatus;
+const WITHDRAWN_STATUS = "withdrawn" satisfies CorpusIndexIntentStatus;
 const CLEANUP_PENDING_STATUS =
   "cleanup_pending" satisfies CorpusIndexIntentStatus;
 const STALE_ACCEPTED_APPEND_MESSAGE =
@@ -1160,6 +1261,12 @@ const validateAcceptedBatch = (intentIds: readonly ProjectionIntentId[]) => {
  * instant is read from PostgreSQL after the receipt, so it is never earlier
  * than the acceptance and the barrier stays sound. A revision whose desired
  * state moved meanwhile goes to cleanup behind the same barrier instead.
+ *
+ * An offline revision is recorded once its indexer has exited or been
+ * killed, with the count its start stored. Its indexer published all it ever
+ * will before that, so its barrier is the record itself; whether an inexact
+ * count is final is still judged from its kill deadline, never from the exit
+ * a caller reports (`settleCommittedCorpusProjectionAppendsTx`).
  */
 export const recordAcceptedCorpusProjectionAppendsTx = async (
   tx: Transaction,
@@ -1191,8 +1298,19 @@ export const recordAcceptedCorpusProjectionAppendsTx = async (
     ) {
       return { status: "lease_lost", intentId, documentCount } as const;
     }
+    if (
+      intent.appendDelivery === "offline_indexer" &&
+      intent.expectedDocumentCount !== documentCount
+    ) {
+      return panic(`Projection append document count changed: ${intent.id}`);
+    }
     return isStillDesiredProjection(rows.states.get(intent.entityId), intent)
-      ? ({ status: "accepted", intentId, documentCount } as const)
+      ? ({
+          status: "accepted",
+          intentId,
+          documentCount,
+          delivery: intent.appendDelivery,
+        } as const)
       : ({ status: "stale_cleanup_pending", intentId, documentCount } as const);
   });
   const written = outcomes.filter(({ status }) => status !== "lease_lost");
@@ -1224,6 +1342,17 @@ export const recordAcceptedCorpusProjectionAppendsTx = async (
       rows.manifest,
       transitionAt,
     );
+    // An offline run is recorded once its indexer has exited, and it
+    // published everything it will before exiting: its barrier is the record
+    // itself, with no commit window to wait out.
+    const exited = written.filter(
+      (outcome) =>
+        outcome.status === "accepted" && outcome.delivery === "offline_indexer",
+    );
+    const exitedBarrier = corpusProjectionAppendPublishBarrier(
+      { type: "offline_exited", exitedBy: transitionAt },
+      rows.manifest,
+    );
     const recorded = await tx
       .update(corpusIndexProjectionIntents)
       .set({
@@ -1235,7 +1364,11 @@ export const recordAcceptedCorpusProjectionAppendsTx = async (
         leaseToken: null,
         leaseExpiresAt: null,
         appendCommittedAt: transitionAt,
-        appendPublishBarrierAt: fence.appendPublishBarrierAt,
+        appendPublishBarrierAt: byIntent(
+          exited,
+          () => sql`${exitedBarrier}::timestamptz`,
+          fence.appendPublishBarrierAt,
+        ),
         cleanupNotBefore: byIntent(
           stale,
           () => fence.cleanupNotBefore,
@@ -1279,12 +1412,16 @@ export const recordAcceptedCorpusProjectionAppendsTx = async (
  *   barrier has passed by the PostgreSQL clock; an inexact one waits for the
  *   proof deadline and then retires the revision, charged like an unknown
  *   append outcome.
+ *   An offline revision has no proof deadline: its inexact count is final
+ *   only for a census that started once its indexer had certainly ended,
+ *   which `censusStart` dates; without it the revision keeps waiting. Then an
+ *   empty count withdraws it and any other retires it.
  * - `request_waited`: the executor, right after a request that waited for
  *   publication. An exact count applies at once; an inexact one retires the
  *   revision at once with an uncharged retry, as a transient append failure.
  */
 export type CorpusProjectionProofTiming =
-  | { type: "after_barrier" }
+  | { type: "after_barrier"; censusStart?: CorpusProjectionCensusStart }
   | { type: "request_waited"; failureMessage: string };
 
 type ProveAcceptedCorpusProjectionAppendsOptions = {
@@ -1301,6 +1438,8 @@ export type AcceptedCorpusProjectionAppendProof =
   | { status: "already_applied"; intentId: ProjectionIntentId }
   | { status: "stale_cleanup_pending"; intentId: ProjectionIntentId }
   | { status: "unproven_cleanup_pending"; intentId: ProjectionIntentId }
+  /** Offline, and empty in a census that started after its indexer ended. */
+  | { status: "withdrawn"; intentId: ProjectionIntentId }
   | {
       status: "blocked";
       intentId: ProjectionIntentId;
@@ -1315,6 +1454,10 @@ export type AcceptedCorpusProjectionAppendProof =
 
 const UNPUBLISHED_APPEND_MESSAGE =
   "projection append was not exactly present at its proof deadline";
+const UNDELIVERED_OFFLINE_APPEND_MESSAGE =
+  "offline projection append was not exactly present once its indexer had ended";
+const WITHDRAWN_OFFLINE_APPEND_MESSAGE =
+  "offline projection append was absent once its indexer had ended";
 
 type ProofDecision =
   | { type: "settled"; outcome: AcceptedCorpusProjectionAppendProof }
@@ -1330,6 +1473,13 @@ type ProofDecision =
       type: "unproven";
       intent: typeof corpusIndexProjectionIntents.$inferSelect;
       charge: AppendFailureCharge;
+      message: string;
+    }
+  | {
+      type: "withdraw";
+      intent: typeof corpusIndexProjectionIntents.$inferSelect;
+      /** Null for a revision its state no longer wants: nothing to retry. */
+      charge: AppendFailureCharge | null;
       message: string;
     };
 
@@ -1411,120 +1561,24 @@ const settleCommittedCorpusProjectionAppendsTx = async (
     }
     return intent;
   };
-  /** Every outcome that does not depend on the census, or null to use it. */
-  const precedingDecision = (
-    intentId: ProjectionIntentId,
-    intent: typeof corpusIndexProjectionIntents.$inferSelect | undefined,
-  ): ProofDecision | null => {
-    if (intent === undefined) {
-      return {
-        type: "settled",
-        outcome: { status: "not_accepted", intentId },
-      };
-    }
-    const state = states.get(intent.entityId);
-    if (intent.status === "applied" && state?.appliedRevision === intent.id) {
-      return {
-        type: "settled",
-        outcome: { status: "already_applied", intentId },
-      };
-    }
-    if (intent.status !== "append_committed" || intent.leaseToken !== null) {
-      return {
-        type: "settled",
-        outcome: { status: "not_accepted", intentId },
-      };
-    }
-    return isStillDesiredProjection(state, intent)
-      ? null
-      : { type: "stale", intent };
-  };
-  const barrierOf = (
-    intent: typeof corpusIndexProjectionIntents.$inferSelect,
-  ) =>
-    intent.appendPublishBarrierAt ??
-    panic(`Committed projection intent has no barrier: ${intent.id}`);
+  const context: ProofContext = { states, manifest, timing, transitionAt };
   const excess: UnprovenCommittedRevision[] = [];
   const decisions: ProofDecision[] = [
-    ...proofs.map((proof): ProofDecision => {
-      const intent = locked(proof.revision, proof.documentCount);
-      const preceding = precedingDecision(proof.revision, intent);
-      if (preceding !== null) {
-        return preceding;
-      }
-      const committed = intent ?? panic(`Lost proven intent ${proof.revision}`);
-      switch (timing.type) {
-        case "request_waited":
-          return { type: "apply", intent: committed };
-        case "after_barrier":
-          return transitionAt.getTime() < barrierOf(committed).getTime()
-            ? {
-                type: "settled",
-                outcome: {
-                  status: "awaiting_publication",
-                  intentId: committed.id,
-                },
-              }
-            : { type: "apply", intent: committed };
-        default:
-          timing satisfies never;
-          return panic(`Unhandled proof timing: ${String(timing)}`);
-      }
-    }),
-    ...unproven.map((revision): ProofDecision => {
-      const intent = locked(revision.revision, revision.expectedDocumentCount);
-      const preceding = precedingDecision(revision.revision, intent);
-      if (preceding !== null) {
-        return preceding;
-      }
-      const committed =
-        intent ?? panic(`Lost unproven intent ${revision.revision}`);
-      const state =
-        states.get(committed.entityId) ??
-        panic(`Committed projection intent has no state: ${committed.id}`);
-      if (
-        revision.observedDocumentCount !== null &&
-        revision.observedDocumentCount > revision.expectedDocumentCount
-      ) {
-        excess.push(revision);
-      }
-      const retire = (
-        rejection: CorpusIndexError["rejection"],
-        message: string,
-      ): ProofDecision => ({
-        type: "unproven",
-        intent: committed,
-        message,
-        charge: appendFailureCharge({
-          state,
-          appendRequestRevisionCount: committed.appendRequestRevisionCount,
-          transitionAt,
-          rejection,
-          fault: "document",
-        }),
-      });
-      switch (timing.type) {
-        case "request_waited":
-          return retire("transient", timing.failureMessage);
-        case "after_barrier":
-          return transitionAt.getTime() <
-            corpusProjectionAcceptedAppendProofDeadline(
-              barrierOf(committed),
-              manifest,
-            ).getTime()
-            ? {
-                type: "settled",
-                outcome: {
-                  status: "awaiting_publication",
-                  intentId: committed.id,
-                },
-              }
-            : retire("unknown", UNPUBLISHED_APPEND_MESSAGE);
-        default:
-          timing satisfies never;
-          return panic(`Unhandled proof timing: ${String(timing)}`);
-      }
-    }),
+    ...proofs.map((proof) =>
+      decideProvenRevision(
+        context,
+        proof.revision,
+        locked(proof.revision, proof.documentCount),
+      ),
+    ),
+    ...unproven.map((revision) =>
+      decideUnprovenRevision(
+        context,
+        revision,
+        locked(revision.revision, revision.expectedDocumentCount),
+        excess,
+      ),
+    ),
   ];
 
   await logExcessCounts(indexId, excess);
@@ -1538,40 +1592,230 @@ const settleCommittedCorpusProjectionAppendsTx = async (
       transitionAt,
     });
   }
+  return decisions.map(proofOutcomeOf);
+};
 
-  return decisions.map((decision): AcceptedCorpusProjectionAppendProof => {
-    switch (decision.type) {
-      case "settled":
-        return decision.outcome;
-      case "apply":
-        return {
-          status: "applied",
-          intentId: decision.intent.id,
-          entityId: decision.intent.entityId,
-        };
-      case "stale":
-        return {
-          status: "stale_cleanup_pending",
-          intentId: decision.intent.id,
-        };
-      case "unproven":
-        return decision.charge.workStatus === "blocked"
-          ? {
-              status: "blocked",
-              intentId: decision.intent.id,
-              entityId: decision.intent.entityId,
-              kind: decision.charge.kind,
-              attempts: decision.charge.failureAttempts,
-            }
-          : {
-              status: "unproven_cleanup_pending",
-              intentId: decision.intent.id,
-            };
-      default:
-        decision satisfies never;
-        return panic(`Unhandled proof decision: ${String(decision)}`);
-    }
+type CommittedIntentRow = typeof corpusIndexProjectionIntents.$inferSelect;
+
+/** What every decision of one proof transaction reads. */
+type ProofContext = {
+  states: ReadonlyMap<string, typeof corpusIndexProjectionStates.$inferSelect>;
+  manifest: CorpusIndexManifest;
+  timing: CorpusProjectionProofTiming;
+  transitionAt: Date;
+};
+
+/** Outcomes of a revision this proof can no longer act on, or null. */
+const supersededDecision = (
+  { states }: ProofContext,
+  intentId: ProjectionIntentId,
+  intent: CommittedIntentRow | undefined,
+): ProofDecision | null => {
+  if (intent === undefined) {
+    return { type: "settled", outcome: { status: "not_accepted", intentId } };
+  }
+  const state = states.get(intent.entityId);
+  if (intent.status === "applied" && state?.appliedRevision === intent.id) {
+    return {
+      type: "settled",
+      outcome: { status: "already_applied", intentId },
+    };
+  }
+  if (intent.status !== "append_committed" || intent.leaseToken !== null) {
+    return { type: "settled", outcome: { status: "not_accepted", intentId } };
+  }
+  return null;
+};
+
+/**
+ * Whether this census is final for an offline revision: it started once the
+ * revision's indexer had certainly ended, both instants read from the
+ * PostgreSQL clock. The transaction's own clock comes after the census and
+ * cannot say when it looked.
+ */
+const censusFollowsOfflineEnd = (
+  { manifest, timing }: ProofContext,
+  intent: CommittedIntentRow,
+): boolean => {
+  if (
+    intent.appendDelivery !== "offline_indexer" ||
+    timing.type !== "after_barrier" ||
+    timing.censusStart === undefined
+  ) {
+    return false;
+  }
+  const startedAt =
+    intent.appendStartedAt ??
+    panic(`Committed projection intent has no start: ${intent.id}`);
+  return (
+    corpusProjectionOfflineIndexerEndedAt(startedAt, manifest).getTime() <=
+    timing.censusStart.at.getTime()
+  );
+};
+
+const committedBarrierOf = (intent: CommittedIntentRow) =>
+  intent.appendPublishBarrierAt ??
+  panic(`Committed projection intent has no barrier: ${intent.id}`);
+
+const awaitingPublication = (intent: CommittedIntentRow): ProofDecision => ({
+  type: "settled",
+  outcome: { status: "awaiting_publication", intentId: intent.id },
+});
+
+/** A revision the census counted exactly: applied once its barrier passed. */
+const decideProvenRevision = (
+  context: ProofContext,
+  intentId: ProjectionIntentId,
+  intent: CommittedIntentRow | undefined,
+): ProofDecision => {
+  const superseded = supersededDecision(context, intentId, intent);
+  if (superseded !== null) {
+    return superseded;
+  }
+  const committed = intent ?? panic(`Lost proven intent ${intentId}`);
+  if (
+    !isStillDesiredProjection(context.states.get(committed.entityId), committed)
+  ) {
+    return { type: "stale", intent: committed };
+  }
+  const { timing, transitionAt } = context;
+  switch (timing.type) {
+    case "request_waited":
+      return { type: "apply", intent: committed };
+    case "after_barrier":
+      return transitionAt.getTime() < committedBarrierOf(committed).getTime()
+        ? awaitingPublication(committed)
+        : { type: "apply", intent: committed };
+    default:
+      timing satisfies never;
+      return panic(`Unhandled proof timing: ${String(timing)}`);
+  }
+};
+
+/**
+ * A revision the census did not count exactly. An offline one is decided only
+ * by a census that started after its indexer had certainly ended: empty, it is
+ * withdrawn; otherwise it is retired. Any other one waits for its proof
+ * deadline, or is retired at once after a request that waited.
+ */
+const decideUnprovenRevision = (
+  context: ProofContext,
+  revision: UnprovenCommittedRevision,
+  intent: CommittedIntentRow | undefined,
+  excess: UnprovenCommittedRevision[],
+): ProofDecision => {
+  const superseded = supersededDecision(context, revision.revision, intent);
+  if (superseded !== null) {
+    return superseded;
+  }
+  const { manifest, timing, transitionAt } = context;
+  const committed =
+    intent ?? panic(`Lost unproven intent ${revision.revision}`);
+  const state =
+    context.states.get(committed.entityId) ??
+    panic(`Committed projection intent has no state: ${committed.id}`);
+  const offlineFinal = censusFollowsOfflineEnd(context, committed);
+  const stillDesired = isStillDesiredProjection(state, committed);
+  const charge = (rejection: CorpusIndexError["rejection"]) =>
+    appendFailureCharge({
+      state,
+      appendRequestRevisionCount: committed.appendRequestRevisionCount,
+      transitionAt,
+      rejection,
+      fault: "document",
+    });
+  // Nothing of the revision reached the index and nothing can any more, so no
+  // delete is owed, and no maturity waited for: the entity may be reserved
+  // again at once, under the same charge an unproven revision takes. A state
+  // that moved on has nothing to retry.
+  if (offlineFinal && revision.observedDocumentCount === 0) {
+    return {
+      type: "withdraw",
+      intent: committed,
+      message: WITHDRAWN_OFFLINE_APPEND_MESSAGE,
+      charge: stillDesired ? charge("unknown") : null,
+    };
+  }
+  if (!stillDesired) {
+    return { type: "stale", intent: committed };
+  }
+  if (
+    revision.observedDocumentCount !== null &&
+    revision.observedDocumentCount > revision.expectedDocumentCount
+  ) {
+    excess.push(revision);
+  }
+  const retire = (
+    rejection: CorpusIndexError["rejection"],
+    message: string,
+  ): ProofDecision => ({
+    type: "unproven",
+    intent: committed,
+    message,
+    charge: charge(rejection),
   });
+  switch (timing.type) {
+    case "request_waited":
+      return retire("transient", timing.failureMessage);
+    case "after_barrier":
+      if (committed.appendDelivery === "offline_indexer") {
+        return offlineFinal
+          ? retire("unknown", UNDELIVERED_OFFLINE_APPEND_MESSAGE)
+          : awaitingPublication(committed);
+      }
+      return transitionAt.getTime() <
+        corpusProjectionAcceptedAppendProofDeadline(
+          committedBarrierOf(committed),
+          manifest,
+        ).getTime()
+        ? awaitingPublication(committed)
+        : retire("unknown", UNPUBLISHED_APPEND_MESSAGE);
+    default:
+      timing satisfies never;
+      return panic(`Unhandled proof timing: ${String(timing)}`);
+  }
+};
+
+const blockedOutcome = (
+  intent: CommittedIntentRow,
+  charge: AppendFailureCharge,
+): AcceptedCorpusProjectionAppendProof => ({
+  status: "blocked",
+  intentId: intent.id,
+  entityId: intent.entityId,
+  kind: charge.kind,
+  attempts: charge.failureAttempts,
+});
+
+const proofOutcomeOf = (
+  decision: ProofDecision,
+): AcceptedCorpusProjectionAppendProof => {
+  switch (decision.type) {
+    case "settled":
+      return decision.outcome;
+    case "apply":
+      return {
+        status: "applied",
+        intentId: decision.intent.id,
+        entityId: decision.intent.entityId,
+      };
+    case "stale":
+      return { status: "stale_cleanup_pending", intentId: decision.intent.id };
+    case "unproven":
+      return decision.charge.workStatus === "blocked"
+        ? blockedOutcome(decision.intent, decision.charge)
+        : {
+            status: "unproven_cleanup_pending",
+            intentId: decision.intent.id,
+          };
+    case "withdraw":
+      return decision.charge?.workStatus === "blocked"
+        ? blockedOutcome(decision.intent, decision.charge)
+        : { status: "withdrawn", intentId: decision.intent.id };
+    default:
+      decision satisfies never;
+      return panic(`Unhandled proof decision: ${String(decision)}`);
+  }
 };
 
 /** Act on one exact census of committed revisions of one index. */
@@ -1637,9 +1881,43 @@ type ReadProvableCorpusProjectionAppendsOptions<Family extends CorpusFamily> =
     testNow?: Date | undefined;
   };
 
+/** Not exported, so only a read of the database clock constructs one. */
+const CENSUS_START_CONSTRUCTION: unique symbol = Symbol(
+  "corpus projection census start",
+);
+
+/**
+ * A PostgreSQL clock reading taken before a census was sent, so the census
+ * observed the engine no earlier than `at`. An offline revision's count is
+ * final only for a census that started once its indexer had certainly ended
+ * (`corpusProjectionOfflineIndexerEndedAt`); the instant the proof commits
+ * comes after the census and proves nothing about when it looked. The field
+ * is private and the constructor gated, so a caller cannot date a census
+ * later than the clock it read.
+ */
+export class CorpusProjectionCensusStart {
+  readonly #at: Date;
+
+  constructor(construction: typeof CENSUS_START_CONSTRUCTION, at: Date) {
+    if (construction !== CENSUS_START_CONSTRUCTION) {
+      panic("Corpus projection census start has a foreign constructor");
+    }
+    if (!Number.isFinite(at.getTime())) {
+      panic("Corpus projection census start is not an instant");
+    }
+    this.#at = at;
+  }
+
+  get at() {
+    return this.#at;
+  }
+}
+
 type ProvableCorpusProjectionAppends = {
   indexId: string;
   revisions: { revision: ProjectionIntentId; documentCount: number }[];
+  /** Read before the revisions, so before any census of them. */
+  censusStart: CorpusProjectionCensusStart;
 };
 
 /**
@@ -1667,6 +1945,10 @@ export const readProvableCorpusProjectionAppendsTx = async <
   const manifest = requireCorpusIndexManifest(family, generation);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
   const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
+  const censusStart = new CorpusProjectionCensusStart(
+    CENSUS_START_CONSTRUCTION,
+    testNow ?? (await readPostgresClock(tx)),
+  );
   const now = testNow ?? sql<Date>`clock_timestamp()`;
   const provable = (indexId: string | null) =>
     and(
@@ -1723,6 +2005,7 @@ export const readProvableCorpusProjectionAppendsTx = async <
         documentCount ??
         panic(`Committed projection intent has no document count: ${revision}`),
     })),
+    censusStart,
   };
 };
 
@@ -1773,14 +2056,25 @@ const writeCorpusProjectionProofTransitionsTx = async (
     manifest,
     transitionAt,
   );
+  const statusOf = (kind: ProofTransition["type"]): CorpusIndexIntentStatus => {
+    switch (kind) {
+      case "apply":
+        return APPLIED_STATUS;
+      case "withdraw":
+        return WITHDRAWN_STATUS;
+      case "stale":
+      case "unproven":
+        return CLEANUP_PENDING_STATUS;
+      default:
+        kind satisfies never;
+        return panic(`Unhandled proof transition: ${String(kind)}`);
+    }
+  };
   const written = await tx
     .update(corpusIndexProjectionIntents)
     .set({
       status: byIntent(
-        ({ type }) =>
-          type === "apply"
-            ? sql`${APPLIED_STATUS}`
-            : sql`${CLEANUP_PENDING_STATUS}`,
+        ({ type }) => sql`${statusOf(type)}`,
         sql`${corpusIndexProjectionIntents.status}`,
       ),
       appliedAt: byIntent(
@@ -1788,7 +2082,8 @@ const writeCorpusProjectionProofTransitionsTx = async (
         sql`${corpusIndexProjectionIntents.appliedAt}`,
       ),
       cleanupNotBefore: byIntent(
-        ({ type }) => (type === "apply" ? null : cleanupNotBefore),
+        ({ type }) =>
+          statusOf(type) === CLEANUP_PENDING_STATUS ? cleanupNotBefore : null,
         sql`${corpusIndexProjectionIntents.cleanupNotBefore}`,
       ),
       lastError: byIntent(
@@ -1799,6 +2094,7 @@ const writeCorpusProjectionProofTransitionsTx = async (
             case "stale":
               return sql`${STALE_PROOF_MESSAGE}`;
             case "unproven":
+            case "withdraw":
               return sql`${transition.message}`;
             default:
               transition satisfies never;
@@ -1883,8 +2179,46 @@ const writeCorpusProjectionProofTransitionsTx = async (
       );
     }
   }
-  const unproven = transitions.flatMap((transition) =>
-    transition.type === "unproven" ? [transition] : [],
+  await chargeGivenUpRevisionsTx(tx, { transitions, transitionAt });
+};
+
+type ChargedProofTransition = {
+  intent: ProofTransition["intent"];
+  charge: AppendFailureCharge;
+  message: string;
+};
+
+/**
+ * Charge each entity whose revision this proof retired or withdrew while the
+ * entity still wants it; one withdrawn for an entity that moved on is not
+ * charged. The retry writes a new revision, so a late publication of the old
+ * one is a survivor cleanup deletes.
+ */
+const chargeGivenUpRevisionsTx = async (
+  tx: Transaction,
+  {
+    transitions,
+    transitionAt,
+  }: Omit<WriteCorpusProjectionProofTransitionsOptions, "manifest">,
+): Promise<void> => {
+  // audit: skip - proof bookkeeping on the derived public corpus projection
+  const unproven = transitions.flatMap(
+    (transition): ChargedProofTransition[] => {
+      switch (transition.type) {
+        case "unproven":
+          return [transition];
+        case "withdraw":
+          return transition.charge === null
+            ? []
+            : [{ ...transition, charge: transition.charge }];
+        case "apply":
+        case "stale":
+          return [];
+        default:
+          transition satisfies never;
+          return panic(`Unhandled proof transition: ${String(transition)}`);
+      }
+    },
   );
   if (unproven.length === 0) {
     return;

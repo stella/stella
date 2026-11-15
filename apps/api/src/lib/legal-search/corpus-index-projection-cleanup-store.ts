@@ -37,7 +37,10 @@ import type {
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexMaturationPeriodMs } from "@/api/lib/legal-search/corpus-index-config";
-import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  type CorpusIndexManifest,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
   type CorpusIndexIntentStatus,
@@ -87,9 +90,14 @@ const CORPUS_PROJECTION_REOPEN_CONVERGED_STATUSES = [
   "cleanup_committed",
   "cleanup_stalled",
 ] as const satisfies readonly CorpusIndexIntentStatus[];
+/** Revisions an absent census expects gone; one it observes reopens. */
+const CORPUS_PROJECTION_REOPEN_FROM_STATUSES = [
+  "settled",
+  "withdrawn",
+] as const satisfies readonly CorpusIndexIntentStatus[];
 const CORPUS_PROJECTION_REOPENABLE_STATUSES = [
   ...CORPUS_PROJECTION_REOPEN_CONVERGED_STATUSES,
-  "settled",
+  ...CORPUS_PROJECTION_REOPEN_FROM_STATUSES,
 ] as const satisfies readonly CorpusIndexIntentStatus[];
 const CORPUS_PROJECTION_REOPEN_CONVERGED_STATUS_SET =
   new Set<CorpusIndexIntentStatus>(CORPUS_PROJECTION_REOPEN_CONVERGED_STATUSES);
@@ -1499,7 +1507,11 @@ type ReopenCorpusProjectionCleanupOptions = {
   testNow?: Date;
 };
 
-/** Reopen exact settled revisions when a later census observes them again. */
+/**
+ * Reopen exact settled or withdrawn revisions when a later census observes
+ * them: a withdrawal is disproved the way a settlement is, and its revision
+ * takes the same exact cleanup.
+ */
 export const reopenCorpusProjectionCleanupTx = async (
   tx: Transaction,
   {
@@ -1588,7 +1600,7 @@ export const reopenCorpusProjectionCleanupTx = async (
             AND reopened.generation = ${corpusIndexProjectionStates.generation}
             AND reopened.entity_id = ${corpusIndexProjectionStates.entityId}
             AND reopened.epoch <= ${corpusIndexProjectionStates.appliedEpoch}
-            AND reopened.status = 'settled'
+            AND ${inArray(sql`reopened.status`, CORPUS_PROJECTION_REOPEN_FROM_STATUSES)}
         )`,
       ),
     );
@@ -1610,7 +1622,10 @@ export const reopenCorpusProjectionCleanupTx = async (
       and(
         inArray(corpusIndexProjectionIntents.id, intentIds),
         eq(corpusIndexProjectionIntents.indexId, indexId),
-        eq(corpusIndexProjectionIntents.status, "settled"),
+        inArray(
+          corpusIndexProjectionIntents.status,
+          CORPUS_PROJECTION_REOPEN_FROM_STATUSES,
+        ),
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
@@ -1823,9 +1838,93 @@ const updateExpiredAppendStatesTx = async (
   }
 };
 
+type CommitExpiredOfflineAppendsOptions = {
+  manifest: CorpusIndexManifest;
+  /** Expired starts of any delivery; only offline ones are committed. */
+  rows: readonly {
+    id: ProjectionIntentId;
+    appendStartedAt: Date | null;
+  }[];
+  transitionAt: Date | SQL<Date>;
+};
+
+/**
+ * An expired offline start is not an unknown write. Its document count was
+ * stored with the start and its indexer is killed by a deadline counted from
+ * that start, so it is recorded as committed behind the instant the run has
+ * certainly ended (`offline_unended`), and the prover's census decides it:
+ * exact applies it, empty withdraws it, anything else retires it. Only a
+ * revision its state still wants advances; any other goes to cleanup with the
+ * unknown appends. The state is not charged here: the proof charges what it
+ * retires or withdraws, and an applied revision costs nothing.
+ */
+const commitExpiredOfflineAppendsTx = async (
+  tx: Transaction,
+  { manifest, rows, transitionAt }: CommitExpiredOfflineAppendsOptions,
+): Promise<Set<ProjectionIntentId>> => {
+  // audit: skip - lease recovery bookkeeping on the derived public corpus projection
+  if (rows.length === 0) {
+    return new Set();
+  }
+  const barrierSql = sqlCaseFragment({
+    operand: sql`${corpusIndexProjectionIntents.id}`,
+    branches: rows.map(({ id, appendStartedAt }) => {
+      const barrier = corpusProjectionAppendPublishBarrier(
+        {
+          type: "offline_unended",
+          appendStartedAt:
+            appendStartedAt ??
+            panic(`Append-started projection intent has no start: ${id}`),
+        },
+        manifest,
+      );
+      return sql`WHEN ${id}::uuid THEN ${barrier}::timestamptz`;
+    }),
+    fallback: sql`${corpusIndexProjectionIntents.appendPublishBarrierAt}`,
+  });
+  const committed = await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "append_committed",
+      leaseToken: null,
+      leaseExpiresAt: null,
+      appendCommittedAt: transitionAt,
+      appendPublishBarrierAt: barrierSql,
+      // No `last_error`: a revision this census applies must stay restorable
+      // like any other (`corpusIndexProjectionRevisionIsRestorable`).
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        inArray(
+          corpusIndexProjectionIntents.id,
+          rows.map(({ id }) => id),
+        ),
+        eq(corpusIndexProjectionIntents.status, "append_started"),
+        eq(corpusIndexProjectionIntents.appendDelivery, "offline_indexer"),
+        isNotNull(corpusIndexProjectionIntents.expectedDocumentCount),
+        sql`EXISTS (
+          SELECT 1
+          FROM ${corpusIndexProjectionStates} state
+          WHERE state.family = ${corpusIndexProjectionIntents.family}
+            AND state.generation = ${corpusIndexProjectionIntents.generation}
+            AND state.entity_id = ${corpusIndexProjectionIntents.entityId}
+            AND state.desired_action = 'upsert'
+            AND state.desired_epoch = ${corpusIndexProjectionIntents.epoch}
+            AND state.desired_fingerprint = ${corpusIndexProjectionIntents.fingerprint}
+            AND state.desired_index_id = ${corpusIndexProjectionIntents.indexId}
+        )`,
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  return new Set(committed.map(({ id }) => id));
+};
+
 /**
  * Recover expired intents by phase: cancel a reservation, treat an append as
- * an unknown write requiring cleanup, and retry an expired delete exactly.
+ * an unknown write requiring cleanup unless its offline delivery lets a census
+ * decide it (`commitExpiredOfflineAppendsTx`), and retry an expired delete
+ * exactly.
  */
 export const recoverExpiredCorpusProjectionIntentsTx = async <
   Family extends CorpusFamily,
@@ -1976,54 +2075,95 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
   const appendStarted = rows.filter(
     ({ status }) => status === "append_started",
   );
-  if (appendStarted.length > 0) {
-    const barriers = appendStarted.map((row) => {
-      if (row.appendStartedAt === null) {
-        return panic(
-          `Append-started projection intent has no start: ${row.id}`,
-        );
-      }
-      return {
-        id: row.id,
-        barrier: corpusProjectionAppendPublishBarrier(
-          { type: "unknown", appendStartedAt: row.appendStartedAt },
-          manifest,
-        ),
-      };
-    });
-    const barrierSql = sqlCaseFragment({
-      operand: sql`${corpusIndexProjectionIntents.id}`,
-      branches: barriers.map(
-        ({ id, barrier }) => sql`WHEN ${id} THEN ${barrier}::timestamptz`,
-      ),
-      fallback: sql`${corpusIndexProjectionIntents.appendPublishBarrierAt}`,
-    });
-    await tx
-      .update(corpusIndexProjectionIntents)
-      .set({
-        status: "cleanup_pending",
-        leaseToken: null,
-        leaseExpiresAt: null,
-        appendPublishBarrierAt: barrierSql,
-        cleanupNotBefore: barrierSql,
-        lastError: "projection append lease expired with unknown outcome",
-        updatedAt: transitionAt,
-      })
-      .where(
-        and(
-          inArray(
-            corpusIndexProjectionIntents.id,
-            appendStarted.map(({ id }) => id),
-          ),
-          eq(corpusIndexProjectionIntents.status, "append_started"),
-        ),
-      );
-    await updateExpiredAppendStatesTx(tx, {
-      family,
-      generation,
-      targets: appendStarted,
-      transitionAt,
-    });
-  }
+  const offlineCommitted = await commitExpiredOfflineAppendsTx(tx, {
+    manifest,
+    rows: appendStarted,
+    transitionAt,
+  });
+  await retireExpiredUnknownAppendsTx(tx, {
+    family,
+    generation,
+    manifest,
+    rows: appendStarted.filter(({ id }) => !offlineCommitted.has(id)),
+    transitionAt,
+  });
   return rows.map(recoveredIntent);
+};
+
+type RetireExpiredUnknownAppendsOptions = {
+  family: CorpusFamily;
+  generation: string;
+  manifest: CorpusIndexManifest;
+  rows: readonly (ExpiredAppendStateTarget & {
+    id: ProjectionIntentId;
+    appendStartedAt: Date | null;
+    appendRequestRevisionCount: number | null;
+  })[];
+  transitionAt: Date | SQL<Date>;
+};
+
+/**
+ * An expired append whose outcome is unknown may have written anything up to
+ * its request's end, so it goes to exact cleanup behind the barrier counted
+ * from its start, and its entity is charged as the request decides.
+ */
+const retireExpiredUnknownAppendsTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    manifest,
+    rows,
+    transitionAt,
+  }: RetireExpiredUnknownAppendsOptions,
+): Promise<void> => {
+  // audit: skip - lease recovery bookkeeping on the derived public corpus projection
+  if (rows.length === 0) {
+    return;
+  }
+  const barriers = rows.map((row) => {
+    if (row.appendStartedAt === null) {
+      return panic(`Append-started projection intent has no start: ${row.id}`);
+    }
+    return {
+      id: row.id,
+      barrier: corpusProjectionAppendPublishBarrier(
+        { type: "unknown", appendStartedAt: row.appendStartedAt },
+        manifest,
+      ),
+    };
+  });
+  const barrierSql = sqlCaseFragment({
+    operand: sql`${corpusIndexProjectionIntents.id}`,
+    branches: barriers.map(
+      ({ id, barrier }) => sql`WHEN ${id} THEN ${barrier}::timestamptz`,
+    ),
+    fallback: sql`${corpusIndexProjectionIntents.appendPublishBarrierAt}`,
+  });
+  await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "cleanup_pending",
+      leaseToken: null,
+      leaseExpiresAt: null,
+      appendPublishBarrierAt: barrierSql,
+      cleanupNotBefore: barrierSql,
+      lastError: "projection append lease expired with unknown outcome",
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        inArray(
+          corpusIndexProjectionIntents.id,
+          rows.map(({ id }) => id),
+        ),
+        eq(corpusIndexProjectionIntents.status, "append_started"),
+      ),
+    );
+  await updateExpiredAppendStatesTx(tx, {
+    family,
+    generation,
+    targets: rows,
+    transitionAt,
+  });
 };
