@@ -1491,6 +1491,7 @@
         "$TURBO_ROOT$/packages/stable-stringify/**",
         "$TURBO_ROOT$/packages/template-conditions/**",
         "$TURBO_ROOT$/packages/template-packs/**",
+        "$TURBO_ROOT$/packages/test-state/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
         "$TURBO_ROOT$/scripts/**",
