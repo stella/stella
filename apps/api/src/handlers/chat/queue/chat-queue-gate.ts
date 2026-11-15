@@ -267,7 +267,7 @@ export const holdChatQueueAfterTurnOnTx = async ({
 };
 
 /** The next queued message, as stored. */
-export type QueuedChatHead = {
+type QueuedChatHead = {
   id: SafeId<"chatMessage">;
   revision: number;
   /** The stored send; `parseQueuedChatSend` reads it. */

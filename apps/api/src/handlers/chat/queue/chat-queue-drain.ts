@@ -104,7 +104,7 @@ export const queueDispositionOfRefusal = (
  * before acceptance holds the queue with its reason, except one that may
  * pass on its own (admission, an outage), which the sweep retries.
  */
-export const sendNextQueuedChatMessage = async ({
+const sendNextQueuedChatMessage = async ({
   dependencies,
   threadId,
   whileWaiting,

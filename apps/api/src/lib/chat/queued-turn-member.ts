@@ -23,7 +23,7 @@ export type QueuedTurnRequest = {
   signal: AbortSignal;
 };
 
-export type QueuedTurnMember =
+type QueuedTurnMember =
   | {
       type: "member";
       caller: SessionMemberCaller;
