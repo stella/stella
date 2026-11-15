@@ -19,7 +19,9 @@ import {
   lockCaseLawProjectionRepairIdentifiers,
   lockCaseLawProjectionRepairRows,
   lockCaseLawProjectionRepairStates,
+  lockCorpusProjectionRevisionsAfterStates,
 } from "@/api/lib/db/aggregate-lock";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
@@ -27,6 +29,7 @@ import {
   CORPUS_INDEX_MANIFESTS,
   type CorpusIndexManifest,
   corpusIndexManifestCoversJurisdiction,
+  requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   type CaseLawProjectionInput,
@@ -35,9 +38,15 @@ import {
   deriveCorpusIndexProjectionDescriptor,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE } from "@/api/lib/legal-search/corpus-index-projection-intent-transition-spec";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
+import {
+  corpusProjectionAcceptedAppendCleanupFence,
+  corpusProjectionRetiredRevisionRunnableAt,
+} from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import { corpusIndexProjectionNamedCopyTrailsTwoChanges } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
@@ -875,6 +884,166 @@ export const buildCorpusIndexProjectionDesiredStateValues = ({
   desiredIndexId: descriptor.action === "upsert" ? descriptor.indexId : null,
 });
 
+export type DesiredStateKey = Pick<
+  typeof corpusIndexProjectionStates.$inferSelect,
+  "family" | "generation" | "entityId"
+>;
+
+const desiredStateKeys = (keys: readonly DesiredStateKey[]) =>
+  or(
+    ...keys.map(({ family, generation, entityId }) =>
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.entityId, entityId),
+      ),
+    ),
+  );
+
+/**
+ * States this write takes from a desired erasure back to an upsert while they
+ * still name a copy. Read before the write, since the write replaces the
+ * erasure it is undoing; every desired writer holds the canonical row first,
+ * so no other desired write can move these states in between.
+ */
+const readUndoneErasuresTx = async (
+  tx: Transaction,
+  values: readonly (typeof corpusIndexProjectionStates.$inferInsert)[],
+): Promise<DesiredStateKey[]> => {
+  const keys = desiredStateKeys(
+    values.filter(({ desiredAction }) => desiredAction === "upsert"),
+  );
+  if (keys === undefined) {
+    return [];
+  }
+  return await tx
+    .select({
+      family: corpusIndexProjectionStates.family,
+      generation: corpusIndexProjectionStates.generation,
+      entityId: corpusIndexProjectionStates.entityId,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        keys,
+        eq(corpusIndexProjectionStates.desiredAction, "erase"),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+      ),
+    );
+};
+
+export const SERVED_COPY_RETIREMENT_REASONS = {
+  undoneErasure: "projection revision retired by an undone erasure",
+  legacyUnproven: "projection revision retired as not provably current",
+} as const;
+
+/**
+ * Retire the copy these states name and stop naming it, so the entity is
+ * appended anew and never served the retired copy again. The copy is queued
+ * for cleanup if it is still `applied`. The caller holds these state rows;
+ * the revisions are locked after them, in the projection lock order. Each
+ * state is then queued for the append walk at the instant its retired copy
+ * can have settled.
+ */
+export const retireServedCopiesTx = async (
+  tx: Transaction,
+  retired: readonly DesiredStateKey[],
+  reason: (typeof SERVED_COPY_RETIREMENT_REASONS)[keyof typeof SERVED_COPY_RETIREMENT_REASONS],
+): Promise<void> => {
+  const keys = desiredStateKeys(retired);
+  if (keys === undefined) {
+    return;
+  }
+  const named = await tx
+    .select({
+      family: corpusIndexProjectionStates.family,
+      generation: corpusIndexProjectionStates.generation,
+      entityId: corpusIndexProjectionStates.entityId,
+      revision: corpusIndexProjectionStates.appliedRevision,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        keys,
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+      ),
+    );
+  const revisions = named.flatMap(({ revision, ...key }) =>
+    revision === null ? [] : [{ ...key, revision }],
+  );
+  if (revisions.length === 0) {
+    return;
+  }
+  await lockCorpusProjectionRevisionsAfterStates(
+    tx,
+    revisions.map(({ revision }) => revision),
+  );
+  const transitionAt = sql<Date>`clock_timestamp()`;
+  const generations = Map.groupBy(
+    revisions,
+    ({ family, generation }) => `${family}/${generation}`,
+  );
+  for (const group of generations.values()) {
+    const first = group.at(0) ?? panic("Empty retired copy group");
+    const manifest = requireCorpusIndexManifest(first.family, first.generation);
+    // db-await-in-loop: one statement per generation, each with that generation's publish fence
+    await transitionBatch({
+      tx,
+      spec: CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE,
+      ids: group.map(({ revision }) => revision),
+      options: {
+        to: "cleanup_pending",
+        from: ["applied"],
+        set: {
+          leaseToken: null,
+          leaseExpiresAt: null,
+          ...corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt),
+          lastError: reason,
+          updatedAt: transitionAt,
+        },
+      },
+      // Bookkeeping on the derived public corpus projection: no tenant data
+      // and no actor; the canonical write that changed the desired state is
+      // audited.
+      recordTransitionAuditEvent: () => undefined,
+    });
+    const unname = replayWrite(
+      corpusIndexProjectionStates,
+      {
+        appliedAction: null,
+        appliedEpoch: null,
+        appliedRevision: null,
+        appliedFingerprint: null,
+        appliedIndexId: null,
+        appliedAt: null,
+      },
+      {
+        modifiedAt: {
+          column: corpusIndexProjectionStates.updatedAt,
+          value: corpusProjectionRetiredRevisionRunnableAt(
+            manifest,
+            corpusIndexProjectionStates.appliedRevision,
+          ),
+        },
+      },
+    );
+    // audit: skip - applied-state bookkeeping on the derived public corpus projection
+    // db-await-in-loop: one statement per generation, each with that generation's settlement bound
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set(unname.set)
+      .where(
+        and(
+          desiredStateKeys(group),
+          eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+          eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+          unname.setWhere,
+        ),
+      );
+  }
+};
+
 export const writeDesiredStates = async (
   tx: Transaction,
   values: (typeof corpusIndexProjectionStates.$inferInsert)[],
@@ -882,6 +1051,24 @@ export const writeDesiredStates = async (
   if (values.length === 0) {
     return;
   }
+  const undone = await readUndoneErasuresTx(tx, values);
+  const states = corpusIndexProjectionStates;
+  // Judged on the row before this write: once its named copy trails by two
+  // changes with other content, `desired_at` keeps the instant that happened,
+  // so the legacy pass can tell a copy an earlier release left behind from one
+  // this release's own writes moved past (see the predicate).
+  const namedCopyTrailsTwoChanges =
+    corpusIndexProjectionNamedCopyTrailsTwoChanges({
+      desiredAction: states.desiredAction,
+      appliedAction: states.appliedAction,
+      appliedRevision: states.appliedRevision,
+      appliedEpoch: states.appliedEpoch,
+      desiredEpoch: states.desiredEpoch,
+      appliedFingerprint: states.appliedFingerprint,
+      desiredFingerprint: states.desiredFingerprint,
+      appliedIndexId: states.appliedIndexId,
+      desiredIndexId: states.desiredIndexId,
+    });
   const desiredStateUnchanged = sql`(
     ${corpusIndexProjectionStates.desiredAction},
     ${corpusIndexProjectionStates.desiredEpoch},
@@ -907,7 +1094,7 @@ export const writeDesiredStates = async (
         {
           desiredAction: sql`excluded.desired_action`,
           desiredEpoch: sql`excluded.desired_epoch`,
-          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
+          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} OR ${namedCopyTrailsTwoChanges} THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
           desiredFingerprint: sql`excluded.desired_fingerprint`,
           desiredIndexId: sql`excluded.desired_index_id`,
           workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
@@ -927,6 +1114,11 @@ export const writeDesiredStates = async (
         },
       ),
     });
+  await retireServedCopiesTx(
+    tx,
+    undone,
+    SERVED_COPY_RETIREMENT_REASONS.undoneErasure,
+  );
 };
 
 type DesiredStateSnapshot = {

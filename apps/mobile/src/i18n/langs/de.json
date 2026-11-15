@@ -244,7 +244,8 @@
         "imageTooLargeToStore": "Dieses Bild ist {total} groß. Bilder über {kept} werden nicht gespeichert, daher kann es nicht angezeigt werden.",
         "loadFailed": "Konnte nicht geladen werden.",
         "showMore": "Mehr anzeigen"
-      }
+      },
+      "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",
@@ -253,7 +254,8 @@
       "analyses": "{count, plural, one {# Analyse} other {# Analysen}}"
     },
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
-    "reasoning": "Argumentation"
+    "reasoning": "Argumentation",
+    "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung."
   },
   "tasks": {
     "emptyTitle": "Keine offenen Aufgaben",

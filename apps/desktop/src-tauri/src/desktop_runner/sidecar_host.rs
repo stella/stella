@@ -52,7 +52,6 @@ use super::harness::{
 };
 use super::journal::SharedJournal;
 use super::run_folders;
-use super::step_outputs;
 use crate::harness_sidecar::{
   self, BackgroundTasks, HarnessLaunchSettings, HarnessProbe, HarnessProcess,
   HarnessSidecar, RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore,
@@ -1162,15 +1161,10 @@ impl HarnessHost for SidecarHarnessHost {
     // Made with the chat's folder; the one place outside the folder the run
     // works in that it may write.
     let cache = run_folders::chat_cache(&chat_folder);
-    // Beside the chat's own folder, where the bridge looks, whatever folder
-    // the run works in: nothing of stella's goes in or beside a linked one.
+    // Beside the chat's own folder, where the app drains what a run hands
+    // over at its end, whatever folder the run works in: nothing of stella's
+    // goes in or beside a linked one.
     let step_output_dir = run_folders::step_output_store(&chat_folder);
-    // Kept before the harness starts, so every step it keeps can be read.
-    if let Some(key) = &start.output_key
-      && let Err(error) = step_outputs::keep_key(&chat_folder, &start.run_id, &key.0)
-    {
-      tracing::warn!(target: LOG_TARGET, %error, "a run's output key was not kept");
-    }
     let workspace = linked.unwrap_or(chat_folder);
     let credentials = cached.and_then(|cached| cached.credentials);
     let thread_id = start

@@ -17,6 +17,7 @@ import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 const TOOL_NAME = "spawn";
 const WIDENED_ARGUMENTS = '{"task":"list matters","context":null}';
 const NORMALIZED_INPUT = { task: "list matters" };
+const FIXTURE_TIMESTAMP = Date.parse("2026-01-01T00:00:00.000Z");
 
 type ToolCallPart = Extract<UIMessage["parts"][number], { type: "tool-call" }>;
 
@@ -49,7 +50,7 @@ const persistToolCallPart = (
 test("the persisted tool-call arguments carry TOOL_CALL_END.input, not the streamed wire string", () => {
   // The fixture must differ, or the assertion below is vacuous.
   expect(JSON.parse(WIDENED_ARGUMENTS)).not.toEqual(NORMALIZED_INPUT);
-  const timestamp = Date.now();
+  const timestamp = FIXTURE_TIMESTAMP;
   const model = "fixture";
 
   const part = persistToolCallPart([
@@ -100,7 +101,7 @@ test("the persisted tool-call arguments carry TOOL_CALL_END.input, not the strea
 // completes every open call). The canonical input still replaces the
 // arguments, and the part keeps the state it already reached.
 test("TOOL_CALL_END.input replaces the arguments of a call that was already completed", () => {
-  const timestamp = Date.now();
+  const timestamp = FIXTURE_TIMESTAMP;
   const model = "fixture";
 
   const part = persistToolCallPart([
@@ -155,7 +156,7 @@ test.each([
 ])(
   "keeps the streamed arguments and input when TOOL_CALL_END.input %s",
   (_case, input) => {
-    const timestamp = Date.now();
+    const timestamp = FIXTURE_TIMESTAMP;
     const model = "fixture";
 
     const part = persistToolCallPart([

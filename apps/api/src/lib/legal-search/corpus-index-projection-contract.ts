@@ -162,7 +162,10 @@ export const CORPUS_INDEX_INTENT_TRANSITIONS = {
   append_started: ["append_committed", "cleanup_pending"],
   append_committed: ["applied", "cleanup_pending"],
   applied: ["cleanup_pending"],
-  cleanup_pending: ["cleanup_started"],
+  // `applied` is the cleanup claim's restore of a revision queued while its
+  // state still served it and before any delete reached it
+  // (`corpusIndexProjectionRevisionIsRestorable`).
+  cleanup_pending: ["cleanup_started", "applied"],
   cleanup_started: ["cleanup_pending", "cleanup_committed"],
   // A delete settles unless revisions it targeted were written after it, which
   // no delete can reach: those go back to cleanup for a new delete, a bounded
