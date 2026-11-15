@@ -8,21 +8,21 @@ import {
  * long serving the file may take rather than from the protocol's 50,000 URLs.
  *
  * A file's read visits a fixed number of pages per decision it scans (the
- * decision's heap row and its language group's index leaf), so its cost is
- * the decisions it scans times the cost of a page. The cut and the ceiling
+ * decision's heap row and its language group's index leaf), so its time is
+ * the decisions it scans times the time of one page. The cut and the ceiling
  * below follow from that and from the serve target the web server shares;
- * `sitemap-shard-read-cost.db.test.ts` measures the pages per decision on a
+ * `sitemap-shard-read-pages.db.test.ts` measures the pages per decision on a
  * corpus in production's shape and fails when the read outgrows them.
  */
 
 /**
  * Page visits the read spends per decision it scans, at most. Measured by the
- * read-cost test, which fails above it.
+ * read-pages test, which fails above it.
  */
 export const SITEMAP_SHARD_READ_PAGES_PER_ROW = 9;
 
 /**
- * What one page visit costs the request when nothing is cached, every other
+ * How long one page visit takes the request when nothing is cached, every other
  * leg of the request (transfer, parsing, XML) included: measured end to end
  * on cold sitemap files of the same read shape, divided by their pages.
  */
@@ -34,8 +34,8 @@ export const SITEMAP_SHARD_COLD_MS_PER_PAGE = 0.133;
  */
 const SITEMAP_SHARD_READ_TARGET_MS = SITEMAP_FILE_SERVE_TARGET_MS - 1000;
 
-/** The cold cost of reading `rows` decisions, in milliseconds. */
-export const sitemapShardReadCostMs = (rows: number): number =>
+/** How long reading `rows` decisions takes on a cold cache, in milliseconds. */
+export const sitemapShardColdReadMs = (rows: number): number =>
   rows * SITEMAP_SHARD_READ_PAGES_PER_ROW * SITEMAP_SHARD_COLD_MS_PER_PAGE;
 
 /**
@@ -55,7 +55,7 @@ export const SITEMAP_RANGE_ROWS = Math.floor(
 export const SITEMAP_RANGE_ROWS_CEILING = 2 * SITEMAP_RANGE_ROWS;
 
 /**
- * The database deadline of one shard read: past the ceiling's cold cost and
+ * The database deadline of one shard read: past the ceiling's cold time and
  * well inside the web server's wait, so a read the web server has given up on
  * is never still running when the next request for it arrives.
  */

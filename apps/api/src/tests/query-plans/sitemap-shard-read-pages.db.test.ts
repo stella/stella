@@ -31,7 +31,7 @@ import {
   SITEMAP_RANGE_ROWS_CEILING,
   SITEMAP_SHARD_READ_DEADLINE_MS,
   SITEMAP_SHARD_READ_PAGES_PER_ROW,
-  sitemapShardReadCostMs,
+  sitemapShardColdReadMs,
 } from "@/api/lib/case-law/sitemap-shard-budget";
 import { sitemapMonthCountSql } from "@/api/lib/case-law/sitemap-shard-refresh";
 import type { SitemapRange } from "@/api/lib/case-law/sitemap-shard-sql";
@@ -46,11 +46,11 @@ import { explainRoot } from "@/api/tests/query-plans/plan-walker";
 import { vacuumUntilAllVisible } from "@/api/tests/query-plans/visibility";
 
 /**
- * What one case-law sitemap file costs to read, measured on rows shaped like
+ * How many pages one case-law sitemap file's read visits, on rows shaped like
  * production's: wide heap rows, a month's decisions spread over the heap among
  * other months', one decision in ten a translation. The budget in
  * `case-law/sitemap-shard-budget.ts` assumes a page count per decision read;
- * this measures it, and that a file's cost does not grow with its month.
+ * this measures it, and that a file's pages do not grow with its month.
  */
 
 const COUNTRY = "CZE";
@@ -94,10 +94,10 @@ test("the sitemap budget's cut, ceiling and deadline fit inside the web server's
   // A cut range's cold read fits the serve target with room for the rest of
   // the request; one grown to the ceiling still ends before the deadline,
   // which ends before the web server stops waiting.
-  expect(sitemapShardReadCostMs(SITEMAP_RANGE_ROWS)).toBeLessThanOrEqual(
+  expect(sitemapShardColdReadMs(SITEMAP_RANGE_ROWS)).toBeLessThanOrEqual(
     SITEMAP_FILE_SERVE_TARGET_MS - 1000,
   );
-  expect(sitemapShardReadCostMs(SITEMAP_RANGE_ROWS_CEILING)).toBeLessThan(
+  expect(sitemapShardColdReadMs(SITEMAP_RANGE_ROWS_CEILING)).toBeLessThan(
     SITEMAP_SHARD_READ_DEADLINE_MS,
   );
   expect(SITEMAP_SHARD_READ_DEADLINE_MS).toBeLessThan(
@@ -141,7 +141,7 @@ test("a sitemap file reads a bounded number of pages per decision, whatever its 
     );
     await db.execute(sql`
       INSERT INTO case_law_sources (id, adapter_key, name)
-      VALUES (${SOURCE_ID}::uuid, 'sitemap-cost', 'Sitemap cost fixture')
+      VALUES (${SOURCE_ID}::uuid, 'sitemap-pages', 'Sitemap pages fixture')
     `);
     // Rows arrive interleaved across months, as a corpus is ingested over
     // years, so a month's rows sit on many heap pages. The padding does not
@@ -216,7 +216,7 @@ test("a sitemap file reads a bounded number of pages per decision, whatever its 
     ) => {
       const conditions = getShardConditions(month);
       if (!Array.isArray(conditions)) {
-        return panic("The cost fixture's month must be valid");
+        return panic("The pages fixture's month must be valid");
       }
       const statement = sitemapShardDecisionsQuery(
         asTestRaw<CaseLawPublicReadTransaction>(db),
@@ -255,7 +255,7 @@ test("a sitemap file reads a bounded number of pages per decision, whatever its 
     expect(pagesPerRow.large).toBeLessThanOrEqual(
       SITEMAP_SHARD_READ_PAGES_PER_ROW,
     );
-    // A month three times larger costs its files nothing more: a range reads
+    // A month three times larger adds no page to its files: a range reads
     // its own decisions and their probes, not the rest of its month.
     expect(Math.abs(large.pages - small.pages)).toBeLessThanOrEqual(
       small.pages * 0.1,
@@ -275,7 +275,7 @@ test("a sitemap file reads a bounded number of pages per decision, whatever its 
       expect(new Set(listed).size).toBe(listed.length);
       const conditions = getShardConditions(month);
       if (!Array.isArray(conditions)) {
-        return panic("The cost fixture's month must be valid");
+        return panic("The pages fixture's month must be valid");
       }
       // Every listed document of the month, read whole and without a cut.
       // db-await-in-loop: one oracle read per fixture month, two in all
