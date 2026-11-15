@@ -17,6 +17,7 @@
     "loadFailed": "Vaše konverzácie sa nepodarilo načítať.",
     "runsLoadFailed": "Nepodarilo sa zistiť, ktoré konverzácie na vás čakajú.",
     "retry": "Skúsiť znova",
+    "resend": "Odoslať znova",
     "untitled": "Konverzácia bez názvu",
     "loadMoreFailed": "Načítať ďalšie",
     "loadOlderFailed": "Načítať staršie správy",
@@ -244,7 +245,8 @@
         "imageTooLargeToStore": "Tento obrázok má {total}. Obrázky väčšie ako {kept} sa neukladajú, preto ho nemožno zobraziť.",
         "loadFailed": "Nepodarilo sa načítať.",
         "showMore": "Zobraziť viac"
-      }
+      },
+      "sessionNotResumed": "Programovací agent vo vašom počítači nemohol nadviazať tam, kde skončil, preto pokračoval podľa správ v tomto chate."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}",
@@ -253,7 +255,37 @@
       "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
-    "reasoning": "Uvažovanie"
+    "reasoning": "Uvažovanie",
+    "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
+    "failure": {
+      "aiDeadlineExceeded": "AI neodpovedala včas. Skúste to o chvíľu znova.",
+      "aiOutputInvalid": "Odpoveď AI mala neočakávaný formát. Skúste to znova.",
+      "aiOutputModerated": "Poskytovateľ AI výstup zablokoval. Preformulujte požiadavku alebo vyberte iný model.",
+      "aiUnknown": "Požiadavka AI zlyhala. Skúste to znova.",
+      "errorFolderUnavailable": "Priečinok prepojený s týmto chatom nie je vo vašom počítači dostupný. Skontrolujte ho v stella desktop a potom to odošlite znova.",
+      "errorLimitReached": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Skúste to znova, keď sa limit obnoví.",
+      "errorNeedsLogin": "Programovací agent vo vašom počítači vyžaduje nové prihlásenie. Prihláste sa cez stella desktop a skúste to znova.",
+      "errorNotReached": "Váš počítač túto odpoveď neprevzal. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
+      "errorRelinked": "stella desktop bol vo vašom počítači znova prepojený, takže sa táto odpoveď zastavila. Odošlite ju znova.",
+      "errorRestoring": "Váš počítač ešte vracia zmeny súborov. Odošlite to znova o chvíľu.",
+      "errorUnavailable": "Váš počítač prestal túto odpoveď spracúvať. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
+      "refusalFolderNotApproved": "Najprv povoľte programovaciemu agentovi pracovať v priečinku prepojenom s týmto chatom.",
+      "refusalHarnessUnavailable": "Programovací agent vo vašom počítači teraz túto požiadavku nemôže prevziať. Skontrolujte ho v stella desktop.",
+      "refusalModelUnavailable": "Programovací agent vo vašom počítači už tento model neponúka. Vyberte iný v ponuke Spustiť na.",
+      "refusalNoComputer": "Žiadny z vašich počítačov nie je pripojený.",
+      "refusalPermissionUnavailable": "Programovací agent vo vašom počítači s týmito oprávneniami bežať nemôže. Vyberte inú možnosť v ponuke Oprávnenia.",
+      "refusalReasoningEffortUnavailable": "Programovací agent vo vašom počítači túto úroveň uvažovania pre daný model neponúka. Vyberte inú v ponuke Úroveň uvažovania.",
+      "refusalTooLarge": "Táto konverzácia je príliš dlhá na odovzdanie do vášho počítača. Na spustenie tam začnite nový chat.",
+      "sendErrorEmptyCompletion": "AI vrátila prázdnu odpoveď. Skúste to znova alebo správu preformulujte.",
+      "sendErrorLoopDetected": "Odpoveď AI sa príliš opakovala. Skúste to znova s užšou požiadavkou.",
+      "sendErrorModelUnavailable": "Nastavený AI model už nie je dostupný. Požiadajte správcu pracovného priestoru, aby model aktualizoval v nastaveniach organizácie.",
+      "sendErrorProviderBilling": "Poskytovateľ AI nahlásil problém s fakturáciou. Obráťte sa na správcu pracovného priestoru.",
+      "sendErrorProviderCredentialsRejected": "Poskytovateľ AI odmietol nastavené prihlasovacie údaje. Požiadajte správcu pracovného priestoru, aby skontroloval kľúč API v nastaveniach organizácie.",
+      "sendErrorProviderUnavailable": "AI poskytovateľ je dočasne nedostupný. Skúste to prosím o chvíľu znova.",
+      "sendErrorQuotaExhausted": "Kvóta poskytovateľa AI je vyčerpaná. Skúste to o minútu znova alebo sa obráťte na správcu pracovného priestoru.",
+      "sendErrorStreamIncomplete": "Odpoveď AI sa prerušila skôr, ako bola dokončená. Skúste to znova.",
+      "sendErrorTurnTooLarge": "Táto odpoveď je príliš veľká na to, aby sa dala doručiť celá. Pokračujte novou správou."
+    }
   },
   "tasks": {
     "emptyTitle": "Žiadne otvorené úlohy",

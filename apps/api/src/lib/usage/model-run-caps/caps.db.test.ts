@@ -369,11 +369,14 @@ describe.skipIf(!enabled)("organization model run caps (postgres)", () => {
             await db.execute(sql`UPDATE legal_list_verification_budgets
               SET active_limit = 3, daily_limit = 7
               WHERE organization_id = ${SEEDED_ORG}`);
-            before = await db.execute(sql`SELECT
+            before = await db.execute(
+              sql`SELECT
               organization_id AS "organizationId", active_runs AS "activeRuns",
               starts_day::text AS "startsDay", starts_today AS "startsToday",
               active_limit AS "activeLimit", daily_limit AS "dailyLimit"
-              FROM legal_list_verification_budgets`);
+              FROM legal_list_verification_budgets`,
+              "objects",
+            );
             // The fixture's premise: one list counter holding a queued
             // verification and a queued fact extraction, and every start
             // stella produced (the external run is never counted).
@@ -393,6 +396,7 @@ describe.skipIf(!enabled)("organization model run caps (postgres)", () => {
           expect(
             await db.execute(
               sql`SELECT count(*)::integer AS rows FROM model_run_budgets`,
+              "objects",
             ),
           ).toEqual([{ rows: before.length }]);
         },
@@ -636,6 +640,7 @@ describe.skipIf(!enabled)("organization model run caps (postgres)", () => {
         expect(
           await db.execute(
             sql`SELECT stella_model_run_day(${instant}::timestamptz)::text AS day`,
+            "objects",
           ),
         ).toEqual([{ day }]);
       }
@@ -749,7 +754,7 @@ describe.skipIf(!enabled)("organization model run caps (postgres)", () => {
         });
       } finally {
         const role = (
-          await fixture.db.execute(sql`SELECT current_user AS name`)
+          await fixture.db.execute(sql`SELECT current_user AS name`, "objects")
         ).at(0);
         if (typeof role?.["name"] !== "string") {
           panic("Fixture owner required");

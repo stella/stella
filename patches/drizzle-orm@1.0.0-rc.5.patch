@@ -1,0 +1,54 @@
+diff --git a/pg-core/async/db.d.cts b/pg-core/async/db.d.cts
+index 00ae1ff4cffa79fc158816ef155a046f17590159..b3b92e31dcb447a009a2eeaed9aece2a718f6b9d 100644
+--- a/pg-core/async/db.d.cts
++++ b/pg-core/async/db.d.cts
+@@ -111,9 +111,12 @@ declare class BasePgAsyncDatabase<TQueryResult extends PgQueryResultHKT, TRelati
+       <TSelection extends SelectedFields>(on: (PgColumn | SQLWrapper)[], fields: TSelection): PgAsyncSelectBuilder<TSelection>;
+     };
+     update: <TTable extends PgTable>(table: TTable) => PgUpdateBuilder<TTable, TQueryResult, PgAsyncUpdateHKT>;
+-    insert: <TTable extends PgTable, TColumnList extends (keyof InferInsertModel<TTable, {
++    insert: {
++      <TTable extends PgTable>(table: TTable): PgInsertBuilder<TTable, TQueryResult, "all", false, PgAsyncInsertHKT>;
++      <TTable extends PgTable, TColumnList extends (keyof InferInsertModel<TTable, {
+       override: true;
+-    }>)[] = [], TRequiredKeys extends string = RequiredInsertKeys<TTable>>(table: TTable, ...columns: TColumnList extends [] ? [] : IsNever<TRequiredKeys> extends true ? TColumnList & NoDuplicateColumns<TColumnList> : [TRequiredKeys] extends [TColumnList[number]] ? TColumnList & NoDuplicateColumns<TColumnList> : DrizzleTypeError<`Column selection is missing following required columns: ${JoinUnion<`"${Exclude<TRequiredKeys, TColumnList[number]>}"`, ", ">}`>[]) => PgInsertBuilder<TTable, TQueryResult, TColumnList extends [] ? "all" : TColumnList, false, PgAsyncInsertHKT>;
++    }>)[] = [], TRequiredKeys extends string = RequiredInsertKeys<TTable>>(table: TTable, ...columns: TColumnList extends [] ? [] : IsNever<TRequiredKeys> extends true ? TColumnList & NoDuplicateColumns<TColumnList> : [TRequiredKeys] extends [TColumnList[number]] ? TColumnList & NoDuplicateColumns<TColumnList> : DrizzleTypeError<`Column selection is missing following required columns: ${JoinUnion<`"${Exclude<TRequiredKeys, TColumnList[number]>}"`, ", ">}`>[]): PgInsertBuilder<TTable, TQueryResult, TColumnList extends [] ? "all" : TColumnList, false, PgAsyncInsertHKT>;
++    };
+     delete: <TTable extends PgTable>(table: TTable) => PgAsyncDeleteBase<TTable, TQueryResult>;
+   };
+   /**
+@@ -262,6 +265,7 @@ declare class BasePgAsyncDatabase<TQueryResult extends PgQueryResultHKT, TRelati
+    *   .returning();
+    * ```
+    */
++  insert<TTable extends PgTable>(table: TTable): PgInsertBuilder<TTable, TQueryResult, "all", false, PgAsyncInsertHKT>;
+   insert<TTable extends PgTable, TColumnList extends (keyof InferInsertModel<TTable, {
+     override: true;
+   }>)[] = [], TRequiredKeys extends string = RequiredInsertKeys<TTable>>(table: TTable, ...columns: TColumnList extends [] ? [] : IsNever<TRequiredKeys> extends true ? TColumnList & NoDuplicateColumns<TColumnList> : [TRequiredKeys] extends [TColumnList[number]] ? TColumnList & NoDuplicateColumns<TColumnList> : DrizzleTypeError<`Column selection is missing following required columns: ${JoinUnion<`"${Exclude<TRequiredKeys, TColumnList[number]>}"`, ', '>}`>[]): PgInsertBuilder<TTable, TQueryResult, TColumnList extends [] ? 'all' : TColumnList, false, PgAsyncInsertHKT>;
+diff --git a/pg-core/async/db.d.ts b/pg-core/async/db.d.ts
+index e5c9df1108afdf764710d9364a516fa4a85cd5de..3e04163936fc75e1644d724dba9d4b28435034b6 100644
+--- a/pg-core/async/db.d.ts
++++ b/pg-core/async/db.d.ts
+@@ -111,9 +111,12 @@ declare class BasePgAsyncDatabase<TQueryResult extends PgQueryResultHKT, TRelati
+       <TSelection extends SelectedFields>(on: (PgColumn | SQLWrapper)[], fields: TSelection): PgAsyncSelectBuilder<TSelection>;
+     };
+     update: <TTable extends PgTable>(table: TTable) => PgUpdateBuilder<TTable, TQueryResult, PgAsyncUpdateHKT>;
+-    insert: <TTable extends PgTable, TColumnList extends (keyof InferInsertModel<TTable, {
++    insert: {
++      <TTable extends PgTable>(table: TTable): PgInsertBuilder<TTable, TQueryResult, "all", false, PgAsyncInsertHKT>;
++      <TTable extends PgTable, TColumnList extends (keyof InferInsertModel<TTable, {
+       override: true;
+-    }>)[] = [], TRequiredKeys extends string = RequiredInsertKeys<TTable>>(table: TTable, ...columns: TColumnList extends [] ? [] : IsNever<TRequiredKeys> extends true ? TColumnList & NoDuplicateColumns<TColumnList> : [TRequiredKeys] extends [TColumnList[number]] ? TColumnList & NoDuplicateColumns<TColumnList> : DrizzleTypeError<`Column selection is missing following required columns: ${JoinUnion<`"${Exclude<TRequiredKeys, TColumnList[number]>}"`, ", ">}`>[]) => PgInsertBuilder<TTable, TQueryResult, TColumnList extends [] ? "all" : TColumnList, false, PgAsyncInsertHKT>;
++    }>)[] = [], TRequiredKeys extends string = RequiredInsertKeys<TTable>>(table: TTable, ...columns: TColumnList extends [] ? [] : IsNever<TRequiredKeys> extends true ? TColumnList & NoDuplicateColumns<TColumnList> : [TRequiredKeys] extends [TColumnList[number]] ? TColumnList & NoDuplicateColumns<TColumnList> : DrizzleTypeError<`Column selection is missing following required columns: ${JoinUnion<`"${Exclude<TRequiredKeys, TColumnList[number]>}"`, ", ">}`>[]): PgInsertBuilder<TTable, TQueryResult, TColumnList extends [] ? "all" : TColumnList, false, PgAsyncInsertHKT>;
++    };
+     delete: <TTable extends PgTable>(table: TTable) => PgAsyncDeleteBase<TTable, TQueryResult>;
+   };
+   /**
+@@ -262,6 +265,7 @@ declare class BasePgAsyncDatabase<TQueryResult extends PgQueryResultHKT, TRelati
+    *   .returning();
+    * ```
+    */
++  insert<TTable extends PgTable>(table: TTable): PgInsertBuilder<TTable, TQueryResult, "all", false, PgAsyncInsertHKT>;
+   insert<TTable extends PgTable, TColumnList extends (keyof InferInsertModel<TTable, {
+     override: true;
+   }>)[] = [], TRequiredKeys extends string = RequiredInsertKeys<TTable>>(table: TTable, ...columns: TColumnList extends [] ? [] : IsNever<TRequiredKeys> extends true ? TColumnList & NoDuplicateColumns<TColumnList> : [TRequiredKeys] extends [TColumnList[number]] ? TColumnList & NoDuplicateColumns<TColumnList> : DrizzleTypeError<`Column selection is missing following required columns: ${JoinUnion<`"${Exclude<TRequiredKeys, TColumnList[number]>}"`, ', '>}`>[]): PgInsertBuilder<TTable, TQueryResult, TColumnList extends [] ? 'all' : TColumnList, false, PgAsyncInsertHKT>;

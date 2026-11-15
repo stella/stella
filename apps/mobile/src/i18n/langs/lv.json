@@ -17,6 +17,7 @@
     "loadFailed": "Jūsu sarunas neizdevās ielādēt.",
     "runsLoadFailed": "Neizdevās pārbaudīt, kuras sarunas gaida jūs.",
     "retry": "Mēģināt vēlreiz",
+    "resend": "Nosūtīt vēlreiz",
     "untitled": "Saruna bez nosaukuma",
     "loadMoreFailed": "Ielādēt vairāk",
     "loadOlderFailed": "Ielādēt agrākās ziņas",
@@ -244,7 +245,8 @@
         "imageTooLargeToStore": "Šī attēla izmērs ir {total}. Attēli, kas lielāki par {kept}, netiek saglabāti, tāpēc to nevar parādīt.",
         "loadFailed": "Neizdevās ielādēt.",
         "showMore": "Rādīt vairāk"
-      }
+      },
+      "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, zero {# pārbaudītu avotu} one {# pārbaudīts avots} other {# pārbaudīti avoti}}",
@@ -253,7 +255,37 @@
       "analyses": "{count, plural, zero {# analīžu} one {# analīze} other {# analīzes}}"
     },
     "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
-    "reasoning": "Argumentācija"
+    "reasoning": "Argumentācija",
+    "historyTrimmed": "Agrākās ziņas neizdevās apkopot, tāpēc šajā atbildē ņemta vērā tikai jaunākā sarunas daļa.",
+    "failure": {
+      "aiDeadlineExceeded": "AI neatbildēja laikā. Mēģiniet vēlreiz pēc brīža.",
+      "aiOutputInvalid": "AI atbilde bija neparedzētā formātā. Mēģiniet vēlreiz.",
+      "aiOutputModerated": "AI pakalpojumu sniedzējs moderēja izvadi. Pārfrāzējiet pieprasījumu vai izvēlieties citu modeli.",
+      "aiUnknown": "AI pieprasījums neizdevās. Mēģiniet vēlreiz.",
+      "errorFolderUnavailable": "Ar šo tērzēšanu saistītā mape jūsu datorā nav pieejama. Pārbaudiet to stella desktop un pēc tam nosūtiet vēlreiz.",
+      "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",
+      "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
+      "errorNotReached": "Jūsu dators nepārņēma šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
+      "errorRelinked": "stella desktop jūsu datorā tika saistīts no jauna, tāpēc šī atbilde apstājās. Nosūtiet to vēlreiz.",
+      "errorRestoring": "Jūsu dators vēl atsauc failu izmaiņas. Pēc brīža nosūtiet to vēlreiz.",
+      "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
+      "refusalFolderNotApproved": "Vispirms atļaujiet programmēšanas aģentam strādāt ar šo tērzēšanu saistītajā mapē.",
+      "refusalHarnessUnavailable": "Programmēšanas aģents jūsu datorā šobrīd nevar pieņemt šo pieprasījumu. Pārbaudiet to lietotnē stella desktop.",
+      "refusalModelUnavailable": "Programmēšanas aģents jūsu datorā vairs nepiedāvā šo modeli. Izvēlieties citu izvēlnē Palaist.",
+      "refusalNoComputer": "Neviens no jūsu datoriem nav savienots.",
+      "refusalPermissionUnavailable": "Programmēšanas aģents jūsu datorā nevar darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
+      "refusalReasoningEffortUnavailable": "Programmēšanas aģents jūsu datorā šim modelim nepiedāvā šo spriešanas līmeni. Izvēlieties citu izvēlnē Spriešanas līmenis.",
+      "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
+      "sendErrorEmptyCompletion": "AI atgrieza tukšu atbildi. Mēģiniet vēlreiz vai pārfrāzējiet ziņu.",
+      "sendErrorLoopDetected": "AI atbilde atkārtojās pārāk daudz reižu. Mēģiniet vēlreiz ar šaurāku pieprasījumu.",
+      "sendErrorModelUnavailable": "Konfigurētais AI modelis vairs nav pieejams. Sazinieties ar darba telpas administratoru, lai atjauninātu modeli organizācijas iestatījumos.",
+      "sendErrorProviderBilling": "AI pakalpojumu sniedzējs ziņoja par norēķinu problēmu. Sazinieties ar darba telpas administratoru.",
+      "sendErrorProviderCredentialsRejected": "AI pakalpojumu sniedzējs noraidīja konfigurētos akreditācijas datus. Sazinieties ar darba telpas administratoru, lai pārbaudītu API atslēgu organizācijas iestatījumos.",
+      "sendErrorProviderUnavailable": "AI pakalpojumu sniedzējs uz laiku nav pieejams. Mēģiniet vēlreiz pēc brīža.",
+      "sendErrorQuotaExhausted": "AI pakalpojumu sniedzēja kvota ir izsmelta. Mēģiniet vēlreiz pēc minūtes vai sazinieties ar darba telpas administratoru.",
+      "sendErrorStreamIncomplete": "AI atbilde tika pārtraukta, pirms tā bija pabeigta. Mēģiniet vēlreiz.",
+      "sendErrorTurnTooLarge": "Šī atbilde kļuva pārāk liela, lai to piegādātu pilnībā. Lai turpinātu, nosūtiet jaunu ziņu."
+    }
   },
   "tasks": {
     "emptyTitle": "Nav atvērtu uzdevumu",

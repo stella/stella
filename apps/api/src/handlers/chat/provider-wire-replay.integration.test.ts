@@ -480,6 +480,7 @@ describe("a replayed provider through the chat pipeline", () => {
         // shapes to its real wire error to exercise the persistence boundary.
         const source = async function* (): AsyncIterable<StreamChunk> {
           for await (const chunk of chat({
+            threadId: "test-thread",
             adapter: instanceWireErrorModel(cassette.model).adapter,
             messages: [{ role: "user", content: "Draft a memo" }],
           })) {

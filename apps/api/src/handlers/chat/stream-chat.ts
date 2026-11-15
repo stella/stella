@@ -33,6 +33,7 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
   isApprovedClientCallAwaitingResult,
   memberWaitsOf,
@@ -148,6 +149,7 @@ import {
 } from "@/api/handlers/chat/snapshot-reconciliation";
 import {
   assistantMessageStartChunk,
+  attachSnapshotMessageOwners,
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
   findDeniedApprovals,
@@ -224,7 +226,6 @@ import {
   chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
 import {
-  type ChatContextNotice,
   createContextNoticeStamp,
   SESSION_NOT_RESUMED_NOTICE,
 } from "@/api/lib/chat/context-notice";
@@ -2143,7 +2144,7 @@ const createChatRuntimeMiddleware = ({
           state,
           threadId,
         });
-        return;
+        break;
       case "aborted":
       case "failed":
         return;
@@ -2155,8 +2156,9 @@ const createChatRuntimeMiddleware = ({
   return {
     name: "stella-chat-runtime",
     ...terminalHooks,
-    onChunk: (_ctx, chunk) => {
+    onChunk: (ctx, chunk) => {
       state.producedAnswer ||= chunkCarriesAnswer(chunk);
+      return attachSnapshotMessageOwners(ctx, chunk);
     },
     onConfig: async (ctx, config) => {
       if (ctx.phase !== "beforeModel") {

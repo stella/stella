@@ -13,6 +13,7 @@ import type {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
+  DesktopRunnerInputEvent,
 } from "@stll/api-contract/desktop-runner";
 
 import type { HarnessStepOutput } from "./step-output";
@@ -226,6 +227,21 @@ export type HarnessEvent =
   | { type: "interaction.resolved"; requestId: string }
   /** A transient provider error the harness is retrying on its own. */
   | { type: "retrying"; message: string }
+  /**
+   * What became of a message the turn was steered with (`HarnessTurn.steer`),
+   * at the point where the harness took it or refused it.
+   */
+  | {
+      type: "input.settled";
+      inputId: string;
+      status: DesktopRunnerInputEvent["status"];
+    }
+  /**
+   * The provider runs the turn on another model than the one asked for:
+   * Codex rerouted it, or Claude Code retried it on its fallback model after
+   * a refusal. What the turn reports from here on names this model.
+   */
+  | { type: "model.rerouted"; model: string }
   | { type: "turn.completed"; usage: HarnessUsage | null }
   | { type: "turn.interrupted" }
   | { type: "turn.failed"; failure: HarnessFailure };

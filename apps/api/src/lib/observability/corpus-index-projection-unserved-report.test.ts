@@ -48,6 +48,7 @@ const freshnessReport = {
   sourceAges: [],
   convergence: null,
   lastCompletedIdentifierPass: null,
+  waitingReplacements: [],
 } as const;
 
 test("each kind reports its generation and each index with an unserved entity", () => {

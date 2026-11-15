@@ -314,11 +314,6 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/document-processing-readiness.test.ts": {
-    "count": 4,
-    "owner": "guards",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/docx/ai-field-generator.test.ts": {
     "count": 10,
     "owner": "ai",
@@ -474,11 +469,6 @@
     "owner": "pricing",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/version.test.ts": {
-    "count": 7,
-    "owner": "guards",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/workflow-start-claim.test.ts": {
     "count": 2,
     "owner": "workflow",
@@ -589,22 +579,7 @@
     "owner": "case-law",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/components/chat/ask-user-card.test.tsx": {
-    "count": 3,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/src/components/chat/chat-answer-footer.dom.test.tsx": {
-    "count": 3,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/web/src/components/chat/chat-mock-model-badge.test.tsx": {
-    "count": 1,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/src/components/chat/chat-query-state.test.tsx": {
     "count": 1,
     "owner": "ai",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
@@ -624,24 +599,9 @@
     "owner": "ai",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/components/chat/composer-query-consumption.dom.test.tsx": {
-    "count": 3,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/src/components/chat/legal-citation-link.dom.test.tsx": {
-    "count": 3,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/web/src/components/chat/tool-approval-card.test.ts": {
     "count": 1,
     "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/src/components/references/reference-chip.test.tsx": {
-    "count": 3,
-    "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
   "apps/web/src/lib/deterministic-date.test.ts": {
@@ -654,18 +614,8 @@
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/lib/organization/ai-config-queries.test.ts": {
-    "count": 1,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/web/src/lib/search.test.ts": {
     "count": 1,
-    "owner": "web",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/src/lib/workspaces/mutations.test.ts": {
-    "count": 3,
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
@@ -674,18 +624,8 @@
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.test.ts": {
-    "count": 1,
-    "owner": "web",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-document-loader.test.ts": {
     "count": 1,
-    "owner": "web",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/vite.config.test.ts": {
-    "count": 5,
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   }

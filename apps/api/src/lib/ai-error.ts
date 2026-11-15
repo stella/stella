@@ -103,6 +103,27 @@ const RUNTIME_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
     AI_FAILURE_CODES.local_runner_folder_unavailable,
     "local_runner_folder_unavailable",
   ],
+  [AI_FAILURE_CODES.local_runner_no_computer, "local_runner_no_computer"],
+  [
+    AI_FAILURE_CODES.local_runner_harness_unavailable,
+    "local_runner_harness_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_model_unavailable,
+    "local_runner_model_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_reasoning_effort_unavailable,
+    "local_runner_reasoning_effort_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_approvals_unavailable,
+    "local_runner_approvals_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_folder_not_approved,
+    "local_runner_folder_not_approved",
+  ],
   [AI_FAILURE_CODES.provider_unavailable, "provider_unavailable"],
 ]);
 
@@ -635,6 +656,12 @@ const AI_FAILURE_CAN_CLEAR_ON_RETRY = {
   local_runner_relinked: true,
   local_runner_restoring: true,
   local_runner_folder_unavailable: false,
+  local_runner_no_computer: false,
+  local_runner_harness_unavailable: false,
+  local_runner_model_unavailable: false,
+  local_runner_reasoning_effort_unavailable: false,
+  local_runner_approvals_unavailable: false,
+  local_runner_folder_not_approved: false,
   unknown: true,
 } as const satisfies Record<AIErrorKind, boolean>;
 
@@ -825,6 +852,12 @@ const aiKindHandlerError = (
     case "local_runner_relinked":
     case "local_runner_restoring":
     case "local_runner_folder_unavailable":
+    case "local_runner_no_computer":
+    case "local_runner_harness_unavailable":
+    case "local_runner_model_unavailable":
+    case "local_runner_reasoning_effort_unavailable":
+    case "local_runner_approvals_unavailable":
+    case "local_runner_folder_not_approved":
     case "unknown":
       return new HandlerError({ ...fallback, code, cause: error });
     default: {

@@ -236,6 +236,13 @@ export const UserMessageSchema = v.object({
     ]),
   }),
   parent_tool_use_id: ParentToolUseId,
+  /** The id a message written to stdin carried, on its echo. */
+  uuid: v.optional(v.string()),
+  /**
+   * Set on the echo of a message written to stdin
+   * (`--replay-user-messages`), once the CLI took it into the conversation.
+   */
+  isReplay: v.optional(v.boolean()),
   /**
    * Why a tool call in this message did not run, by tool use id: a call cut
    * off by an interrupt or a new message is `cancelled` or `interrupted`,
@@ -282,6 +289,17 @@ export const ApiRetryMessageSchema = v.object({
   attempt: v.number(),
   max_retries: v.number(),
   error: v.string(),
+});
+
+/**
+ * The turn was retried once on the fallback model after the asked one
+ * refused. `local`: only a subagent's response came from the fallback, and
+ * the main thread's model is unchanged; an older CLI leaves `scope` out,
+ * which is the main thread.
+ */
+export const ModelRefusalFallbackSchema = v.object({
+  fallback_model: v.string(),
+  scope: v.optional(v.picklist(["session", "local"])),
 });
 
 export const StreamEventMessageSchema = v.object({

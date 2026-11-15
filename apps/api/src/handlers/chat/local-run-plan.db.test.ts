@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -24,10 +23,7 @@ import {
   readLocalRunApprovalCeiling,
   updateLocalRunApprovalCeiling,
 } from "@/api/lib/chat/local-run-approval-ceiling";
-import type {
-  DesktopRunnerControl,
-  PickedDesktop,
-} from "@/api/lib/desktop-runner/control";
+import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { createLocalRunBell } from "@/api/lib/desktop-runner/doorbell";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -75,22 +71,6 @@ const setCeiling = async (maxApprovals: ChatLocalRunApprovalCeiling) =>
     )
   ).unwrap();
 
-/** A connected computer whose Claude Code can run in every mode. */
-const SANDBOXING: PickedDesktop = {
-  type: "available",
-  desktopId: Bun.randomUUIDv7(),
-  harness: {
-    id: "claude-code",
-    state: "ready",
-    version: "2.1.309",
-    capabilities: ["approvals", "interrupt"],
-    approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
-    models: [{ id: MODEL, label: "Sonnet", reasoningEfforts: [] }],
-  },
-  linkedFolders: [],
-  approvedFolderIds: [],
-};
-
 const snapshot = () =>
   createFeatureAccessSnapshot({
     organizationId: ids.orgA,
@@ -134,9 +114,8 @@ const send = async (
     approvals,
     reasoningEffort: null,
   };
-  const control = asTestRaw<DesktopRunnerControl>({
-    pickDesktop: async () => await Promise.resolve(Result.ok(SANDBOXING)),
-  });
+  // The send picks no computer; its turn's run does once it is stored.
+  const control = asTestRaw<DesktopRunnerControl>({});
   const resolved = await resolveChatLocalRun({
     runTarget,
     agentSandboxRequested: false,
@@ -151,7 +130,7 @@ const send = async (
     runtime: { control, runBell: createLocalRunBell() },
   });
   if (resolved.isOk()) {
-    return resolved.value === undefined ? "cloud" : "routed";
+    return resolved.value === undefined ? "cloud" : "accepted";
   }
   return HandlerError.is(resolved.error) ? resolved.error.code : "failed";
 };
@@ -162,7 +141,7 @@ describe("a turn on the member's computer under the organization's ceiling", () 
       .delete(organizationSettings)
       .where(eq(organizationSettings.organizationId, ids.orgA));
     for (const mode of DESKTOP_RUNNER_APPROVAL_MODES) {
-      expect(await send(mode)).toBe("routed");
+      expect(await send(mode)).toBe("accepted");
     }
   });
 
@@ -171,22 +150,24 @@ describe("a turn on the member's computer under the organization's ceiling", () 
     expect(await send("full_auto")).toBe(
       CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
     );
-    expect(await send("auto")).toBe("routed");
-    expect(await send("ask")).toBe("routed");
-    expect(await send("plan")).toBe("routed");
+    expect(await send("auto")).toBe("accepted");
+    expect(await send("ask")).toBe("accepted");
+    expect(await send("plan")).toBe("accepted");
   });
 
   test("a lowered ceiling holds the next turn, while a paused run keeps the mode it started with", async () => {
     await setCeiling("full_auto");
-    expect(await send("full_auto")).toBe("routed");
+    expect(await send("full_auto")).toBe("accepted");
     await setCeiling("ask");
     expect(await send("full_auto")).toBe(
       CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
     );
     expect(await send("auto")).toBe(CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit);
-    expect(await send("full_auto", { resumesPausedRun: true })).toBe("routed");
+    expect(await send("full_auto", { resumesPausedRun: true })).toBe(
+      "accepted",
+    );
     // Raised again, the same mode runs on the next turn.
     await setCeiling("full_auto");
-    expect(await send("full_auto")).toBe("routed");
+    expect(await send("full_auto")).toBe("accepted");
   });
 });

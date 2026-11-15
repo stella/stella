@@ -410,6 +410,7 @@ test("the real SDK stops the cancellation fixture through its adapter signal", a
   const firstDelta = Promise.withResolvers<undefined>();
   const deltas: string[] = [];
   const stream = chat({
+    threadId: "test-thread",
     adapter: createMockTextAdapter("mock-cancellation"),
     messages: [{ role: "user", content: "Stream until stopped please" }],
     abortController: run,
@@ -444,6 +445,7 @@ for (const marker of [MOCK_AI_CANCELLATION_MARKER, MOCK_AI_CONTINUOUS_MARKER]) {
     })("gemini-2.5-flash");
     const run = new AbortController();
     const stream = chat({
+      threadId: "test-thread",
       adapter,
       abortController: run,
       systemPrompts: ["Answer questions about the supplied documents."],

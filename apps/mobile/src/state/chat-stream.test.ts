@@ -1,7 +1,12 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import {
+  CHAT_CONTEXT_NOTICE_EVENTS,
+  CHAT_CONTEXT_NOTICE_METADATA_KEY,
+} from "@stll/api-contract/chat-context-notice";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import {
   SSE_HEARTBEAT_FRAME,
@@ -20,6 +25,7 @@ import {
   answerEntry,
   applyChatEvent,
   cancelChatTurn,
+  chatRegenerateBody,
   chatSendBody,
   createSseParser,
   EMPTY_ANSWER,
@@ -158,6 +164,61 @@ describe("reading server-sent events", () => {
   });
 });
 
+describe("an answer's context notice", () => {
+  const NOTICE = {
+    type: "session-not-resumed",
+  } as const satisfies ChatContextNotice;
+  /** One event of each kind the server stamps the notice on. */
+  const STAMPED = {
+    TEXT_MESSAGE_START: {
+      type: "TEXT_MESSAGE_START",
+      messageId: ANSWER_ID,
+      role: "assistant",
+    },
+    TEXT_MESSAGE_CONTENT: {
+      type: "TEXT_MESSAGE_CONTENT",
+      messageId: ANSWER_ID,
+      delta: "Done.",
+    },
+    TEXT_MESSAGE_END: { type: "TEXT_MESSAGE_END", messageId: ANSWER_ID },
+    REASONING_MESSAGE_CONTENT: {
+      type: "REASONING_MESSAGE_CONTENT",
+      messageId: "reasoning-1",
+      delta: "Check the register.",
+    },
+  } as const satisfies Record<
+    (typeof CHAT_CONTEXT_NOTICE_EVENTS)[number],
+    Readonly<Record<string, string>>
+  >;
+  const parsed = (event: object): ChatEvent =>
+    parseChatEvent(JSON.stringify(event)) ??
+    panic("A stamped event must be one an answer is drawn from");
+
+  test("is read from every event the server stamps it on, kept, and withdrawn by null", () => {
+    for (const type of CHAT_CONTEXT_NOTICE_EVENTS) {
+      const shown = reduce([
+        parsed({
+          ...STAMPED[type],
+          metadata: { [CHAT_CONTEXT_NOTICE_METADATA_KEY]: NOTICE },
+        }),
+        // A later event without the notice leaves it standing.
+        parsed(STAMPED.TEXT_MESSAGE_CONTENT),
+      ]);
+      expect(
+        answerEntry(shown, "2026-10-20T10:00:00.000Z").contextNotice,
+      ).toEqual(NOTICE);
+      const withdrawn = applyChatEvent(
+        shown,
+        parsed({
+          ...STAMPED[type],
+          metadata: { [CHAT_CONTEXT_NOTICE_METADATA_KEY]: null },
+        }),
+      );
+      expect(withdrawn.contextNotice).toBeNull();
+    }
+  });
+});
+
 describe("drawing an answer from its events", () => {
   const events = RUN_EVENTS.flatMap(
     (event) => parseChatEvent(JSON.stringify(event)) ?? [],
@@ -179,6 +240,7 @@ describe("drawing an answer from its events", () => {
         { type: "text", content: "Two found." },
       ],
       status: "finished",
+      contextNotice: null,
     });
     expect(answerEntry(answer, "2026-10-20T10:00:00.000Z")).toEqual({
       id: ANSWER_ID,
@@ -197,12 +259,18 @@ describe("drawing an answer from its events", () => {
       ],
       files: [],
       drafts: [],
+      contextNotice: null,
     });
   });
 
   test("a step is running until its result comes back, and failed when the result says so", () => {
     // Up to the tool call's start: no result yet.
-    const started = reduce(events.slice(0, 4));
+    const started = reduce(
+      events.slice(
+        0,
+        events.findIndex(({ type }) => type === "TOOL_CALL_START") + 1,
+      ),
+    );
     expect(answerEntry(started, "2026-10-20T10:00:00.000Z").blocks[1]).toEqual({
       type: "steps",
       key: "1",
@@ -447,11 +515,90 @@ describe("drawing an answer from its events", () => {
     );
   });
 
+  test("a failure says why by the code its error event carries", () => {
+    const failureAfter = (event: unknown) =>
+      reduce([parseChatEvent(JSON.stringify(event)) ?? []].flat()).failure;
+    expect(
+      failureAfter({
+        type: "RUN_ERROR",
+        message: "None of the member's computers is connected.",
+        code: "ai_local_runner_no_computer",
+      }),
+    ).toBe("local_runner_no_computer");
+    // A code this build does not know, or none, still reads as a failure.
+    expect(
+      failureAfter({ type: "RUN_ERROR", message: "x", code: "ai_newer" }),
+    ).toBe("unknown");
+    expect(failureAfter({ type: "RUN_ERROR", message: "x" })).toBe("unknown");
+    expect(
+      failureAfter({ type: "RUN_FINISHED", outcome: { type: "completed" } }),
+    ).toBeUndefined();
+  });
+
   test("passes over events it does not draw, and data that is not JSON", () => {
     expect(parseChatEvent('{"type":"MESSAGES_SNAPSHOT","messages":[]}')).toBe(
       undefined,
     );
     expect(parseChatEvent("not json")).toBe(undefined);
+  });
+});
+
+describe("answering the latest message again", () => {
+  const PARTS = [{ type: "text", content: "Which leases end this year?" }];
+  const LOCAL = {
+    kind: "local",
+    harness: "codex",
+    model: "gpt-5-codex",
+  } as const;
+
+  test("sends the stored message back as a regeneration, on the thread's computer", () => {
+    const body = chatRegenerateBody({
+      anonymized: false,
+      matterId: undefined,
+      retry: {
+        answerId: ANSWER_ID,
+        messageId: MESSAGE_ID,
+        parts: PARTS,
+        runTarget: LOCAL,
+      },
+      runId: "run-2",
+      threadId: THREAD_ID,
+    });
+    expect(body.forwardedProps).toEqual({
+      threadId: THREAD_ID,
+      runId: "run-2",
+      sendMode: "rawOverride",
+      runTarget: LOCAL,
+      message: { id: MESSAGE_ID, role: "user", parts: PARTS },
+      turnIntent: "regenerate",
+    });
+    // The server refuses an envelope whose copies disagree.
+    expect(body.data).toEqual(body.forwardedProps);
+    expect(body.messages).toEqual([{ id: MESSAGE_ID, role: "user" }]);
+  });
+
+  test("names no target for a thread on stella's own models", () => {
+    expect(
+      chatRegenerateBody({
+        anonymized: true,
+        matterId: "matter-1",
+        retry: {
+          answerId: ANSWER_ID,
+          messageId: MESSAGE_ID,
+          parts: PARTS,
+          runTarget: undefined,
+        },
+        runId: "run-2",
+        threadId: THREAD_ID,
+      }).forwardedProps,
+    ).toEqual({
+      threadId: THREAD_ID,
+      runId: "run-2",
+      workspaceId: "matter-1",
+      sendMode: "anonymized",
+      message: { id: MESSAGE_ID, role: "user", parts: PARTS },
+      turnIntent: "regenerate",
+    });
   });
 });
 
@@ -703,6 +850,41 @@ describe("sending a message", () => {
         ? sent.error.error.status
         : undefined,
     ).toBe(409);
+  });
+
+  test("names the turn of a send refused after the server stored it, and none before", async () => {
+    const send = async (response: Response) => {
+      const named: string[] = [];
+      const { fetch } = streamingFetch(() => response);
+      const sent = await sendChatMessage({
+        anonymized: false,
+        fetch,
+        matterId: undefined,
+        messageId: MESSAGE_ID,
+        onEvent: () => {},
+        onTurn: (turnId) => {
+          named.push(turnId);
+        },
+        runId: "run-1",
+        signal: new AbortController().signal,
+        source: sourceFor(),
+        text: "Hello",
+        threadId: THREAD_ID,
+      });
+      expect(Result.isError(sent)).toBe(true);
+      return named;
+    };
+    // Accepted, then refused: the thread holds the message.
+    expect(
+      await send(
+        new Response("{}", {
+          status: 429,
+          headers: { [CHAT_TURN_ID_HEADER]: TURN_ID },
+        }),
+      ),
+    ).toEqual([TURN_ID]);
+    // Refused before anything was stored.
+    expect(await send(new Response("{}", { status: 409 }))).toEqual([]);
   });
 
   test("ends quietly on abort, keeping the last event id it read", async () => {

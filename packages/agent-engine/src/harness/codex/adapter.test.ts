@@ -925,6 +925,72 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)).toEqual({ type: "turn.interrupted" });
   });
 
+  test("a steer joins the running turn through turn/steer and is settled where the server took it", async () => {
+    const inputId = crypto.randomUUID();
+    const { events, received } = await run("steered", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          expect(
+            await turn.steer({ inputId, text: "Also check the annex." }),
+          ).toEqual(Result.ok());
+        }
+      },
+    });
+    expect(
+      received().find(({ method }) => method === "turn/steer")?.params,
+    ).toEqual({
+      threadId: FAKE_THREAD_ID,
+      expectedTurnId: "turn-1",
+      input: [
+        { type: "text", text: "Also check the annex.", text_elements: [] },
+      ],
+    });
+    const settled = events.findIndex(({ type }) => type === "input.settled");
+    expect(events[settled]).toEqual({
+      type: "input.settled",
+      inputId,
+      status: "accepted",
+    });
+    // What the turn did after it took the message follows the settlement.
+    expect(
+      events.findIndex(
+        (event) =>
+          event.type === "text.completed" && event.messageId === "m-steer",
+      ),
+    ).toBeGreaterThan(settled);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a steer the server refuses settles rejected and the turn goes on", async () => {
+    const inputId = crypto.randomUUID();
+    const { events } = await run("steer_refused", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId, text: "Also check the annex." });
+        }
+      },
+    });
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId, status: "rejected" },
+    ]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a steer after the turn ended is refused without an event", async () => {
+    const started = await start("tool_calls");
+    const collected = collect(started.turn, () => undefined);
+    await collected.done;
+    const steered = await started.turn.steer({
+      inputId: crypto.randomUUID(),
+      text: "Too late.",
+    });
+    await started.turn.dispose();
+    expect(Result.isError(steered) && steered.error.reason).toBe("turn_ended");
+    expect(collected.events.some(({ type }) => type === "input.settled")).toBe(
+      false,
+    );
+  });
+
   test("resuming a missing session falls back to the transcript and says so", async () => {
     const { events, received } = await run("resume_missing", {
       overrides: {
@@ -1301,7 +1367,13 @@ describe("Codex adapter over a stdio app-server", () => {
           inputModalities: ["text", "image"],
         },
       ],
-      capabilities: ["approvals", "interrupt", "resume", "image_input"],
+      capabilities: [
+        "approvals",
+        "interrupt",
+        "resume",
+        "image_input",
+        "steer",
+      ],
       approvalModes: ["ask", "auto", "full_auto"],
       // The plan's main window is at 40 %.
       usageLimit: null,
@@ -1451,7 +1523,7 @@ const cloudChatChunks = async () => {
       // them; the answer follows the last step's results.
       const step = FAKE_STELLA_STEPS.at(iteration);
       iteration += 1;
-      const ids = { runId: runId ?? "run-1", threadId: threadId ?? "t-1" };
+      const ids = { runId: runId ?? "run-1", threadId };
       yield { type: EventType.RUN_STARTED, ...ids, model, timestamp };
       if (step !== undefined) {
         for (const call of step) {
@@ -1460,7 +1532,6 @@ const cloudChatChunks = async () => {
             type: EventType.TOOL_CALL_START,
             toolCallId: call.id,
             toolCallName: call.tool,
-            toolName: call.tool,
             model,
             timestamp,
           };
@@ -1475,7 +1546,6 @@ const cloudChatChunks = async () => {
             type: EventType.TOOL_CALL_END,
             toolCallId: call.id,
             toolCallName: call.tool,
-            toolName: call.tool,
             input: call.arguments,
             model,
             timestamp,
@@ -1551,7 +1621,52 @@ describe("Codex items as chat parts", () => {
     expect(
       cloudParts.filter(({ type }) => type === "tool-result"),
     ).toHaveLength(FAKE_STELLA_CALLS.length);
-    expect(local).toEqual(cloud);
+    // v1 chat() owns a message per model iteration and stamps its source;
+    // the native harness reports one continuous turn with model-only stamps.
+    // Verify that bookkeeping separately before comparing every ordered part.
+    expect(local.map(({ role }) => role)).toEqual(["assistant"]);
+    expect(cloud.map(({ role }) => role)).toEqual(
+      [...FAKE_STELLA_STEPS, null].map(() => "assistant"),
+    );
+    const comparableParts = (
+      messages: ReturnType<typeof storedMessages>,
+      engine: "cloud" | "local",
+    ) =>
+      messages.flatMap(({ parts }) =>
+        parts.map((part) => {
+          if (part.type === "tool-call") {
+            expect(part.metadata).toEqual({
+              tanstack: {
+                model: "gpt-test",
+                ...(engine === "cloud"
+                  ? {
+                      source: {
+                        api: "text",
+                        model: "gpt-test",
+                        provider: "scripted",
+                      },
+                    }
+                  : {}),
+              },
+            });
+            const { metadata: _metadata, ...content } = part;
+            return content;
+          }
+          if (part.type === "tool-result") {
+            expect(part.metadata).toEqual(
+              engine === "local"
+                ? { tanstack: { model: "gpt-test" } }
+                : undefined,
+            );
+            const { metadata: _metadata, ...content } = part;
+            return content;
+          }
+          return part;
+        }),
+      );
+    expect(comparableParts(local, "local")).toEqual(
+      comparableParts(cloud, "cloud"),
+    );
   });
 
   test("the answer's markdown reaches the stored text unchanged", async () => {
@@ -2054,6 +2169,7 @@ const CLIENT_METHODS = [
   "thread/unarchive",
   "turn/start",
   "turn/interrupt",
+  "turn/steer",
 ] as const;
 
 /** Experimental client methods the adapter calls; `initialize` opts in. */
