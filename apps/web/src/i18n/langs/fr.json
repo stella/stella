@@ -2093,6 +2093,7 @@
       "noResults": "Aucune compétence correspondante",
       "tryOne": "Essayez l’une d’entre elles pour commencer"
     },
+    "queuePrompt": "Envoyer quand l’agent aura terminé",
     "queuedAttachmentCount": "{count, plural, one {# pièce jointe} many {# pièces jointes} other {# pièces jointes}}",
     "queuedNotice": "En file d’attente : envoi à la fin de la réponse en cours",
     "reasoning": "Raisonnement",

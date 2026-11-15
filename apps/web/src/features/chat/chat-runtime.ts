@@ -533,6 +533,15 @@ export const createChatRuntime = ({
   let desktopHold: AbortController | null = null;
   const isStoppedTurn = (): boolean =>
     stoppedTurnId !== null && stoppedTurnId === turnId;
+  /** Settles once the request of the page's current loading has its
+   *  answer's headers, or the loading ends: the server holds the turn by
+   *  then, as one that runs again after a resumed wait. A new loading opens
+   *  a new one, before its request is posted. */
+  let requestAnswered = Promise.withResolvers<undefined>();
+  requestAnswered.resolve(undefined);
+  /** Counts the page's loadings, so a steer stays with the one it was asked
+   *  in. */
+  let loadingGeneration = 0;
   /** Steers waiting to hear from the running turn, by input id. */
   const pendingSteers = new Map<string, (outcome: ChatSteerOutcome) => void>();
   const settleSteer = (inputId: string, outcome: ChatSteerOutcome) => {
@@ -707,6 +716,7 @@ export const createChatRuntime = ({
         try: async () => await chatFetchClient(input, init),
         catch: toError,
       });
+      requestAnswered.resolve(undefined);
       if (Result.isError(received)) {
         acceptance?.resolve({ status: "failed", error: received.error });
         return readQueryResult(received);
@@ -1138,7 +1148,11 @@ export const createChatRuntime = ({
       });
     },
     onLoadingChange: (isLoading) => {
-      if (!isLoading) {
+      if (isLoading) {
+        loadingGeneration += 1;
+        requestAnswered = Promise.withResolvers<undefined>();
+      } else {
+        requestAnswered.resolve(undefined);
         settleOpenSteers();
       }
       setSnapshot({
@@ -1520,10 +1534,12 @@ export const createChatRuntime = ({
     inputId: string;
     text: string;
   }): Promise<ChatSteerOutcome> => {
-    const steeredTurn = turnId;
+    // The loading the steer was asked in: a later one is another request,
+    // which the steer must not reach.
+    const loading = loadingGeneration;
     const running = () =>
-      turnId === steeredTurn && snapshot.isLoading && !isStoppedTurn();
-    if (!running() || steeredTurn === null) {
+      loadingGeneration === loading && snapshot.isLoading && !isStoppedTurn();
+    if (!running()) {
       return "unsettled";
     }
     // A cloud turn takes nothing mid-turn: it is stopped and started again.
@@ -1536,6 +1552,15 @@ export const createChatRuntime = ({
     // The turn's stream settles the steer, possibly before this request
     // answers, so the caller hears it as soon as the stream says.
     const send = async () => {
+      // A request still on its way has no turn the server runs yet: a new
+      // turn has no id until then, and a turn resumed after its wait still
+      // reads as waiting.
+      await requestAnswered.promise;
+      const steeredTurn = turnId;
+      if (!running() || steeredTurn === null) {
+        settleSteer(inputId, "unsettled");
+        return;
+      }
       const sent = await Result.tryPromise(
         async (): Promise<Result<ChatLocalRunSteerOutcome, APIError>> =>
           await invokeAppOnlyWrite("chat.turns.steer", async () => {
