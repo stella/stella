@@ -196,7 +196,6 @@ const REQUEST_OPTION_COVERAGE = {
   adapter: { covered: "The organization's adapter, from the model factory." },
   agentLoopStrategy: { neverSent: "Bounds the engine's loop." },
   context: { neverSent: NOT_SET_BY_CHAT },
-  conversationId: { neverSent: NOT_SET_BY_CHAT },
   debug: { neverSent: NOT_SET_BY_CHAT },
   interrupts: { neverSent: NOT_SET_BY_CHAT },
   lazyToolsConfig: { neverSent: NOT_SET_BY_CHAT },
@@ -210,14 +209,23 @@ const REQUEST_OPTION_COVERAGE = {
     covered: "The chat role's generation options, with every effort.",
   },
   parentRunId: { covered: "The continuation after the approval." },
+  parentSubagentRunId: { neverSent: NOT_SET_BY_CHAT },
+  reasoning: {
+    neverSent: "Stella's capability owner sets native modelOptions instead.",
+  },
+  repairToolInput: { neverSent: NOT_SET_BY_CHAT },
+  retry: { neverSent: NOT_SET_BY_CHAT },
   resume: { covered: "The continuation after the approval." },
   runId: { neverSent: "The engine's own run identity." },
   state: { neverSent: NOT_SET_BY_CHAT },
+  subagentName: { neverSent: NOT_SET_BY_CHAT },
   subagentRunId: { neverSent: NOT_SET_BY_CHAT },
   subagents: { neverSent: NOT_SET_BY_CHAT },
   systemPrompts: { covered: "The chat system prompt on every request." },
   threadId: { neverSent: "The engine's own thread identity." },
+  toolChoice: { neverSent: NOT_SET_BY_CHAT },
   tools: { covered: "Every tool kind the tool tables give (below)." },
+  wrapFetch: { neverSent: NOT_SET_BY_CHAT },
 } as const satisfies Record<keyof StreamChatChunksOptions, Coverage>;
 
 const UI_ONLY = "Its part policy keeps it off the provider (`ui-only`).";
@@ -321,7 +329,7 @@ const REASONING_REPLAY_PATHS: Partial<
     "messages[].content[].signature",
     "messages[].content[].thinking",
   ],
-  google: ["contents[].parts[].thoughtSignature"],
+  google: ["contents[].parts[].thought", "contents[].parts[].thoughtSignature"],
   openai: ["input[].encrypted_content", "input[].summary"],
 };
 

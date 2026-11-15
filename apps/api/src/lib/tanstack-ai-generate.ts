@@ -17,8 +17,10 @@ import type {
 } from "@tanstack/ai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import { panic, Result, TaggedError } from "better-result";
+import type { ResponseCreateParams } from "openai/resources/responses/responses";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
   getModelDefaultReasoningEffort,
   getOutputTokenLimit,
@@ -508,20 +510,26 @@ export const withProviderRetryWait = async <T>(
 
 export const generateTanStackTextForTask = async (
   options: GenerateTanStackTextForTaskOptions,
-): Promise<string> =>
-  await withGenerationDeadline(
+): Promise<string> => {
+  const threadId = Bun.randomUUIDv7();
+  return await withGenerationDeadline(
     options,
     async (abortSignal, deadlineAt) =>
       await withProviderRetryWait(
         abortSignal,
         async () =>
-          await generateTanStackTextWithin({ ...options, abortSignal }),
+          await generateTanStackTextWithin(
+            { ...options, abortSignal },
+            threadId,
+          ),
         deadlineAt,
       ),
   );
+};
 
 const generateTanStackTextWithin = async (
   options: GenerateTanStackTextForTaskOptions,
+  threadId: string,
 ): Promise<string> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
   const abortSignal = admittedDispatchSignal(options);
@@ -539,6 +547,7 @@ const generateTanStackTextWithin = async (
 
   try {
     for await (const delta of streamTanStackTextDeltas({
+      threadId,
       abortController,
       analytics: options.analytics,
       beforeEachDispatch: options.beforeEachDispatch,
@@ -594,6 +603,7 @@ export const streamTanStackTextForTask = async function* (
     : undefined;
 
   yield* streamTanStackTextDeltas({
+    threadId: Bun.randomUUIDv7(),
     abortController,
     analytics: options.analytics,
     caching: options.caching,
@@ -791,6 +801,7 @@ const afterDispatchCheck = async function* <TChunk>(
 };
 
 const streamTanStackTextDeltas = async function* ({
+  threadId,
   abortController,
   analytics,
   beforeEachDispatch,
@@ -803,6 +814,7 @@ const streamTanStackTextDeltas = async function* ({
   temperature,
   onFinish,
 }: {
+  threadId: string;
   abortController: AbortController | undefined;
   analytics: TanStackAIAnalyticsCallbacks | undefined;
   beforeEachDispatch?: DispatchCheck | undefined;
@@ -823,6 +835,7 @@ const streamTanStackTextDeltas = async function* ({
     stream: (requestedServiceTier) =>
       afterDispatchCheck(beforeEachDispatch, () =>
         streamChatChunks({
+          threadId,
           adapter: textAdapterWithNormalizedStops(model),
           messages,
           ...systemPromptsPatch({ caching, model, system }),
@@ -1631,6 +1644,7 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
   const abortController = abortSignal
     ? abortControllerFromSignal(abortSignal)
     : undefined;
+  const threadId = Bun.randomUUIDv7();
   const run = async (
     messages: GuardedModelMessages<ModelMessage[]>,
     requestModel: ResolvedTanStackTextModel,
@@ -1659,6 +1673,7 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
               run: async (serviceTier) => {
                 await checkBeforeDispatch(options.beforeEachDispatch);
                 return await generateChatObject({
+                  threadId,
                   adapter: requestModel.adapter,
                   messages,
                   outputSchema: tanStackOutputSchema,
@@ -1861,6 +1876,7 @@ const streamTanStackStructuredOutput = async function* <
   system: GuardedSystemPrompt | undefined;
   temperature: number | undefined;
 }): AsyncIterable<TanStackStructuredOutputEvent<v.InferOutput<TSchema>>> {
+  const threadId = Bun.randomUUIDv7();
   let completed = false;
   let rawJson = "";
   guardStructuredOutputBudget({ model, outputSchema });
@@ -1882,6 +1898,7 @@ const streamTanStackStructuredOutput = async function* <
     serviceTier,
     stream: (requestedServiceTier) =>
       streamChatObjectWithManagedErrors({
+        threadId,
         adapter: model.adapter,
         messages,
         outputSchema: tanStackOutputSchema,
@@ -2447,7 +2464,7 @@ export const mergeGenerationOptions = ({
               ),
             }),
         ...temperatureOverride,
-        ...openAICacheOptions(caching),
+        ...openAICacheOptions(caching, model.modelId),
         ...openAIServiceTierOptions(serviceTier),
       };
     case "openrouter":
@@ -2487,12 +2504,31 @@ const isDeferredServiceTier = (serviceTier: AIRequestServiceTier): boolean =>
 // catalogue, not here.
 const openAICacheOptions = (
   caching: CachingDecision,
-): Partial<Pick<OpenAITextProviderOptions, "prompt_cache_key">> => {
-  if (!caching.enabled || caching.scopeKey === null) {
-    return {};
-  }
+  modelId: string,
+): Pick<ResponseCreateParams, "prompt_cache_key" | "prompt_cache_options"> => {
+  // GPT-5.6+ accepts request-wide mode; older models only cache implicitly.
+  // https://developers.openai.com/api/docs/guides/prompt-caching
+  const version = /^gpt-(\d+)(?:\.(\d+))?/u.exec(modelId);
+  const major = parseIntegerToken(version?.[1], { sign: "unsigned" });
+  const minor = parseIntegerToken(version?.[2] ?? "0", { sign: "unsigned" });
+  const supportsMode =
+    major.isOk() &&
+    minor.isOk() &&
+    (major.value > 5 || (major.value === 5 && minor.value >= 6));
   return {
-    prompt_cache_key: hashCacheScopeKey(caching.scopeKey),
+    // The shared runtime suppresses SDK cache defaults and generated keys.
+    // Native model options win over the adapter's explicit-only default:
+    // enabled requests keep Stella's implicit caching; disabled requests have
+    // no breakpoints, so explicit-only mode creates no cache reads or writes.
+    ...(supportsMode && {
+      prompt_cache_options: {
+        mode: caching.enabled ? "implicit" : "explicit",
+      },
+    }),
+    ...(caching.enabled &&
+      caching.scopeKey !== null && {
+        prompt_cache_key: hashCacheScopeKey(caching.scopeKey),
+      }),
   };
 };
 

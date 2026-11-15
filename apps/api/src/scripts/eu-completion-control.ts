@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import type { SQLWrapper } from "drizzle-orm";
 import { parseArgs } from "node:util";
 import * as v from "valibot";
 
@@ -150,8 +151,12 @@ const withOperatorStore = async (
         createEuCompletionStore({
           db: {
             transaction,
-            execute: async (query) =>
-              await transaction(async (tx) => await tx.execute(query)),
+            execute: async <TRow extends Record<string, unknown>>(
+              query: SQLWrapper | string,
+            ) =>
+              await transaction(
+                async (tx) => await tx.execute<TRow>(query, "objects"),
+              ),
           },
           now: () => Temporal.Now.instant().epochMilliseconds,
         }),

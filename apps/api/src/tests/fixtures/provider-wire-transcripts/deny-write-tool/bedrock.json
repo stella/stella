@@ -135,7 +135,7 @@
                         "text": "{\"error\":\"User declined tool execution\"}"
                       }
                     ],
-                    "status": "success"
+                    "status": "error"
                   }
                 }
               ]

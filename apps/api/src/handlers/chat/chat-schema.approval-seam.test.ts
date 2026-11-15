@@ -152,7 +152,7 @@ for (const definition of [searchTool, noDefaultsTool, saveMatterTool]) {
         threadId,
         connection: {
           async *connect(messages, _data, _signal, runContext) {
-            if (runContext?.resume !== undefined) {
+            if (runContext.resume !== undefined) {
               submitted.resolve({
                 toolCallOwnership: "cloud",
                 message: assistantFromSdk(messages.at(-1)),
@@ -172,7 +172,7 @@ for (const definition of [searchTool, noDefaultsTool, saveMatterTool]) {
               messages,
               tools: chatToolMapToArray(tools),
               threadId,
-              runId: runContext?.runId,
+              runId: runContext.runId,
             });
           },
         },

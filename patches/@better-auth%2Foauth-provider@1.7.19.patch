@@ -1,6 +1,6 @@
-diff --git a/dist/authorize-BnSO_Slc.mjs b/dist/authorize-BnSO_Slc.mjs
---- a/dist/authorize-BnSO_Slc.mjs
-+++ b/dist/authorize-BnSO_Slc.mjs
+diff --git a/dist/authorize-CLcUWfZo.mjs b/dist/authorize-CLcUWfZo.mjs
+--- a/dist/authorize-CLcUWfZo.mjs
++++ b/dist/authorize-CLcUWfZo.mjs
 @@ -16,7 +16,7 @@
  import { createHash } from "@better-auth/utils/hash";
  import { SignJWT, base64url, compactVerify, createLocalJWKSet, decodeJwt, decodeProtectedHeader, errors, jwtVerify } from "jose";
@@ -556,9 +556,9 @@ diff --git a/dist/authorize-BnSO_Slc.mjs b/dist/authorize-BnSO_Slc.mjs
  	let requestedScopes = query.scope?.split(" ").filter((s) => s);
  	if (requestedScopes) {
  		const validScopes = new Set(client.scopes ?? opts.scopes);
-diff --git a/dist/oauth-m0aNFIHP.d.mts b/dist/oauth-m0aNFIHP.d.mts
---- a/dist/oauth-m0aNFIHP.d.mts
-+++ b/dist/oauth-m0aNFIHP.d.mts
+diff --git a/dist/oauth-DJZT3ri_.d.mts b/dist/oauth-DJZT3ri_.d.mts
+--- a/dist/oauth-DJZT3ri_.d.mts
++++ b/dist/oauth-DJZT3ri_.d.mts
 @@ -1170,6 +1170,8 @@
    /**
     * Controls whether boot-time `resources` config overwrites DB-edited rows.

@@ -600,8 +600,11 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test migration identity logic": [
     "scripts/check-migration-order.test.ts",
+    "scripts/check-migration-order.ts",
   ],
-  "ci-checks-rest/Check migration identity against the base branch": [],
+  "ci-checks-rest/Check migration identity against the base branch": [
+    "scripts/check-migration-order.ts",
+  ],
   "ci-checks-rest/Test dead-columns reference matching": [
     "scripts/check-dead-columns.ts",
   ],

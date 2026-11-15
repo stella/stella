@@ -1513,6 +1513,7 @@ const runToolProbe = async ({
   };
 
   const stream = streamChatChunks({
+    threadId: Bun.randomUUIDv7(),
     adapter: model.adapter,
     abortController: abortControllerFromSignal(signal),
     agentLoopStrategy: maxIterations(2),

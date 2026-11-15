@@ -1,0 +1,41 @@
+Persisted approvals from before native interrupt descriptors have only part.approval,
+not a resumable run binding. Keep the former processor update and guarded continuation
+for this exact legacy boundary. Native bound descriptors reject this path.
+Remove when pre-interrupt stored approvals are no longer supported.
+Canary: approval-answer-order.test.ts drives the real client, server settlement,
+core tool execution and persisted/reloaded result for approval and denial.
+
+diff --git a/dist/esm/chat-client.d.ts b/dist/esm/chat-client.d.ts
+--- a/dist/esm/chat-client.d.ts
++++ b/dist/esm/chat-client.d.ts
+@@ -510,6 +510,8 @@
+     /** Run a client tool, then add its result and continue the loop. */
+     private runClientTool;
+     private addToolResultForClientTool;
++    /** Persisted pre-interrupt approvals only; native descriptors remain authoritative. */
++    addLegacyToolApprovalResponse(response: { id: string; approved: boolean }): Promise<void>;
+     private validateClientToolOutput;
+     /**
+      * Queue an action to be executed after the current stream ends
+diff --git a/dist/esm/chat-client.js b/dist/esm/chat-client.js
+--- a/dist/esm/chat-client.js
++++ b/dist/esm/chat-client.js
+@@ -1887,6 +1887,18 @@
+ 		}
+ 		await this.checkForContinuation();
+ 	}
++	async addLegacyToolApprovalResponse(response) {
++		if (this.lastResume || this.hasPendingInterrupts()) throw new Error("Native interrupts must be resolved through their bound descriptor");
++		const found = this.processor.getMessages().some((message) => message.parts.some((part) => part.type === "tool-call" && part.state === "approval-requested" && part.approval?.id === response.id && part.approval.approved === void 0));
++		if (!found) throw new Error("The stored approval is no longer pending");
++		this.processor.addToolApprovalResponse(response.id, response.approved);
++		this.devtoolsBridge.emitSnapshot();
++		if (this.isLoading) {
++			this.queuePostStreamAction(() => this.checkForContinuation());
++			return;
++		}
++		await this.checkForContinuation();
++	}
+ 	async validateClientToolOutput(clientTool, output) {
+ 		const validation = await validateWithStandardSchema(clientTool.outputSchema, output);
+ 		if (!validation.success) throw new Error(validation.issues.map((issue) => issue.message).join(", "));

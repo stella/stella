@@ -544,7 +544,6 @@ const asToolInputChunk = (
       metadata: {
         tanstack: {
           toolCallName: name,
-          toolName: name,
           input: nativeInput(name, reported["input"]),
           ...reportedModel(chunk.metadata),
         },
