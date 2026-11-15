@@ -1468,7 +1468,6 @@
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
         "$TURBO_ROOT$/packages/cli/**",
-        "$TURBO_ROOT$/packages/collation/**",
         "$TURBO_ROOT$/packages/concurrency/**",
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
