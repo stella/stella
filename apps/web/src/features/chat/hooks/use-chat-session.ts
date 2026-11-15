@@ -2267,13 +2267,18 @@ export const useChatSession = ({
   const queuedIds = chatQueue.items.map(({ id }) => id).join(" ");
   const seenQueueHeadRef = useRef<string | null>(null);
   useExternalSyncEffect(() => {
+    // While a turn of this page runs, the head it last saw stays the one to
+    // compare with: the server sends from the queue only once that turn
+    // has ended.
+    if (turnRunning) {
+      return;
+    }
     const seen = seenQueueHeadRef.current;
     seenQueueHeadRef.current = queueHeadId;
     if (
       seen === null ||
       queuedIds.split(" ").includes(seen) ||
-      removedHereRef.current.has(seen) ||
-      turnRunning
+      removedHereRef.current.has(seen)
     ) {
       return;
     }
