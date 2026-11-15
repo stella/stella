@@ -310,7 +310,7 @@
     "stylelint": "17.16.0",
     "tailwindcss": "4.3.5",
     "temporal-polyfill": "1.0.8",
-    "tsdown": "0.23.4",
+    "tsdown": "0.23.7",
     "tsrs": "0.23.0-ts7.1.0-beta",
     "typescript6": "npm:typescript@6.0.3",
     "use-intl": "4.14.9",
