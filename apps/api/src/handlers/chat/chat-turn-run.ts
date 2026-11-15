@@ -5,6 +5,7 @@ import { panic, Result, TaggedError } from "better-result";
 import type { AIProvider } from "@stll/ai-catalog";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import {
   CHAT_RUN_TARGET_KIND,
   type ChatRunTarget,
@@ -13,7 +14,6 @@ import { TimeoutError } from "@stll/concurrency/with-timeout";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { reportDeliveryFailuresByKind } from "@/api/handlers/chat/chat-delivery-failure";
-import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
 import {
   persistFailedChatTurn,
   persistTerminalAssistantTurn,
@@ -645,14 +645,13 @@ export class ChatTurnRun {
       return undefined;
     }
     const { checkpoint } = this.options;
-    return checkpoint !== undefined &&
-      getAwaitingUserInteractions(checkpoint).length > 0
+    return checkpoint !== undefined && memberWaitsOf(checkpoint).length > 0
       ? checkpoint
       : undefined;
   }
 
   private async restoreCheckpoint(checkpoint: PersistableChatMessage) {
-    const interaction = getAwaitingUserInteractions(checkpoint).at(0);
+    const interaction = memberWaitsOf(checkpoint).at(0);
     if (interaction === undefined) {
       return panic("A restorable chat checkpoint must await user input");
     }
