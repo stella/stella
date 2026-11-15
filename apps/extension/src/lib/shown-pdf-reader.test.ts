@@ -95,7 +95,9 @@ afterEach(async () => {
 });
 
 /** A local server answering each path with `answer`, recording every request. */
-const serve = (answer: (path: string) => Response): Served => {
+const serve = (
+  answer: (path: string) => Promise<Response> | Response,
+): Served => {
   const requests: string[] = [];
   const server = Bun.serve({
     fetch: (request) => {
@@ -203,8 +205,29 @@ describe("reading a shown PDF for its save", () => {
   });
 });
 
-describe("the read's deadline", () => {
-  test("a body that stalls ends as interrupted once the deadline passes", async () => {
+describe("the read's deadlines", () => {
+  /** Deadlines that pass only when a test says so. */
+  const manualTimer = () => {
+    const pending = new Set<() => void>();
+    return {
+      pending,
+      runOut: () => {
+        const due = [...pending];
+        pending.clear();
+        for (const task of due) {
+          task();
+        }
+      },
+      timer: (task: () => void) => {
+        pending.add(task);
+        return () => {
+          pending.delete(task);
+        };
+      },
+    };
+  };
+
+  test("a body that stalls ends as interrupted at the idle deadline", async () => {
     const sent = Promise.withResolvers<undefined>();
     const site = serve(
       () =>
@@ -219,15 +242,49 @@ describe("the read's deadline", () => {
           { headers: { "content-type": "application/pdf" } },
         ),
     );
-    const deadline = new AbortController();
+    const deadlines = manualTimer();
 
     const reading = readShownPdf(`${site.origin}/decisions/42`, 1024, {
-      deadline: deadline.signal,
+      timer: deadlines.timer,
     });
     await sent.promise;
-    deadline.abort();
+    expect(deadlines.pending.size).toBe(1);
+    deadlines.runOut();
 
     expect(await reading).toEqual({ reason: "interrupted", type: "refused" });
+  });
+
+  test("a response that never starts ends as interrupted at the headers deadline", async () => {
+    const asked = Promise.withResolvers<undefined>();
+    const site = serve(async () => {
+      asked.resolve(undefined);
+      // Never answered: not even the status line is sent.
+      return await Promise.withResolvers<Response>().promise;
+    });
+    const deadlines = manualTimer();
+
+    const reading = readShownPdf(`${site.origin}/decisions/42`, 1024, {
+      timer: deadlines.timer,
+    });
+    await asked.promise;
+    deadlines.runOut();
+
+    expect(await reading).toEqual({ reason: "interrupted", type: "refused" });
+  });
+
+  test("a read that completes leaves no deadline behind", async () => {
+    const site = serve(() => pdf());
+    const deadlines = manualTimer();
+
+    const read = await readShownPdf(`${site.origin}/decisions/42`, 1024, {
+      timer: deadlines.timer,
+    });
+
+    expect(read.type).toBe("read");
+    expect(deadlines.pending.size).toBe(0);
+    if (read.type === "read") {
+      URL.revokeObjectURL(read.downloadUrl);
+    }
   });
 });
 

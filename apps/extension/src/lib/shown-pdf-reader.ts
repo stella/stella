@@ -125,31 +125,40 @@ const isRedirect = (response: Response): boolean =>
   (response.status >= 300 && response.status < 400);
 
 /**
- * How long one read may take, its request and its whole body together. A
- * read past it ends as interrupted, so a slow stream never holds one of
- * the chat's delivery slots for long.
+ * How long the reader waits for the response to start; past it the read
+ * ends as interrupted.
  */
-export const SHOWN_PDF_READ_TIMEOUT_MS = 120_000;
+const SHOWN_PDF_HEADERS_TIMEOUT_MS = 30_000;
 
 /**
- * How long the worker waits for the reader's answer: the read's own
- * deadline and a margin for the document to start. Past it the worker
- * stops waiting, whatever the document still does.
+ * How long the reader waits for the next chunk of the body; a stream that
+ * stalls this long ends the read as interrupted. A body that keeps
+ * arriving is read to its end or to the size limit.
  */
-const READER_ANSWER_TIMEOUT_MS = SHOWN_PDF_READ_TIMEOUT_MS + 15_000;
+const SHOWN_PDF_IDLE_TIMEOUT_MS = 30_000;
+
+/**
+ * How long the worker waits for the reader's answer before it stops
+ * waiting and frees the save's slot, whatever the document still does:
+ * long enough for the size limit to arrive over a slow connection.
+ */
+const READER_ANSWER_TIMEOUT_MS = 10 * 60_000;
 
 type ReadOptions = {
-  /** Aborts the request and its body; the read then ends as interrupted. */
-  deadline?: AbortSignal;
   /** The offscreen document's `fetch`. */
   fetcher?: typeof fetch;
+  /** Sets the read's deadlines; a test passes its own. */
+  timer?: ReaderTimer;
 };
 
-/** Reads the body, at most `maxBytes` of it, until done or the deadline. */
+/**
+ * Reads the body, at most `maxBytes` of it, until its end. Each chunk must
+ * arrive within the idle deadline, which aborts the request otherwise.
+ */
 const readBody = async (
   body: NonNullable<Response["body"]>,
   maxBytes: number,
-  deadline: AbortSignal,
+  awaitChunk: <T>(chunk: Promise<T>) => Promise<T>,
 ): Promise<
   { type: "bytes"; chunks: BlobPart[]; total: number } | ShownPdfRead
 > => {
@@ -159,8 +168,8 @@ const readBody = async (
   try {
     for (;;) {
       // await-in-loop: one chunk at a time, so a large file stops early.
-      const chunk = await reader.read().catch(() => null);
-      if (chunk === null || deadline.aborted) {
+      const chunk = await awaitChunk(reader.read()).catch(() => null);
+      if (chunk === null) {
         return refusedRead(STOP.interrupted);
       }
       if (chunk.done) {
@@ -181,25 +190,36 @@ const readBody = async (
 
 /**
  * Fetches `url` once and keeps at most `maxBytes` of it as a `blob:`
- * address, within one deadline for the request and its body. Runs in the
- * offscreen document. The HTTP cache is used when it holds the response,
- * so an address a site serves once can still be saved when the tab's
- * response was cached.
+ * address. Runs in the offscreen document. The response must start within
+ * the headers deadline and each chunk of its body arrive within the idle
+ * deadline; either aborts the request. The HTTP cache is used when it
+ * holds the response, so an address a site serves once can still be saved
+ * when the tab's response was cached.
  */
 export const readShownPdf = async (
   url: string,
   maxBytes: number,
-  {
-    deadline = AbortSignal.timeout(SHOWN_PDF_READ_TIMEOUT_MS),
-    fetcher = fetch,
-  }: ReadOptions = {},
+  { fetcher = fetch, timer = systemReaderTimer }: ReadOptions = {},
 ): Promise<ShownPdfRead> => {
-  const response = await fetcher(url, {
-    cache: "force-cache",
-    credentials: "include",
-    redirect: "manual",
-    signal: deadline,
-  }).catch(() => null);
+  const request = new AbortController();
+  const abort = () => {
+    request.abort();
+  };
+  /** Awaits `step`, aborting the request if it takes longer than `ms`. */
+  const within =
+    (ms: number) =>
+    async <T>(step: Promise<T>): Promise<T> => {
+      const cancel = timer(abort, ms);
+      return await step.finally(cancel);
+    };
+  const response = await within(SHOWN_PDF_HEADERS_TIMEOUT_MS)(
+    fetcher(url, {
+      cache: "force-cache",
+      credentials: "include",
+      redirect: "manual",
+      signal: request.signal,
+    }),
+  ).catch(() => null);
   if (response === null) {
     return refusedRead(STOP.interrupted);
   }
@@ -212,7 +232,11 @@ export const readShownPdf = async (
     await body?.cancel().catch(() => undefined);
     return refusedRead(STOP.interrupted);
   }
-  const read = await readBody(body, maxBytes, deadline);
+  const read = await readBody(
+    body,
+    maxBytes,
+    within(SHOWN_PDF_IDLE_TIMEOUT_MS),
+  );
   if (read.type !== "bytes") {
     return read;
   }
@@ -236,7 +260,9 @@ export const answerShownPdfRead = async (
   post: (answer: ShownPdfRead) => void,
   {
     read = readShownPdf,
-    revoke = URL.revokeObjectURL,
+    revoke = (downloadUrl: string) => {
+      URL.revokeObjectURL(downloadUrl);
+    },
   }: {
     read?: (url: string, maxBytes: number) => Promise<ShownPdfRead>;
     revoke?: (downloadUrl: string) => void;
