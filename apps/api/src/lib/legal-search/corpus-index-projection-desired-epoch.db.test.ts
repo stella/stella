@@ -147,7 +147,7 @@ const reset = async (): Promise<void> => {
     ...GENERATIONS.map((generation) => ({
       family: "case_law" as const,
       generation,
-      cluster: "q09",
+      cluster: "q09" as const,
       manifestDigest: corpusIndexManifestDigest(
         CORPUS_INDEX_MANIFESTS[generation],
       ),
@@ -156,7 +156,7 @@ const reset = async (): Promise<void> => {
     {
       family: "legislation",
       generation: "legislation_v2",
-      cluster: "q09",
+      cluster: "q09" as const,
       manifestDigest: corpusIndexManifestDigest(
         CORPUS_INDEX_MANIFESTS.legislation_v2,
       ),
