@@ -3,6 +3,7 @@ import type { ReservedSQL, SQL } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
+import { systemClock } from "@stll/test-kit";
 
 import { buildBetterAuthOAuthResources } from "@/api/mcp/resource-policy-contract";
 
@@ -19,6 +20,7 @@ import type {
   OnlineRepair,
 } from "./online-migration-connection";
 import { ONLINE_MIGRATION_REPAIRS } from "./online-migrations";
+import unseeded from "./online-repairs-unseeded.json";
 import { terminateReserved } from "./sql-close";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -69,6 +71,8 @@ if (enabled && templateDatabase === undefined) {
 setDefaultTimeout(120_000);
 
 type RepairName = (typeof ONLINE_MIGRATION_REPAIRS)[number]["name"];
+/** Every registered repair has a seed unless the shrink-only list names it. */
+type SeededRepairName = Exclude<RepairName, keyof typeof unseeded.repairs>;
 type RowSeed = {
   kind: "row-work";
   assertPending: (client: SQL, id: string) => Promise<void>;
@@ -1056,7 +1060,7 @@ const SEEDS = {
     "chat_turns_interaction_values_check",
     `INSERT INTO chat_turns (id, organization_id, user_id, thread_id, user_message_id, status, assistant_message_id, interaction_type, interaction_tool_call_id) VALUES ('${ID}', 'org', 'user', '${ID_2}', '${ID_3}', 'awaiting-user', '${ENTITY_ID}', 'approval', 'call')`,
   ),
-} as const satisfies Record<RepairName, Seed>;
+} as const satisfies Record<SeededRepairName, Seed>;
 const seedsByName: Readonly<Record<string, Seed>> = SEEDS;
 
 const adapter = (connection: ReservedSQL): OnlineMigrationConnection => ({
@@ -1115,8 +1119,15 @@ const withScratch = async (
   );
 };
 
+const UNSEEDED_REPAIRS = Object.keys(unseeded.repairs);
+
 const assertRegistryAndSeedsMatch = () => {
-  expect(Object.keys(SEEDS).toSorted()).toEqual(
+  // Every registered repair has a seed or is on the shrink-only unseeded
+  // list (online-repairs-unseeded.test.ts), never both.
+  expect(UNSEEDED_REPAIRS.filter((name) => Object.hasOwn(SEEDS, name))).toEqual(
+    [],
+  );
+  expect([...Object.keys(SEEDS), ...UNSEEDED_REPAIRS].toSorted()).toEqual(
     ONLINE_MIGRATION_REPAIRS.map(({ name }) => name).toSorted(),
   );
 };
@@ -1183,7 +1194,7 @@ const withContendingWriter = async <T>({
     } finally {
       abort.abort();
       writerOutcome = await writerRun;
-      endMs = Date.now();
+      endMs = systemClock.now();
     }
   });
   if (workOutcome.isErr() && writerOutcome.isErr()) {
@@ -1223,7 +1234,7 @@ const runTimedRepair = async ({
             connection,
             createUngatedTableGateForTests(connection),
           ),
-        { timeoutMs: DEADLINE_MS, label: `Online repair ${repair.name}` },
+        { timeoutMs: DEADLINE_MS, label: "Online repair beside a writer" },
       ),
   );
   if (result.isOk()) {
@@ -1331,7 +1342,7 @@ const exercise = async (repair: (typeof ONLINE_MIGRATION_REPAIRS)[number]) => {
               ],
         work: async () => {
           await seed.assertPending(owner, seed.writerLock.id);
-          const workStartedAt = Date.now();
+          const workStartedAt = systemClock.now();
           const repaired = await runTimedRepair({
             connection,
             repair,
@@ -1369,10 +1380,12 @@ const exercise = async (repair: (typeof ONLINE_MIGRATION_REPAIRS)[number]) => {
 
 describe.skipIf(!enabled)("online repairs run beside writers", () => {
   test(
-    "the seed map exactly enumerates the repair registry",
+    "the seed map and the unseeded list enumerate the repair registry",
     assertRegistryAndSeedsMatch,
   );
-  for (const repair of ONLINE_MIGRATION_REPAIRS) {
+  for (const repair of ONLINE_MIGRATION_REPAIRS.filter(
+    ({ name }) => !UNSEEDED_REPAIRS.includes(name),
+  )) {
     test(`${repair.name} keeps its writer moving`, async () =>
       await exercise(repair));
   }
@@ -1396,13 +1409,13 @@ describe.skipIf(!enabled)("online repairs run beside writers", () => {
             "WITH changed AS (UPDATE fixture_repair SET touched_at = clock_timestamp() WHERE id = 1 RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed",
           ],
           work: async () => {
-            const holdStartedAt = Date.now();
+            const holdStartedAt = systemClock.now();
             await repair.begin(async (tx) => {
               await tx.unsafe(
                 "UPDATE fixture_repair SET touched_at = clock_timestamp() WHERE id = 1",
               );
               // real-time: Deliberately hold the PostgreSQL row beyond the 2 s writer-gap budget so the negative oracle must fail.
-              await Bun.sleep(2500);
+              await systemClock.sleep(2500);
             });
             return { startMs: holdStartedAt, value: undefined };
           },
