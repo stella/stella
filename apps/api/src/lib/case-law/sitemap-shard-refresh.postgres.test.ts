@@ -295,6 +295,8 @@ if (!databaseUrl || !runPostgresTests) {
       await refreshUntilDone();
       expect(await loggedMonths("1905")).toEqual([]);
       expect(await listedMonths("1905")).toEqual(["1905/01:1", "1905/03:1"]);
+      // The month refresh leaves the touch to the fold job.
+      await foldUntilEmpty();
       expect(
         await db.$count(
           caseLawSitemapTouches,
@@ -468,12 +470,7 @@ if (!databaseUrl || !runPostgresTests) {
     const foldOnce = async (handle: typeof db = db) =>
       await handle.transaction(
         async (tx) =>
-          // SAFETY: the gated transaction offers the execute and savepoint surface the fold uses.
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction stands in for the root one
-          await foldCaseLawSitemapTouches(
-            tx as never,
-            SITEMAP_TOUCH_FOLD_BATCH_LIMIT,
-          ),
+          await foldCaseLawSitemapTouches(tx, SITEMAP_TOUCH_FOLD_BATCH_LIMIT),
       );
 
     /** Fold until nothing is queued, as consecutive fold runs would. */
@@ -583,14 +580,14 @@ if (!databaseUrl || !runPostgresTests) {
         const writerPid = Number(backend?.["pid"]);
         let writing: Promise<unknown> | undefined;
         await db.transaction(async (tx) => {
-          // SAFETY: the gated transaction offers the execute and savepoint surface the fold uses.
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction stands in for the root one
           const folded = await foldCaseLawSitemapTouches(
-            tx as never,
+            tx,
             SITEMAP_TOUCH_FOLD_BATCH_LIMIT,
           );
           expect(folded).toMatchObject({ status: "folded", retained: 0 });
-          writing = writer.sql`UPDATE case_law_decisions SET updated_at = '2032-01-01T00:00:00Z'::timestamptz WHERE id = ${id}::uuid`;
+          // A Bun SQL query starts when awaited, so start it without blocking.
+          writing = (async () =>
+            await writer.sql`UPDATE case_law_decisions SET updated_at = '2032-01-01T00:00:00Z'::timestamptz WHERE id = ${id}::uuid`)();
           // The write waits on the fold's claim of its decision.
           await waitFor(
             async () => {

@@ -338,10 +338,10 @@ async function foldAllTouches(limit = SITEMAP_TOUCH_FOLD_BATCH_LIMIT) {
       return;
     }
     if (folded.status !== "folded") {
-      return panic(`A fold found the fence ${folded.status}`);
+      panic(`A fold found the fence ${folded.status}`);
     }
   }
-  return panic("The touch queue never drained");
+  panic("The touch queue never drained");
 }
 
 const expectMatchesFullRecount = async () => {

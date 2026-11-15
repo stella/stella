@@ -25,7 +25,7 @@ export const FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK =
   "caseLaw.foldSitemapTouches" as const;
 
 /** Folding stops this long into a run; the next minutely run continues. */
-export const SITEMAP_TOUCH_FOLD_RUN_BUDGET_MS = 45_000;
+const SITEMAP_TOUCH_FOLD_RUN_BUDGET_MS = 45_000;
 // Leave room for a governed indicator read and one bounded batch transaction.
 const BATCH_START_RESERVE_MS = 10_000;
 /** The queue depth logged at the end of a run is read no further than this. */
