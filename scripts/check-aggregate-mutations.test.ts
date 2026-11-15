@@ -678,6 +678,22 @@ describe("declared handler locks", () => {
     }
   });
 
+  test("a lock inside a turn-pings callback's transaction covers the route", () => {
+    const sources = fixture();
+    const module = "apps/api/src/handlers/example/create.ts";
+    const handler = (transaction: string) =>
+      `import { Result } from "better-result"; import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeRootHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; import { withChatRunPings } from "@/api/lib/chat/chat-run-pings"; const existing = createSafeRootHandler({}, async function* ({safeDb}) { const outcome = yield* Result.await(withChatRunPings(async (pings) => await safeDb(async (tx) => { ${transaction} }))); return Result.ok(outcome); }); declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`;
+    sources.set(
+      module,
+      handler(
+        'await withAggregateLock({aggregate: "workspace", id, tx}); return 1;',
+      ),
+    );
+    expect(verify(sources)).toBe(1);
+    sources.set(module, handler("return 1;"));
+    expect(() => verify(sources)).toThrow("must await withAggregateLock");
+  });
+
   describe("one-level calls into same-package lock helpers", () => {
     const module = "apps/api/src/handlers/example/create.ts";
     const service = "apps/api/src/services/example-lock.ts";

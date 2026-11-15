@@ -19,19 +19,13 @@ export type {
   ChatTurnInterruptionReason,
 } from "@stll/api-contract/chat-turn-errors";
 export { CHAT_TURN_INTERACTION_TYPES } from "@stll/api-contract/chat";
+export { ACTIVE_CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 export type { ChatTurnInteractionType } from "@stll/api-contract/chat";
 
 /** Whoever may start a turn in a thread may also stop it. */
 export const CHAT_TURN_PERMISSIONS = {
   chat: ["create"],
 } satisfies PermissionInput;
-
-/** The statuses of a turn not yet settled; a thread holds at most one. */
-export const ACTIVE_CHAT_TURN_STATUSES = [
-  "accepted",
-  "running",
-  "awaiting-user",
-] as const satisfies readonly ChatTurnStatus[];
 
 export const CHAT_TURN_CANCELLATION_REASONS = [
   "superseded",
