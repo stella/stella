@@ -537,12 +537,6 @@ const SWEEP_MAX_PAGES = 8;
 const SWEEP_EVERY_SHARDS = 8;
 /** Proof cycles a run takes at its start for an earlier run's revisions. */
 const RECOVERY_PROOF_MAX_PASSES = 8;
-/**
- * Rounds of sweep and recovery a run spends settling what is outstanding on
- * its route before it reports `drained`; a round that settles nothing ends
- * them at once.
- */
-const SETTLE_OUTSTANDING_MAX_ROUNDS = 8;
 
 const emptyProgress = (
   cursor: CorpusProjectionReservationQueueKey | null,
@@ -916,42 +910,29 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     await slots.raiseFailure();
     await this.#releaseWaiting();
     await this.#drainProofs();
-    const status = this.#stop ?? (await this.#confirmDrained());
     this.#report();
-    return status;
+    return this.#stop ?? "drained";
   }
 
   /**
-   * A pass from the head reserved nothing, so the run would end drained; it
-   * does only once nothing of the route is outstanding either. Each round
-   * sweeps and proves what an earlier run, a crash or this run left, until
-   * nothing is outstanding, the deadline passes, or a round settles nothing.
+   * A pass from the head reserved nothing. Count what of the route is still
+   * started or committed and undecided, by any actor; if any is, sweep and
+   * prove once. `stuck` when that settled nothing or the deadline has passed.
    */
-  async #confirmDrained(): Promise<"drained" | "awaiting_proof"> {
-    for (let round = 0; round < SETTLE_OUTSTANDING_MAX_ROUNDS; round += 1) {
-      const step = await this.#settleOutstandingRound();
-      if (step !== "settling") {
-        return step;
-      }
-    }
-    this.#progress.outstanding = await this.#countOutstanding();
-    return this.#progress.outstanding === 0 ? "drained" : "awaiting_proof";
-  }
-
-  async #settleOutstandingRound(): Promise<
-    "drained" | "awaiting_proof" | "settling"
+  async #settleOutstanding(): Promise<
+    "nothing_outstanding" | "settled_some" | "stuck"
   > {
     const outstanding = await this.#countOutstanding();
     this.#progress.outstanding = outstanding;
     if (outstanding === 0) {
-      return "drained";
+      return "nothing_outstanding";
     }
     if ((await this.#nowMs()) >= this.#options.deadline.getTime()) {
-      return "awaiting_proof";
+      return "stuck";
     }
     const before = this.#progress.recovered;
     await this.#recover();
-    return this.#progress.recovered === before ? "awaiting_proof" : "settling";
+    return this.#progress.recovered === before ? "stuck" : "settled_some";
   }
 
   /**
@@ -1005,9 +986,21 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       // Nothing was runnable; a retry due soon is still this run's to take.
       const dueInMs = await this.#nextRetryDueInMs();
       if (dueInMs === null) {
-        return "drained";
+        // Drained only with nothing of the route outstanding. What recovery
+        // settles may be runnable again (a withdrawal is), so the walk goes
+        // on from the head after it, and ends drained only when a pass from
+        // the head finds nothing and nothing is outstanding.
+        const settled = await this.#settleOutstanding();
+        if (settled === "nothing_outstanding") {
+          return "drained";
+        }
+        if (settled === "stuck") {
+          this.#stop = "awaiting_proof";
+          return "drained";
+        }
+      } else {
+        await this.#sleep(dueInMs);
       }
-      await this.#sleep(dueInMs);
     } else if (this.#passReserved > 0 && this.#passStarted === 0) {
       this.#stop = "no_progress";
       return "drained";
@@ -1761,7 +1754,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       );
       this.#inFlight.delete(shard.name);
       shards.delivered += 1;
-      fault = await this.#classify(started, outcome);
+      fault = await this.#classify(started, outcome, handoff.shard.killAfterMs);
     } else {
       shards.infrastructureFailures += 1;
       this.#stop ??= handoff.stop;
@@ -1791,8 +1784,13 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     if (!(await this.#generationIsBuilding())) {
       return { type: "withheld", stop: "generation_not_building" };
     }
+    // Whatever the clock query took counts against the budget, so the time
+    // between its reading and the hand-off never extends the indexer's run.
+    const askedAtMs = await this.#nowMs();
+    const databaseNowMs = await this.#databaseNowMs();
+    const queryMs = Math.max(0, (await this.#nowMs()) - askedAtMs);
     const killAfterMs =
-      started.shard.killDeadline.getTime() - (await this.#databaseNowMs());
+      started.shard.killDeadline.getTime() - databaseNowMs - queryMs;
     if (killAfterMs <= 0) {
       return { type: "withheld", stop: "infrastructure_failed" };
     }
@@ -1802,6 +1800,8 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   async #classify(
     { shard, entries }: StartedShard,
     outcome: CorpusProjectionOfflineDeliveryOutcome,
+    /** The budget the indexer was handed, after staging and hand-off. */
+    killAfterMs: number,
   ): Promise<CorpusIndexAppendFault> {
     const shards = this.#progress.shards;
     // The rate achieved on earlier shards, before this one counts.
@@ -1840,13 +1840,13 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           return "none";
         }
         if (entries.length === 1) {
-          // Alone, the revision held its run up itself, unless what the run
-          // measured says the engine could not index it in time at all.
+          // Alone, the revision held its run up itself, unless the rate the
+          // run achieved could not index it in the budget it was handed.
           if (
             corpusProjectionOfflineRateCannotIndex(
               completed,
               shard.bytes,
-              this.#plan.killBudgetMs,
+              killAfterMs,
             )
           ) {
             shards.infrastructureFailures += 1;
