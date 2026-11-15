@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { CLAUDE_STEER_PRIORITY } from "../src/harness/claude-code/protocol";
 import { browseAsAgent, claudeMcpEndpoints } from "./fake-browser";
 import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
@@ -1568,6 +1569,12 @@ export const run = async (
       const message = await take("users");
       if (message === null) {
         return;
+      }
+      // A steer is taken at the agent's next step; any other priority would
+      // play differently on the real CLI.
+      if (message["priority"] !== CLAUDE_STEER_PRIORITY) {
+        log({ steerPriority: message["priority"] ?? null });
+        process.exit(95);
       }
       write({
         type: "user",
