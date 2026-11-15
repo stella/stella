@@ -24,6 +24,7 @@ if [[ -t 0 ]]; then
   exit 0
 fi
 
+gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
 work=$(mktemp -d)
 trap 'rm -rf "${work}"' EXIT
 
@@ -37,10 +38,10 @@ load_registered_keys() {
   else
     command -v gh >/dev/null 2>&1 || return 1
     local login
-    login=$(gh api user --jq .login 2>/dev/null) || return 1
+    login=$("${gh_retry_script}" api user --jq .login 2>/dev/null) || return 1
     [[ -n "${login}" ]] || return 1
-    ssh_keys=$(gh api "users/${login}/ssh_signing_keys" --jq '.[].key' 2>/dev/null) || return 1
-    gpg_ids=$(gh api "users/${login}/gpg_keys" --jq '.[] | .key_id, .subkeys[].key_id' 2>/dev/null) || return 1
+    ssh_keys=$("${gh_retry_script}" api "users/${login}/ssh_signing_keys" --jq '.[].key' 2>/dev/null) || return 1
+    gpg_ids=$("${gh_retry_script}" api "users/${login}/gpg_keys" --jq '.[] | .key_id, .subkeys[].key_id' 2>/dev/null) || return 1
   fi
   : > "${work}/allowed_signers"
   while read -r key; do
