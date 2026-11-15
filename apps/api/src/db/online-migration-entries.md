@@ -43,3 +43,9 @@ in the same release (for example an `ON CONFLICT` arbiter index) may be
 finalized early only through a reasoned entry in
 `scripts/online-migration-lifecycle-exemptions.json`; the exemption lapses
 once the release carries the entry.
+
+`migrate` builds every entry by default. `migrate --online=finalized` builds
+only finalized entries and leaves pending ones to be built after the rollout.
+Startup records an incomplete pending step as pending whatever migration is
+newest, and still refuses an incomplete finalized index, cutover or retirement
+outside its deploy window; repairs keep their own startup rule.
