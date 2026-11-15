@@ -246,7 +246,8 @@
         "loadFailed": "Laadimine ebaõnnestus.",
         "showMore": "Näita rohkem"
       },
-      "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal."
+      "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
+      "steered": "Saadetud agendi töö ajal"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}",
@@ -285,6 +286,14 @@
       "sendErrorQuotaExhausted": "AI teenusepakkuja kvoot on täis. Proovi minuti pärast uuesti või võta ühendust tööruumi administraatoriga.",
       "sendErrorStreamIncomplete": "AI vastus katkes enne, kui see valmis sai. Proovi uuesti.",
       "sendErrorTurnTooLarge": "See vastus läks liiga suureks, et seda tervikuna edastada. Jätkamiseks saada uus sõnum."
+    },
+    "steerPrompt": "Saada agendile töö ajal",
+    "steerRefused": {
+      "turnNotRunning": "Agent praegu ei tööta.",
+      "noRun": "Agent pole veel alustanud.",
+      "cannotSteer": "See agent ei võta töö ajal sõnumeid vastu.",
+      "runFull": "Agent ei saa praegu rohkem sõnumeid vastu võtta.",
+      "notTaken": "Agent ei saanud sinu sõnumit praegu vastu võtta."
     }
   },
   "tasks": {

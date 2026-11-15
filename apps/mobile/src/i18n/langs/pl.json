@@ -246,7 +246,8 @@
         "loadFailed": "Nie udało się wczytać.",
         "showMore": "Pokaż więcej"
       },
-      "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu."
+      "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
+      "steered": "Wysłano podczas pracy agenta"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}",
@@ -285,6 +286,14 @@
       "sendErrorQuotaExhausted": "Limit dostawcy AI został wyczerpany. Spróbuj ponownie za minutę albo skontaktuj się z administratorem obszaru roboczego.",
       "sendErrorStreamIncomplete": "Odpowiedź AI urwała się przed zakończeniem. Spróbuj ponownie.",
       "sendErrorTurnTooLarge": "Ta odpowiedź stała się zbyt duża, aby dostarczyć ją w całości. Wyślij nową wiadomość, aby kontynuować."
+    },
+    "steerPrompt": "Wyślij do agenta w trakcie pracy",
+    "steerRefused": {
+      "turnNotRunning": "Agent w tej chwili nie pracuje.",
+      "noRun": "Agent jeszcze nie zaczął.",
+      "cannotSteer": "Ten agent nie przyjmuje wiadomości w trakcie pracy.",
+      "runFull": "Agent nie przyjmie teraz kolejnych wiadomości.",
+      "notTaken": "Agent nie mógł teraz przyjąć twojej wiadomości."
     }
   },
   "tasks": {

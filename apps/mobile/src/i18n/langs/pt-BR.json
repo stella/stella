@@ -246,7 +246,8 @@
         "loadFailed": "Não foi possível carregar.",
         "showMore": "Mostrar mais"
       },
-      "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat."
+      "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat.",
+      "steered": "Enviado enquanto o agente trabalhava"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas} many {# fontes consultadas}}",
@@ -285,6 +286,14 @@
       "sendErrorQuotaExhausted": "A cota do provedor de IA foi esgotada. Tente novamente em um minuto ou fale com o administrador do espaço de trabalho.",
       "sendErrorStreamIncomplete": "A resposta da IA foi interrompida antes de terminar. Tente novamente.",
       "sendErrorTurnTooLarge": "Esta resposta ficou grande demais para ser entregue por completo. Envie uma nova mensagem para continuar."
+    },
+    "steerPrompt": "Enviar ao agente enquanto ele trabalha",
+    "steerRefused": {
+      "turnNotRunning": "O agente não está trabalhando agora.",
+      "noRun": "O agente ainda não começou.",
+      "cannotSteer": "Este agente não aceita mensagens enquanto trabalha.",
+      "runFull": "O agente não pode aceitar mais mensagens agora.",
+      "notTaken": "O agente não conseguiu receber sua mensagem agora."
     }
   },
   "tasks": {

@@ -1,9 +1,11 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { randomUUID } from "expo-crypto";
 import { fetch as streamingFetch } from "expo/fetch";
 import { AppState } from "react-native";
+
+import type { ChatLocalRunSteerRefusal } from "@stll/api-contract/chat-run-target";
 
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
@@ -24,6 +26,7 @@ import {
   probeChatTurn,
   regenerateChatTurn,
   sendChatMessage,
+  steerChatTurn,
 } from "@/state/chat-stream";
 import type {
   AnswerStatus,
@@ -53,6 +56,16 @@ type StoredLink = {
   readonly type: "continues" | "replaces";
   readonly messageId: string;
 };
+
+/**
+ * What became of a message steered into the running turn: the agent took it
+ * (`steered`), it did not and says why (`refused`), or the turn ended before
+ * either (`unsettled`).
+ */
+type SteerOutcome =
+  | { readonly type: "steered" }
+  | { readonly type: "refused"; readonly reason: ChatLocalRunSteerRefusal }
+  | { readonly type: "unsettled" };
 
 /** What a paused turn waits for, when this phone can give it. */
 type AnswerablePendingInput = Exclude<PendingInput, { type: "elsewhere" }>;
@@ -317,9 +330,75 @@ export const useChatTurn = ({
     regenerate,
     send,
     sendError,
+    ...useTurnSteer({ send, signedOut, thread, turn }),
     stop,
   };
 };
+
+/**
+ * Hands a draft to the turn answering now, which goes on with it at the
+ * agent's next step, unless no turn of this phone runs or the draft holds
+ * files (only text is steered). `onRefused` hands the draft back when the
+ * agent did not take it, with `steerRefusal` saying why. A turn that ends
+ * before it said takes the draft as the next message instead (`send`).
+ */
+function useTurnSteer({
+  send,
+  signedOut,
+  thread,
+  turn,
+}: {
+  send: (draft: ChatDraft, onRefused: () => void) => boolean;
+  signedOut: (error: ApiError) => boolean;
+  thread: { source: AccessTokenSource; threadId: string };
+  turn: ReturnType<typeof useLiveTurn>;
+}) {
+  const [steerRefusal, onRefusal] = useState<ChatLocalRunSteerRefusal>();
+  const steer = (draft: ChatDraft, onRefused: () => void): boolean => {
+    const { turnId } = turn;
+    if (turnId === undefined || draft.files.length > 0) {
+      return false;
+    }
+    onRefusal(undefined);
+    const inputId = randomUUID();
+    const settled = turn.awaitSteer(inputId);
+    void (async () => {
+      const asked = await steerChatTurn({
+        ...thread,
+        fetch,
+        inputId,
+        text: draft.text,
+        turnId,
+      });
+      // A failed request may still have reached the computer: the turn's
+      // stream or its end settles the steer, never a guess.
+      if (Result.isError(asked)) {
+        signedOut(asked.error);
+      } else if (asked.value.type === "refused") {
+        turn.settleSteer(inputId, asked.value);
+      }
+      const outcome = await settled;
+      switch (outcome.type) {
+        case "steered":
+          return;
+        case "refused":
+          onRefusal(outcome.reason);
+          onRefused();
+          return;
+        case "unsettled":
+          if (!send(draft, onRefused)) {
+            onRefused();
+          }
+          return;
+        default:
+          outcome satisfies never;
+          return panic("Unhandled steer outcome");
+      }
+    })();
+    return true;
+  };
+  return { steer, steerRefusal };
+}
 
 /**
  * The stream side of a turn: settling a stream that ended, rejoining one
@@ -479,6 +558,14 @@ function useLiveTurn(activeTurnId: string | null) {
   // is let go as soon as the answer ends, while the thread is still reloading.
   const shownFor = useRef<Connection | null>(null);
   const answer = useRef<StreamedAnswer>(EMPTY_ANSWER);
+  /** Steers waiting to hear from the running turn, by input id. */
+  const steers = useRef(new Map<string, (outcome: SteerOutcome) => void>());
+
+  const settleSteer = (inputId: string, outcome: SteerOutcome) => {
+    const settle = steers.current.get(inputId);
+    steers.current.delete(inputId);
+    settle?.(outcome);
+  };
 
   const showAnswer = (next: StreamedAnswer) => {
     answer.current = next;
@@ -492,8 +579,24 @@ function useLiveTurn(activeTurnId: string | null) {
     live,
     turnId,
     applyEvent: (event: ChatEvent) => {
+      if (event.type === "CUSTOM") {
+        const { inputId, status } = event.value;
+        settleSteer(
+          inputId,
+          status === "steered"
+            ? { type: "steered" }
+            : { type: "refused", reason: "not_taken" },
+        );
+        return;
+      }
       showAnswer(applyChatEvent(answer.current, event));
     },
+    /** What the running turn makes of steer `inputId`, once it says. */
+    awaitSteer: async (inputId: string): Promise<SteerOutcome> =>
+      await new Promise<SteerOutcome>((resolve) => {
+        steers.current.set(inputId, resolve);
+      }),
+    settleSteer,
     /**
      * A new turn, replacing any still connected: one answering `question`,
      * or one linked to a stored message, which it continues or replaces.
@@ -549,6 +652,10 @@ function useLiveTurn(activeTurnId: string | null) {
     close: (status?: AnswerStatus) => {
       if (status !== undefined) {
         showAnswer({ ...answer.current, status });
+      }
+      // The turn is over: a steer it never answered was not taken.
+      for (const inputId of [...steers.current.keys()]) {
+        settleSteer(inputId, { type: "unsettled" });
       }
       connection.current = null;
       setBusy(false);

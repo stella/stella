@@ -246,7 +246,8 @@
         "loadFailed": "Nepavyko įkelti.",
         "showMore": "Rodyti daugiau"
       },
-      "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis."
+      "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis.",
+      "steered": "Išsiųsta agentui dirbant"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}",
@@ -285,6 +286,14 @@
       "sendErrorQuotaExhausted": "DI teikėjo kvota išnaudota. Pabandykite dar kartą po minutės arba susisiekite su darbo srities administratoriumi.",
       "sendErrorStreamIncomplete": "DI atsakymas nutrūko nepasibaigęs. Bandykite dar kartą.",
       "sendErrorTurnTooLarge": "Šis atsakymas tapo per didelis, kad būtų pateiktas visas. Norėdami tęsti, išsiųskite naują žinutę."
+    },
+    "steerPrompt": "Siųsti agentui jam dirbant",
+    "steerRefused": {
+      "turnNotRunning": "Agentas šiuo metu nedirba.",
+      "noRun": "Agentas dar nepradėjo.",
+      "cannotSteer": "Šis agentas darbo metu nepriima žinučių.",
+      "runFull": "Agentas šiuo metu negali priimti daugiau žinučių.",
+      "notTaken": "Agentas šiuo metu negalėjo priimti jūsų žinutės."
     }
   },
   "tasks": {

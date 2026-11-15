@@ -246,7 +246,8 @@
         "loadFailed": "Neizdevās ielādēt.",
         "showMore": "Rādīt vairāk"
       },
-      "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām."
+      "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām.",
+      "steered": "Nosūtīts aģenta darba laikā"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, zero {# pārbaudītu avotu} one {# pārbaudīts avots} other {# pārbaudīti avoti}}",
@@ -285,6 +286,14 @@
       "sendErrorQuotaExhausted": "AI pakalpojumu sniedzēja kvota ir izsmelta. Mēģiniet vēlreiz pēc minūtes vai sazinieties ar darba telpas administratoru.",
       "sendErrorStreamIncomplete": "AI atbilde tika pārtraukta, pirms tā bija pabeigta. Mēģiniet vēlreiz.",
       "sendErrorTurnTooLarge": "Šī atbilde kļuva pārāk liela, lai to piegādātu pilnībā. Lai turpinātu, nosūtiet jaunu ziņu."
+    },
+    "steerPrompt": "Sūtīt aģentam tā darba laikā",
+    "steerRefused": {
+      "turnNotRunning": "Aģents pašlaik nestrādā.",
+      "noRun": "Aģents vēl nav sācis.",
+      "cannotSteer": "Šis aģents darba laikā nepieņem ziņas.",
+      "runFull": "Aģents pašlaik nevar pieņemt vairāk ziņu.",
+      "notTaken": "Aģents pašlaik nevarēja pieņemt jūsu ziņu."
     }
   },
   "tasks": {

@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { CHAT_RUN_TARGET_KIND } from "@stll/api-contract/chat-run-target";
+import { isChatSteerOffered } from "@stll/api-contract/chat-send-intent";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Text } from "@stll/ui/text";
 
@@ -53,6 +55,7 @@ const EMPTY_PAGE: ChatMessagesPage = {
   usedAnonymization: false,
   pendingInput: null,
   retry: null,
+  runTargetKind: CHAT_RUN_TARGET_KIND.cloud,
 };
 
 /**
@@ -197,6 +200,7 @@ const ThreadMessages = ({
   const [cursor, setCursor] = useState(firstPage.olderCursor);
   const [older, setOlder] = useState<PagingState>("idle");
   const [anonymized, setAnonymized] = useState(firstPage.usedAnonymization);
+  const [runTargetKind, setRunTargetKind] = useState(firstPage.runTargetKind);
   const [pending, setPending] = useState(firstPage.pendingInput);
   const [retry, setRetry] = useState(firstPage.retry);
   const [inputNotice, setInputNotice] = useState<InputNotice>();
@@ -214,6 +218,7 @@ const ThreadMessages = ({
       if (Result.isOk(latest)) {
         setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
         setAnonymized(latest.value.usedAnonymization);
+        setRunTargetKind(latest.value.runTargetKind);
         setPending(latest.value.pendingInput);
         setRetry(latest.value.retry);
         setInputNotice(undefined);
@@ -353,9 +358,11 @@ const ThreadMessages = ({
             busy={turn.busy}
             canStop={turn.canStop}
             onSend={turn.send}
+            onSteer={undefined}
             onStop={turn.stop}
             sendError={turn.sendError}
             shareId={shareId}
+            steerRefusal={undefined}
           />
         </View>
       </View>
@@ -442,9 +449,19 @@ const ThreadMessages = ({
           busy={turn.busy}
           canStop={turn.canStop}
           onSend={turn.send}
+          onSteer={
+            isChatSteerOffered(
+              turn.busy
+                ? { type: "working", runTarget: runTargetKind }
+                : { type: "idle" },
+            )
+              ? turn.steer
+              : undefined
+          }
           onStop={turn.stop}
           sendError={turn.sendError}
           shareId={undefined}
+          steerRefusal={turn.steerRefusal}
         />
       </View>
     </View>
