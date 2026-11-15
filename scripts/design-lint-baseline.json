@@ -831,7 +831,6 @@
     "apps/web/src/components/inspector/pdf-signing-stamp.logic.ts": 1,
     "apps/web/src/components/templates/registry-autofill.ts": 1,
     "apps/web/src/components/workspaces/table/select-row-content.tsx": 1,
-    "apps/web/src/components/workspaces/tasks/task-badges.tsx": 1,
     "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 1,
     "apps/web/src/features/knowledge/views/templates/template-preview-view.tsx": 1,
     "apps/web/src/features/time-timers/timer.logic.ts": 1,
@@ -840,7 +839,6 @@
     "apps/web/src/lib/errors/api.ts": 1,
     "apps/web/src/lib/errors/localization.ts": 1,
     "apps/web/src/lib/search.logic.ts": 1,
-    "apps/web/src/lib/value-types.ts": 1,
     "apps/web/src/routes/_protected.time_.report/-components/report-labels.ts": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/expense-row.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/status-styles.ts": 1,
@@ -1380,8 +1378,6 @@
     "scripts/suppression-waivers.ts": 1
   },
   "eslint/max-params": {
-    ".oxlint-plugins/no-ambient-nondeterminism.ts": 6,
-    ".oxlint-plugins/require-cn-for-classname-composition.ts": 2,
     "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts": 1,
@@ -1393,8 +1389,7 @@
     "apps/web/src/routes/knowledge/-components/template-studio.tsx": 1,
     "packages/cli/src/auth/login.ts": 1,
     "packages/scripts/src/i18n-lint.ts": 2,
-    "packages/template-conditions/src/index.ts": 1,
-    "scripts/typecheck-baseline.ts": 1
+    "packages/template-conditions/src/index.ts": 1
   },
   "react/no-children-prop": {
     "apps/web/src/components/chat/chat-rich-message-part.test.ts": 1
