@@ -1296,7 +1296,9 @@ describe("previous release of squash-merged release branches", () => {
         () => {
           throw new Error("no output expected");
         },
-        (message) => errors.push(message),
+        (message) => {
+          errors.push(message);
+        },
         fixtureGit,
       ),
     ).toBe(1);
@@ -1309,7 +1311,9 @@ describe("previous release of squash-merged release branches", () => {
     expect(
       runPreviousReleaseCli(
         ["--previous-release", "--base", m5, "--repo-dir", root],
-        (message) => output.push(message),
+        (message) => {
+          output.push(message);
+        },
         (message) => {
           throw new Error(message);
         },
@@ -1327,7 +1331,9 @@ describe("previous release of squash-merged release branches", () => {
         runPreviousReleaseCli(
           args,
           () => {},
-          (message) => errors.push(message),
+          (message) => {
+            errors.push(message);
+          },
           fixtureGit,
         ),
         args.join(" "),

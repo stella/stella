@@ -935,9 +935,13 @@ const PREVIOUS_RELEASE_USAGE =
  */
 export const runPreviousReleaseCli = (
   args: readonly string[],
-  writeOutput = (message: string) => process.stdout.write(`${message}\n`),
-  writeError = (message: string) => process.stderr.write(`${message}\n`),
-  commandFor = commandRunner,
+  writeOutput: (message: string) => void = (message) => {
+    process.stdout.write(`${message}\n`);
+  },
+  writeError: (message: string) => void = (message) => {
+    process.stderr.write(`${message}\n`);
+  },
+  commandFor: (cwd: string) => CommandRunner = commandRunner,
 ): number => {
   try {
     const rest = args.filter((arg) => arg !== "--previous-release");
