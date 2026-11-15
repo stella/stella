@@ -563,6 +563,9 @@ export const createChatRuntime = ({
    *  a new one, before its request is posted. */
   let requestAnswered = Promise.withResolvers<undefined>();
   requestAnswered.resolve(undefined);
+  /** Counts the page's loadings, so a steer stays with the one it was asked
+   *  in. */
+  let loadingGeneration = 0;
   /** Steers waiting to hear from the running turn, by input id. */
   const pendingSteers = new Map<string, (outcome: ChatSteerOutcome) => void>();
   const settleSteer = (inputId: string, outcome: ChatSteerOutcome) => {
@@ -1170,6 +1173,7 @@ export const createChatRuntime = ({
     },
     onLoadingChange: (isLoading) => {
       if (isLoading) {
+        loadingGeneration += 1;
         requestAnswered = Promise.withResolvers<undefined>();
       } else {
         requestAnswered.resolve(undefined);
@@ -1554,10 +1558,12 @@ export const createChatRuntime = ({
     inputId: string;
     text: string;
   }): Promise<ChatSteerOutcome> => {
-    const steeredTurn = turnId;
+    // The loading the steer was asked in: a later one is another request,
+    // which the steer must not reach.
+    const loading = loadingGeneration;
     const running = () =>
-      turnId === steeredTurn && snapshot.isLoading && !isStoppedTurn();
-    if (!running() || steeredTurn === null) {
+      loadingGeneration === loading && snapshot.isLoading && !isStoppedTurn();
+    if (!running()) {
       return STEER_UNSETTLED;
     }
     // A cloud turn takes nothing mid-turn.
@@ -1570,10 +1576,12 @@ export const createChatRuntime = ({
     // The turn's stream settles the steer, possibly before this request
     // answers, so the caller hears it as soon as the stream says.
     const send = async () => {
-      // A request still on its way has no turn the server runs yet: a turn
-      // resumed after its wait still reads as waiting until then.
+      // A request still on its way has no turn the server runs yet: a new
+      // turn has no id until then, and a turn resumed after its wait still
+      // reads as waiting.
       await requestAnswered.promise;
-      if (!running()) {
+      const steeredTurn = turnId;
+      if (!running() || steeredTurn === null) {
         settleSteer(inputId, STEER_UNSETTLED);
         return;
       }
