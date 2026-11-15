@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { Result } from "better-result";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
@@ -39,6 +40,7 @@ const { installSessionExpiredNotice } =
 const { resetSessionExpiredNoticeForTests } =
   await import("@/lib/errors/session-expired");
 const { createAppQueryClient } = await import("@/lib/react-query");
+const { APIError } = await import("@/lib/errors/api");
 
 const SAVE_LABEL = "Save";
 
@@ -173,6 +175,49 @@ test("a session read that comes back empty leaves the notice available", async (
   expect(view.getAllByText(englishMessages.auth.sessionExpired)).toHaveLength(
     1,
   );
+  stopNotice();
+});
+
+const readWithEndedSession = async (
+  queryClient: ReturnType<typeof createAppQueryClient>,
+) => {
+  await act(async () => {
+    const read = await Result.tryPromise(
+      async () =>
+        await queryClient.fetchQuery({
+          queryKey: ["ended-session-read"],
+          queryFn: async () =>
+            await Promise.reject(
+              new APIError({
+                code: "permission_denied",
+                message: "Sign in to continue.",
+                status: 401,
+              }),
+            ),
+        }),
+    );
+    expect(Result.isError(read)).toBe(true);
+  });
+};
+
+test("a failed read of an expired session shows the notice", async () => {
+  const { queryClient, stopNotice, view } = renderForm({ signedIn: true });
+
+  await readWithEndedSession(queryClient);
+  await readWithEndedSession(queryClient);
+
+  expect(view.getAllByText(englishMessages.auth.sessionExpired)).toHaveLength(
+    1,
+  );
+  stopNotice();
+});
+
+test("a visitor's refused read shows no session notice", async () => {
+  const { queryClient, stopNotice, view } = renderForm({ signedIn: false });
+
+  await readWithEndedSession(queryClient);
+
+  expect(view.queryByText(englishMessages.auth.sessionExpired)).toBeNull();
   stopNotice();
 });
 
