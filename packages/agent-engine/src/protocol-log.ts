@@ -45,6 +45,7 @@ import {
   SIDECAR_PROBE_FAILURES,
   SIDECAR_REJECTIONS,
   SIDECAR_RESTORE_OUTCOMES,
+  SIDECAR_RUN_SESSION,
   type SidecarHostMessage,
   type SidecarMessage,
   type SidecarProbeOutcome,
@@ -517,6 +518,7 @@ const CLAUDE_LINE_FIELDS: Readonly<Record<ClaudeLineType, MessageShape>> = {
       usage: CLAUDE_USAGE,
     }),
     error: CLAUDE_ASSISTANT_ERRORS,
+    uuid: IDENTIFIER,
   }),
   // `content` is a list of blocks or, written by Stella, one string.
   user: shape({ message: object({ content: list(CLAUDE_CONTENT_BLOCK) }) }),
@@ -765,6 +767,12 @@ const CODEX_PARAMS: Readonly<Record<CodexMethod, Fields>> = {
     threadId: IDENTIFIER,
     excludeTurns: BOOLEAN,
   },
+  "thread/fork": {
+    ...CODEX_THREAD_PARAMS,
+    threadId: IDENTIFIER,
+    lastTurnId: IDENTIFIER,
+    excludeTurns: BOOLEAN,
+  },
   "thread/unarchive": { threadId: IDENTIFIER },
   "thread/backgroundTerminals/list": {
     threadId: IDENTIFIER,
@@ -946,7 +954,11 @@ const SIDECAR_HOST_FIELDS: Readonly<
   "run.start": {
     runId: IDENTIFIER,
     threadId: IDENTIFIER,
-    harnessSessionId: IDENTIFIER,
+    session: object({
+      type: vocabulary(Object.values(SIDECAR_RUN_SESSION)),
+      sessionId: IDENTIFIER,
+      boundary: IDENTIFIER,
+    }),
     ...SIDECAR_LAUNCH,
     model: OPAQUE,
     reasoningEffort: vocabulary(DESKTOP_RUNNER_REASONING_EFFORTS),
@@ -1077,6 +1089,7 @@ const SIDECAR_FIELDS: Readonly<Record<SidecarMessage["type"], Fields>> = {
     seq: NUMBER,
     outcome: vocabulary(DESKTOP_RUNNER_RUN_OUTCOMES),
     harnessSessionId: IDENTIFIER,
+    harnessBoundary: IDENTIFIER,
   },
   "folder.restored": {
     requestId: IDENTIFIER,
