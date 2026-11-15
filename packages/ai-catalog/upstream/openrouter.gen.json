@@ -1213,12 +1213,6 @@
       }
     },
     {
-      "id": "z-ai/glm-5.2:batch",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
       "id": "z-ai/glm-5.3",
       "reasoning": {
         "default_effort": "max"

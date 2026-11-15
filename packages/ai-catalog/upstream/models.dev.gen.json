@@ -3367,8 +3367,7 @@
         "modalities": {
           "input": [
             "text",
-            "image",
-            "pdf"
+            "image"
           ]
         },
         "reasoning": true,
@@ -3420,8 +3419,7 @@
         "modalities": {
           "input": [
             "text",
-            "image",
-            "pdf"
+            "image"
           ]
         },
         "reasoning": true,
@@ -8043,7 +8041,7 @@
           "output_audio": 21
         },
         "limit": {
-          "output": 32768
+          "output": 16384
         },
         "modalities": {
           "input": [
@@ -8369,6 +8367,27 @@
         "release_date": "2026-07-21",
         "temperature": true,
         "tool_call": true
+      },
+      "gemini-omni-flash-preview": {
+        "cost": {
+          "input": 1.5,
+          "output": 17.5
+        },
+        "limit": {
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [],
+        "release_date": "2026-06-30",
+        "temperature": true,
+        "tool_call": false
       },
       "gemini-pro-latest": {
         "cost": {
@@ -8766,7 +8785,7 @@
           "output": 0.1
         },
         "limit": {
-          "output": 262144
+          "output": 131072
         },
         "modalities": {
           "input": [
