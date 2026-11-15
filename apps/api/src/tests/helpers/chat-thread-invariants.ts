@@ -183,6 +183,7 @@ const rowOutcome = (turn: {
   switch (turn.status) {
     case "accepted":
     case "running":
+    case "handed-over":
       return null;
     case "awaiting-user":
     case "completed":

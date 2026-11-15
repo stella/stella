@@ -30,6 +30,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
+import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { findTurnOutcomeMismatches } from "@/api/tests/helpers/chat-thread-invariants";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -79,15 +81,15 @@ const TEXT_PART = {
   content: "Reading the repository.",
   type: "text",
 } satisfies ChatPart;
-/** A call the computer was still running when the turn was released. */
+/** A call still open when the turn was released. */
 const OPEN_CALL = {
-  arguments: JSON.stringify({ command: "ls" }),
-  id: "call-shell",
-  input: { command: "ls" },
-  name: "shell",
+  arguments: JSON.stringify({ name: "NDA", source: "@title NDA" }),
+  id: "call-draft",
+  input: { name: "NDA", source: "@title NDA" },
+  name: "create-document",
   state: "input-complete",
   type: "tool-call",
-  metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+  metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
 } satisfies ChatPart;
 
 const acceptOnThread = async ({
@@ -192,13 +194,14 @@ const seedHandedOverTurn = async ({
 
 const LAPSED = sql<Date>`now() - interval '1 second'`;
 
-/** One reaper visit to `threadId`, as the scheduled task makes it. */
-const reapThread = async (threadId: SafeId<"chatThread">) =>
-  await withChatRunPings(
-    async (pings) =>
-      await testDb.transaction(
-        async (tx) => await reapOwnerlessChatTurnOnTx({ pings, threadId, tx }),
-      ),
+/** One run of the scheduled reaper over every lapsed turn. */
+const runReaper = async () =>
+  await createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx)(
+    asTestRaw<SchedulerTaskContext>({
+      db: testDb,
+      logger: { info: () => undefined },
+      signal: new AbortController().signal,
+    }),
   );
 
 const readTurn = async (turnId: SafeId<"chatTurn">) =>
@@ -318,9 +321,7 @@ describe("a handed-over chat turn", () => {
     const lapsed = await seedHandedOverTurn({ adoptBy: LAPSED });
     const due = await seedHandedOverTurn();
 
-    for (const { threadId } of [lapsed, due]) {
-      await reapThread(threadId);
-    }
+    await runReaper();
 
     const ended = await readTurn(lapsed.turnId);
     expect(ended.status).toBe("interrupted");
