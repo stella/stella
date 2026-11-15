@@ -11,6 +11,8 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+
 import { CHAT_TURNS_ORG_RUN_ID_UIDX } from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -19,7 +21,6 @@ import {
   attachTerminalTurnOutcome,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
-  getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_TURN_STATUS_OF_OUTCOME,
@@ -1157,7 +1158,7 @@ export const claimChatTurnForExecutionOnTx = async ({
     const awaitingTurn = awaiting.at(0);
     const ownsContinuation =
       awaitingTurn !== undefined &&
-      getAwaitingUserInteractions(
+      memberWaitsOf(
         chatMessageFromPersisted({
           content: awaitingTurn.content,
           id: incomingMessageId,

@@ -95,7 +95,7 @@ const textTurn = (text: string): HarnessEvent[] => [
   ...(text === ""
     ? []
     : [{ type: "text.completed", messageId: "msg_1", text } as const]),
-  { type: "turn.completed", usage: null },
+  { type: "turn.completed", usage: null, boundary: null },
 ];
 
 const asStored = async (
@@ -166,7 +166,8 @@ const localRunFor = ({
   const runId = Bun.randomUUIDv7();
   const control: LocalRunContext["control"] = asTestRaw({
     pickDesktop: async () => await Promise.resolve(Result.ok(picked)),
-    readChatRunSession: async () => await Promise.resolve(Result.ok(null)),
+    readChatRunSession: async () =>
+      await Promise.resolve(Result.ok({ type: "fresh" })),
     startRun: async ({ instructions }: { instructions: string }) => {
       onStart(instructions);
       return await Promise.resolve(Result.ok({ type: "assigned", runId }));

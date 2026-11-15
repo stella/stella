@@ -62,10 +62,12 @@ export default defineConfig({
     // for on its own, by members who run coding agents with stella desktop.
     optional_permissions: ["downloads", "nativeMessaging", "webNavigation"],
     // `alarms` wakes the worker to reconnect to stella desktop.
+    // `offscreen` keeps a shown PDF's bytes as a blob address for its save.
     permissions: [
       "activeTab",
       "alarms",
       "declarativeNetRequest",
+      "offscreen",
       "scripting",
       "storage",
     ],

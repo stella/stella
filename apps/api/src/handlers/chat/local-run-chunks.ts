@@ -1918,6 +1918,7 @@ async function* startLocalRun({
     chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
     desktopId: destination.desktopId,
     harness: destination.harness,
+    capabilities: destination.capabilities,
     linkedFolderId: destination.linkedFolderId,
   });
   if (session.isErr()) {
@@ -1925,7 +1926,6 @@ async function* startLocalRun({
     yield* storeUnavailable(session.error, rewrite);
     return;
   }
-  const harnessSessionId = session.value;
   const start = async (messages: readonly ModelMessage[]) =>
     await control.startRun({
       owner,
@@ -1935,7 +1935,7 @@ async function* startLocalRun({
       model: destination.model,
       reasoningEffort: destination.reasoningEffort,
       approvals: destination.approvals,
-      harnessSessionId,
+      session: session.value,
       instructions: input.instructions,
       // Copied to plain objects: the wire schema reads them as records.
       messages: messages.map((message) => ({ ...message })),
@@ -1951,10 +1951,10 @@ async function* startLocalRun({
   if (
     started.isOk() &&
     started.value.type === "too_large" &&
-    harnessSessionId !== null &&
+    session.value.type !== "fresh" &&
     latest !== undefined
   ) {
-    // The resumed session already holds the history.
+    // The resumed or forked session already holds the history.
     started = await start([latest]);
   }
   if (started.isErr()) {

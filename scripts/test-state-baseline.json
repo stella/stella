@@ -349,16 +349,6 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/flows/review-gate-task-state.postgres.test.ts": {
-    "count": 4,
-    "owner": "database",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
-  "apps/api/src/lib/flows/start-flow-run.admission.test.ts": {
-    "count": 2,
-    "owner": "guards",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/folio-collab-rooms.test.ts": {
     "count": 2,
     "owner": "guards",
@@ -434,11 +424,6 @@
     "owner": "guards",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/runtime-worker-path.test.ts": {
-    "count": 8,
-    "owner": "guards",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/search/index-entity.test.ts": {
     "count": 4,
     "owner": "guards",
@@ -448,11 +433,6 @@
     "count": 3,
     "owner": "guards",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/api/src/lib/tanstack-ai-provider-wire.test.ts": {
-    "count": 5,
-    "owner": "ai",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
   "apps/api/src/lib/templates/create-template.test.ts": {
     "count": 2,
@@ -467,11 +447,6 @@
   "apps/api/src/lib/usage/member-capacity.db.test.ts": {
     "count": 5,
     "owner": "pricing",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
-  "apps/api/src/lib/workflow-start-claim.test.ts": {
-    "count": 2,
-    "owner": "workflow",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
   "apps/api/src/lib/workflow/decisions/decision-model.test.ts": {
@@ -589,11 +564,6 @@
     "owner": "ai",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/components/chat/chat-thread-messages-playbook.dom.test.tsx": {
-    "count": 3,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/web/src/components/chat/chat-thread-messages.test.tsx": {
     "count": 3,
     "owner": "ai",
@@ -615,11 +585,6 @@
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
   "apps/web/src/lib/search.test.ts": {
-    "count": 1,
-    "owner": "web",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/src/lib/workspaces/mutations/views.logic.test.ts": {
     "count": 1,
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."

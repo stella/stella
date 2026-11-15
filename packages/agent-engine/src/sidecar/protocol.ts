@@ -17,6 +17,7 @@ import {
   DESKTOP_RUNNER_RUN_OUTCOMES,
   desktopRunnerAttachmentSchema,
   desktopRunnerQuestionAnswersSchema,
+  harnessBoundarySchema,
   MAX_RUN_ATTACHMENTS,
 } from "@stll/api-contract/desktop-runner";
 
@@ -66,7 +67,20 @@ import {
  * `protocol.fixtures.json` holds valid and rejected examples of every message;
  * the desktop's serde types round-trip the same file.
  */
-export const SIDECAR_PROTOCOL = 6;
+export const SIDECAR_PROTOCOL = 7;
+
+/** How a run's turn continues the chat's native session (`run.start`). */
+export const SIDECAR_RUN_SESSION = {
+  fresh: "fresh",
+  resume: "resume",
+  fork: "fork",
+} as const;
+
+const harnessSessionIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(256),
+);
 
 /** Most background tasks one count reports; a larger count is capped. */
 export const SIDECAR_MAX_BACKGROUND_TASKS = 1000;
@@ -375,10 +389,22 @@ export const sidecarHostMessageSchema = v.variant("type", [
       v.array(absolutePathSchema),
       v.maxLength(MAX_RUN_TOOL_DIRECTORIES),
     ),
-    /** The native session to resume; `null` starts fresh. */
-    harnessSessionId: v.nullable(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-    ),
+    /**
+     * The native session the run's turn continues: none, the session whole,
+     * or a new session holding what it held through `boundary`.
+     */
+    session: v.variant("type", [
+      v.object({ type: v.literal(SIDECAR_RUN_SESSION.fresh) }),
+      v.object({
+        type: v.literal(SIDECAR_RUN_SESSION.resume),
+        sessionId: harnessSessionIdSchema,
+      }),
+      v.object({
+        type: v.literal(SIDECAR_RUN_SESSION.fork),
+        sessionId: harnessSessionIdSchema,
+        boundary: harnessBoundarySchema,
+      }),
+    ]),
     policy: v.object({
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: v.picklist(DESKTOP_RUNNER_FS_POLICIES),
@@ -596,9 +622,9 @@ export const sidecarMessageSchema = v.variant("type", [
     runId: runIdSchema,
     seq: seqSchema,
     outcome: v.picklist(DESKTOP_RUNNER_RUN_OUTCOMES),
-    harnessSessionId: v.nullable(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-    ),
+    harnessSessionId: v.nullable(harnessSessionIdSchema),
+    /** Where a completed turn ended in that session; `null` otherwise. */
+    harnessBoundary: v.nullable(harnessBoundarySchema),
   }),
   /** The answer to `folder.restore`; it names no file. */
   v.object({

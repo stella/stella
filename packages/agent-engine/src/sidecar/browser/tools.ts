@@ -9,6 +9,7 @@ import {
   BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_DESKTOP_KEYS,
   BROWSER_FIND_TYPE,
+  BROWSER_SHOWN_DOCUMENT_TYPE,
   type BrowserControlCommand,
   type BrowserControlElement,
   type BrowserControlElementCommand,
@@ -16,6 +17,7 @@ import {
   type BrowserControlFound,
   type BrowserControlResult,
   type BrowserControlSnapshot,
+  browserDocumentAddress,
   type BrowserObservedTab,
 } from "@stll/api-contract/browser-control";
 import {
@@ -27,6 +29,7 @@ import {
 import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import { browserBridgeError } from "./bridge";
+import type { TakenDownloads } from "./download-inbox";
 import {
   BROWSER_DOWNLOADS_FOLDER,
   type BrowserDownloadOutcome,
@@ -107,7 +110,25 @@ const INPUT_SCHEMAS = {
   }),
 } as const satisfies Record<ChatLocalRunBrowserAction, v.GenericSchema>;
 
-const DOWNLOADS_NOTE = `A PDF the page downloads is saved into your working folder under ${BROWSER_DOWNLOADS_FOLDER}/; this result or a later one lists it under downloads with its path (relative to your working folder), size and source address, so you can read and cite it with your own file tools. Other files are not saved, and a refused download says why.`;
+const DOWNLOADS_NOTE = `A PDF the page downloads is saved into your working folder under ${BROWSER_DOWNLOADS_FOLDER}/; this result lists it under downloads with its path (relative to your working folder), size and source address, so you can read and cite it with your own file tools. One still saving is counted under savingDownloads and listed by a later result. Other files are not saved, and a refused download says why.`;
+
+const PDF_NOTE = `A PDF the tab shows (document: "pdf") cannot be read as a page and has no text here: it is saved once into ${BROWSER_DOWNLOADS_FOLDER}/ and file gives its path, or why it was not saved, or that it is still saving (call snapshot again for the path). Read the saved file with your own file tools and cite the PDF by its address (url).`;
+
+/** What a result showing a PDF says in place of page text. */
+const PDF_SHOWN_MESSAGE =
+  "This tab shows a PDF document, which cannot be read as a page. Read the saved file with your own file tools and cite the PDF by its address (url).";
+
+const PDF_SAVING = {
+  status: "saving",
+  message:
+    "The PDF is still being saved. Call snapshot again for its path; do not open it again.",
+} as const;
+
+const PDF_NOT_SAVED = {
+  status: "not_saved",
+  message:
+    "No saved copy of this PDF is known in this run, so its text is not available. Tell the member, citing its address.",
+} as const;
 
 const REF_PROPERTY = {
   type: "string",
@@ -126,7 +147,7 @@ const UNTRUSTED_AND_CITING =
 /** `tools/list` as the agent sees it; each schema mirrors `INPUT_SCHEMAS`. */
 const TOOL_DEFINITIONS = {
   open: {
-    description: `Open a public HTTPS page in the member's Chrome, in the tab this chat uses (a new tab the first time), and read it. With newTab true it opens in a new tab of this chat instead, which the tools then work in; the chat keeps at most ${String(BROWSER_CONTROL_LIMITS.tabs)} tabs. Returns the page as snapshot does. A page that asks for a sign-in returns needs_member: ask the member to sign in in Chrome, then call snapshot. ${DOWNLOADS_NOTE}`,
+    description: `Open a public HTTPS page in the member's Chrome, in the tab this chat uses (a new tab the first time), and read it. With newTab true it opens in a new tab of this chat instead, which the tools then work in; the chat keeps at most ${String(BROWSER_CONTROL_LIMITS.tabs)} tabs. Returns the page as snapshot does. A page that asks for a sign-in returns needs_member: ask the member to sign in in Chrome, then call snapshot. ${PDF_NOTE} ${DOWNLOADS_NOTE}`,
     inputSchema: {
       type: "object",
       properties: {
@@ -145,7 +166,7 @@ const TOOL_DEFINITIONS = {
     },
   },
   snapshot: {
-    description: `Read the page in this chat's Chrome tab, one window of up to ${String(BROWSER_CONTROL_LIMITS.pageTextChars)} characters of its visible text at a time (hidden text is left out). The text has one block per line; a heading's line starts with one # per level, and a link's words are followed by [L<n>]. It also returns the address, the title, the page's facts for citing (canonical link, language, citation meta entries) and its elements: the links marked in the text (L<n>, with their full address) and other controls (E<n>; an element in an embedded frame reads L<frame>.<n>). Use an id as ref for click, type, press_key and select. An element keeps its id while the page stays loaded, but those tools take only ids the latest read listed. When the chat has more than one tab, tabs lists them; switch_tab moves to another. Without a cursor it reads from the section in view, which is where a link to a section lands, or else from the top. Pass window.next or window.previous as cursor to read on. In a long document, go to the part you need with find or a link to its section rather than paging from the top. Reading never asks the member and is not counted as a browser step. Lists under downloads any file the tab downloaded since the last result; a download still running shows up in a later one. ${UNTRUSTED_AND_CITING}`,
+    description: `Read the page in this chat's Chrome tab, one window of up to ${String(BROWSER_CONTROL_LIMITS.pageTextChars)} characters of its visible text at a time (hidden text is left out). The text has one block per line; a heading's line starts with one # per level, and a link's words are followed by [L<n>]. It also returns the address, the title, the page's facts for citing (canonical link, language, citation meta entries) and its elements: the links marked in the text (L<n>, with their full address) and other controls (E<n>; an element in an embedded frame reads L<frame>.<n>). Use an id as ref for click, type, press_key and select. An element keeps its id while the page stays loaded, but those tools take only ids the latest read listed. When the chat has more than one tab, tabs lists them; switch_tab moves to another. Without a cursor it reads from the section in view, which is where a link to a section lands, or else from the top. Pass window.next or window.previous as cursor to read on. In a long document, go to the part you need with find or a link to its section rather than paging from the top. Reading never asks the member and is not counted as a browser step. ${PDF_NOTE} Lists under downloads any file the tab downloaded since the last result; a download still running shows up in a later one. ${UNTRUSTED_AND_CITING}`,
     inputSchema: {
       type: "object",
       properties: {
@@ -180,7 +201,7 @@ const TOOL_DEFINITIONS = {
     },
   },
   click: {
-    description: `Click an element of the page this chat last read, by its ref, and read the page that follows. Depending on the member's approval setting, the click may wait for the member to allow it in chat; a refusal comes back as declined. A ref from an older read, or a page that changed since, is refused: call snapshot and use a ref from it. ${DOWNLOADS_NOTE}`,
+    description: `Click an element of the page this chat last read, by its ref, and read the page that follows. Depending on the member's approval setting, the click may wait for the member to allow it in chat; a refusal comes back as declined. A ref from an older read, or a page that changed since, is refused: call snapshot and use a ref from it. ${PDF_NOTE} ${DOWNLOADS_NOTE}`,
     inputSchema: {
       type: "object",
       properties: { ref: REF_PROPERTY },
@@ -371,22 +392,59 @@ const foundView = (found: BrowserControlFound) => ({
 });
 
 /**
+ * A tab showing a PDF, as the agent reads it: no text, and what became of
+ * the PDF's own save instead.
+ */
+const pdfView = (
+  snapshot: BrowserControlSnapshot,
+  { shown, shownSaving }: Pick<TakenDownloads, "shown" | "shownSaving">,
+  knownTabs: ReadonlySet<number> | null,
+) => {
+  const savingFile = shownSaving ? PDF_SAVING : PDF_NOT_SAVED;
+  return {
+    contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+    url: snapshot.url,
+    title: snapshot.title,
+    document: BROWSER_SHOWN_DOCUMENT_TYPE.pdf,
+    message: PDF_SHOWN_MESSAGE,
+    file: shown ?? savingFile,
+    ...tabsView(snapshot.tabs, knownTabs),
+  };
+};
+
+const NO_DOWNLOADS: TakenDownloads = {
+  downloads: [],
+  saving: 0,
+  shown: null,
+  shownSaving: false,
+};
+
+/**
  * A result as the agent reads it; a sign-in is its own status. Downloads
  * the chat's tab made since the last result ride along, whatever the step's
  * own outcome: a click may download a file and still fail to read the page.
- * `knownTabs` are the tabs the chat knew before the step (`tabsView`).
+ * A PDF the tab shows names its own save under `file`, not again under
+ * `downloads`. `knownTabs` are the tabs the chat knew before the step
+ * (`tabsView`).
  */
 const localBrowserToolResult = (
   result: BrowserControlResult,
-  downloads: readonly BrowserDownloadOutcome[],
+  taken: TakenDownloads,
   knownTabs: ReadonlySet<number> | null,
 ): LocalBrowserToolResult => {
-  const downloaded = downloads.length === 0 ? {} : { downloads };
+  const listed: readonly BrowserDownloadOutcome[] = taken.downloads.filter(
+    (download) => download !== taken.shown,
+  );
+  const downloaded = {
+    ...(listed.length === 0 ? {} : { downloads: listed }),
+    ...(taken.saving === 0 ? {} : { savingDownloads: taken.saving }),
+  };
   if (result.status === "success") {
-    return textResult(
-      { ...pageView(result.snapshot, knownTabs), ...downloaded },
-      false,
-    );
+    const view =
+      result.snapshot.document?.type === BROWSER_SHOWN_DOCUMENT_TYPE.pdf
+        ? pdfView(result.snapshot, taken, knownTabs)
+        : pageView(result.snapshot, knownTabs);
+    return textResult({ ...view, ...downloaded }, false);
   }
   if (result.status === "found") {
     return textResult({ ...foundView(result.found), ...downloaded }, false);
@@ -486,7 +544,7 @@ type BackRefusal = (typeof BACK_REFUSAL)[keyof typeof BACK_REFUSAL];
 const backRefused = (
   refused: BackRefusal,
   message: string,
-  downloads: readonly BrowserDownloadOutcome[],
+  { downloads, saving }: TakenDownloads,
 ): LocalBrowserToolResult =>
   textResult(
     {
@@ -496,6 +554,7 @@ const backRefused = (
       message,
       hint: "Call open with the address of the page you want.",
       ...(downloads.length === 0 ? {} : { downloads }),
+      ...(saving === 0 ? {} : { savingDownloads: saving }),
     },
     true,
   );
@@ -701,7 +760,7 @@ const built = (command: BrowserControlCommand): BuiltCommand => ({
 const invalidInput = (message: string): BuiltCommand => ({
   result: localBrowserToolResult(
     browserBridgeError(BROWSER_CONTROL_ERROR_CODE.invalidCommand, message),
-    [],
+    NO_DOWNLOADS,
     null,
   ),
   type: "refused",
@@ -713,7 +772,7 @@ const unknownRef = (): BuiltCommand => ({
       BROWSER_CONTROL_ERROR_CODE.elementNotFound,
       "No element has this ref in the page this chat last read.",
     ),
-    [],
+    NO_DOWNLOADS,
     null,
   ),
   type: "refused",
@@ -739,9 +798,10 @@ type LocalBrowserCallContext = {
   approve: ApproveAction;
   /**
    * The chat's downloads since its last result, saved into the run's
-   * folder or refused; each is handed out once.
+   * folder or refused; each is handed out once. Given the address of a
+   * document the result shows, also what became of its own save.
    */
-  downloads: () => Promise<readonly BrowserDownloadOutcome[]>;
+  downloads: (shownAddress: string | null) => Promise<TakenDownloads>;
   /** Aborts when the agent's call ends. */
   signal: AbortSignal;
 };
@@ -903,7 +963,7 @@ const COMMAND_BUILDERS = {
           result: backRefused(
             BACK_REFUSAL.noEarlierPage,
             "This chat read no earlier page in this tab, so there is nothing to go back to.",
-            [],
+            NO_DOWNLOADS,
           ),
           type: "refused",
         }
@@ -1003,13 +1063,22 @@ export const createLocalBrowserSession = () => {
           returned?.status === "success"
             ? "Going back reached a page this chat has not read in this tab. It was not read, and the tab is back on the page it was on: call snapshot to read that page again."
             : "Going back reached a page this chat has not read in this tab. It was not read, and the tab could not return to the page it was on.",
-          await downloads(),
+          await downloads(null),
         );
       }
       if (result.status === "success") {
         seen = seenAfter(seen, result.snapshot, wentBack);
       }
-      return localBrowserToolResult(result, await downloads(), knownTabs);
+      const shownAddress =
+        result.status === "success" &&
+        result.snapshot.document?.type === BROWSER_SHOWN_DOCUMENT_TYPE.pdf
+          ? browserDocumentAddress(result.snapshot.url)
+          : null;
+      return localBrowserToolResult(
+        result,
+        await downloads(shownAddress),
+        knownTabs,
+      );
     },
   };
 };
