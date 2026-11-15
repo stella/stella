@@ -31,6 +31,8 @@ import {
   readPendingChangesets,
   readPreviousRelease,
   readReleaseManifest,
+  type ReceiptCoverage,
+  type ReceiptCoverageReader,
   refreshMaintenanceReleaseFiles,
   resolveGitHubToken,
   withFileRollback,
@@ -1468,15 +1470,18 @@ const fakeGitHub = (responses: Record<string, unknown>) => {
   return Object.assign(read, { paths });
 };
 
+const NOT_COVERED = async (): Promise<ReceiptCoverage> => "not_covered";
+
 const cutRefusal = async (
   responses: Record<string, unknown>,
+  coverage: ReceiptCoverageReader = NOT_COVERED,
 ): Promise<string> => {
   const written: string[] = [];
   try {
     await assertReleaseCutReady(
       CUT_SHA,
       false,
-      { json: fakeGitHub(responses) },
+      { json: fakeGitHub(responses), coverage },
       (text) => {
         written.push(text);
       },
@@ -1733,13 +1738,92 @@ describe("release cut readiness", () => {
     expect(read.paths).toHaveLength(2);
   });
 
+  test("cuts without the statuses when a merge-group receipt covers the commit", async () => {
+    const asked: string[] = [];
+    const written: string[] = [];
+
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      {
+        json: fakeGitHub({
+          [STATUSES_PATH]: [],
+          [SCHEDULED_PR_DEPTH_PATH]: { workflow_runs: [] },
+        }),
+        coverage: async (sha) => {
+          asked.push(sha);
+          return "covered";
+        },
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+
+    expect(asked).toEqual([CUT_SHA]);
+    expect(written).toEqual([
+      `maintenance-release: a merge-group receipt and validated queue history stand in for main/heavy and main/pr-depth on ${CUT_SHA}\n`,
+    ]);
+  });
+
+  test("an uncovered receipt keeps both statuses required", async () => {
+    const responses = {
+      [STATUSES_PATH]: [],
+      [SCHEDULED_PR_DEPTH_PATH]: { workflow_runs: [] },
+    };
+    const expected = [
+      `main is not release-ready at ${CUT_SHA}:`,
+      "  main/heavy: missing (no status on the commit)",
+      `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+      "  main/pr-depth: missing (no status and no scheduled run on the commit)",
+      `    run it: gh workflow run main-pr-depth.yml --ref main -f sha=${CUT_SHA}`,
+      "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+    ].join("\n");
+
+    expect(await cutRefusal(responses, NOT_COVERED)).toBe(expected);
+    // A coverage check that cannot run answers nothing: the same refusal.
+    expect(
+      await cutRefusal(responses, async () => {
+        throw new Error("coverage check crashed");
+      }),
+    ).toBe(expected);
+  });
+
+  test("green statuses cut without asking for receipt coverage", async () => {
+    const asked: string[] = [];
+    const written: string[] = [];
+
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      {
+        json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN, HEAVY_GREEN] }),
+        coverage: async (sha) => {
+          asked.push(sha);
+          return "not_covered";
+        },
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+
+    expect(asked).toEqual([]);
+    expect(written).toEqual([
+      `maintenance-release: main/heavy and main/pr-depth are green on ${CUT_SHA}\n`,
+    ]);
+  });
+
   test("an explicit override prints the same refusal and lets the cut go on", async () => {
     const written: string[] = [];
 
     await assertReleaseCutReady(
       CUT_SHA,
       true,
-      { json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }) },
+      {
+        json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }),
+        coverage: NOT_COVERED,
+      },
       (text) => {
         written.push(text);
       },

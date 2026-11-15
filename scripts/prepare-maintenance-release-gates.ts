@@ -21,7 +21,10 @@ export type CutGateCheck =
       readonly kind: "npm-publish-lag";
     }
   | {
-      /** main/heavy and main/pr-depth green on the base commit. */
+      /**
+       * main/heavy and main/pr-depth green on the base commit, or a
+       * merge-group receipt covering them as release health accepts.
+       */
       readonly kind: "main-statuses";
     };
 

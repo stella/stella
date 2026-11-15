@@ -1298,13 +1298,53 @@ const resolveHeadSha = (rootDir: string): string => {
   return sha;
 };
 
+/** Whether a merge-group receipt stands in for main/heavy and main/pr-depth. */
+export type ReceiptCoverage = "covered" | "not_covered";
+
+/** Answers receipt coverage for a commit; a throw counts as not covered. */
+export type ReceiptCoverageReader = (sha: string) => Promise<ReceiptCoverage>;
+
+const RELEASE_REPOSITORY = "stella/stella";
+
+/**
+ * The rule release health applies before the final tag, asked of the script
+ * that owns it (check-release-receipt-coverage.sh, via
+ * check-release-main-health.sh). Only its exit 0 is coverage: no receipt,
+ * uncovered history and a crash all keep both statuses required.
+ */
+const readReceiptCoverage: ReceiptCoverageReader = async (sha) => {
+  const spawned = Result.try(() =>
+    Bun.spawn(
+      [
+        "bash",
+        "scripts/check-release-receipt-coverage.sh",
+        RELEASE_REPOSITORY,
+        sha,
+      ],
+      {
+        cwd: ROOT_DIR,
+        stderr: "inherit",
+        stdin: "ignore",
+        stdout: "ignore",
+      },
+    ),
+  );
+  if (Result.isError(spawned)) {
+    return "not_covered";
+  }
+  return (await spawned.value.exited) === 0 ? "covered" : "not_covered";
+};
+
 export type ReleaseCutReaders = {
   json?: GitHubJsonReader;
+  coverage?: ReceiptCoverageReader;
 };
 
 /**
- * Refuses the cut unless main/heavy and main/pr-depth are green on it. With
- * --allow-unproven-main the same verdict is printed and the cut goes on.
+ * Refuses the cut unless main/heavy and main/pr-depth are green on it, or a
+ * merge-group receipt on it covers them by the rule release health applies
+ * before the final tag. With --allow-unproven-main the same verdict is
+ * printed and the cut goes on.
  */
 export const assertReleaseCutReady = async (
   sha: string,
@@ -1319,6 +1359,14 @@ export const assertReleaseCutReady = async (
   if (refusal === null) {
     write(
       `maintenance-release: main/heavy and main/pr-depth are green on ${sha}\n`,
+    );
+    return;
+  }
+  const readCoverage = readers.coverage ?? readReceiptCoverage;
+  const coverage = await Result.tryPromise(async () => readCoverage(sha));
+  if (Result.isOk(coverage) && coverage.value === "covered") {
+    write(
+      `maintenance-release: a merge-group receipt and validated queue history stand in for main/heavy and main/pr-depth on ${sha}\n`,
     );
     return;
   }

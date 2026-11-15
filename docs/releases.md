@@ -158,7 +158,11 @@ by the RC run.
    `release/vX.Y.Z`, and opens `chore: release vX.Y.Z` into `main`. An earlier
    open release pull request blocks another cut. The command runs the existing
    pre-cut heavy, dependency-audit, npm-publish-lag, deploy-env-contract and
-   desktop-support-floor gates before writing.
+   desktop-support-floor gates before writing. The heavy gate passes when
+   `main/heavy` and `main/pr-depth` are green on the base commit, or when
+   `scripts/check-release-receipt-coverage.sh` reports that a merge-group
+   receipt on it covers them, the same rule release health applies before the
+   final tag; any other answer keeps both statuses required.
    The npm gate checks that same newest final tag, regardless of main's
    `VERSION`. When `VERSION` is ahead of every final tag, a release pull request
    merged before its final tag; the cut then takes the next patch after
