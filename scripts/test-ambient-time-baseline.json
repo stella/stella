@@ -425,7 +425,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/clauses/variants.postgres.test.ts": {
-    "count": 3,
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -499,18 +499,8 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/document-reviews/list-runs.integration.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/handlers/document-reviews/run-basis-reader.integration.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/document-reviews/run-persistence.integration.test.ts": {
-    "count": 10,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -774,11 +764,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/playbooks/from-run/create.integration.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/handlers/playbooks/from-run/create.postgres.test.ts": {
     "count": 5,
     "owner": "api",
@@ -826,11 +811,6 @@
   },
   "apps/api/src/handlers/soft-law/ingestion.db.test.ts": {
     "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/template-packs/installs/create.db.test.ts": {
-    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -891,11 +871,6 @@
   },
   "apps/api/src/handlers/work-obligations/queues/list.integration.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/work-obligations/transitions.integration.test.ts": {
-    "count": 4,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -1306,11 +1281,6 @@
   },
   "apps/api/src/lib/desktop-runner/gateway.db.test.ts": {
     "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/document-counter.integration.test.ts": {
-    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
