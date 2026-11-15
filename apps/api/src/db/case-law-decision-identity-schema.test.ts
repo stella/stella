@@ -18,7 +18,7 @@ test("every unique decision key distinguishes more than the source language and 
             return column.name;
           }
           return panic(
-            `Unique decision expression needs column-scope classification: ${index.name}`,
+            `Unique decision expression needs column-scope classification: ${index.name ?? "unnamed index"}`,
           );
         }),
       })),
