@@ -54,7 +54,7 @@ import { frameNumberOf, type OwnedTab, TOP_FRAME_NUMBER } from "./targets";
  */
 
 /** The page script's source, as every frame receives it. */
-export const PAGE_SCRIPT_SOURCE = pageScript.toString();
+const PAGE_SCRIPT_SOURCE = pageScript.toString();
 
 const NAVIGATION_TIMEOUT_MS = 15_000;
 const PAGE_SETTLE_MS = 250;

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { rmSync } from "node:fs";
+import * as v from "valibot";
 
 import { type CdpClient, type CdpMethod, createCdpClient } from "./cdp-client";
 import { type CdpPipeEnd, connectCdpPipe } from "./cdp-pipe";
@@ -19,7 +20,7 @@ import {
  */
 
 /** From this version on, Chrome honours the debugging pipe only on a profile of its own. */
-export const MIN_BROWSER_MAJOR = 136;
+const MIN_BROWSER_MAJOR = 136;
 
 const VERSION_TIMEOUT_MS = 20_000;
 const CLOSE_WAIT_MS = 5000;
@@ -45,9 +46,11 @@ export type StartFailure =
   | { type: "no-answer" };
 
 /** The major version in a product string such as `Chrome/146.0.7680.80`. */
+const MAJOR_VERSION = v.pipe(v.string(), v.digits(), v.toNumber());
+
 const productMajor = (product: string): number | null => {
-  const digits = /\/(\d{1,4})\./u.exec(product)?.[1];
-  return digits !== undefined ? Number.parseInt(digits, 10) : null;
+  const major = v.safeParse(MAJOR_VERSION, /\/(\d{1,4})\./u.exec(product)?.[1]);
+  return major.success ? major.output : null;
 };
 
 const exitedWithin = async (

@@ -144,6 +144,15 @@ export const browserEnvironment = (
     ),
   );
 
+/** A whole decimal process id, digits only. */
+const PROCESS_ID = v.pipe(
+  v.string(),
+  v.digits(),
+  v.toNumber(),
+  v.safeInteger(),
+  v.minValue(1),
+);
+
 const instanceSchema = v.object({
   holderPid: v.pipe(v.number(), v.integer(), v.minValue(1)),
   browserPid: v.pipe(v.number(), v.integer(), v.minValue(1)),
@@ -213,12 +222,9 @@ export const singletonLockPid = (profileDir: string): number | null => {
   }
   const separator = target.value.lastIndexOf("-");
   const host = target.value.slice(0, separator);
-  const pid = Number.parseInt(target.value.slice(separator + 1), 10);
-  return separator > 0 &&
-    host === hostname() &&
-    Number.isSafeInteger(pid) &&
-    pid > 0
-    ? pid
+  const pid = v.safeParse(PROCESS_ID, target.value.slice(separator + 1));
+  return separator > 0 && host === hostname() && pid.success
+    ? pid.output
     : null;
 };
 

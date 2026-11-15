@@ -36,7 +36,7 @@ export const browserEndpointFor = (holderEndpoint: string): string =>
   );
 
 /** The stella browser, when the development switch is on. */
-export type StellaBrowserOptions = {
+type StellaBrowserOptions = {
   /** Where its profiles live: `<app data>/browser`. */
   profileRoot: string;
   /** The environment the holder started with; the browser gets a minimal part. */

@@ -552,6 +552,11 @@ export const RESULT_CONVENTION_OPT_OUTS = [
       "Chrome extension library: tab-executor is the boundary that maps chrome.* rejections to protocol error codes. Enrol once chrome.* calls sit behind Result.tryPromise.",
     unit: "apps/extension/src/lib",
   },
+  {
+    reason:
+      "Shared page code of the browser hosts: the page script is serialised into the page and may reference nothing outside itself, so it cannot import better-result; it moved here from the extension library unchanged. Enrol the package's other modules with that library.",
+    unit: "packages/browser-page/src",
+  },
   { reason: "unreviewed", unit: "apps/landing/src" },
   { reason: "unreviewed", unit: "apps/landing/src/components" },
   { reason: "unreviewed", unit: "apps/landing/src/components/react" },

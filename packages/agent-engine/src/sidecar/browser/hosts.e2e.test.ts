@@ -147,13 +147,9 @@ const alive = (pid: number) => {
   return probed.exitCode === 0;
 };
 
-/** A measurement the run reports without failing on: a CI annotation there. */
+/** A measurement the run reports without failing on: an annotation in CI. */
 const report = (title: string, value: string) => {
-  const line =
-    process.env["GITHUB_ACTIONS"] === "true"
-      ? `::notice title=${title}::${value}`
-      : `${title}: ${value}`;
-  process.stdout.write(`${line}\n`);
+  process.stdout.write(`::notice title=${title}::${value}\n`);
 };
 
 const read = async (leg: HostLeg) => {
@@ -181,7 +177,7 @@ const read = async (leg: HostLeg) => {
     {
       stdin: "ignore",
       stdout: "ignore",
-      stderr: process.env["STELLA_E2E_DEBUG"] === "1" ? "inherit" : "ignore",
+      stderr: "ignore",
       env: {
         PATH: process.env["PATH"] ?? "",
         HOME: home,

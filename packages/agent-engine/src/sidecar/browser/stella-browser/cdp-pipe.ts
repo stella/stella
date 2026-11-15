@@ -7,7 +7,7 @@
  */
 
 /** A message longer than this ends the browser: no answer the holder asks for comes near it. */
-export const CDP_MAX_MESSAGE_BYTES = 16 * 1024 * 1024;
+const CDP_MAX_MESSAGE_BYTES = 16 * 1024 * 1024;
 
 const NUL = 0;
 

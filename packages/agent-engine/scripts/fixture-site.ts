@@ -20,10 +20,10 @@ import { FIXTURE_CANARIES, FIXTURE_CITATION } from "./fake-browser";
  * nothing resolves it outside the test.
  */
 
-export const FIXTURE_SITE_HOST = "library.example.com";
+const FIXTURE_SITE_HOST = "library.example.com";
 
 /** Phrases the scenario finds; each paragraph that holds one says so. */
-export const FIXTURE_FIND_QUERY = "notice period";
+const FIXTURE_FIND_QUERY = "notice period";
 
 /** The decision's paragraphs, and the ones that hold the canaries. */
 const PARAGRAPHS = 160;
