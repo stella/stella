@@ -7,6 +7,8 @@ import {
   AGENTS,
   chooseRunOn,
   composer,
+  expandTranscript,
+  expectTurnsFinished,
   messagesReceived,
   openNewChat,
   send,
@@ -21,6 +23,19 @@ import {
 // message after the member's decision.
 const STEER_TEXT = "Also check the annex";
 const STEERED_LABEL = "Sent while the agent was working";
+
+/**
+ * The steered message's own caption in the answer, once the finished turn's
+ * steps are open (the turn's live status can say the same while it works).
+ */
+const expectSteeredInAnswer = async (page: Page) => {
+  await expectTurnsFinished(page, 1);
+  await expandTranscript(page);
+  await expect(
+    transcript(page).locator("figcaption").filter({ hasText: STEERED_LABEL }),
+  ).toBeVisible();
+  await expect(transcript(page)).toContainText(STEER_TEXT);
+};
 
 /** The composer's queue action, offered while Enter steers the turn. */
 const queueButton = (page: Page) =>
@@ -58,8 +73,7 @@ for (const agent of ["codex", "claude-code"] as const) {
     });
     // The message sits in the answer as the member's own words, and the
     // turn was not stopped and started again: one answer holds both.
-    await expect(transcript(page).getByText(STEERED_LABEL)).toBeVisible();
-    await expect(transcript(page)).toContainText(STEER_TEXT);
+    await expectSteeredInAnswer(page);
     expect(
       messagesReceived(log).some((message) => message.includes(STEER_TEXT)),
     ).toBe(true);
@@ -93,8 +107,7 @@ for (const agent of ["codex", "claude-code"] as const) {
       "Left the draft and checked the annex.",
       { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
     );
-    await expect(transcript(page).getByText(STEERED_LABEL)).toBeVisible();
-    await expect(transcript(page)).toContainText(STEER_TEXT);
+    await expectSteeredInAnswer(page);
     await expect(
       transcript(page).getByRole("button", { name: "Allow once" }),
     ).toHaveCount(0);
