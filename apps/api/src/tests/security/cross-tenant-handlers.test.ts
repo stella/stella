@@ -3395,7 +3395,9 @@ const isolationCases: IsolationCase[] = [
     },
     expectPositive: (result) =>
       expect(result).toEqual({
-        response: {},
+        response: {
+          message: queuedSendOf(chatQueuedSecondB, "Second").message,
+        },
         ids: [chatQueuedThirdB, chatQueuedFirstB],
       }),
   },

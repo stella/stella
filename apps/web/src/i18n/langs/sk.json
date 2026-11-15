@@ -2093,6 +2093,23 @@
       "noResults": "Žiadne zhodné zručnosti",
       "tryOne": "Začni s jedným z týchto"
     },
+    "queue": {
+      "actions": "Akcie správy vo fronte",
+      "filesNotQueued": "Správa so súbormi nemôže čakať vo fronte. Odošlite ju, keď aktuálna odpoveď skončí.",
+      "heldByMember": "Front je pozastavený.",
+      "heldComputerAway": "Čaká sa na váš počítač: správy vo fronte sa odošlú, keď sa pripojí.",
+      "heldSendRefused": "Front je pozastavený: prvú správu sa nepodarilo odoslať. Upravte ju alebo ju odstráňte a potom pokračujte.",
+      "heldTurnFailed": "Front je pozastavený: posledná odpoveď zlyhala. Pokračovaním odošlete ďalšiu správu.",
+      "heldTurnInterrupted": "Front je pozastavený: posledná odpoveď bola prerušená. Pokračovaním odošlete ďalšiu správu.",
+      "heldUsageLimit": "Front je pozastavený: dosiahli ste limit využitia. Pokračujte, keď sa obnoví.",
+      "noLongerQueued": "Táto správa už vo fronte nie je.",
+      "notSent": "Nepodarilo sa odoslať",
+      "pause": "Pozastaviť front",
+      "replaceDescription": "Chat čaká na vašu odpoveď. Odoslaním tejto správy teraz zrušíte otázku alebo schválenie, na ktoré čaká.",
+      "replaceTitle": "Odoslať túto správu hneď?",
+      "resume": "Obnoviť front",
+      "waitForEdit": "Najprv odošlite alebo zrušte otvorenú úpravu; správa zostane v poli na písanie."
+    },
     "queuePrompt": "Odoslať, keď agent skončí",
     "queuedAttachmentCount": "{count, plural, one {# príloha} few {# prílohy} other {# príloh} many {# prílohy}}",
     "queuedNotice": "V poradí – odošle sa po dokončení aktuálnej odpovede",

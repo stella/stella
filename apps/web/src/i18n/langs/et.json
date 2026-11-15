@@ -2093,6 +2093,23 @@
       "noResults": "Sobivaid oskusi pole",
       "tryOne": "Alusta ühe nendest"
     },
+    "queue": {
+      "actions": "Järjekorras oleva sõnumi toimingud",
+      "filesNotQueued": "Failidega sõnum ei saa järjekorras oodata. Saatke see, kui praegune vastus on lõppenud.",
+      "heldByMember": "Järjekord on peatatud.",
+      "heldComputerAway": "Ootame teie arvutit: järjekorras olevad sõnumid saadetakse, kui see ühendub.",
+      "heldSendRefused": "Järjekord on peatatud: esimest sõnumit ei õnnestunud saata. Muutke või eemaldage see ja seejärel jätkake.",
+      "heldTurnFailed": "Järjekord on peatatud: viimane vastus ebaõnnestus. Järgmise sõnumi saatmiseks jätkake.",
+      "heldTurnInterrupted": "Järjekord on peatatud: viimane vastus katkes. Järgmise sõnumi saatmiseks jätkake.",
+      "heldUsageLimit": "Järjekord on peatatud: kasutuslimiit on täis. Jätkake, kui see lähtestub.",
+      "noLongerQueued": "Seda sõnumit pole enam järjekorras.",
+      "notSent": "Saatmine ebaõnnestus",
+      "pause": "Peata järjekord",
+      "replaceDescription": "See vestlus ootab teie vastust. Kui saadate selle sõnumi kohe, tühistatakse küsimus või kinnitus, mida see ootab.",
+      "replaceTitle": "Kas saata see sõnum kohe?",
+      "resume": "Jätka järjekorda",
+      "waitForEdit": "Saatke või tühistage esmalt avatud muudatus; teie sõnum jääb sisestusväljale."
+    },
     "queuePrompt": "Saada, kui agent on lõpetanud",
     "queuedAttachmentCount": "{count, plural, one {# manus} other {# manust}}",
     "queuedNotice": "Järjekorras: saadetakse, kui praegune vastus on valmis",

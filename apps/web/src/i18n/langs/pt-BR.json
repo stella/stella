@@ -2093,6 +2093,23 @@
       "noResults": "Sem habilidades correspondentes",
       "tryOne": "Experimente um destes para começar"
     },
+    "queue": {
+      "actions": "Ações da mensagem na fila",
+      "filesNotQueued": "Uma mensagem com arquivos não pode aguardar na fila. Envie-a quando a resposta atual terminar.",
+      "heldByMember": "Fila pausada.",
+      "heldComputerAway": "Aguardando seu computador: as mensagens na fila são enviadas assim que ele se conectar.",
+      "heldSendRefused": "Fila pausada: não foi possível enviar a primeira mensagem. Edite ou remova-a e depois retome.",
+      "heldTurnFailed": "Fila pausada: a última resposta falhou. Retome para enviar a próxima mensagem.",
+      "heldTurnInterrupted": "Fila pausada: a última resposta foi interrompida. Retome para enviar a próxima mensagem.",
+      "heldUsageLimit": "Fila pausada: você atingiu seu limite de uso. Retome quando ele for redefinido.",
+      "noLongerQueued": "Essa mensagem não está mais na fila.",
+      "notSent": "Não foi possível enviar",
+      "pause": "Pausar fila",
+      "replaceDescription": "Este chat está aguardando sua resposta. Enviar esta mensagem agora cancela a pergunta ou aprovação que ele aguarda.",
+      "replaceTitle": "Enviar esta mensagem agora?",
+      "resume": "Retomar fila",
+      "waitForEdit": "Primeiro envie ou cancele a edição aberta; sua mensagem fica na caixa de texto."
+    },
     "queuePrompt": "Enviar quando o agente terminar",
     "queuedAttachmentCount": "{count, plural, one {# anexo} many {# anexos} other {# anexos}}",
     "queuedNotice": "Na fila: será enviada quando a resposta atual terminar",

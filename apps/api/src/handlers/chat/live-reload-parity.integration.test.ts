@@ -1160,6 +1160,12 @@ const PAGE_STATE = notModelled(
   "It changes what the page sends next, not the conversation.",
 );
 
+/** The queue's own actions: the queue is the server's, sent by a sender the
+ *  harness does not run. */
+const QUEUE_ACTION = notModelled(
+  "The queue is the server's, sent by a sender the harness does not run; chat-queue.postgres.test.ts covers its store and gate.",
+);
+
 const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "allow-in-conversation": byCommands(
     "ResolveCards (allow-in-conversation), AnswerOnStaleTab",
@@ -1202,6 +1208,7 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "edit-answer": notModelled(
     "Edit and rerun lives in the session hook, which the harness does not render.",
   ),
+  "edit-queued-message": QUEUE_ACTION,
   "edit-message": notModelled(
     "Editing a sent message lives in the session hook, which the harness does not render; edit-user-message.postgres.test.ts covers the stored history and its reload.",
   ),
@@ -1212,6 +1219,7 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   ),
   "improve-prompt": PAGE_STATE,
   "load-older": READS_ONLY,
+  "move-queued-message": QUEUE_ACTION,
   "move-to-side": PAGE_STATE,
   "new-chat": byCommands("LeaveThread", LeaveThread.allows),
   "open-created-document": READS_ONLY,
@@ -1220,20 +1228,19 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
     "Opening the editor only stops a running turn, through the same stop the harness models as its own command.",
   ),
   "open-playbook": READS_ONLY,
-  queue: notModelled(
-    "The send queue lives in the session hook, which the harness does not render.",
-  ),
+  "pause-queue": QUEUE_ACTION,
+  queue: QUEUE_ACTION,
   "refresh-edited-answer": READS_ONLY,
-  "remove-queued-message": notModelled(
-    "The send queue lives in the session hook, which the harness does not render.",
-  ),
+  "remove-queued-message": QUEUE_ACTION,
   "rename-thread": notModelled("It changes the title only."),
+  "replace-with-queued-message": QUEUE_ACTION,
   "resend-without-anonymization": notModelled(
     "Offered only after the anonymization boundary refuses a turn, which the harness's raw boundary never does.",
   ),
   "resolve-draft": notModelled(
     "Saving a draft changes the stored document, not the conversation.",
   ),
+  "resume-queue": QUEUE_ACTION,
   retry: byCommands("ResendLatest", ResendLatest.allows),
   "run-client-tool": byCommands("ResolveCards", ResolveCards.allows),
   "select-matters": PAGE_STATE,
@@ -1255,9 +1262,7 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "submit-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
   ),
-  "send-queued-message-now": notModelled(
-    "The send queue lives in the session hook, which the harness does not render; the stop it issues is modelled as stop.",
-  ),
+  "send-queued-message-now": QUEUE_ACTION,
   stop: byCommands("StopRunningCall, StopMidStream", StopRunningCall.allows),
   "toggle-anonymization": PAGE_STATE,
   "toggle-web-search": PAGE_STATE,

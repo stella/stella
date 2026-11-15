@@ -1,7 +1,10 @@
 import { panic, Result } from "better-result";
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
-import { lockOwnQueueThreadOnTx } from "@/api/handlers/chat/queue/chat-queue-store";
+import {
+  lockOwnQueueThreadOnTx,
+  parseQueuedChatSend,
+} from "@/api/handlers/chat/queue/chat-queue-store";
 import {
   chatQueuedMessageParams,
   chatThreadNotFound,
@@ -21,9 +24,10 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   description:
-    "Remove a queued message. Idempotent: a message no longer queued " +
-    "answers as removed, except one that was sent (409 " +
-    "`queued_message_sent`).",
+    "Remove a queued message and answer it as it was queued (`message`), " +
+    "so it can be written again. Idempotent: a message no longer queued " +
+    "answers as removed with `message: null`, except one that was sent " +
+    "(409 `queued_message_sent`).",
   params: chatQueuedMessageParams,
 } satisfies HandlerConfig;
 
@@ -69,7 +73,7 @@ const cancelQueuedChatMessage = createSafeRootHandler(
     }
     switch (outcome.type) {
       case "removed":
-      case "not-found":
+      case "not-found": {
         announceChatQueueChange({
           organizationId: session.activeOrganizationId,
           userId: user.id,
@@ -77,7 +81,13 @@ const cancelQueuedChatMessage = createSafeRootHandler(
         // Removing the head, or the last message with its hold, may let
         // the queue go.
         ringChatQueue(threadId);
-        return Result.ok({});
+        return Result.ok({
+          message:
+            outcome.type === "removed"
+              ? parseQueuedChatSend(outcome.request).message
+              : null,
+        });
+      }
       case "sent":
         return Result.err(queuedMessageSent());
       default:

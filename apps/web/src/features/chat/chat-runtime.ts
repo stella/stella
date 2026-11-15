@@ -329,6 +329,38 @@ export const sendThreadChatMessageUntilAccepted = async (
   return await send(message, options);
 };
 
+/**
+ * The send a message would make, as the chat's queue keeps it: everything the
+ * page sends with it now (its mode, the open document, the run target), but
+ * no run, which the queue's sender gives it when it sends it.
+ */
+export type QueuedChatSendBody = Omit<
+  ChatSendRequestDraft,
+  "message" | "runId" | "threadId" | "truncateAfterMessageId" | "turnIntent"
+> & {
+  message: Omit<ChatSendRequestDraft["message"], "role"> & { role: "user" };
+};
+
+type ChatThreadQueuedSend = (
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+) => QueuedChatSendBody;
+
+const threadQueuedSendByRuntime = new WeakMap<
+  ChatRuntime,
+  ChatThreadQueuedSend
+>();
+
+export const queuedChatSendOf = (
+  chat: ChatRuntime,
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+): QueuedChatSendBody =>
+  (
+    threadQueuedSendByRuntime.get(chat) ??
+    panic("Missing thread queued send capability for chat runtime")
+  )(message, options);
+
 const getChatApiPath = () => apiUrl("/chat");
 
 /** Runs `callback` once, later; the returned function cancels it. */
@@ -376,7 +408,11 @@ type ActiveToolResultOperation = {
 const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
-const hasChatErrorCode = (error: unknown, code: string): boolean => {
+/** The run id a queued send is built under; the queue never sends it. */
+const QUEUED_SEND_RUN_ID = "queued";
+
+/** Whether `error`, or an error it was caused by, is the API's `code`. */
+export const hasChatErrorCode = (error: unknown, code: string): boolean => {
   const visited = new Set<Error>();
   let current = error;
 
@@ -1973,6 +2009,33 @@ export const createChatRuntime = ({
   } satisfies ChatRuntime;
 
   threadSendMessageByRuntime.set(runtime, sendThreadMessage);
+  threadQueuedSendByRuntime.set(runtime, (message, options) => {
+    const {
+      runId: _runId,
+      threadId: _threadId,
+      truncateAfterMessageId: _truncateAfterMessageId,
+      turnIntent: _turnIntent,
+      ...send
+    } = buildSendRequestBody({
+      context,
+      key,
+      messages: toPersistedChatMessages([
+        {
+          id: message.id,
+          role: "user",
+          parts:
+            typeof message.content === "string"
+              ? [{ type: "text", content: message.content }]
+              : [...message.content],
+          createdAt: new Date(),
+        },
+      ]),
+      purpose: "queue",
+      run: { runId: QUEUED_SEND_RUN_ID, threadId: key.threadId },
+      requestBody: normalizeChatContinuationRequestBody(options?.body),
+    });
+    return { ...send, message: { ...send.message, role: "user" } };
+  });
   threadSendUntilAcceptedByRuntime.set(runtime, sendThreadMessageUntilAccepted);
 
   return runtime;
@@ -2009,16 +2072,25 @@ type ChatSendRequestDraft = Omit<
   message: ChatSendRequest["message"];
 };
 
+/**
+ * What a send body is built for: `send` it now, which makes its message the
+ * turn the page runs (a continuation of that turn keeps its mode), or
+ * `queue` it, which runs nothing yet.
+ */
+type ChatSendBodyPurpose = "queue" | "send";
+
 export const buildSendRequestBody = ({
   context,
   key,
   messages,
+  purpose = "send",
   run,
   requestBody,
 }: {
   context: ChatThreadOptionsContext | undefined;
   key: ChatThreadKey;
   messages: PersistedChatMessage[];
+  purpose?: ChatSendBodyPurpose | undefined;
   run: Pick<
     RunAgentInputContext,
     "parentRunId" | "resume" | "runId" | "threadId"
@@ -2052,6 +2124,7 @@ export const buildSendRequestBody = ({
       context,
       key,
       messages,
+      purpose,
       requestBody,
     }),
     runId: run.runId,
@@ -2094,6 +2167,7 @@ export const buildSendRequestBody = ({
       context,
       key,
       messages,
+      purpose,
       requestBody,
     });
   if (editApplyMode !== undefined) {
@@ -2298,6 +2372,7 @@ type ResolveChatRequestSendModeProps = {
   context: ChatThreadOptionsContext | undefined;
   key: ChatThreadKey;
   messages: readonly PersistedChatMessage[];
+  purpose: ChatSendBodyPurpose;
   requestBody: ChatContinuationRequestBody | undefined;
 };
 
@@ -2305,6 +2380,7 @@ const resolveChatRequestSendMode = ({
   context,
   key,
   messages,
+  purpose,
   requestBody,
 }: ResolveChatRequestSendModeProps): ChatSendMode => {
   const explicitSendMode = getRequestSendMode(requestBody);
@@ -2319,7 +2395,7 @@ const resolveChatRequestSendMode = ({
     context?.getSendMode?.() ??
     CHAT_SEND_MODE.rawOverride;
 
-  if (userMessageId) {
+  if (userMessageId && purpose === "send") {
     activeTurnSendModes.set(threadKey, { sendMode, userMessageId });
   }
 
@@ -2359,6 +2435,7 @@ const resolveChatRequestDocxEditPreferences = ({
   context,
   key,
   messages,
+  purpose,
   requestBody,
 }: ResolveChatRequestSendModeProps): Omit<
   ActiveTurnDocxEditPreferences,
@@ -2392,7 +2469,7 @@ const resolveChatRequestDocxEditPreferences = ({
     };
   }
 
-  if (userMessageId !== null) {
+  if (userMessageId !== null && purpose === "send") {
     activeTurnDocxEditPreferences.set(threadKey, {
       ...preferences,
       userMessageId,

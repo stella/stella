@@ -2093,6 +2093,23 @@
       "noResults": "Sin habilidades coincidentes",
       "tryOne": "Prueba uno de estos para empezar"
     },
+    "queue": {
+      "actions": "Acciones del mensaje en cola",
+      "filesNotQueued": "Un mensaje con archivos no puede esperar en la cola. Envíalo cuando termine la respuesta actual.",
+      "heldByMember": "Cola en pausa.",
+      "heldComputerAway": "Esperando a tu ordenador: los mensajes en cola se envían en cuanto se conecte.",
+      "heldSendRefused": "Cola en pausa: no se pudo enviar el primer mensaje. Edítalo o quítalo y luego reanuda.",
+      "heldTurnFailed": "Cola en pausa: la última respuesta falló. Reanúdala para enviar el siguiente mensaje.",
+      "heldTurnInterrupted": "Cola en pausa: la última respuesta se interrumpió. Reanúdala para enviar el siguiente mensaje.",
+      "heldUsageLimit": "Cola en pausa: has alcanzado tu límite de uso. Reanúdala cuando se restablezca.",
+      "noLongerQueued": "Ese mensaje ya no está en la cola.",
+      "notSent": "No se pudo enviar",
+      "pause": "Pausar la cola",
+      "replaceDescription": "Este chat espera tu respuesta. Si envías este mensaje ahora, se cancela la pregunta o aprobación que espera.",
+      "replaceTitle": "¿Enviar este mensaje ahora?",
+      "resume": "Reanudar la cola",
+      "waitForEdit": "Primero envía o cancela la edición abierta; tu mensaje se queda en el cuadro de redacción."
+    },
     "queuePrompt": "Enviar cuando el agente termine",
     "queuedAttachmentCount": "{count, plural, one {# adjunto} many {# adjuntos} other {# adjuntos}}",
     "queuedNotice": "En cola: se enviará cuando termine la respuesta actual",
