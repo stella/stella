@@ -147,7 +147,7 @@ export const sendNextQueuedChatMessage = async ({
   // or a matter they lost, shows them nothing to send.
   const gate = await caller.safeDb(async (tx) => {
     if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
-      return { type: "empty" } as const;
+      return { type: "thread-unavailable" } as const;
     }
     return await readChatQueueGateOnTx({ threadId, tx, whileWaiting });
   });
@@ -160,6 +160,16 @@ export const sendNextQueuedChatMessage = async ({
       }),
     );
     return { type: "retry-later" };
+  }
+  if (gate.value.type === "thread-unavailable") {
+    // The member can no longer see the thread (a matter they lost): hold
+    // it rather than proving them again on every sweep.
+    await holdQueueOfUnavailableMember({
+      threadId,
+      queuedMessageId: due.queuedMessageId,
+      refusalCode: CHAT_QUEUE_SEND_REFUSAL.memberUnavailable,
+    });
+    return { type: "held", reason: CHAT_QUEUE_HOLD_REASON.sendRefused };
   }
   if (gate.value.type !== "due") {
     return { type: "not-due" };
