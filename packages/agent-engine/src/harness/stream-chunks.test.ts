@@ -248,6 +248,7 @@ describe("local harness chunks", () => {
           reasoningOutputTokens: 5,
           context: null,
         },
+        boundary: null,
       },
     ];
 
@@ -305,7 +306,7 @@ describe("local harness chunks", () => {
         },
       },
       { type: "text.completed", messageId: "m-2", text: "Left it in place." },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ];
     const chunks = await localChunks(events);
     const pauseIndex = chunks.findIndex(
@@ -421,7 +422,7 @@ describe("local harness chunks", () => {
           ],
         },
       },
-      { type: "turn.completed", usage: null },
+      { type: "turn.completed", usage: null, boundary: null },
     ]);
     expect(
       chunks.some(
@@ -638,6 +639,7 @@ describe("local harness chunks", () => {
               reasoningOutputTokens: 0,
               context,
             },
+            boundary: null,
           },
         ])
       ).findLast((chunk) => chunk.type === EventType.RUN_FINISHED);
@@ -776,7 +778,11 @@ describe("chunk stream invariants", () => {
       .map((model) => ({ type: "model.rerouted" as const, model })),
   );
   const terminal: fc.Arbitrary<HarnessEvent | null> = fc.oneof(
-    fc.constant<HarnessEvent>({ type: "turn.completed", usage: null }),
+    fc.constant<HarnessEvent>({
+      type: "turn.completed",
+      usage: null,
+      boundary: null,
+    }),
     fc.constant<HarnessEvent>({ type: "turn.interrupted" }),
     fc.constant<HarnessEvent>({
       type: "turn.failed",
