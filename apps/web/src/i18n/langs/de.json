@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Optionen zur Überarbeitung",
     "editWithAI": "Mit KI bearbeiten",
     "keyRequired": {
+      "accountFeaturesUnavailable": "KI-Funktionen sind für dieses Konto nicht verfügbar.",
       "accountRestricted": "Die Einstellungen des KI-Anbieters sind für dieses Konto nicht verfügbar.",
       "configUnreadable": "Die Konfiguration des KI-Anbieters kann nicht gelesen werden. Bitten Sie eine Organisationsadministration, ihn erneut zu verbinden.",
       "cta": "KI-Einstellungen öffnen",

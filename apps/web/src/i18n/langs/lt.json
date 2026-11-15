@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Perrašymo parinktys",
     "editWithAI": "Redaguoti su DI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "DI funkcijos šiai paskyrai nepasiekiamos.",
       "accountRestricted": "DI teikėjo nustatymai šiai paskyrai nepasiekiami.",
       "configUnreadable": "DI teikėjo konfigūracijos nuskaityti nepavyko. Paprašykite organizacijos administratoriaus prijungti jį iš naujo.",
       "cta": "Atidaryti DI nustatymus",

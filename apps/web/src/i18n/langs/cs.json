@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upravit pomocí AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Funkce AI nejsou pro tento účet dostupné.",
       "accountRestricted": "Nastavení poskytovatele AI není pro tento účet dostupné.",
       "configUnreadable": "Konfiguraci poskytovatele AI nelze načíst. Požádejte správce organizace o nové připojení.",
       "cta": "Otevřít nastavení AI",
