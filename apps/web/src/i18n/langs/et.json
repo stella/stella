@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Tehisintellekti funktsioonid pole selle konto jaoks saadaval.",
       "accountRestricted": "Tehisintellekti pakkuja seaded pole selle konto jaoks saadaval.",
       "configUnreadable": "Tehisintellekti pakkuja seadistust ei saa lugeda. Paluge organisatsiooni administraatoril see uuesti ühendada.",
       "cta": "Ava AI seaded",
@@ -159,6 +160,7 @@
     "handoffAccount": "Kas jätkata kasutajana <account>{email}</account> organisatsioonis <organization>{organizationName}</organization>?",
     "handoffTitle": "Jätka stellasse",
     "headline": "Selgus igas asjas.",
+    "invalidEmailOrPassword": "Vale e-posti aadress või parool.",
     "invitation": {
       "declined": "Kutse tagasi lükatud",
       "declinedDescription": "Olete selle kutse tagasi lükanud. Võite selle lehe sulgeda.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Kasuta selle asemel varukoodi"
     },
     "useDifferentEmail": "Kasuta teist e-posti aadressi",
+    "useEmailCode": "Kasuta hoopis e-posti koodi",
     "usePassword": "Kasuta hoopis parooli",
     "weSentCodeTo": "Saatsime koodi aadressile <email>{emailAddress}</email>"
   },
@@ -2093,6 +2096,7 @@
       "noResults": "Sobivaid oskusi pole",
       "tryOne": "Alusta ühe nendest"
     },
+    "queuePrompt": "Saada, kui agent on lõpetanud",
     "queuedAttachmentCount": "{count, plural, one {# manus} other {# manust}}",
     "queuedNotice": "Järjekorras: saadetakse, kui praegune vastus on valmis",
     "reasoning": "Arutlus",
@@ -2199,6 +2203,15 @@
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
     "sources": "Allikad:",
+    "steerRefused": {
+      "cannotSteer": "See agent ei võta töö ajal sõnumeid vastu.",
+      "noRun": "Agent ei tööta praegu sinu arvutis.",
+      "notPlain": "Töö ajal saad agendile saata ainult failideta tekstisõnumi, mida ei saadeta anonüümitud režiimis.",
+      "notTaken": "Agent ei saanud sinu sõnumit praegu vastu võtta.",
+      "runFull": "Agent ei saa praegu rohkem sõnumeid vastu võtta.",
+      "title": "Sinu sõnum ootab järjekorras, kuni agent lõpetab",
+      "turnNotRunning": "Agent praegu ei tööta."
+    },
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
@@ -6031,6 +6044,7 @@
         "title": "Programmeerimisagendid liikmete arvutites",
         "updated": "Programmeerimisagentide õigused on uuendatud"
       },
+      "logoInvalid": "Valige kuni 5 MB suurune PNG-, JPEG- või WebP-pilt.",
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",
       "membersDescription": "Halda, kellel on juurdepääs sellele organisatsioonile, ja ootel kutseid",
@@ -6079,6 +6093,7 @@
         "title": "Ajavöönd",
         "updated": "Ajavöönd on uuendatud"
       },
+      "uploadLogo": "Laadi logo üles",
       "usage": "Kasutus",
       "usageDescription": "Selle organisatsiooni kasutuslimiidid ja õiguse olek",
       "usageEmptyDescription": "Seadista kasutusõigus, et lubada selles organisatsioonis mõõdetud AI-funktsioonid.",

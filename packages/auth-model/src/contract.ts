@@ -10,6 +10,9 @@ export const AUTH_SOCIAL_PROVIDER_IDS = [
 ] as const;
 export type AuthSocialProviderId = (typeof AUTH_SOCIAL_PROVIDER_IDS)[number];
 export const AUTH_ACCESS_RESET_ERROR_CODE = "confirm_access_reset";
+/** No sign-in code is sent: the account named signs in with a password. */
+export const AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE =
+  "sign_in_code_unavailable";
 
 export const ORGANIZATION_ROLE_NAMES = [
   "owner",
@@ -88,6 +91,17 @@ export const ORGANIZATION_SLUG_RULES = {
   minLength: 1,
   maxLength: 128,
   pattern: /^[a-z0-9\x2d]+$/u,
+} as const;
+
+/**
+ * A logo is stored as a small raster data URL the client downscales before
+ * saving, so it renders on every page without a file route. SVG is excluded
+ * because it can carry script.
+ */
+export const ORGANIZATION_LOGO_RULES = {
+  edge: 96,
+  maxLength: 60_000,
+  pattern: /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/u,
 } as const;
 
 /** Random bytes behind an opaque organization slug. */

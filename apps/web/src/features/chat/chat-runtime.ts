@@ -34,6 +34,7 @@ import {
   type ChatLocalRunSteerEvent,
   chatLocalRunSteerEventSchema,
   type ChatLocalRunSteerOutcome,
+  type ChatLocalRunSteerRefusal,
 } from "@stll/api-contract/chat-run-target";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -210,9 +211,32 @@ const CHAT_RUNTIME_BRAND: unique symbol = Symbol("StellaChatRuntime");
 /**
  * What became of a message handed to a turn running on the member's
  * computer: the turn took it (`steered`), the turn runs on and did not
- * (`refused`), or nothing settled it before the turn ended (`unsettled`).
+ * (`refused`, with why), or nothing settled it before the turn ended
+ * (`unsettled`).
  */
-export type ChatSteerOutcome = ChatLocalRunSteerEvent["status"] | "unsettled";
+export type ChatSteerOutcome =
+  | { type: "steered" }
+  | { type: "refused"; reason: ChatLocalRunSteerRefusal }
+  | { type: "unsettled" };
+
+const STEER_UNSETTLED = {
+  type: "unsettled",
+} as const satisfies ChatSteerOutcome;
+
+/** What the turn's stream says became of a steer. */
+const steerOutcomeOfEvent = ({
+  status,
+}: ChatLocalRunSteerEvent): ChatSteerOutcome => {
+  switch (status) {
+    case "steered":
+      return { type: "steered" };
+    case "refused":
+      return { type: "refused", reason: "not_taken" };
+    default:
+      status satisfies never;
+      return panic("Unhandled steer status");
+  }
+};
 
 export type ChatActivitySession = {
   readonly reportedUnknownActivityTypes: Set<string>;
@@ -533,6 +557,15 @@ export const createChatRuntime = ({
   let desktopHold: AbortController | null = null;
   const isStoppedTurn = (): boolean =>
     stoppedTurnId !== null && stoppedTurnId === turnId;
+  /** Settles once the request of the page's current loading has its
+   *  answer's headers, or the loading ends: the server holds the turn by
+   *  then, as one that runs again after a resumed wait. A new loading opens
+   *  a new one, before its request is posted. */
+  let requestAnswered = Promise.withResolvers<undefined>();
+  requestAnswered.resolve(undefined);
+  /** Counts the page's loadings, so a steer stays with the one it was asked
+   *  in. */
+  let loadingGeneration = 0;
   /** Steers waiting to hear from the running turn, by input id. */
   const pendingSteers = new Map<string, (outcome: ChatSteerOutcome) => void>();
   const settleSteer = (inputId: string, outcome: ChatSteerOutcome) => {
@@ -543,7 +576,7 @@ export const createChatRuntime = ({
   /** The request ended: no steer still waiting can hear from its turn. */
   const settleOpenSteers = () => {
     for (const inputId of [...pendingSteers.keys()]) {
-      settleSteer(inputId, "unsettled");
+      settleSteer(inputId, STEER_UNSETTLED);
     }
   };
   /** The server refused the latest request for a turn it had already
@@ -707,6 +740,7 @@ export const createChatRuntime = ({
         try: async () => await chatFetchClient(input, init),
         catch: toError,
       });
+      requestAnswered.resolve(undefined);
       if (Result.isError(received)) {
         acceptance?.resolve({ status: "failed", error: received.error });
         return readQueryResult(received);
@@ -1108,7 +1142,7 @@ export const createChatRuntime = ({
         // A malformed or unknown one settles nothing; the turn's end does.
         const steer = v.safeParse(chatLocalRunSteerEventSchema, value);
         if (steer.success) {
-          settleSteer(steer.output.inputId, steer.output.status);
+          settleSteer(steer.output.inputId, steerOutcomeOfEvent(steer.output));
         }
         return;
       }
@@ -1138,7 +1172,11 @@ export const createChatRuntime = ({
       });
     },
     onLoadingChange: (isLoading) => {
-      if (!isLoading) {
+      if (isLoading) {
+        loadingGeneration += 1;
+        requestAnswered = Promise.withResolvers<undefined>();
+      } else {
+        requestAnswered.resolve(undefined);
         settleOpenSteers();
       }
       setSnapshot({
@@ -1520,15 +1558,17 @@ export const createChatRuntime = ({
     inputId: string;
     text: string;
   }): Promise<ChatSteerOutcome> => {
-    const steeredTurn = turnId;
+    // The loading the steer was asked in: a later one is another request,
+    // which the steer must not reach.
+    const loading = loadingGeneration;
     const running = () =>
-      turnId === steeredTurn && snapshot.isLoading && !isStoppedTurn();
-    if (!running() || steeredTurn === null) {
-      return "unsettled";
+      loadingGeneration === loading && snapshot.isLoading && !isStoppedTurn();
+    if (!running()) {
+      return STEER_UNSETTLED;
     }
-    // A cloud turn takes nothing mid-turn: it is stopped and started again.
+    // A cloud turn takes nothing mid-turn.
     if (context?.getRunTarget?.().kind !== "local") {
-      return "refused";
+      return { type: "refused", reason: "harness_cannot_steer" };
     }
     const settled = new Promise<ChatSteerOutcome>((resolve) => {
       pendingSteers.set(inputId, resolve);
@@ -1536,6 +1576,15 @@ export const createChatRuntime = ({
     // The turn's stream settles the steer, possibly before this request
     // answers, so the caller hears it as soon as the stream says.
     const send = async () => {
+      // A request still on its way has no turn the server runs yet: a new
+      // turn has no id until then, and a turn resumed after its wait still
+      // reads as waiting.
+      await requestAnswered.promise;
+      const steeredTurn = turnId;
+      if (!running() || steeredTurn === null) {
+        settleSteer(inputId, STEER_UNSETTLED);
+        return;
+      }
       const sent = await Result.tryPromise(
         async (): Promise<Result<ChatLocalRunSteerOutcome, APIError>> =>
           await invokeAppOnlyWrite("chat.turns.steer", async () => {
@@ -1558,11 +1607,17 @@ export const createChatRuntime = ({
         captureRuntimeError(sent.value.error);
         return;
       }
-      if (sent.value.value === "queued") {
+      const outcome = sent.value.value;
+      if (outcome.type === "queued") {
         return;
       }
-      // Only a turn that still runs is one the caller can stop and restart.
-      settleSteer(inputId, running() ? "refused" : "unsettled");
+      // Only a turn that still runs is one that refused it.
+      settleSteer(
+        inputId,
+        running()
+          ? { type: "refused", reason: outcome.reason }
+          : STEER_UNSETTLED,
+      );
     };
     detached(send(), "chat-runtime.steer-local-turn");
     return await settled;

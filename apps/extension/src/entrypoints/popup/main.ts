@@ -9,6 +9,7 @@ import {
 import { readBrowserController } from "../../lib/controller";
 import { readDesktopLinkState } from "../../lib/desktop-link";
 import { downloadNoticeMessage } from "../../lib/download-guard";
+import { openOrFocusStella } from "../../lib/open-stella";
 import { parseControllableUrl } from "../../lib/origin-policy";
 import { type PopupTab, runPopupAction } from "../../lib/popup-actions";
 import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
@@ -26,7 +27,10 @@ import {
 } from "../../lib/popup-view";
 import { BROWSER_DESKTOP_LINK_STORAGE_KEY } from "../../lib/storage-keys";
 import { containedTabIds, readContainedTabs } from "../../lib/tab-containment";
-import { trustedStellaOriginFromUrl } from "../../lib/trusted-origin";
+import {
+  STELLA_START_ORIGIN,
+  trustedStellaOriginFromUrl,
+} from "../../lib/trusted-origin";
 
 const element = <T extends Element>(selector: string, type: new () => T): T => {
   const found = document.querySelector(selector);
@@ -207,6 +211,26 @@ const adoptActiveTab = async (activeTab: PopupTab | null): Promise<void> => {
   render(handedTabView(controller.origin), containedTabs);
 };
 
+const openStella = async (): Promise<void> => {
+  const result = await openOrFocusStella(
+    {
+      activateTab: async (tabId) =>
+        await chrome.tabs.update(tabId, { active: true }),
+      createTab: async (url) => await chrome.tabs.create({ url }),
+      focusWindow: async (windowId) =>
+        await chrome.windows.update(windowId, { focused: true }),
+      queryTabs: async () => await chrome.tabs.query({}),
+    },
+    {
+      originFromUrl: trustedStellaOriginFromUrl,
+      startOrigin: STELLA_START_ORIGIN,
+    },
+  );
+  if (result.status === "no-origin") {
+    renderFailure("unsupportedTab");
+  }
+};
+
 const execute = (
   button: HTMLButtonElement,
   action: PopupAction["action"] | PopupSecondaryAction["action"],
@@ -218,6 +242,7 @@ const execute = (
     readActiveTab,
     pair: pairActiveTab,
     adopt: adoptActiveTab,
+    openStella,
     disconnect: async () => {
       await sendPopupRequest({ type: "disconnect" });
     },
@@ -238,7 +263,8 @@ primaryButton.addEventListener("click", () => {
     action === "adopt" ||
     action === "connect" ||
     action === "grant" ||
-    action === "grant-and-connect"
+    action === "grant-and-connect" ||
+    action === "open-stella"
   ) {
     execute(primaryButton, action);
   }

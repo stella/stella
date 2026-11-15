@@ -3,11 +3,13 @@ import { panic } from "better-result";
 
 import { CHAT_SEND_MODE, type ChatSendMode } from "@stll/anonymize-chat";
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
+import type { ChatLocalRunSteerRefusal } from "@stll/api-contract/chat-run-target";
 
 import type {
   ChatSendMessageOptions,
   ChatUserMessageInput,
 } from "@/features/chat/chat-runtime";
+import type { TranslationKey } from "@/i18n/types";
 import type {
   ChatEditApplyMode,
   DocxEditRepresentation,
@@ -170,8 +172,8 @@ export const canSendWithoutQueueing = (state: SendQueueState): boolean =>
  *   was queued to be sent anonymized; the turn is stopped and the message
  *   goes once the stop settles, through the send path that keeps its mode.
  *
- * A steer that is not taken falls back to `stop_and_send` (see
- * `steerFallback`).
+ * After "Send now", a steer that is not taken falls back to `stop_and_send`
+ * (see `steerFallback`).
  */
 export type SendNowRoute =
   | { type: "send" }
@@ -180,32 +182,69 @@ export type SendNowRoute =
 
 export const sendNowRoute = (
   state: Pick<SendQueueState, "isGenerating">,
-  entry: Pick<QueuedChatEntry, "fileCount" | "options" | "text">,
+  entry: SteerableEntry,
 ): SendNowRoute => {
   if (!state.isGenerating) {
     return { type: "send" };
   }
+  const text = steerableText(entry);
+  return text === null ? { type: "stop_and_send" } : { type: "steer", text };
+};
+
+type SteerableEntry = Pick<QueuedChatEntry, "fileCount" | "options" | "text">;
+
+/**
+ * The text a turn can be steered with: a message of text alone, queued to be
+ * sent raw, since a steer hands the text to the computer's harness as is.
+ * `null` for any other message, which only goes as a message of its own.
+ */
+export const steerableText = (entry: SteerableEntry): string | null => {
   const text = entry.text.trim();
   const anonymized =
     entry.options?.body?.sendMode === CHAT_SEND_MODE.anonymized;
-  return entry.fileCount === 0 && text !== "" && !anonymized
-    ? { type: "steer", text }
-    : { type: "stop_and_send" };
+  return entry.fileCount === 0 && text !== "" && !anonymized ? text : null;
 };
 
 /**
- * What follows a steer, by what became of it: `steered` leaves the queue
- * (the running answer holds the message), `refused` stops the turn so the
- * message goes next, `unsettled` leaves it queued for the turn's end.
+ * Why a steer left the message queued: what the turn or the API
+ * said (`ChatLocalRunSteerRefusal`), or `message_not_plain` for a message
+ * with files or one sent anonymized, which only goes as a message of its own.
+ */
+export type ChatSteerRefusal = ChatLocalRunSteerRefusal | "message_not_plain";
+
+/** What the member is told about a steer that left the message queued. */
+export const CHAT_STEER_REFUSAL_MESSAGES = {
+  turn_not_running: "chat.steerRefused.turnNotRunning",
+  no_run: "chat.steerRefused.noRun",
+  harness_cannot_steer: "chat.steerRefused.cannotSteer",
+  run_full: "chat.steerRefused.runFull",
+  not_taken: "chat.steerRefused.notTaken",
+  message_not_plain: "chat.steerRefused.notPlain",
+} as const satisfies Record<ChatSteerRefusal, TranslationKey>;
+
+/**
+ * Who handed a queued message to the running turn: "Send now" on it
+ * (`send_now`), which means now even if the turn has to stop, or the
+ * member's plain send that steers (`steer`), which never stops the turn.
+ */
+export type SteerOrigin = "send_now" | "steer";
+
+/**
+ * What follows a steer, by what became of it and who asked: `steered`
+ * leaves the queue (the running answer holds the message); `refused` stops
+ * the turn so the message goes next after "Send now", and leaves it queued
+ * for the turn's end after a steer; `unsettled` leaves it queued for the
+ * turn's end.
  */
 export const steerFallback = (
   outcome: "steered" | "refused" | "unsettled",
+  origin: SteerOrigin,
 ): "remove" | "stop" | "keep" => {
   switch (outcome) {
     case "steered":
       return "remove";
     case "refused":
-      return "stop";
+      return origin === "send_now" ? "stop" : "keep";
     case "unsettled":
       return "keep";
     default:
@@ -256,7 +295,13 @@ export type SendQueueEvent =
       /** The latest turn waits on the member: an approval or a question. */
       awaitingMember: boolean;
     }
-  | { type: "conversation-switched"; conversationId: string }
+  | {
+      type: "conversation-switched";
+      conversationId: string;
+      /** A turn of the conversation switched to already runs: a page that
+       *  opens mid-turn, as a new chat's page does with its first turn. */
+      isGenerating: boolean;
+    }
   | { type: "message-edit-opened"; sessionId: string }
   | { type: "message-edit-closed"; sessionId: string }
   | { type: "message-edit-accepted"; sessionId: string }
@@ -438,7 +483,11 @@ export const reduceSendQueue = (
 
     case "conversation-switched": {
       return {
-        state: createInitialSendQueueState(event.conversationId),
+        state: {
+          ...createInitialSendQueueState(event.conversationId),
+          isGenerating: event.isGenerating,
+          wasGenerating: event.isGenerating,
+        },
         dispatchedEntry: null,
       };
     }

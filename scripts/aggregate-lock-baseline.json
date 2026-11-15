@@ -955,12 +955,6 @@
     "holder": "stella_ingestion"
   },
   {
-    "file": "apps/api/src/handlers/chat/chat-turn-persistence.ts",
-    "fingerprint": "d57afde04e8f70189b3055b20bc5341b7c52c1ce116688e79cb12d82b6e540fb",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/chat/chat-turn-persistence.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/chat/file-thread-mapping.ts",
     "fingerprint": "69ca2bf448838dfa869d9085b4fefd5fed2719affb069d98acbe63154c93f9ca",
     "count": 1,
@@ -1190,15 +1184,15 @@
   },
   {
     "file": "apps/api/src/handlers/entities/versions/delete.ts",
-    "fingerprint": "b8baf4910b8ed5d934c4355d6c0fd8964d8b76bf39aed7babab9d40cad904750",
+    "fingerprint": "ddd4d14f6e070ccdeafa5fa1afb3983850249c9d7051dba37ea38b89884f30a6",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entities/versions/delete.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Version deletion fences every PDF signing session on the version, whatever its state, so the cancellation that follows keeps the lock's whole key."
   },
   {
     "file": "apps/api/src/handlers/entities/versions/delete.ts",
-    "fingerprint": "cea09118532871e7fc835e2ebd6d0a0bb6bfc8228af2f74cf552ea6341ba49cb",
+    "fingerprint": "de0c3fa851edb09dda9ded19dc89aa93f80bed650728bff41bce332048246b9d",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entities/versions/delete.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Version deletion fences every desktop edit session on the version, whatever its state, so the cancellation that follows keeps the lock's whole key."
   },
   {
     "file": "apps/api/src/handlers/entities/versions/delete.ts",
@@ -1675,15 +1669,15 @@
   },
   {
     "file": "apps/api/src/handlers/time-entries/batch/delete.ts",
-    "fingerprint": "06d8436fa79273835b7bf775d500456418fd3298ceadeb8b71eb6315ace7feed",
+    "fingerprint": "eb0bc1dee5e8f4c59b2b8de62488286e8302e0cb1267973ca0b904981edca781",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/batch/delete.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Batch delete locks the same unbilled entries through lockRowsForWrite, so its delete and write-off name only the locked ids."
   },
   {
     "file": "apps/api/src/handlers/time-entries/batch/update.ts",
-    "fingerprint": "bc51ffce8fe7227ad57efae890ed95d71f13edd7c73013aaa974a25c9787bc6f",
+    "fingerprint": "8bd7d1932e10fb9b0c563a3145eec8f646f3c587575d959e8f23a2a8bc6ee23e",
     "count": 1,
-    "reason": "Batch approval locks the same rows, now selected as submitted entries or the caller's own drafts instead of every draft, and reads each row's status for its audit."
+    "reason": "Batch approval locks the same submitted entries and the caller's own drafts through lockRowsForWrite, so its write names only the locked ids."
   },
   {
     "file": "apps/api/src/handlers/time-entries/split.ts",

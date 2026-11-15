@@ -23,6 +23,7 @@ import type {
 
 import { useTranslations } from "use-intl";
 
+import { CHAT_MEMBER_SEND_ACTION } from "@stll/api-contract/chat-send-intent";
 import { resolveChatComposerAction } from "@stll/chat/composer";
 import type {
   AISuggestion,
@@ -987,7 +988,10 @@ export const PromptBar = (props: PromptBarProps) => {
                 isGenerating={isGenerating}
                 onRetry={retryOffer}
                 onSend={() => {
-                  detached(submitDraft(), "ai-suggestions-host.submit-draft");
+                  detached(
+                    submitDraft(CHAT_MEMBER_SEND_ACTION.send),
+                    "ai-suggestions-host.submit-draft",
+                  );
                 }}
                 onStop={onStop}
                 stopping={stopping}

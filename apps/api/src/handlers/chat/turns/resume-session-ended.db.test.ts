@@ -192,6 +192,7 @@ const createRunningTurn = async (): Promise<Fixture> => {
   const db = ownerDb({ organizationId, owner });
   const safeDb = toSafeDbMock(db);
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId,
     threadId,
     userId: owner,

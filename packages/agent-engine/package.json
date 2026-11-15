@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@stll/api-contract": "workspace:*",
+    "@stll/browser-page": "workspace:*",
     "@stll/errors": "workspace:*",
     "@stll/fetch": "workspace:*",
     "@stll/portable-path": "workspace:*",

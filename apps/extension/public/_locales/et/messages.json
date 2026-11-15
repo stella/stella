@@ -68,6 +68,9 @@
   "connectStella": {
     "message": "Ühenda stella"
   },
+  "openStella": {
+    "message": "Ava stella"
+  },
   "adoptTab": {
     "message": "Kasuta seda vahekaarti stellaga"
   },

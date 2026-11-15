@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Opcje przeredagowania",
     "editWithAI": "Edytuj z AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Funkcje AI są niedostępne dla tego konta.",
       "accountRestricted": "Ustawienia dostawcy AI są niedostępne dla tego konta.",
       "configUnreadable": "Nie można odczytać konfiguracji dostawcy AI. Poproś administratora organizacji o ponowne połączenie.",
       "cta": "Otwórz ustawienia AI",
@@ -159,6 +160,7 @@
     "handoffAccount": "Kontynuować jako <account>{email}</account> w organizacji <organization>{organizationName}</organization>?",
     "handoffTitle": "Przejdź do stella",
     "headline": "Jasność w każdej sprawie.",
+    "invalidEmailOrPassword": "Nieprawidłowy adres e-mail lub hasło.",
     "invitation": {
       "declined": "Zaproszenie odrzucone",
       "declinedDescription": "Odrzuciłeś to zaproszenie. Możesz bezpiecznie zamknąć tę stronę.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Użyj zamiast tego kodu zapasowego"
     },
     "useDifferentEmail": "Użyj innego adresu e-mail",
+    "useEmailCode": "Użyj kodu z e-maila",
     "usePassword": "Użyj hasła",
     "weSentCodeTo": "Wysłaliśmy kod na adres <email>{emailAddress}</email>"
   },
@@ -2093,6 +2096,7 @@
       "noResults": "Brak pasujących umiejętności",
       "tryOne": "Zacznij od jednego z tych"
     },
+    "queuePrompt": "Wyślij, gdy agent skończy",
     "queuedAttachmentCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
     "queuedNotice": "W kolejce: zostanie wysłana po zakończeniu bieżącej odpowiedzi",
     "reasoning": "Rozumowanie",
@@ -2199,6 +2203,15 @@
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",
     "sources": "Źródła:",
+    "steerRefused": {
+      "cannotSteer": "Ten agent nie przyjmuje wiadomości w trakcie pracy.",
+      "noRun": "Agent nie działa teraz na Twoim komputerze.",
+      "notPlain": "W trakcie pracy agenta możesz wysłać mu tylko wiadomość tekstową bez plików, wysłaną poza trybem anonimizacji.",
+      "notTaken": "Agent nie mógł teraz przyjąć twojej wiadomości.",
+      "runFull": "Agent nie przyjmie teraz kolejnych wiadomości.",
+      "title": "Twoja wiadomość czeka w kolejce, aż agent skończy",
+      "turnNotRunning": "Agent w tej chwili nie pracuje."
+    },
     "stopFailed": "Nie udało się zatrzymać odpowiedzi. Spróbuj ponownie.",
     "stopResponse": "Zatrzymaj",
     "stopped": "Zatrzymano",
@@ -6031,6 +6044,7 @@
         "title": "Agenci programistyczni na komputerach członków",
         "updated": "Uprawnienia agentów programistycznych zostały zaktualizowane"
       },
+      "logoInvalid": "Wybierz obraz PNG, JPEG lub WebP o rozmiarze do 5 MB.",
       "matterNumbering": "Numeracja spraw",
       "matterNumberingDescription": "Skonfiguruj sposób generowania numerów referencyjnych nowych spraw",
       "membersDescription": "Zarządzaj tym, kto ma dostęp do tej organizacji, oraz oczekującymi zaproszeniami",
@@ -6079,6 +6093,7 @@
         "title": "Strefa czasowa",
         "updated": "Strefa czasowa została zaktualizowana"
       },
+      "uploadLogo": "Prześlij logo",
       "usage": "Użycie",
       "usageDescription": "Limity użycia i stan uprawnień tej organizacji",
       "usageEmptyDescription": "Skonfiguruj uprawnienie do użycia, aby włączyć mierzone funkcje AI w tej organizacji.",

@@ -136,6 +136,9 @@ const ingest = async ({
   const text = paragraphs.join("\n\n");
   const input: IngestionResult = plainTextIngestionResult({
     caseNumber,
+    // The publisher's own id keeps a re-served document on its decision; a
+    // document-less identity would treat changed text as a sibling decision.
+    sourceDocumentId: `ns-${caseNumber}`,
     court: "Nejvyšší soud",
     country: "CZE",
     language: "cs",

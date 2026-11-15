@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Pārrakstīšanas iespējas",
     "editWithAI": "Rediģēt ar AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "AI funkcijas šim kontam nav pieejamas.",
       "accountRestricted": "AI pakalpojumu sniedzēja iestatījumi šim kontam nav pieejami.",
       "configUnreadable": "AI pakalpojumu sniedzēja konfigurāciju nevar nolasīt. Lūdziet organizācijas administratoram to savienot atkārtoti.",
       "cta": "Atvērt AI iestatījumus",
@@ -159,6 +160,7 @@
     "handoffAccount": "Vai turpināt kā <account>{email}</account> organizācijā <organization>{organizationName}</organization>?",
     "handoffTitle": "Turpināt uz stella",
     "headline": "Skaidrība ikvienā lietā.",
+    "invalidEmailOrPassword": "Nepareiza e-pasta adrese vai parole.",
     "invitation": {
       "declined": "Uzaicinājums noraidīts",
       "declinedDescription": "Jūs esat noraidījis šo uzaicinājumu. Varat droši aizvērt šo lapu.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Tā vietā izmantot rezerves kodu"
     },
     "useDifferentEmail": "Izmantot citu e-pasta adresi",
+    "useEmailCode": "Izmantot e-pastā saņemtu kodu",
     "usePassword": "Izmantot paroli",
     "weSentCodeTo": "Mēs nosūtījām kodu uz <email>{emailAddress}</email>"
   },
@@ -2093,6 +2096,7 @@
       "noResults": "Nav atbilstošu prasmju",
       "tryOne": "Izmēģini vienu no tiem"
     },
+    "queuePrompt": "Sūtīt, kad aģents pabeigs",
     "queuedAttachmentCount": "{count, plural, zero {# pielikumu} one {# pielikums} other {# pielikumi}}",
     "queuedNotice": "Rindā: tiks nosūtīts, kad pabeigsies pašreizējā atbilde",
     "reasoning": "Argumentācija",
@@ -2199,6 +2203,15 @@
     "sourcePlaceholder": "Tērzēt par {title}",
     "sourcePlaceholderAction": "Tērzēt par",
     "sources": "Avoti:",
+    "steerRefused": {
+      "cannotSteer": "Šis aģents darba laikā nepieņem ziņas.",
+      "noRun": "Aģents pašlaik jūsu datorā nedarbojas.",
+      "notPlain": "Aģenta darba laikā tam var nosūtīt tikai teksta ziņu bez failiem, kas nav nosūtīta anonimizētajā režīmā.",
+      "notTaken": "Aģents pašlaik nevarēja pieņemt jūsu ziņu.",
+      "runFull": "Aģents pašlaik nevar pieņemt vairāk ziņu.",
+      "title": "Jūsu ziņa gaida rindā, līdz aģents beigs darbu",
+      "turnNotRunning": "Aģents pašlaik nestrādā."
+    },
     "stopFailed": "Neizdevās apturēt atbildi. Mēģiniet vēlreiz.",
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
@@ -6031,6 +6044,7 @@
         "title": "Programmēšanas aģenti dalībnieku datoros",
         "updated": "Programmēšanas aģentu atļaujas atjauninātas"
       },
+      "logoInvalid": "Izvēlieties PNG, JPEG vai WebP attēlu, kas nepārsniedz 5 MB.",
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
       "membersDescription": "Pārvaldiet, kam ir piekļuve šai organizācijai, un gaidošos uzaicinājumus",
@@ -6079,6 +6093,7 @@
         "title": "Laika josla",
         "updated": "Laika josla atjaunināta"
       },
+      "uploadLogo": "Augšupielādēt logotipu",
       "usage": "Lietojums",
       "usageDescription": "Šīs organizācijas lietojuma limiti un tiesību statuss",
       "usageEmptyDescription": "Konfigurējiet lietojuma tiesības, lai šai organizācijai iespējotu mērītas AI funkcijas.",

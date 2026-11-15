@@ -127,6 +127,7 @@ const seedRunningTurn = async (): Promise<{
     }),
   });
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: ids.orgA,
     threadId,
     userId: ids.userA1,

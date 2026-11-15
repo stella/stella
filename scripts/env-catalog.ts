@@ -1411,6 +1411,14 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   // browser host (an unpacked development build has its own), separated by
   // commas. packages/agent-engine/src/sidecar/env.ts reads it.
   "STELLA_BROWSER_EXTENSION_IDS",
+  // Development switch, local only: `1` lets local runs use the stella
+  // browser when no extension is connected; unset is off.
+  // packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_BROWSER_DEV_HOST",
+  // The stella browser's test hooks (its executable, the fixture site's
+  // resolver rules and certificate, a method log) apply only with `1`; the
+  // sidecar build replaces it with "0", so release builds have none.
+  "STELLA_BROWSER_TEST_HOOKS",
   "STELLA_API_KEY",
   "STELLA_DESKTOP_ALLOWED_API_BASE_URLS",
   "STELLA_DESKTOP_ALLOWED_ORIGINS",
@@ -1514,6 +1522,11 @@ export const TOOLING_ENV_KEYS = new Set([
   // API contract's limits and hands it to the crate at compile time.
   "STELLA_EDITABLE_DOCUMENT_MAX_BYTES",
   "APPLE_TEAM_ID",
+  // The release workflow's Developer ID; the desktop's PKCS #11 helper build
+  // signs the helper with it before Tauri bundles the app.
+  "APPLE_SIGNING_IDENTITY",
+  // The ignored SoftHSM2 test of the PKCS #11 helper names the module to load.
+  "SOFTHSM2_MODULE",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
@@ -1532,9 +1545,17 @@ export const TOOLING_ENV_KEYS = new Set([
   "RUST_LOG",
   // The fixture page the fake harness CLIs' `browse` scenario opens first.
   "FAKE_BROWSER_START",
+  // `read` makes the `browse` scenario only open and read pages, for a
+  // browser that cannot click or type.
+  "FAKE_BROWSER_SCENARIO",
+  // The browser the stella browser's end-to-end leg runs; unset skips it.
+  "STELLA_BROWSER_E2E_EXECUTABLE",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",
+  // The pre-push signature check reads the registered signing keys from this
+  // folder instead of the GitHub account (its tests).
+  "SIGNING_KEYS_DIR",
   "STAND_IN_ENDPOINT",
   "FAKE_SIDECAR_LOG",
   // Invocation-local handoff values are removed before test/native entry points run.
@@ -1943,6 +1964,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_SEED_ORG_ID",
   "STELLA_SEED_USER_ID",
   "STELLA_TEST_LATEST_TAG",
+  // Runner-owned migrated database cloned by isolated PostgreSQL suites.
+  "STELLA_TEST_TEMPLATE_DATABASE",
   "STELLA_TEST_OMIT_ASSET",
   "STELLA_TEST_RELEASE_NUMBERS",
   "STELLA_UPDATE_PLAN_CONTRACTS",

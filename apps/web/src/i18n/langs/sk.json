@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upraviť pomocou AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Funkcie AI nie sú pre tento účet dostupné.",
       "accountRestricted": "Nastavenia poskytovateľa AI nie sú pre tento účet dostupné.",
       "configUnreadable": "Konfiguráciu poskytovateľa AI nemožno načítať. Požiadajte správcu organizácie o opätovné pripojenie.",
       "cta": "Otvoriť nastavenia AI",
@@ -159,6 +160,7 @@
     "handoffAccount": "Pokračovať ako <account>{email}</account> v organizácii <organization>{organizationName}</organization>?",
     "handoffTitle": "Pokračovať v aplikácii stella",
     "headline": "Jasno v každom prípade.",
+    "invalidEmailOrPassword": "Nesprávny e-mail alebo heslo.",
     "invitation": {
       "declined": "Pozvánka odmietnutá",
       "declinedDescription": "Odmietli ste túto pozvánku. Môžete túto stránku zavrieť.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Použiť namiesto toho záložný kód"
     },
     "useDifferentEmail": "Použiť iný e-mail",
+    "useEmailCode": "Prihlásiť sa radšej kódom z e-mailu",
     "usePassword": "Prihlásiť sa radšej heslom",
     "weSentCodeTo": "Odoslali sme kód na <email>{emailAddress}</email>"
   },
@@ -2093,6 +2096,7 @@
       "noResults": "Žiadne zhodné zručnosti",
       "tryOne": "Začni s jedným z týchto"
     },
+    "queuePrompt": "Odoslať, keď agent skončí",
     "queuedAttachmentCount": "{count, plural, one {# príloha} few {# prílohy} other {# príloh} many {# prílohy}}",
     "queuedNotice": "V poradí – odošle sa po dokončení aktuálnej odpovede",
     "reasoning": "Uvažovanie",
@@ -2199,6 +2203,15 @@
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
     "sources": "Zdroje:",
+    "steerRefused": {
+      "cannotSteer": "Tento agent počas práce neprijíma správy.",
+      "noRun": "Agent teraz na vašom počítači nebeží.",
+      "notPlain": "Agentovi možno počas práce poslať len textovú správu bez súborov, neodoslanú v anonymizovanom režime.",
+      "notTaken": "Agent teraz vašu správu nemohol prijať.",
+      "runFull": "Agent teraz ďalšie správy neprijme.",
+      "title": "Správa čaká v poradí, kým agent neskončí",
+      "turnNotRunning": "Agent práve nepracuje."
+    },
     "stopFailed": "Odpoveď sa nepodarilo zastaviť. Skúste to znova.",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
@@ -6031,6 +6044,7 @@
         "title": "Programovací agenti v počítačoch členov",
         "updated": "Oprávnenia programovacích agentov boli aktualizované"
       },
+      "logoInvalid": "Vyberte obrázok PNG, JPEG alebo WebP s veľkosťou do 5 MB.",
       "matterNumbering": "Číslovanie spisov",
       "matterNumberingDescription": "Nakonfigurujte, ako sa generujú referenčné čísla nových spisov",
       "membersDescription": "Spravujte, kto má prístup k tejto organizácii a všetky čakajúce pozvánky",
@@ -6079,6 +6093,7 @@
         "title": "Časové pásmo",
         "updated": "Časové pásmo bolo aktualizované"
       },
+      "uploadLogo": "Nahrať logo",
       "usage": "Využitie",
       "usageDescription": "Limity využitia a stav oprávnenia pre túto organizáciu",
       "usageEmptyDescription": "Nakonfigurujte oprávnenie na využitie, aby organizácia mohla používať merané funkcie AI.",

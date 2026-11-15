@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Rewrite options",
     "editWithAI": "Edit with AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "AI features are not available for this account.",
       "accountRestricted": "AI provider settings are unavailable for this account.",
       "configUnreadable": "The AI provider configuration cannot be read. Ask an organization admin to reconnect it.",
       "cta": "Open AI settings",
@@ -159,6 +160,7 @@
     "handoffAccount": "Continue as <account>{email}</account> in <organization>{organizationName}</organization>?",
     "handoffTitle": "Continue to stella",
     "headline": "Clarity for every case.",
+    "invalidEmailOrPassword": "Incorrect email or password.",
     "invitation": {
       "declined": "Invitation declined",
       "declinedDescription": "You have declined this invitation. You can safely close this page.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Use a backup code instead"
     },
     "useDifferentEmail": "Use a different email",
+    "useEmailCode": "Use an email code instead",
     "usePassword": "Use a password instead",
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>"
   },
@@ -2093,6 +2096,7 @@
       "noResults": "No matching skills",
       "tryOne": "Try one of these to start"
     },
+    "queuePrompt": "Send when the agent finishes",
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued: sends when the current response finishes",
     "reasoning": "Reasoning trace",
@@ -2199,6 +2203,15 @@
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",
     "sources": "Sources:",
+    "steerRefused": {
+      "cannotSteer": "This agent cannot take messages while it works.",
+      "noRun": "The agent is not running on your computer right now.",
+      "notPlain": "Only a text message without files, not sent anonymized, can go to the agent while it works.",
+      "notTaken": "The agent could not take your message just now.",
+      "runFull": "The agent cannot take more messages right now.",
+      "title": "Your message is queued until the agent finishes",
+      "turnNotRunning": "The agent is not working right now."
+    },
     "stopFailed": "Couldn't stop the answer. Try again.",
     "stopResponse": "Stop",
     "stopped": "Stopped",
@@ -6031,6 +6044,7 @@
         "title": "Coding agents on members' computers",
         "updated": "Coding agent permissions updated"
       },
+      "logoInvalid": "Choose a PNG, JPEG or WebP image up to 5 MB.",
       "matterNumbering": "Matter numbering",
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization and any pending invitations",
@@ -6079,6 +6093,7 @@
         "title": "Time zone",
         "updated": "Time zone updated"
       },
+      "uploadLogo": "Upload logo",
       "usage": "Usage",
       "usageDescription": "Usage limits and entitlement state for this organization",
       "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organization.",

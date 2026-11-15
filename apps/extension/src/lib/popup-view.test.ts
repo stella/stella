@@ -53,7 +53,11 @@ describe("popupView", () => {
           }
           if (controller === null) {
             expect(view.state.type).toBe("open-stella-to-connect");
-            expect(view.primary).toBeNull();
+            expect(view.statusMessageKey).toBe("statusOpenStella");
+            expect(view.primary).toEqual({
+              action: "open-stella",
+              messageKey: "openStella",
+            });
             expect(view.secondary.map(({ action }) => action)).toEqual([
               "revoke",
             ]);
@@ -118,6 +122,19 @@ describe("popupView", () => {
       state: { origin: "https://example.com", type: "tab-handed-to-stella" },
       statusMessageKey: "statusConnected",
     });
+  });
+
+  test("offers to open stella only while no stella tab is in front to connect", () => {
+    for (const granted of grants) {
+      for (const controller of controllers) {
+        for (const activeTab of activeTabs) {
+          const view = popupView({ activeTab, controller, granted });
+          expect(view.primary?.action === "open-stella").toBe(
+            granted && controller === null && activeTab.kind !== "stella",
+          );
+        }
+      }
+    }
   });
 
   test("says what connecting does only until stella is connected", () => {

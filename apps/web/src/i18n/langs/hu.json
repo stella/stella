@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Átírási lehetőségek",
     "editWithAI": "Szerkesztés AI-val",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Az AI-funkciók nem érhetők el ehhez a fiókhoz.",
       "accountRestricted": "Az AI-szolgáltató beállításai nem érhetők el ehhez a fiókhoz.",
       "configUnreadable": "Az AI-szolgáltató konfigurációja nem olvasható. Kérje meg a szervezet egyik rendszergazdáját, hogy csatlakoztassa újra.",
       "cta": "AI-beállítások megnyitása",
@@ -159,6 +160,7 @@
     "handoffAccount": "Folytatja <account>{email}</account> fiókkal a(z) <organization>{organizationName}</organization> szervezetben?",
     "handoffTitle": "Tovább a Stellába",
     "headline": "Tisztán látás minden ügyben.",
+    "invalidEmailOrPassword": "Hibás e-mail-cím vagy jelszó.",
     "invitation": {
       "declined": "Meghívó elutasítva",
       "declinedDescription": "Elutasította ezt a meghívót. Biztonságosan bezárhatja ezt az oldalt.",
@@ -207,6 +209,7 @@
       "useBackupCode": "Inkább biztonsági kód használata"
     },
     "useDifferentEmail": "Másik e-mail-cím használata",
+    "useEmailCode": "Bejelentkezés e-mailben kapott kóddal",
     "usePassword": "Bejelentkezés jelszóval",
     "weSentCodeTo": "Kódot küldtünk a következő címre: <email>{emailAddress}</email>"
   },
@@ -2093,6 +2096,7 @@
       "noResults": "Nincs egyező készség",
       "tryOne": "Kezdésként próbálja ki valamelyiket"
     },
+    "queuePrompt": "Küldés, amikor az ügynök végzett",
     "queuedAttachmentCount": "{count, plural, one {# melléklet} other {# melléklet}}",
     "queuedNotice": "Sorba állítva – a jelenlegi válasz befejeztével küldjük el",
     "reasoning": "Érvelés",
@@ -2199,6 +2203,15 @@
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
     "sources": "Források:",
+    "steerRefused": {
+      "cannotSteer": "Ez az ügynök munka közben nem fogad üzeneteket.",
+      "noRun": "Az ügynök most nem fut a számítógépén.",
+      "notPlain": "Munka közben csak fájlok nélküli, nem anonimizált módban küldött szöveges üzenetet küldhet az ügynöknek.",
+      "notTaken": "Az ügynök most nem tudta fogadni az üzenetét.",
+      "runFull": "Az ügynök most nem fogad több üzenetet.",
+      "title": "Az üzenete a sorban vár, amíg az ügynök végez",
+      "turnNotRunning": "Az ügynök jelenleg nem dolgozik."
+    },
     "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
@@ -6031,6 +6044,7 @@
         "title": "Kódoló ügynökök a tagok számítógépein",
         "updated": "A kódoló ügynökök engedélyei frissítve"
       },
+      "logoInvalid": "Válasszon legfeljebb 5 MB méretű PNG-, JPEG- vagy WebP-képet.",
       "matterNumbering": "Ügyszámozás",
       "matterNumberingDescription": "Beállíthatja, hogyan generálódjanak az új ügyek hivatkozási számai",
       "membersDescription": "Kezelje, kik férhetnek hozzá ehhez a szervezethez, és a függőben lévő meghívókat",
@@ -6079,6 +6093,7 @@
         "title": "Időzóna",
         "updated": "Időzóna frissítve"
       },
+      "uploadLogo": "Logó feltöltése",
       "usage": "Használat",
       "usageDescription": "Használati korlátok és jogosultsági állapot ehhez a szervezethez",
       "usageEmptyDescription": "Állíts be használati jogosultságot, hogy a szervezet használhassa a mért AI-funkciókat.",

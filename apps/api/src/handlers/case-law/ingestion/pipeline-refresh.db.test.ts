@@ -119,12 +119,19 @@ if (!databaseUrl || !runPostgresTests) {
     const suffix = Bun.randomUUIDv7().slice(0, 8);
 
     /** The row a hydration or a corpus backfill leaves behind. */
+    /**
+     * The publisher's own id: a refresh is found by it. Without one, changed
+     * metadata reads as a sibling decision on the same docket.
+     */
+    const publisherIdOf = (caseNumber: string) => `sk-${caseNumber}`;
+
     const insertHydratedDecision = async (caseNumber: string) => {
       const [row] = await db
         .insert(caseLawDecisions)
         .values({
           sourceId,
           caseNumber,
+          sourceDocumentId: publisherIdOf(caseNumber),
           court: "Okresný súd",
           country: "SVK",
           language: "sk",
@@ -157,6 +164,7 @@ if (!databaseUrl || !runPostgresTests) {
         .values({
           sourceId,
           caseNumber,
+          sourceDocumentId: publisherIdOf(caseNumber),
           court: "Okresný súd",
           country: "SVK",
           language: "sk",
@@ -176,6 +184,7 @@ if (!databaseUrl || !runPostgresTests) {
     const metadataOnlyResult = (caseNumber: string): IngestionResult =>
       plainTextIngestionResult({
         caseNumber,
+        sourceDocumentId: publisherIdOf(caseNumber),
         court: "Okresný súd",
         country: "SVK",
         language: "sk",

@@ -68,6 +68,9 @@
   "connectStella": {
     "message": "Połącz stellę"
   },
+  "openStella": {
+    "message": "Otwórz stellę"
+  },
   "adoptTab": {
     "message": "Użyj tej karty ze stellą"
   },
