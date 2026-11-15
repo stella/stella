@@ -10,5 +10,17 @@
     "from": "06d8436fa79273835b7bf775d500456418fd3298ceadeb8b71eb6315ace7feed",
     "to": "eb0bc1dee5e8f4c59b2b8de62488286e8302e0cb1267973ca0b904981edca781",
     "reason": "Batch delete locks the same unbilled entries through lockRowsForWrite, so its delete and write-off name only the locked ids."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/versions/delete.ts",
+    "from": "b8baf4910b8ed5d934c4355d6c0fd8964d8b76bf39aed7babab9d40cad904750",
+    "to": "de0c3fa851edb09dda9ded19dc89aa93f80bed650728bff41bce332048246b9d",
+    "reason": "Version deletion fences every desktop edit session on the version, whatever its state, so the cancellation that follows keeps the lock's whole key."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/versions/delete.ts",
+    "from": "cea09118532871e7fc835e2ebd6d0a0bb6bfc8228af2f74cf552ea6341ba49cb",
+    "to": "ddd4d14f6e070ccdeafa5fa1afb3983850249c9d7051dba37ea38b89884f30a6",
+    "reason": "Version deletion fences every PDF signing session on the version, whatever its state, so the cancellation that follows keeps the lock's whole key."
   }
 ]

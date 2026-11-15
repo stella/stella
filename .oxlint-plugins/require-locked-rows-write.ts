@@ -666,13 +666,30 @@ const ownerLockSite = (node: AstNode): LockSite | null => {
   if (!table) {
     return null;
   }
+  // The helper's filter: the WHERE of its `query`, or the condition a
+  // fixed-table helper takes after the transaction.
+  const queryProperty = properties.find(
+    (property) =>
+      property.type === "Property" &&
+      isIdentifier(property.key, "query") &&
+      property.computed !== true,
+  );
+  const conditionArgument = argumentsOf(node).at(1);
+  const where =
+    fixedTable === null
+      ? isAstNode(queryProperty?.value)
+        ? chainArgument(chainCalls(queryProperty.value), "where")
+        : null
+      : isAstNode(conditionArgument)
+        ? conditionArgument
+        : null;
   const { owner, carrier } = lockOwner(node);
   return owner
     ? {
         node,
         owner,
         table,
-        where: null,
+        where,
         bindings: lockBindings(carrier),
         helper: true,
       }
@@ -735,6 +752,59 @@ export default eslintCompatPlugin({
         const writes: WriteSite[] = [];
         const text = (node: AstNode) =>
           context.sourceCode.text.slice(node.range[0], node.range[1]);
+        // The write re-applies the lock's own filter: every top-level
+        // conjunct of the lock's WHERE also appears in the write's. A write
+        // whose WHERE is its own (a sweep of a parent, a key chosen
+        // elsewhere, no WHERE at all) says nothing about the locked rows.
+        // A conjunct's source with every handle of `table` (an alias, a
+        // schema member) spelled as the table, so `eq(entries.status, x)`
+        // and `eq(timeEntries.status, x)` compare equal.
+        const filterText = (node: AstNode, table: string) => {
+          const handles = everyNode(node)
+            .filter(
+              (member) =>
+                member.type === "MemberExpression" &&
+                isAstNode(member.object) &&
+                columnOf(member, table) !== null,
+            )
+            .flatMap((member) =>
+              isAstNode(member.object) ? [member.object.range] : [],
+            )
+            .toSorted((left, right) => left[0] - right[0]);
+          let source = "";
+          let cursor = node.range[0];
+          for (const [start, end] of handles) {
+            source += context.sourceCode.text.slice(cursor, start) + table;
+            cursor = end;
+          }
+          source += context.sourceCode.text.slice(cursor, node.range[1]);
+          return normalized(source);
+        };
+        const repeatsFilter = (write: WriteSite, lock: LockSite) => {
+          const lockConjuncts = conjunctsOf(lock.owner, lock.where);
+          if (lockConjuncts.length === 0) {
+            return false;
+          }
+          // Anywhere in the write's WHERE, so `or(<locked ids>, <filter>)`
+          // repeats it too.
+          const writeFilters = new Set(
+            conjunctsOf(lock.owner, write.where)
+              .flatMap((node) => everyNode(node))
+              .flatMap((node) =>
+                // A lock result names the lock, not a filter of the write.
+                isIdentifier(node) &&
+                !locks.some(({ bindings }) => bindings.has(node.name))
+                  ? conjunctsOf(lock.owner, node).flatMap((value) =>
+                      everyNode(value),
+                    )
+                  : [node],
+              )
+              .map((node) => filterText(node, write.table)),
+          );
+          return lockConjuncts.every((node) =>
+            writeFilters.has(filterText(node, lock.table)),
+          );
+        };
         const pinned = (write: WriteSite, preceding: LockSite[]) => {
           const scope = preceding.at(0)?.owner;
           if (!scope) {
@@ -743,10 +813,12 @@ export default eslintCompatPlugin({
           // After the helper, the write's whole WHERE is `locked.where(...)`:
           // wrapping it (`or(locked.where(), x)`) would widen it again.
           const helperLocks = preceding.filter(({ helper }) => helper);
-          if (helperLocks.length > 0) {
-            return helperLocks.some((lock) =>
+          if (
+            helperLocks.some((lock) =>
               isLockedWhere(write.where, lock.bindings),
-            );
+            )
+          ) {
+            return true;
           }
           const seed = new Set<string>();
           for (const lock of preceding) {
@@ -861,7 +933,10 @@ export default eslintCompatPlugin({
                   lock.node.range[1] < write.node.range[0] &&
                   contains(lock.owner, write.node),
               );
-              if (preceding.length === 0 || pinned(write, preceding)) {
+              if (
+                !preceding.some((lock) => repeatsFilter(write, lock)) ||
+                pinned(write, preceding)
+              ) {
                 continue;
               }
               context.report({

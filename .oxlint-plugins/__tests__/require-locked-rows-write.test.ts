@@ -26,10 +26,10 @@ await tx.delete(t).where(and(inArray(t.id, ids), eq(t.status, STATUS.SUBMITTED))
     ).toEqual([6, 7]);
   });
 
-  test("reports both lock strengths and an unconditional write", async () => {
+  test("reports both write lock strengths, not a share lock", async () => {
     expect(
       await lint(`const rows = await tx.select().from(t).where(eq(t.status, "open")).for("no key update");
-await tx.update(t).set({ seen: true });
+await tx.update(t).set({ seen: true }).where(eq(t.status, "open"));
 const others = await tx.select().from(u).where(eq(u.status, "open")).for("update");
 await tx.delete(u).where(eq(u.status, "open"));
 await tx.select().from(v).where(eq(v.status, "open")).for("share");
@@ -41,9 +41,9 @@ await tx.delete(v).where(eq(v.status, "open"));`),
     expect(
       await lint(`${filteredLock}
 const lockedIds = rows.map((row) => row.id);
-await tx.update(t).set({ done: true }).where(or(inArray(t.id, lockedIds), eq(t.status, "open")));
-await tx.update(t).set({ done: true }).where(notInArray(t.id, lockedIds));
-await tx.update(t).set({ done: true }).where(eq(t.status, rows[0].status));`),
+await tx.update(t).set({ done: true }).where(or(inArray(t.id, lockedIds), open));
+await tx.update(t).set({ done: true }).where(and(notInArray(t.id, lockedIds), open));
+await tx.update(t).set({ done: true }).where(and(open, eq(t.kind, rows[0].kind)));`),
     ).toEqual([7, 8, 9]);
   });
 
@@ -81,10 +81,10 @@ await tx.update(t).set({ a: 1 }).from(sql\`(VALUES \${sql.join(rows.map((r) => s
   test("reads a listed table's own primary key as its row identity", async () => {
     expect(
       await lint(`const owned = await tx.select().from(workObligations).where(and(eq(workObligations.ownerUserId, id), inArray(workObligations.status, OPEN))).for("update");
-await tx.update(workObligations).set({ s: 1 }).where(and(inArray(workObligations.entityId, owned.map((row) => row.entityId)), eq(workObligations.ownerUserId, id)));
-await tx.update(workObligations).set({ s: 2 }).where(and(inArray(workObligations.workspaceId, owned.map((row) => row.workspaceId)), eq(workObligations.ownerUserId, id)));
+await tx.update(workObligations).set({ s: 1 }).where(and(inArray(workObligations.entityId, owned.map((row) => row.entityId)), eq(workObligations.ownerUserId, id), inArray(workObligations.status, OPEN)));
+await tx.update(workObligations).set({ s: 2 }).where(and(inArray(workObligations.workspaceId, owned.map((row) => row.workspaceId)), eq(workObligations.ownerUserId, id), inArray(workObligations.status, OPEN)));
 const rows = await tx.select().from(t).where(eq(t.status, "open")).for("update");
-await tx.update(t).set({ s: 1 }).where(inArray(t.entityId, rows.map((row) => row.entityId)));`),
+await tx.update(t).set({ s: 1 }).where(and(inArray(t.entityId, rows.map((row) => row.entityId)), eq(t.status, "open")));`),
     ).toEqual([4, 6]);
   });
 
@@ -101,8 +101,26 @@ await tx.update(t).set({ x: 1 }).where(eq(t.id, id));`),
   test("reports a key write whose lock filtered on state", async () => {
     expect(
       await lint(`await tx.select().from(t).where(and(eq(t.workspaceId, w), inArray(t.status, OPEN_STATUSES))).for("update");
-await tx.update(t).set({ x: 1 }).where(eq(t.workspaceId, w));`),
+await tx.update(t).set({ x: 1 }).where(and(eq(t.workspaceId, w), inArray(t.status, OPEN_STATUSES)));`),
     ).toEqual([3]);
+  });
+
+  test("accepts writes that do not repeat the lock's filter", async () => {
+    expect(
+      await lint(`const own = await tx.select().from(t).where(and(eq(t.userId, user), inArray(t.status, OPEN))).for("update");
+await tx.delete(t).where(eq(t.userId, user));
+await tx.update(t).set({ isDefault: false }).where(and(eq(t.workspaceId, w), eq(t.isDefault, true)));
+await tx.update(t).set({ seen: true });
+const locked = await lockRowsForWrite({ table: u, query: tx.select({ id: u.id }).from(u).where(eq(u.state, "staged")) });
+await tx.update(u).set({ state: "rejected" }).where(and(eq(u.sourceId, source), ne(u.id, locked.ids[0])));`),
+    ).toEqual([]);
+  });
+
+  test("accepts a write pinned to the ids lockRowsForWrite returned", async () => {
+    expect(
+      await lint(`const locked = await lockRowsForWrite({ table: t, query: tx.select({ id: t.id }).from(t).where(eq(t.status, "open")) });
+await tx.delete(t).where(and(inArray(t.id, locked.ids), eq(t.status, "open")));`),
+    ).toEqual([]);
   });
 
   test("ignores other tables, writes before the lock, and a lock in another transaction", async () => {
@@ -122,9 +140,8 @@ await tx.update(t).set({ status: "done" }).where(locked.where());
 await tx.delete(t).where(locked.where(eq(t.kind, "draft")));
 await tx.update(t).set({ status: "done" }).where(eq(t.status, "open"));
 await tx.update(t).set({ status: "done" }).where(or(locked.where(), eq(t.status, "open")));
-await tx.delete(t).where(inArray(t.id, locked.ids));
 await tx.update(other).set({ status: "done" });`),
-    ).toEqual([5, 6, 7]);
+    ).toEqual([5, 6]);
   });
 
   test("accepts a destructured where() and knows the owner's other lock helpers", async () => {
