@@ -549,7 +549,7 @@ export const ChatThreadPage = ({
 
   // Stable across stream chunks: the composer takes this as a prop, and a
   // closure over `messages` would re-render it once per chunk.
-  const submitDraftAs = useLatestCallback(
+  const handleSubmit = useLatestCallback(
     async (
       action: ChatMemberSendAction,
       draft: ChatInputDraft,
@@ -698,13 +698,13 @@ export const ChatThreadPage = ({
       return CHAT_SEND_SENT;
     },
   );
-  const handleSubmit = useLatestCallback(
+  const handleSend = useLatestCallback(
     async (draft: ChatInputDraft) =>
-      await submitDraftAs(CHAT_MEMBER_SEND_ACTION.send, draft),
+      await handleSubmit(CHAT_MEMBER_SEND_ACTION.send, draft),
   );
   const handleQueue = useLatestCallback(
     async (draft: ChatInputDraft) =>
-      await submitDraftAs(CHAT_MEMBER_SEND_ACTION.queue, draft),
+      await handleSubmit(CHAT_MEMBER_SEND_ACTION.queue, draft),
   );
 
   return (
@@ -1013,7 +1013,7 @@ export const ChatThreadPage = ({
                     }}
                     stopping={stopPending}
                     onFocusChange={setComposerFocused}
-                    onSubmit={handleSubmit}
+                    onSubmit={handleSend}
                     onQueue={handleQueue}
                     queueOffered={isChatQueueOffered(
                       composerSendState({
