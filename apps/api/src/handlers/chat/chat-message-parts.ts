@@ -124,6 +124,9 @@ const KNOWN_STORED_FIELDS = {
       description: true,
       error: { code: true, message: true },
       id: true,
+      // What the parent model wrote when it started the child: the SDK's
+      // checked value, kept as written.
+      input: true,
       interruptIds: true,
       // Each child message is read through its own stored content.
       messages: true,
