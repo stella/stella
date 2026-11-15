@@ -22,6 +22,9 @@ const owner = {
 const apiEntry = `{ name: "rows", handler: rows.handler, measure: measureRows }`;
 const apiSource = `import rows from "@/api/handlers/rows/list"; const scenarios = [${apiEntry}];`;
 
+/** Every handler module is still in the tree. */
+const kept = () => true;
+
 const readApi = (
   source: string,
   extraSources: ReadonlyMap<string, string> = new Map(),
@@ -48,7 +51,11 @@ describe("measured scaling scenario membership", () => {
       { kind: "api", name: "rows", handlerOwner: owner },
     ]);
     expect(
-      scenarioMembershipViolations({ base: readApi(apiSource), current }),
+      scenarioMembershipViolations({
+        base: readApi(apiSource),
+        current,
+        handlerExists: kept,
+      }),
     ).toEqual([]);
   });
 
@@ -74,10 +81,32 @@ describe("measured scaling scenario membership", () => {
       scenarioMembershipViolations({
         base: readApi(apiSource),
         current: readApi("const scenarios = [];"),
+        handlerExists: kept,
       }),
     ).toEqual([
       `previously measured scenario removed: ${JSON.stringify(["api", "rows", owner.file, owner.exportName])}`,
     ]);
+  });
+
+  test("a scenario leaves only with its handler: a route deleted whole has nothing to measure", () => {
+    const current = readApi("const scenarios = [];");
+    const removed = `previously measured scenario removed: ${JSON.stringify(["api", "rows", owner.file, owner.exportName])}`;
+    // Its handler still in the tree: the route stays, so its scenario does.
+    expect(
+      scenarioMembershipViolations({
+        base: readApi(apiSource),
+        current,
+        handlerExists: (file) => file === owner.file,
+      }),
+    ).toEqual([removed]);
+    // Deleted with its handler module: nothing is left to measure.
+    expect(
+      scenarioMembershipViolations({
+        base: readApi(apiSource),
+        current,
+        handlerExists: (file) => file !== owner.file,
+      }),
+    ).toEqual([]);
   });
 
   test("retargeting a scenario name to a different handler owner is refused", () => {
@@ -86,7 +115,11 @@ describe("measured scaling scenario membership", () => {
     );
     expect(current).not.toEqual(readApi(apiSource));
     expect(
-      scenarioMembershipViolations({ base: readApi(apiSource), current }),
+      scenarioMembershipViolations({
+        base: readApi(apiSource),
+        current,
+        handlerExists: kept,
+      }),
     ).toHaveLength(1);
   });
 
@@ -99,7 +132,11 @@ describe("measured scaling scenario membership", () => {
     );
     expect(base).toHaveLength(2);
     expect(
-      scenarioMembershipViolations({ base, current: readApi(apiSource) }),
+      scenarioMembershipViolations({
+        base,
+        current: readApi(apiSource),
+        handlerExists: kept,
+      }),
     ).toEqual([
       `previously measured scenario removed: ${JSON.stringify(["api", "filtered rows", owner.file, owner.exportName])}`,
     ]);
@@ -123,6 +160,7 @@ describe("measured scaling scenario membership", () => {
       scenarioMembershipViolations({
         base: readApi(apiSource),
         current: readApi(apiSource),
+        handlerExists: kept,
       }),
     ).toEqual([]);
   });
@@ -141,7 +179,11 @@ describe("measured scaling scenario membership", () => {
           { kind: "api", name: "rows", handlerOwner: owner },
         ]);
         expect(
-          scenarioMembershipViolations({ base: readApi(apiSource), current }),
+          scenarioMembershipViolations({
+            base: readApi(apiSource),
+            current,
+            handlerExists: kept,
+          }),
         ).toEqual([]);
       }),
     );
@@ -187,6 +229,8 @@ describe("measured scaling scenario membership", () => {
       scenarioMembershipViolations({
         base,
         current: read("const scenarios = [];"),
+        // A tool's measurement stays whatever its handler.
+        handlerExists: () => false,
       }),
     ).toEqual(['previously measured scenario removed: ["mcp","list_rows"]']);
   });

@@ -341,15 +341,26 @@ const membershipKey = (entry: ScenarioMembership) =>
 type ScenarioMembershipOptions = {
   base: readonly ScenarioMembership[];
   current: readonly ScenarioMembership[];
+  /**
+   * Whether a handler module is still in the current tree. A measured API
+   * scenario may leave only with its handler: a route deleted whole has
+   * nothing left to measure, while a route that stays keeps its scenario.
+   */
+  handlerExists: (file: string) => boolean;
 };
 
 export const scenarioMembershipViolations = ({
   base,
   current,
+  handlerExists,
 }: ScenarioMembershipOptions) => {
   const retained = new Set(current.map(membershipKey));
   return base
-    .filter((entry) => !retained.has(membershipKey(entry)))
+    .filter(
+      (entry) =>
+        !retained.has(membershipKey(entry)) &&
+        (entry.kind === "mcp" || handlerExists(entry.handlerOwner.file)),
+    )
     .map(
       (entry) =>
         `previously measured scenario removed: ${membershipKey(entry)}`,

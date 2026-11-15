@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
@@ -208,6 +208,7 @@ test("previously measured scenarios retain their handler or tool identity", asyn
       scenarioMembershipViolations({
         base: readScenarioRegistry({ ...registry, readSource: readBaseSource }),
         current,
+        handlerExists: (file) => existsSync(path.join(repoRoot, file)),
       }),
     ).toEqual([]);
   }
