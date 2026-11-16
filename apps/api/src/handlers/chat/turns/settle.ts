@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 
-import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import {
@@ -10,7 +9,6 @@ import {
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  chatMessageFromPersisted,
   isChatPart,
   synchronizeToolResultContent,
   toPersistableChatMessage,
@@ -32,13 +30,8 @@ import type { ChatTurnStoredSettlement } from "@/api/handlers/chat/chat-turn-run
 import { CUT_SHORT_OUTCOME } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { computeAssistantTurnWorkspaceIds } from "@/api/handlers/chat/data-scope";
-import { loadWindowedThreadHistory } from "@/api/handlers/chat/history-window";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
-import {
-  intersectAccessibleWorkspaceIds,
-  resolveToolWorkspaceIds,
-} from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { resolveRegistryToolOutputRefs } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
 import type {
@@ -47,7 +40,6 @@ import type {
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { SessionMemberCaller } from "@/api/lib/auth/member-caller";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -58,22 +50,18 @@ import {
   type ChatRefContext,
   type ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
-import {
-  type ChatThreadNamesRead,
-  readChatThreadNames,
-} from "@/api/lib/chat/thread-names";
+import type { ChatThreadNamesRead } from "@/api/lib/chat/thread-names";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 /**
- * Everything storing a streamed turn's answer reads, as explicit inputs. The
- * request that started the turn supplies them while it owns the turn
- * (`send-message.ts`); a task that takes over a turn it did not start reads
- * them from the turn's stored rows (`loadStoredTurnSettlement`). One shape
- * for both, so the answer is validated, its refs resolved, the thread's
- * scope widened and the turn settled the same way whoever stores it.
+ * Everything storing a streamed turn's answer reads, as explicit inputs,
+ * supplied by whoever owns the turn (today the request that started it,
+ * `send-message.ts`), so the answer is validated, its refs resolved, the
+ * thread's scope widened and the turn settled the same way whoever stores
+ * it.
  */
 export type StreamedTurnSettlementContext = {
   turn: {
@@ -476,134 +464,3 @@ export const persistStreamedTurn = async ({
     threadId: turn.threadId,
   });
 };
-
-/** What a stored turn's rows settle it with, or what they lack. */
-type StoredTurnSettlement =
-  | { type: "loaded"; context: StreamedTurnSettlementContext }
-  /** The member no longer sees the thread. */
-  | { type: "thread-unavailable" }
-  /** The thread holds no stored answer by that id for the run to continue. */
-  | { type: "checkpoint-missing" };
-
-/**
- * The settlement context of a turn that runs on the member's computer, read
- * from its stored rows instead of from the request that started it: the
- * thread's matter, pins and names, its stored history with the answer the
- * run continues, and the member's matters proved again now. Call it once the
- * caller owns the turn (`execution`), so no other settlement can add names
- * the read would miss.
- *
- * What a request supplied is derived the way the request derived it: the
- * matters an agent's tools could read are the thread's pins narrowed to the
- * member's current access, or all of it without pins
- * (`resolveToolWorkspaceIds`); the send mode is anonymized when the thread
- * is marked so, which accepting an anonymized turn always did; a computer's
- * calls are checked as a harness's.
- */
-export const loadStoredTurnSettlement = async ({
-  caseLawDb,
-  checkpointMessageId,
-  createRefRegistry,
-  execution,
-  indexThread,
-  member,
-  threadId,
-}: {
-  caseLawDb?: Parameters<typeof loadWindowedThreadHistory>[0]["caseLawDb"];
-  /** The stored answer the run continues. */
-  checkpointMessageId: SafeId<"chatMessage">;
-  /** Builds the turn's registry from the names its thread holds. */
-  createRefRegistry: (
-    restoredBindings: readonly ChatRefBinding[],
-    retiredRefs: readonly string[],
-  ) => ChatRefRegistry;
-  execution: ChatTurnExecution;
-  indexThread: typeof upsertChatThreadSearchDocument;
-  /** The turn's member, proved again for this work. */
-  member: Pick<
-    SessionMemberCaller,
-    "getActiveWorkspaceIds" | "recordAuditEvent" | "safeDb" | "user"
-  >;
-  threadId: SafeId<"chatThread">;
-}) =>
-  await Result.gen(async function* () {
-    const { recordAuditEvent, safeDb } = member;
-    const userId = member.user.id;
-    const stored = yield* Result.await(
-      safeDb(async (tx) => {
-        const thread = await tx.query.chatThreads.findFirst({
-          where: { id: { eq: threadId }, userId: { eq: userId } },
-          columns: {
-            contextMatterIds: true,
-            usedAnonymization: true,
-            workspaceId: true,
-          },
-        });
-        if (thread === undefined) {
-          return null;
-        }
-        return {
-          thread,
-          threadNames: await readChatThreadNames({ threadId, tx }),
-        };
-      }),
-    );
-    if (stored === null) {
-      return Result.ok({
-        type: "thread-unavailable",
-      } satisfies StoredTurnSettlement);
-    }
-    const { thread, threadNames } = stored;
-    const window = yield* Result.await(
-      loadWindowedThreadHistory({ caseLawDb, safeDb, threadId }),
-    );
-    const messages = window.messages.map(chatMessageFromPersisted);
-    const checkpoint = messages.find(
-      ({ id, role }) => id === checkpointMessageId && role === "assistant",
-    );
-    if (checkpoint === undefined) {
-      return Result.ok({
-        type: "checkpoint-missing",
-      } satisfies StoredTurnSettlement);
-    }
-    const accessibleWorkspaceIds = yield* Result.await(
-      Result.tryPromise(async () => await member.getActiveWorkspaceIds()),
-    );
-    const registry = createRefRegistry(
-      threadNames.refBindings,
-      threadNames.retiredRefs,
-    );
-    return Result.ok({
-      type: "loaded",
-      context: {
-        turn: {
-          execution,
-          threadId,
-          userId,
-          workspaceId: thread.workspaceId,
-          owningAssistantMessage: checkpoint,
-          sendMode: thread.usedAnonymization ? CHAT_SEND_MODE.anonymized : null,
-        },
-        history: {
-          messages,
-          existingIds: new Set(messages.map(({ id }) => id)),
-        },
-        threadNames,
-        refs: {
-          registry,
-          observedBeforeRun: new Set(registry.getObservedWorkspaceIds()),
-          accessibleWorkspaceIds: new Set(accessibleWorkspaceIds),
-          opaqueReadWorkspaceIds: resolveToolWorkspaceIds({
-            pinnedIds: intersectAccessibleWorkspaceIds({
-              pinnedIds: thread.contextMatterIds,
-              accessibleWorkspaceIds,
-            }),
-            accessibleWorkspaceIds,
-          }),
-        },
-        toolCalls: { ownership: "harness" },
-        member: { recordAuditEvent, safeDb },
-        indexThread,
-      },
-    } satisfies StoredTurnSettlement);
-  });

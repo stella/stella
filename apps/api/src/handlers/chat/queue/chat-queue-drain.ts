@@ -126,7 +126,8 @@ const sendNextQueuedChatMessage = async ({
   const member = await resolveServerStartedMember({
     organizationId: due.organizationId,
     userId: due.userId,
-    work: { type: "queued-send", threadId, queuedMessageId: due.id },
+    threadId,
+    queuedMessageId: due.id,
     signal: dependencies.signal,
   });
   if (Result.isError(member)) {

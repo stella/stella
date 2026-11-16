@@ -47,15 +47,6 @@ type AuditMetadata = Record<string, unknown>;
 
 export type AuditActivityCategory = (typeof AUDIT_ACTIVITY_CATEGORIES)[number];
 
-/**
- * What a user's dispatched work started from. `chat_queue`: the server sent
- * a message the user queued, as the user. `chat_turn_handover`: the server
- * continued the user's chat turn after the task running it stopped, as the
- * user.
- */
-export type UserDispatchSource =
-  "chat" | "chat_queue" | "chat_turn_handover" | "action" | "api";
-
 export type AuditExecutionContext = {
   performer:
     | { type: "user"; id: SafeId<"user"> }
@@ -65,7 +56,8 @@ export type AuditExecutionContext = {
     | {
         type: "user_dispatch";
         userId: SafeId<"user">;
-        source: UserDispatchSource;
+        /** `chat_queue`: the server sent a message the user queued, as the user. */
+        source: "chat" | "chat_queue" | "action" | "api";
         sourceId?: string;
       }
     | {
