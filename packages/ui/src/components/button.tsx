@@ -74,6 +74,7 @@ const BUTTON_SIZE_CLASS_NAMES = {
   default: "h-9 px-[calc(--spacing(3)-1px)] sm:h-8",
   icon: "size-9 sm:size-8",
   "icon-lg": "size-10 sm:size-9",
+  "icon-round": "size-7 rounded-full sm:size-7",
   "icon-sm": "size-8 sm:size-7",
   "icon-xl":
     "size-11 sm:size-10 [&_svg:not([class*='size-'])]:size-5 sm:[&_svg:not([class*='size-'])]:size-4.5",
@@ -113,8 +114,12 @@ const BUTTON_SIZE_CLASS_NAMES = {
 // Every shared variant: its shared colours, then the web's states. A
 // selected button (`data-pressed`) shows its own treatment, and hover never
 // paints over it.
+const BUTTON_PRIMARY_STATE_CLASS =
+  "shadow-primary/24 data-pressed:bg-primary/80 [:hover:not([data-pressed])]:bg-primary/90 shadow-xs not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none";
+
 const BUTTON_VARIANT_CLASS_NAMES = {
-  default: `${tokens("default")} shadow-primary/24 data-pressed:bg-primary/80 [:hover:not([data-pressed])]:bg-primary/90 shadow-xs not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none`,
+  composer: `${tokens("composer")} ${BUTTON_PRIMARY_STATE_CLASS} hover:bg-foreground/90`,
+  default: `${tokens("default")} ${BUTTON_PRIMARY_STATE_CLASS}`,
   destructive: `${tokens("destructive")} shadow-destructive/8 data-pressed:border-destructive/56 data-pressed:bg-destructive/20 [:hover:not([data-pressed])]:border-destructive/40 [:hover:not([data-pressed])]:bg-destructive/14 active:bg-destructive/18 shadow-xs not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] [:disabled,:active,[data-pressed]]:shadow-none`,
   "destructive-outline": `${tokens("destructive-outline")} dark:bg-input/32 data-pressed:border-destructive/56 data-pressed:bg-destructive/8 [:hover:not([data-pressed])]:border-destructive/32 [:hover:not([data-pressed])]:bg-destructive/4 shadow-xs/5 not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:not-disabled:before:shadow-[0_-1px_--theme(--color-white/2%)] dark:not-disabled:not-active:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] [:disabled,:active,[data-pressed]]:shadow-none`,
   "destructive-ghost": `${tokens("destructive-ghost")} data-pressed:bg-destructive/14 data-pressed:inset-ring-destructive/32 [:hover:not([data-pressed])]:bg-destructive/10 data-pressed:inset-ring`,
@@ -234,6 +239,7 @@ const BUTTON_SIZE_CONTENT = {
   default: BUTTON_CONTENT.text,
   icon: BUTTON_CONTENT.icon,
   "icon-lg": BUTTON_CONTENT.icon,
+  "icon-round": BUTTON_CONTENT.icon,
   "icon-sm": BUTTON_CONTENT.icon,
   "icon-xl": BUTTON_CONTENT.icon,
   "icon-2xs": BUTTON_CONTENT.icon,

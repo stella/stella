@@ -1,7 +1,6 @@
 import {
   convertMessagesToModelMessages,
   EventType,
-  RUN_CANCEL_REASON,
   uiMessagesToWire,
 } from "@tanstack/ai";
 import type {
@@ -105,11 +104,14 @@ import {
   readChatTurnTiming,
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
-import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
 import type {
   ChatTurnRun,
   ChatTurnStoredSettlement,
 } from "@/api/handlers/chat/chat-turn-run";
+import {
+  chatTurnRunCutOf,
+  isCutByStopOrOwnerLoss,
+} from "@/api/handlers/chat/chat-turn-run-cut";
 import {
   CUT_SHORT_OUTCOME,
   findHandedOutInteraction,
@@ -2304,16 +2306,23 @@ const chatCutShortOutcome = ({
   abortSignal: AbortSignal;
   deadlineSignal: AbortSignal;
 }): CutShortOutcome => {
-  if (abortSignal.reason === RUN_CANCEL_REASON) {
-    return USER_STOP_OUTCOME;
+  const cut = chatTurnRunCutOf(abortSignal.reason);
+  switch (cut) {
+    case "member-stop":
+      return USER_STOP_OUTCOME;
+    case "owner-lost":
+      return OWNER_LOST_OUTCOME;
+    case "production-failed":
+    case "admission-lost":
+    case "other":
+      return {
+        type: "interrupted",
+        reason: deadlineSignal.aborted ? "timeout" : "client-disconnected",
+      };
+    default:
+      cut satisfies never;
+      return panic(`Unhandled chat turn run cut: ${String(cut)}`);
   }
-  if (abortSignal.reason === CHAT_TURN_OWNER_LOST_REASON) {
-    return OWNER_LOST_OUTCOME;
-  }
-  return {
-    type: "interrupted",
-    reason: deadlineSignal.aborted ? "timeout" : "client-disconnected",
-  };
 };
 
 type RunErrorChunk = Extract<PublicStreamChunk, { type: EventType.RUN_ERROR }>;
@@ -2686,11 +2695,7 @@ const resolveAdmissionLossOutcome = ({
 const streamControlSignal = (
   abortSignal: AbortSignal,
   runSignal: AbortSignal,
-) =>
-  runSignal.reason === RUN_CANCEL_REASON ||
-  runSignal.reason === CHAT_TURN_OWNER_LOST_REASON
-    ? runSignal
-    : abortSignal;
+) => (isCutByStopOrOwnerLoss(runSignal) ? runSignal : abortSignal);
 
 type StreamSettlementOptions = Pick<
   ProcessServerChatStreamProps,
@@ -2737,14 +2742,12 @@ const createStreamSettlement = ({
   announceBeforeFailure,
   terminal,
 }: StreamSettlementOptions) => {
+  const admissionCut = () =>
+    chatTurnRunCutOf(abortSignal.reason) === "admission-lost";
   const admissionLost = () =>
-    ActionAdmissionError.is(abortSignal.reason) &&
-    runSignal.reason !== RUN_CANCEL_REASON &&
-    runSignal.reason !== CHAT_TURN_OWNER_LOST_REASON;
+    admissionCut() && !isCutByStopOrOwnerLoss(runSignal);
   const admissionCutByControl = () =>
-    ActionAdmissionError.is(abortSignal.reason) &&
-    (runSignal.reason === RUN_CANCEL_REASON ||
-      runSignal.reason === CHAT_TURN_OWNER_LOST_REASON);
+    admissionCut() && isCutByStopOrOwnerLoss(runSignal);
   const cutShortOutcome = () =>
     chatCutShortOutcome({
       abortSignal: streamControlSignal(abortSignal, runSignal),

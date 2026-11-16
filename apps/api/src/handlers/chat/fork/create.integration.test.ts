@@ -1,18 +1,11 @@
 import { panic, Result } from "better-result";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  expect,
-  mock,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { DESKTOP_RUNNER_PROTOCOL } from "@stll/api-contract/desktop-runner";
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -73,6 +66,9 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 import getMessages from "../messages/list";
 import getThreads from "../threads/list";
 import { createForkThread } from "./create";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
 
 // Search indexing writes through the root (unscoped) database, which this
 // fixture deliberately does not stand up; the handler takes it as an injectable
@@ -135,7 +131,7 @@ const scopedFor = ({
     ),
   );
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -1064,10 +1060,10 @@ test("a metered fork reports capacity refusal without creating a copy", async ()
     organizationId: ids.orgA,
     userId: ids.userA1,
   });
-  const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+
   const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-  env.FEATURE_FILE_USAGE_LIMITS = true;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+  testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+  workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
   try {
     const meteredFork = createForkThread({
       fileUsageDb:
@@ -1092,8 +1088,7 @@ test("a metered fork reports capacity refusal without creating a copy", async ()
         .where(eq(userFiles.threadId, newThreadId)),
     ).toHaveLength(0);
   } finally {
-    env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", priorWorkerFlag);
     await testDb
       .delete(usageSeatAssignments)
       .where(eq(usageSeatAssignments.id, assignmentId));
@@ -1138,11 +1133,11 @@ test.each(["available", "inaccessible"])(
       asTestRaw<NonNullable<Parameters<typeof copyOrganizationFile>[0]["db"]>>(
         testDb,
       );
-    const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+
     const priorWorkerFlag =
       envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-    env.FEATURE_FILE_USAGE_LIMITS = true;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
     try {
       const meteredFork = createForkThread({
         fileUsageDb,
@@ -1181,8 +1176,7 @@ test.each(["available", "inaccessible"])(
         fakeS3.requests.filter(({ method }) => method === "COPY"),
       ).toHaveLength(0);
     } finally {
-      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+      workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", priorWorkerFlag);
       const pending = await testDb
         .select({
           objectKey: organizationFileObjects.objectKey,
@@ -1289,11 +1283,11 @@ test.each([true, false])(
       asTestRaw<NonNullable<Parameters<typeof copyOrganizationFile>[0]["db"]>>(
         testDb,
       );
-    const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+
     const priorWorkerFlag =
       envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-    env.FEATURE_FILE_USAGE_LIMITS = metered;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = metered;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", metered);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", metered);
     const newThreadId = createSafeId<"chatThread">();
     seededThreadIds.push(newThreadId);
     try {
@@ -1391,7 +1385,7 @@ test.each([true, false])(
     } finally {
       // Settle test-owned identities before restoring the flag; uncertain
       // reservation retention remains part of the production helper contract.
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+      workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
       const added = (
         await testDb
           .select()
@@ -1416,8 +1410,8 @@ test.each([true, false])(
         added.map((row) => row.objectKey),
         fileUsageDb,
       );
-      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+
+      workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", priorWorkerFlag);
     }
   },
 );

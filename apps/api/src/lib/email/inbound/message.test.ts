@@ -2,11 +2,15 @@ import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import PostalMime from "postal-mime";
 
+import { createTestState } from "@stll/test-state";
+
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 import { INBOUND_MAIL_LIMITS } from "./limits";
 import type { InboundMessageError } from "./message";
 import { parseInboundMessage } from "./message";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
 
 const parseValidInboundMessage = async (raw: Uint8Array) => {
   const result = await parseInboundMessage(raw);
@@ -731,7 +735,6 @@ describe("inbound MIME normalization", () => {
   });
 
   test("date storage and content identity stay stable across host timezones", async () => {
-    const previousTimezone = process.env.TZ;
     const ambiguous = message(
       baseHeaders.replace("12:00:00 +0000", "12:00:00"),
       "Body",
@@ -742,28 +745,19 @@ describe("inbound MIME normalization", () => {
     );
     const identities = new Set<string>();
     const providerDates = new Set<string | undefined>();
-    try {
-      for (const timezone of [
-        "UTC",
-        "America/Los_Angeles",
-        "Pacific/Auckland",
-      ]) {
-        process.env.TZ = timezone;
-        providerDates.add((await PostalMime.parse(ambiguous)).date);
-        const withoutZone = await parseValidInboundMessage(ambiguous);
-        const withZone = await parseValidInboundMessage(zoned);
-        expect(withoutZone.message.date).toBeNull();
-        expect(withZone.message.date).toBe("2026-09-26T12:00:00.000Z");
-        identities.add(
-          JSON.stringify([
-            withoutZone.message.contentHash,
-            withZone.message.contentHash,
-          ]),
-        );
-      }
-    } finally {
-      // Bun's date cache needs a reassignment when restoring an unset TZ.
-      process.env.TZ = previousTimezone ?? "";
+    for (const timezone of ["UTC", "America/Los_Angeles", "Pacific/Auckland"]) {
+      testState.setEnv("TZ", timezone);
+      providerDates.add((await PostalMime.parse(ambiguous)).date);
+      const withoutZone = await parseValidInboundMessage(ambiguous);
+      const withZone = await parseValidInboundMessage(zoned);
+      expect(withoutZone.message.date).toBeNull();
+      expect(withZone.message.date).toBe("2026-09-26T12:00:00.000Z");
+      identities.add(
+        JSON.stringify([
+          withoutZone.message.contentHash,
+          withZone.message.contentHash,
+        ]),
+      );
     }
     expect(providerDates.size).toBeGreaterThan(1);
     expect(identities.size).toBe(1);

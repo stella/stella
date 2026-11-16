@@ -1,11 +1,16 @@
 import type { GetParameterCommandOutput } from "@aws-sdk/client-ssm";
-import { expect, test } from "bun:test";
+import { afterEach, expect, jest, test } from "bun:test";
 
 import { readParameter } from "./read-parameter";
+
+afterEach(() => {
+  jest.useRealTimers();
+});
 
 test.each(["enabled", "disabled"] as const)(
   "reads one parameter with decryption %s",
   async (decryption) => {
+    jest.useFakeTimers();
     const result = await readParameter({
       name: "/test/grants",
       decryption,
@@ -21,6 +26,7 @@ test.each(["enabled", "disabled"] as const)(
       },
     });
     expect(result.unwrap()).toEqual({ value: "", version: 7 });
+    expect(jest.getTimerCount()).toBe(0);
   },
 );
 
@@ -73,6 +79,7 @@ test.each([undefined, {}, { Value: "grants" }, { Version: 1 }])(
 );
 
 test("cancellation reaches an active parameter read", async () => {
+  jest.useFakeTimers();
   const controller = new AbortController();
   const started = Promise.withResolvers<undefined>();
   const response = Promise.withResolvers<GetParameterCommandOutput>();
@@ -93,33 +100,50 @@ test("cancellation reaches an active parameter read", async () => {
     },
   });
   await started.promise;
+  expect(jest.getTimerCount()).toBe(1);
   controller.abort();
   const result = await pending;
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.reason).toBe("timeout");
   }
+  expect(jest.getTimerCount()).toBe(0);
 });
 
-// timeout: the real five-second parameter deadline needs room for scheduler jitter in CI.
 test("an unresponsive client times out even when it ignores cancellation", async () => {
+  jest.useFakeTimers();
+  const started = Promise.withResolvers<undefined>();
   let signal: AbortSignal | undefined;
-  const started = performance.now();
+  let settled = false;
   const response = Promise.withResolvers<GetParameterCommandOutput>();
-  const result = await readParameter({
+  const pending = readParameter({
     name: "/test/grants",
     decryption: "enabled",
     client: {
       send: async (_command, options) => {
         signal = options.abortSignal;
-        return response.promise;
+        started.resolve(undefined);
+        return await response.promise;
       },
     },
+  }).then((result) => {
+    settled = true;
+    return result;
   });
-  expect(performance.now() - started).toBeLessThan(6500);
+  await started.promise;
+  jest.advanceTimersByTime(4999);
+  await Promise.resolve();
+  expect(settled).toBe(false);
+  expect(signal?.aborted).toBe(false);
+  expect(jest.getTimerCount()).toBe(1);
+  jest.advanceTimersByTime(1);
   expect(signal?.aborted).toBe(true);
+  const result = await pending;
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.reason).toBe("timeout");
   }
-}, 10_000);
+  expect(jest.getTimerCount()).toBe(0);
+  response.resolve({ Parameter: { Value: "late", Version: 1 }, $metadata: {} });
+  expect(await pending).toBe(result);
+});

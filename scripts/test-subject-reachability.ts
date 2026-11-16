@@ -70,7 +70,7 @@ const isReachabilityTest = (file: string): boolean =>
   TEST_FILE.test(file) && !file.startsWith(".oxlint-plugins/__fixtures__/");
 const TEST_SUPPORT =
   /(?:^|\/)(?:__tests__|test|tests|fixtures?|mocks?|test-utils?)(?:\/|[.-])/u;
-const SOURCE_FILE = /\.[cm]?[jt]sx?$/u;
+const SOURCE_FILE = /(?:\.[cm]?[jt]sx?|\.json)$/u;
 const NODE_NEXT_SOURCE_EXTENSION_SUBSTITUTIONS = new Map([
   [".js", [".ts", ".tsx"]],
   [".mjs", [".mts"]],
@@ -229,6 +229,7 @@ const existingSource = (
   repoRoot: string,
   testFile: string,
   specifier: string,
+  includeSupport = false,
 ): string | undefined =>
   candidatePaths(repoRoot, testFile, specifier).find((candidate) => {
     const relative = repoRelativePath(repoRoot, candidate);
@@ -237,7 +238,8 @@ const existingSource = (
       !TEST_FILE.test(candidate) &&
       // A support module is a subject when its own colocated test exercises it;
       // importing unrelated fixtures still does not establish reachability.
-      (!TEST_SUPPORT.test(relative) ||
+      (includeSupport ||
+        !TEST_SUPPORT.test(relative) ||
         candidate.replace(/\.[cm]?[jt]sx?$/u, "") ===
           path.resolve(
             repoRoot,
@@ -331,11 +333,17 @@ const entryPointName = (node: ts.Expression): string | undefined => {
 // The name in `const helper = ...` or `function helper()` declares the
 // helper; only a reference elsewhere can make its body run.
 const isDeclarationName = (node: ts.Identifier): boolean =>
-  (ts.isVariableDeclaration(node.parent) ||
-    ts.isFunctionDeclaration(node.parent)) &&
-  node.parent.name === node;
+  ((ts.isVariableDeclaration(node.parent) ||
+    ts.isFunctionDeclaration(node.parent) ||
+    ts.isBindingElement(node.parent)) &&
+    node.parent.name === node) ||
+  (ts.isBindingElement(node.parent) && node.parent.propertyName === node);
 
-const runtimeRoots = async (source: ts.SourceFile, checker: Checker) => {
+const runtimeRoots = async (
+  source: ts.SourceFile,
+  checker: Checker,
+  entryNames?: ReadonlySet<string>,
+) => {
   const identifiers: ts.Identifier[] = [];
   const collectIdentifiers = (node: ts.Node): void => {
     if (ts.isIdentifier(node)) {
@@ -416,6 +424,7 @@ const runtimeRoots = async (source: ts.SourceFile, checker: Checker) => {
     if (ts.isCallExpression(node)) {
       const name = entryPointName(node.expression);
       if (name && TEST_ENTRY_POINTS.has(name)) {
+        enqueueNode(node);
         for (const argument of node.arguments) {
           await enqueueFunction(argument);
         }
@@ -423,8 +432,32 @@ const runtimeRoots = async (source: ts.SourceFile, checker: Checker) => {
     }
     await visitChildren(node, findEntries);
   };
-  await findEntries(source);
-  for (const statement of source.statements) {
+  if (entryNames === undefined) {
+    await findEntries(source);
+  } else {
+    for (const statement of source.statements) {
+      if (
+        !(
+          ts.isFunctionDeclaration(statement) ||
+          ts.isVariableStatement(statement)
+        ) ||
+        !statement.modifiers?.some(
+          (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+        )
+      ) {
+        continue;
+      }
+      const names = ts.isFunctionDeclaration(statement)
+        ? [statement.name]
+        : statement.declarationList.declarations.map(({ name }) => name);
+      for (const name of names) {
+        if (name && ts.isIdentifier(name) && entryNames.has(name.text)) {
+          await enqueueFunction(name);
+        }
+      }
+    }
+  }
+  for (const statement of entryNames === undefined ? source.statements : []) {
     if (!ts.isExpressionStatement(statement)) {
       continue;
     }
@@ -519,6 +552,7 @@ const runtimeSymbols = async (roots: readonly ts.Node[], checker: Checker) => {
     if (
       ts.isIdentifier(node) &&
       !isTypePosition(node) &&
+      !isDeclarationName(node) &&
       !ts.isImportSpecifier(node.parent) &&
       !ts.isImportClause(node.parent) &&
       !ts.isNamespaceImport(node.parent)
@@ -536,6 +570,37 @@ const runtimeSymbols = async (roots: readonly ts.Node[], checker: Checker) => {
     }
   }
   return symbols;
+};
+
+const invokedRuntimeSymbols = async (
+  roots: readonly ts.Node[],
+  checker: Checker,
+) => {
+  const identifiers: ts.Identifier[] = [];
+  for (const root of roots) {
+    visitRuntime(root, (node) => {
+      if (!ts.isCallExpression(node)) {
+        return;
+      }
+      const callee = calledIdentifier(node);
+      if (callee) {
+        identifiers.push(callee);
+      }
+      const entry = entryPointName(node.expression);
+      if (entry && TEST_ENTRY_POINTS.has(entry)) {
+        for (const argument of node.arguments) {
+          if (ts.isIdentifier(argument)) {
+            identifiers.push(argument);
+          }
+        }
+      }
+    });
+  }
+  return new Set(
+    (await checker.getSymbolAtLocation(identifiers)).filter(
+      (symbol) => symbol !== undefined,
+    ),
+  );
 };
 
 const includesRuntimeBinding = (
@@ -663,7 +728,10 @@ const siblingExportNames = async ({
   return names;
 };
 
+type SupportSubject = { file: string; imported: string };
+
 type ImportReachability = {
+  supportSubjects: SupportSubject[];
   hasFactory: boolean;
   importedRuntimeBindings: Set<CompilerSymbol>;
   patchedDependencyBindings: Set<CompilerSymbol>;
@@ -679,6 +747,7 @@ type ImportReachabilityOptions = {
   source: ts.SourceFile;
   checker: Checker;
   usedSymbols: ReadonlySet<CompilerSymbol>;
+  invokedSymbols: ReadonlySet<CompilerSymbol>;
   patchedPackages: ReadonlySet<string>;
 };
 
@@ -712,25 +781,20 @@ const packageNameOf = (specifier: string): string => {
     : (segments.at(0) ?? specifier);
 };
 
-type DynamicImport = { specifier: string; bindings: readonly CompilerSymbol[] };
+type DynamicImport = {
+  specifier: string;
+  bindings: readonly { symbol: CompilerSymbol; imported: string }[];
+};
 
-// `const { name } = await import("specifier")` at the top of a test.
+// Destructured imports may initialize a subject inside a test or its helpers.
 const dynamicImport = async (
-  statement: ts.Statement,
+  declaration: ts.VariableDeclaration,
   checker: Checker,
 ): Promise<DynamicImport | undefined> => {
-  if (
-    !ts.isVariableStatement(statement) ||
-    statement.declarationList.declarations.length !== 1
-  ) {
-    return undefined;
-  }
-  const declaration = statement.declarationList.declarations.at(0);
-  const awaited = declaration?.initializer;
+  const awaited = declaration.initializer;
   const imported =
     awaited && ts.isAwaitExpression(awaited) ? awaited.expression : awaited;
   if (
-    !declaration ||
     !ts.isObjectBindingPattern(declaration.name) ||
     !imported ||
     !ts.isCallExpression(imported) ||
@@ -743,14 +807,46 @@ const dynamicImport = async (
   if (!specifier || !ts.isStringLiteral(specifier)) {
     return undefined;
   }
-  const names = declaration.name.elements.flatMap(({ name }) =>
-    name === undefined ? [] : [name],
-  );
-  const symbols = await checker.getSymbolAtLocation(names);
-  return {
-    specifier: specifier.text,
-    bindings: symbols.filter((symbol) => symbol !== undefined),
-  };
+  const bindings = [];
+  for (const element of declaration.name.elements) {
+    if (!element.name || !ts.isIdentifier(element.name)) {
+      continue;
+    }
+    const symbol = await checker.getSymbolAtLocation(element.name);
+    const exportName = element.propertyName ?? element.name;
+    if (symbol && ts.isIdentifier(exportName)) {
+      bindings.push({ symbol, imported: exportName.text });
+    }
+  }
+  return { specifier: specifier.text, bindings };
+};
+
+const reachedNamedImports = async (
+  statement: ts.ImportDeclaration,
+  checker: Checker,
+  usedSymbols: ReadonlySet<CompilerSymbol>,
+): Promise<string[]> => {
+  const clause = statement.importClause;
+  const bindings = clause?.namedBindings;
+  if (
+    !clause ||
+    clause.phaseModifier === ts.SyntaxKind.TypeKeyword ||
+    !bindings ||
+    !ts.isNamedImports(bindings)
+  ) {
+    return [];
+  }
+  const names: string[] = [];
+  for (const element of bindings.elements) {
+    if (element.isTypeOnly) {
+      continue;
+    }
+    const symbol = await checker.getSymbolAtLocation(element.name);
+    if (symbol && usedSymbols.has(symbol)) {
+      names.push(element.propertyName?.text ?? element.name.text);
+    }
+  }
+  return names;
 };
 
 const importReachability = async ({
@@ -759,8 +855,10 @@ const importReachability = async ({
   source,
   checker,
   usedSymbols,
+  invokedSymbols,
   patchedPackages,
 }: ImportReachabilityOptions): Promise<ImportReachability> => {
+  const supportSubjects: SupportSubject[] = [];
   const importedRuntimeBindings = new Set<CompilerSymbol>();
   const patchedDependencyBindings = new Set<CompilerSymbol>();
   const reachedSiblingExports = new Set<string>();
@@ -770,17 +868,36 @@ const importReachability = async ({
   );
   let hasFactory = false;
   let reachesSourceFileIndex = false;
-  for (const statement of source.statements) {
-    const dynamic = await dynamicImport(statement, checker);
-    if (dynamic && patchedPackages.has(packageNameOf(dynamic.specifier))) {
-      for (const symbol of dynamic.bindings) {
-        patchedDependencyBindings.add(symbol);
-      }
-    } else if (dynamic && existingSource(repoRoot, file, dynamic.specifier)) {
-      for (const symbol of dynamic.bindings) {
-        importedRuntimeBindings.add(symbol);
+  const visitImports = async (node: ts.Node): Promise<void> => {
+    if (ts.isVariableDeclaration(node)) {
+      const dynamic = await dynamicImport(node, checker);
+      if (dynamic) {
+        const resolved = existingSource(repoRoot, file, dynamic.specifier);
+        const support =
+          resolved === undefined
+            ? existingSource(repoRoot, file, dynamic.specifier, true)
+            : undefined;
+        for (const { symbol, imported } of dynamic.bindings) {
+          if (patchedPackages.has(packageNameOf(dynamic.specifier))) {
+            patchedDependencyBindings.add(symbol);
+          } else if (support && invokedSymbols.has(symbol)) {
+            supportSubjects.push({ file: support, imported });
+          } else if (resolved) {
+            importedRuntimeBindings.add(symbol);
+            if (
+              usedSymbols.has(symbol) &&
+              resolved.replace(/\.[cm]?[jt]sx?$/u, "") === siblingStem
+            ) {
+              reachedSiblingExports.add(imported);
+            }
+          }
+        }
       }
     }
+    await visitChildren(node, visitImports);
+  };
+  await visitImports(source);
+  for (const statement of source.statements) {
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier)
@@ -803,6 +920,21 @@ const importReachability = async ({
       statement.moduleSpecifier.text,
     );
     if (!resolvedSource) {
+      const support = existingSource(
+        repoRoot,
+        file,
+        statement.moduleSpecifier.text,
+        true,
+      );
+      if (support) {
+        for (const imported of await reachedNamedImports(
+          statement,
+          checker,
+          invokedSymbols,
+        )) {
+          supportSubjects.push({ file: support, imported });
+        }
+      }
       continue;
     }
     for (const name of namedImports(statement)) {
@@ -841,6 +973,7 @@ const importReachability = async ({
     }
   }
   return {
+    supportSubjects,
     hasFactory,
     importedRuntimeBindings,
     patchedDependencyBindings,
@@ -909,6 +1042,41 @@ const localCollisionFindings = async ({
   return findings;
 };
 
+// Include support modules as compiler roots even when their application's alias
+// is not part of this repository-wide program. Discovery alone never grants
+// reachability: only the imported export's invoked body is inspected below.
+const supportSourceRoots = (
+  repoRoot: string,
+  files: readonly string[],
+): string[] => {
+  const discovered = new Set<string>();
+  const queue = [...files];
+  const transpilers = {
+    ts: new Bun.Transpiler({ loader: "ts" }),
+    tsx: new Bun.Transpiler({ loader: "tsx" }),
+  };
+  for (const file of queue) {
+    const text = readFileSync(path.resolve(repoRoot, file), "utf-8");
+    const transpiler = file.endsWith("x") ? transpilers.tsx : transpilers.ts;
+    for (const { path: specifier } of transpiler.scanImports(
+      text.replace(/^#![^\n]*\n/u, ""),
+    )) {
+      const resolved = existingSource(repoRoot, file, specifier, true);
+      if (
+        !resolved ||
+        resolved.endsWith(".json") ||
+        discovered.has(resolved) ||
+        !TEST_SUPPORT.test(repoRelativePath(repoRoot, resolved))
+      ) {
+        continue;
+      }
+      discovered.add(resolved);
+      queue.push(repoRelativePath(repoRoot, resolved));
+    }
+  }
+  return [...discovered];
+};
+
 export const analyzeTestSubjectReachability = async ({
   repoRoot,
   files = trackedTests(repoRoot),
@@ -917,7 +1085,10 @@ export const analyzeTestSubjectReachability = async ({
   const testFiles = files.filter(isReachabilityTest);
   const findings: ReachabilityFinding[] = [];
   const opened = await createProgram({
-    rootNames: testFiles.map((file) => path.join(repoRoot, file)),
+    rootNames: [
+      ...testFiles.map((file) => path.join(repoRoot, file)),
+      ...supportSourceRoots(repoRoot, testFiles),
+    ],
     compilerOptions: {
       allowJs: true,
       jsx: "preserve",
@@ -934,6 +1105,58 @@ export const analyzeTestSubjectReachability = async ({
     const sourceFor =
       siblingSource ??
       (async (filename: string) => await program.getSourceFile(filename));
+    const supportReachesSubject = async (
+      subjects: readonly SupportSubject[],
+      visited = new Set<string>(),
+    ): Promise<boolean> => {
+      for (const subject of subjects) {
+        const key = `${subject.file}:${subject.imported}`;
+        if (visited.has(key)) {
+          continue;
+        }
+        visited.add(key);
+        const source = await program.getSourceFile(subject.file);
+        if (!source) {
+          panic(`Could not inspect test support ${subject.file}`);
+        }
+        const roots = await runtimeRoots(
+          source,
+          checker,
+          new Set([subject.imported]),
+        );
+        const usedSymbols = await runtimeSymbols(roots, checker);
+        const invokedSymbols = await invokedRuntimeSymbols(roots, checker);
+        const file = repoRelativePath(repoRoot, subject.file);
+        const imports = await importReachability({
+          repoRoot,
+          file,
+          source,
+          checker,
+          usedSymbols,
+          invokedSymbols,
+          patchedPackages,
+        });
+        if (
+          namedCategory({
+            file,
+            fileText: source.text,
+            reachableText: runtimeText(roots, source),
+          }) ||
+          includesRuntimeBinding(
+            usedSymbols,
+            imports.importedRuntimeBindings,
+          ) ||
+          includesRuntimeBinding(
+            usedSymbols,
+            imports.patchedDependencyBindings,
+          ) ||
+          (await supportReachesSubject(imports.supportSubjects, visited))
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
     for (const file of testFiles) {
       const absolute = path.join(repoRoot, file);
       const source =
@@ -942,18 +1165,24 @@ export const analyzeTestSubjectReachability = async ({
       const text = source.text;
       const reachableRuntime = await runtimeRoots(source, checker);
       const usedSymbols = await runtimeSymbols(reachableRuntime, checker);
+      const invokedSymbols = await invokedRuntimeSymbols(
+        reachableRuntime,
+        checker,
+      );
       const {
         hasFactory,
         importedRuntimeBindings,
         patchedDependencyBindings,
         reachesSourceFileIndex,
         reachedSiblingExports,
+        supportSubjects,
       } = await importReachability({
         repoRoot,
         file,
         source,
         checker,
         usedSymbols,
+        invokedSymbols,
         patchedPackages,
       });
       let category = namedCategory({
@@ -970,6 +1199,9 @@ export const analyzeTestSubjectReachability = async ({
         includesRuntimeBinding(usedSymbols, patchedDependencyBindings)
       ) {
         category = "patched-dependency-subject";
+      }
+      if (!category && (await supportReachesSubject(supportSubjects))) {
+        category = "source-factory";
       }
       if (!category) {
         let attempted: readonly ReachabilityCategory[] =

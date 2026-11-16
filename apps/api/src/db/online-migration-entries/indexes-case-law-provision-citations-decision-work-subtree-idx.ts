@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-provision-citations-decision-work-subtree-idx",
   revision: 455,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

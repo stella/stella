@@ -872,7 +872,7 @@ export const settlePendingCellRecoveryStart = async (
  * are deliberately irrelevant: ownership and deadline on each cell are the
  * complete recovery signal.
  */
-export const reconcileOrphanedWorkflows = async (
+const reconcileOrphanedWorkflows = async (
   _options: Record<string, never>,
   { database, extractionRuns }: OrphanReconciliationWorker,
 ): Promise<void> => {

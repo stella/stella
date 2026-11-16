@@ -20,11 +20,6 @@ import type { UsageServiceTier } from "@/api/db/schema";
 export type DataRegion = "eu" | "global" | "ch";
 export type AIRequestServiceTier = UsageServiceTier;
 
-export const STELLA_PROVIDER_METADATA_KEY = "stella";
-export const SERVICE_TIER_PROVIDER_METADATA_KEY = "effectiveServiceTier";
-export const FALLBACK_FROM_SERVICE_TIER_PROVIDER_METADATA_KEY =
-  "fallbackFromServiceTier";
-
 /**
  * Check whether a provider supports regional routing.
  * Used at config save time to reject unsupported
@@ -101,7 +96,7 @@ export type OrgDecisionModelConfig =
       modelId: string;
     };
 
-export type StandardOrgAIProviderConfig = {
+type StandardOrgAIProviderConfig = {
   provider: Exclude<AIProvider, "azure_foundry" | "huggingface" | "anthropic">;
   /** Decrypted API key. */
   apiKey: string;
@@ -117,7 +112,7 @@ type AnthropicOrgAIProviderConfig = {
   region?: DataRegion | undefined;
 };
 
-export type AzureFoundryOrgAIProviderConfig = {
+type AzureFoundryOrgAIProviderConfig = {
   provider: "azure_foundry";
   /** Decrypted API key. */
   apiKey: string;
@@ -126,7 +121,7 @@ export type AzureFoundryOrgAIProviderConfig = {
   apiVersion?: string | undefined;
 };
 
-export type HuggingFaceOrgAIProviderConfig = {
+type HuggingFaceOrgAIProviderConfig = {
   provider: "huggingface";
   /** Decrypted API key (HF user token or Inference Endpoint token). */
   apiKey: string;

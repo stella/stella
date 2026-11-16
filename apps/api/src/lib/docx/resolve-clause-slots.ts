@@ -42,16 +42,16 @@ export const resolveClauseSlotBodies = async (
     organizationId,
   );
 
-  const bodies: Record<string, ClauseBody> = {};
+  const bodies = new Map<string, ClauseBody>();
 
   for (const slot of slots) {
     const body = resolved.get(slot.patchKey)?.body;
     if (body) {
-      bodies[slot.patchKey] = body;
+      bodies.set(slot.patchKey, body);
     }
   }
 
-  return bodies;
+  return Object.fromEntries(bodies);
 };
 
 /**
@@ -79,7 +79,7 @@ export const resolveClauseSlotTexts = async (
     organizationId,
   );
 
-  const texts: Record<string, string> = {};
+  const texts = new Map<string, string>();
 
   for (const slot of slots) {
     const body = bodies.get(slot.patchKey)?.body;
@@ -87,13 +87,14 @@ export const resolveClauseSlotTexts = async (
       // Flatten paragraph breaks so the clause flows as one inline run in the
       // preview (wraps within the column); the actual fill inserts the full
       // multi-paragraph rich clause. Not truncated — the author sees it all.
-      texts[slot.name] = clauseBodyToPlainText(body)
-        .replace(/\s+/gu, " ")
-        .trim();
+      texts.set(
+        slot.name,
+        clauseBodyToPlainText(body).replace(/\s+/gu, " ").trim(),
+      );
     }
   }
 
-  return texts;
+  return Object.fromEntries(texts);
 };
 
 // ── Batched resolution ───────────────────────────────

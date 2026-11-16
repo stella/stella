@@ -292,221 +292,188 @@ describe("createSafeHandler workspace audit binding", () => {
 
 describe("createSafeRootHandler usage preflight", () => {
   test("retains the complete static refusal response for exhausted managed usage", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    const previousProvider = env.AI_PROVIDER;
-    const previousKey = env.OPENROUTER_API_KEY;
-    const previousConfiguredAccess = env.FEATURE_CONFIGURED_ACCESS;
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    env.FEATURE_CONFIGURED_ACCESS = false;
-    env.AI_PROVIDER = "openrouter";
-    env.OPENROUTER_API_KEY = "sk-test";
-    try {
-      let bodyRan = false;
-      const endpoint = createSafeRootHandler(
-        {
-          contract: "patch",
-          permissions: { workspace: ["read"] },
-          accountAccess: ACCOUNT_ACCESS.sandbox,
-          mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat" },
-        },
-        async function* () {
-          bodyRan = true;
-          return Result.ok({ ok: true });
-        },
-      );
-      const safeDb = safeDbFromScoped(
-        async (run) =>
-          await run(
-            asTestRaw({
-              select: () => ({
-                from: () => ({
-                  where: () =>
-                    Object.assign([{ total: 0 }], {
-                      limit: async () =>
-                        await Promise.resolve([
-                          {
-                            status: "active",
-                            currentPeriodStart: new Date("2020-01-01"),
-                            currentPeriodEnd: new Date("2099-01-01"),
-                          },
-                        ]),
-                    }),
-                }),
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
+    testState.setConfig("FEATURE_CONFIGURED_ACCESS", false);
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("OPENROUTER_API_KEY", "sk-test");
+
+    let bodyRan = false;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+        requiresUsage: { actionType: "chat" },
+      },
+      async function* () {
+        bodyRan = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const safeDb = safeDbFromScoped(
+      async (run) =>
+        await run(
+          asTestRaw({
+            select: () => ({
+              from: () => ({
+                where: () =>
+                  Object.assign([{ total: 0 }], {
+                    limit: async () =>
+                      await Promise.resolve([
+                        {
+                          status: "active",
+                          currentPeriodStart: new Date("2020-01-01"),
+                          currentPeriodEnd: new Date("2099-01-01"),
+                        },
+                      ]),
+                  }),
               }),
             }),
-          ),
-      );
-      const result = await endpoint.handler(createContext(endpoint, safeDb));
-      expect(bodyRan).toBe(false);
-      if (!("code" in result)) {
-        throw new TypeError("Expected static admission refusal");
-      }
-      expect({ status: result.code, body: result.response }).toEqual({
-        status: 402,
-        body: {
-          code: "usage_limit_exceeded",
-          message: "Usage limit exceeded: need 2, have 0",
-          reason: "usage_limit_exceeded",
-          required: 2,
-          available: 0,
-        },
-      });
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-      env.FEATURE_CONFIGURED_ACCESS = previousConfiguredAccess;
-      env.AI_PROVIDER = previousProvider;
-      env.OPENROUTER_API_KEY = previousKey;
+          }),
+        ),
+    );
+    const result = await endpoint.handler(createContext(endpoint, safeDb));
+    expect(bodyRan).toBe(false);
+    if (!("code" in result)) {
+      throw new TypeError("Expected static admission refusal");
     }
+    expect({ status: result.code, body: result.response }).toEqual({
+      status: 402,
+      body: {
+        code: "usage_limit_exceeded",
+        message: "Usage limit exceeded: need 2, have 0",
+        reason: "usage_limit_exceeded",
+        required: 2,
+        available: 0,
+      },
+    });
   });
 
   test("uses effective provider tier for preflight cost", () => {
-    const previousProvider = env.AI_PROVIDER;
-    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
-    try {
-      env.AI_PROVIDER = "anthropic";
-      env.ANTHROPIC_API_KEY = "sk-test";
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
 
-      const context = resolveMeteringContext({
-        metering: {
-          actionType: "chat",
-          modelTask: "short-text",
-          serviceTier: "flex",
-        },
-        organizationId: toSafeId<"organization">(
-          "019e7000-0000-7000-8000-000000000002",
-        ),
-        orgAIConfig: null,
-        workspaceId: null,
-        userId: toSafeId<"user">("019e7000-0000-7000-8000-000000000001"),
-      });
+    const context = resolveMeteringContext({
+      metering: {
+        actionType: "chat",
+        modelTask: "short-text",
+        serviceTier: "flex",
+      },
+      organizationId: toSafeId<"organization">(
+        "019e7000-0000-7000-8000-000000000002",
+      ),
+      orgAIConfig: null,
+      workspaceId: null,
+      userId: toSafeId<"user">("019e7000-0000-7000-8000-000000000001"),
+    });
 
-      expect(context.serviceTier).toBe("standard");
-      expect(context.cost).toBe(2);
-    } finally {
-      env.AI_PROVIDER = previousProvider;
-      env.ANTHROPIC_API_KEY = previousAnthropicKey;
-    }
+    expect(context.serviceTier).toBe("standard");
+    expect(context.cost).toBe(2);
   });
 
   test("fails closed when enforced usage preflight cannot read the ledger", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    const previousProvider = env.AI_PROVIDER;
-    const previousKey = env.OPENROUTER_API_KEY;
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    env.AI_PROVIDER = "openrouter";
-    env.OPENROUTER_API_KEY = "sk-test";
-    try {
-      let meteredHandlerCalled = false;
-      const endpoint = createSafeRootHandler(
-        {
-          contract: "patch",
-          permissions: { workspace: ["read"] },
-          accountAccess: ACCOUNT_ACCESS.sandbox,
-          mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat" },
-        },
-        async function* () {
-          meteredHandlerCalled = true;
-          return Result.ok({ ok: true });
-        },
-      );
-      const dbError = new DatabaseError({
-        message: "usage ledger unavailable",
-      });
-      const safeDb: SafeDb = async <T>() => Result.err<T, SafeDbError>(dbError);
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("OPENROUTER_API_KEY", "sk-test");
 
-      const result = await endpoint.handler(createContext(endpoint, safeDb));
+    let meteredHandlerCalled = false;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+        requiresUsage: { actionType: "chat" },
+      },
+      async function* () {
+        meteredHandlerCalled = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const dbError = new DatabaseError({
+      message: "usage ledger unavailable",
+    });
+    const safeDb: SafeDb = async <T>() => Result.err<T, SafeDbError>(dbError);
 
-      expect(meteredHandlerCalled).toBe(false);
-      if (!("code" in result)) {
-        throw new Error("Expected usage preflight to return a status response");
-      }
-      expect(result.code).toBe(500);
-      expect(result.response).toEqual({
-        code: "internal_server_error",
-        message: "Internal server error",
-      });
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-      env.AI_PROVIDER = previousProvider;
-      env.OPENROUTER_API_KEY = previousKey;
+    const result = await endpoint.handler(createContext(endpoint, safeDb));
+
+    expect(meteredHandlerCalled).toBe(false);
+    if (!("code" in result)) {
+      throw new Error("Expected usage preflight to return a status response");
     }
+    expect(result.code).toBe(500);
+    expect(result.response).toEqual({
+      code: "internal_server_error",
+      message: "Internal server error",
+    });
   });
 
   test("skips metering entirely when enforcement is disabled", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    env.USAGE_ENFORCEMENT_ENABLED = false;
-    try {
-      let meteredHandlerCalled = false;
-      let safeDbCalled = false;
-      const endpoint = createSafeRootHandler(
-        {
-          contract: "patch",
-          permissions: { workspace: ["read"] },
-          accountAccess: ACCOUNT_ACCESS.sandbox,
-          mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat" },
-        },
-        async function* () {
-          meteredHandlerCalled = true;
-          return Result.ok({ ok: true });
-        },
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+
+    let meteredHandlerCalled = false;
+    let safeDbCalled = false;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+        requiresUsage: { actionType: "chat" },
+      },
+      async function* () {
+        meteredHandlerCalled = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const safeDb: SafeDb = async <T>() => {
+      safeDbCalled = true;
+      return Result.err<T, SafeDbError>(
+        new DatabaseError({ message: "ledger should not be read" }),
       );
-      const safeDb: SafeDb = async <T>() => {
-        safeDbCalled = true;
-        return Result.err<T, SafeDbError>(
-          new DatabaseError({ message: "ledger should not be read" }),
-        );
-      };
+    };
 
-      const result = await endpoint.handler(createContext(endpoint, safeDb));
+    const result = await endpoint.handler(createContext(endpoint, safeDb));
 
-      expect(safeDbCalled).toBe(false);
-      expect(meteredHandlerCalled).toBe(true);
-      expect(result).toEqual({ ok: true });
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-    }
+    expect(safeDbCalled).toBe(false);
+    expect(meteredHandlerCalled).toBe(true);
+    expect(result).toEqual({ ok: true });
   });
 
   test("does not run usage preflight when the metered role uses BYOK", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    try {
-      let meteredHandlerCalled = false;
-      let safeDbCalled = false;
-      const endpoint = createSafeRootHandler(
-        {
-          contract: "patch",
-          permissions: { workspace: ["read"] },
-          accountAccess: ACCOUNT_ACCESS.sandbox,
-          mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat", modelTask: "short-text" },
-        },
-        async function* () {
-          meteredHandlerCalled = true;
-          return Result.ok({ ok: true });
-        },
-      );
-      const dbError = new DatabaseError({
-        message: "usage ledger should not be read",
-      });
-      const safeDb: SafeDb = async <T>() => {
-        safeDbCalled = true;
-        return Result.err<T, SafeDbError>(dbError);
-      };
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
 
-      const result = await endpoint.handler(
-        createContext(endpoint, safeDb, { orgAIConfig: createOrgAIConfig() }),
-      );
+    let meteredHandlerCalled = false;
+    let safeDbCalled = false;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+        requiresUsage: { actionType: "chat", modelTask: "short-text" },
+      },
+      async function* () {
+        meteredHandlerCalled = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const dbError = new DatabaseError({
+      message: "usage ledger should not be read",
+    });
+    const safeDb: SafeDb = async <T>() => {
+      safeDbCalled = true;
+      return Result.err<T, SafeDbError>(dbError);
+    };
 
-      expect(safeDbCalled).toBe(false);
-      expect(meteredHandlerCalled).toBe(true);
-      expect(result).toEqual({ ok: true });
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-    }
+    const result = await endpoint.handler(
+      createContext(endpoint, safeDb, { orgAIConfig: createOrgAIConfig() }),
+    );
+
+    expect(safeDbCalled).toBe(false);
+    expect(meteredHandlerCalled).toBe(true);
+    expect(result).toEqual({ ok: true });
   });
 });
 
@@ -597,47 +564,43 @@ describe("createSafeRootHandler member AI access", () => {
   });
 
   test("refuses an AI handler for a member without a seat assignment, own key included", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    try {
-      let bodyRan = false;
-      const endpoint = createSafeRootHandler(
-        {
-          contract: "patch",
-          permissions: { workspace: ["read"] },
-          accountAccess: ACCOUNT_ACCESS.sandbox,
-          mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat", laneRouting: true },
-        },
-        async function* () {
-          bodyRan = true;
-          return Result.ok({ ok: true });
-        },
-      );
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
 
-      const result = await endpoint.handler(
-        createContext(endpoint, unreadableLedger, {
-          orgAIConfig: createOrgAIConfig(),
-          orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
-        }),
-      );
+    let bodyRan = false;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+        requiresUsage: { actionType: "chat", laneRouting: true },
+      },
+      async function* () {
+        bodyRan = true;
+        return Result.ok({ ok: true });
+      },
+    );
 
-      expect(bodyRan).toBe(false);
-      if (!("code" in result)) {
-        throw new Error("expected a status response");
-      }
-      expect({ status: result.code, body: result.response }).toEqual({
-        status: 403,
-        body: {
-          code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
-          message:
-            "AI is available only to members with an assigned seat in this " +
-            "organization. Ask an organization admin to assign you one.",
-        },
-      });
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+    const result = await endpoint.handler(
+      createContext(endpoint, unreadableLedger, {
+        orgAIConfig: createOrgAIConfig(),
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+      }),
+    );
+
+    expect(bodyRan).toBe(false);
+    if (!("code" in result)) {
+      throw new Error("expected a status response");
     }
+    expect({ status: result.code, body: result.response }).toEqual({
+      status: 403,
+      body: {
+        code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+        message:
+          "AI is available only to members with an assigned seat in this " +
+          "organization. Ask an organization admin to assign you one.",
+      },
+    });
   });
 
   test("runs a handler that declares no AI usage for the same member", async () => {

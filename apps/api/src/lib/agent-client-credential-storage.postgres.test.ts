@@ -1,6 +1,8 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq, sql } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import {
   AGENT_CLIENT_BATCH_SIZE,
@@ -30,17 +32,16 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 
-let priorStorageSetting = false;
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const databaseUrl = process.env["DATABASE_URL"];
+
 beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+  testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
 });
 
 type Transaction = Parameters<Parameters<GatedTestDb["transaction"]>[0]>[0];
-const databaseUrl = process.env["DATABASE_URL"];
+
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const credential = Buffer.alloc(32, 0x2a).toHex();
 
@@ -272,7 +273,7 @@ if (!databaseUrl || !enabled) {
         if (!job) {
           throw new Error("scheduler fixture missing");
         }
-        env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+        testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", false);
         const unusedDatabase = new Proxy(db, {
           get() {
             throw new Error("disabled task must not access storage");

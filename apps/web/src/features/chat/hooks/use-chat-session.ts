@@ -143,6 +143,7 @@ import {
   withQueuedMessageMoved,
   withQueuedMessageRemoved,
 } from "@/features/chat/chat-queue.logic";
+import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import {
   type ChatRuntime,
   type ChatSendMessageOptions,
@@ -205,13 +206,14 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {
   APIError,
+  chatRefusal,
   internalToolErrorMessage,
   toAPIError,
   unwrapApiResponse,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { readQueryResult } from "@/lib/errors/query-result";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { fileOptions } from "@/lib/files/queries";
 import {
   isPlaybookDraftViewPayload,
@@ -1138,7 +1140,20 @@ export const useChatSession = ({
       if (isQueueInsteadRefusal(acceptance.error)) {
         return await enqueueMessage(message, options);
       }
-      notifyUserError(acceptance.error, t("chat.sendError"));
+      // The composer holds the message again; the notice says why it was
+      // not sent in the words the thread used for a failed request.
+      // The server's refusal is found beneath the transport's wrapping.
+      const refusal = chatRefusal(acceptance.error);
+      const copy = chatErrorTranslationKey(acceptance.error);
+      if (refusal !== null) {
+        // Its message, as the thread showed it, unless a notice of its own
+        // (an expired session, an admission refusal) says more.
+        notifyUserError(refusal, refusal.message);
+      } else if (copy === "chat.sendError") {
+        notifyUserError(acceptance.error, t(copy));
+      } else {
+        notifyUserProblem(t(copy));
+      }
       return CHAT_SEND_KEPT;
     },
     [

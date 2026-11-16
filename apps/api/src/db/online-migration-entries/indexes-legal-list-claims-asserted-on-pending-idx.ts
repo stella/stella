@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-legal-list-claims-asserted-on-pending-idx",
   revision: 1451,
+  lifecycle: "pending",
   type: "indexes",
   values: [
     {

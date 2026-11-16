@@ -173,12 +173,12 @@ const projectToolAnnotation = (cli: ParsedCliAnnotation): ToolAnnotation => {
     annotation.inputOnly = cli.inputOnly;
   }
   if (cli.discriminator !== undefined) {
-    const subcommands: Record<string, DiscriminatorSubcommand> = {};
-    for (const [key, subcommand] of Object.entries(
-      cli.discriminator.subcommands,
-    )) {
-      subcommands[key] = projectDiscriminatorSubcommand(subcommand);
-    }
+    const subcommands = Object.fromEntries(
+      Object.entries(cli.discriminator.subcommands).map(([key, subcommand]) => [
+        key,
+        projectDiscriminatorSubcommand(subcommand),
+      ]),
+    );
     annotation.discriminator = {
       prop: cli.discriminator.prop,
       subcommands,
@@ -242,7 +242,12 @@ for (const tool of snapshot.output) {
     inputSchema: tool.inputSchema,
     ...(tool.annotations === undefined ? {} : { annotations }),
   });
-  toolAnnotations[tool.name] = projectToolAnnotation(tool.cli);
+  Object.defineProperty(toolAnnotations, tool.name, {
+    value: projectToolAnnotation(tool.cli),
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
 }
 
 // Project the committed capability-catalog snapshot into leaf commands and

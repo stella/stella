@@ -1214,20 +1214,3 @@ export const pickRequestedScopes = ({
 
   return arrayOrEmpty(protectedResource.scopes_supported);
 };
-
-export const assertOAuthConnector = ({
-  authType,
-}: {
-  authType: string;
-}): Result<void, HandlerError<400>> => {
-  if (authType === "oauth2") {
-    return Result.ok(undefined);
-  }
-
-  return Result.err(
-    new HandlerError({
-      status: 400,
-      message: "MCP connector does not use OAuth",
-    }),
-  );
-};
