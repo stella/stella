@@ -604,9 +604,7 @@ test("a downloaded speech model can be removed, also while stella AI transcribes
   // Gone, and stella AI needs no download prompt in its place.
   await waitFor(() => {
     expect(
-      document.body.textContent?.includes(
-        defaultMessages.dictation.removeModel,
-      ),
+      document.body.textContent.includes(defaultMessages.dictation.removeModel),
     ).toBe(false);
   });
   expect(document.body.textContent).not.toContain(
