@@ -123,6 +123,7 @@ import {
 import type {
   ChatTurnObservation,
   ChatTurnOwnership,
+  ChatTurnStoredSettlement,
 } from "@/api/handlers/chat/chat-turn-run";
 import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
@@ -247,9 +248,10 @@ import {
 } from "@/api/handlers/chat/tools/tool-scope";
 import { loadTurnPromptSources } from "@/api/handlers/chat/turn-prompt-sources";
 import {
+  type AssistantTurnFailure,
   type CompletedTurnFollowUps,
   persistStreamedTurn,
-  settleStreamedAssistantTurn,
+  type StreamedTurnPersistence,
   type StreamedTurnSettlementContext,
 } from "@/api/handlers/chat/turns/settle";
 import type {
@@ -351,6 +353,11 @@ import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
 import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
+
+const COMPLETED_TURN_FOLLOW_UPS_FAILED = failureSink({
+  event: "chat.turn.completed_follow_ups_failed",
+  expected: [],
+});
 
 /**
  * Dev model overrides (`body.devModelId`) are local-only: reject them outside
@@ -556,6 +563,61 @@ type ChatSendLifecycleOptions = {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
   rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
+};
+
+/**
+ * A streamed turn's `onFinish` boundary. The response is already streaming,
+ * so no outer catch settles the turn: without this it stays `running` until
+ * its lease lapses and the thread is dead. One boundary for every failure,
+ * expected or thrown, so the turn row is settled exactly once before the
+ * stream reports the error. Returns what the row now holds, for the run to
+ * count.
+ */
+const settleStreamedAssistantTurn = async ({
+  persist,
+  run,
+  runFollowUps,
+  threadId,
+}: {
+  persist: () => Promise<StreamedTurnPersistence>;
+  run: ChatTurnRun;
+  runFollowUps: (followUps: CompletedTurnFollowUps) => Promise<void>;
+  threadId: SafeId<"chatThread">;
+}): Promise<ChatTurnStoredSettlement> => {
+  const settled = (
+    await Result.tryPromise({
+      try: persist,
+      catch: (cause): AssistantTurnFailure => ({
+        code: "internal",
+        error: new HandlerError({
+          status: 500,
+          message: "Failed to settle assistant turn",
+          cause,
+        }),
+      }),
+    })
+  ).andThen((result) => result);
+  if (Result.isError(settled)) {
+    const { code, error } = settled.error;
+    await run.fail(code, true);
+    throw error;
+  }
+  // The turn is stored from here, so a follow-up that throws is reported and
+  // never reaches the boundary above: a completed turn cannot then read as
+  // failed.
+  const { followUps, settlement } = settled.value;
+  if (followUps !== null) {
+    const followedUp = await Result.tryPromise(
+      async () => await runFollowUps(followUps),
+    );
+    if (Result.isError(followedUp)) {
+      observeFailure(followedUp.error, {
+        sink: COMPLETED_TURN_FOLLOW_UPS_FAILED,
+        ctx: { threadId },
+      });
+    }
+  }
+  return settlement;
 };
 
 const CHECKPOINT_RESTORATION_FAILED = failureSink({
