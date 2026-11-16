@@ -396,20 +396,60 @@ export const corpusProjectionOfflineShardCapAfterKill = (
 };
 
 /**
- * Whether the rate a run achieved cannot index `bytes` within the kill
- * budget: the run's evidence that a lone revision killed at its deadline was
- * too slow for the engine rather than at fault itself. The measurement is
- * every shard the indexer ran to its own end before this one (ingested, or
- * failed on what it held), never a killed one: a kill bounds the rate only
- * from above, and the revision under judgement may be what held it up. With
- * no such measurement there is no evidence, and the kill is the revision's.
+ * One shard the indexer ingested to its end: its bytes, and how long the
+ * indexer ran on it, measured by the runner on the same monotonic clock that
+ * enforces `killAfterMs`.
  */
-export const corpusProjectionOfflineRateCannotIndex = (
-  completed: { bytes: number; ms: number },
-  bytes: number,
-  killBudgetMs: number,
-): boolean =>
-  completed.ms > 0 && completed.bytes * killBudgetMs < bytes * completed.ms;
+export type CorpusProjectionOfflineIngestedShard = {
+  bytes: number;
+  ms: number;
+};
+
+/**
+ * Who a lone revision killed at its deadline with documents short is charged
+ * to:
+ * - `budget_short`: the kill says nothing about the revision, because the
+ *   budget it was handed was short. Either it was below the plan's indexing
+ *   window (staging or admission ate the rest), or a shard this run ingested
+ *   to its end, at least as large, needed longer at its own rate for this
+ *   revision's bytes than the revision was handed. Nobody is charged and the
+ *   run stops as an infrastructure failure.
+ * - `revision`: otherwise. It had at least the window the plan sized for the
+ *   largest revision at the policy's rate, and no comparable shard says it
+ *   needed more, so it is charged like a lone failure on its content.
+ *
+ * This judges the budget, not the engine: an engine slower than the policy
+ * gets its comparable shards killed rather than ingested, so no measurement
+ * here could show it. That case is caught where it shows, by shards of
+ * several killed at their deadline, which halve the shard byte cap and stop
+ * the run `rate_too_slow` once half no longer holds the largest revision.
+ * Only shards at least as large count, since a smaller one carries the fixed
+ * time of a process start, a commit and merges. Only ingested ones count: a
+ * failure may stop on its first line, and a kill bounds nothing from below.
+ */
+export const corpusProjectionOfflineLoneKillJudgement = (
+  plan: Pick<CorpusProjectionOfflinePlan, "indexingWindowMs">,
+  {
+    ingested,
+    bytes,
+    killAfterMs,
+  }: {
+    ingested: readonly CorpusProjectionOfflineIngestedShard[];
+    bytes: number;
+    killAfterMs: number;
+  },
+): "budget_short" | "revision" => {
+  if (killAfterMs < plan.indexingWindowMs) {
+    return "budget_short";
+  }
+  // At a comparable shard's rate, `bytes` take `ms * bytes / shard.bytes`.
+  return ingested.some(
+    (shard) =>
+      shard.bytes >= bytes && shard.ms * bytes > killAfterMs * shard.bytes,
+  )
+    ? "budget_short"
+    : "revision";
+};
 
 /**
  * How many leases the next reservation page may take, so the blocks it

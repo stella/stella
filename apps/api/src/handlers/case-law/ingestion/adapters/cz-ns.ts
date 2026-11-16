@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: [cz-ns] replay reads identity from the stored listing row where the envelope keeps one; every row that replayed before builds the same decision.
 // parser-output-unchanged: [cz-ns] the legacy identity fields decide which row a document writes to; the parsed output is unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
@@ -58,7 +59,6 @@ import {
   EMPTY_AST,
   encodeSourceRawEnvelope,
   excludedSourceSurface,
-  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -336,9 +336,16 @@ const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "textField", key: "legalSentence" },
   },
-  "Senátní značka": legacyExcludedSourceField(
-    "The same docket under the label this court prints for its insolvency senate register. The row's docket is the one the listing entry states, which is what the document was fetched by.",
-  ),
+  "Senátní značka": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: [],
+      reason:
+        "The detail page retains the senate docket exactly as labelled, independently of the listing docket",
+    },
+  },
   /**
    * The deciding court, which is not always this publisher's own. Stored as
    * the row's court, through `czDecisionCourt`: where the decision's ECLI

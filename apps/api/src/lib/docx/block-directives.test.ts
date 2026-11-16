@@ -278,6 +278,26 @@ describe("resolvePath", () => {
 // ── flattenTemplateData ──────────────────────────────────
 
 describe("flattenTemplateData", () => {
+  test("flat template data preserves own string entries", () => {
+    assertProperty(
+      "flat template data preserves own string entries",
+      fc.property(
+        fc.array(fc.tuple(fc.string(), fc.string()), { maxLength: 50 }),
+        (entries) => {
+          const data = Object.fromEntries([
+            ["__proto__", "prototype field"],
+            ["constructor", "constructor field"],
+            ["toString", "string field"],
+            ...entries,
+          ]);
+          const flattened = flattenTemplateData(data);
+          expect(Object.entries(flattened)).toEqual(Object.entries(data));
+          expect(Object.getPrototypeOf(flattened)).toBe(Object.prototype);
+        },
+      ),
+    );
+  });
+
   test("flat string values", () => {
     expect(flattenTemplateData({ name: "Alice", city: "Prague" })).toEqual({
       name: "Alice",

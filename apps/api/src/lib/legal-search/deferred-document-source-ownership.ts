@@ -10,7 +10,7 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withTimeout } from "@/api/lib/with-timeout";
 
-export class DeferredDocumentOwnershipLostError extends TaggedError(
+class DeferredDocumentOwnershipLostError extends TaggedError(
   "DeferredDocumentOwnershipLostError",
 )<{ message: string }> {}
 

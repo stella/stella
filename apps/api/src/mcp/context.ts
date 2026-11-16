@@ -159,7 +159,7 @@ import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
 import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
 
-export type McpOperationDatabaseScope = {
+type McpOperationDatabaseScope = {
   /**
    * Add one workspace only when it belongs to the access map captured by this
    * MCP request. Returns false instead of minting scope for an unknown ID.

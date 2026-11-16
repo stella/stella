@@ -75,6 +75,10 @@ import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
+  type ChatTurnRunCut,
+  chatTurnRunCutOf,
+} from "@/api/handlers/chat/chat-turn-run-cut";
+import {
   type LocalRunRouteRefusal,
   type LocalRunTarget,
   routeLocalRun,
@@ -193,8 +197,10 @@ type LocalRunStreamInput = {
   resume: readonly RunAgentResumeItem[] | undefined;
   /**
    * The turn's own cut: a stop on any API task, a lost owner or admission,
-   * or a failed production. It interrupts the run on the computer. No
-   * deadline is among them (`ChatTurnRunBound`).
+   * or a failed production, told apart by its reason (`chatTurnRunCutOf`).
+   * Its kind decides whether it interrupts the run on the computer
+   * (`LOCAL_RUN_CUT_STOPS_COMPUTER`). No deadline is among them
+   * (`ChatTurnRunBound`).
    */
   abortSignal: AbortSignal;
 };
@@ -1288,9 +1294,9 @@ type ReadRunOptions = {
 };
 
 /**
- * Stop the computer's turn: what a user's stop or a lost owner means for a
- * run nobody reads any more. The gateway keeps one interrupt per run, so a
- * repeat is a no-op.
+ * Stop the computer's turn: what a read that cannot go on, or a cut of the
+ * turn (`LOCAL_RUN_CUT_STOPS_COMPUTER`), means for a run nobody reads any
+ * more. The gateway keeps one interrupt per run, so a repeat is a no-op.
  */
 const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
   const stopped = await context.control.interruptRun({
@@ -1303,6 +1309,19 @@ const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
     observeFailure(stopped.error, { sink: LOCAL_RUN_STORE_SINK });
   }
 };
+
+/**
+ * Whether a cut of the turn, by its kind, stops the computer's turn. After
+ * each of them nobody reads the run any more, so each does.
+ */
+const LOCAL_RUN_CUT_STOPS_COMPUTER: Readonly<Record<ChatTurnRunCut, boolean>> =
+  {
+    "member-stop": true,
+    "owner-lost": true,
+    "production-failed": true,
+    "admission-lost": true,
+    other: true,
+  };
 
 /**
  * Tells the chat while its run waits for the computer to pick it up, once it
@@ -1582,6 +1601,45 @@ const storedRunMessage = (stored: unknown): SequencedRunMessage => {
   }
 };
 
+/**
+ * The run a read holds until it finishes or pauses for an answer. Any other
+ * way the read ends interrupts the run, once: a consumer that stops reading,
+ * a store that cannot be read, or a cut of the turn, while the read waits or
+ * while its consumer is not pulling, of a kind that stops the computer's turn
+ * (`LOCAL_RUN_CUT_STOPS_COMPUTER`).
+ */
+const holdRun = (
+  context: LocalRunContext,
+  runnerRunId: string,
+  abortSignal: AbortSignal,
+) => {
+  let holds = true;
+  let interrupting: Promise<void> | null = null;
+  const stop = async () => {
+    if (holds) {
+      holds = false;
+      interrupting = interruptRun(context, runnerRunId);
+    }
+    await interrupting;
+  };
+  /** The run finished, ended on the gateway's side, or paused. */
+  const release = () => {
+    holds = false;
+  };
+  return {
+    stop,
+    release,
+    /** End the read for the turn's cut, as its kind says. */
+    endForCut: async () => {
+      if (LOCAL_RUN_CUT_STOPS_COMPUTER[chatTurnRunCutOf(abortSignal.reason)]) {
+        await stop();
+        return;
+      }
+      release();
+    },
+  };
+};
+
 async function* readRunChunks({
   context,
   runnerRunId,
@@ -1630,27 +1688,11 @@ async function* readRunChunks({
       runId: runnerRunId,
       seq: position,
     });
-  /**
-   * The run is this reader's to end until it finishes or pauses for an
-   * answer. Any other way the read ends interrupts it, once: a cut of the
-   * turn while the read waits or while its consumer is not pulling, a
-   * consumer that stops reading, a store that cannot be read.
-   */
-  let holdsRun = true;
-  let interrupting: Promise<void> | null = null;
-  const stopRun = async () => {
-    if (holdsRun) {
-      holdsRun = false;
-      interrupting = interruptRun(context, runnerRunId);
-    }
-    await interrupting;
-  };
-  /** The run finished, ended on the gateway's side, or paused. */
-  const releaseRun = () => {
-    holdsRun = false;
-  };
+  const held = holdRun(context, runnerRunId, abortSignal);
+  const stopRun = held.stop;
+  const releaseRun = held.release;
   const onCut = () => {
-    detached(stopRun, "local-run-chunks.interrupt");
+    detached(held.endForCut, "local-run-chunks.interrupt");
   };
   abortSignal.addEventListener("abort", onCut, { once: true });
   const listener = context.runBell.listen(runnerRunId);
@@ -1660,7 +1702,7 @@ async function* readRunChunks({
     }
     for (;;) {
       if (abortSignal.aborted) {
-        await stopRun();
+        await held.endForCut();
         return;
       }
       const page = await control.readEvents({
@@ -1803,8 +1845,9 @@ async function* readRunChunks({
   } finally {
     abortSignal.removeEventListener("abort", onCut);
     listener.close();
-    // A consumer that closed the read early, or a read that threw.
-    await stopRun();
+    // A read the turn's cut ended, or a consumer that closed the read early,
+    // or a read that threw.
+    await (abortSignal.aborted ? held.endForCut() : stopRun());
   }
 }
 

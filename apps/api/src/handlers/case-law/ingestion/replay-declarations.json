@@ -540,5 +540,11 @@
     "parserVersion": 37,
     "type": "pending-enrolment-wave",
     "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-nss",
+    "parserVersion": 39,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
   }
 ]
