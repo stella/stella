@@ -126,15 +126,21 @@ describe("API access token claims", () => {
 
 describe("which routes an API access token opens", () => {
   test("a listed route with its scope is admitted", () => {
-    for (const [key, { scope }] of Object.entries(API_OAUTH_ROUTES)) {
+    for (const [key, entry] of Object.entries(API_OAUTH_ROUTES)) {
       const [method = "", route = ""] = key.split(" ");
+      // A route bound to one app is asked for by that app's token.
+      const client = "client" in entry ? entry.client : undefined;
       expect(
-        admitApiAccessTokenRoute({ method, route, scopes: [scope] }),
+        admitApiAccessTokenRoute({
+          client,
+          method,
+          route,
+          scopes: [entry.scope],
+        }),
       ).toEqual({ admitted: true });
-      expect(admitApiAccessTokenRoute({ method, route, scopes: [] })).toEqual({
-        admitted: false,
-        reason: "scope",
-      });
+      expect(
+        admitApiAccessTokenRoute({ client, method, route, scopes: [] }),
+      ).toEqual({ admitted: false, reason: "scope" });
     }
   });
 
@@ -433,6 +439,42 @@ describe("which routes an API access token opens", () => {
       "GET /v1/chat/runs/active",
       "POST /v1/chat/tool-grants",
     ]);
+  });
+
+  test("undoing a computer's file changes opens for the phone app's token alone", () => {
+    for (const method of ["GET", "POST"]) {
+      const undo = {
+        method,
+        route:
+          "/v1/chat/threads/:threadId/messages/:messageId/local-files/undo",
+      } as const;
+      expect(
+        admitApiAccessTokenRoute({
+          ...undo,
+          client: "mobile",
+          scopes: MOBILE_SCOPES,
+        }),
+      ).toEqual({ admitted: true });
+      // Another app holding the chat scope, such as the Outlook add-in.
+      expect(
+        admitApiAccessTokenRoute({ ...undo, scopes: ["stella:chat"] }),
+      ).toEqual({ admitted: false, reason: "client" });
+      expect(
+        admitApiAccessTokenRoute({
+          ...undo,
+          client: "mobile",
+          scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+    }
+    // A route bound to no app opens for any token with its scope.
+    expect(
+      admitApiAccessTokenRoute({
+        method: "POST",
+        route: "/v1/chat",
+        scopes: ["stella:chat"],
+      }),
+    ).toEqual({ admitted: true });
   });
 
   test("a coding agent's step content and the image it viewed open at the chat scope only", () => {
