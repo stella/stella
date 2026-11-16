@@ -23,7 +23,9 @@ const readContactsQuerySchema = v.object({
     paginationCursorSchema({ maxChars: CONTACT_CURSOR_MAX_LENGTH }),
   ),
   type: v.exactOptional(contactTypeSchema),
-  q: v.exactOptional(v.string()),
+  q: v.exactOptional(
+    v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),
+  ),
 });
 
 const readContacts = createSafeRootHandler(

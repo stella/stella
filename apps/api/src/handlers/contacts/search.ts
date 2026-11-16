@@ -8,11 +8,16 @@ import { contacts } from "@/api/db/schema";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { escapeLike } from "@/api/lib/escape-like";
+import { LIMITS } from "@/api/lib/limits";
 
 const SEARCH_LIMIT = 20;
 
 const searchContactsQuerySchema = v.object({
-  q: v.pipe(v.string(), v.minLength(1)),
+  q: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
+  ),
   type: v.optional(contactTypeSchema),
 });
 
