@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -184,18 +184,19 @@ describe("flow review lifecycle", () => {
       throw result.error;
     }
     expect(result.value).toEqual({ runId, status: "cancelled" });
-    const run = await db.query.flowRuns.findFirst({
-      where: { id: { eq: runId } },
-    });
-    expect(run?.status).toBe("cancelled");
-    expect(run?.finishedAt).toBeInstanceOf(Date);
+    const run =
+      (await db.query.flowRuns.findFirst({
+        where: { id: { eq: runId } },
+      })) ?? panic("The cancelled fixture run must exist");
+    expect(run.status).toBe("cancelled");
+    expect(run.finishedAt).toBeInstanceOf(Date);
     const steps = await db.query.flowRunSteps.findMany({
       where: { runId: { eq: runId } },
     });
     expect(steps).toHaveLength(2);
     for (const step of steps) {
       expect(step.status).toBe("skipped");
-      expect(step.finishedAt).toEqual(run?.finishedAt);
+      expect(step.finishedAt).toEqual(run.finishedAt);
     }
     const audits = await db
       .select()
