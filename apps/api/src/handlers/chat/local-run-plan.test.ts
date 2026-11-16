@@ -203,6 +203,7 @@ const start = async (options: Parameters<typeof resolve>[0] = {}) => {
     instructions: "",
     resume: undefined,
     abortSignal: new AbortController().signal,
+    handOverSignal: new AbortController().signal,
   })) {
     chunks.push(chunk);
   }

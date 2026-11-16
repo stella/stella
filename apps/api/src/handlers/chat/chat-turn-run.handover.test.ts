@@ -31,7 +31,7 @@ import {
 } from "./chat-turn-run";
 import { processServerChatStream, toChatMessage } from "./stream-chat";
 import { createChatMessageIdMapper } from "./stream-message-identity";
-import type { ChatMessage, ChatTurnOutcome } from "./types";
+import type { ChatTurnOutcome, PersistableChatMessage } from "./types";
 
 // A stopping process gives up its turns. With hand-over on, a turn read from
 // a computer is released to another task within its budget and the computer
@@ -79,7 +79,7 @@ const startTurn = ({
     capture: toChatMessage,
   });
   const outcomes: ChatTurnOutcome[] = [];
-  const released: ChatMessage[] = [];
+  const released: PersistableChatMessage[] = [];
   const emitted: PublicStreamChunk[] = [];
   let changed = Promise.withResolvers<undefined>();
   const output = processServerChatStream({

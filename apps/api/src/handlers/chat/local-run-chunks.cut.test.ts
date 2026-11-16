@@ -139,7 +139,7 @@ describe("a local turn released to another task", () => {
     const rest = await readRest(read);
 
     expect(rest).toHaveLength(1);
-    expect(rest.at(0)).toSatisfy(isChatTurnReleasedChunk);
+    expect(rest.findIndex(isChatTurnReleasedChunk)).toBe(0);
     expect(computer.chatReadSeq()).toBe(content + 1);
     expect(computer.queued.interrupts).toBe(0);
   });
@@ -150,7 +150,9 @@ describe("a local turn released to another task", () => {
     const chunks = await readRest(read);
 
     expect(chunks.at(0)).toMatchObject({ type: EventType.RUN_STARTED });
-    expect(chunks.at(-1)).toSatisfy(isChatTurnReleasedChunk);
+    expect(chunks.findLastIndex(isChatTurnReleasedChunk)).toBe(
+      chunks.length - 1,
+    );
     expect(computer.queued.interrupts).toBe(0);
   });
 

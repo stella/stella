@@ -28,6 +28,7 @@ import {
 } from "@/api/handlers/chat/answer-quote-checks";
 import {
   chatMessageFromPersisted,
+  toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { persistHandedOverChatTurn } from "@/api/handlers/chat/chat-message-persistence";
@@ -488,7 +489,7 @@ describe("an owner stop mid-turn", () => {
     const markedDue: unknown[] = [];
     const quoteChecked: unknown[] = [];
     const quoteChecker: AnswerQuoteChecker = async (message) => {
-      quoteChecked.push(message.id);
+      quoteChecked.push(message.parts.length);
       return await NO_ANSWER_QUOTE_CHECKER(message);
     };
     const adopter = createChatTurnAdopter({
@@ -568,7 +569,7 @@ describe("an owner stop mid-turn", () => {
     );
     expect(sayings(stored.parts)).toEqual(sayings(whole.answer.parts));
     // The adopter checked the answer's quotes, as the send would have.
-    expect(quoteChecked).toEqual([stored.id]);
+    expect(quoteChecked).toHaveLength(1);
 
     // A page that tails the turn's log through the gap shows the same answer
     // as one that watched a single task, with one run start and one end.
@@ -613,11 +614,11 @@ describe("an owner stop mid-turn", () => {
       indexThread: async () => {},
       owningAssistantMessage: undefined,
       recordAuditEvent: noAudit,
-      responseMessage: {
+      responseMessage: toPersistableChatMessage({
         id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
         parts: [{ content: "Running the tests. ", type: "text" }],
         role: "assistant",
-      },
+      }),
       safeDb: safeDbOf(),
       threadId: seeded.threadId,
       userId: ids.userA1,

@@ -2439,7 +2439,8 @@ type ProcessServerChatStreamProps = {
    * it stands, open calls open, with no outcome. Only a source that can be
    * released needs it.
    */
-  onRelease?: ((answer: ChatMessage) => Promise<void> | void) | undefined;
+  onRelease?:
+    ((answer: PersistableChatMessage) => Promise<void> | void) | undefined;
   /**
    * What the turn answered before this read: nothing, or the answer a read
    * released to another task stored, which this read continues. A released
@@ -3875,12 +3876,16 @@ export const processServerChatStream = async function* ({
       finalizeResponseProcessor(processor);
       const release =
         onRelease ?? panic("A released turn's processor has no release");
+      const current = getResponseMessage();
       await release(
-        getResponseMessage() ?? {
+        toPersistableChatMessage({
           id: responseMessageId,
-          parts: [],
+          parts: current?.parts ?? [],
           role: "assistant",
-        },
+          ...(current?.metadata !== undefined
+            ? { metadata: current.metadata }
+            : {}),
+        }),
       );
       return;
     }

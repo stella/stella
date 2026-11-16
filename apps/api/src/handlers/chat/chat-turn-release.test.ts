@@ -15,11 +15,10 @@ import {
   localSource,
 } from "@/api/tests/helpers/fake-local-computer";
 
-import { toPersistableChatMessage } from "./chat-message-parts";
 import type { StreamChatFinishEvent } from "./stream-chat";
 import { processServerChatStream, toChatMessage } from "./stream-chat";
 import { createTurnMessageIdMapper } from "./stream-message-identity";
-import type { ChatMessage } from "./types";
+import type { ChatMessage, PersistableChatMessage } from "./types";
 
 // A turn released by a stopping task and adopted by another, read through
 // the processor that stores a turn: the released task stores the answer so
@@ -60,7 +59,7 @@ type Processed = {
   /** What the turn's log and viewers receive. */
   emitted: PublicStreamChunk[];
   finished: StreamChatFinishEvent | undefined;
-  released: ChatMessage | undefined;
+  released: PersistableChatMessage | undefined;
 };
 
 /** Read `source` through the processor that stores a turn. */
@@ -180,13 +179,13 @@ const adoptedAnswer = async ({
 }: {
   chunks: readonly StreamChunk[];
   readSeq: number;
-  released: ChatMessage;
+  released: PersistableChatMessage;
 }) => {
   const computer = createComputer();
   computer.events(chunks);
   computer.finish();
   computer.releaseAt(readSeq);
-  const checkpoint = toPersistableChatMessage(released);
+  const checkpoint = released;
   const { emitted, finished } = await processTurn({
     initialMessages: [checkpoint],
     source: adoptedSource(computer)(new AbortController().signal),
