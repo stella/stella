@@ -83,6 +83,7 @@ export const BUTTON_SIZES = [
   "icon-xs",
   // An action inside a line of text: no box of its own.
   "inline",
+  "inspector-row",
   "lg",
   "row",
   "sm",

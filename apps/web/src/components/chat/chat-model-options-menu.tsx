@@ -55,9 +55,6 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { queryView } from "@/lib/query-view.logic";
 
-export const CHAT_MODEL_MENU_POPUP_CLASS_NAME =
-  "w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)";
-
 export type ComposerModelsMenuProps = {
   activeOrganizationId: string;
   threadRef: ChatThreadRef;
