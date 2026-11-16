@@ -6,13 +6,16 @@ import type { PermissionInput } from "@stll/permissions";
 import type { listSkillMetadata } from "@stll/skills";
 
 import { rlsDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import {
+  createExplicitSafeDb,
+  createExplicitScopedDb,
   createMembershipSafeDb,
   createMembershipScopedDb,
-  createSafeDb,
-  createScopedDb,
+  TRANSACTION_DEADLINE,
 } from "@/api/db/scoped";
+import type { RlsDatabase, TransactionDeadline } from "@/api/db/scoped";
 import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
@@ -671,6 +674,55 @@ const admitMcpMember = async ({
   return Result.ok(authorization);
 };
 
+/**
+ * One MCP operation's databases. A workspace_ids claim is a signed attenuation
+ * boundary, not just a tool-discovery hint: once intersected with live
+ * authorization it is carried into RLS explicit mode, so root and list queries
+ * cannot see another workspace through ordinary membership. Either scope runs
+ * under the request's deadline.
+ */
+export const createMcpOperationDatabases = (
+  database: RlsDatabase<Transaction>,
+  {
+    deadline,
+    organizationId,
+    serverValidatedWorkspaceIds,
+    tokenWorkspaceIds,
+    userId,
+  }: {
+    deadline: TransactionDeadline;
+    organizationId: SafeId<"organization">;
+    /** Membership pins, filled as the operation proves access to a workspace. */
+    serverValidatedWorkspaceIds: readonly SafeId<"workspace">[];
+    /** The token's attenuated workspaces; undefined when it carries no claim. */
+    tokenWorkspaceIds: SafeId<"workspace">[] | undefined;
+    userId: SafeId<"user">;
+  },
+): McpRequestDataAccess => {
+  if (tokenWorkspaceIds !== undefined) {
+    const explicitIdentity = {
+      workspaceIds: tokenWorkspaceIds,
+      organizationId,
+      userId,
+      deadline,
+    };
+    return {
+      safeDb: createExplicitSafeDb(database, explicitIdentity),
+      scopedDb: createExplicitScopedDb(database, explicitIdentity),
+    };
+  }
+  const databaseIdentity = {
+    organizationId,
+    serverValidatedWorkspaceIds,
+    userId,
+    deadline,
+  };
+  return {
+    safeDb: createMembershipSafeDb(database, databaseIdentity),
+    scopedDb: createMembershipScopedDb(database, databaseIdentity),
+  };
+};
+
 export const resolveMcpSessionContext = async (
   session: AdmittedMcpSession,
   {
@@ -715,6 +767,7 @@ export const resolveMcpSessionContext = async (
     organizationId,
     serverValidatedWorkspaceIds: [],
     userId,
+    deadline: TRANSACTION_DEADLINE.request,
   });
   const accessibleWorkspaces = await loadAccessibleMcpWorkspaces({
     organizationId,
@@ -742,31 +795,17 @@ export const resolveMcpSessionContext = async (
         }
         return true;
       });
-    // A workspace_ids claim is a signed attenuation boundary, not just a
-    // tool-discovery hint. After intersecting it with live authorization
-    // above, carry that exact subset into RLS explicit mode so root/list
-    // queries cannot see another workspace through ordinary membership.
-    if (hasTokenWorkspaceAttenuation) {
-      return {
-        pinServerValidatedWorkspaceId,
-        safeDb: createSafeDb(rlsDb, usableWorkspaceIds, organizationId, userId),
-        scopedDb: createScopedDb(
-          rlsDb,
-          usableWorkspaceIds,
-          organizationId,
-          userId,
-        ),
-      };
-    }
-    const databaseIdentity = {
-      organizationId,
-      serverValidatedWorkspaceIds,
-      userId,
-    };
     return {
       pinServerValidatedWorkspaceId,
-      safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
-      scopedDb: createMembershipScopedDb(rlsDb, databaseIdentity),
+      ...createMcpOperationDatabases(rlsDb, {
+        deadline: TRANSACTION_DEADLINE.request,
+        organizationId,
+        serverValidatedWorkspaceIds,
+        tokenWorkspaceIds: hasTokenWorkspaceAttenuation
+          ? usableWorkspaceIds
+          : undefined,
+        userId,
+      }),
     };
   };
   const requestDatabaseScope = createOperationDatabaseScope();
