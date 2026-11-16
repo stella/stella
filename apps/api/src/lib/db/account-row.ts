@@ -57,14 +57,14 @@ export const readAccountProfileForExport = async (
 export const ACCOUNT_MEMBERSHIP_PAGE_SIZE = 100;
 
 type ListAccountMembershipPageOptions = {
-  database: Pick<typeof rootDb, "select">;
+  database?: Pick<typeof rootDb, "select">;
   userId: SafeId<"user">;
   after?: string;
 };
 
 /** Reads this account's memberships in bounded organization/id order. */
 export const listAccountMembershipPage = async ({
-  database,
+  database = rootDb,
   userId,
   after,
 }: ListAccountMembershipPageOptions) =>

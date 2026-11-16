@@ -2470,7 +2470,7 @@ export const createAuth = (
             }
             return { data: data.value };
           },
-          after: createUserProjectionUpdateHook({ database: rootDb }),
+          after: createUserProjectionUpdateHook(),
         },
       },
     },

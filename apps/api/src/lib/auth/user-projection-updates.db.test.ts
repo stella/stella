@@ -12,7 +12,10 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import { createUserProjectionUpdateHook } from "@/api/lib/auth/user-projection-updates";
-import { ACCOUNT_MEMBERSHIP_PAGE_SIZE } from "@/api/lib/db/account-row";
+import {
+  ACCOUNT_MEMBERSHIP_PAGE_SIZE,
+  listAccountMembershipPage,
+} from "@/api/lib/db/account-row";
 import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -74,14 +77,15 @@ const createFixture = async (
   });
   let refuse = false;
   const hook = createUserProjectionUpdateHook({
-    database:
-      notification === "read-failure"
-        ? {
-            select: () => {
-              throw failure;
-            },
-          }
-        : asTestRaw<typeof rootDb>(database),
+    readMembershipPage: async (options) => {
+      if (notification === "read-failure") {
+        throw failure;
+      }
+      return await listAccountMembershipPage({
+        ...options,
+        database: asTestRaw<typeof rootDb>(database),
+      });
+    },
     publish: (organizationId, resource) => {
       if (notification === "publish-failure") {
         throw failure;

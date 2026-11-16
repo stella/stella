@@ -21,7 +21,9 @@ const USER_PROJECTION_NOTIFICATION_FAILED = failureSink({
 });
 
 type UserProjectionUpdateOptions = {
-  database: Parameters<typeof listAccountMembershipPage>[0]["database"];
+  readMembershipPage?: (
+    options: Omit<Parameters<typeof listAccountMembershipPage>[0], "database">,
+  ) => ReturnType<typeof listAccountMembershipPage>;
   publish?: typeof broadcastOrganizationResourceSetUpdated;
   observe?: typeof observeFailure;
 };
@@ -30,10 +32,10 @@ type UserProjectionUpdateOptions = {
  * row belongs to every actual membership, not only the request's active firm. */
 export const createUserProjectionUpdateHook =
   ({
-    database,
+    readMembershipPage = listAccountMembershipPage,
     publish = broadcastOrganizationResourceSetUpdated,
     observe = observeFailure,
-  }: UserProjectionUpdateOptions) =>
+  }: UserProjectionUpdateOptions = {}) =>
   async (user: { id: string } | null) => {
     // An adapter update that matches no row has committed no user change.
     if (user === null) {
@@ -42,8 +44,7 @@ export const createUserProjectionUpdateHook =
     const notified = await Result.tryPromise(async () => {
       const userId = brandPersistedUserId(user.id);
       const pages = iterateCursorPages(async (cursor) => {
-        const items = await listAccountMembershipPage({
-          database,
+        const items = await readMembershipPage({
           userId,
           ...(cursor === null ? {} : { after: cursor }),
         });
