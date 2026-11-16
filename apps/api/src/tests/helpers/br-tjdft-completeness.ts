@@ -8,6 +8,7 @@ const COMPLETENESS_CODES: ReadonlySet<string> = new Set([
   "CONTENT_LOSS",
   "MISSING_WORDS",
   "MARKUP_RESIDUE",
+  "INLINE_PLAINTEXT_MISMATCH",
   "EMPTY_AST",
 ]);
 
