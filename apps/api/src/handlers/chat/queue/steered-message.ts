@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
@@ -53,7 +53,9 @@ const steerMark = (revision: number | null) =>
 /**
  * Mark queued message `id` as handed to a turn at `revision`; `changed`
  * when it is no longer queued at that revision (edited, sent or removed
- * since). The caller holds the thread lock.
+ * since), or a steer of another revision is still open: the runner takes one
+ * input per id, so a second revision would be removed for the first one's
+ * report. The caller holds the thread lock.
  */
 export const markSteeredQueuedMessageOnTx = async ({
   id,
@@ -74,6 +76,10 @@ export const markSteeredQueuedMessageOnTx = async ({
         eq(chatQueuedMessages.id, id),
         eq(chatQueuedMessages.threadId, threadId),
         eq(chatQueuedMessages.revision, revision),
+        or(
+          isNull(chatQueuedMessages.steeredRevision),
+          eq(chatQueuedMessages.steeredRevision, revision),
+        ),
       ),
     )
     .returning({ id: chatQueuedMessages.id });
