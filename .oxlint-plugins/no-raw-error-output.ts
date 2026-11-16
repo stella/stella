@@ -229,7 +229,22 @@ const isOwnedSafeProjection = (
     names.has(node.name)
   ) {
     const variable = resolveVariable(context, node);
-    return variable !== null && variable.defs.length > 0;
+    const definition = variable?.defs.at(0)?.node;
+    const declaration = isAstNode(definition) ? definition.parent : null;
+    const exported = isAstNode(declaration) ? declaration.parent : null;
+    return (
+      variable !== null &&
+      stableInitializer(variable)?.type === "ArrowFunctionExpression" &&
+      isAstNode(definition) &&
+      definition.type === "VariableDeclarator" &&
+      isAstNode(declaration) &&
+      declaration.type === "VariableDeclaration" &&
+      declaration.kind === "const" &&
+      isAstNode(exported) &&
+      exported.type === "ExportNamedDeclaration" &&
+      isAstNode(exported.parent) &&
+      exported.parent.type === "Program"
+    );
   }
   return false;
 };

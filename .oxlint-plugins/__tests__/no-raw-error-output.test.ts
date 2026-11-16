@@ -245,3 +245,51 @@ test.each([
     ).toEqual([2]);
   },
 );
+
+test.each([
+  ["errors/error-tag", "errorTag"],
+  ["pg-error", "pgErrorFields"],
+  ["observability/failure", "identityFields"],
+] as const)(
+  "trusts only the stable exported declaration in owner %s",
+  async (owner, name) => {
+    const options = { sourcePath: `apps/api/src/lib/${owner}.ts` };
+    expect(
+      await lintSingleRule(
+        "no-raw-error-output",
+        `export const ${name} = (error) => "Error";
+logger.warn("fixture.failed", ${name}(error));`,
+        options,
+      ),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule(
+        "no-raw-error-output",
+        `function output(${name}) {
+  logger.warn("fixture.failed", ${name}(error));
+}`,
+        options,
+      ),
+    ).toEqual([2]);
+    expect(
+      await lintSingleRule(
+        "no-raw-error-output",
+        `export const ${name} = (error) => "Error";
+function output() {
+  const ${name} = (value) => value;
+  logger.warn("fixture.failed", ${name}(error));
+}`,
+        options,
+      ),
+    ).toEqual([4]);
+    expect(
+      await lintSingleRule(
+        "no-raw-error-output",
+        `export let ${name} = (value) => value;
+${name} = (value) => value;
+logger.warn("fixture.failed", ${name}(error));`,
+        options,
+      ),
+    ).toEqual([3]);
+  },
+);
