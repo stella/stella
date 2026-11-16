@@ -28,6 +28,11 @@ import {
   executeDictation,
 } from "@/api/handlers/dictation/transcribe";
 import {
+  readTranscriptionDeployment,
+  type TranscriptionDeployment,
+  transcriptionServed,
+} from "@/api/handlers/dictation/transcription-deployment";
+import {
   loadOrgSettingsForAuth,
   type OrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
@@ -68,7 +73,10 @@ export const listDictationModels = (
     orgAIConfig,
     managedAIResidency,
   }: Pick<OrgSettingsForAuth, "orgAIConfig" | "managedAIResidency">,
-  { labeled = false }: { labeled?: boolean } = {},
+  {
+    labeled = false,
+    deployment = readTranscriptionDeployment(),
+  }: { labeled?: boolean; deployment?: TranscriptionDeployment } = {},
 ): DesktopDictationModels => {
   const none = (unavailable: "region" | "provider") => ({
     models: [],
@@ -86,11 +94,13 @@ export const listDictationModels = (
   ) {
     return none("provider");
   }
+  const served = transcriptionServed(deployment, orgAIConfig);
   const offered = Object.keys(TRANSCRIPTION_MODELS)
     .filter(isTranscriptionModelId)
     .flatMap((modelId) => {
       const endpoint = transcriptionEndpointFor(modelId, managedAIResidency, {
         outsideRegion: labeled,
+        served,
       });
       return endpoint === undefined
         ? []
@@ -107,11 +117,20 @@ export const listDictationModels = (
       : { id: modelId, displayName };
   });
   if (models.length === 0) {
-    return none("region");
+    // Nothing this deployment can transcribe with, or nothing in the region.
+    const servedAnywhere = Object.keys(TRANSCRIPTION_MODELS)
+      .filter(isTranscriptionModelId)
+      .some((modelId) =>
+        (["eu", "us", "global"] as const).some((endpoint) =>
+          served(modelId, endpoint),
+        ),
+      );
+    return none(servedAnywhere ? "region" : "provider");
   }
   return {
     models,
-    defaultModelId: defaultTranscriptionModelId(managedAIResidency) ?? null,
+    defaultModelId:
+      defaultTranscriptionModelId(managedAIResidency, served) ?? null,
     unavailable: null,
   };
 };
@@ -119,6 +138,7 @@ export const listDictationModels = (
 type DesktopDictationOptions = {
   authorizeAccount?: typeof authorizeDesktopAccount;
   loadSettings?: typeof loadOrgSettingsForAuth;
+  readDeployment?: typeof readTranscriptionDeployment;
 };
 
 /** The linked account's email, for the restricted-account check a session
@@ -197,6 +217,7 @@ export const createDesktopDictationModelsEndpoint = (
       }
       return Result.ok(
         listDictationModels(settings, {
+          deployment: (options.readDeployment ?? readTranscriptionDeployment)(),
           labeled:
             new URL(request.url).searchParams.get(
               DESKTOP_DICTATION_MODELS_LABELED_QUERY,

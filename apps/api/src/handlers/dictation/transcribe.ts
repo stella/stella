@@ -4,6 +4,7 @@ import type * as v from "valibot";
 import {
   defaultTranscriptionModelId,
   isTranscriptionModelId,
+  TRANSCRIPTION_MODELS,
   transcriptionEndpointFor,
 } from "@stll/ai-catalog/transcription";
 import type { TranscriptionEndpoint } from "@stll/ai-catalog/transcription";
@@ -19,6 +20,7 @@ import { classifyFailure } from "@stll/errors";
 
 import type { SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
+import { transcribeWithElevenLabs } from "@/api/handlers/dictation/elevenlabs-provider";
 import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import {
   transcribeAudio,
@@ -26,6 +28,10 @@ import {
 } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { dictationBodySchema } from "@/api/handlers/dictation/schema";
+import {
+  readTranscriptionDeployment,
+  transcriptionServed,
+} from "@/api/handlers/dictation/transcription-deployment";
 import type { OrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
@@ -209,6 +215,8 @@ const settleUsage = async ({
 
 type DictationDependencies = {
   transcribe: typeof transcribeAudio;
+  transcribeElevenLabs: typeof transcribeWithElevenLabs;
+  deployment: typeof readTranscriptionDeployment;
   credential: typeof getManagedOpenRouterCredential;
   limit: typeof consumeDictationLimit;
   preflight: typeof checkUsage;
@@ -259,9 +267,27 @@ export const executeDictation = async (
         );
       }
     }
+    const ownKey = ctx.orgAIConfig?.providers.find(
+      ({ provider }) => provider === "openrouter",
+    )?.apiKey;
+    if (ctx.orgAIConfig !== null && ownKey === undefined) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          code: AI_FAILURE_CODES.own_key_required,
+          message:
+            "Transcription is not available with your organization's AI provider.",
+          hint: "Configure an organization OpenRouter key in organization AI settings.",
+        }),
+      );
+    }
+    const deployment = dependencies.deployment();
+    const served = transcriptionServed(deployment, ctx.orgAIConfig);
     const residency = ctx.managedAIResidency;
     const regionalDefault =
-      residency === null ? undefined : defaultTranscriptionModelId(residency);
+      residency === null
+        ? undefined
+        : defaultTranscriptionModelId(residency, served);
     const modelId =
       residency === null ? undefined : (body.modelId ?? regionalDefault);
     const endpoint =
@@ -270,6 +296,7 @@ export const executeDictation = async (
         : transcriptionEndpointFor(modelId, residency, {
             outsideRegion:
               ctx.allowOutsideRegion === true && body.modelId !== undefined,
+            served,
           });
     if (modelId === undefined || endpoint === undefined) {
       return Result.err(
@@ -297,21 +324,9 @@ export const executeDictation = async (
         userId: user.id,
       }),
     );
-    const ownKey = ctx.orgAIConfig?.providers.find(
-      ({ provider }) => provider === "openrouter",
-    )?.apiKey;
-    if (ctx.orgAIConfig !== null && ownKey === undefined) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          code: AI_FAILURE_CODES.own_key_required,
-          message:
-            "Transcription is not available with your organization's AI provider.",
-          hint: "Configure an organization OpenRouter key in organization AI settings.",
-        }),
-      );
-    }
-    const isByok = ownKey !== undefined;
+    // A direct model runs on the deployment's key, never the organization's.
+    const direct = TRANSCRIPTION_MODELS[modelId].route === "elevenlabs";
+    const isByok = !direct && ownKey !== undefined;
     const maximumDurationMs = MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000;
     const usageCaller = {
       safeDb: ctx.safeDb,
@@ -333,26 +348,34 @@ export const executeDictation = async (
       }),
     );
     const admission = configuredModelAdmission(ctx);
-    const credential =
-      ownKey === undefined
-        ? yield* Result.await(dependencies.credential(admission.modelTier))
-        : { apiKey: ownKey };
-    const { transcript: result, admittedDurationMs } = yield* Result.await(
-      dependencies.transcribe({
-        audio: body.file,
-        modelId,
-        language: body.language,
-        vocabulary: body.vocabulary,
-        apiKey: credential.apiKey,
-        residency: endpoint,
-        scope: {
-          admission,
-          organizationId: session.activeOrganizationId,
-          userId: user.id,
-        },
-        signal: ctx.request.signal,
-      }),
-    );
+    const scope = {
+      admission,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    };
+    const transcribed = direct
+      ? await dependencies.transcribeElevenLabs({
+          audio: body.file,
+          modelId,
+          language: body.language,
+          deployment: deployment.elevenLabs,
+          scope,
+          signal: ctx.request.signal,
+        })
+      : await dependencies.transcribe({
+          audio: body.file,
+          modelId,
+          language: body.language,
+          vocabulary: body.vocabulary,
+          apiKey:
+            ownKey ??
+            (yield* Result.await(dependencies.credential(admission.modelTier)))
+              .apiKey,
+          residency: endpoint,
+          scope,
+          signal: ctx.request.signal,
+        });
+    const { transcript: result, admittedDurationMs } = yield* transcribed;
     const durationMismatch =
       result.durationMs >
       admittedDurationMs + TRANSCRIPTION_DURATION_TOLERANCE_MS;
@@ -377,6 +400,8 @@ export const executeDictation = async (
 
 export const DEFAULT_DICTATION_DEPENDENCIES = {
   transcribe: transcribeAudio,
+  transcribeElevenLabs: transcribeWithElevenLabs,
+  deployment: readTranscriptionDeployment,
   credential: getManagedOpenRouterCredential,
   limit: consumeDictationLimit,
   preflight: checkUsage,
@@ -385,6 +410,8 @@ export const DEFAULT_DICTATION_DEPENDENCIES = {
 
 export const createDictationTranscribeEndpoint = ({
   transcribe = transcribeAudio,
+  transcribeElevenLabs = transcribeWithElevenLabs,
+  deployment = readTranscriptionDeployment,
   credential = getManagedOpenRouterCredential,
   limit = consumeDictationLimit,
   preflight = checkUsage,
@@ -394,6 +421,8 @@ export const createDictationTranscribeEndpoint = ({
     const result = yield* Result.await(
       executeDictation(ctx, {
         transcribe,
+        transcribeElevenLabs,
+        deployment,
         credential,
         limit,
         preflight,

@@ -499,6 +499,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Batch mode: the document-processing worker exits once its queue has stayed empty this many minutes. Unset keeps it long-running.",
   EDGAR_USER_AGENT:
     "Identifying SEC EDGAR contact string. Unset disables the adapter because the SEC requires one.",
+  ELEVENLABS_API_KEY:
+    "ElevenLabs API key for stella AI transcription straight to ElevenLabs (Scribe v3). Every request asks for zero retention, which ElevenLabs grants to enterprise accounts. Unset offers no direct ElevenLabs model.",
+  ELEVENLABS_ENVIRONMENT:
+    'ElevenLabs environment the key belongs to: "default" or "us" (US region) or "eu" (EU data residency). Organizations outside it see the model as outside their region.',
   EMAIL_PROVIDER:
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
   EMAIL_EVENTS_QUEUE_URL:
@@ -981,6 +985,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   MICROSOFT_AUTH_TENANT_ID: ENV_CREDENTIAL_KIND.notCredential,
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: ENV_CREDENTIAL_KIND.notCredential,
   MISTRAL_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  ELEVENLABS_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  ELEVENLABS_ENVIRONMENT: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_CLIENT_CHECK_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_IDLE_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_LONG_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,

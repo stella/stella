@@ -8,6 +8,7 @@ import {
   getTranscriptionModel,
   isTranscriptionModelId,
   TRANSCRIPTION_MODELS,
+  transcriptionEndpointFor,
 } from "./transcription";
 
 // The catalog entries are distinct literal types, so Object.values needs the
@@ -48,7 +49,11 @@ test("transcription lookup preserves the evidence for every catalog model", () =
       );
     }
     expect(getTranscriptionModel(modelId)).toBe(metadata);
-    expect(metadata.source.url).toBe(`https://openrouter.ai/${modelId}`);
+    expect(metadata.source.url).toBe(
+      metadata.route === "openrouter"
+        ? `https://openrouter.ai/${modelId}`
+        : "https://elevenlabs.io/pricing/api",
+    );
     expect(metadata.source.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
     expect(Number.isSafeInteger(metadata.price.usdNumerator)).toBe(true);
     expect(Number.isSafeInteger(metadata.price.secondsDenominator)).toBe(true);
@@ -99,5 +104,46 @@ test("the default transcription model is offered in its region and no offered mo
     for (const { usdPerSecond } of offered) {
       expect(chosenPrice).toBeLessThanOrEqual(usdPerSecond);
     }
+  }
+});
+
+test("a direct model is offered only where the deployment serves it, and never by default where it is not", () => {
+  const direct = "elevenlabs-direct/scribe-v3";
+  const servesOnly =
+    (endpoint: "eu" | "us" | "global") =>
+    (modelId: string, at: "eu" | "us" | "global") =>
+      modelId !== direct || at === endpoint;
+  expect(
+    transcriptionEndpointFor(direct, "eu", {
+      outsideRegion: true,
+      served: servesOnly("eu"),
+    }),
+  ).toBe("eu");
+  expect(
+    transcriptionEndpointFor(direct, "eu", {
+      outsideRegion: false,
+      served: servesOnly("global"),
+    }),
+  ).toBeUndefined();
+  expect(
+    transcriptionEndpointFor(direct, "eu", {
+      outsideRegion: true,
+      served: servesOnly("global"),
+    }),
+  ).toBe("global");
+  expect(
+    transcriptionEndpointFor(direct, "us", {
+      outsideRegion: true,
+      served: () => false,
+    }),
+  ).toBeUndefined();
+  for (const residency of ["eu", "us"] as const) {
+    expect(
+      defaultTranscriptionModelId(residency, (modelId) => modelId !== direct),
+    ).not.toBe(direct);
+    // A deployment serving only the direct model defaults to it.
+    expect(
+      defaultTranscriptionModelId(residency, (modelId) => modelId === direct),
+    ).toBe(direct);
   }
 });

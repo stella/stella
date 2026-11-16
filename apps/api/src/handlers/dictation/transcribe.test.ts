@@ -18,6 +18,7 @@ import {
 import { assertProperty } from "@stll/property-testing";
 
 import { makeM4aAudioBytes } from "@/api/handlers/dictation/audio-fixtures.test-helper";
+import { transcribeWithElevenLabs } from "@/api/handlers/dictation/elevenlabs-provider";
 import { transcribeAudio } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -51,12 +52,15 @@ const MODEL = "mistralai/voxtral-mini-transcribe";
 const audioChunk = (durationMs = 1234) =>
   new File([makeM4aAudioBytes(durationMs)], "hlas.m4a", { type: "audio/mp4" });
 
+const OPENROUTER_ONLY = { openRouter: true, elevenLabs: null } as const;
+
 const fixture = (
   durationMs = 1234,
   admittedDurationMs = Math.min(
     durationMs,
     MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
   ),
+  deployment: ReturnType<Dependencies["deployment"]> = OPENROUTER_ONLY,
 ) => {
   const context = createTestHandlerContext<DictationContext>({
     audit: NO_AUDIT,
@@ -83,7 +87,30 @@ const fixture = (
   const preflightRequirements: number[] = [];
   let credentials = 0;
   let preflights = 0;
+  const directRequests: { url: string; form: FormData; key: string | null }[] =
+    [];
   const dependencies = {
+    deployment: () => deployment,
+    transcribeElevenLabs: async (options) =>
+      await transcribeWithElevenLabs({
+        ...options,
+        fetch: async (url, init) => {
+          if (!(init.body instanceof FormData)) {
+            throw new TypeError("Expected a multipart body");
+          }
+          directRequests.push({
+            url: String(url),
+            form: init.body,
+            key: new Headers(init.headers).get("xi-api-key"),
+          });
+          return Response.json({
+            text: TEXT,
+            language_code: "ces",
+            words: [{ text: "K", type: "word", start: 0, end: 0.2 }],
+            audio_duration_secs: durationMs / 1000,
+          });
+        },
+      }),
     transcribe: async (options) =>
       await transcribeAudio({
         ...options,
@@ -123,6 +150,7 @@ const fixture = (
     context,
     dependencies,
     requests,
+    directRequests,
     settlements,
     preflightRequirements,
     counts: () => ({ credentials, preflights }),
@@ -383,6 +411,9 @@ describe("dictation operation request matrix", () => {
             if (!isTranscriptionModelId(modelId)) {
               throw new TypeError("Expected catalog model id");
             }
+            if (model.route !== "openrouter") {
+              continue;
+            }
             for (const residency of ["eu", "us"] as const) {
               if (model.residency[residency].status !== "available") {
                 continue;
@@ -566,6 +597,80 @@ describe("dictation operation request matrix", () => {
         isByok: false,
       }).unitsConsumed,
     ]);
+  });
+
+  test("Scribe v3 goes straight to the deployment's ElevenLabs environment with zero retention, billed to stella", async () => {
+    const f = fixture(1234, 1234, {
+      openRouter: true,
+      elevenLabs: { apiKey: "elevenlabs-fixture", environment: "eu" },
+    });
+    const context = {
+      ...f.context,
+      orgAIConfig: null,
+      body: {
+        ...f.context.body,
+        modelId: "elevenlabs-direct/scribe-v3",
+        vocabulary: undefined,
+      },
+    } as const satisfies DictationContext;
+    const result = await executeDictation(context, f.dependencies);
+    if (result.isErr()) {
+      throw result.error;
+    }
+    expect(result.value).toMatchObject({
+      text: TEXT,
+      detectedLanguage: "ces",
+      durationMs: 1234,
+      modelId: "elevenlabs-direct/scribe-v3",
+      words: [{ startMs: 0, endMs: 200, text: "K" }],
+    });
+    expect(f.requests).toEqual([]);
+    expect(f.counts().credentials).toBe(0);
+    const request = f.directRequests.at(0);
+    expect(request?.url).toBe(
+      "https://api.eu.residency.elevenlabs.io/v1/speech-to-text?enable_logging=false",
+    );
+    expect(request?.key).toBe("elevenlabs-fixture");
+    expect(request?.form.get("model_id")).toBe("scribe_v3");
+    expect(request?.form.get("language_code")).toBe("cs");
+    const settlement = f.settlements.at(0);
+    expect(settlement?.isByok).toBe(false);
+    expect(settlement?.caller.transcriptionEndpoint).toBe("eu");
+  });
+
+  test("Scribe v3 is refused without the deployment's key, and to an organization on its own provider", async () => {
+    for (const [deployment, orgAIConfig] of [
+      [OPENROUTER_ONLY, null],
+      [
+        {
+          openRouter: true,
+          elevenLabs: { apiKey: "elevenlabs-fixture", environment: "eu" },
+        },
+        {
+          providers: [
+            { provider: "openrouter", apiKey: "organization-fixture" },
+          ],
+          overrideModels: null,
+          decision: null,
+        },
+      ],
+    ] as const) {
+      const f = fixture(1234, 1234, deployment);
+      const context = {
+        ...f.context,
+        orgAIConfig,
+        body: { ...f.context.body, modelId: "elevenlabs-direct/scribe-v3" },
+      } satisfies DictationContext;
+      const result = await executeDictation(context, f.dependencies);
+      expect(result.isErr()).toBe(true);
+      if (result.isOk()) {
+        throw new TypeError("Expected refusal");
+      }
+      expect(result.error).toMatchObject({
+        code: "transcription_model_unavailable",
+      });
+      expect(f.directRequests).toEqual([]);
+    }
   });
 
   test("a default never leaves the region, even for a caller that allows it", async () => {

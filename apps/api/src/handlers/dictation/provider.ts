@@ -37,8 +37,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { admittedDispatchSignal } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ModelDispatchScope } from "@/api/lib/rate-limit/model-dispatch-admission";
 
-const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
-const PROVIDER_TIMEOUT_MS = 60_000;
+export const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+export const PROVIDER_TIMEOUT_MS = 60_000;
 const RETRY_AFTER_MS = 1000;
 const MAX_SAFE_SECONDS = Number.MAX_SAFE_INTEGER / 1000;
 const MIME_FORMATS = {
@@ -51,8 +51,8 @@ const MIME_FORMATS = {
   (typeof TRANSCRIPTION_AUDIO_MEDIA_TYPES)[number],
   "wav" | "m4a"
 >;
-type AudioFormat = (typeof MIME_FORMATS)[keyof typeof MIME_FORMATS];
-const VOCABULARY_STATUS = {
+export type AudioFormat = (typeof MIME_FORMATS)[keyof typeof MIME_FORMATS];
+export const VOCABULARY_STATUS = {
   none: "not-supported",
   "groq-prompt": "applied",
   "azure-phrase-list": "applied",
@@ -104,7 +104,7 @@ const wireSchema = v.object({
   usage: v.optional(v.object({ seconds: v.optional(secondsSchema) })),
 });
 
-const unavailable = () =>
+export const unavailable = () =>
   classifyFailure(
     new HandlerError({
       status: 503,
@@ -117,7 +117,7 @@ const unavailable = () =>
     "model_unavailable",
   );
 
-const oversize = () =>
+export const oversize = () =>
   new HandlerError({
     status: 413,
     code: "audio_too_large",
@@ -125,7 +125,7 @@ const oversize = () =>
     hint: "Split the recording into smaller audio chunks.",
   });
 
-const providerFailure = (retryable: boolean) =>
+export const providerFailure = (retryable: boolean) =>
   classifyFailure(
     new HandlerError({
       status: 502,
@@ -139,7 +139,7 @@ const providerFailure = (retryable: boolean) =>
     "provider_unavailable",
   );
 
-const timeoutFailure = () =>
+export const timeoutFailure = () =>
   classifyFailure(
     new HandlerError({
       status: 503,
@@ -152,7 +152,7 @@ const timeoutFailure = () =>
     "model_deadline_exceeded",
   );
 
-const invalidResponse = () =>
+export const invalidResponse = () =>
   classifyFailure(
     new HandlerError({
       status: 502,
@@ -306,6 +306,41 @@ export const normalizeTranscriptionResponse = (
   } satisfies TranscriptionResult);
 };
 
+/**
+ * The audio chunk every provider gets: within the size limit, of an accepted
+ * type, and of a duration read from the audio itself, which is what admits
+ * and bills it.
+ */
+export const loadTranscriptionAudio = async (audio: File) => {
+  if (audio.size > MAX_TRANSCRIPTION_AUDIO_BYTES) {
+    return Result.err(oversize());
+  }
+  const mime = TRANSCRIPTION_AUDIO_MEDIA_TYPES.find(
+    (candidate) => candidate === audio.type.split(";").at(0),
+  );
+  if (mime === undefined) {
+    return Result.err(createUnreadableAudioError());
+  }
+  const format = MIME_FORMATS[mime];
+  const loaded = await Result.tryPromise({
+    try: async () => new Uint8Array(await audio.arrayBuffer()),
+    catch: () => createUnreadableAudioError(),
+  });
+  if (loaded.isErr()) {
+    return Result.err(loaded.error);
+  }
+  const duration = readAdmissibleAudioDuration(loaded.value, format);
+  if (duration.isErr()) {
+    return Result.err(duration.error);
+  }
+  return Result.ok({
+    bytes: loaded.value,
+    mime,
+    format,
+    durationMs: duration.value,
+  });
+};
+
 type TranscribeAudioOptions = {
   audio: File;
   modelId: string;
@@ -345,32 +380,19 @@ export const transcribeAudio = async ({
     return Result.err(unavailable());
   }
   const model = TRANSCRIPTION_MODELS[modelId];
-  if (model.residency[residency].status !== "available") {
+  if (
+    model.route !== "openrouter" ||
+    model.residency[residency].status !== "available"
+  ) {
     return Result.err(unavailable());
   }
-  if (audio.size > MAX_TRANSCRIPTION_AUDIO_BYTES) {
-    return Result.err(oversize());
-  }
-  const mime = TRANSCRIPTION_AUDIO_MEDIA_TYPES.find(
-    (candidate) => candidate === audio.type.split(";").at(0),
-  );
-  if (mime === undefined) {
-    return Result.err(createUnreadableAudioError());
-  }
-  const matchedFormat = MIME_FORMATS[mime];
-  const loaded = await Result.tryPromise({
-    try: async () => new Uint8Array(await audio.arrayBuffer()),
-    catch: () => createUnreadableAudioError(),
-  });
+  const loaded = await loadTranscriptionAudio(audio);
   if (loaded.isErr()) {
     return Result.err(loaded.error);
   }
-  const duration = readAdmissibleAudioDuration(loaded.value, matchedFormat);
-  if (duration.isErr()) {
-    return Result.err(duration.error);
-  }
+  const { bytes, format: matchedFormat, durationMs } = loaded.value;
   const requestBody = buildTranscriptionRequest({
-    audioBytes: loaded.value,
+    audioBytes: bytes,
     format: matchedFormat,
     modelId,
     language,
@@ -414,17 +436,17 @@ export const transcribeAudio = async ({
           if (response.body === null) {
             return Result.err(invalidResponse());
           }
-          const bytes = await readCappedBytes(
+          const answer = await readCappedBytes(
             response.body,
             MAX_RESPONSE_BYTES,
           );
-          if (bytes === null) {
+          if (answer === null) {
             return Result.err(invalidResponse());
           }
           const decoded = Result.try({
             try: (): unknown =>
               JSON.parse(
-                new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+                new TextDecoder("utf-8", { fatal: true }).decode(answer),
               ),
             catch: () => invalidResponse(),
           });
@@ -454,6 +476,6 @@ export const transcribeAudio = async ({
   }
   return Result.ok({
     transcript: fetched.value.value,
-    admittedDurationMs: duration.value,
+    admittedDurationMs: durationMs,
   });
 };
