@@ -473,7 +473,6 @@
   "no-unbounded-response-body/no-unbounded-response-body": {
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 6,
     "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
-    "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts": 3,
     "apps/api/src/handlers/sharepoint/graph-client.ts": 1,
     "apps/api/src/handlers/sharepoint/graph-oauth.ts": 1,
     "apps/api/src/lib/deepl/client.ts": 2,
