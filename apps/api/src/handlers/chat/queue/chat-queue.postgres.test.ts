@@ -955,10 +955,11 @@ const suite = (
         .from(userFiles)
         .where(eq(userFiles.threadId, threadId));
       expect(left.map(({ id }) => id)).toEqual([earlier]);
-      if (deletion.type !== "deleted") {
-        return panic("The thread holds no legal hold, yet nothing was deleted");
-      }
-      const cleanup = deletion.cleanup;
+      // The thread holds no legal hold, so the stored file was deleted.
+      const cleanup =
+        deletion.type === "deleted"
+          ? deletion.cleanup
+          : panic("The thread holds no legal hold, yet nothing was deleted");
       expect(cleanup).toHaveLength(1);
       const [request] = await database
         .select({ s3Keys: entityDeletionCleanupRequests.s3Keys })

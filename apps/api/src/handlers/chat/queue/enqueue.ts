@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   isChatPart,
   toPersistableChatMessage,
@@ -71,6 +71,12 @@ const chatQueueFull = () =>
  * the send's own upload (`uploadMessageFiles`: the same scan, size, type and
  * legal-hold checks); a send without inline files is unchanged.
  */
+type StoredInlineFiles = {
+  send: QueuedChatSend;
+  uploadedFiles: UploadedChatFile[];
+  workspaceId: SafeId<"workspace"> | null;
+};
+
 const storeInlineFiles = async ({
   organizationId,
   recordAuditEvent,
@@ -85,13 +91,14 @@ const storeInlineFiles = async ({
   send: QueuedChatSend;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
-}) => {
+}): Promise<
+  Result<
+    StoredInlineFiles,
+    HandlerError<400 | 404 | 409 | 413 | 422 | 500 | 503> | SafeDbError
+  >
+> => {
   if (hasOnlyStoredAttachments(send)) {
-    return Result.ok({
-      send,
-      uploadedFiles: [] satisfies UploadedChatFile[],
-      workspaceId: null,
-    });
+    return Result.ok({ send, uploadedFiles: [], workspaceId: null });
   }
   const thread = await safeDb(
     async (tx) =>
