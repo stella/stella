@@ -624,7 +624,9 @@
       "unavailableRegion": "A stella AI a szervezete régiójában még nem kínál átírást.",
       "unavailableProvider": "A szervezete AI-szolgáltatója nem kínál átírást.",
       "unavailable": "A stella AI átírás most nem érhető el.",
-      "model": "Átírási modell"
+      "model": "Átírási modell",
+      "outsideRegion": "A régióján kívül",
+      "outsideRegionNote": "Ez a modell a szervezete régióján kívül dolgozza fel a hangot."
     },
     "language": {
       "title": "Diktálás nyelve",

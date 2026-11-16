@@ -535,17 +535,25 @@ impl CloudSession {
   }
 }
 
-/// One model stella AI offers this organization.
+/// One model stella AI offers this organization. Fields a newer API adds are
+/// ignored, so a model list with them still reads on this version.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudModel {
   id: String,
   display_name: String,
+  /// Who runs the model, as a name to show; absent from older APIs.
+  #[serde(default)]
+  provider: Option<String>,
+  /// Whether the model processes audio outside the organization's region.
+  #[serde(default)]
+  outside_region: bool,
 }
 
 /// The models stella AI offers this organization, as the API lists them.
+/// Fields a newer API adds are ignored.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudModels {
   models: Vec<CloudModel>,
   default_model_id: Option<String>,
@@ -617,11 +625,36 @@ mod tests {
       .map(|id| CloudModel {
         id: id.to_string(),
         display_name: id.to_string(),
+        provider: None,
+        outside_region: false,
       })
       .to_vec(),
       default_model_id: default.map(ToString::to_string),
       unavailable: None,
     }
+  }
+
+  #[test]
+  fn a_model_list_from_a_newer_api_still_reads() {
+    let newer: CloudModels = serde_json::from_str(
+      r#"{
+        "models": [
+          {"id": "mistralai/voxtral-mini-transcribe", "displayName": "Voxtral Mini Transcribe"},
+          {"id": "google/chirp-3", "displayName": "Chirp 3", "provider": "Google",
+           "outsideRegion": true, "pricePerHour": 0.96}
+        ],
+        "defaultModelId": "mistralai/voxtral-mini-transcribe",
+        "unavailable": null,
+        "environment": "eu"
+      }"#,
+    )
+    .expect("a newer model list reads");
+    assert!(newer.offers("google/chirp-3"));
+    assert_eq!(newer.models[1].provider.as_deref(), Some("Google"));
+    assert!(newer.models[1].outside_region);
+    assert!(!newer.models[0].outside_region);
+    let shown = serde_json::to_value(&newer.models[1]).expect("serializes");
+    assert_eq!(shown["outsideRegion"], true);
   }
 
   #[test]

@@ -23,11 +23,17 @@ export const DESKTOP_DICTATION_MODELS_UNAVAILABLE = [
 ] as const;
 
 export const desktopDictationModelsSchema = v.strictObject({
-  /** Only the models offered in the organization's region. */
+  /** The models offered to the organization. Desktops ignore fields they
+   *  do not know, so new optional fields can be added here. */
   models: v.array(
     v.strictObject({
       id: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
       displayName: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+      /** Who runs the model, as a name to show, such as "Google". */
+      provider: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
+      /** The model processes audio outside the organization's region; the
+       *  desktop says so where it is chosen. */
+      outsideRegion: v.optional(v.boolean()),
     }),
   ),
   /** The model a request without one gets; null when none is offered. */
