@@ -187,6 +187,7 @@ export const adoptChatLocalRun = async ({
   featureAccessSnapshot,
   organizationId,
   runtime = getDesktopRunnerControl(),
+  steeredQueue,
   userId,
   workspaceIds,
 }: Pick<
@@ -195,6 +196,7 @@ export const adoptChatLocalRun = async ({
   | "featureAccessSnapshot"
   | "organizationId"
   | "runtime"
+  | "steeredQueue"
   | "userId"
   | "workspaceIds"
 > & {
@@ -225,6 +227,7 @@ export const adoptChatLocalRun = async ({
     run: createLocalChatRun(
       {
         control: runtime.control,
+        steeredQueue,
         runBell: runtime.runBell,
         owner,
         chatThreadId,
