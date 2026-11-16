@@ -280,9 +280,8 @@ const ADOPTION_SKIP_LEVEL = {
 /** The trace every skipped adoption leaves. */
 export const CHAT_TURN_ADOPTION_SKIPPED_EVENT = "chat.turn.adoption_skipped";
 
-/** What one attempt to adopt a handed-over turn did. */
+/** What one attempt did: this task runs the turn now, or it says why not. */
 type ChatTurnAdoptionOutcome =
-  /** This task runs the turn now. */
   { type: "adopted" } | { type: "skipped"; reason: ChatTurnAdoptionSkip };
 
 const skipped = (reason: ChatTurnAdoptionSkip) =>
