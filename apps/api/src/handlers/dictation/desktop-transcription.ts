@@ -9,6 +9,7 @@ import {
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   DESKTOP_DICTATION_MODELS_LABELED_QUERY,
+  DESKTOP_DICTATION_MODELS_RETENTION_QUERY,
   type DesktopDictationModels,
   desktopDictationModelsSchema,
   desktopDictationTranscriptSchema,
@@ -30,6 +31,7 @@ import {
 import {
   readTranscriptionDeployment,
   type TranscriptionDeployment,
+  transcriptionRetainsData,
   transcriptionServed,
 } from "@/api/handlers/dictation/transcription-deployment";
 import {
@@ -75,8 +77,15 @@ export const listDictationModels = (
   }: Pick<OrgSettingsForAuth, "orgAIConfig" | "managedAIResidency">,
   {
     labeled = false,
+    retention = false,
     deployment = readTranscriptionDeployment(),
-  }: { labeled?: boolean; deployment?: TranscriptionDeployment } = {},
+  }: {
+    labeled?: boolean;
+    /** The desktop warns about `retainsData`, so models whose provider
+     *  keeps the audio are listed, marked. */
+    retention?: boolean;
+    deployment?: TranscriptionDeployment;
+  } = {},
 ): DesktopDictationModels => {
   const none = (unavailable: "region" | "provider") => ({
     models: [],
@@ -94,7 +103,9 @@ export const listDictationModels = (
   ) {
     return none("provider");
   }
-  const served = transcriptionServed(deployment, orgAIConfig);
+  const served = transcriptionServed(deployment, orgAIConfig, {
+    retainingData: labeled && retention,
+  });
   const offered = Object.keys(TRANSCRIPTION_MODELS)
     .filter(isTranscriptionModelId)
     .flatMap((modelId) => {
@@ -112,9 +123,18 @@ export const listDictationModels = (
     ...offered.filter(({ outsideRegion }) => outsideRegion),
   ].map(({ modelId, outsideRegion }) => {
     const { displayName, provider } = TRANSCRIPTION_MODELS[modelId];
-    return labeled
-      ? { id: modelId, displayName, provider, outsideRegion }
-      : { id: modelId, displayName };
+    if (!labeled) {
+      return { id: modelId, displayName };
+    }
+    return retention
+      ? {
+          id: modelId,
+          displayName,
+          provider,
+          outsideRegion,
+          retainsData: transcriptionRetainsData(deployment, modelId),
+        }
+      : { id: modelId, displayName, provider, outsideRegion };
   });
   if (models.length === 0) {
     // Nothing this deployment can transcribe with, or nothing in the region.
@@ -130,7 +150,10 @@ export const listDictationModels = (
   return {
     models,
     defaultModelId:
-      defaultTranscriptionModelId(managedAIResidency, served) ?? null,
+      defaultTranscriptionModelId(
+        managedAIResidency,
+        transcriptionServed(deployment, orgAIConfig, { asDefault: true }),
+      ) ?? null,
     unavailable: null,
   };
 };
@@ -215,13 +238,14 @@ export const createDesktopDictationModelsEndpoint = (
       if (configurationError !== null) {
         return Result.err(configurationError);
       }
+      const { searchParams } = new URL(request.url);
       return Result.ok(
         listDictationModels(settings, {
           deployment: (options.readDeployment ?? readTranscriptionDeployment)(),
           labeled:
-            new URL(request.url).searchParams.get(
-              DESKTOP_DICTATION_MODELS_LABELED_QUERY,
-            ) === "1",
+            searchParams.get(DESKTOP_DICTATION_MODELS_LABELED_QUERY) === "1",
+          retention:
+            searchParams.get(DESKTOP_DICTATION_MODELS_RETENTION_QUERY) === "1",
         }),
       );
     },
@@ -295,6 +319,9 @@ export const createDesktopDictationTranscribeEndpoint = ({
           ...settings,
           // The desktop lists models outside the region only labeled as such.
           allowOutsideRegion: true,
+          // The desktop lists a model whose provider keeps the audio only
+          // with its warning.
+          allowRetainingModels: true,
           user,
           session,
           safeDb,

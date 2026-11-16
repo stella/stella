@@ -500,9 +500,11 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   EDGAR_USER_AGENT:
     "Identifying SEC EDGAR contact string. Unset disables the adapter because the SEC requires one.",
   ELEVENLABS_API_KEY:
-    "ElevenLabs API key for stella AI transcription straight to ElevenLabs (Scribe v3). Every request asks for zero retention, which ElevenLabs grants to enterprise accounts. Unset offers no direct ElevenLabs model.",
+    "ElevenLabs API key for stella AI transcription straight to ElevenLabs (Scribe v3). Requests ask for zero retention unless ELEVENLABS_ZERO_RETENTION is 0. Unset offers no direct ElevenLabs model.",
   ELEVENLABS_ENVIRONMENT:
     'ElevenLabs environment the key belongs to: "default" or "us" (US region) or "eu" (EU data residency). Organizations outside it see the model as outside their region.',
+  ELEVENLABS_ZERO_RETENTION:
+    '"1" (default) when the ElevenLabs account has zero retention (an ElevenLabs enterprise feature), so every request asks for it. "0" offers Scribe v3 only to desktops that warn that ElevenLabs keeps the audio and transcript, never as a default and never on the web.',
   EMAIL_PROVIDER:
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
   EMAIL_EVENTS_QUEUE_URL:
@@ -987,6 +989,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   MISTRAL_API_KEY: ENV_CREDENTIAL_KIND.credential,
   ELEVENLABS_API_KEY: ENV_CREDENTIAL_KIND.credential,
   ELEVENLABS_ENVIRONMENT: ENV_CREDENTIAL_KIND.notCredential,
+  ELEVENLABS_ZERO_RETENTION: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_CLIENT_CHECK_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_IDLE_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_LONG_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,

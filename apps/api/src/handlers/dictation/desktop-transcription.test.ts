@@ -153,7 +153,11 @@ test("the deployment's ElevenLabs key offers Scribe v3 in its environment's regi
   const direct = "elevenlabs-direct/scribe-v3";
   const withKey = (environment: "default" | "us" | "eu") => ({
     openRouter: true,
-    elevenLabs: { apiKey: "elevenlabs-fixture", environment },
+    elevenLabs: {
+      apiKey: "elevenlabs-fixture",
+      environment,
+      zeroRetention: true,
+    },
   });
   const ids = (listed: { models: readonly { id: string }[] }) =>
     listed.models.map(({ id }) => id);
@@ -204,6 +208,45 @@ test("the deployment's ElevenLabs key offers Scribe v3 in its environment's regi
   expect(
     listModels(eu, { deployment: { openRouter: false, elevenLabs: null } }),
   ).toEqual({ models: [], defaultModelId: null, unavailable: "provider" });
+});
+
+test("a key without zero retention is listed only to a desktop that warns, marked, and never as the default", () => {
+  const direct = "elevenlabs-direct/scribe-v3";
+  const deployment = {
+    openRouter: true,
+    elevenLabs: {
+      apiKey: "elevenlabs-fixture",
+      environment: "eu",
+      zeroRetention: false,
+    },
+  } as const;
+  const eu = { orgAIConfig: null, managedAIResidency: "eu" } as const;
+  const ids = (listed: { models: readonly { id: string }[] }) =>
+    listed.models.map(({ id }) => id);
+  expect(ids(listModels(eu, { deployment }))).not.toContain(direct);
+  expect(ids(listModels(eu, { deployment, labeled: true }))).not.toContain(
+    direct,
+  );
+  const warned = listModels(eu, { deployment, labeled: true, retention: true });
+  expect(warned.models).toContainEqual({
+    id: direct,
+    displayName: "Scribe v3",
+    provider: "ElevenLabs",
+    outsideRegion: false,
+    retainsData: true,
+  });
+  expect(warned.defaultModelId).not.toBe(direct);
+  for (const model of warned.models) {
+    expect(model).toHaveProperty("retainsData", model.id === direct);
+  }
+  // Only the key without zero retention: listed with its warning, no default.
+  expect(
+    listModels(eu, {
+      deployment: { ...deployment, openRouter: false },
+      labeled: true,
+      retention: true,
+    }),
+  ).toMatchObject({ defaultModelId: null, unavailable: null });
 });
 
 test("a region without a model and a provider that does not transcribe list nothing, with the reason", () => {

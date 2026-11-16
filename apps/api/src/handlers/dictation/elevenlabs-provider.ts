@@ -57,6 +57,9 @@ export const ELEVENLABS_ORIGINS = {
 export type ElevenLabsDeployment = {
   apiKey: string;
   environment: ElevenLabsEnvironment;
+  /** The account has ElevenLabs zero retention, so every request asks for
+   *  it. Without it ElevenLabs keeps the audio and transcript. */
+  zeroRetention: boolean;
 };
 
 /** The deployment's ElevenLabs key and its environment; `null` offers no
@@ -65,7 +68,11 @@ export const readElevenLabsDeployment = (): ElevenLabsDeployment | null => {
   const apiKey = env.ELEVENLABS_API_KEY?.trim();
   return apiKey === undefined || apiKey === ""
     ? null
-    : { apiKey, environment: env.ELEVENLABS_ENVIRONMENT };
+    : {
+        apiKey,
+        environment: env.ELEVENLABS_ENVIRONMENT,
+        zeroRetention: env.ELEVENLABS_ZERO_RETENTION === "1",
+      };
 };
 
 /**
@@ -82,19 +89,23 @@ export const elevenLabsServes = (
   (endpoint === "global" ||
     endpoint === (deployment.environment === "eu" ? "eu" : "us"));
 
-// Zero retention on every request: ElevenLabs keeps neither the audio nor
-// the transcript beyond the request.
-const transcriptionUrl = (environment: ElevenLabsEnvironment) =>
-  `${ELEVENLABS_ORIGINS[environment]}/v1/speech-to-text?enable_logging=false`;
+// With zero retention ElevenLabs keeps neither the audio nor the transcript
+// beyond the request; an account without it cannot ask for it.
+const transcriptionUrl = (
+  environment: ElevenLabsEnvironment,
+  zeroRetention: boolean,
+) =>
+  `${ELEVENLABS_ORIGINS[environment]}/v1/speech-to-text${zeroRetention ? "?enable_logging=false" : ""}`;
 
-const TRANSCRIPTION_URLS: ReadonlySet<string> = new Set([
-  transcriptionUrl("default"),
-  transcriptionUrl("us"),
-  transcriptionUrl("eu"),
-]);
+const TRANSCRIPTION_URLS: ReadonlySet<string> = new Set(
+  (["default", "us", "eu"] as const).flatMap((environment) => [
+    transcriptionUrl(environment, true),
+    transcriptionUrl(environment, false),
+  ]),
+);
 
-/** Audio goes only to a zero-retention transcription URL of a known
- *  environment, and redirects are refused. */
+/** Audio goes only to the transcription URL of a known environment, and
+ *  redirects are refused. */
 export const fetchElevenLabsTranscription = async (
   input: string | URL,
   init: FetchWithTimeoutInit,
@@ -201,8 +212,8 @@ type TranscribeWithElevenLabsOptions = {
   scheduleTimeout?: WithTimeoutScheduler | undefined;
 };
 
-/** One audio chunk transcribed by ElevenLabs with the deployment's key,
- *  in its environment, with zero retention. */
+/** One audio chunk transcribed by ElevenLabs with the deployment's key, in
+ *  its environment, with zero retention when the account has it. */
 export const transcribeWithElevenLabs = async ({
   audio,
   modelId,
@@ -250,7 +261,7 @@ export const transcribeWithElevenLabs = async ({
       await withTimeout(
         async (requestSignal) => {
           const response = await fetchProvider(
-            transcriptionUrl(deployment.environment),
+            transcriptionUrl(deployment.environment, deployment.zeroRetention),
             {
               method: "POST",
               headers: { "xi-api-key": deployment.apiKey },

@@ -111,6 +111,9 @@ export type DictationCaller = Readonly<OrgSettingsForAuth> &
      *  a model the region does not serve to the global endpoint. Only a
      *  model named in the request goes there; a default never does. */
     readonly allowOutsideRegion?: boolean;
+    /** A caller that warns members when a provider keeps the audio may use
+     *  such a model when it names it; a default never is one. */
+    readonly allowRetainingModels?: boolean;
   };
 type PreflightOptions = {
   caller: UsageCaller;
@@ -282,12 +285,19 @@ export const executeDictation = async (
       );
     }
     const deployment = dependencies.deployment();
-    const served = transcriptionServed(deployment, ctx.orgAIConfig);
+    const served = transcriptionServed(deployment, ctx.orgAIConfig, {
+      retainingData: ctx.allowRetainingModels === true,
+    });
     const residency = ctx.managedAIResidency;
     const regionalDefault =
       residency === null
         ? undefined
-        : defaultTranscriptionModelId(residency, served);
+        : defaultTranscriptionModelId(
+            residency,
+            transcriptionServed(deployment, ctx.orgAIConfig, {
+              asDefault: true,
+            }),
+          );
     const modelId =
       residency === null ? undefined : (body.modelId ?? regionalDefault);
     const endpoint =

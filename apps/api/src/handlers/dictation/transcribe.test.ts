@@ -602,7 +602,11 @@ describe("dictation operation request matrix", () => {
   test("Scribe v3 goes straight to the deployment's ElevenLabs environment with zero retention, billed to stella", async () => {
     const f = fixture(1234, 1234, {
       openRouter: true,
-      elevenLabs: { apiKey: "elevenlabs-fixture", environment: "eu" },
+      elevenLabs: {
+        apiKey: "elevenlabs-fixture",
+        environment: "eu",
+        zeroRetention: true,
+      },
     });
     const context = {
       ...f.context,
@@ -644,7 +648,11 @@ describe("dictation operation request matrix", () => {
       [
         {
           openRouter: true,
-          elevenLabs: { apiKey: "elevenlabs-fixture", environment: "eu" },
+          elevenLabs: {
+            apiKey: "elevenlabs-fixture",
+            environment: "eu",
+            zeroRetention: true,
+          },
         },
         {
           providers: [
@@ -671,6 +679,63 @@ describe("dictation operation request matrix", () => {
       });
       expect(f.directRequests).toEqual([]);
     }
+  });
+
+  test("a key without zero retention never asks for it, serves only a caller that warns, and is never a default", async () => {
+    const deployment = {
+      openRouter: false,
+      elevenLabs: {
+        apiKey: "elevenlabs-fixture",
+        environment: "eu",
+        zeroRetention: false,
+      },
+    } as const;
+    const named = {
+      modelId: "elevenlabs-direct/scribe-v3",
+      vocabulary: undefined,
+    } as const;
+    const web = fixture(1234, 1234, deployment);
+    const refused = await executeDictation(
+      {
+        ...web.context,
+        orgAIConfig: null,
+        body: { ...web.context.body, ...named },
+      },
+      web.dependencies,
+    );
+    expect(refused.isErr() && refused.error.code).toBe(
+      "transcription_model_unavailable",
+    );
+    const defaulted = fixture(1234, 1234, deployment);
+    const noDefault = await executeDictation(
+      {
+        ...defaulted.context,
+        orgAIConfig: null,
+        allowRetainingModels: true,
+        body: { ...defaulted.context.body, modelId: undefined },
+      },
+      defaulted.dependencies,
+    );
+    expect(noDefault.isErr() && noDefault.error.code).toBe(
+      "transcription_model_unavailable",
+    );
+    const desktop = fixture(1234, 1234, deployment);
+    const result = await executeDictation(
+      {
+        ...desktop.context,
+        orgAIConfig: null,
+        allowRetainingModels: true,
+        body: { ...desktop.context.body, ...named },
+      },
+      desktop.dependencies,
+    );
+    if (result.isErr()) {
+      throw result.error;
+    }
+    expect(desktop.directRequests.at(0)?.url).toBe(
+      "https://api.eu.residency.elevenlabs.io/v1/speech-to-text",
+    );
+    expect([...web.directRequests, ...defaulted.directRequests]).toEqual([]);
   });
 
   test("a default never leaves the region, even for a caller that allows it", async () => {

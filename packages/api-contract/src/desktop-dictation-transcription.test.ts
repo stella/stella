@@ -4,6 +4,7 @@ import * as v from "valibot";
 import {
   DESKTOP_DICTATION_MODELS_LABELED_QUERY,
   DESKTOP_DICTATION_MODELS_PATH,
+  DESKTOP_DICTATION_MODELS_RETENTION_QUERY,
   DESKTOP_DICTATION_TRANSCRIBE_PATH,
   desktopDictationModelsSchema,
 } from "./desktop-dictation-transcription";
@@ -17,6 +18,7 @@ test("the typed transcription contract reads the native one", () => {
   expect(contract).toStrictEqual({
     modelsPath: DESKTOP_DICTATION_MODELS_PATH,
     modelsLabeledQuery: DESKTOP_DICTATION_MODELS_LABELED_QUERY,
+    modelsRetentionQuery: DESKTOP_DICTATION_MODELS_RETENTION_QUERY,
     transcribePath: DESKTOP_DICTATION_TRANSCRIBE_PATH,
     maxAudioBytes: MAX_TRANSCRIPTION_AUDIO_BYTES,
     maxAudioSeconds: MAX_TRANSCRIPTION_AUDIO_SECONDS,
@@ -32,6 +34,13 @@ test("a model may name its provider and that it runs outside the region", () => 
         displayName: "Chirp 3",
         provider: "Google",
         outsideRegion: true,
+      },
+      {
+        id: "elevenlabs-direct/scribe-v3",
+        displayName: "Scribe v3",
+        provider: "ElevenLabs",
+        outsideRegion: false,
+        retainsData: true,
       },
     ],
     defaultModelId: "mistralai/voxtral-mini-transcribe",

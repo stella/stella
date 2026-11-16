@@ -1,5 +1,8 @@
 import { TRANSCRIPTION_MODELS } from "@stll/ai-catalog/transcription";
-import type { TranscriptionServed } from "@stll/ai-catalog/transcription";
+import type {
+  TranscriptionModelId,
+  TranscriptionServed,
+} from "@stll/ai-catalog/transcription";
 
 import {
   elevenLabsServes,
@@ -24,19 +27,40 @@ export const readTranscriptionDeployment = (): TranscriptionDeployment => ({
   elevenLabs: readElevenLabsDeployment(),
 });
 
+/** The provider keeps the audio and transcript: a direct model on a key
+ *  without zero retention. OpenRouter requests always require it. */
+export const transcriptionRetainsData = (
+  deployment: TranscriptionDeployment,
+  modelId: TranscriptionModelId,
+): boolean =>
+  TRANSCRIPTION_MODELS[modelId].route === "elevenlabs" &&
+  deployment.elevenLabs?.zeroRetention === false;
+
 /**
  * Which models an organization may use, and at which endpoints. OpenRouter
  * models need the deployment's OpenRouter credential, or the organization's
  * own OpenRouter key when it brings its own AI provider. A direct model runs
  * on the deployment's key, so an organization on its own AI provider, which
- * pays its provider itself, does not get it.
+ * pays its provider itself, does not get it. A model whose provider keeps
+ * the data is served only where the caller warns about it, and never as a
+ * default (`asDefault`).
  */
 export const transcriptionServed =
   (
     deployment: TranscriptionDeployment,
     orgAIConfig: OrgSettingsForAuth["orgAIConfig"],
+    {
+      retainingData = false,
+      asDefault = false,
+    }: { retainingData?: boolean; asDefault?: boolean } = {},
   ): TranscriptionServed =>
   (modelId, endpoint) => {
+    if (
+      transcriptionRetainsData(deployment, modelId) &&
+      (asDefault || !retainingData)
+    ) {
+      return false;
+    }
     const model = TRANSCRIPTION_MODELS[modelId];
     if (model.route === "openrouter") {
       return orgAIConfig === null

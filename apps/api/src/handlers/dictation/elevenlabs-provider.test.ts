@@ -12,7 +12,11 @@ import {
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 
 const MODEL = "elevenlabs-direct/scribe-v3";
-const DEPLOYMENT = { apiKey: "elevenlabs-fixture", environment: "eu" } as const;
+const DEPLOYMENT = {
+  apiKey: "elevenlabs-fixture",
+  environment: "eu",
+  zeroRetention: true,
+} as const;
 
 const rejectionOf = async (promise: Promise<unknown>) => {
   try {
@@ -36,7 +40,10 @@ describe("ElevenLabs environments", () => {
   test("the EU residency environment is the EU region, the others the US region, and each serves elsewhere as outside the region", () => {
     const serves = (environment: "default" | "us" | "eu") =>
       (["eu", "us", "global"] as const).filter((endpoint) =>
-        elevenLabsServes({ apiKey: "k", environment }, endpoint),
+        elevenLabsServes(
+          { apiKey: "k", environment, zeroRetention: true },
+          endpoint,
+        ),
       );
     expect(serves("eu")).toEqual(["eu", "global"]);
     expect(serves("us")).toEqual(["us", "global"]);
@@ -44,11 +51,11 @@ describe("ElevenLabs environments", () => {
     expect(elevenLabsServes(null, "global")).toBe(false);
   });
 
-  test("audio goes only to a zero-retention transcription URL of a known environment", async () => {
+  test("audio goes only to the transcription URL of a known environment", async () => {
     for (const target of [
-      "https://api.elevenlabs.io/v1/speech-to-text",
       "https://api.elevenlabs.io/v1/speech-to-text?enable_logging=true",
       "https://api.eu.residency.elevenlabs.io/v1/speech-to-text/extra?enable_logging=false",
+      "https://api.eu.residency.elevenlabs.io/v1/speech-to-text?enable_logging=true",
       "https://api.elevenlabs.example/v1/speech-to-text?enable_logging=false",
       "http://api.elevenlabs.io/v1/speech-to-text?enable_logging=false",
     ]) {
