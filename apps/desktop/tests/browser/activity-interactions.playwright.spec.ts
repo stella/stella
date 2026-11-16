@@ -2469,19 +2469,20 @@ for (const language of ["en", "ar"] as const) {
       .getByRole("heading", { name: messages.activity.welcomeTitle })
       .locator("..");
     await expect
-      .poll(() =>
-        details.evaluate((element) => {
-          const section = element.closest("section");
-          const content = element.getBoundingClientRect();
-          const bounds = section?.getBoundingClientRect();
-          return (
-            bounds !== undefined &&
-            content.left >= bounds.left &&
-            content.right <= bounds.right &&
-            content.bottom <= bounds.bottom &&
-            element.scrollWidth <= element.clientWidth
-          );
-        }),
+      .poll(
+        async () =>
+          await details.evaluate((element) => {
+            const section = element.closest("section");
+            const content = element.getBoundingClientRect();
+            const bounds = section?.getBoundingClientRect();
+            return (
+              bounds !== undefined &&
+              content.left >= bounds.left &&
+              content.right <= bounds.right &&
+              content.bottom <= bounds.bottom &&
+              element.scrollWidth <= element.clientWidth
+            );
+          }),
       )
       .toBe(true);
     await expect(
