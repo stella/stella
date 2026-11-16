@@ -2225,6 +2225,7 @@
       "noRun": "Der Agent läuft gerade nicht auf Ihrem Computer.",
       "notPlain": "Während der Agent arbeitet, können Sie ihm nur eine Textnachricht ohne Dateien senden, die nicht im anonymisierten Modus gesendet wird.",
       "notTaken": "Der Agent konnte Ihre Nachricht gerade nicht annehmen.",
+      "queuedMessageChanged": "Die Nachricht wurde inzwischen geändert oder ist nicht mehr in der Warteschlange, daher hat der Agent sie nicht erhalten.",
       "runFull": "Der Agent nimmt gerade keine weiteren Nachrichten an.",
       "title": "Ihre Nachricht wartet, bis der Agent fertig ist",
       "turnNotRunning": "Der Agent arbeitet gerade nicht."

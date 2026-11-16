@@ -293,7 +293,8 @@
       "noRun": "Agentas dabar neveikia jūsų kompiuteryje.",
       "cannotSteer": "Šis agentas darbo metu nepriima žinučių.",
       "runFull": "Agentas šiuo metu negali priimti daugiau žinučių.",
-      "notTaken": "Agentas šiuo metu negalėjo priimti jūsų žinutės."
+      "notTaken": "Agentas šiuo metu negalėjo priimti jūsų žinutės.",
+      "queuedMessageChanged": "Žinutė pasikeitė arba jos nebėra eilėje, todėl agentas jos negavo."
     }
   },
   "tasks": {

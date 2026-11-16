@@ -293,7 +293,8 @@
       "noRun": "Aģents pašlaik jūsu datorā nedarbojas.",
       "cannotSteer": "Šis aģents darba laikā nepieņem ziņas.",
       "runFull": "Aģents pašlaik nevar pieņemt vairāk ziņu.",
-      "notTaken": "Aģents pašlaik nevarēja pieņemt jūsu ziņu."
+      "notTaken": "Aģents pašlaik nevarēja pieņemt jūsu ziņu.",
+      "queuedMessageChanged": "Ziņa ir mainīta vai vairs nav rindā, tāpēc aģents to nesaņēma."
     }
   },
   "tasks": {

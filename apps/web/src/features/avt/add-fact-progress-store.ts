@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import type { WebApiRoutes } from "@/lib/api";
 import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 
 /** Where a new fact comes from: a document, a page of it, and the words.
@@ -12,10 +13,9 @@ type FactSourceInput = {
 
 export type AddFactInput = { statement: string; source: FactSourceInput };
 
-/** How far adding a fact got: being created, added to the list, sourced,
- *  linked. The create's and the re-check's keys are chosen once, so a retry
- *  whose create or re-check already landed replays it instead of adding the
- *  fact twice or grading the claim again. */
+/** Each submitted write keeps its request across panel remounts. A source
+ * version is resolved once, before its first submission, and retained with
+ * its replay key until that submission succeeds. */
 export type AddedFact = {
   input: AddFactInput;
   createRequest: IdempotentRequest;
@@ -23,12 +23,21 @@ export type AddedFact = {
 } & (
   | { step: "creating" }
   | { step: "added" | "sourced" | "linked"; entityId: string }
+  | {
+      step: "sourcing";
+      entityId: string;
+      sourceRequest: {
+        body: WebApiRoutes["lists"][":workspaceId"]["item-sources"]["post"]["body"];
+        request: IdempotentRequest;
+      };
+    }
 );
 
 type AddFactProgressStore = {
   /** Unfinished additions by claim (`addFactProgressKey`). */
   progress: Readonly<Record<string, AddedFact>>;
   record: (key: string, added: AddedFact | null) => void;
+  runAttempt: (key: string, write: () => Promise<void>) => Promise<void>;
 };
 
 /**
@@ -36,17 +45,38 @@ type AddFactProgressStore = {
  * session, outside the claim's panel: switching claims and coming back
  * resumes the same fact instead of adding a second one.
  */
-export const useAddFactProgress = create<AddFactProgressStore>()((set) => ({
-  progress: {},
-  record: (key, added) => {
-    set(({ progress }) => {
-      const next = Object.fromEntries(
-        Object.entries(progress).filter(([entry]) => entry !== key),
-      );
-      return { progress: added === null ? next : { ...next, [key]: added } };
-    });
-  },
-}));
+export const useAddFactProgress = create<AddFactProgressStore>()((set) => {
+  const attempts = new Map<string, Promise<void>>();
+  return {
+    progress: {},
+    record: (key, added) => {
+      set(({ progress }) => {
+        const next = Object.fromEntries(
+          Object.entries(progress).filter(([entry]) => entry !== key),
+        );
+        return { progress: added === null ? next : { ...next, [key]: added } };
+      });
+    },
+    runAttempt: async (key, write) => {
+      const active = attempts.get(key);
+      if (active !== undefined) {
+        await active;
+        return;
+      }
+      // Store ownership before work starts. A remount joins this exact attempt;
+      // queuing another write would create a new fact after success clears progress.
+      const pending = Promise.resolve()
+        .then(write)
+        .finally(() => {
+          if (attempts.get(key) === pending) {
+            attempts.delete(key);
+          }
+        });
+      attempts.set(key, pending);
+      await pending;
+    },
+  };
+});
 
 export const addFactProgressKey = (scope: {
   workspaceId: string;

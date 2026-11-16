@@ -1574,23 +1574,29 @@ export const readS3ObjectBounded = async ({
   s3Policy,
 }: BoundedS3ReadOptions): Promise<Uint8Array> =>
   await documentsCredentials.run(async () => {
-    const response = await getAbortableS3().send(
-      new GetObjectCommand({ Bucket: bucket, Key: key }),
-      { abortSignal: signal },
-    );
-    const declared = response.ContentLength;
-    if (declared === undefined) {
-      throw new S3ObjectReadError({
-        message: `Object read for ${key} declared no usable length; refusing an unbounded read`,
-      });
+    const operation = new AbortController();
+    try {
+      const response = await getAbortableS3().send(
+        new GetObjectCommand({ Bucket: bucket, Key: key }),
+        { abortSignal: AbortSignal.any([signal, operation.signal]) },
+      );
+      const declared = response.ContentLength;
+      if (declared === undefined) {
+        throw new S3ObjectReadError({
+          message: `Object read for ${key} declared no usable length; refusing an unbounded read`,
+        });
+      }
+      validateDeclaredObjectSize({ key, declaredBytes: declared, maxBytes });
+      if (!response.Body) {
+        throw new S3ObjectReadError({
+          message: "S3 returned an object without a response body",
+        });
+      }
+      return meterStorageRead(await response.Body.transformToByteArray());
+    } finally {
+      // Header refusal must close the unread SDK body without aborting its caller.
+      operation.abort();
     }
-    validateDeclaredObjectSize({ key, declaredBytes: declared, maxBytes });
-    if (!response.Body) {
-      throw new S3ObjectReadError({
-        message: "S3 returned an object without a response body",
-      });
-    }
-    return meterStorageRead(await response.Body.transformToByteArray());
   }, s3Policy);
 
 /**
