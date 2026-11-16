@@ -466,6 +466,7 @@ class CallScanner {
   readonly visited = new Set<string>();
   readonly scanned = new Set<string>();
   readonly optionsNodes = new Set<ts.Node>();
+  readonly returnedFunctionValues = new Set<ts.Node>();
   deduplicate = <T>(items: T[]) =>
     items.filter((item) => {
       const key = JSON.stringify(item);
@@ -636,7 +637,7 @@ class CallScanner {
   scanInvocationBody = ({
     value,
     depth,
-    active,
+    active = new Set<ts.Node>(),
     intent = "inspect",
   }: ScanArgs) => {
     const returned = this.analyzer.returned(value);
@@ -645,22 +646,33 @@ class CallScanner {
       returned &&
       functionNode(unwrap(returned.node))
     ) {
-      // Preserve conservative callback effects without treating a returned
-      // function value as evidence that its nested owner executed.
-      const scanner = new CallScanner(this.analyzer, "transitive");
-      const scanBody = {
-        evaluate: scanner.scanEvaluation,
-        inspect: scanner.scan,
-      }[intent];
-      scanBody({ value, depth, active });
-      this.routes.push(...scanner.routes);
-      this.unresolved.push(...scanner.unresolved);
-      return;
+      this.returnedFunctionValues.add(unwrap(returned.node));
     }
     const scanBody = { evaluate: this.scanEvaluation, inspect: this.scan }[
       intent
     ];
     scanBody({ value, depth, active });
+  };
+  scanReturnedFunction = ({
+    value,
+    depth,
+    active = new Set<ts.Node>(),
+    intent = "inspect",
+  }: ScanArgs): boolean => {
+    if (!this.returnedFunctionValues.has(value.node)) {
+      return false;
+    }
+    // Only this returned value lacks execution credit. Eager work and nested
+    // mutation primitives elsewhere in the helper retain their own boundaries.
+    const scanner = new CallScanner(this.analyzer, "transitive");
+    const scanBody = {
+      evaluate: scanner.scanEvaluation,
+      inspect: scanner.scan,
+    }[intent];
+    scanBody({ value, depth, active });
+    this.routes.push(...scanner.routes);
+    this.unresolved.push(...scanner.unresolved);
+    return true;
   };
   scanOwnedMutation = ({
     current,
@@ -916,6 +928,9 @@ class CallScanner {
       return;
     }
     if (ts.isFunctionDeclaration(node)) {
+      return;
+    }
+    if (this.scanReturnedFunction({ value: current, depth, active, intent })) {
       return;
     }
     // Function arguments and lifecycle callbacks can execute; uncalled local declarations cannot.

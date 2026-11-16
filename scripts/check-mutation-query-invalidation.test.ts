@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
@@ -1297,28 +1298,28 @@ export const verify = () => useMutation({ mutationFn: async (input) => {
 test("mixed auth mutations retain legacy status while executed nested owners keep exact contract evidence", () => {
   const sources = mixedOwnedMutationSources();
   const census = inspectMutationQuerySources(sources);
-  const entry = census.mutations.find(({ id }) =>
-    id.includes("verify:useMutation"),
-  );
+  const entry =
+    census.mutations.find(({ id }) => id.includes("verify:useMutation")) ??
+    panic("Expected the fixture mutation primitive");
   const findings = inspectMutationQueryInvalidation(census, sources);
   expect(findings).toEqual([
     expect.objectContaining({
-      id: `${entry?.id}:mutation`,
+      id: `${entry.id}:mutation`,
       disposition: "legacy",
     }),
   ]);
-  expect(entry?.writes.map(({ route }) => route).toSorted()).toEqual([
+  expect(entry.writes.map(({ route }) => route).toSorted()).toEqual([
     "/entities/:workspaceId/rename",
   ]);
-  expect(entry?.ownWrites).toEqual([]);
-  expect(entry?.ownUnresolved).toEqual(entry?.unresolved);
-  expect(entry?.unresolved).toEqual([
+  expect(entry.ownWrites).toEqual([]);
+  expect(entry.ownUnresolved).toEqual(entry.unresolved);
+  expect(entry.unresolved).toEqual([
     expect.objectContaining({
       reason: "unresolved-auth-plugin-endpoint",
       expression: expect.stringContaining("authClient.$fetch"),
     }),
   ]);
-  expect(entry?.resourceMutations).toMatchObject([
+  expect(entry.resourceMutations).toMatchObject([
     {
       file: "apps/web/src/account.ts",
       writes: [{ route: "/entities/:workspaceId/rename" }],
@@ -1454,20 +1455,20 @@ export const verify = () => useMutation({ mutationFn: async (input) => {
     },
   ];
   const census = inspectMutationQuerySources(sources);
-  const entry = census.mutations.find(({ id }) =>
-    id.includes("verify:useMutation"),
-  );
+  const entry =
+    census.mutations.find(({ id }) => id.includes("verify:useMutation")) ??
+    panic("Expected the fixture mutation primitive");
   expect(inspectMutationQueryInvalidation(census, sources)).toEqual([
     expect.objectContaining({
-      id: `${entry?.id}:mutation`,
+      id: `${entry.id}:mutation`,
       disposition: "legacy",
     }),
   ]);
-  expect(entry?.writes.map(({ route }) => route)).toEqual(["/update-user"]);
-  expect(entry?.ownWrites).toEqual([]);
-  expect(entry?.ownUnresolved).toEqual(entry?.unresolved);
-  expect(entry?.unresolved?.length).toBeGreaterThan(0);
-  expect(entry?.resourceMutations).toMatchObject([
+  expect(entry.writes.map(({ route }) => route)).toEqual(["/update-user"]);
+  expect(entry.ownWrites).toEqual([]);
+  expect(entry.ownUnresolved).toEqual(entry.unresolved);
+  expect(entry.unresolved.length).toBeGreaterThan(0);
+  expect(entry.resourceMutations).toMatchObject([
     {
       file: "apps/web/src/lib/account/update-user.ts",
       writes: [{ route: "/update-user" }],
@@ -1506,4 +1507,41 @@ test("calling a factory without invoking its returned callback gives no nested e
   assertInvalidCannotBeBaselined(
     inspectMutationQueryInvalidation(census, sources),
   );
+});
+
+test("task action closures preserve their eager registered mutation boundary", () => {
+  const sources = [
+    ...validSources.slice(0, 2).map((source) => ({
+      ...source,
+      text: source.text
+        .replace("renameEntity:", "updateTask:")
+        .replace("/entities/:workspaceId/rename", "/tasks/:workspaceId"),
+    })),
+    {
+      file: "apps/web/src/components/workspaces/tasks/task-status-menu.tsx",
+      text: readFileSync(
+        new URL(
+          "../apps/web/src/components/workspaces/tasks/task-status-menu.tsx",
+          import.meta.url,
+        ),
+        "utf-8",
+      ),
+    },
+    {
+      file: "apps/web/src/features.ts",
+      text: `import { useTaskStatusAction } from "@/components/workspaces/tasks/task-status-menu";
+export const useTaskConsumer = () => useTaskStatusAction("workspace");`,
+    },
+  ];
+  const census = inspectMutationQuerySources(sources);
+  const entry =
+    census.mutations.find(({ id }) =>
+      id.includes("useTaskConsumer:useTaskStatusAction"),
+    ) ?? panic("Expected the task action caller wrapper");
+  expect(entry.writes.map(({ route }) => route)).toEqual([
+    "/tasks/:workspaceId",
+  ]);
+  expect(entry.wrapperOf.length).toBeGreaterThan(0);
+  expect(entry.ownWrites).toEqual([]);
+  expect(inspectMutationQueryInvalidation(census, sources)).toEqual([]);
 });
