@@ -5,6 +5,8 @@ import type { PublicCaseLawDecision } from "@/features/case-law/public-decision"
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import type { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
+import type { Route as CourtBrowseRoute } from "@/routes/law/$country/courts/$";
+import type { Route as JurisdictionHubRoute } from "@/routes/law/$country/index";
 import type { Route as StatuteRoute } from "@/routes/law/$country/statutes/$slug/index";
 
 export const publicRouteExceptions: Record<string, string> = {
@@ -117,6 +119,21 @@ const statuteData = {
   work: statute,
 } satisfies typeof StatuteRoute.types.loaderData;
 
+const jurisdictionHubData = {
+  scope: "CZE",
+  courts: [{ name: "Nejvyšší soud", segment: "nejvyssi-soud" }],
+} satisfies typeof JurisdictionHubRoute.types.loaderData;
+
+const courtBrowseData = {
+  scope: "CZE",
+  court: "Nejvyšší soud",
+  page: {
+    kind: "periods",
+    target: { level: "court", court: "nejvyssi-soud" },
+    periods: [{ value: 2023, count: 0 }],
+  },
+} satisfies typeof CourtBrowseRoute.types.loaderData;
+
 export const publicFixtureLoaderData = (routeId: string) => {
   switch (routeId) {
     case "/law/$country/cases/$court/$slug":
@@ -125,6 +142,10 @@ export const publicFixtureLoaderData = (routeId: string) => {
     case "/law/$country/statutes/$slug/":
     case "/law/$country/statutes/$slug/v/$version":
       return statuteData;
+    case "/law/$country/":
+      return jurisdictionHubData;
+    case "/law/$country/courts/$":
+      return courtBrowseData;
     default:
       return undefined;
   }

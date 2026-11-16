@@ -4,12 +4,8 @@ import * as v from "valibot";
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import readDecisionAnchorRedirectsRoute from "@/api/handlers/case-law/decisions/anchor-redirects";
-import {
-  listBrowseCourtsHandler,
-  listBrowseCourtsQuerySchema,
-  readBrowseCalendarHandler,
-  readBrowseCalendarQuerySchema,
-} from "@/api/handlers/case-law/decisions/browse-hubs";
+import readBrowseCalendar from "@/api/handlers/case-law/decisions/browse-calendar";
+import listBrowseCourts from "@/api/handlers/case-law/decisions/browse-courts";
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
@@ -77,8 +73,6 @@ import {
   decisionProvisionsSuccessResponseSchema,
 } from "@/api/handlers/case-law/provisions/response-schema";
 import {
-  browseCalendarResponseSchema,
-  browseCourtsResponseSchema,
   corpusStatusResponseSchema,
   decisionFacetsResponseSchema,
   latestDecisionsResponseSchema,
@@ -219,56 +213,6 @@ const listLatestDecisions = createSafeBoundedPublicHandler(
 
     return Result.ok(
       projectResponseText(response, latestDecisionsResponseSchema),
-    );
-  },
-);
-
-const listBrowseCourts = createSafeBoundedPublicHandler(
-  {
-    contract: "patch",
-    accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "internal", reason: "public_indexing" },
-    cache: { kind: "none" },
-    response: withPublicCountryUnavailable(
-      safePublicHandlerResponseSchemasWithStatusText(
-        browseCourtsResponseSchema,
-      ),
-    ),
-    query: listBrowseCourtsQuerySchema,
-  },
-  async function* ({ query }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () => await listBrowseCourtsHandler(query, caseLawPublicReadDb),
-      ),
-    );
-
-    return Result.ok(projectResponseText(response, browseCourtsResponseSchema));
-  },
-);
-
-const readBrowseCalendar = createSafeBoundedPublicHandler(
-  {
-    contract: "patch",
-    accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "internal", reason: "public_indexing" },
-    cache: { kind: "none" },
-    response: withPublicCountryUnavailable(
-      safePublicHandlerResponseSchemasWithStatusText(
-        browseCalendarResponseSchema,
-      ),
-    ),
-    query: readBrowseCalendarQuerySchema,
-  },
-  async function* ({ query }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () => await readBrowseCalendarHandler(query, caseLawPublicReadDb),
-      ),
-    );
-
-    return Result.ok(
-      projectResponseText(response, browseCalendarResponseSchema),
     );
   },
 );

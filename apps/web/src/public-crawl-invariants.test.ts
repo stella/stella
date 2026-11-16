@@ -138,7 +138,7 @@ describe("public law crawl invariants", () => {
     for (const path of sitemapPaths) {
       expect(path).not.toContain("?");
       expect(robotsAllows(robots, path)).toBe(true);
-      expect(headIndexes(path as `/${string}`)).toBe(true);
+      expect(headIndexes(`/${path.slice(1)}`)).toBe(true);
     }
   });
 
