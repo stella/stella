@@ -966,8 +966,7 @@
     "packages/decision-reader/src/document-ast-text.tsx": 3
   },
   "no-native-ui/no-native-textarea": {
-    "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1,
-    "apps/web/src/routes/law/-law-home/law-entry-box.tsx": 1
+    "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1
   },
   "no-native-ui/no-native-tooltip": {},
   "eslint/complexity": {
