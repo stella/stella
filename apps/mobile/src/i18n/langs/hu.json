@@ -247,7 +247,8 @@
         "showMore": "Több megjelenítése"
       },
       "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább.",
-      "steered": "Az ügynök munkája közben elküldve"
+      "steered": "Az ügynök munkája közben elküldve",
+      "desktopSettingsSteps": "A számítógépén a stella desktopban nyissa meg a Beállítások › Általános › AI-előfizetések részt."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}",

@@ -6,6 +6,7 @@ import {
   unregisterDomEnvironment,
 } from "@stll/property-testing/dom-environment";
 
+import type { AgentSettingsFocus } from "../src/mainview/AgentSubscriptionsSection";
 import type {
   HarnessInstallState,
   HarnessStatus,
@@ -49,9 +50,13 @@ type Call = { command: string; args: unknown };
 /**
  * Renders the section over a native side whose harness status is
  * `harnesses()`, read again on every status request, with both
- * subscriptions signed out.
+ * subscriptions signed out, and `focus` requested by a settings link.
  */
-const renderSection = (harnesses: () => unknown) => {
+const renderSection = (
+  harnesses: () => unknown,
+  focus: AgentSettingsFocus | null = null,
+) => {
+  const shown: AgentSettingsFocus[] = [];
   const calls: Call[] = [];
   mockIPC(
     (command, args) => {
@@ -80,11 +85,17 @@ const renderSection = (harnesses: () => unknown) => {
   const view = render(
     <DesktopIntlProvider language="en" messages={defaultMessages}>
       <AgentSubscriptionsSection
+        focus={focus}
+        onFocusShown={() => {
+          if (focus !== null) {
+            shown.push(focus);
+          }
+        }}
         renderGroup={(content) => <section>{content}</section>}
       />
     </DesktopIntlProvider>,
   );
-  return { ...view, calls };
+  return { ...view, calls, shown };
 };
 
 const statuses = (
@@ -239,3 +250,24 @@ test.each([
     expect(queryByRole("status")).toBeNull();
   },
 );
+
+test("a settings link's agent card is brought into view, focused and marked once it shows", async () => {
+  const { findByText, shown } = renderSection(
+    () => statuses({ state: "not_installed" }, { state: "not_installed" }),
+    "claude-code",
+  );
+  const claudeCode = (
+    await findByText(message(install.notInstalled, { name: "Claude Code" }))
+  ).closest<HTMLElement>("[data-agent-settings]");
+  expect(claudeCode?.dataset["agentSettings"]).toBe("claude-code");
+  await waitFor(() => {
+    expect(document.activeElement).toBe(claudeCode);
+  });
+  expect(claudeCode?.dataset["highlighted"]).toBe("");
+  const codex = (
+    await findByText(message(install.notInstalled, { name: "Codex" }))
+  ).closest<HTMLElement>("[data-agent-settings]");
+  expect(codex?.dataset["agentSettings"]).toBe("codex");
+  expect(codex?.dataset["highlighted"]).toBeUndefined();
+  expect(shown).toEqual(["claude-code"]);
+});

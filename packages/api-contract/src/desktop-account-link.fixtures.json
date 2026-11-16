@@ -36,5 +36,31 @@
       "payload": { "status": "failed", "reason": "unavailable" },
       "signed": "failed:unavailable"
     }
-  ]
+  ],
+  "settingsLinks": {
+    "valid": [
+      { "harness": "codex", "url": "stella://settings/agents?harness=codex" },
+      {
+        "harness": "claude-code",
+        "url": "stella://settings/agents?harness=claude-code"
+      },
+      { "harness": null, "url": "stella://settings/agents" }
+    ],
+    "rejected": [
+      "stella://settings",
+      "stella://settings/general",
+      "stella://settings/agents/",
+      "stella://settings/agents/codex",
+      "stella://settings/agents?harness=",
+      "stella://settings/agents?harness=Codex",
+      "stella://settings/agents?harness=codex%20",
+      "stella://settings/agents?harness=..%2Fcodex",
+      "stella://settings/agents?harness=gemini",
+      "stella://settings/agents?tab=codex",
+      "stella://settings/agents?harness=codex&harness=claude-code",
+      "stella://settings/agents?harness=codex&focus=1",
+      "stella://settings/agents?harness=codex#general",
+      "stella://agents/settings?harness=codex"
+    ]
+  }
 }

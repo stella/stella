@@ -1910,6 +1910,7 @@
     },
     "localRun": {
       "backgroundTasks": "{count, plural, one {# háttérfeladat fut} other {# háttérfeladat fut}}",
+      "desktopSettingsSteps": "A számítógépén a stella desktopban nyissa meg a Beállítások › Általános › AI-előfizetések részt.",
       "errorFolderUnavailable": "A csevegéshez csatolt mappa nem érhető el a számítógépén. Ellenőrizze a stella desktopban, majd küldje el újra.",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
       "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
@@ -2158,6 +2159,7 @@
       "cloud": "Felhő",
       "cloudDescription": "A felhőben fut. Bárhonnan elérhető.",
       "harnessModels": "{harness}-modellek",
+      "hintCheck": "Ellenőrizze a stella desktopban",
       "hintInstall": "Telepítse a stella desktopból",
       "hintOffline": "Nyissa meg a stella desktopot a számítógépén",
       "hintSignIn": "Jelentkezzen be a stella desktopban",
@@ -2168,6 +2170,10 @@
       "localSelection": "Az Ön számítógépe · {harness}",
       "modelDefault": "Alapértelmezett (ajánlott)",
       "placeState": "{place}. {state}",
+      "stepsCheck": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános › AI-előfizetések részen ellenőrizze ezt az ügynököt: {harness}.",
+      "stepsInstall": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános részen válassza a Telepítés gombot ennél az ügynöknél: {harness}.",
+      "stepsSignInClaudeCode": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és válassza a Beállítások › Általános › Bejelentkezés Claude-dal lehetőséget.",
+      "stepsSignInCodex": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és válassza a Beállítások › Általános › Folytatás a ChatGPT-vel lehetőséget.",
       "yourComputer": "Az Ön számítógépe",
       "yourComputerDescription": "A Codexet vagy a Claude Code-ot használja az Ön számítógépén, a saját előfizetésével. Olvashatja és módosíthatja a csevegés mappájában lévő fájlokat; az engedélyek határozzák meg, mit tehet rákérdezés nélkül."
     },

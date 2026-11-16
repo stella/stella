@@ -62,6 +62,7 @@ import {
 import { accountPresentation } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
+import type { AgentSettingsFocus } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
 import { DictationSetting } from "./DictationSetting";
 import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
@@ -97,6 +98,18 @@ const PREFERENCES_TABS = [
 ] as const;
 
 type PreferencesTab = (typeof PREFERENCES_TABS)[number];
+
+/**
+ * Where on General a `stella://settings/agents` link scrolls to: the coding
+ * agents' group or one agent's card. Native code sends only these ids
+ * (`AgentSettingsFocus` in `src-tauri/src/lib.rs`).
+ */
+const AGENT_SETTINGS_FOCUS = [
+  "agents",
+  "codex",
+  "claude-code",
+] as const satisfies readonly AgentSettingsFocus[];
+
 type NotificationPreferenceKey = keyof DesktopNotificationPreferences;
 
 const NOTIFICATION_PREFERENCE_KEYS = [
@@ -116,6 +129,9 @@ const isMacDesktop = navigator.userAgent.includes("Mac");
 
 const isPreferencesTab = (value: string | null): value is PreferencesTab =>
   value !== null && (PREFERENCES_TABS as readonly string[]).includes(value);
+
+const isAgentSettingsFocus = (value: unknown): value is AgentSettingsFocus =>
+  AGENT_SETTINGS_FOCUS.some((focus) => focus === value);
 
 const reportSubscriptionFailure = () => {
   reportDesktopError({
@@ -434,11 +450,15 @@ const TelemetryPreferenceControl = ({ onRetry }: { onRetry: () => void }) => {
 const GeneralPane = ({
   language,
   accountState,
+  agentSettingsFocus,
+  onAgentSettingsShown,
   onLanguageChange,
   onAccountAction,
 }: {
   language: SupportedLanguage;
   accountState: DesktopAccountState;
+  agentSettingsFocus: AgentSettingsFocus | null;
+  onAgentSettingsShown: () => void;
   onLanguageChange: (language: SupportedLanguage) => void;
   onAccountAction: () => void;
 }) => {
@@ -544,6 +564,8 @@ const GeneralPane = ({
         renderGroup={(content) => <PanelGroup>{content}</PanelGroup>}
       />
       <AgentSubscriptionsSection
+        focus={agentSettingsFocus}
+        onFocusShown={onAgentSettingsShown}
         renderGroup={(content) => (
           <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>
         )}
@@ -834,6 +856,8 @@ const App = () => {
   const snapshotGeneration = useRef(0);
   const snapshotRefresh = useRef<() => void>(() => undefined);
   const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
+  const [agentSettingsFocus, setAgentSettingsFocus] =
+    useState<AgentSettingsFocus | null>(null);
   const activityAvailability = useActivityAvailability();
   // A requested Activity tab stays shown while availability loads, so opening
   // it does not flash General first; it falls back only once activity is off.
@@ -856,12 +880,16 @@ const App = () => {
   // Listen for tab activation from Rust backend
   useEffect(
     () =>
-      subscribeDesktopEvent<{ tab: string }>({
+      subscribeDesktopEvent<{ tab: string; focus?: unknown }>({
         event: "activate-tab",
         handler: (event) => {
-          const nextTab = event.payload.tab;
-          if (isPreferencesTab(nextTab)) {
-            setActiveTab(nextTab);
+          const { tab: nextTab, focus } = event.payload;
+          if (!isPreferencesTab(nextTab)) {
+            return;
+          }
+          setActiveTab(nextTab);
+          if (nextTab === "general" && isAgentSettingsFocus(focus)) {
+            setAgentSettingsFocus(focus);
           }
         },
         onError: reportSubscriptionFailure,
@@ -1165,6 +1193,10 @@ const App = () => {
                 <div className="space-y-4 p-4">
                   <GeneralPane
                     accountState={accountState}
+                    agentSettingsFocus={agentSettingsFocus}
+                    onAgentSettingsShown={() => {
+                      setAgentSettingsFocus(null);
+                    }}
                     language={language}
                     onAccountAction={() => {
                       if (accountState.status === "unavailable") {

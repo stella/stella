@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -9,6 +11,7 @@ import {
   type ChatLocalRunTarget,
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
+import { desktopAgentSettingsUrl } from "@stll/api-contract/desktop-account-link";
 import { DESKTOP_RUNNER_LINKED_FOLDER_STATE } from "@stll/api-contract/desktop-runner";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
@@ -47,6 +50,7 @@ import { localRunnersOptions } from "@/features/chat/queries";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { openDesktopUrl } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
@@ -159,7 +163,7 @@ const UNAVAILABLE_HINT_KEY = {
   needs_login: "chat.runOn.hintSignIn",
   not_installed: "chat.runOn.hintInstall",
   unsupported: "chat.runOn.hintUpdate",
-  unavailable: "chat.localRun.stateUnavailable",
+  unavailable: "chat.runOn.hintCheck",
   offline: "chat.runOn.hintOffline",
 } as const satisfies Record<UnavailableState, TranslationKey>;
 
@@ -266,6 +270,82 @@ const OfflineHarnessItem = ({
   );
 };
 
+/** A harness the member sets up at its card in stella desktop's Settings. */
+type DesktopSetupOption = {
+  harness: ChatLocalRunHarness;
+  state: Exclude<UnavailableState, "offline">;
+};
+
+/** Each harness's sign-in, named by its button in stella desktop. */
+const SIGN_IN_STEPS_KEY = {
+  codex: "chat.runOn.stepsSignInCodex",
+  "claude-code": "chat.runOn.stepsSignInClaudeCode",
+} as const satisfies Record<ChatLocalRunHarness, TranslationKey>;
+
+/**
+ * The way to the harness's card by hand, said once the link to it was
+ * handed over: stella desktop may not be on this computer, or may be one
+ * too old to know the link, and nothing tells this page which.
+ */
+const useDesktopSetupSteps = () => {
+  const t = useTranslations();
+  return (option: DesktopSetupOption): string => {
+    const harness = CHAT_LOCAL_HARNESS_NAMES[option.harness];
+    switch (option.state) {
+      case "needs_login":
+        return t(SIGN_IN_STEPS_KEY[option.harness]);
+      case "not_installed":
+        return t("chat.runOn.stepsInstall", { harness });
+      case "unsupported":
+      case "unavailable":
+        return t("chat.runOn.stepsCheck", { harness });
+      default:
+        option satisfies never;
+        return panic("Unknown harness setup state");
+    }
+  };
+};
+
+/**
+ * An agent its computer reports but cannot run yet: signed out, not
+ * installed, a version it cannot use, or not available. Choosing it opens
+ * stella desktop's Settings at the agent's card; the row then says how to
+ * get there by hand. The menu stays open meanwhile.
+ */
+const DesktopSetupHarnessItem = ({
+  option,
+  name,
+  hint,
+}: {
+  option: DesktopSetupOption;
+  name: string;
+  hint: string;
+}) => {
+  const steps = useDesktopSetupSteps();
+  const [opened, setOpened] = useState(false);
+  return (
+    <MenuItem
+      closeOnClick={false}
+      onClick={() => {
+        openDesktopUrl(desktopAgentSettingsUrl(option.harness));
+        setOpened(true);
+      }}
+    >
+      {/* PlaceLabel's layout; the description is a status region that
+          stays mounted, so the change to the steps is announced. */}
+      <span className="flex min-w-0 flex-col py-0.5">
+        <span>{name}</span>
+        <span
+          className="text-muted-foreground text-2xs text-pretty"
+          role="status"
+        >
+          {opened ? steps(option) : hint}
+        </span>
+      </span>
+    </MenuItem>
+  );
+};
+
 type ChatRunTargetMenuProps = {
   activeOrganizationId: string;
   /** Reads the member's computers only while the menu is open. */
@@ -347,11 +427,21 @@ export const ChatRunTargetMenu = ({
               />
             );
           }
-          if (option.state !== "ready") {
+          if (option.state === "limit_until") {
             return (
               <MenuItem disabled key={option.harness}>
                 <PlaceLabel description={hint(option) ?? ""} title={name} />
               </MenuItem>
+            );
+          }
+          if (option.state !== "ready") {
+            return (
+              <DesktopSetupHarnessItem
+                hint={hint(option) ?? ""}
+                key={option.harness}
+                name={name}
+                option={{ harness: option.harness, state: option.state }}
+              />
             );
           }
           // The agent keeps the chat's model when it is the one chosen.

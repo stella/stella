@@ -1910,6 +1910,7 @@
     },
     "localRun": {
       "backgroundTasks": "{count, plural, one {Na pozadí beží # úloha} few {Na pozadí bežia # úlohy} many {Na pozadí beží # úlohy} other {Na pozadí beží # úloh}}",
+      "desktopSettingsSteps": "V stella desktop vo svojom počítači otvorte Nastavenia › Všeobecné › Predplatné AI.",
       "errorFolderUnavailable": "Priečinok prepojený s týmto chatom nie je vo vašom počítači dostupný. Skontrolujte ho v stella desktop a potom to odošlite znova.",
       "errorLimitReached": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Skúste to znova, keď sa limit obnoví.",
       "errorLimitResetsAt": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Znova to môžete skúsiť po {time}.",
@@ -2158,6 +2159,7 @@
       "cloud": "Cloud",
       "cloudDescription": "Beží v cloude. Funguje odkiaľkoľvek.",
       "harnessModels": "Modely {harness}",
+      "hintCheck": "Skontrolujte ho v stella desktop",
       "hintInstall": "Nainštalujte ho v stella desktop",
       "hintOffline": "Otvorte stella desktop vo svojom počítači",
       "hintSignIn": "Prihláste sa v stella desktop",
@@ -2168,6 +2170,10 @@
       "localSelection": "Váš počítač · {harness}",
       "modelDefault": "Predvolený (odporúčaný)",
       "placeState": "{place}. {state}",
+      "stepsCheck": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a skontrolujte agenta {harness} v časti Nastavenia › Všeobecné › Predplatné AI.",
+      "stepsInstall": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a v časti Nastavenia › Všeobecné zvoľte pri agentovi {harness} Nainštalovať.",
+      "stepsSignInClaudeCode": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a zvoľte Nastavenia › Všeobecné › Prihlásiť sa cez Claude.",
+      "stepsSignInCodex": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a zvoľte Nastavenia › Všeobecné › Pokračovať s ChatGPT.",
       "yourComputer": "Váš počítač",
       "yourComputerDescription": "Použije Codex alebo Claude Code vo vašom počítači s vaším vlastným predplatným. Môže čítať a meniť súbory v priečinku tohto chatu; čo smie urobiť bez opýtania, určujú jeho oprávnenia."
     },

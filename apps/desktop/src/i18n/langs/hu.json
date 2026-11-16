@@ -789,7 +789,7 @@
     }
   },
   "agentSubscriptions": {
-    "title": "MI-előfizetések",
+    "title": "AI-előfizetések",
     "chatGpt": "ChatGPT",
     "description": "Használja ChatGPT-csomagját a stella MI-kéréseihez. A használat a ChatGPT-csomagját terheli, a stella-előfizetésétől külön.",
     "continueWithChatGpt": "Folytatás a ChatGPT-vel",

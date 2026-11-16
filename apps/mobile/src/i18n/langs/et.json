@@ -247,7 +247,8 @@
         "showMore": "Näita rohkem"
       },
       "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
-      "steered": "Saadetud agendi töö ajal"
+      "steered": "Saadetud agendi töö ajal",
+      "desktopSettingsSteps": "Ava oma arvutis stella desktopis Seaded › Üldine › AI-tellimused."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}",

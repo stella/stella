@@ -2,6 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
+import {
+  AI_ERROR_KINDS,
+  isFixedInDesktopSettings,
+} from "@stll/api-contract/ai-errors";
 import type { AIErrorKind } from "@stll/api-contract/ai-errors";
 import type { ChatLocalRunReadiness } from "@stll/api-contract/chat-run-target";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
@@ -176,7 +180,7 @@ test("a turn that failed with no computer connected offers Open stella desktop, 
 });
 
 test("a turn that failed for another reason offers no Open stella desktop", async () => {
-  const error = failedTurn("local_runner_harness_unavailable");
+  const error = failedTurn("local_runner_model_unavailable");
 
   const view = render(
     <QueryClientProvider client={new QueryClient()}>
@@ -193,8 +197,11 @@ test("a turn that failed for another reason offers no Open stella desktop", asyn
   );
 
   expect(
-    view.getByText(messages.chat.localRun.refusalHarnessUnavailable),
+    view.getByText(messages.chat.localRun.refusalModelUnavailable),
   ).toBeDefined();
+  expect(
+    view.queryByText(messages.chat.localRun.desktopSettingsSteps),
+  ).toBeNull();
   expect(
     view.queryByRole("button", {
       name: messages.settings.account.desktopOpenApp,
@@ -278,3 +285,32 @@ test("a refusal that left the page before the computer connects sends nothing", 
 
   expect(page.resends).toEqual([]);
 });
+
+test.each(AI_ERROR_KINDS.filter(isFixedInDesktopSettings))(
+  "a turn that failed with %s says where in stella desktop to fix it and opens its settings there",
+  (kind) => {
+    const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(
+      () => undefined,
+    );
+    const view = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <AuthenticatedUserProvider user={user}>
+            <ChatErrorMessage error={failedTurn(kind)} isGenerating={false} />
+          </AuthenticatedUserProvider>
+        </IntlProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(
+      view.getByText(messages.chat.localRun.desktopSettingsSteps),
+    ).toBeDefined();
+    fireEvent.click(
+      view.getByRole("button", {
+        name: messages.settings.account.desktopOpenApp,
+      }),
+    );
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith("stella://settings/agents");
+  },
+);

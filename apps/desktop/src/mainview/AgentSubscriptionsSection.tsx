@@ -28,13 +28,26 @@ import {
 import type { HarnessStatus, ManagedHarness } from "./harness-install-status";
 import { HarnessInstallLine } from "./HarnessInstallLine";
 
+/** The coding agents' group, or one agent's card. */
+export type AgentSettingsFocus = "agents" | ManagedHarness;
+
+/** How long a card brought into view stays marked, and the mark. */
+const FOCUS_HIGHLIGHT_MS = 2000;
+const HIGHLIGHT_ATTRIBUTE = "data-highlighted";
+
 /**
  * AI subscriptions the local agents can use. It renders nothing unless the
- * local agents feature is on: the status commands refuse otherwise.
+ * local agents feature is on: the status commands refuse otherwise. A
+ * requested `focus` (from a `stella://settings/agents` link) is scrolled to
+ * and marked briefly once its card shows, then `onFocusShown` clears it.
  */
 export const AgentSubscriptionsSection = ({
+  focus,
+  onFocusShown,
   renderGroup,
 }: {
+  focus: AgentSettingsFocus | null;
+  onFocusShown: () => void;
   renderGroup: (content: React.JSX.Element) => React.JSX.Element;
 }) => {
   const [chatGpt, refreshChatGpt] = useNativeStatus<ChatGptStatus>({
@@ -60,10 +73,33 @@ export const AgentSubscriptionsSection = ({
   // frame cannot send another.
   const starting = useRef(false);
   const startingClaudeCode = useRef(false);
+  useFocusRequest({
+    focus,
+    onShown: onFocusShown,
+    shown: {
+      agents: chatGpt !== null || claudeCode !== null,
+      codex: chatGpt !== null,
+      "claude-code": claudeCode !== null,
+    },
+  });
 
   if (chatGpt === null && claudeCode === null) {
     return null;
   }
+
+  /** A card that a link can scroll to and mark. */
+  const focusTarget = (
+    target: AgentSettingsFocus,
+    content: React.JSX.Element,
+  ) => (
+    <div
+      className="data-highlighted:bg-muted transition-colors outline-none"
+      data-agent-settings={target}
+      tabIndex={-1}
+    >
+      {content}
+    </div>
+  );
 
   /** The CLI's install line; a refused command shows the card's notice. */
   const installLine = (
@@ -223,12 +259,57 @@ export const AgentSubscriptionsSection = ({
     );
 
   return renderGroup(
-    <>
-      {chatGptCard}
-      {chatGptCard && claudeCodeCard ? <Separator /> : null}
-      {claudeCodeCard}
-    </>,
+    focusTarget(
+      "agents",
+      <>
+        {chatGptCard ? focusTarget("codex", chatGptCard) : null}
+        {chatGptCard && claudeCodeCard ? <Separator /> : null}
+        {claudeCodeCard ? focusTarget("claude-code", claudeCodeCard) : null}
+      </>,
+    ),
   );
+};
+
+/**
+ * Scrolls to the requested card once it shows, moves focus there for a
+ * keyboard or screen reader, marks it for a moment and then reports the
+ * request done, so showing General again later does not repeat it. The mark
+ * is a data attribute on the card's own element, which outlives the request.
+ */
+const useFocusRequest = ({
+  focus,
+  onShown,
+  shown,
+}: {
+  focus: AgentSettingsFocus | null;
+  onShown: () => void;
+  shown: Record<AgentSettingsFocus, boolean>;
+}) => {
+  const ready = focus !== null && shown[focus];
+  useEffect(() => {
+    if (focus === null || !ready) {
+      return;
+    }
+    const target = document.querySelector<HTMLElement>(
+      `[data-agent-settings="${focus}"]`,
+    );
+    if (target === null) {
+      return;
+    }
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    target.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "center",
+    });
+    target.focus({ preventScroll: true });
+    target.toggleAttribute(HIGHLIGHT_ATTRIBUTE, true);
+    window.setTimeout(() => {
+      target.toggleAttribute(HIGHLIGHT_ATTRIBUTE, false);
+    }, FOCUS_HIGHLIGHT_MS);
+    onShown();
+  }, [focus, ready, onShown]);
 };
 
 const readChatGptStatus = async () =>

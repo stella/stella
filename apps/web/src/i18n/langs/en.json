@@ -1910,6 +1910,7 @@
     },
     "localRun": {
       "backgroundTasks": "{count, plural, one {# background task running} other {# background tasks running}}",
+      "desktopSettingsSteps": "In stella desktop on your computer, open Settings › General › AI subscriptions.",
       "errorFolderUnavailable": "The folder linked to this chat is not available on your computer. Check it in stella desktop, then send this again.",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
       "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
@@ -2158,6 +2159,7 @@
       "cloud": "Cloud",
       "cloudDescription": "Runs in the cloud. Works anywhere.",
       "harnessModels": "{harness} models",
+      "hintCheck": "Check it in stella desktop",
       "hintInstall": "Install it from stella desktop",
       "hintOffline": "Open stella desktop on your computer",
       "hintSignIn": "Sign in from stella desktop",
@@ -2168,6 +2170,10 @@
       "localSelection": "Your computer · {harness}",
       "modelDefault": "Default (recommended)",
       "placeState": "{place}. {state}",
+      "stepsCheck": "Opening stella desktop. If it does not open, open it on your computer and check {harness} under Settings › General › AI subscriptions.",
+      "stepsInstall": "Opening stella desktop. If it does not open, open it on your computer and, under Settings › General, choose Install for {harness}.",
+      "stepsSignInClaudeCode": "Opening stella desktop. If it does not open, open it on your computer and choose Settings › General › Sign in with Claude.",
+      "stepsSignInCodex": "Opening stella desktop. If it does not open, open it on your computer and choose Settings › General › Continue with ChatGPT.",
       "yourComputer": "Your computer",
       "yourComputerDescription": "Uses Codex or Claude Code on your computer with your own subscription. It can read and change files in this chat's folder; its permissions decide what it does without asking."
     },

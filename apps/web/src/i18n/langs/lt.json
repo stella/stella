@@ -1910,6 +1910,7 @@
     },
     "localRun": {
       "backgroundTasks": "{count, plural, one {Fone vykdoma # užduotis} few {Fone vykdomos # užduotys} many {Fone vykdoma # užduoties} other {Fone vykdoma # užduočių}}",
+      "desktopSettingsSteps": "Savo kompiuteryje programoje stella desktop atidarykite skiltį Nustatymai › Bendra › DI prenumeratos.",
       "errorFolderUnavailable": "Su šiuo pokalbiu susietas aplankas jūsų kompiuteryje nepasiekiamas. Patikrinkite jį stella desktop, tada išsiųskite tai dar kartą.",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
       "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
@@ -2158,6 +2159,7 @@
       "cloud": "Debesis",
       "cloudDescription": "Veikia debesyje. Pasiekiama iš bet kur.",
       "harnessModels": "{harness} modeliai",
+      "hintCheck": "Patikrinkite jį per stella desktop",
       "hintInstall": "Įdiekite jį per stella desktop",
       "hintOffline": "Atidarykite stella desktop savo kompiuteryje",
       "hintSignIn": "Prisijunkite per stella desktop",
@@ -2168,6 +2170,10 @@
       "localSelection": "Jūsų kompiuteris · {harness}",
       "modelDefault": "Numatytasis (rekomenduojamas)",
       "placeState": "{place}. {state}",
+      "stepsCheck": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir patikrinkite agentą {harness} skiltyje Nustatymai › Bendra › DI prenumeratos.",
+      "stepsInstall": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir skiltyje Nustatymai › Bendra prie agento {harness} pasirinkite Įdiegti.",
+      "stepsSignInClaudeCode": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir pasirinkite Nustatymai › Bendra › Prisijungti su Claude.",
+      "stepsSignInCodex": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir pasirinkite Nustatymai › Bendra › Tęsti su ChatGPT.",
       "yourComputer": "Jūsų kompiuteris",
       "yourComputerDescription": "Naudoja Codex arba Claude Code jūsų kompiuteryje su jūsų pačių prenumerata. Gali skaityti ir keisti šio pokalbio aplanko failus; leidimai nustato, ką jis gali daryti neklausdamas."
     },

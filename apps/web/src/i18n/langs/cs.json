@@ -1910,6 +1910,7 @@
     },
     "localRun": {
       "backgroundTasks": "{count, plural, one {Na pozadí běží # úloha} few {Na pozadí běží # úlohy} many {Na pozadí běží # úlohy} other {Na pozadí běží # úloh}}",
+      "desktopSettingsSteps": "Ve stella desktop ve svém počítači otevřete Nastavení › Obecné › Předplatné AI.",
       "errorFolderUnavailable": "Složka propojená s tímto chatem není ve vašem počítači dostupná. Zkontrolujte ji ve stella desktop a pak to odešlete znovu.",
       "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
       "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
@@ -2158,6 +2159,7 @@
       "cloud": "Cloud",
       "cloudDescription": "Běží v cloudu. Funguje odkudkoli.",
       "harnessModels": "Modely {harness}",
+      "hintCheck": "Zkontrolujte ho ve stella desktop",
       "hintInstall": "Nainstalujte ho ve stella desktop",
       "hintOffline": "Otevřete stella desktop ve svém počítači",
       "hintSignIn": "Přihlaste se ve stella desktop",
@@ -2168,6 +2170,10 @@
       "localSelection": "Váš počítač · {harness}",
       "modelDefault": "Výchozí (doporučeno)",
       "placeState": "{place}. {state}",
+      "stepsCheck": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a zkontrolujte agenta {harness} v Nastavení › Obecné › Předplatné AI.",
+      "stepsInstall": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a v Nastavení › Obecné zvolte u agenta {harness} Nainstalovat.",
+      "stepsSignInClaudeCode": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a zvolte Nastavení › Obecné › Přihlásit se přes Claude.",
+      "stepsSignInCodex": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a zvolte Nastavení › Obecné › Pokračovat s ChatGPT.",
       "yourComputer": "Váš počítač",
       "yourComputerDescription": "Použije Codex nebo Claude Code ve vašem počítači s vaším vlastním předplatným. Může číst a měnit soubory ve složce tohoto chatu; co smí udělat bez ptaní, určují jeho oprávnění."
     },

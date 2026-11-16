@@ -247,7 +247,8 @@
         "showMore": "Afficher plus"
       },
       "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation.",
-      "steered": "Envoyé pendant que l’agent travaillait"
+      "steered": "Envoyé pendant que l’agent travaillait",
+      "desktopSettingsSteps": "Dans stella desktop sur votre ordinateur, ouvrez Paramètres › Général › Abonnements IA."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées} many {# sources vérifiées}}",

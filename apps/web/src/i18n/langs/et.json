@@ -1910,6 +1910,7 @@
     },
     "localRun": {
       "backgroundTasks": "{count, plural, one {Taustal käib # ülesanne} other {Taustal käib # ülesannet}}",
+      "desktopSettingsSteps": "Ava oma arvutis stella desktopis Seaded › Üldine › AI-tellimused.",
       "errorFolderUnavailable": "Selle vestlusega seotud kaust pole sinu arvutis saadaval. Kontrolli seda stella desktopis ja saada see siis uuesti.",
       "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
       "errorLimitResetsAt": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Uuesti saad proovida alates {time}.",
@@ -2158,6 +2159,7 @@
       "cloud": "Pilv",
       "cloudDescription": "Töötab pilves. Kasutatav kõikjalt.",
       "harnessModels": "{harness} mudelid",
+      "hintCheck": "Kontrolli seda stella desktopis",
       "hintInstall": "Paigalda see stella desktopist",
       "hintOffline": "Ava oma arvutis stella desktop",
       "hintSignIn": "Logi sisse stella desktopis",
@@ -2168,6 +2170,10 @@
       "localSelection": "Sinu arvuti · {harness}",
       "modelDefault": "Vaikimisi (soovitatud)",
       "placeState": "{place}. {state}",
+      "stepsCheck": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vaata jaotises Seaded › Üldine › AI-tellimused rida {harness}.",
+      "stepsInstall": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali jaotises Seaded › Üldine rea {harness} juures Installi.",
+      "stepsSignInClaudeCode": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali Seaded › Üldine › Logi sisse Claude’iga.",
+      "stepsSignInCodex": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali Seaded › Üldine › Jätka ChatGPT-ga.",
       "yourComputer": "Sinu arvuti",
       "yourComputerDescription": "Kasutab sinu arvutis Codexit või Claude Code'i sinu enda tellimusega. See saab lugeda ja muuta selle vestluse kausta faile; õigused määravad, mida see tohib küsimata teha."
     },

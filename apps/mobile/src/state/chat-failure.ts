@@ -1,6 +1,10 @@
 import * as v from "valibot";
 
-import { AI_ERROR_KINDS, AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
+import {
+  AI_ERROR_KINDS,
+  AI_FAILURE_CODES,
+  isFixedInDesktopSettings,
+} from "@stll/api-contract/ai-errors";
 import type { AIErrorKind } from "@stll/api-contract/ai-errors";
 
 import type { MobileMessages } from "@/i18n/catalogs";
@@ -71,3 +75,16 @@ export const CHAT_FAILURE_KEYS = {
   AIErrorKind,
   keyof MobileMessages["chat"]["failure"]
 >;
+
+const DESKTOP_SETTINGS_STEPS =
+  "desktopSettingsSteps" satisfies keyof MobileMessages["chat"]["localRun"];
+
+/**
+ * The way to the fix a failure adds under its reason, by key under
+ * `chat.localRun`, or `null` when it adds none. An agent to sign in or
+ * install is fixed in stella desktop's Settings on the person's computer,
+ * which the phone cannot open, so it says where that is; the web says the
+ * same beside its button that opens it.
+ */
+export const chatFailureStepsKey = (failure: AIErrorKind) =>
+  isFixedInDesktopSettings(failure) ? DESKTOP_SETTINGS_STEPS : null;

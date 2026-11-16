@@ -33,6 +33,18 @@ export const AI_ERROR_KINDS = [
 
 export type AIErrorKind = (typeof AI_ERROR_KINDS)[number];
 
+/**
+ * Failures the member fixes at a coding agent's sign-in or install in stella
+ * desktop's Settings; every client that shows one says how to get there.
+ */
+const AI_ERROR_KINDS_FIXED_IN_DESKTOP_SETTINGS = [
+  "local_runner_needs_login",
+  "local_runner_harness_unavailable",
+] as const satisfies readonly AIErrorKind[];
+
+export const isFixedInDesktopSettings = (kind: AIErrorKind) =>
+  AI_ERROR_KINDS_FIXED_IN_DESKTOP_SETTINGS.some((fixed) => fixed === kind);
+
 /** Stable REST error codes for failures at an AI boundary. */
 export const AI_FAILURE_CODES = {
   quota_exhausted: "ai_quota_exhausted",

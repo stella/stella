@@ -1910,6 +1910,7 @@
     },
     "localRun": {
       "backgroundTasks": "{count, plural, zero {# مهمة تعمل في الخلفية} one {# مهمة تعمل في الخلفية} two {# مهمتان تعملان في الخلفية} few {# مهام تعمل في الخلفية} many {# مهمة تعمل في الخلفية} other {# مهمة تعمل في الخلفية}}",
+      "desktopSettingsSteps": "في stella desktop على حاسوبك، افتح الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
       "errorFolderUnavailable": "المجلد المرتبط بهذه الدردشة غير متاح على حاسوبك. تحقق منه في stella desktop، ثم أرسل هذا مرة أخرى.",
       "errorLimitReached": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. حاول مرة أخرى بعد إعادة ضبط الحد.",
       "errorLimitResetsAt": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. يمكنك المحاولة مرة أخرى بعد {time}.",
@@ -2158,6 +2159,7 @@
       "cloud": "السحابة",
       "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
       "harnessModels": "نماذج {harness}",
+      "hintCheck": "تحقّق منه في stella desktop",
       "hintInstall": "ثبّته من stella desktop",
       "hintOffline": "افتح stella desktop على حاسوبك",
       "hintSignIn": "سجّل الدخول من stella desktop",
@@ -2168,6 +2170,10 @@
       "localSelection": "حاسوبك · {harness}",
       "modelDefault": "الافتراضي (موصى به)",
       "placeState": "{place}. {state}",
+      "stepsCheck": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك وتحقّق من {harness} في الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
+      "stepsInstall": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك، ثم اختر في الإعدادات › عام زر تثبيت بجوار {harness}.",
+      "stepsSignInClaudeCode": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك واختر الإعدادات › عام › تسجيل الدخول باستخدام Claude.",
+      "stepsSignInCodex": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك واختر الإعدادات › عام › المتابعة باستخدام ChatGPT.",
       "yourComputer": "حاسوبك",
       "yourComputerDescription": "يستخدم Codex أو Claude Code على حاسوبك باشتراكك الخاص. يمكنه قراءة الملفات وتغييرها في مجلد هذه الدردشة، وتحدد الأذونات ما يمكنه فعله دون أن يسألك."
     },

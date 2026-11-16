@@ -1910,6 +1910,7 @@
     },
     "localRun": {
       "backgroundTasks": "{count, plural, one {# tarefa em segundo plano em execução} other {# tarefas em segundo plano em execução} many {# tarefas em segundo plano em execução}}",
+      "desktopSettingsSteps": "No stella desktop do seu computador, abra Configurações › Geral › Assinaturas de IA.",
       "errorFolderUnavailable": "A pasta vinculada a este chat não está disponível no seu computador. Verifique-a no stella desktop e envie isto de novo.",
       "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",
       "errorLimitResetsAt": "O agente de programação do seu computador atingiu o limite de uso. Você poderá tentar novamente a partir de {time}.",
@@ -2158,6 +2159,7 @@
       "cloud": "Nuvem",
       "cloudDescription": "Roda na nuvem. Funciona de qualquer lugar.",
       "harnessModels": "Modelos do {harness}",
+      "hintCheck": "Verifique-o no stella desktop",
       "hintInstall": "Instale pelo stella desktop",
       "hintOffline": "Abra o stella desktop no seu computador",
       "hintSignIn": "Entre no stella desktop",
@@ -2168,6 +2170,10 @@
       "localSelection": "Seu computador · {harness}",
       "modelDefault": "Padrão (recomendado)",
       "placeState": "{place}. {state}",
+      "stepsCheck": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e verifique o {harness} em Configurações › Geral › Assinaturas de IA.",
+      "stepsInstall": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e, em Configurações › Geral, escolha Instalar para o {harness}.",
+      "stepsSignInClaudeCode": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e escolha Configurações › Geral › Entrar com o Claude.",
+      "stepsSignInCodex": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e escolha Configurações › Geral › Continuar com o ChatGPT.",
       "yourComputer": "Seu computador",
       "yourComputerDescription": "Usa o Codex ou o Claude Code no seu computador com a sua própria assinatura. Pode ler e alterar arquivos na pasta deste chat; as permissões definem o que ele pode fazer sem perguntar."
     },

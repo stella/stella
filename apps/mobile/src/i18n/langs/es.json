@@ -247,7 +247,8 @@
         "showMore": "Mostrar más"
       },
       "sessionNotResumed": "El agente de programación de tu ordenador no pudo retomar donde lo había dejado, así que continuó a partir de los mensajes de este chat.",
-      "steered": "Enviado mientras el agente trabajaba"
+      "steered": "Enviado mientras el agente trabajaba",
+      "desktopSettingsSteps": "En stella desktop, en tu ordenador, abre Configuración › General › Suscripciones de IA."
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas} many {# fuentes consultadas}}",

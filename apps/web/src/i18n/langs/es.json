@@ -1910,6 +1910,7 @@
     },
     "localRun": {
       "backgroundTasks": "{count, plural, one {# tarea en segundo plano en curso} other {# tareas en segundo plano en curso} many {# tareas en segundo plano en curso}}",
+      "desktopSettingsSteps": "En stella desktop, en tu ordenador, abre Configuración › General › Suscripciones de IA.",
       "errorFolderUnavailable": "La carpeta vinculada a este chat no está disponible en tu ordenador. Revísala en stella desktop y vuelve a enviarlo.",
       "errorLimitReached": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Vuelve a intentarlo cuando se restablezca el límite.",
       "errorLimitResetsAt": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Puedes volver a intentarlo a partir del {time}.",
@@ -2158,6 +2159,7 @@
       "cloud": "Nube",
       "cloudDescription": "Se ejecuta en la nube. Funciona desde cualquier sitio.",
       "harnessModels": "Modelos de {harness}",
+      "hintCheck": "Revísalo en stella desktop",
       "hintInstall": "Instálalo desde stella desktop",
       "hintOffline": "Abre stella desktop en tu ordenador",
       "hintSignIn": "Inicia sesión en stella desktop",
@@ -2168,6 +2170,10 @@
       "localSelection": "Tu ordenador · {harness}",
       "modelDefault": "Predeterminado (recomendado)",
       "placeState": "{place}. {state}",
+      "stepsCheck": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y revisa {harness} en Configuración › General › Suscripciones de IA.",
+      "stepsInstall": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y, en Configuración › General, elige Instalar para {harness}.",
+      "stepsSignInClaudeCode": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y elige Configuración › General › Iniciar sesión con Claude.",
+      "stepsSignInCodex": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y elige Configuración › General › Continuar con ChatGPT.",
       "yourComputer": "Tu ordenador",
       "yourComputerDescription": "Usa Codex o Claude Code en tu ordenador con tu propia suscripción. Puede leer y cambiar archivos de la carpeta de este chat; sus permisos deciden qué puede hacer sin preguntar."
     },
