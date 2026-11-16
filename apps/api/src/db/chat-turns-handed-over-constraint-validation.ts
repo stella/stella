@@ -5,19 +5,19 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 /**
  * The status and state payload checks migration
- * 20261116000000_chat_turns_handed_over widens to accept a turn handed over
+ * 20261116020000_chat_turns_handed_over widens to accept a turn handed over
  * by its owner, re-added NOT VALID.
  */
 export const CHAT_TURNS_HANDED_OVER_CONSTRAINTS = [
   {
     tableName: "chat_turns",
     constraintName: "chat_turns_status_values_check",
-    introducedBy: "20261116000000_chat_turns_handed_over",
+    introducedBy: "20261116020000_chat_turns_handed_over",
   },
   {
     tableName: "chat_turns",
     constraintName: "chat_turns_state_payload_check",
-    introducedBy: "20261116000000_chat_turns_handed_over",
+    introducedBy: "20261116020000_chat_turns_handed_over",
   },
 ] as const satisfies readonly (OnlineConstraintValidation & {
   introducedBy: string;
