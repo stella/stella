@@ -825,6 +825,10 @@
               "citationCount": {
                 "type": "number"
               },
+              "appealReviews": {
+                "type": "object",
+                "additionalProperties": true
+              },
               "citationAuthority": {
                 "type": "number"
               },
@@ -944,6 +948,7 @@
               "url",
               "caseNumber",
               "citationCount",
+              "appealReviews",
               "citationAuthority",
               "country",
               "court",
@@ -1411,7 +1416,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_case_law_citations",
-    "description": "Read citations/citing passages. `cited_by`: citers; `cites`: citations. `doctrine` AND `polarity` filters. `polarity`: 'unclassified': unread; 'mixed': mentions disagreed. `doctrine`: reviewed 'distinguishes'/'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread': none was read; null when `doctrineAvailability` is 'unavailable'. `passage.evidenceQuote`: verbatim evidence when text is available. `passage.text` is at most 1200 chars, cut when `passage.truncated`; `passage.mention`: 'sole', 'classified_section' (polarity source mention) or 'latest_of_several' (may not be). `detail`, `passage_query` narrow replies. Pass nextCursor as cursor. Use `url` for the reader and `source_url` for the publisher.",
+    "description": "Read citations/citing passages. `cited_by`: citers; `cites`: citations. `doctrine` AND `polarity` filters. `polarity`: 'unclassified': unread; 'mixed': mentions disagreed. `doctrine`: reviewed 'distinguishes'/'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread': none was read; null when `doctrineAvailability` is 'unavailable'. `passage.evidenceQuote`: verbatim evidence when text is available. `passage.text` is at most 1200 chars, cut when `passage.truncated`; `passage.mention`: 'sole', 'classified_section' (polarity source mention) or 'latest_of_several' (may not be). `detail`, `passage_query` narrow replies. `appealReviews`: review links. Pass nextCursor as cursor. Use `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_id", "direction"],
@@ -1476,6 +1481,61 @@
     "outputSchema": {
       "type": "object",
       "properties": {
+        "appealReviews": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": [
+                "none_found",
+                "upheld",
+                "overturned",
+                "partly",
+                "under_review",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            "reason": {
+              "enum": ["no_link_in_corpus"],
+              "type": "string"
+            },
+            "basis": {
+              "enum": ["available_corpus"],
+              "type": "string"
+            },
+            "reviewedBy": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "maxItems": 32
+            },
+            "reviews": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "maxItems": 32
+            },
+            "reviewedByTruncated": {
+              "type": "boolean"
+            },
+            "reviewsTruncated": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "status",
+            "basis",
+            "reviewedBy",
+            "reviews",
+            "reviewedByTruncated",
+            "reviewsTruncated"
+          ],
+          "additionalProperties": false
+        },
         "doctrineAvailability": {
           "enum": ["available", "unavailable"],
           "type": "string"
@@ -1587,6 +1647,7 @@
         }
       },
       "required": [
+        "appealReviews",
         "doctrineAvailability",
         "decisionId",
         "direction",
@@ -4176,6 +4237,61 @@
               "required": ["status"],
               "additionalProperties": false
             },
+            "appealReviews": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "none_found",
+                    "upheld",
+                    "overturned",
+                    "partly",
+                    "under_review",
+                    "unknown"
+                  ],
+                  "type": "string"
+                },
+                "reason": {
+                  "enum": ["no_link_in_corpus"],
+                  "type": "string"
+                },
+                "basis": {
+                  "enum": ["available_corpus"],
+                  "type": "string"
+                },
+                "reviewedBy": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "maxItems": 32
+                },
+                "reviews": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "maxItems": 32
+                },
+                "reviewedByTruncated": {
+                  "type": "boolean"
+                },
+                "reviewsTruncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "status",
+                "basis",
+                "reviewedBy",
+                "reviews",
+                "reviewedByTruncated",
+                "reviewsTruncated"
+              ],
+              "additionalProperties": false
+            },
             "documentId": {
               "type": "string"
             },
@@ -4473,6 +4589,61 @@
                 }
               },
               "required": ["status"],
+              "additionalProperties": false
+            },
+            "appealReviews": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "none_found",
+                    "upheld",
+                    "overturned",
+                    "partly",
+                    "under_review",
+                    "unknown"
+                  ],
+                  "type": "string"
+                },
+                "reason": {
+                  "enum": ["no_link_in_corpus"],
+                  "type": "string"
+                },
+                "basis": {
+                  "enum": ["available_corpus"],
+                  "type": "string"
+                },
+                "reviewedBy": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "maxItems": 32
+                },
+                "reviews": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "maxItems": 32
+                },
+                "reviewedByTruncated": {
+                  "type": "boolean"
+                },
+                "reviewsTruncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "status",
+                "basis",
+                "reviewedBy",
+                "reviews",
+                "reviewedByTruncated",
+                "reviewsTruncated"
+              ],
               "additionalProperties": false
             },
             "documentId": {

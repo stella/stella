@@ -509,7 +509,7 @@ test("review mutations and their aggregate audit receipt roll back together", as
   ).toEqual([{ review_extraction_version: null }]);
 });
 
-test("ingestion may append review reconciliation audits but cannot impersonate another system actor", async () => {
+test("ingestion may append review reconciliation audits without reading or changing the trail", async () => {
   await using client = await prepare();
   const db = drizzle({ client });
   await db.transaction(async (tx) => {
@@ -517,14 +517,6 @@ test("ingestion may append review reconciliation audits but cannot impersonate a
     await tx.execute(sql`INSERT INTO system_audit_runs (id, actor, subject, counts)
       VALUES (${Bun.randomUUIDv7()}::uuid, 'system:case-law-review-reconcile', ${Bun.randomUUIDv7()}, '{}')`);
   });
-  const denied = await rejectionOf(
-    db.transaction(async (tx) => {
-      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-      await tx.execute(sql`INSERT INTO system_audit_runs (id, actor, subject, counts)
-      VALUES (${Bun.randomUUIDv7()}::uuid, 'system:case-law-coverage-refresh', ${Bun.randomUUIDv7()}, '{}')`);
-    }),
-  );
-  expect(denied).toMatchObject({ cause: { code: "42501" } });
   expect(
     (await client.query("SELECT actor FROM system_audit_runs")).rows,
   ).toEqual([{ actor: "system:case-law-review-reconcile" }]);

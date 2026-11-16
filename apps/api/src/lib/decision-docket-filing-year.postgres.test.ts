@@ -87,7 +87,7 @@ describe.skipIf(!enabled)("docket filing-year parity (postgres)", () => {
 
 test("the generated filing-year function agrees with the grammar on Czech long sheets", async () => {
   await using db = await PGlite.create();
-  await db.exec(decisionDocketFilingYearFunctionSql());
+  await db.exec(decisionDocketFilingYearFunctionSql("create"));
   const fixtures = DECISION_DOCKET_FILING_YEAR_FIXTURES.filter(
     ({ jurisdiction }) => jurisdiction === "CZE",
   );

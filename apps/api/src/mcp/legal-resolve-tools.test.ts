@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 
@@ -496,6 +497,10 @@ describe("resolve_case_law_decision keeps its court promise", () => {
               dependencies: {
                 lookup: async () => [...rows],
                 read: async () => null,
+                readReviews: async ({ decisionIds }) =>
+                  new Map(
+                    decisionIds.map((id) => [id, noDecisionReviewFound()]),
+                  ),
               },
             }),
         }),

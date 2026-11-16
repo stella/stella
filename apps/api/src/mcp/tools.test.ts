@@ -3061,6 +3061,7 @@ describe("OpenAI-compatible MCP tools", () => {
             caseNumber: "29 Cdo 123/2024",
             citationAuthority: 1.75,
             citationCount: 7,
+            appealReviews: noDecisionReviewFound(),
             country: "CZE",
             court: "Nejvyšší soud",
             courtAbbreviation: "NS",
@@ -5494,6 +5495,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_citations compact detail asks for the short passage", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
+      decisionId: DECISION_ID,
       page: {
         doctrineAvailability: "unavailable",
         items: [],
@@ -5530,6 +5532,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_citations filters passages and says how many it read", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
+      decisionId: DECISION_ID,
       page: {
         doctrineAvailability: "unavailable",
         items: [],
