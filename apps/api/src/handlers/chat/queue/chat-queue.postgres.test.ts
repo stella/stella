@@ -531,11 +531,29 @@ const suite = (
         if (item === undefined) {
           return;
         }
+        // A removal that read an older or newer revision leaves it queued.
+        const stale = await withLock(
+          threadId,
+          owner,
+          async (tx) =>
+            await removeQueuedChatMessageOnTx({
+              id: item.id,
+              revision: item.revision + 1,
+              threadId,
+              tx,
+            }),
+        );
+        expect(stale.type).toBe("changed");
         const removed = await withLock(
           threadId,
           owner,
           async (tx) =>
-            await removeQueuedChatMessageOnTx({ id: item.id, threadId, tx }),
+            await removeQueuedChatMessageOnTx({
+              id: item.id,
+              revision: item.revision,
+              threadId,
+              tx,
+            }),
         );
         expect(removed.type).toBe("removed");
         model.queue.splice(op.slot, 1);
@@ -548,7 +566,12 @@ const suite = (
           threadId,
           owner,
           async (tx) =>
-            await removeQueuedChatMessageOnTx({ id: item.id, threadId, tx }),
+            await removeQueuedChatMessageOnTx({
+              id: item.id,
+              revision: item.revision,
+              threadId,
+              tx,
+            }),
         );
         expect(again.type).toBe("not-found");
         return;

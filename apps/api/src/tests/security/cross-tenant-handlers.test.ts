@@ -3368,6 +3368,7 @@ const isolationCases: IsolationCase[] = [
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(cancelQueuedChatMessage, workspaceA, {
         params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+        query: { revision: 0 },
       }),
       queue: await chatQueueOfB(),
     }),
@@ -3377,6 +3378,7 @@ const isolationCases: IsolationCase[] = [
         sameUserWorkspaceB,
         {
           params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+          query: { revision: 0 },
         },
       );
       return {
@@ -3397,7 +3399,9 @@ const isolationCases: IsolationCase[] = [
     },
     expectPositive: (result) =>
       expect(result).toEqual({
-        response: {},
+        response: {
+          message: queuedSendOf(chatQueuedSecondB, "Second").message,
+        },
         ids: [chatQueuedThirdB, chatQueuedFirstB],
       }),
   },

@@ -23,14 +23,15 @@ globalThis.fetch = Object.assign(
 );
 
 const { act } = await import("react");
-const { cleanup, fireEvent, waitFor, within } =
-  await import("@testing-library/react");
+const { cleanup, waitFor, within } = await import("@testing-library/react");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { openChatThreadDomPage } =
   await import("@/components/chat/chat-thread-dom-page");
 const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
 const { chatKeys } = await import("@/features/chat/chat-query-contract");
+const { CHAT_SEND_KEPT, CHAT_SEND_SENT } =
+  await import("@/components/chat-editor-provider");
 const { toSafeId } = await import("@/lib/safe-id");
 
 afterEach(async () => {
@@ -134,6 +135,14 @@ const serve = (history: StoredMessage[]) => {
         webSearchAvailable: false,
         webSearchEnabled: false,
       });
+    }
+    // Nothing is queued in the chat; a thread the server does not store
+    // has no queue either.
+    if (
+      request.method === "GET" &&
+      url.pathname === `/v1/chat/threads/${THREAD_ID}/queue`
+    ) {
+      return Response.json({ hold: null, items: [] });
     }
     if (request.method === "POST" && url.pathname === "/v1/chat") {
       const body: unknown = await request.json();
@@ -283,7 +292,7 @@ test("the first send of a new chat, refused before it is stored, keeps the messa
   expect(server.unexpected).toEqual([]);
 });
 
-test("Resend on a send refused before it is stored sends the message again, and it is answered", async () => {
+test("a send refused before it is stored leaves the page for the composer, and is answered when sent again", async () => {
   const server = serve([
     stored(FIRST_ID, "user", "First question"),
     stored(FIRST_ANSWER_ID, "assistant", "First answer."),
@@ -292,34 +301,39 @@ test("Resend on a send refused before it is stored sends the message again, and 
     organizationId: ORGANIZATION_ID,
     threadId: THREAD_ID,
   });
-  await act(async () => {
-    await live.session().sendMessage({
-      content: REFUSED_TEXT,
-      id: toSafeId<"chatMessage">(REFUSED_ID),
+  const send = async () => {
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await live.session().sendMessage({
+        content: REFUSED_TEXT,
+        id: toSafeId<"chatMessage">(REFUSED_ID),
+      });
     });
-  });
-  const { container } = live.view;
-  await refusalShown(server, live);
-  expectMessageAndRefusal(container);
+    return outcome;
+  };
 
-  server.allowed = true;
-  await act(async () => {
-    fireEvent.click(
-      within(container).getByRole("button", { name: messages.chat.resend }),
-    );
-  });
+  // Refused before anything of it was stored: the composer keeps the draft
+  // (the send answers kept), and the page shows the thread as stored.
+  expect(await send()).toEqual(CHAT_SEND_KEPT);
+  const { container } = live.view;
+  expect(server.stored.some(({ id }) => id === REFUSED_ID)).toBe(false);
   await waitFor(() => {
-    if (within(container).queryByText(ANSWER) === null) {
-      panic("The resent message is not answered yet");
+    if (within(container).queryByText(REFUSED_TEXT) !== null) {
+      panic("The refused message still shows in the transcript");
     }
   });
 
+  server.allowed = true;
+  expect(await send()).toEqual(CHAT_SEND_SENT);
+  await waitFor(() => {
+    if (within(container).queryByText(ANSWER) === null) {
+      panic("The message sent again is not answered yet");
+    }
+  });
   // The same message, sent as the new message it still is.
   expect(server.posted.map(messageIdOf)).toEqual([REFUSED_ID, REFUSED_ID]);
   expect(server.posted.map(intentOf)).toEqual([undefined, undefined]);
   const page = within(container);
-  expect(page.queryByText(NOT_ALLOWED)).toBeNull();
-  expect(page.queryByText(messages.errors.api.validation)).toBeNull();
   expect(page.getAllByText(REFUSED_TEXT)).toHaveLength(1);
   expect(page.getByText("First answer.")).toBeDefined();
   expect(server.unexpected).toEqual([]);
