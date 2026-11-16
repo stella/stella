@@ -533,7 +533,9 @@ describe("SAOS listing response bounds", () => {
     const normalPage = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
     const normal =
       normalPage.decisions.at(0) ?? panic("Captured listing yields a decision");
-    expect(normal.fulltext.length).toBeGreaterThan(0);
+    const normalFulltext =
+      normal.fulltext ?? panic("Captured listing has fulltext");
+    expect(normalFulltext.length).toBeGreaterThan(0);
 
     let cancelledWith: unknown;
     detailResponse = () =>
@@ -549,8 +551,9 @@ describe("SAOS listing response bounds", () => {
       page.decisions.at(0) ??
       panic("Oversized detail retains its listed decision");
     expect(decision.sourceDocumentId).toBe(normal.sourceDocumentId);
-    expect(decision.fulltext).toBe(normal.fulltext);
-    expect(decision.metadata["detailReadState"]).toBe(
+    expect(decision.fulltext).toBe(normalFulltext);
+    expect(decision.metadata).toHaveProperty(
+      "detailReadState",
       PL_COURTS_DETAIL_READ_STATE.FAILED,
     );
     expect(
