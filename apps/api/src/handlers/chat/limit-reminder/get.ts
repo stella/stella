@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { ChatLimitReminderResponse } from "@stll/api-contract/chat-limit-reminder";
+import type {
+  ChatLimitReminderResponse,
+  ChatLimitResetAction,
+} from "@stll/api-contract/chat-limit-reminder";
 
 import { chatLimitReminders, chatTurns } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
@@ -14,6 +17,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
+import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 
 const config = {
   contract: "patch",
@@ -24,6 +28,26 @@ const config = {
   params: limitReminderParams,
   query: limitReminderQuery,
 } satisfies HandlerConfig;
+
+const reminderResponse = (
+  reminder: { remindAt: Date; onReset: ChatLimitResetAction } | undefined,
+): ChatLimitReminderResponse => {
+  if (reminder === undefined) {
+    const nothingAsked = { remindAt: null };
+    return nothingAsked satisfies AssertNoExtraFields<
+      typeof nothingAsked,
+      ChatLimitReminderResponse
+    >;
+  }
+  const asked = {
+    remindAt: reminder.remindAt.toISOString(),
+    onReset: reminder.onReset,
+  };
+  return asked satisfies AssertNoExtraFields<
+    typeof asked,
+    ChatLimitReminderResponse
+  >;
+};
 
 /**
  * What happens when the usage limit that stopped the chat's latest turn
@@ -90,15 +114,7 @@ const getChatLimitReminder = createSafeRootHandler(
     if (found === null) {
       return Result.err(chatThreadNotFound());
     }
-    const { reminder } = found;
-    return Result.ok(
-      reminder === undefined
-        ? ({ remindAt: null } satisfies ChatLimitReminderResponse)
-        : ({
-            remindAt: reminder.remindAt.toISOString(),
-            onReset: reminder.onReset,
-          } satisfies ChatLimitReminderResponse),
-    );
+    return Result.ok(reminderResponse(found.reminder));
   },
 );
 

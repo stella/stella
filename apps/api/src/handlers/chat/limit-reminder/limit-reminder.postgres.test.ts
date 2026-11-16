@@ -440,7 +440,7 @@ const suite = (
 
       expect(
         (await filedFor(all))
-          .map(({ entityId }) => entityId)
+          .flatMap(({ entityId }) => (entityId === null ? [] : [entityId]))
           .toSorted(compareCodeUnit),
       ).toEqual([continueOverdue, notifyNow].toSorted(compareCodeUnit));
       expect(
