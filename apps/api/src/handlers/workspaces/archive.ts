@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
@@ -94,6 +94,18 @@ export const archiveWorkspaceHandler = async function* ({
           .limit(1);
         if (runningOcrRuns.at(0)) {
           return "document_processing_running" as const;
+        }
+
+        const [currentTimers] = await tx
+          .select({
+            running: sql<boolean>`public.stella_matter_has_running_timers(${workspaceId}::uuid)`,
+          })
+          .from(sql`(SELECT 1) timer_presence`);
+        if (
+          (currentTimers ?? panic("Timer presence aggregate returned no row"))
+            .running
+        ) {
+          return "timer_running" as const;
         }
 
         const runningTimers = await tx
