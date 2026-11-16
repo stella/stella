@@ -53,6 +53,7 @@ const { ListItemSources } =
 const { PDF_MIME, DOCX_MIME } = await import("@/lib/consts");
 const principal = { organizationId: "org-fixture", userId: "user-fixture" };
 const workspaceId = "019a0000-0000-7000-8000-000000000001";
+const otherWorkspaceId = "019a0000-0000-7000-8000-000000000099";
 const listId = "019a0000-0000-7000-8000-000000000002";
 const itemEntityId = "019a0000-0000-7000-8000-000000000003";
 const documentId = "019a0000-0000-7000-8000-000000000004";
@@ -345,6 +346,22 @@ for (const { locale, messages } of [
   test(`${locale}: attach a PDF page and quote, refresh sources and the fact, and show the new source`, async () => {
     answer();
     const mounted = await mountAction({ locale, messages, showSources: true });
+    const sourcesKey = legalListSourcesOptions({
+      workspaceId,
+      listId,
+      itemEntityId,
+      viewer: principal,
+    }).queryKey;
+    const otherSourcesKey = legalListSourcesOptions({
+      workspaceId: otherWorkspaceId,
+      listId,
+      itemEntityId,
+      viewer: principal,
+    }).queryKey;
+    const otherItemsKey = legalListKeys.items(otherWorkspaceId, listId);
+    mounted.client.setQueryData(otherSourcesKey, emptySources);
+    mounted.client.setQueryData(otherItemsKey, { pages: [] });
+    expect(mounted.client.getQueryData(sourcesKey)).toEqual(emptySources);
     await openForm(mounted);
     await pickDocument(mounted, "Signed", "Signed agreement");
     fireEvent.change(mounted.view.getByLabelText(messages.lists.sources.page), {
@@ -370,9 +387,29 @@ for (const { locale, messages } of [
       await mounted.view.findByText("Payment falls due on delivery."),
     ).toBeTruthy();
     expect(mounted.view.queryByText(messages.common.empty)).toBeNull();
-    expect(mounted.invalidation).toHaveBeenCalledWith({
-      queryKey: legalListKeys.items(workspaceId, listId),
+    expect(mounted.client.getQueryData(sourcesKey)).toMatchObject({
+      items: [
+        {
+          id: sourceId,
+          sourceEntityId: documentId,
+          sourceEntityVersionId: versionId,
+          locator: { type: "pdf-page", pageNumber: 12 },
+          quote: "Payment falls due on delivery.",
+        },
+      ],
     });
+    expect(mounted.client.getQueryState(sourcesKey)?.isInvalidated).toBe(false);
+    expect(mounted.client.getQueryData(otherSourcesKey)).toEqual(emptySources);
+    expect(mounted.client.getQueryState(otherSourcesKey)?.isInvalidated).toBe(
+      false,
+    );
+    expect(mounted.client.getQueryState(otherItemsKey)?.isInvalidated).toBe(
+      false,
+    );
+    expect(
+      mounted.client.getQueryState(workspaceFilesOptions(workspaceId).queryKey)
+        ?.isInvalidated,
+    ).toBe(false);
     expect(
       mounted.client.getQueryState(legalListKeys.items(workspaceId, listId))
         ?.isInvalidated,
