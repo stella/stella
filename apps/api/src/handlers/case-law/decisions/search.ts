@@ -2046,17 +2046,20 @@ const servableCandidateRevisionsQuery = async (
 ) => {
   const records = await servableCandidateRevisionsStatement(tx, options);
   return partitionReturnedCorpusRecords<ServableCaseLawCopy>(
-    records.map(({ id, row }) => ({
-      id,
-      row:
-        row === null || row.appliedRevision === null
-          ? null
-          : {
-              id: row.id,
-              appliedRevision: row.appliedRevision,
-              appliedGeneration: row.appliedGeneration,
-            },
-    })),
+    records.map(({ id, row }) => {
+      const appliedRevision = row?.appliedRevision ?? null;
+      return {
+        id,
+        row:
+          row === null || appliedRevision === null
+            ? null
+            : {
+                id: row.id,
+                appliedRevision,
+                appliedGeneration: row.appliedGeneration,
+              },
+      };
+    }),
   );
 };
 

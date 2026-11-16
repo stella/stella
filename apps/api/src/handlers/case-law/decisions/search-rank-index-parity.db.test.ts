@@ -346,23 +346,15 @@ test("a hit without a well-formed signal set is excluded, not ranked on a guess"
 
 test("an indexed ranking stands only on the copy Postgres records as applied", async () => {
   const db = drizzle({ client });
-  const [applied, stale, erased, unapplied] = ids;
-  if (
-    applied === undefined ||
-    stale === undefined ||
-    erased === undefined ||
-    unapplied === undefined
-  ) {
-    return panic("Fixture ids missing");
-  }
+  const applied = ids[0] ?? panic("Fixture ids missing");
+  const stale = ids[1] ?? panic("Fixture ids missing");
+  const erased = ids[2] ?? panic("Fixture ids missing");
+  const unapplied = ids[3] ?? panic("Fixture ids missing");
   const staleOriginal = projections.get(stale) ?? panic("No projection");
-  const [unappliedState] = await db
+  const [unappliedState = panic("Fixture state missing")] = await db
     .select()
     .from(corpusIndexProjectionStates)
     .where(eq(corpusIndexProjectionStates.entityId, unapplied));
-  if (unappliedState === undefined) {
-    return panic("Fixture state missing");
-  }
   // The engine still answers with a copy Postgres superseded, carrying the
   // signals that copy was written with; Postgres queued an erasure for another
   // decision; a third was never applied at all. The index holds a copy of each.

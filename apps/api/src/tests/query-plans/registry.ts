@@ -464,8 +464,10 @@ export const QUERY_PLAN_REGISTRY = [
       }),
     seed: "case-law",
     heapFetchMitigation: {
-      type: "batched",
-      pageSize: LIMITS.corpusIndexSearchCandidateLimit,
+      type: "heapFetchBudget",
+      rows: LIMITS.corpusIndexSearchCandidateLimit,
+      reason:
+        "The decisions of one scan round, probed by the id array the round reached, and heap visits are only for pages not yet all-visible.",
     },
     contract: planContracts["case-law.search-servable-candidate-revisions"],
   },
