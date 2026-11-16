@@ -258,6 +258,37 @@ export const readQueuedChatMessageRevisionOnTx = async ({
       .limit(1)
   ).at(0)?.revision;
 
+/** Queued message `id` whole, with its revision, or none when it is not
+ *  queued. */
+export const readQueuedChatSendOnTx = async ({
+  id,
+  threadId,
+  tx,
+}: {
+  id: SafeId<"chatMessage">;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<{ revision: number; send: QueuedChatSend } | undefined> => {
+  const row = (
+    await tx
+      .select({
+        request: chatQueuedMessages.request,
+        revision: chatQueuedMessages.revision,
+      })
+      .from(chatQueuedMessages)
+      .where(
+        and(
+          eq(chatQueuedMessages.id, id),
+          eq(chatQueuedMessages.threadId, threadId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  return row === undefined
+    ? undefined
+    : { revision: row.revision, send: parseQueuedChatSend(row.request) };
+};
+
 /**
  * Replace a queued message's send, only at the revision the member last saw.
  * The caller holds the thread lock.

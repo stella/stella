@@ -20,6 +20,7 @@ import type {
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
 import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import {
@@ -121,6 +122,7 @@ import {
   enqueueChatMessage,
   moveQueuedChatMessage,
   pauseChatQueue,
+  readQueuedChatMessage,
   removeQueuedChatMessage,
   resumeChatQueue,
   sendQueuedChatMessageNow,
@@ -137,6 +139,7 @@ import {
   queueMoveTarget,
   snapshotChatRequestOptions,
   steerableMessageText,
+  steerableQueuedText,
   withQueuedMessageMoved,
   withQueuedMessageRemoved,
 } from "@/features/chat/chat-queue.logic";
@@ -145,6 +148,7 @@ import {
   type ChatRuntime,
   type ChatSendMessageOptions,
   type ChatUserMessageInput,
+  hasChatErrorCode,
   queuedChatSendOf,
   sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
@@ -1238,13 +1242,25 @@ export const useChatSession = ({
         case "steer":
           detached(
             (async () => {
-              const outcome = await chat.steerLocalTurn({
-                inputId: id,
-                text: route.text,
-              });
+              // The queue's read shows only the message's beginning; the
+              // turn is handed it whole, or it is sent next as before.
+              const whole = await Result.tryPromise(
+                async () => await readQueuedChatMessage(threadRef.threadId, id),
+              );
+              const read = Result.isOk(whole) ? whole.value : null;
+              const text =
+                read === null
+                  ? null
+                  : steerableQueuedText({ item, parts: read.message.parts });
+              const steered =
+                text !== null &&
+                (await chat.steerLocalTurn({ inputId: id, text })).type ===
+                  "steered";
               await writeQueue(async () =>
-                outcome.type === "steered"
-                  ? await removeFromQueue(id, item.revision)
+                // Removed at the revision the turn was handed: one edited
+                // since stays queued.
+                steered && read !== null
+                  ? await removeFromQueue(id, read.revision)
                   : await sendQueuedChatMessageNow(threadRef.threadId, id),
               );
             })(),
@@ -1320,34 +1336,36 @@ export const useChatSession = ({
         stellaToast.info(t("chat.queue.editNeedsComposer"));
         return;
       }
-      const item = readQueue().items.find((queued) => queued.id === id);
-      if (item === undefined) {
-        return;
-      }
       detached(
         (async () => {
-          const removed = await Result.tryPromise(
-            async () => await removeFromQueue(id, item.revision),
+          // Read whole and put into the composer first, then removed: a
+          // removal whose answer is lost leaves the message in the composer
+          // (and at worst still queued), never in neither.
+          const whole = await Result.tryPromise(
+            async () => await readQueuedChatMessage(threadRef.threadId, id),
           );
-          await refreshQueue();
-          if (Result.isError(removed)) {
-            notifyUserError(removed.error, t("errors.actionFailed"));
-            return;
-          }
-          const { message } = removed.value;
-          if (message === null) {
-            stellaToast.info(t("chat.queue.noLongerQueued"));
+          if (Result.isError(whole)) {
+            await refreshQueue();
+            if (hasChatErrorCode(whole.error, CHAT_QUEUE_ERROR_CODE.notFound)) {
+              stellaToast.info(t("chat.queue.noLongerQueued"));
+              return;
+            }
+            notifyUserError(whole.error, t("errors.actionFailed"));
             return;
           }
           draftManager.restoreMessageDraftIntoThread(
             threadRef,
-            composerDraftOfParts(message.parts),
+            composerDraftOfParts(whole.value.message.parts),
+          );
+          // At the revision put into the composer: one edited since stays.
+          await writeQueue(
+            async () => await removeFromQueue(id, whole.value.revision),
           );
         })(),
         "use-chat-session.edit-queued-message",
       );
     },
-    [draftManager, readQueue, refreshQueue, removeFromQueue, t, threadRef],
+    [draftManager, refreshQueue, removeFromQueue, t, threadRef, writeQueue],
   );
 
   const moveQueuedMessage = useCallback(
