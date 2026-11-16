@@ -10,6 +10,7 @@ import type {
   ModelMessage,
   RunAgentResumeItem,
   StreamChunk,
+  StreamDurability,
   TokenUsage,
   UIMessage,
 } from "@tanstack/ai";
@@ -228,6 +229,7 @@ import {
   chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
 import {
+  type ContextNoticeStamp,
   createContextNoticeStamp,
   SESSION_NOT_RESUMED_NOTICE,
 } from "@/api/lib/chat/context-notice";
@@ -893,7 +895,7 @@ export const streamChat = async ({
       modelRejectsStreamingTools(resolvedFallbackModel))
       ? null
       : resolvedFallbackModel;
-  const { abortController, deadlineSignal } = run.control;
+  const { deadlineSignal } = run.control;
   const restorationPairs: ChatAnonRestoration[] = [];
   // Set before the turn by the send path's compaction, or during it by a
   // step's own; the answer carries whichever it has.
@@ -983,6 +985,255 @@ export const streamChat = async ({
           yield* attemptStream;
         })();
 
+  const production = produceChatTurn({
+    answerQuoteChecker,
+    contextNotice,
+    decisionPassageStamper,
+    dismissesAwaited: resumeDismissesAwaited(preparedResume),
+    initialMessages: preparedMessageList,
+    latestMessageId,
+    onFinish,
+    organizationId,
+    owningAssistantMessageId,
+    resolveAssistantTextRefs,
+    resolveAssistantToolInputRefs,
+    resolveAssistantToolOutputRefs,
+    resolveAssistantValueRefs,
+    restorationPairs,
+    run,
+    runId,
+    safeDb,
+    source: stream,
+    // A turn on the member's computer was answered by its harness, not by a
+    // cloud model: it names no turn model and its reasoning no provenance.
+    stampAnswer: (message) =>
+      localRun === undefined
+        ? stampReasoningProvenance({
+            message: {
+              ...message,
+              metadata: { ...message.metadata, turnModel: servedTurnModel },
+            },
+            model: {
+              provider: servedTurnModel.provider,
+              modelId: servedTurnModel.model,
+            },
+            initialMessages: rawMessages,
+          })
+        : message,
+    storedHistory,
+    thirdPartyBoundary,
+    threadId,
+    turnBudget,
+    visualOrigin,
+  });
+  emitRequestStage({
+    route: "/v1/chat/:threadId/messages",
+    stage: "request_setup",
+    durationMs: performance.now() - admittedAt,
+    outcome: "completed",
+  });
+  return {
+    type: "streaming",
+    response: run.produce(production.output, production.durability, viewer),
+  };
+};
+
+/** What a turn's production learns of its settlement as its output runs. */
+type TurnProductionSettlement = {
+  event: StreamChatFinishEvent | undefined;
+  source: "not-started" | "started";
+  resumeSnapshot: ChatMessageMetadata["resumeSnapshot"];
+  terminalChunk: StreamChunk | undefined;
+  finished: Promise<unknown> | undefined;
+};
+
+/**
+ * The chunks a turn's viewers and log receive: the visible output, with the
+ * answer's quote check and a cut-short outcome placed before the run's
+ * terminal chunk, which goes last so every earlier chunk stays appendable
+ * under the execution fence.
+ *
+ * @yields The turn's chunks, ending with its terminal one.
+ */
+async function* deliverTurnOutput({
+  answerQuoteChecker,
+  contextNotice,
+  runId,
+  settlement,
+  threadId,
+  timingPhase,
+  visibleOutput,
+}: {
+  answerQuoteChecker: AnswerQuoteChecker;
+  contextNotice: ContextNoticeStamp;
+  runId: string;
+  settlement: TurnProductionSettlement;
+  threadId: SafeId<"chatThread">;
+  timingPhase: { status: "running" | "settled" };
+  visibleOutput: AsyncIterable<StreamChunk>;
+}): AsyncGenerator<StreamChunk> {
+  settlement.source = "started";
+  const finalChunks: StreamChunk[] = [];
+  for await (const visibleChunk of visibleOutput) {
+    for (const chunk of contextNotice.stamp(visibleChunk)) {
+      if (
+        settlement.event !== undefined &&
+        (chunk.type === EventType.RUN_FINISHED ||
+          chunk.type === EventType.RUN_ERROR)
+      ) {
+        if (
+          chunk.type === EventType.RUN_FINISHED &&
+          chunk.outcome?.type === "interrupt"
+        ) {
+          settlement.resumeSnapshot = {
+            resumeState: { threadId, runId },
+            pendingInterrupts: chunk.outcome.interrupts,
+          };
+        }
+        finalChunks.push(chunk);
+        continue;
+      }
+      yield chunk;
+    }
+  }
+  if (settlement.event !== undefined) {
+    const { outcome, responseMessage } = settlement.event;
+    const quoteCheck = await answerQuoteChecker(responseMessage);
+    if (quoteCheck.type === "checked") {
+      const answerQuotes = quoteCheck.checks;
+      settlement.event = {
+        outcome,
+        responseMessage: attachTerminalTurnOutcome({
+          message: toPersistableChatMessage({
+            ...responseMessage,
+            metadata: { ...responseMessage.metadata, answerQuotes },
+          }),
+          turnOutcome: outcome,
+        }),
+      };
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: responseMessage.id,
+        metadata: { answerQuotes },
+      } as const satisfies PublicStreamChunk;
+    }
+  }
+  const terminalEvent = settlement.event;
+  if (
+    terminalEvent !== undefined &&
+    CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
+  ) {
+    // A terminal outcome that differs from the provider finish belongs on
+    // the live message too; otherwise only a reload sees it.
+    yield {
+      type: EventType.TEXT_MESSAGE_END,
+      messageId: terminalEvent.responseMessage.id,
+      metadata: { turnOutcome: terminalEvent.outcome },
+    } as const satisfies PublicStreamChunk;
+  }
+  if (
+    terminalEvent !== undefined &&
+    CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
+  ) {
+    // Interruption is stored as turn data, not a provider error. Close the
+    // durable protocol too: EOF alone makes attached readers reconnect.
+    finalChunks.splice(0, finalChunks.length, {
+      type: EventType.RUN_FINISHED,
+      runId,
+      threadId,
+      outcome: { type: "cancelled" },
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+    });
+  }
+  // The visual transform can flush buffered refs after the source terminal.
+  // Deliver that content before terminalizing, and identify the last terminal
+  // so every earlier iteration remains appendable under the execution fence.
+  settlement.terminalChunk = finalChunks.at(-1);
+  for (const chunk of finalChunks) {
+    if (chunk === settlement.terminalChunk) {
+      timingPhase.status = "settled";
+    }
+    yield chunk;
+  }
+  if (settlement.event !== undefined) {
+    timingPhase.status = "settled";
+  }
+}
+
+/** What a turn's run produces: its chunks, and the log they are kept in. */
+type ChatTurnProduction = {
+  output: AsyncIterable<StreamChunk>;
+  durability: StreamDurability;
+};
+
+type ProduceChatTurnOptions = {
+  /** The run's chunks, from the model or from the member's computer. */
+  source: AsyncIterable<PublicStreamChunk>;
+  run: ChatTurnRun;
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  runId: string;
+  threadId: SafeId<"chatThread">;
+  thirdPartyBoundary: ChatThirdPartyBoundary;
+  latestMessageId: string;
+  /** The history the run continues, as its source received it. */
+  initialMessages: ChatMessage[];
+  restorationPairs: ChatAnonRestoration[];
+  owningAssistantMessageId: SafeId<"chatMessage"> | undefined;
+  turnBudget: ChatTurnBudgetRun;
+  contextNotice: ContextNoticeStamp;
+  /** See `ProcessTurnForPersistenceOptions.dismissesAwaited`. */
+  dismissesAwaited: boolean;
+  /** Names who answered the finished turn on its message. */
+  stampAnswer: (
+    message: StreamChatFinishEvent["responseMessage"],
+  ) => StreamChatFinishEvent["responseMessage"];
+  storedHistory: StoredHistory;
+  visualOrigin: Pick<VisualResourceOrigin, "accepts"> | undefined;
+  decisionPassageStamper: DecisionPassageStamper;
+  answerQuoteChecker: AnswerQuoteChecker;
+  resolveAssistantTextRefs: ((text: string) => string) | undefined;
+  resolveAssistantToolInputRefs: AssistantToolInputRefResolver | undefined;
+  resolveAssistantToolOutputRefs: AssistantToolOutputRefResolver | undefined;
+  resolveAssistantValueRefs: AssistantValueRefResolver | undefined;
+  onFinish: StreamChatProps["onFinish"];
+};
+
+/**
+ * Turn a run's source into what the run produces: the chunks its viewers
+ * see, stored in the run's log under the run's execution, with the turn
+ * settled through `onFinish` once the source ends. The same for a turn a
+ * request starts and for one a task adopts, so both store and show a turn
+ * alike; only who delivers the output differs (`ChatTurnRun.produce` or
+ * `ChatTurnRun.pump`).
+ */
+export const produceChatTurn = ({
+  answerQuoteChecker,
+  contextNotice,
+  decisionPassageStamper,
+  dismissesAwaited,
+  initialMessages: preparedMessageList,
+  latestMessageId,
+  onFinish,
+  organizationId,
+  owningAssistantMessageId,
+  resolveAssistantTextRefs,
+  resolveAssistantToolInputRefs,
+  resolveAssistantToolOutputRefs,
+  resolveAssistantValueRefs,
+  restorationPairs,
+  run,
+  runId,
+  safeDb,
+  source,
+  stampAnswer,
+  storedHistory,
+  thirdPartyBoundary,
+  threadId,
+  turnBudget,
+  visualOrigin,
+}: ProduceChatTurnOptions): ChatTurnProduction => {
+  const { abortController, deadlineSignal } = run.control;
   const log = createChatRunLog({
     db: async (callback) => {
       const result = await safeDb(callback);
@@ -995,13 +1246,7 @@ export const streamChat = async ({
     organizationId,
     runId,
   });
-  const settlement: {
-    event: StreamChatFinishEvent | undefined;
-    source: "not-started" | "started";
-    resumeSnapshot: ChatMessageMetadata["resumeSnapshot"];
-    terminalChunk: StreamChunk | undefined;
-    finished: Promise<unknown> | undefined;
-  } = {
+  const settlement: TurnProductionSettlement = {
     source: "not-started",
     resumeSnapshot: undefined,
     terminalChunk: undefined,
@@ -1019,7 +1264,7 @@ export const streamChat = async ({
           })
         : new Set<string>(),
     restorationPairs,
-    source: projectVisualPreviewStream(stream),
+    source: projectVisualPreviewStream(source),
     stamper: decisionPassageStamper,
   });
   const timingPhase: { status: "running" | "settled" } = { status: "running" };
@@ -1040,7 +1285,7 @@ export const streamChat = async ({
           getRestorableCheckpoint: () => run.restorableCheckpoint,
         }),
     deadlineSignal,
-    dismissesAwaited: resumeDismissesAwaited(preparedResume),
+    dismissesAwaited,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
     onFinish: (event) => {
@@ -1048,22 +1293,7 @@ export const streamChat = async ({
         ...event.responseMessage.metadata,
         ...contextNotice.metadata(),
       };
-      // A turn on the member's computer was answered by its harness, not by a
-      // cloud model: it names no turn model and its reasoning no provenance.
-      const finished =
-        localRun === undefined
-          ? stampReasoningProvenance({
-              message: {
-                ...event.responseMessage,
-                metadata: { ...metadata, turnModel: servedTurnModel },
-              },
-              model: {
-                provider: servedTurnModel.provider,
-                modelId: servedTurnModel.model,
-              },
-              initialMessages: rawMessages,
-            })
-          : { ...event.responseMessage, metadata };
+      const finished = stampAnswer({ ...event.responseMessage, metadata });
       settlement.event = {
         outcome: event.outcome,
         responseMessage: attachTerminalTurnOutcome({
@@ -1087,94 +1317,15 @@ export const streamChat = async ({
     storedHistory,
   });
 
-  const output = (async function* () {
-    settlement.source = "started";
-    const finalChunks: StreamChunk[] = [];
-    for await (const visibleChunk of visibleOutput) {
-      for (const chunk of contextNotice.stamp(visibleChunk)) {
-        if (
-          settlement.event !== undefined &&
-          (chunk.type === EventType.RUN_FINISHED ||
-            chunk.type === EventType.RUN_ERROR)
-        ) {
-          if (
-            chunk.type === EventType.RUN_FINISHED &&
-            chunk.outcome?.type === "interrupt"
-          ) {
-            settlement.resumeSnapshot = {
-              resumeState: { threadId, runId },
-              pendingInterrupts: chunk.outcome.interrupts,
-            };
-          }
-          finalChunks.push(chunk);
-          continue;
-        }
-        yield chunk;
-      }
-    }
-    if (settlement.event !== undefined) {
-      const { outcome, responseMessage } = settlement.event;
-      const quoteCheck = await answerQuoteChecker(responseMessage);
-      if (quoteCheck.type === "checked") {
-        const answerQuotes = quoteCheck.checks;
-        settlement.event = {
-          outcome,
-          responseMessage: attachTerminalTurnOutcome({
-            message: toPersistableChatMessage({
-              ...responseMessage,
-              metadata: { ...responseMessage.metadata, answerQuotes },
-            }),
-            turnOutcome: outcome,
-          }),
-        };
-        yield {
-          type: EventType.TEXT_MESSAGE_END,
-          messageId: responseMessage.id,
-          metadata: { answerQuotes },
-        } as const satisfies PublicStreamChunk;
-      }
-    }
-    const terminalEvent = settlement.event;
-    if (
-      terminalEvent !== undefined &&
-      CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
-    ) {
-      // A terminal outcome that differs from the provider finish belongs on
-      // the live message too; otherwise only a reload sees it.
-      yield {
-        type: EventType.TEXT_MESSAGE_END,
-        messageId: terminalEvent.responseMessage.id,
-        metadata: { turnOutcome: terminalEvent.outcome },
-      } as const satisfies PublicStreamChunk;
-    }
-    if (
-      terminalEvent !== undefined &&
-      CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
-    ) {
-      // Interruption is stored as turn data, not a provider error. Close the
-      // durable protocol too: EOF alone makes attached readers reconnect.
-      finalChunks.splice(0, finalChunks.length, {
-        type: EventType.RUN_FINISHED,
-        runId,
-        threadId,
-        outcome: { type: "cancelled" },
-        timestamp: Temporal.Now.instant().epochMilliseconds,
-      });
-    }
-    // The visual transform can flush buffered refs after the source terminal.
-    // Deliver that content before terminalizing, and identify the last terminal
-    // so every earlier iteration remains appendable under the execution fence.
-    settlement.terminalChunk = finalChunks.at(-1);
-    for (const chunk of finalChunks) {
-      if (chunk === settlement.terminalChunk) {
-        timingPhase.status = "settled";
-      }
-      yield chunk;
-    }
-    if (settlement.event !== undefined) {
-      timingPhase.status = "settled";
-    }
-  })();
+  const output = deliverTurnOutput({
+    answerQuoteChecker,
+    contextNotice,
+    runId,
+    settlement,
+    threadId,
+    timingPhase,
+    visibleOutput,
+  });
   const finishSettlement = async () => {
     const { event } = settlement;
     if (event === undefined) {
@@ -1217,12 +1368,6 @@ export const streamChat = async ({
     return readPresent(timing.value);
   };
 
-  emitRequestStage({
-    route: "/v1/chat/:threadId/messages",
-    stage: "request_setup",
-    durationMs: performance.now() - admittedAt,
-    outcome: "completed",
-  });
   const providerWaitStartedAt = performance.now();
   const observedOutput = observeChatOutputStages({
     source: output,
@@ -1230,29 +1375,24 @@ export const streamChat = async ({
     getSettlementOutcome: () => settlement.event?.outcome.type,
   });
   return {
-    type: "streaming",
-    response: run.produce(
-      withChatTurnTiming({
-        source: observedOutput,
-        getPhase: () => timingPhase.status,
-        readTiming,
-      }),
-      createChatTurnTimingDurability({
-        log,
-        getTerminal: () =>
-          settlement.event === undefined ||
-          settlement.terminalChunk === undefined
-            ? undefined
-            : {
-                chunk: settlement.terminalChunk,
-                messageId: settlement.event.responseMessage.id,
-              },
-        getPhase: () => timingPhase.status,
-        finishSettlement,
-        readTiming,
-      }),
-      viewer,
-    ),
+    output: withChatTurnTiming({
+      source: observedOutput,
+      getPhase: () => timingPhase.status,
+      readTiming,
+    }),
+    durability: createChatTurnTimingDurability({
+      log,
+      getTerminal: () =>
+        settlement.event === undefined || settlement.terminalChunk === undefined
+          ? undefined
+          : {
+              chunk: settlement.terminalChunk,
+              messageId: settlement.event.responseMessage.id,
+            },
+      getPhase: () => timingPhase.status,
+      finishSettlement,
+      readTiming,
+    }),
   };
 };
 

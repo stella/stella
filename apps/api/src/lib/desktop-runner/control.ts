@@ -53,6 +53,7 @@ import {
   type ChatRunSession,
   type DesktopRunnerDb,
   type DesktopRunnerRunView,
+  type HandedOverChatRun,
   insertAssignedRun,
   type InsertedCommand,
   insertRunCommand,
@@ -60,6 +61,7 @@ import {
   readChatRunForRequest,
   readChatRunSession,
   readConnectedRunners,
+  readHandedOverChatRun,
   readMemberRunners,
   readOpenRunChatThread,
   readRun,
@@ -937,6 +939,14 @@ export const createDesktopRunnerControl = ({
     ): Promise<Result<ChatRunForRequest | null, DatabaseError>> =>
       await Result.tryPromise({
         try: async () => await readChatRunForRequest(db, options),
+        catch: toDatabaseError,
+      }),
+    /** The run a handed-over chat turn reads on (`readHandedOverChatRun`). */
+    readHandedOverChatRun: async (
+      options: Parameters<typeof readHandedOverChatRun>[1],
+    ): Promise<Result<HandedOverChatRun | null, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await readHandedOverChatRun(db, options),
         catch: toDatabaseError,
       }),
     /** Undo the file changes of the thread's newest turn on its computer. */
