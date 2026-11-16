@@ -18,6 +18,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
+import { CORPUS_SCHEMA_LANE_SHARED_PG_LOCK_SQL } from "@/api/db/corpus-schema-lane";
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
@@ -176,8 +177,8 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
  * - The route lock (`lock`) lives on a session of its own. `runInTransaction`
  *   never lends that connection, or any connection holding a session-level
  *   advisory lock: a start transaction refuses to run while its connection
- *   holds any lock (`requireFreshReadCommittedStartTx`), and runs in read
- *   committed.
+ *   holds any lock but the corpus schema lane held shared
+ *   (`requireFreshReadCommittedStartTx`), and runs in read committed.
  * - `deliver` resolves only once its indexer has exited, been killed or been
  *   refused, and enforces the shard's `killAfterMs` with a monotonic timer
  *   started before it launches the indexer, never by comparing its own clock
@@ -504,6 +505,20 @@ const lockKeyOf = (
  * no advisory and no transaction id lock means nothing was locked yet. A
  * connection that holds a session-level advisory lock (the route lock among
  * them) is refused too, which is why that lock lives on a session of its own.
+ *
+ * One lock is let through: the corpus schema lane held SHARED, which the
+ * production transaction boundary (`createIngestionDb`) takes before every
+ * corpus batch. It cannot close a cycle with anything a start waits for. A
+ * cycle through it needs a holder of a conflicting lane lock that waits for
+ * something a start holds, and the only conflicting mode is EXCLUSIVE, which
+ * only the migrate entrypoint takes, on a session of its own, waiting with
+ * nothing else held; every shared holder only tries the lane, never waits for
+ * it, so no start ever waits for the lane either. Shared holders never
+ * conflict with one another. The exclusive waiter waits for a start exactly
+ * as for any other corpus batch: one bounded transaction of at most
+ * `CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE` revisions, with no delivery inside
+ * it, and once it waits every further try is refused, so no new start
+ * begins. The lane EXCLUSIVE, or any other key, is still refused.
  */
 export const requireFreshReadCommittedStartTx = async (
   tx: Transaction,
@@ -517,6 +532,7 @@ export const requireFreshReadCommittedStartTx = async (
         WHERE pid = pg_backend_pid()
           AND granted
           AND locktype IN ('advisory', 'transactionid', 'tuple')
+          AND NOT ${sql.raw(CORPUS_SCHEMA_LANE_SHARED_PG_LOCK_SQL)}
       )`,
     })
     .from(sql`(SELECT 1) AS probe`);
