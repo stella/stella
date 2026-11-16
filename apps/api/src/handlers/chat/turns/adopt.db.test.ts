@@ -221,7 +221,8 @@ const handOver = async (seeded: SeededTurn, adoptBy: "future" | "past") => {
       leaseExpiresAt:
         adoptBy === "future"
           ? sql`now() + interval '90 seconds'`
-          : sql`now() - interval '1 second'`,
+          : // Past, yet after the turn's creation (`chat_turns_lease_after_created_check`).
+            sql`${chatTurns.createdAt} + interval '1 microsecond'`,
       runId: runIdOf(seeded),
       status: "handed-over",
     })
