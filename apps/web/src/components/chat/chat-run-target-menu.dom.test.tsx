@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import type {
+  ChatLocalHarnessReadiness,
+  ChatLocalRunHarness,
   ChatLocalRunReadiness,
   ChatLocalRunTarget,
   ChatRunTarget,
@@ -394,3 +396,121 @@ test("choosing an agent on a computer that is not connected opens stella desktop
   expect(chosen).toEqual([]);
   expect(open).toHaveBeenCalledTimes(1);
 });
+
+/** The states a harness is set up from in stella desktop. */
+type SetupState =
+  "needs_login" | "not_installed" | "unsupported" | "unavailable";
+
+/** A report of `harness` in `state`, as its computer sends it. */
+const setupReport = (
+  id: ChatLocalRunHarness,
+  state: SetupState,
+): ChatLocalHarnessReadiness => {
+  switch (state) {
+    case "needs_login":
+      return { id, state, version: "0.50.0" };
+    case "not_installed":
+      return { id, state };
+    case "unsupported":
+      return { id, state, version: null };
+    case "unavailable":
+      return { id, state, reason: "probe_failed" };
+    default:
+      state satisfies never;
+      throw new Error("Unknown setup state");
+  }
+};
+
+/** READINESS with each harness reported in its state of `states`. */
+const withHarnessStates = (
+  states: Record<ChatLocalRunHarness, SetupState>,
+): ChatLocalRunReadiness => ({
+  ...READINESS,
+  runners: READINESS.runners.map((runner) => ({
+    ...runner,
+    harnesses: [
+      setupReport("codex", states.codex),
+      setupReport("claude-code", states["claude-code"]),
+    ],
+  })),
+});
+
+const harnessRow = async (view: ReturnType<typeof render>, name: string) =>
+  await waitFor(() => {
+    const item = view
+      .getAllByRole("menuitem")
+      .find((candidate) => candidate.textContent.startsWith(name));
+    if (item === undefined) {
+      throw new Error(`no ${name} row`);
+    }
+    return item;
+  });
+
+test("an agent that needs signing in opens stella desktop at its card and then says how to get there by hand", async () => {
+  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(
+    () => undefined,
+  );
+  const { view, chosen } = renderMenu(
+    { kind: "cloud" },
+    withHarnessStates({ codex: "needs_login", "claude-code": "needs_login" }),
+  );
+
+  const claude = await harnessRow(view, "Claude Code");
+  expect(claude.getAttribute("aria-disabled")).not.toBe("true");
+  const status = within(claude).getByRole("status");
+  expect(status.textContent).toBe(messages.chat.runOn.hintSignIn);
+
+  fireEvent.click(claude);
+
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(open).toHaveBeenCalledWith(
+    "stella://settings/agents?harness=claude-code",
+  );
+  await waitFor(() =>
+    expect(status.textContent).toBe(messages.chat.runOn.stepsSignInClaudeCode),
+  );
+  // The menu stays open on the row, and nothing was chosen for the member.
+  expect(within(claude).getByRole("status")).toBe(status);
+  expect(chosen).toEqual([]);
+
+  const codex = await harnessRow(view, "Codex");
+  fireEvent.click(codex);
+  expect(open).toHaveBeenLastCalledWith(
+    "stella://settings/agents?harness=codex",
+  );
+  await waitFor(() =>
+    expect(within(codex).getByRole("status").textContent).toBe(
+      messages.chat.runOn.stepsSignInCodex,
+    ),
+  );
+});
+
+test.each([
+  ["not_installed", "hintInstall", "stepsInstall"],
+  ["unsupported", "hintUpdate", "stepsCheck"],
+  ["unavailable", "hintCheck", "stepsCheck"],
+] as const)(
+  "an agent reported %s says what to do and opens stella desktop at its card",
+  async (state, hintKey, stepsKey) => {
+    const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(
+      () => undefined,
+    );
+    const { view, chosen } = renderMenu(
+      { kind: "cloud" },
+      withHarnessStates({ codex: state, "claude-code": "needs_login" }),
+    );
+    const codex = await harnessRow(view, "Codex");
+    const status = within(codex).getByRole("status");
+    expect(status.textContent).toBe(messages.chat.runOn[hintKey]);
+
+    fireEvent.click(codex);
+
+    expect(open).toHaveBeenCalledWith("stella://settings/agents?harness=codex");
+    await waitFor(() =>
+      expect(status.textContent).toBe(
+        messages.chat.runOn[stepsKey].replace("{harness}", "Codex"),
+      ),
+    );
+    expect(chosen).toEqual([]);
+  },
+);
