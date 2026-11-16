@@ -653,6 +653,12 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
     TO stella_ingestion
   `,
+  // Route proofs: the projection runner advances and revokes them; only the
+  // generation's cascade deletes one.
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "corpus_index_route_proofs"
+    TO stella_ingestion
+  `,
   // Seeding passes: the seeding walk writes them; the transition that takes
   // a generation out of the active set deletes its pass, and its route rows
   // cascade.

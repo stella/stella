@@ -3,38 +3,70 @@ import type { ReactNode, Ref } from "react";
 import { CheckIcon, XIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { StellaMark } from "./stella-mark";
-import { StellaWordmarkLatin } from "./stella-wordmark";
 
 // The outcome screen's markup, with no browser behaviour: `OutcomeScreen`
 // (./outcome-screen.tsx) adds closing the tab, and this package's
 // `scripts/generate-outcome-page.ts` renders this view into the template the
-// loopback listeners serve, where no script runs.
+// loopback listeners serve, where no script runs. The generator renders
+// `OutcomeLayout` with slots where the optional parts go, and each optional
+// part (`OutcomeDetailList`, `OutcomeDetailRow`, `OutcomeCommand`,
+// `OutcomeNote`) on its own,
+// so a listener fills in exactly the markup this module draws.
 
 export type OutcomeTone = "success" | "error";
 
-export type OutcomeScreenViewProps = {
+/** One fact about what the flow connected, e.g. Account: jan@firm.example. */
+export type OutcomeDetail = {
+  /** What the fact is, in a word or two. */
+  label: string;
+  /** The fact itself; isolated as its own bidi run (names, emails). */
+  value: ReactNode;
+};
+
+type OutcomeLayoutProps = {
   tone: OutcomeTone;
   /** What happened, in a few words. Also the document title. */
   title: string;
-  /** What to do next. */
+  /** What it means, or what to do next. */
   description?: ReactNode;
   /** The other side's identity (a logo), drawn in a tile beside stella's. */
   counterpart?: ReactNode;
+  /** The flow's facts, drawn by `OutcomeDetailList`. */
+  details?: ReactNode;
+  /** A command to run next, drawn by `OutcomeCommand`. */
+  command?: ReactNode;
   /** The way on, as buttons or links. */
   actions?: ReactNode;
-  /** A quiet footnote, e.g. that the tab can be closed. */
+  /** A quiet footnote, drawn by `OutcomeNote`. */
   note?: ReactNode;
   /**
-   * `page` owns the viewport and signs it with the wordmark; `embedded` sits
-   * inside a layout that already brands the page (the sign-in layout).
+   * `page` owns the viewport; `embedded` sits inside a layout that already
+   * frames the page (the sign-in layout).
    */
   surface?: "page" | "embedded";
   /** The document title, when it differs from `title` (an app suffix). */
   documentTitle?: string;
-  /** The wordmark at the foot of a page; defaults to the Latin lockup. */
-  wordmark?: ReactNode;
   /** Makes the heading focusable and hands it over, to move focus to it. */
   headingRef?: Ref<HTMLHeadingElement>;
+};
+
+export type OutcomeScreenViewProps = Omit<
+  OutcomeLayoutProps,
+  "details" | "command" | "note"
+> & {
+  /**
+   * What the flow connected, 1 to 3 facts it already holds (the account, the
+   * organization, the access granted). Leave it out when there is nothing
+   * specific to say; never fill it with generic text.
+   */
+  details?: readonly OutcomeDetail[];
+  /** A command the person runs next, e.g. to try again from a terminal. */
+  command?: string;
+  /**
+   * That the tab can be closed, and only when it really can: never beside a
+   * redirect or a button, which are the way on themselves.
+   */
+  note?: ReactNode;
 };
 
 const TONE_BADGE = {
@@ -45,8 +77,11 @@ const TONE_BADGE = {
   { className: string; Icon: typeof CheckIcon }
 >;
 
+// The tile's edge is a layered shadow, not a border. On a lone tile the badge
+// is centred on the corner's curve (16px radius: 4.7px in from each edge), so
+// its ring cuts the corner symmetrically.
 const TILE_CLASS =
-  "bg-card text-foreground outline-foreground/8 relative flex size-14 shrink-0 items-center justify-center rounded-2xl shadow-xs outline-1";
+  "bg-card text-foreground shadow-outcome-tile relative flex size-14 shrink-0 items-center justify-center rounded-2xl";
 
 const StatusBadge = ({
   className,
@@ -87,7 +122,7 @@ const OutcomeGlyph = ({
     return (
       <div className="relative" aria-hidden="true">
         {stellaTile}
-        <StatusBadge className="absolute -end-1.5 -bottom-1.5" tone={tone} />
+        <StatusBadge className="absolute -end-1.25 -bottom-1.25" tone={tone} />
       </div>
     );
   }
@@ -108,28 +143,105 @@ const OutcomeGlyph = ({
   );
 };
 
-export const OutcomeScreenView = ({
+/** The facts' one quiet surface; its rows are `OutcomeDetailRow`s. */
+// Two columns shared by every row: the labels' column is as wide as the
+// widest label, and each value starts right after it.
+export const OutcomeDetailList = ({ children }: { children: ReactNode }) => (
+  <dl
+    className="bg-muted mt-6 grid w-full max-w-[22rem] grid-cols-[max-content_minmax(0,1fr)] gap-x-4 rounded-xl px-4 py-2 text-start text-sm"
+    data-slot="outcome-details"
+  >
+    {children}
+  </dl>
+);
+
+/**
+ * One fact: its label in the start column, the value (one bidi run) beside
+ * it. A long value wraps rather than cut short, so an email reads in full.
+ */
+export const OutcomeDetailRow = ({
+  label,
+  value,
+}: {
+  label: ReactNode;
+  value: ReactNode;
+}) => (
+  <div
+    className="col-span-2 grid grid-cols-subgrid py-1.5"
+    data-slot="outcome-detail"
+  >
+    <dt className="text-muted-foreground">{label}</dt>
+    <dd className="text-foreground min-w-0 wrap-break-word">
+      <bdi>{value}</bdi>
+    </dd>
+  </div>
+);
+
+/**
+ * A place or control in the app, named as it reads there ("General"), set
+ * apart inside running text so the way back can be scanned.
+ */
+export const OutcomeControl = ({ children }: { children: ReactNode }) => (
+  <bdi
+    className="bg-muted text-foreground rounded-md px-1.5 py-0.5 font-medium whitespace-nowrap"
+    data-slot="outcome-control"
+  >
+    {children}
+  </bdi>
+);
+
+/** A button's label inside running text; the sentence supplies the quotes. */
+export const OutcomeButtonLabel = ({ children }: { children: ReactNode }) => (
+  <bdi className="text-foreground font-medium" data-slot="outcome-button-label">
+    {children}
+  </bdi>
+);
+
+/** A command to run, set as code: left to right in every language. */
+export const OutcomeCommand = ({ children }: { children: ReactNode }) => (
+  <code
+    className="bg-muted text-foreground mt-5 max-w-full rounded-lg px-3 py-1.5 font-mono text-[0.8125rem] break-all select-all"
+    data-slot="outcome-command"
+    dir="ltr"
+  >
+    {children}
+  </code>
+);
+
+/** The quiet line under everything else. */
+export const OutcomeNote = ({ children }: { children: ReactNode }) => (
+  <p className="text-muted-foreground mt-6 text-xs" data-slot="outcome-note">
+    {children}
+  </p>
+);
+
+/**
+ * The screen with every optional part already drawn: `OutcomeScreenView`
+ * draws them from props, the generator puts template slots in their place.
+ */
+export const OutcomeLayout = ({
   tone,
   title,
   description,
   counterpart,
+  details,
+  command,
   actions,
   note,
   surface = "page",
   documentTitle,
-  wordmark,
   headingRef,
-}: OutcomeScreenViewProps) => {
+}: OutcomeLayoutProps) => {
   const outcome = (
     <section
-      className="flex w-full max-w-[26rem] flex-col items-center text-center wrap-anywhere"
+      className="motion-safe:animate-rise flex w-full max-w-[26rem] flex-col items-center text-center wrap-anywhere"
       data-slot="outcome"
       data-tone={tone}
       role="status"
     >
       <OutcomeGlyph counterpart={counterpart} tone={tone} />
       <h1
-        className="mt-8 text-2xl font-semibold tracking-tight text-balance outline-none"
+        className="mt-7 text-2xl font-semibold tracking-tight text-balance outline-none"
         ref={headingRef}
         tabIndex={headingRef === undefined ? undefined : -1}
       >
@@ -140,14 +252,14 @@ export const OutcomeScreenView = ({
           {description}
         </p>
       )}
+      {details}
+      {command}
       {actions === undefined ? null : (
         <div className="mt-7 flex flex-wrap justify-center gap-2">
           {actions}
         </div>
       )}
-      {note === undefined ? null : (
-        <p className="text-muted-foreground mt-6 text-xs">{note}</p>
-      )}
+      {note}
     </section>
   );
   const titleElement = <title>{documentTitle ?? title}</title>;
@@ -164,17 +276,38 @@ export const OutcomeScreenView = ({
   }
   return (
     <main
-      className="bg-background text-foreground flex min-h-dvh w-full flex-col px-4 font-sans"
+      className="bg-background text-foreground flex min-h-dvh w-full flex-col items-center justify-center px-4 pt-12 pb-[14svh] font-sans"
       data-slot="outcome-screen"
     >
       {titleElement}
       {/* Optical centre: a little above the middle. */}
-      <div className="flex flex-1 flex-col items-center justify-center pt-12 pb-[14svh]">
-        {outcome}
-      </div>
-      <footer className="text-foreground-subtle flex justify-center pb-8">
-        {wordmark ?? <StellaWordmarkLatin className="h-4 w-auto" />}
-      </footer>
+      {outcome}
     </main>
   );
 };
+
+export const OutcomeScreenView = ({
+  details,
+  command,
+  note,
+  ...layout
+}: OutcomeScreenViewProps) => (
+  <OutcomeLayout
+    {...layout}
+    note={note === undefined ? undefined : <OutcomeNote>{note}</OutcomeNote>}
+    command={
+      command === undefined ? undefined : (
+        <OutcomeCommand>{command}</OutcomeCommand>
+      )
+    }
+    details={
+      details === undefined || details.length === 0 ? undefined : (
+        <OutcomeDetailList>
+          {details.map(({ label, value }) => (
+            <OutcomeDetailRow key={label} label={label} value={value} />
+          ))}
+        </OutcomeDetailList>
+      )
+    }
+  />
+);

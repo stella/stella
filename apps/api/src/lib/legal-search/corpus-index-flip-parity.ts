@@ -39,7 +39,14 @@
  *   one while its content is current, never lead it, and no generation numbers
  *   epochs of its own. So a converged candidate holds current content, and
  *   comparing two generations' applied epochs compares two readings of one
- *   counter (`corpus-index-projection-desired-state.db.test.ts` pins it);
+ *   counter (`corpus-index-projection-desired-state.db.test.ts` pins it).
+ *   No database trigger enforces this in production, on purpose: it would
+ *   read the canonical row of another table on every desired-state write,
+ *   the projection's hottest path, and under concurrent writers it would
+ *   fail a correct write whenever a canonical update commits between the
+ *   writer's read and the trigger's snapshot. Every writer suite installs
+ *   the test guard instead (`tests/helpers/corpus-projection-canonical-epoch-guard.ts`);
+ *   a new desired-state writer must run under it;
  * - whether a decision is erased does not depend on the generation, except
  *   through a jurisdiction-serving pointer (`vacatedFrom`) or a partial
  *   generation's scope. The read refuses both.
@@ -226,15 +233,17 @@ const microsecondToken = (instant: Temporal.Instant): string =>
 /**
  * The serving side's "shows": an upsert is wanted, the named copy sits in the
  * index the route wants, and its documents are whole or a delete of them may
- * be in flight.
+ * be in flight. An unknown counts as shown, so the serving side is
+ * conservative by construction, not only because a foreign key keeps every
+ * named revision present.
  */
-const servingShows = sql`(
+const servingShows = sql`coalesce((
   ${servingState.appliedIndexId} = ${servingState.desiredIndexId}
   AND (
     ${CORPUS_INDEX_PROJECTION_SERVING.served({ state: servingState, revision: servingRevision })}
     OR ${CORPUS_INDEX_PROJECTION_SERVING.at_risk({ state: servingState, revision: servingRevision })}
   )
-)`;
+), true)`;
 
 /** The candidate side's "shows": as the serving side, but only a whole copy. */
 const candidateShows = sql`coalesce((

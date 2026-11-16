@@ -96,6 +96,9 @@ export const ChatMessage = ({
       {entry.failure === undefined ? null : (
         <FailedAnswer failure={entry.failure} onRetry={onRetry} />
       )}
+      {entry.ranOnModel === undefined ? null : (
+        <RanOnModel model={entry.ranOnModel} />
+      )}
       {live || entry.text === "" ? null : <ShareAnswer text={entry.text} />}
     </View>
   );
@@ -127,6 +130,12 @@ const FailedAnswer = ({
       )}
     </View>
   );
+};
+
+/** The model a coding agent's answer ran on after the harness rerouted it. */
+const RanOnModel = ({ model }: { model: string }) => {
+  const t = useTranslations("chat");
+  return <Text variant="caption">{t("localRun.ranOnModel", { model })}</Text>;
 };
 
 /**

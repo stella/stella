@@ -33,6 +33,10 @@
   --shadow-floating-ring:
     0 0 0 1px rgb(0 0 0 / 0.02), 0 1px 2px rgb(0 0 0 / 0.03),
     0 8px 20px rgb(0 0 0 / 0.05);
+  /* A small tile that stands on the page by itself (OutcomeScreen): a hairline
+     ring, a contact shadow and a soft drop, each light enough to read as
+     one crisp edge; the dark scheme swaps in a faint top highlight. */
+  --shadow-outcome-tile: var(--outcome-tile-shadow);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -160,9 +164,11 @@
   --animate-outcome-badge: outcome-badge 200ms ease-out 120ms both;
   @keyframes outcome-connector {
     from {
-      transform: scaleX(0);
+      opacity: 0;
+      transform: scaleX(0.6);
     }
     to {
+      opacity: 1;
       transform: scaleX(1);
     }
   }
@@ -1448,11 +1454,17 @@
   --auth-gradient-end: #cbe1fc;
   --error-gradient-end: #fbe9e4;
   --shadow-tint: rgb(23 28 38);
+  --outcome-tile-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.06),
+    0 4px 12px -2px rgb(0 0 0 / 0.08);
 }
 
 .dark {
   --auth-gradient-end: #1a3a5c;
   --error-gradient-end: #261815;
+  --outcome-tile-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06), 0 0 0 1px rgb(255 255 255 / 0.08),
+    0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px -2px rgb(0 0 0 / 0.5);
 }
 
 /* A category's tile takes its hue from the category (`--cat-hue`, set inline);

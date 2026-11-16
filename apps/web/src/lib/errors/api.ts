@@ -1,6 +1,7 @@
 import { isTaggedError, panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { CHAT_TRANSPORT_ERROR_CODE } from "@stll/anonymize-chat";
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
@@ -374,6 +375,8 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.legalSourceEntityLimitReached",
   legal_source_file_property_missing:
     "errors.apiCodes.legalSourceFilePropertyMissing",
+  [CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal]:
+    "errors.apiCodes.localRunAnonymizedRefusal",
   mcp_oauth_binding_invalid: "errors.apiCodes.mcpAuthorizationApprovalRequired",
   mcp_authorization_approval_required:
     "errors.apiCodes.mcpAuthorizationApprovalRequired",
