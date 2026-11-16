@@ -2,16 +2,17 @@ import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { harnessSessionId } from "@stll/agent-engine";
 import { CHAT_RUN_TARGET_KIND } from "@stll/api-contract/chat-run-target";
 import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
-import { settledWithin, waitFor } from "@stll/test-kit";
+import { createTestClock, settledWithin, waitFor } from "@stll/test-kit";
 import { createTestState } from "@stll/test-state";
 
-import { user } from "@/api/db/auth-schema";
-import type { ScopedDb } from "@/api/db/safe-db";
+import { member, organization, user } from "@/api/db/auth-schema";
+import { rootDb } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   chatMessages,
   chatRunLogEntries,
@@ -21,7 +22,6 @@ import {
   featureEnrolments,
   PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
 } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import {
   type AnswerQuoteChecker,
@@ -74,27 +74,27 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { answerChatTurnAdopterDoorbell } from "@/api/lib/chat/chat-turn-handover-doorbell";
 import { createContextNoticeStamp } from "@/api/lib/chat/context-notice";
+import { resolveServerStartedMember } from "@/api/lib/chat/server-started-member";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { logger } from "@/api/lib/observability/logger";
-import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
-import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import {
   createComputer,
   harnessChunks,
 } from "@/api/tests/helpers/fake-local-computer";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
-import {
-  getRlsFixture,
-  releaseRlsFixture,
-} from "@/api/tests/security/rls-fixture";
-import type { TestIds } from "@/api/tests/security/rls-helpers";
-import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-// Runs as a postgres suite: the adopting task resolves its member through
-// the root pool, as a task started on the server does.
+// Runs as a postgres suite against the database the root pool reaches: the
+// adopting task proves its member again through that pool, as a task
+// started on the server does, and then works on the member's own
+// connection, so every row the turn needs is written there too.
 //
 // The owner of a running local turn stops: an API task with a member's
 // computer working on the turn, stopped through the path its shutdown takes,
@@ -104,17 +104,71 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
-let testDb: TestDatabase;
-let ids: TestIds;
-const seededThreads: SafeId<"chatThread">[] = [];
-let emailVerifiedBefore = false;
+const db = rootDb;
+const clock = createTestClock();
 
-const safeDbOf = () =>
-  toSafeDbMock(
-    asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-    ),
-  );
+/** A member of the fixture organization, and their own connection. */
+type Member = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  safeDb: SafeDb;
+};
+
+const organizationId = mintAuthProviderId<"organization">();
+const memberIds: SafeId<"user">[] = [];
+/** Runs turns on their computer throughout. */
+let staying: Member;
+/** Leaves the organization while a turn of theirs waits for a task. */
+let leaving: Member;
+
+/**
+ * A member who may run chat turns on their computer: verified, accepted
+ * professional use as any signed-in request has, enrolled in the feature.
+ */
+const seedMember = async (): Promise<Member> => {
+  const userId = mintAuthProviderId<"user">();
+  memberIds.push(userId);
+  await db.insert(user).values({
+    id: userId,
+    name: "Handover fixture",
+    email: `${userId}@example.test`,
+    emailVerified: true,
+  });
+  const accepted = await recordAccountProfessionalUse({
+    userId,
+    source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+  });
+  expect(accepted.isOk()).toBe(true);
+  await db.insert(member).values({
+    id: mintAuthProviderIdValue(),
+    organizationId,
+    userId,
+    role: "member",
+    createdAt: new Date(clock.now()),
+  });
+  await db.insert(featureEnrolments).values({
+    featureId: DESKTOP_RUNNER_FEATURE_ID,
+    organizationId,
+    userId,
+  });
+  const resolved = await resolveServerStartedMember({
+    organizationId,
+    userId,
+    work: {
+      type: "turn-handover",
+      threadId: toSafeId<"chatThread">(Bun.randomUUIDv7()),
+      turnId: toSafeId<"chatTurn">(Bun.randomUUIDv7()),
+    },
+    signal: new AbortController().signal,
+  });
+  const proved = resolved.isOk()
+    ? resolved.value
+    : panic("Could not prove the fixture member", resolved.error);
+  if (proved.type !== "member") {
+    return panic("The fixture member was not proved");
+  }
+  return { organizationId, userId, safeDb: proved.caller.safeDb };
+};
 
 const noAudit: AuditRecorder = async () => {
   await Promise.resolve();
@@ -158,36 +212,35 @@ const turnHalves = async () => {
   return { before, after };
 };
 
-/** A new thread whose first turn a send claimed for its run. */
-const seedClaimedTurn = async () => {
+/** A new thread of `owner`'s whose first turn a send claimed for its run. */
+const seedClaimedTurn = async (owner: Member) => {
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   const userMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
-  seededThreads.push(threadId);
   const question = { content: QUESTION, type: "text" } as const;
-  await testDb.insert(chatThreads).values({
+  await db.insert(chatThreads).values({
     id: threadId,
-    organizationId: ids.orgA,
+    organizationId: owner.organizationId,
     title: extractTitle([question]),
-    userId: ids.userA1,
-    workspaceId: ids.wsA1,
+    userId: owner.userId,
+    workspaceId: null,
   });
-  await testDb.insert(chatMessages).values({
+  await db.insert(chatMessages).values({
     id: userMessageId,
     threadId,
-    userId: ids.userA1,
-    workspaceId: ids.wsA1,
+    userId: owner.userId,
+    workspaceId: null,
     role: "user",
     content: toPersistedChatMessageContentV3({ data: [question] }),
   });
   const acceptance = createChatTurnAcceptance({
     source: { type: "member" },
-    organizationId: ids.orgA,
+    organizationId: owner.organizationId,
     threadId,
-    userId: ids.userA1,
+    userId: owner.userId,
     userMessageId,
-    workspaceId: ids.wsA1,
+    workspaceId: null,
   });
-  const safeDb = safeDbOf();
+  const { safeDb } = owner;
   const inserted = await withChatRunPings(
     async (pings) =>
       await safeDb(
@@ -202,11 +255,11 @@ const seedClaimedTurn = async () => {
     acceptedTurnId: acceptance.id,
     incomingMessageId: userMessageId,
     incomingMessageRole: "user",
-    organizationId: ids.orgA,
+    organizationId: owner.organizationId,
     safeDb,
     threadId,
-    userId: ids.userA1,
-    workspaceId: ids.wsA1,
+    userId: owner.userId,
+    workspaceId: null,
   });
   const execution = Result.isOk(claimed)
     ? (claimed.value ?? panic("The seeded turn was not claimed"))
@@ -221,7 +274,7 @@ const seedClaimedTurn = async () => {
     parts: [question],
     role: "user",
   };
-  return { execution, runId, threadId, userMessage };
+  return { execution, owner, runId, threadId, userMessage };
 };
 
 type SeededTurn = Awaited<ReturnType<typeof seedClaimedTurn>>;
@@ -238,7 +291,8 @@ const startOwner = async ({
   seeded: SeededTurn;
 }) => {
   const ownership = new ChatTurnOwnership();
-  const safeDb = safeDbOf();
+  const { owner } = seeded;
+  const { safeDb } = owner;
   const run = new ChatTurnRun({
     ownership,
     connectors: undefined,
@@ -251,8 +305,8 @@ const startOwner = async ({
       recordAuditEvent: noAudit,
       safeDb,
       threadId: seeded.threadId,
-      userId: ids.userA1,
-      workspaceId: ids.wsA1,
+      userId: owner.userId,
+      workspaceId: null,
     },
   });
   const settledHere: unknown[] = [];
@@ -280,7 +334,7 @@ const startOwner = async ({
     }),
     run,
     safeDb,
-    organizationId: ids.orgA,
+    organizationId: owner.organizationId,
     runId: seeded.runId,
     threadId: seeded.threadId,
     thirdPartyBoundary: { type: "raw" },
@@ -316,17 +370,17 @@ const startOwner = async ({
 };
 
 const readTurn = async (turnId: SafeId<"chatTurn">) =>
-  (await testDb.query.chatTurns.findFirst({ where: { id: { eq: turnId } } })) ??
+  (await db.select().from(chatTurns).where(eq(chatTurns.id, turnId))).at(0) ??
   panic("Expected the turn row");
 
 const readLog = async (runId: string): Promise<StreamChunk[]> =>
   (
-    await testDb
+    await db
       .select({ chunk: chatRunLogEntries.chunk })
       .from(chatRunLogEntries)
       .where(
         and(
-          eq(chatRunLogEntries.organizationId, ids.orgA),
+          eq(chatRunLogEntries.organizationId, organizationId),
           eq(chatRunLogEntries.runId, runId),
         ),
       )
@@ -334,7 +388,7 @@ const readLog = async (runId: string): Promise<StreamChunk[]> =>
   ).map(({ chunk }) => asTestRaw<StreamChunk>(chunk));
 
 const readAnswer = async (messageId: SafeId<"chatMessage">) => {
-  const [row] = await testDb
+  const [row] = await db
     .select({
       content: chatMessages.content,
       id: chatMessages.id,
@@ -436,67 +490,40 @@ if (!databaseUrl || !runPostgresTests) {
 } else {
   describe("an owner stop mid-turn (postgres)", () => {
     testState.beforeAll(async () => {
-      const fixture = await getRlsFixture();
-      testDb = fixture.testDb;
-      ids = fixture.ids;
-      // The member may run chat turns on their computer.
-      const [member] = await testDb
-        .select({ emailVerified: user.emailVerified })
-        .from(user)
-        .where(eq(user.id, ids.userA1));
-      emailVerifiedBefore = member?.emailVerified ?? false;
-      await testDb
-        .update(user)
-        .set({ emailVerified: true })
-        .where(eq(user.id, ids.userA1));
-      // A task started on the server acts for a member who accepted
-      // professional use, as any signed-in request does.
-      const accepted = await recordAccountProfessionalUse({
-        userId: ids.userA1,
-        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+      await db.insert(organization).values({
+        id: organizationId,
+        name: "Handover fixture",
+        slug: organizationId,
+        createdAt: new Date(clock.now()),
       });
-      expect(accepted.isOk()).toBe(true);
-      await testDb
-        .insert(featureEnrolments)
-        .values({
-          featureId: DESKTOP_RUNNER_FEATURE_ID,
-          organizationId: ids.orgA,
-          userId: ids.userA1,
-        })
-        .onConflictDoNothing();
+      await recordNewOrganizationAccessState(db, {
+        organizationId,
+        now: new Date(clock.now()),
+      });
       testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-        [DESKTOP_RUNNER_FEATURE_ID]: [
-          { type: "organization", organizationId: ids.orgA },
-        ],
+        [DESKTOP_RUNNER_FEATURE_ID]: [{ type: "organization", organizationId }],
       });
+      staying = await seedMember();
+      leaving = await seedMember();
     });
 
     afterAll(async () => {
-      if (seededThreads.length > 0) {
-        await testDb
-          .delete(chatThreads)
-          .where(inArray(chatThreads.id, seededThreads));
-      }
-      await testDb
+      await db
+        .delete(chatThreads)
+        .where(eq(chatThreads.organizationId, organizationId));
+      await db
         .delete(featureEnrolments)
-        .where(
-          and(
-            eq(featureEnrolments.featureId, DESKTOP_RUNNER_FEATURE_ID),
-            eq(featureEnrolments.organizationId, ids.orgA),
-            eq(featureEnrolments.userId, ids.userA1),
-          ),
-        );
-      await testDb
-        .update(user)
-        .set({ emailVerified: emailVerifiedBefore })
-        .where(eq(user.id, ids.userA1));
-      await releaseRlsFixture();
+        .where(eq(featureEnrolments.organizationId, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
+      for (const userId of memberIds) {
+        await db.delete(user).where(eq(user.id, userId));
+      }
     });
 
     test("hands the turn to another task, which finishes the one answer while the computer runs on", async () => {
       const { before, after } = await turnHalves();
       const whole = await uninterrupted([...before, ...after]);
-      const seeded = await seedClaimedTurn();
+      const seeded = await seedClaimedTurn(staying);
       const computer = createComputer();
       computer.events(before);
       // The owner's read asks for the run's state once it read every stored
@@ -567,7 +594,7 @@ if (!databaseUrl || !runPostgresTests) {
         expect(
           sayings((await readAnswer(checkpointId)).parts).flat(),
         ).toContain("Running the tests. ");
-        const [log] = await testDb
+        const [log] = await db
           .select({ closedAt: chatRunLogs.closedAt })
           .from(chatRunLogs)
           .where(eq(chatRunLogs.runId, seeded.runId));
@@ -645,8 +672,8 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("that finds the member's stop recorded first ends the turn as that stop", async () => {
-      const seeded = await seedClaimedTurn();
-      await testDb
+      const seeded = await seedClaimedTurn(staying);
+      await db
         .update(chatTurns)
         .set({ cancelRequestedAt: sql`now()` })
         .where(eq(chatTurns.id, seeded.execution.id));
@@ -661,10 +688,10 @@ if (!databaseUrl || !runPostgresTests) {
           parts: [{ content: "Running the tests. ", type: "text" }],
           role: "assistant",
         }),
-        safeDb: safeDbOf(),
+        safeDb: staying.safeDb,
         threadId: seeded.threadId,
-        userId: ids.userA1,
-        workspaceId: ids.wsA1,
+        userId: staying.userId,
+        workspaceId: null,
       });
 
       expect(released.isOk() ? released.value.type : released.error).toBe(
@@ -676,7 +703,7 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("that cannot act for the turn's member says why, and the turn ends as owner-lost at its adopt-by", async () => {
-      const seeded = await seedClaimedTurn();
+      const seeded = await seedClaimedTurn(leaving);
       const turnId = seeded.execution.id;
       const released = await persistHandedOverChatTurn({
         execution: seeded.execution,
@@ -688,10 +715,10 @@ if (!databaseUrl || !runPostgresTests) {
           parts: [{ content: "Running the tests. ", type: "text" }],
           role: "assistant",
         }),
-        safeDb: safeDbOf(),
+        safeDb: leaving.safeDb,
         threadId: seeded.threadId,
-        userId: ids.userA1,
-        workspaceId: ids.wsA1,
+        userId: leaving.userId,
+        workspaceId: null,
       });
       expect(released.isOk() ? released.value.type : released.error).toBe(
         "handed-over",
@@ -699,20 +726,16 @@ if (!databaseUrl || !runPostgresTests) {
       const checkpointId =
         (await readTurn(turnId)).assistantMessageId ??
         panic("Expected the answer so far");
-      // The thread's member is no longer in the organization when a task is
-      // rung for the turn: its rows stay theirs.
-      await testDb
-        .update(chatThreads)
-        .set({ userId: ids.userB1 })
-        .where(eq(chatThreads.id, seeded.threadId));
-      await testDb
-        .update(chatMessages)
-        .set({ userId: ids.userB1 })
-        .where(eq(chatMessages.threadId, seeded.threadId));
-      await testDb
-        .update(chatTurns)
-        .set({ userId: ids.userB1 })
-        .where(eq(chatTurns.id, turnId));
+      // The member leaves the organization before a task is rung for the
+      // turn; its rows stay theirs.
+      await db
+        .delete(member)
+        .where(
+          and(
+            eq(member.organizationId, organizationId),
+            eq(member.userId, leaving.userId),
+          ),
+        );
 
       const computer = createComputer();
       const adopter = createChatTurnAdopter({
@@ -729,10 +752,10 @@ if (!databaseUrl || !runPostgresTests) {
       try {
         await settledWithin(
           adopter.adopt({
-            organizationId: ids.orgA,
+            organizationId,
             threadId: seeded.threadId,
             turnId,
-            userId: ids.userB1,
+            userId: leaving.userId,
           }),
           {
             description: "the rung task to skip the turn",
@@ -740,7 +763,7 @@ if (!databaseUrl || !runPostgresTests) {
           },
         );
         expect(warned).toHaveBeenCalledWith(CHAT_TURN_ADOPTION_SKIPPED_EVENT, {
-          organizationId: ids.orgA,
+          organizationId,
           reason: "member-unavailable",
           threadId: seeded.threadId,
           turnId,
@@ -753,19 +776,24 @@ if (!databaseUrl || !runPostgresTests) {
       expect(waiting.status).toBe("handed-over");
       expect(waiting.executionId).toBeNull();
 
-      // Nobody adopts it by then; the reaper ends it as a vanished owner's.
-      await testDb
+      // Nobody adopts it by then; the reaper ends it as a vanished owner's,
+      // through the settlement its scheduled run applies to each thread.
+      await db
         .update(chatTurns)
         .set({
           leaseExpiresAt: sql`${chatTurns.createdAt} + interval '1 millisecond'`,
         })
         .where(eq(chatTurns.id, turnId));
-      await createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx)(
-        asTestRaw<SchedulerTaskContext>({
-          db: testDb,
-          logger: { info: () => undefined },
-          signal: new AbortController().signal,
-        }),
+      await withChatRunPings(
+        async (pings) =>
+          await db.transaction(
+            async (tx) =>
+              await reapOwnerlessChatTurnOnTx({
+                pings,
+                threadId: seeded.threadId,
+                tx,
+              }),
+          ),
       );
       const ended = await readTurn(turnId);
       expect(ended.status).toBe("interrupted");
