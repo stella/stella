@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -6,7 +7,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import {
   entities,
@@ -15,12 +16,15 @@ import {
   WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
   workObligations,
+  workspaceMembers,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import acknowledgeWorkObligation from "@/api/handlers/work-obligations/acknowledgements/create";
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
+import updateWorkObligation from "@/api/handlers/work-obligations/update";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FlowStep } from "@/api/lib/flows/flow-types";
@@ -40,6 +44,7 @@ setDefaultTimeout(120_000);
 type AcknowledgeContext = Parameters<
   typeof acknowledgeWorkObligation.handler
 >[0];
+type UpdateContext = Parameters<typeof updateWorkObligation.handler>[0];
 type TransitionContext = Parameters<typeof transitionWorkObligation.handler>[0];
 
 let testDb: TestDatabase;
@@ -224,6 +229,163 @@ const transition = async (
         "/v1/work-obligations/:workspaceId/:entityId/transition" satisfies ApiRoutePath,
     }),
   );
+
+describe("work obligation assignment updates", () => {
+  test.each([
+    {
+      name: "active self-assignment",
+      previous: WORK_OBLIGATION_STATUS.ACTIVE,
+      ownership: "self",
+      next: WORK_OBLIGATION_STATUS.ACTIVE,
+      events: ["delegated", "acknowledged"],
+    },
+    {
+      name: "awaiting delegation",
+      previous: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+      ownership: "delegate",
+      next: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+      events: ["delegated"],
+    },
+    {
+      name: "unassigned self-assignment",
+      previous: WORK_OBLIGATION_STATUS.UNASSIGNED,
+      ownership: "self",
+      next: WORK_OBLIGATION_STATUS.ACTIVE,
+      events: ["owner_assigned", "acknowledged"],
+    },
+  ])(
+    "preserves $name state and ordered history",
+    async ({ previous, ownership, next, events }) => {
+      const entityId = await seedOpenWork(previous);
+      const membershipId = createSafeId<"workspaceMember">();
+      await testDb.insert(workspaceMembers).values({
+        id: membershipId,
+        workspaceId: ids.wsA1,
+        userId: ids.userA2,
+      });
+      try {
+        if (previous !== WORK_OBLIGATION_STATUS.UNASSIGNED) {
+          await testDb
+            .update(workObligations)
+            .set({
+              ownerUserId: ids.userA2,
+              acknowledgedByUserId:
+                previous === WORK_OBLIGATION_STATUS.ACTIVE ? ids.userA2 : null,
+            })
+            .where(eq(workObligations.entityId, entityId));
+        }
+        const actor = ownership === "self" ? ids.userA1 : ids.userA2;
+        const audits: AuditEvent[] = [];
+        expect(
+          await updateWorkObligation.handler(
+            asTestRaw<UpdateContext>({
+              ...contextBase(actor),
+              body: { ownerUserId: ids.userA1, reason: "Coverage handoff" },
+              params: { workspaceId: ids.wsA1, entityId },
+              route:
+                "/v1/work-obligations/:workspaceId/:entityId" satisfies ApiRoutePath,
+              recordAuditEvent: async (_tx, event) => {
+                audits.push(...(Array.isArray(event) ? event : [event]));
+              },
+            }),
+          ),
+        ).toEqual({ success: true });
+        const after =
+          (await testDb.query.workObligations.findFirst({
+            where: { entityId: { eq: entityId } },
+          })) ?? panic("Updated obligation must exist");
+        const history = await testDb.query.workObligationEvents.findMany({
+          where: { obligationEntityId: { eq: entityId } },
+          orderBy: { id: "asc" },
+        });
+        expect(after).toMatchObject({
+          status: next,
+          ownerUserId: ids.userA1,
+          acknowledgedByUserId: ownership === "self" ? actor : null,
+        });
+        expect(after.acknowledgedAt).toEqual(
+          ownership === "self" ? after.updatedAt : null,
+        );
+        expect(history.map((event) => event.type)).toEqual(events);
+        expect(
+          history.every(
+            (event) => event.occurredAt.getTime() === after.updatedAt.getTime(),
+          ),
+        ).toBe(true);
+        expect(audits).toHaveLength(1);
+        expect(audits.at(0)).toMatchObject({
+          resourceId: entityId,
+          changes: {
+            ownerUserId: {
+              old:
+                previous === WORK_OBLIGATION_STATUS.UNASSIGNED
+                  ? null
+                  : ids.userA2,
+              new: ids.userA1,
+            },
+          },
+        });
+      } finally {
+        await testDb
+          .delete(workspaceMembers)
+          .where(eq(workspaceMembers.id, membershipId));
+      }
+    },
+  );
+
+  test("metadata-only updates retain status and acknowledgement while mirroring the task", async () => {
+    const entityId = await seedOpenWork(WORK_OBLIGATION_STATUS.ACTIVE);
+    const before =
+      (await testDb.query.workObligations.findFirst({
+        where: { entityId: { eq: entityId } },
+      })) ?? panic("Seeded obligation must exist");
+    const audits: AuditEvent[] = [];
+    expect(
+      await updateWorkObligation.handler(
+        asTestRaw<UpdateContext>({
+          ...contextBase(ids.userA1),
+          body: { workingTargetDate: "2026-05-01" },
+          params: { workspaceId: ids.wsA1, entityId },
+          route:
+            "/v1/work-obligations/:workspaceId/:entityId" satisfies ApiRoutePath,
+          recordAuditEvent: async (_tx, event) => {
+            audits.push(...(Array.isArray(event) ? event : [event]));
+          },
+        }),
+      ),
+    ).toEqual({ success: true });
+    const after =
+      (await testDb.query.workObligations.findFirst({
+        where: { entityId: { eq: entityId } },
+      })) ?? panic("Updated obligation must exist");
+    expect(after).toMatchObject({
+      status: WORK_OBLIGATION_STATUS.ACTIVE,
+      ownerUserId: ids.userA1,
+      acknowledgedAt: before.acknowledgedAt,
+      acknowledgedByUserId: before.acknowledgedByUserId,
+      workingTargetDate: "2026-05-01",
+    });
+    const task = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+    });
+    expect(task).toMatchObject({
+      status: "open",
+      dueDate: "2026-05-01",
+      updatedAt: after.updatedAt,
+    });
+    const history = await testDb.query.workObligationEvents.findMany({
+      where: { obligationEntityId: { eq: entityId } },
+    });
+    expect(history.map((event) => event.type)).toEqual([
+      "working_target_changed",
+    ]);
+    expect(audits).toHaveLength(1);
+    expect(audits.at(0)).toMatchObject({
+      resourceId: entityId,
+      changes: { workingTargetDate: { old: null, new: "2026-05-01" } },
+    });
+  });
+});
 
 describe("work obligation transitions", () => {
   test("acknowledgement is an idempotent fixed point", async () => {
