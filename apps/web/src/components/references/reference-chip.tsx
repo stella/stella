@@ -284,7 +284,7 @@ const ReferenceChipView = ({
   }
   return (
     <InlinePill
-      ariaLabel={labelContent === undefined ? visual.label : undefined}
+      {...(labelContent === undefined ? { ariaLabel: visual.label } : {})}
       className={cn(selected && "ring-ring ring-1")}
       data-reference-type={referenceType}
       leadingIcon={
