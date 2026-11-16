@@ -213,7 +213,9 @@ test("free/busy sends bounded attendee schedules and strips subject fields", asy
         if (typeof request.body !== "string") {
           return panic("Expected serialized schedule body");
         }
-        expect(JSON.parse(request.body).schedules).toEqual(["a@example.test"]);
+        expect(JSON.parse(request.body)).toMatchObject({
+          schedules: ["a@example.test"],
+        });
         return jsonResponse({
           value: [
             {
@@ -340,7 +342,7 @@ test("free/busy refuses omitted, duplicate, and unexpected attendee schedules", 
           if (typeof body !== "string") {
             return panic("Expected serialized schedule body");
           }
-          expect(JSON.parse(body).schedules).toEqual(attendees);
+          expect(JSON.parse(body)).toMatchObject({ schedules: attendees });
           return jsonResponse({ value: schedules });
         },
       },

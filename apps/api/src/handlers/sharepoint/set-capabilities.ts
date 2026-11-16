@@ -113,7 +113,7 @@ const setSharepointCapabilities = createSetSharepointCapabilities();
 
 declareAggregateMutation(setSharepointCapabilities, {
   type: "aggregate",
-  aggregates: ["sharepointPolicy"],
+  aggregates: ["organizationSettings"],
 });
 
 export default setSharepointCapabilities;

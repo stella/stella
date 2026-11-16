@@ -44,7 +44,7 @@ export const lockSharepointPolicy = async ({
     .returning({ id: organizationSettings.id });
 
   const lock = await withAggregateLock({
-    aggregate: "sharepointPolicy",
+    aggregate: "organizationSettings",
     id: organizationId,
     mode: "update",
     tx,
@@ -79,7 +79,7 @@ export const readLockedSharepointPolicy = async ({
   mode: "share" | "update";
 }) => {
   const lock = await withAggregateLock({
-    aggregate: "sharepointPolicy",
+    aggregate: "organizationSettings",
     id: organizationId,
     mode,
     tx,

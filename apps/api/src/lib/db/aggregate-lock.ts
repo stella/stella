@@ -779,7 +779,6 @@ type AuxiliaryRowIdentityOptions = Extract<
     aggregate:
       | "accountDeletionRequest"
       | "organizationSettings"
-      | "sharepointPolicy"
       | "sharepointConnection"
       | "correspondence"
       | "desktopMembership"
@@ -809,7 +808,6 @@ const auxiliaryRowResource = (
         scopeValues: [],
       };
     case "organizationSettings":
-    case "sharepointPolicy":
       return byUnscopedKey(
         "organization_settings",
         "organization_id",
@@ -885,7 +883,6 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
       );
     case "accountDeletionRequest":
     case "organizationSettings":
-    case "sharepointPolicy":
     case "sharepointConnection":
     case "correspondence":
     case "desktopMembership":

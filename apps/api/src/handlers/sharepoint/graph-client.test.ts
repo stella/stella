@@ -507,11 +507,11 @@ describe("downloading a file", () => {
   });
 });
 
-const accountResponse = (
+const accountResponse = async (
   status: number,
   body: string,
 ): ReturnType<typeof safeOutboundFetchBytes> =>
-  Promise.resolve(
+  await Promise.resolve(
     Result.ok({
       body: new TextEncoder().encode(body).buffer,
       headers: new Headers(),

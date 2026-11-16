@@ -630,6 +630,7 @@ test("revoked calendar reads leave persisted calls valid without advertising or 
     approval: { ...original.approval, approved: true },
   } satisfies ChatPart;
   const validated = await validateMessage({
+    toolCallOwnership: "cloud",
     message: {
       id: toSafeId<"chatMessage">("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
       role: "assistant",

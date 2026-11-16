@@ -542,10 +542,11 @@ describe("EU list refresh", () => {
           permit: request.permit,
           url: toServer(request.url),
           addresses,
-          maxBytes: request.maxBytes,
+          ...(request.transfer === undefined
+            ? { maxBytes: request.maxBytes, timeoutMs: 5000 }
+            : { transfer: request.transfer }),
           headers: request.headers,
           signal: request.signal,
-          timeoutMs: 5000,
         })) satisfies typeof safeOutboundFetchBytes,
       fetchStreamRequest: (async (request) =>
         await fetchStreamWithResolvedAddress({
