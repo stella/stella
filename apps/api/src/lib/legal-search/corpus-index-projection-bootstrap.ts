@@ -15,6 +15,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
+  CORPUS_INDEX_MANIFESTS,
   type CorpusIndexManifest,
   corpusIndexManifestScopeJurisdictions,
   requireCorpusIndexManifest,
@@ -31,6 +32,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
+import { CORPUS_ROW_PROJECTABLE } from "@/api/lib/legal-search/corpus-projectability";
 import type { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
 /**
@@ -66,6 +68,11 @@ export type CorpusIndexProjectionBootstrapResult =
       seededCount: number;
       /** Canonical ids the page accounted for, seeded or already seeded. */
       walkedCount: number;
+      /**
+       * Of those, rows not yet projectable with a desired state nowhere: no
+       * generation shows them, and their settle transaction seeds them.
+       */
+      deferredCount: number;
       entityIds: readonly SafeId<"caseLawDecision">[];
       nextAfterEntityId: SafeId<"caseLawDecision">;
     }
@@ -77,6 +84,11 @@ export type CorpusIndexProjectionBootstrapResult =
       seededCount: number;
       /** Canonical ids the page accounted for, seeded or already seeded. */
       walkedCount: number;
+      /**
+       * Of those, rows not yet projectable with a desired state nowhere: no
+       * generation shows them, and their settle transaction seeds them.
+       */
+      deferredCount: number;
       entityIds: readonly SafeId<"legislationDocument">[];
       nextAfterEntityId: SafeId<"legislationDocument">;
     }
@@ -209,6 +221,39 @@ type CorpusBootstrapCandidate<TEntityId extends string> = {
   documentId: TEntityId;
   sourceId: string;
   sourceDescriptor: Parameters<typeof isRedistributable>[0];
+  /** `CORPUS_ROW_PROJECTABLE`: whether the row's text has settled. */
+  projectable: boolean;
+};
+
+/**
+ * Which of the page's unprojectable ids have a desired state in some
+ * generation of the family. Those are owed one in this generation too; the
+ * rest are shown by no generation and wait for their settle transaction. A
+ * primary-key probe per declared generation, bounded by the page.
+ */
+const selectProjectedAnywhere = async (
+  tx: Transaction,
+  family: CorpusIndexProjectionSubject["family"],
+  entityIds: string[],
+): Promise<ReadonlySet<string>> => {
+  if (entityIds.length === 0) {
+    return new Set();
+  }
+  const generations = Object.values(CORPUS_INDEX_MANIFESTS).flatMap(
+    (manifest) => (manifest.family === family ? [manifest.generation] : []),
+  );
+  const rows = await tx
+    .selectDistinct({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        inArray(corpusIndexProjectionStates.generation, generations),
+        inArray(corpusIndexProjectionStates.entityId, entityIds),
+      ),
+    )
+    .limit(entityIds.length);
+  return new Set(rows.map(({ entityId }) => entityId));
 };
 
 /** One page's rows to insert; a family builds them with or without a query. */
@@ -228,6 +273,7 @@ type CorpusBootstrapPage<TEntityId extends string> =
       claimedCount: number;
       seededCount: number;
       walkedCount: number;
+      deferredCount: number;
       entityIds: TEntityId[];
       nextAfterEntityId: TEntityId;
     };
@@ -293,8 +339,31 @@ const runCorpusBootstrapPage = async <
     generation,
     entityIds: candidateIds,
   });
-  const unseededIds = candidateIds.filter(
+  const projectable = new Set(
+    candidates.flatMap(({ documentId, projectable: settled }) =>
+      settled ? [documentId] : [],
+    ),
+  );
+  const missingIds = candidateIds.filter(
     (candidateId) => !seededEntityIds.has(candidateId),
+  );
+  // A row whose text has not settled and that no generation holds is not this
+  // page's to seed: no generation shows it, and the transaction that settles
+  // it seeds every active generation. One that some generation holds is owed
+  // a state here as well, so every generation shows it or none does.
+  const projectedAnywhere = await selectProjectedAnywhere(
+    tx,
+    family,
+    missingIds.filter((candidateId) => !projectable.has(candidateId)),
+  );
+  const deferredIds = new Set(
+    missingIds.filter(
+      (candidateId) =>
+        !projectable.has(candidateId) && !projectedAnywhere.has(candidateId),
+    ),
+  );
+  const unseededIds = missingIds.filter(
+    (candidateId) => !deferredIds.has(candidateId),
   );
   // The page reads its whole id range but writes at most `seedLimit` rows, so
   // a caller that reserved its I/O up front can bound what a fresh region of
@@ -310,8 +379,11 @@ const runCorpusBootstrapPage = async <
   const rows: TRow[] = [];
   let pageEndEntityId: TEntityId | undefined;
   let walkedCount = 0;
+  let deferredCount = 0;
   for (const candidate of candidates) {
-    if (!seededEntityIds.has(candidate.documentId)) {
+    if (deferredIds.has(candidate.documentId)) {
+      deferredCount += 1;
+    } else if (!seededEntityIds.has(candidate.documentId)) {
       if (rows.length === seedLimit) {
         // The seed budget is spent and this id is still a gap. The cursor
         // stops at the last id the batch accounted for, so the rest of the
@@ -336,6 +408,7 @@ const runCorpusBootstrapPage = async <
       claimedCount: 0,
       seededCount: 0,
       walkedCount,
+      deferredCount,
       entityIds: [],
       nextAfterEntityId: pageEndEntityId,
     };
@@ -384,6 +457,7 @@ const runCorpusBootstrapPage = async <
     claimedCount: rows.length,
     seededCount: inserted.length,
     walkedCount,
+    deferredCount,
     entityIds,
     nextAfterEntityId: pageEndEntityId,
   };
@@ -427,6 +501,7 @@ const bootstrapCaseLaw = async ({
           documentId: caseLawDecisions.id,
           sourceId: caseLawDecisions.sourceId,
           sourceDescriptor: caseLawSources.descriptor,
+          projectable: CORPUS_ROW_PROJECTABLE.case_law,
         })
         .from(caseLawDecisions)
         .innerJoin(
@@ -619,6 +694,7 @@ const bootstrapLegislation = async ({
           documentId: legislationDocuments.id,
           sourceId: legislationDocuments.sourceId,
           sourceDescriptor: legislationSources.descriptor,
+          projectable: CORPUS_ROW_PROJECTABLE.legislation,
         })
         .from(legislationDocuments)
         .innerJoin(
@@ -717,6 +793,7 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
         claimedCount: page.claimedCount,
         seededCount: page.seededCount,
         walkedCount: page.walkedCount,
+        deferredCount: page.deferredCount,
         entityIds: page.entityIds,
         nextAfterEntityId: page.nextAfterEntityId,
       };
@@ -739,6 +816,7 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
         claimedCount: page.claimedCount,
         seededCount: page.seededCount,
         walkedCount: page.walkedCount,
+        deferredCount: page.deferredCount,
         entityIds: page.entityIds,
         nextAfterEntityId: page.nextAfterEntityId,
       };

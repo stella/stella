@@ -65,6 +65,15 @@ export const corpusIndexGenerationSeedingPasses = p.pgTable(
       .bigint("seeded_count", { mode: "number" })
       .default(0)
       .notNull(),
+    /**
+     * Rows the pass passed over because their text had not settled and no
+     * generation held them (`corpus-projectability.ts`): shown by none, and
+     * seeded in every active generation by the transaction that settles them.
+     */
+    deferredCount: p
+      .bigint("deferred_count", { mode: "number" })
+      .default(0)
+      .notNull(),
     /** When the pass walked its last page; null while it is under way. */
     completedAt: timestamptz("completed_at"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
@@ -94,7 +103,7 @@ export const corpusIndexGenerationSeedingPasses = p.pgTable(
     ),
     p.check(
       "corpus_index_generation_seeding_passes_counts",
-      sql`${t.passNumber} > 0 AND ${t.walkedCount} >= 0 AND ${t.seededCount} >= 0 AND ${t.seededCount} <= ${t.walkedCount}`,
+      sql`${t.passNumber} > 0 AND ${t.walkedCount} >= 0 AND ${t.seededCount} >= 0 AND ${t.deferredCount} >= 0 AND ${t.seededCount} + ${t.deferredCount} <= ${t.walkedCount}`,
     ),
     p.check(
       "corpus_index_generation_seeding_passes_completed_shape",

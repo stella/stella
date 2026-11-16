@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS "corpus_index_generation_seeding_passes" (
   "after_entity_id" uuid,
   "walked_count" bigint DEFAULT 0 NOT NULL,
   "seeded_count" bigint DEFAULT 0 NOT NULL,
+  "deferred_count" bigint DEFAULT 0 NOT NULL,
   "completed_at" timestamptz,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL,
@@ -31,7 +32,7 @@ CREATE TABLE IF NOT EXISTS "corpus_index_generation_seeding_passes" (
   CONSTRAINT "corpus_index_generation_seeding_passes_family_values"
     CHECK ("family" IN ('case_law','legislation')),
   CONSTRAINT "corpus_index_generation_seeding_passes_counts"
-    CHECK ("pass_number" > 0 AND "walked_count" >= 0 AND "seeded_count" >= 0 AND "seeded_count" <= "walked_count"),
+    CHECK ("pass_number" > 0 AND "walked_count" >= 0 AND "seeded_count" >= 0 AND "deferred_count" >= 0 AND "seeded_count" + "deferred_count" <= "walked_count"),
   CONSTRAINT "corpus_index_generation_seeding_passes_completed_shape"
     CHECK ("completed_at" IS NULL OR "completed_at" >= "pass_started_at")
 );--> statement-breakpoint

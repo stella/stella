@@ -1,24 +1,47 @@
 /**
- * Whether every route (physical index) of a corpus generation is seeded: each
- * canonical row the route holds has a desired state in the generation.
+ * Whether every route (physical index) of a corpus generation is seeded.
  *
- * Seeding is filled by one walk over the whole generation in id order
+ * Definition. A route of generation G is seeded when, for every canonical row
+ * the route holds, EITHER G has a desired state for it, OR the row is not
+ * projectable (its text has not settled, `corpus-projectability.ts`) and NO
+ * generation of the family has a desired state for it. Put the other way:
+ * each row has a desired state in every active generation that routes it, or
+ * in none, and "none" happens only to a row whose text has not settled.
+ *
+ * What a flip reads from it (F4). A row with no state in any generation is
+ * shown by no generation, so a flip can neither lose nor age it. Every row
+ * the serving generation S shows has a state in S, so it is not such a row:
+ * when the candidate N is seeded, N has a state for it too. The parity read's
+ * coverage walk (`corpus-index-flip-parity.ts`) then compares S's states
+ * with N's one by one, and its regression read compares what N would show.
+ * Together, "N seeded on every route" plus a complete coverage walk with no
+ * regression cover every decision S shows. Seeding alone says nothing about
+ * what N shows; the coverage walk alone cannot see a row S shows that has no
+ * state in S. F4 refuses a flip unless both hold, for both generations.
+ *
+ * How it is filled. One walk over the whole generation in id order
  * (`corpus_index_generation_seeding_passes`), since a per-route walk would
  * read the whole corpus once per route: case-law decisions have no index on
- * (country, id). A pass records the routes and the jurisdictions routed as
- * it begins, and when it completes it marks exactly those routes seeded
- * (`corpus_index_route_seedings`). A route that did not exist when the pass
- * began has no row and stays unseeded until a pass that saw it completes, so
- * a group declared later (decisions routable with no canonical write, which
- * no writer would seed) is never inherited silently.
+ * (country, id). The walk seeds every row missing a state in G except a row
+ * that is not projectable and has a state in no generation; it counts those
+ * as deferred and passes them without marking anything (their settle
+ * transaction seeds every active generation at once). A pass records the
+ * routes and the jurisdictions routed as it begins, and when it completes it
+ * marks exactly those routes seeded (`corpus_index_route_seedings`). A route
+ * that did not exist when the pass began has no row and stays unseeded until
+ * a pass that saw it completes, so a group declared later (decisions routable
+ * with no canonical write, which no writer would seed) is never inherited
+ * silently.
  *
- * Why the fact stays true after the pass: every desired writer projects a
- * changed row into every active generation in the writing transaction
- * (`corpus-index-projection-desired-state.ts`; the test databases check it at
- * commit, `tests/helpers/corpus-projection-seeding-guard.ts`). Rows created
- * after the walk passed their id are seeded by their writer; rows created
- * before are walked. A generation that leaves the active set stops receiving
- * those writes, so the transition that takes it out deletes its pass
+ * Why it stays true after the pass. Every desired writer projects a changed
+ * row into every active generation in the writing transaction, and the
+ * ingestion writers seed a new row in all of them in the transaction that
+ * settles its text (`corpus-index-projection-desired-state.ts`; the test
+ * databases check the all-or-none rule at commit,
+ * `tests/helpers/corpus-projection-seeding-guard.ts`). Rows created after the
+ * walk passed their id are seeded by their writer; rows created before are
+ * walked. A generation that leaves the active set stops receiving those
+ * writes, so the transition that takes it out deletes its pass
  * (`corpus-index-generation-store.ts`), and the route rows cascade.
  *
  * Each page seeds and records its cursor and counts in one transaction, so
@@ -72,6 +95,8 @@ export type CorpusIndexSeedingPass = {
   afterEntityId: string | null;
   walked: number;
   seeded: number;
+  /** Rows passed over as not yet projectable and held by no generation. */
+  deferred: number;
   completedAt: Date | null;
 };
 
@@ -198,6 +223,7 @@ const passView = (row: PassRow): CorpusIndexSeedingPass => ({
   afterEntityId: row.afterEntityId,
   walked: row.walkedCount,
   seeded: row.seededCount,
+  deferred: row.deferredCount,
   completedAt: row.completedAt,
 });
 
@@ -335,6 +361,7 @@ const startPassTx = async (
     afterEntityId: null,
     walkedCount: 0,
     seededCount: 0,
+    deferredCount: 0,
     completedAt: null,
   };
   // audit: skip - derived public corpus seeding bookkeeping
@@ -484,6 +511,7 @@ export const advanceCorpusIndexGenerationSeedingTx = async (
             afterEntityId: page.nextAfterEntityId,
             walkedCount: sql`${passes.walkedCount} + ${page.walkedCount}`,
             seededCount: sql`${passes.seededCount} + ${page.seededCount}`,
+            deferredCount: sql`${passes.deferredCount} + ${page.deferredCount}`,
           })
           .where(and(isTarget(target), eq(passes.passNumber, pass.passNumber)))
           .returning()

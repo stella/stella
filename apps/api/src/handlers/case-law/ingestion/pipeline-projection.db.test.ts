@@ -27,6 +27,7 @@ import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -70,6 +71,7 @@ const input = (court: string, rawHash: string): IngestionResult =>
 
 beforeAll(async () => {
   client = await createTestPglite();
+  await installCorpusProjectionSeedingGuard(client);
   db = drizzle({ client, relations: { ...relations, ...authRelationsPart } });
   scopedDb = async (callback) =>
     await db.transaction(async (tx) => await callback(asTestRaw(tx)));

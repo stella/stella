@@ -23,6 +23,10 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  lockActiveCorpusProjectionSourceTx,
+  synchronizeLockedCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
   advanceCorpusIndexGenerationSeedingTx,
   type CorpusIndexSeedingTarget,
   readCorpusIndexRouteSeedingsTx,
@@ -130,6 +134,39 @@ const insertDecisions = async (tx: Transaction, ns: readonly number[]) => {
       contentHash: String(n % 10).repeat(64),
     })),
   );
+};
+
+/**
+ * A decision as the ingestion pipeline leaves it between its insert and the
+ * transaction that settles its text: pending, with no text pointers.
+ */
+const insertPendingDecision = async (tx: Transaction, n: number) => {
+  await tx.insert(caseLawDecisions).values({
+    id: decisionId(n),
+    sourceId: CASE_LAW_SOURCE_ID,
+    caseNumber: `${n} As 1/2020`,
+    court: "Nejvyšší správní soud",
+    country: "CZE",
+    language: "cs",
+    corpusMirrorStatus: "pending",
+  });
+};
+
+/** The settle transaction's projection step, as the pipeline runs it. */
+const settleDecision = async (tx: Transaction, n: number) => {
+  await tx
+    .update(caseLawDecisions)
+    .set({ corpusMirrorStatus: "settled" })
+    .where(eq(caseLawDecisions.id, decisionId(n)));
+  const subject = { family: "case_law", entityId: decisionId(n) } as const;
+  const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
+  if (lock === null) {
+    throw new Error("expected an active projection");
+  }
+  await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+    lock,
+    subject,
+  });
 };
 
 const insertDocuments = async (
@@ -454,4 +491,99 @@ test("the seeding guard fails a commit that leaves a canonical row unseeded in a
     })
     .then(() => "committed", String);
   expect(bumped).toContain("no desired state in active generation");
+});
+
+test("a decision whose text never settles stays stateless, does not block the walk, and is not counted as seeded", async () => {
+  await inTx(async (tx) => {
+    await insertDecisions(tx, [1, 3]);
+    await insertPendingDecision(tx, 2);
+  });
+  await register("case_law_v5", "building");
+
+  expect(await advance(CASE_LAW, 10)).toMatchObject({
+    type: "advanced",
+    walked: 3,
+    seeded: 2,
+    pass: { walked: 3, seeded: 2, deferred: 1, afterEntityId: decisionId(3) },
+  });
+  expect(await advance(CASE_LAW, 10)).toMatchObject({
+    type: "completed",
+    pass: { walked: 3, seeded: 2, deferred: 1 },
+  });
+  expect(await statesOf(CASE_LAW)).toEqual([decisionId(1), decisionId(3)]);
+  expect(
+    (await readSeedings(CASE_LAW))?.routes.every(
+      ({ state }) => state === "seeded",
+    ),
+  ).toBe(true);
+});
+
+test("a pending decision some generation already holds is seeded, so every generation shows it or none does", async () => {
+  await inTx(async (tx) => await insertPendingDecision(tx, 1));
+  await register("case_law_v5", "building");
+  await register("case_law_v6", "building");
+  const v6: CorpusIndexSeedingTarget = {
+    family: "case_law",
+    generation: "case_law_v6",
+  };
+  // As a row that was settled, projected and then re-observed: pending again
+  // with a state in one generation only.
+  await standUpUnseeded(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({ corpusMirrorStatus: "settled" })
+      .where(eq(caseLawDecisions.id, decisionId(1)));
+    await advanceCorpusIndexGenerationSeedingTx(tx, v6, { limit: 10 });
+    await tx
+      .update(caseLawDecisions)
+      .set({ corpusMirrorStatus: "pending" })
+      .where(eq(caseLawDecisions.id, decisionId(1)));
+  });
+  expect(await statesOf(v6)).toEqual([decisionId(1)]);
+
+  expect(await advance(CASE_LAW, 10)).toMatchObject({
+    type: "advanced",
+    seeded: 1,
+    pass: { deferred: 0 },
+  });
+  expect(await statesOf(CASE_LAW)).toEqual([decisionId(1)]);
+});
+
+test("a decision that settles behind the cursor is seeded in every generation by its own settle transaction", async () => {
+  await inTx(async (tx) => {
+    await insertPendingDecision(tx, 1);
+    await insertDecisions(tx, [2, 3]);
+  });
+  await register("case_law_v5", "building");
+  await register("case_law_v6", "building");
+  const v6: CorpusIndexSeedingTarget = {
+    family: "case_law",
+    generation: "case_law_v6",
+  };
+
+  expect(await advance(CASE_LAW, 2)).toMatchObject({
+    type: "advanced",
+    pass: { afterEntityId: decisionId(2), seeded: 1, deferred: 1 },
+  });
+  // Settling without projecting leaves a settled row with no state: refused.
+  const unprojected = await db
+    .transaction(async (raw) => {
+      await asTestRaw<Transaction>(raw)
+        .update(caseLawDecisions)
+        .set({ corpusMirrorStatus: "settled" })
+        .where(eq(caseLawDecisions.id, decisionId(1)));
+    })
+    .then(() => "committed", String);
+  expect(unprojected).toContain("no desired state in active generation");
+
+  await inTx(async (tx) => await settleDecision(tx, 1));
+  expect(await statesOf(CASE_LAW)).toEqual([decisionId(1), decisionId(2)]);
+  expect(await statesOf(v6)).toEqual([decisionId(1)]);
+
+  expect(await advance(CASE_LAW, 2)).toMatchObject({ type: "advanced" });
+  expect(await advance(CASE_LAW, 2)).toMatchObject({
+    type: "completed",
+    pass: { walked: 3, seeded: 2, deferred: 1 },
+  });
+  expect(await statesOf(CASE_LAW)).toEqual([1, 2, 3].map(decisionId));
 });

@@ -26,6 +26,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { planCorpusDocumentWrite } from "@/api/lib/legal-search/corpus-storage";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
+import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -124,6 +125,7 @@ const withdrawalOf = (
 
 beforeAll(async () => {
   client = await createTestPglite();
+  await installCorpusProjectionSeedingGuard(client);
   db = drizzle({ client });
   scopedDb = async (callback) =>
     await db.transaction(async (tx) => await callback(asTestRaw(tx)));

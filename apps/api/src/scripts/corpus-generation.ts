@@ -1330,7 +1330,7 @@ const describeSeedingPage = (
   pages: number,
 ): string => {
   const { pass } = outcome;
-  return `pass ${String(pass.number)}: ${outcome.type}; walked ${String(pass.walked)}, seeded ${String(pass.seeded)}, routes ${String(pass.routes.length)}, pages ${String(pages)}, last ${pass.afterEntityId ?? "-"}`;
+  return `pass ${String(pass.number)}: ${outcome.type}; walked ${String(pass.walked)}, seeded ${String(pass.seeded)}, deferred (text not settled) ${String(pass.deferred)}, routes ${String(pass.routes.length)}, pages ${String(pages)}, last ${pass.afterEntityId ?? "-"}`;
 };
 
 /**

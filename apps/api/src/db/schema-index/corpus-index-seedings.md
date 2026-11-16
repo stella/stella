@@ -18,23 +18,24 @@ corpus_index_generation_seeding_passes.route_jurisdictions  varchar      array,n
 corpus_index_generation_seeding_passes.after_entity_id      uuid         null              corpus-index-seedings.ts:57  The last canonical id the pass accounted for; null before its first page.
 corpus_index_generation_seeding_passes.walked_count         bigint       default,not null  corpus-index-seedings.ts:59  Canonical rows the pass has walked.
 corpus_index_generation_seeding_passes.seeded_count         bigint       default,not null  corpus-index-seedings.ts:64  Desired states the pass has written.
-corpus_index_generation_seeding_passes.completed_at         timestamptz  null              corpus-index-seedings.ts:69  When the pass walked its last page; null while it is under way.
-corpus_index_generation_seeding_passes.created_at           timestamptz  default,not null  corpus-index-seedings.ts:70
-corpus_index_generation_seeding_passes.updated_at           timestamptz  default,not null  corpus-index-seedings.ts:71
+corpus_index_generation_seeding_passes.deferred_count       bigint       default,not null  corpus-index-seedings.ts:73  Rows the pass passed over because their text had not settled and no generation held them (`corpus-projectability.ts`): shown by none, and seeded in every activ…
+corpus_index_generation_seeding_passes.completed_at         timestamptz  null              corpus-index-seedings.ts:78  When the pass walked its last page; null while it is under way.
+corpus_index_generation_seeding_passes.created_at           timestamptz  default,not null  corpus-index-seedings.ts:79
+corpus_index_generation_seeding_passes.updated_at           timestamptz  default,not null  corpus-index-seedings.ts:80
 ```
 
-## corpus_index_route_seedings · `corpusIndexRouteSeedings` · corpus-index-seedings.ts:116 · rls
+## corpus_index_route_seedings · `corpusIndexRouteSeedings` · corpus-index-seedings.ts:125 · rls
 
 One route (physical index) of a generation that a completed seeding pass covered: every canonical row the route held when that pass began was given a desired s…
 
 ```text
-corpus_index_route_seedings.family           text         fk,not null       corpus-index-seedings.ts:119
-corpus_index_route_seedings.generation       varchar      fk,not null       corpus-index-seedings.ts:120
-corpus_index_route_seedings.index_id         varchar      not null          corpus-index-seedings.ts:123
-corpus_index_route_seedings.jurisdictions    varchar      array,not null    corpus-index-seedings.ts:127  The jurisdictions routed when the covering pass began.
-corpus_index_route_seedings.pass_number      bigint       not null          corpus-index-seedings.ts:129  The pass that covered the route.
-corpus_index_route_seedings.pass_started_at  timestamptz  not null          corpus-index-seedings.ts:131  When that pass began.
-corpus_index_route_seedings.seeded_at        timestamptz  not null          corpus-index-seedings.ts:133  When that pass completed.
-corpus_index_route_seedings.created_at       timestamptz  default,not null  corpus-index-seedings.ts:134
-corpus_index_route_seedings.updated_at       timestamptz  default,not null  corpus-index-seedings.ts:135
+corpus_index_route_seedings.family           text         fk,not null       corpus-index-seedings.ts:128
+corpus_index_route_seedings.generation       varchar      fk,not null       corpus-index-seedings.ts:129
+corpus_index_route_seedings.index_id         varchar      not null          corpus-index-seedings.ts:132
+corpus_index_route_seedings.jurisdictions    varchar      array,not null    corpus-index-seedings.ts:136  The jurisdictions routed when the covering pass began.
+corpus_index_route_seedings.pass_number      bigint       not null          corpus-index-seedings.ts:138  The pass that covered the route.
+corpus_index_route_seedings.pass_started_at  timestamptz  not null          corpus-index-seedings.ts:140  When that pass began.
+corpus_index_route_seedings.seeded_at        timestamptz  not null          corpus-index-seedings.ts:142  When that pass completed.
+corpus_index_route_seedings.created_at       timestamptz  default,not null  corpus-index-seedings.ts:143
+corpus_index_route_seedings.updated_at       timestamptz  default,not null  corpus-index-seedings.ts:144
 ```

@@ -230,6 +230,7 @@ test("bulk bootstrap advances a keyset cursor and reaches a fixed point", async 
     claimedCount: 0,
     seededCount: 0,
     walkedCount: 1,
+    deferredCount: 0,
     entityIds: [],
     nextAfterEntityId: CASE_LAW_DECISION_ID,
   });
