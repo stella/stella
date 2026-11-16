@@ -95,6 +95,10 @@ import { createLocalRunStepContent } from "@/api/handlers/chat/local-run-step-co
 import { encodeMessagePageCursor } from "@/api/handlers/chat/message-page";
 import getChatMessage from "@/api/handlers/chat/messages/get";
 import listChatMessages from "@/api/handlers/chat/messages/list";
+import {
+  createReadLocalFilesUndo,
+  createUndoLocalFiles,
+} from "@/api/handlers/chat/messages/local-files-undo";
 import acceptChatMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
 import listChatMessageRevisions from "@/api/handlers/chat/messages/revisions/list";
 import revertChatMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
@@ -139,10 +143,6 @@ import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
-import {
-  createReadLocalFilesUndo,
-  createUndoLocalFiles,
-} from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import steerChatTurn from "@/api/handlers/chat/turns/steer";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
@@ -3028,11 +3028,14 @@ const isolationCases: IsolationCase[] = [
       }),
   },
   {
-    // Runs after the cancel case: the turn ended without a run, so it has
-    // nothing to undo, which its own member is told.
-    name: "chat turn local files undo",
+    // Runs after the cancel case: the message's turn ended without a run,
+    // so there are no files to undo, which its own member is told.
+    name: "chat message local files undo",
     runAAgainstB: async ({ workspaceA }) => {
-      const params = { threadId: chatTurnThreadB, turnId: chatTurnB };
+      const params = {
+        threadId: chatTurnThreadB,
+        messageId: chatTurnUserMessageB,
+      };
       return {
         read: await runHandler(readLocalFilesUndo, workspaceA, { params }),
         undo: await runHandler(undoLocalFiles, workspaceA, { params }),
@@ -3040,7 +3043,10 @@ const isolationCases: IsolationCase[] = [
       };
     },
     runBPositive: async ({ sameUserWorkspaceB }) => {
-      const params = { threadId: chatTurnThreadB, turnId: chatTurnB };
+      const params = {
+        threadId: chatTurnThreadB,
+        messageId: chatTurnUserMessageB,
+      };
       return {
         read: await runHandler(readLocalFilesUndo, sameUserWorkspaceB, {
           params,
@@ -3057,7 +3063,11 @@ const isolationCases: IsolationCase[] = [
     },
     expectPositive: (result) =>
       expect(result).toEqual({
-        read: { undoable: false, undo: null },
+        read: {
+          files: { type: "none" },
+          conversation: { type: "continues" },
+          undo: null,
+        },
         undo: { status: "refused", undo: null, reason: "no_checkpoint" },
       }),
   },
