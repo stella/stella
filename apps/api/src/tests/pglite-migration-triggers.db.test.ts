@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { CORPUS_PROJECTION_SEEDING_GUARD_TRIGGER } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
@@ -149,7 +150,17 @@ beforeAll(async () => {
        JOIN pg_class c ON c.oid = t.tgrelid
       WHERE NOT t.tgisinternal`,
   );
-  installed = new Set(rows.map((row) => row.trigger));
+  // The seeding guard is a test-only check every test database installs on
+  // purpose (`helpers/corpus-projection-seeding-guard.ts`); no migration
+  // defines it.
+  installed = new Set(
+    rows
+      .map((row) => row.trigger)
+      .filter(
+        (trigger) =>
+          !trigger.endsWith(`.${CORPUS_PROJECTION_SEEDING_GUARD_TRIGGER}`),
+      ),
+  );
 }, 120_000);
 
 afterAll(async () => {
