@@ -76,12 +76,14 @@ const noAudit: AuditRecorder = async () => {
 
 const READING = { content: "Reading the files.", type: "text" } as const;
 const DONE = { content: "Done.", type: "text" } as const;
+// The same call as a harness's and as the API's: a harness call's name only
+// matches a registry tool's by chance, and its executor decides who ran it.
 const HARNESS_CALL = {
-  arguments: JSON.stringify({ command: "ls" }),
-  id: "call-ls",
-  input: { command: "ls" },
-  name: "Bash",
-  output: { stdout: "README.md" },
+  arguments: "{}",
+  id: "call-harness",
+  input: {},
+  name: "list_templates",
+  output: { templates: [] },
   state: "complete",
   type: "tool-call",
   metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "harness" },
