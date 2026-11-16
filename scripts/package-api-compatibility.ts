@@ -102,9 +102,12 @@ const strictMethodType = (methods: readonly Method[]): ts.TypeNode => {
       first.type ?? ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
     );
   }
-  return ts.factory.createTypeLiteralNode(
+  // A nested object with call signatures changes the lexical owner of `this`.
+  // Function intersections retain the overload order and strict parameters
+  // while keeping polymorphic receivers bound to their class or interface.
+  return ts.factory.createIntersectionTypeNode(
     methods.map((method) =>
-      ts.factory.createCallSignature(
+      ts.factory.createFunctionTypeNode(
         method.typeParameters,
         method.parameters,
         method.type ??
@@ -327,12 +330,36 @@ export const isGenericTypeDeclaration = (
   node.name !== undefined &&
   (node.typeParameters?.length ?? 0) > 0;
 
+export const omittedTypeArgumentCounts = (
+  declaration: GenericTypeDeclaration,
+): number[] => {
+  const counts: number[] = [];
+  for (
+    let provided = declaration.typeParameters.length - 1;
+    provided >= 0;
+    provided -= 1
+  ) {
+    if (declaration.typeParameters[provided]?.default === undefined) {
+      break;
+    }
+    counts.push(provided);
+  }
+  return counts;
+};
+
 /**
  * The probe declared beside a generic type, found among the statements of
  * the block that declares it: the probe's result names the type.
  */
 export const genericTypeProbe = (
   declaration: GenericTypeDeclaration,
+  {
+    space = "type",
+    provided = declaration.typeParameters.length,
+  }: {
+    space?: "type" | "value";
+    provided?: number;
+  } = {},
 ): ts.FunctionTypeNode | undefined => {
   const block = declaration.parent;
   if (!ts.isSourceFile(block) && !ts.isModuleBlock(block)) {
@@ -342,12 +369,27 @@ export const genericTypeProbe = (
     if (
       ts.isTypeAliasDeclaration(statement) &&
       isGenericTypeProbeName(statement.name.text) &&
-      ts.isFunctionTypeNode(statement.type) &&
-      ts.isTypeReferenceNode(statement.type.type) &&
-      ts.isIdentifier(statement.type.type.typeName) &&
-      statement.type.type.typeName.text === declaration.name.text
+      ts.isFunctionTypeNode(statement.type)
     ) {
-      return statement.type;
+      const result = statement.type.type;
+      let reference: ts.TypeReferenceNode | ts.TypeQueryNode | undefined;
+      if (space === "type" && ts.isTypeReferenceNode(result)) {
+        reference = result;
+      } else if (space === "value" && ts.isTypeQueryNode(result)) {
+        reference = result;
+      }
+      if (
+        reference === undefined ||
+        (reference.typeArguments?.length ?? 0) !== provided
+      ) {
+        continue;
+      }
+      const name = ts.isTypeReferenceNode(reference)
+        ? reference.typeName
+        : reference.exprName;
+      if (ts.isIdentifier(name) && name.text === declaration.name.text) {
+        return statement.type;
+      }
     }
   }
   return undefined;
@@ -362,6 +404,9 @@ export const genericTypeProbe = (
  * through the parameters, so comparing the before and after probes compares
  * the two declarations with shared type parameters: an unchanged shape
  * passes, while a changed member, constraint or parameter count does not.
+ * Classes also get a `typeof Name<T, ...>` result for their full value contract.
+ * Additional type probes omit each defaulted suffix, so the compiler resolves
+ * the defaults with the same earlier arguments on both sides.
  */
 export const withGenericTypeProbes = (
   contents: string,
@@ -378,23 +423,40 @@ export const withGenericTypeProbes = (
   const tag = file.replaceAll(/[^\p{L}\p{N}_$]/gu, "_");
   const printer = ts.createPrinter({ removeComments: true });
   const probes: { end: number; text: string }[] = [];
-  const probe = (declaration: GenericTypeDeclaration): string =>
-    printer.printNode(
+  const probe = (
+    declaration: GenericTypeDeclaration,
+    space: "type" | "value",
+    provided = declaration.typeParameters.length,
+  ): string => {
+    const parameters = declaration.typeParameters.slice(0, provided);
+    const arguments_ =
+      parameters.length === 0
+        ? undefined
+        : parameters.map((parameter) =>
+            ts.factory.createTypeReferenceNode(parameter.name),
+          );
+    const result =
+      space === "type"
+        ? ts.factory.createTypeReferenceNode(declaration.name, arguments_)
+        : ts.factory.createTypeQueryNode(declaration.name, arguments_);
+    return printer.printNode(
       ts.EmitHint.Unspecified,
       ts.factory.createTypeAliasDeclaration(
         undefined,
-        `${GENERIC_TYPE_PROBE}${tag}_${probes.length}`,
+        `${GENERIC_TYPE_PROBE}${tag}_${probes.length}_${space}_${provided}`,
         undefined,
         ts.factory.createFunctionTypeNode(
-          declaration.typeParameters.map((parameter) =>
-            ts.factory.createTypeParameterDeclaration(
-              undefined,
-              parameter.name,
-              parameter.constraint,
-              parameter.default,
-            ),
-          ),
-          declaration.typeParameters.map((parameter, position) =>
+          parameters.length === 0
+            ? undefined
+            : parameters.map((parameter) =>
+                ts.factory.createTypeParameterDeclaration(
+                  undefined,
+                  parameter.name,
+                  parameter.constraint,
+                  parameter.default,
+                ),
+              ),
+          parameters.map((parameter, position) =>
             ts.factory.createParameterDeclaration(
               undefined,
               undefined,
@@ -403,29 +465,43 @@ export const withGenericTypeProbes = (
               ts.factory.createTypeReferenceNode(parameter.name),
             ),
           ),
-          ts.factory.createTypeReferenceNode(
-            declaration.name,
-            declaration.typeParameters.map((parameter) =>
-              ts.factory.createTypeReferenceNode(parameter.name),
-            ),
-          ),
+          result,
         ),
       ),
       source,
     );
+  };
   const visitBlock = (statements: readonly ts.Statement[]): void => {
-    // Merged declarations of one name in one block share their type
-    // parameters, so one probe per name and block covers them.
+    // A later merged declaration can add a value space or defaults. Deduplicate
+    // only identical probe contracts, after considering every declaration.
     const probed = new Set<string>();
     for (const statement of statements) {
       if (ts.isModuleDeclaration(statement)) {
         visitModule(statement);
-      } else if (
-        isGenericTypeDeclaration(statement) &&
-        !probed.has(statement.name.text)
-      ) {
-        probed.add(statement.name.text);
-        probes.push({ end: statement.end, text: probe(statement) });
+      } else if (isGenericTypeDeclaration(statement)) {
+        const text: string[] = [];
+        const add = (
+          space: "type" | "value",
+          provided = statement.typeParameters.length,
+        ): void => {
+          const key = `${statement.name.text}:${space}:${provided}`;
+          if (!probed.has(key)) {
+            probed.add(key);
+            text.push(probe(statement, space, provided));
+          }
+        };
+        add("type");
+        if (ts.isClassDeclaration(statement)) {
+          add("value");
+        }
+        // Resolve each valid omitted suffix through the compiler, including
+        // defaults depending on earlier, explicitly supplied type arguments.
+        for (const provided of omittedTypeArgumentCounts(statement)) {
+          add("type", provided);
+        }
+        if (text.length > 0) {
+          probes.push({ end: statement.end, text: text.join("\n") });
+        }
       }
     }
   };

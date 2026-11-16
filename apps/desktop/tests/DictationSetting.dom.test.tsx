@@ -525,3 +525,55 @@ test("picking the shown model stores it when the stored one is no longer offered
     }).textContent,
   ).toContain("Voxtral Mini Transcribe");
 });
+
+test("a model outside the organization's region is named with its provider and says so", async () => {
+  const view = await renderSetting(
+    {
+      ...ENABLED_SNAPSHOT,
+      cloudAvailable: true,
+      cloudModel: "google/chirp-3",
+      destination: "cloud",
+    },
+    (command) =>
+      command === "dictation_get_cloud_models"
+        ? {
+            ...CLOUD_MODELS,
+            models: [
+              ...CLOUD_MODELS.models,
+              {
+                displayName: "Chirp 3",
+                id: "google/chirp-3",
+                outsideRegion: true,
+                provider: "Google",
+              },
+            ],
+          }
+        : undefined,
+  );
+  const { destination } = defaultMessages.dictation;
+  await waitFor(() => {
+    expect(
+      view.getByText(`Chirp 3 · Google · ${destination.outsideRegion}`),
+    ).toBeTruthy();
+  });
+  expect(view.getByText(destination.outsideRegionNote)).toBeTruthy();
+
+  const models = await openSelect(view, destination.model);
+  expect(
+    within(models).getByRole("option", { name: "Voxtral Mini Transcribe" }),
+  ).toBeTruthy();
+});
+
+test("a model in the region adds no note", async () => {
+  const { getByText, queryByText } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, cloudAvailable: true, destination: "cloud" },
+    (command) =>
+      command === "dictation_get_cloud_models" ? CLOUD_MODELS : undefined,
+  );
+  await waitFor(() => {
+    expect(getByText("Voxtral Mini Transcribe")).toBeTruthy();
+  });
+  expect(
+    queryByText(defaultMessages.dictation.destination.outsideRegionNote),
+  ).toBeNull();
+});

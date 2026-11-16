@@ -60,6 +60,8 @@ const JOIN_RESERVE_MILLIS: usize = 500;
 #[serde(rename_all = "camelCase")]
 struct Contract {
   models_path: String,
+  /// Asks for the labeled model list this version shows.
+  models_labeled_query: String,
   transcribe_path: String,
   max_audio_bytes: usize,
   max_audio_seconds: usize,
@@ -535,17 +537,25 @@ impl CloudSession {
   }
 }
 
-/// One model stella AI offers this organization.
+/// One model stella AI offers this organization. Fields a newer API adds are
+/// ignored, so a model list with them still reads on this version.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudModel {
   id: String,
   display_name: String,
+  /// Who runs the model, as a name to show; absent from older APIs.
+  #[serde(default)]
+  provider: Option<String>,
+  /// Whether the model processes audio outside the organization's region.
+  #[serde(default)]
+  outside_region: bool,
 }
 
 /// The models stella AI offers this organization, as the API lists them.
+/// Fields a newer API adds are ignored.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudModels {
   models: Vec<CloudModel>,
   default_model_id: Option<String>,
@@ -561,11 +571,13 @@ impl CloudModels {
 pub async fn models(app: &AppHandle) -> Result<CloudModels, String> {
   let account = cloud_account(app).await?;
   let response = crate::http_client::device_proof_request(
-    client(MODELS_TIMEOUT)?.get(format!(
-      "{}{}",
-      account.api_base_url,
-      contract().models_path
-    )),
+    client(MODELS_TIMEOUT)?
+      .get(format!(
+        "{}{}",
+        account.api_base_url,
+        contract().models_path
+      ))
+      .query(&[(contract().models_labeled_query.as_str(), "1")]),
     &account.device_key,
     Some(&account.credential.key),
     None,
@@ -617,11 +629,36 @@ mod tests {
       .map(|id| CloudModel {
         id: id.to_string(),
         display_name: id.to_string(),
+        provider: None,
+        outside_region: false,
       })
       .to_vec(),
       default_model_id: default.map(ToString::to_string),
       unavailable: None,
     }
+  }
+
+  #[test]
+  fn a_model_list_from_a_newer_api_still_reads() {
+    let newer: CloudModels = serde_json::from_str(
+      r#"{
+        "models": [
+          {"id": "mistralai/voxtral-mini-transcribe", "displayName": "Voxtral Mini Transcribe"},
+          {"id": "google/chirp-3", "displayName": "Chirp 3", "provider": "Google",
+           "outsideRegion": true, "pricePerHour": 0.96}
+        ],
+        "defaultModelId": "mistralai/voxtral-mini-transcribe",
+        "unavailable": null,
+        "environment": "eu"
+      }"#,
+    )
+    .expect("a newer model list reads");
+    assert!(newer.offers("google/chirp-3"));
+    assert_eq!(newer.models[1].provider.as_deref(), Some("Google"));
+    assert!(newer.models[1].outside_region);
+    assert!(!newer.models[0].outside_region);
+    let shown = serde_json::to_value(&newer.models[1]).expect("serializes");
+    assert_eq!(shown["outsideRegion"], true);
   }
 
   #[test]
@@ -987,16 +1024,24 @@ mod tests {
   }
 
   #[test]
-  fn a_listed_model_is_offered_and_an_unknown_answer_is_refused() {
+  fn a_listed_model_is_offered_and_a_malformed_answer_is_refused() {
     let models: CloudModels = serde_json::from_str(
       r#"{"models":[{"id":"mistralai/voxtral-mini-transcribe","displayName":"Voxtral Mini Transcribe"}],"defaultModelId":"mistralai/voxtral-mini-transcribe","unavailable":null}"#,
     )
     .unwrap();
     assert!(models.offers("mistralai/voxtral-mini-transcribe"));
     assert!(!models.offers("openai/whisper-large-v3"));
+    // Fields a newer API adds are read past (see the test above); an answer
+    // without the model list is still refused.
     assert!(
       serde_json::from_str::<CloudModels>(
-        r#"{"models":[],"defaultModelId":null,"unavailable":null,"price":1}"#
+        r#"{"defaultModelId":null,"unavailable":null}"#
+      )
+      .is_err()
+    );
+    assert!(
+      serde_json::from_str::<CloudModels>(
+        r#"{"models":[{"id":"x"}],"defaultModelId":null,"unavailable":null}"#
       )
       .is_err()
     );

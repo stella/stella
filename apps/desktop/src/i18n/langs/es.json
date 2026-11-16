@@ -624,7 +624,9 @@
       "unavailableRegion": "stella AI aún no ofrece transcripción en la región de su organización.",
       "unavailableProvider": "El proveedor de IA de su organización no ofrece transcripción.",
       "unavailable": "La transcripción con stella AI no está disponible en este momento.",
-      "model": "Modelo de transcripción"
+      "model": "Modelo de transcripción",
+      "outsideRegion": "Fuera de tu región",
+      "outsideRegionNote": "Este modelo procesa el audio fuera de la región de tu organización."
     },
     "language": {
       "title": "Idioma del dictado",

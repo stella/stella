@@ -624,7 +624,9 @@
       "unavailableRegion": "stella AI zatiaľ v oblasti vašej organizácie prevod reči neponúka.",
       "unavailableProvider": "Poskytovateľ AI vašej organizácie prevod reči neponúka.",
       "unavailable": "Prevod pomocou stella AI teraz nie je k dispozícii.",
-      "model": "Model prevodu"
+      "model": "Model prevodu",
+      "outsideRegion": "Mimo vášho regiónu",
+      "outsideRegionNote": "Tento model spracúva zvuk mimo regiónu vašej organizácie."
     },
     "language": {
       "title": "Jazyk diktovania",

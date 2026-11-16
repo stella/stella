@@ -14,9 +14,18 @@ import {
 
 export type DictationDestinationValue = "local" | "cloud";
 
+type CloudModel = {
+  displayName: string;
+  id: string;
+  /** Who runs the model; absent from older APIs. */
+  provider?: string | null;
+  /** The model processes audio outside the organization's region. */
+  outsideRegion?: boolean;
+};
+
 type CloudModels = {
   defaultModelId: string | null;
-  models: { displayName: string; id: string }[];
+  models: CloudModel[];
   unavailable: "provider" | "region" | null;
 };
 
@@ -113,6 +122,14 @@ export const DictationDestination = ({
     destination === "cloud" && offered !== null && selectedModel !== null
       ? { models: offered.models, selected: selectedModel }
       : null;
+  const selectedOutsideRegion =
+    modelChoice?.models.find(({ id }) => id === modelChoice.selected)
+      ?.outsideRegion === true;
+  /** The name, who runs it, and whether it leaves the region. */
+  const modelLabel = ({ displayName, outsideRegion, provider }: CloudModel) =>
+    [displayName, provider, outsideRegion === true ? t("outsideRegion") : null]
+      .filter((part): part is string => typeof part === "string" && part !== "")
+      .join(" · ");
 
   return (
     <div className="flex flex-col gap-3">
@@ -168,9 +185,19 @@ export const DictationDestination = ({
       </div>
       {modelChoice !== null && (
         <div className="flex items-center justify-between gap-4">
-          <p className="text-sm font-medium" id="dictation-cloud-model-label">
-            {t("model")}
-          </p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium" id="dictation-cloud-model-label">
+              {t("model")}
+            </p>
+            {selectedOutsideRegion ? (
+              <p
+                className="text-muted-foreground mt-1 text-sm leading-relaxed"
+                role="note"
+              >
+                {t("outsideRegionNote")}
+              </p>
+            ) : null}
+          </div>
           <Select
             onValueChange={(value) => {
               // Compared with what is stored, not what is shown: the shown
@@ -183,14 +210,14 @@ export const DictationDestination = ({
           >
             <SelectTrigger
               aria-labelledby="dictation-cloud-model-label"
-              className="w-56"
+              className="w-64"
             >
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
-              {modelChoice.models.map(({ displayName, id }) => (
-                <SelectItem key={id} value={id}>
-                  {displayName}
+              {modelChoice.models.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  {modelLabel(model)}
                 </SelectItem>
               ))}
             </SelectPopup>
