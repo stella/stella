@@ -1653,14 +1653,12 @@ jobs:
   # untrusted run never generates.
   generated-sources:
     needs: ci-plan
-    # A push to main also caches its generated sources by commit, so a pull
-    # request can restore its merge base's capability catalog.
     if: >-
       (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
-      (inputs.heavy_only != true || github.event_name == 'push')
+      inputs.heavy_only != true
       && (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
