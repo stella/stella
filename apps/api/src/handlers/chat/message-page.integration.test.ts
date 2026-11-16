@@ -3,7 +3,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatThreads,
+  chatTurns,
+  userFiles,
+} from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -214,6 +219,54 @@ describe("loadChatMessagePage keyset pagination", () => {
     expect(idsAscending).toEqual(expectedAscendingIds(messages));
     expect(pageSizes).toEqual([50, 20]);
     expect(new Set(idsAscending).size).toBe(70);
+  });
+});
+
+describe("loadChatMessagePage active turn", () => {
+  const acceptTurn = async (
+    threadId: SafeId<"chatThread">,
+    userMessageId: SafeId<"chatMessage">,
+    acceptedAt: Date,
+  ) => {
+    const turnId = toSafeId<"chatTurn">(Bun.randomUUIDv7());
+    await testDb.insert(chatTurns).values({
+      activeDurationMs: 0,
+      activeStartedAt: acceptedAt,
+      id: turnId,
+      leaseExpiresAt: new Date(acceptedAt.getTime() + 60_000),
+      organizationId: ids.orgA,
+      status: "accepted",
+      threadId,
+      userId: ids.userA1,
+      userMessageId,
+      workspaceId: ids.wsA1,
+    });
+    return turnId;
+  };
+
+  test("names the thread's unsettled turn on every page of it", async () => {
+    const base = Date.parse("2026-05-01T00:00:00.000Z");
+    const { threadId, messages } = await seedThread(
+      Array.from({ length: 60 }, (_, i) => new Date(base + i)),
+    );
+    const newest = expectedAscendingIds(messages).at(-1);
+    if (newest === undefined) {
+      throw new Error("seeded thread has no messages");
+    }
+    const turnId = await acceptTurn(threadId, newest, new Date(base + 60));
+    const { threadId: idleThreadId } = await seedThread([new Date(base)]);
+
+    const page = await loadPage(threadId);
+    const cursor =
+      page.olderCursor === null
+        ? undefined
+        : (decodeMessagePageCursor(page.olderCursor) ?? undefined);
+    expect(cursor).toBeDefined();
+    const older = await loadPage(threadId, cursor);
+
+    expect(page.activeTurnId).toBe(turnId);
+    expect(older.activeTurnId).toBe(turnId);
+    expect((await loadPage(idleThreadId)).activeTurnId).toBeNull();
   });
 });
 
