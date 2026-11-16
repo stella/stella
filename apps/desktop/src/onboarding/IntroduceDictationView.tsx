@@ -9,12 +9,15 @@ import { useDictation } from "./use-dictation";
 type IntroduceDictationViewProps = {
   dictationPermissions: readonly Permission[];
   onDismiss: () => void;
+  /** Opens settings, where language and the other options are. */
+  onOpenSettings: () => void;
 };
 
 /** Dictation arrived after setup: the same setup as the tour's step, once. */
 export const IntroduceDictationView = ({
   dictationPermissions,
   onDismiss,
+  onOpenSettings,
 }: IntroduceDictationViewProps) => {
   const t = useTranslations("onboarding");
   const controls = useDictation();
@@ -24,7 +27,16 @@ export const IntroduceDictationView = ({
       <DictationSetup controls={controls} permissions={dictationPermissions} />
       <div className="mt-auto flex justify-end gap-2 pt-5">
         {controls.snapshot?.enabled === true ? (
-          <Button onClick={onDismiss}>{t("done")}</Button>
+          <>
+            <Button
+              className="me-auto"
+              onClick={onOpenSettings}
+              variant="ghost"
+            >
+              {t("openSettings")}
+            </Button>
+            <Button onClick={onDismiss}>{t("done")}</Button>
+          </>
         ) : (
           <Button onClick={onDismiss} variant="ghost">
             {t("later")}

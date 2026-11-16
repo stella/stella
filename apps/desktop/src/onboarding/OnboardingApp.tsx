@@ -142,6 +142,18 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
     }
   };
 
+  /** Settings hold what an introduction leaves out; the introduction is
+   *  done once they open. */
+  const openSettingsAndDismiss = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke("onboarding_open_settings"),
+    );
+    if (Result.isError(result)) {
+      reportOnboardingFailure();
+    }
+    await close("onboarding_dismiss");
+  };
+
   return (
     <main
       className={cn(
@@ -225,6 +237,9 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
           <IntroduceDictationView
             dictationPermissions={snapshot.dictationPermissions}
             onDismiss={onDismiss}
+            onOpenSettings={() => {
+              void openSettingsAndDismiss();
+            }}
           />
         );
       default:

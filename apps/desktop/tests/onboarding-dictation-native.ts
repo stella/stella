@@ -13,6 +13,8 @@ import type { PermissionsSnapshot } from "../src/shared/permissions";
 
 export const DICTATION_OFF = {
   available: true,
+  cleanup: true,
+  destination: "local",
   enabled: false,
   failure: null,
   keys: { code: "Space", modifiers: ["control", "alt"] },
@@ -89,6 +91,12 @@ export const installNativeSide = (native: NativeSide) => {
             panic("dictation is not available on this computer");
           }
           native.dictation = { ...dictation, enabled: enabledArgument(args) };
+          return native.dictation;
+        case "dictation_set_cleanup":
+          if (!("enabled" in dictation)) {
+            panic("dictation is not available on this computer");
+          }
+          native.dictation = { ...dictation, cleanup: enabledArgument(args) };
           return native.dictation;
         case "dictation_download_model":
           if (!("enabled" in dictation)) {

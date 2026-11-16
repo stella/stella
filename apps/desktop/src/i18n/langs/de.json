@@ -598,21 +598,21 @@
   },
   "dictation": {
     "title": "Diktieren",
-    "description": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird auf diesem Computer umgewandelt und nicht gespeichert. Ist die KI-Überarbeitung aktiviert, wird der umgewandelte Text, nicht der Ton, über stella an den KI-Anbieter Ihrer Organisation gesendet, um Fehler und Formatierung zu korrigieren; stella speichert ihn nicht.",
+    "description": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird auf diesem Computer umgewandelt und nicht gespeichert.",
     "descriptionCloud": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird von stella AI umgewandelt und von stella nicht gespeichert.",
     "cleanup": {
       "title": "Mit KI überarbeiten",
-      "description": "Die Sprache wird weiterhin auf diesem Computer umgewandelt, und der Ton verlässt ihn nie. Ist die Überarbeitung aktiviert, wird der umgewandelte Text über stella an den KI-Anbieter Ihrer Organisation gesendet, um Erkennungsfehler zu korrigieren und gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ anzuwenden. stella speichert ihn nicht. Die Überarbeitung erfährt außerdem, in welche Art von App Sie diktieren, etwa E-Mail oder Chat, damit der Text dazu passt.",
-      "descriptionCloud": "Ist die Überarbeitung aktiviert, korrigiert stella AI außerdem Erkennungsfehler im umgewandelten Text und wendet gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ an. Die Überarbeitung erfährt außerdem, in welche Art von App Sie diktieren, etwa E-Mail oder Chat, damit der Text dazu passt."
+      "description": "Korrigiert Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ und passt den Text an die App an, etwa an E-Mail. Nur der Text, nicht der Ton, wird über stella an den KI-Anbieter Ihrer Organisation gesendet; stella speichert ihn nicht.",
+      "descriptionCloud": "stella AI korrigiert außerdem Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ und passt den Text an die App an, etwa an E-Mail."
     },
     "context": {
       "windowTitle": {
         "title": "Fenstertitel mit der KI-Überarbeitung teilen",
-        "description": "Die Überarbeitung erhält auch den Titel des Fensters, in das Sie diktieren, um etwa einen Vertrag von einem internen Vermerk zu unterscheiden. Fenstertitel können Namen von Mandanten oder Akten enthalten. Der Titel wird über stella an den KI-Anbieter Ihrer Organisation gesendet, und stella speichert ihn nicht."
+        "description": "Hilft, einen Vertrag von einem Memo zu unterscheiden. Fenstertitel können Mandanten- oder Aktennamen enthalten."
       },
       "textBeforeCursor": {
         "title": "Text vor dem Cursor mit der KI-Überarbeitung teilen",
-        "description": "Die Überarbeitung erhält auch bis zu {limit, number} Zeichen vor dem Cursor, damit das Diktat an Ihren Text anschließt. Dabei wird ein Teil des Dokuments, in dem Sie gerade arbeiten, über stella an den KI-Anbieter Ihrer Organisation gesendet, und stella speichert ihn nicht."
+        "description": "Bis zu {limit, number} Zeichen des Dokuments, in dem Sie arbeiten, damit das Diktat an Ihren Text anschließt."
       }
     },
     "keptInHistory": "Jedes Diktat wird außerdem im Zwischenablageverlauf auf diesem Computer gespeichert.",
@@ -628,7 +628,7 @@
     },
     "language": {
       "title": "Diktiersprache",
-      "description": "Gesprochenes wird in dieser Sprache erkannt, und die Überarbeitung belässt den Text darin. Automatisch verwendet die Sprachen der Anzeige und Tastaturen dieses Computers.",
+      "description": "Automatisch verwendet die Sprachen der Anzeige und Tastaturen dieses Computers.",
       "automatic": "Automatisch",
       "automaticWith": "Automatisch ({languages})",
       "noResults": "Keine Sprachen gefunden"

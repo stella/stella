@@ -1116,7 +1116,7 @@ const App = () => {
       <WindowDragRegion />
       <div
         className={cn(
-          "mx-auto flex h-dvh max-w-[30rem] flex-col px-4 pb-4",
+          "mx-auto flex h-dvh max-w-[44rem] flex-col px-4 pb-4",
           isMacDesktop ? "pt-9" : "pt-4",
         )}
       >

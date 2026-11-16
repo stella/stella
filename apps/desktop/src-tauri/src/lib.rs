@@ -624,8 +624,11 @@ pub fn run() {
 
 /// The settings window's size. The browser harness reads these lines and
 /// renders the window at this size (`tests/desktop-window-sizes.ts`).
-const SETTINGS_WINDOW_WIDTH: f64 = 480.0;
-const SETTINGS_WINDOW_HEIGHT: f64 = 460.0;
+const SETTINGS_WINDOW_WIDTH: f64 = 600.0;
+const SETTINGS_WINDOW_HEIGHT: f64 = 620.0;
+/// The smallest the settings window can be resized to.
+const SETTINGS_WINDOW_MIN_WIDTH: f64 = 480.0;
+const SETTINGS_WINDOW_MIN_HEIGHT: f64 = 460.0;
 pub(crate) const SETTINGS_WINDOW_LABEL: &str = "main";
 
 /// A Settings window tab native code opens; the ids are `PREFERENCES_TABS`
@@ -673,7 +676,8 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab)
   let builder = crate::app_window::builder(handle, SETTINGS_WINDOW_LABEL, "index.html")
     .title("stella desktop")
     .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
-    .resizable(false);
+    .min_inner_size(SETTINGS_WINDOW_MIN_WIDTH, SETTINGS_WINDOW_MIN_HEIGHT)
+    .resizable(true);
   let builder = window_placement::centered_on_target_screen(
     handle,
     builder,

@@ -598,21 +598,21 @@
   },
   "dictation": {
     "title": "Diktování",
-    "description": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč se převádí na tomto počítači a neukládá se. Se zapnutou úpravou pomocí AI se převedený text (ne zvuk) odešle přes stellu poskytovateli AI vaší organizace, který opraví chyby a formátování; stella ho neukládá.",
+    "description": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč se převádí na tomto počítači a neukládá se.",
     "descriptionCloud": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč převádí stella AI a stella ji neukládá.",
     "cleanup": {
       "title": "Upravit pomocí AI",
-      "description": "Řeč se i nadále převádí na tomto počítači a zvuk ho nikdy neopustí. Se zapnutou úpravou se převedený text odešle přes stellu poskytovateli AI vaší organizace, který opraví chyby rozpoznávání a použije vyslovenou interpunkci a formátování, například „nový řádek“ nebo „tučně“. stella ho neukládá. Úprava se dozví i druh aplikace, do které diktujete, například e-mail nebo chat, aby jí text odpovídal.",
-      "descriptionCloud": "Se zapnutou úpravou stella AI také opraví chyby rozpoznávání v převedeném textu a použije vyslovenou interpunkci a formátování, například „nový řádek“ nebo „tučně“. Úprava se dozví i druh aplikace, do které diktujete, například e-mail nebo chat, aby jí text odpovídal."
+      "description": "Opraví chyby rozpoznávání a vyslovené formátování, například „nový řádek“, a přizpůsobí text aplikaci, například e-mailu. Přes stellu se poskytovateli AI vaší organizace odešle jen text, ne zvuk; stella ho neukládá.",
+      "descriptionCloud": "stella AI navíc opraví chyby rozpoznávání a vyslovené formátování, například „nový řádek“, a přizpůsobí text aplikaci, například e-mailu."
     },
     "context": {
       "windowTitle": {
         "title": "Sdílet název okna s úpravou pomocí AI",
-        "description": "Úprava dostane i název okna, do kterého diktujete, aby rozeznala například smlouvu od interní poznámky. Názvy oken mohou obsahovat jména klientů nebo názvy spisů. Název se odešle přes stellu poskytovateli AI vaší organizace a stella ho neukládá."
+        "description": "Pomůže odlišit smlouvu od interní poznámky. Názvy oken mohou obsahovat jména klientů nebo věcí."
       },
       "textBeforeCursor": {
         "title": "Sdílet text před kurzorem s úpravou pomocí AI",
-        "description": "Úprava dostane i nejvýše {limit, number} znaků před kurzorem, aby diktát navázal na text, který píšete. Část dokumentu, ve kterém právě jste, se tak odešle přes stellu poskytovateli AI vaší organizace a stella ji neukládá."
+        "description": "Nejvýše {limit, number} znaků dokumentu, ve kterém jste, aby diktát navázal na to, co píšete."
       }
     },
     "keptInHistory": "Každý diktát se také uloží do historie schránky na tomto počítači.",
@@ -628,7 +628,7 @@
     },
     "language": {
       "title": "Jazyk diktování",
-      "description": "Řeč se rozpoznává v tomto jazyce a úprava v něm text ponechá. Automaticky se použijí jazyky zobrazení a klávesnic tohoto počítače.",
+      "description": "Automaticky se použijí jazyky zobrazení a klávesnic tohoto počítače.",
       "automatic": "Automaticky",
       "automaticWith": "Automaticky ({languages})",
       "noResults": "Žádné jazyky nenalezeny"

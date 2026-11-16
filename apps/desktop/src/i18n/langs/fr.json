@@ -598,21 +598,21 @@
   },
   "dictation": {
     "title": "Dictée",
-    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée. Lorsque la correction par IA est activée, le texte transcrit, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs et la mise en forme ; stella ne le conserve pas.",
+    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée.",
     "descriptionCloud": "Maintenez {shortcut} et parlez. Le texte apparaît dans l’application que vous utilisez. La parole est transcrite par stella AI et n’est pas conservée par stella.",
     "cleanup": {
       "title": "Corriger avec l’IA",
-      "description": "La parole est toujours transcrite sur cet ordinateur et l’audio ne le quitte jamais. Lorsque la correction est activée, le texte transcrit est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs de reconnaissance et appliquer la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras ». stella ne le conserve pas. La correction reçoit aussi le type d’application dans laquelle vous dictez, comme un e-mail ou une messagerie, pour que le texte s’y prête.",
-      "descriptionCloud": "Lorsque la correction est activée, stella AI corrige aussi les erreurs de reconnaissance du texte transcrit et applique la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras ». La correction reçoit aussi le type d’application dans laquelle vous dictez, comme un e-mail ou une messagerie, pour que le texte s’y prête."
+      "description": "Corrige les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne », et adapte le texte à l’application, comme un e-mail. Seul le texte, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation ; stella ne le conserve pas.",
+      "descriptionCloud": "stella AI corrige aussi les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne », et adapte le texte à l’application, comme un e-mail."
     },
     "context": {
       "windowTitle": {
         "title": "Partager le titre de la fenêtre avec la correction par l’IA",
-        "description": "La correction reçoit aussi le titre de la fenêtre dans laquelle vous dictez, pour distinguer par exemple un contrat d’une note interne. Les titres de fenêtre peuvent contenir des noms de clients ou de dossiers. Le titre est envoyé via stella au fournisseur d’IA de votre organisation, et stella ne le conserve pas."
+        "description": "Aide à distinguer un contrat d’une note interne. Les titres de fenêtre peuvent contenir des noms de clients ou de dossiers."
       },
       "textBeforeCursor": {
         "title": "Partager le texte avant le curseur avec la correction par l’IA",
-        "description": "La correction reçoit aussi jusqu’à {limit, number} caractères avant le curseur, pour que la dictée prolonge le texte que vous rédigez. Une partie du document dans lequel vous êtes est ainsi envoyée via stella au fournisseur d’IA de votre organisation, et stella ne la conserve pas."
+        "description": "Jusqu’à {limit, number} caractères du document où vous êtes, pour que la dictée s’accorde avec ce que vous écrivez."
       }
     },
     "keptInHistory": "Chaque dictée est aussi conservée dans l’historique du presse-papiers de cet ordinateur.",
@@ -628,7 +628,7 @@
     },
     "language": {
       "title": "Langue de dictée",
-      "description": "La parole est reconnue dans cette langue et la correction y conserve le texte. Automatique utilise les langues de l’affichage et des claviers de cet ordinateur.",
+      "description": "Automatique utilise les langues d’affichage et de clavier de cet ordinateur.",
       "automatic": "Automatique",
       "automaticWith": "Automatique ({languages})",
       "noResults": "Aucune langue trouvée"

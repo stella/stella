@@ -598,21 +598,21 @@
   },
   "dictation": {
     "title": "Dyktowanie",
-    "description": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowa jest przetwarzana na tym komputerze i nie jest zapisywana. Po włączeniu poprawiania przez AI przetworzony tekst (nie dźwięk) jest wysyłany za pośrednictwem stelli do dostawcy AI Twojej organizacji w celu poprawienia błędów i formatowania; stella go nie zapisuje.",
+    "description": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowa jest przetwarzana na tym komputerze i nie jest zapisywana.",
     "descriptionCloud": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowę przetwarza stella AI, a stella jej nie przechowuje.",
     "cleanup": {
       "title": "Popraw za pomocą AI",
-      "description": "Mowa nadal jest przetwarzana na tym komputerze, a dźwięk nigdy go nie opuszcza. Po włączeniu poprawiania przetworzony tekst jest wysyłany za pośrednictwem stelli do dostawcy AI Twojej organizacji, który poprawia błędy rozpoznawania i stosuje podyktowaną interpunkcję oraz formatowanie, na przykład „nowa linia” lub „pogrubienie”. stella go nie zapisuje. Poprawianie otrzymuje też rodzaj aplikacji, w której dyktujesz, na przykład poczta e-mail lub czat, aby tekst do niej pasował.",
-      "descriptionCloud": "Po włączeniu poprawiania stella AI poprawia też błędy rozpoznawania w przetworzonym tekście i stosuje podyktowaną interpunkcję oraz formatowanie, na przykład „nowa linia” lub „pogrubienie”. Poprawianie otrzymuje też rodzaj aplikacji, w której dyktujesz, na przykład poczta e-mail lub czat, aby tekst do niej pasował."
+      "description": "Poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail. Za pośrednictwem stelli do dostawcy AI Twojej organizacji trafia tylko tekst, nie dźwięk; stella go nie zapisuje.",
+      "descriptionCloud": "stella AI dodatkowo poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail."
     },
     "context": {
       "windowTitle": {
         "title": "Udostępniaj tytuł okna poprawianiu przez AI",
-        "description": "Poprawianie otrzymuje też tytuł okna, w którym dyktujesz, aby odróżnić na przykład umowę od notatki służbowej. Tytuły okien mogą zawierać nazwiska klientów lub nazwy spraw. Tytuł jest wysyłany za pośrednictwem stelli do dostawcy AI Twojej organizacji, a stella go nie zapisuje."
+        "description": "Pomaga odróżnić umowę od notatki. Tytuły okien mogą zawierać nazwy klientów lub spraw."
       },
       "textBeforeCursor": {
         "title": "Udostępniaj tekst przed kursorem poprawianiu przez AI",
-        "description": "Poprawianie otrzymuje też do {limit, number} znaków przed kursorem, aby dyktowany tekst nawiązywał do tego, co piszesz. W ten sposób część dokumentu, w którym jesteś, jest wysyłana za pośrednictwem stelli do dostawcy AI Twojej organizacji, a stella jej nie zapisuje."
+        "description": "Do {limit, number} znaków dokumentu, w którym jesteś, aby dyktowany tekst pasował do tego, co piszesz."
       }
     },
     "keptInHistory": "Każde dyktowanie jest też zapisywane w historii schowka na tym komputerze.",
@@ -628,7 +628,7 @@
     },
     "language": {
       "title": "Język dyktowania",
-      "description": "Mowa jest rozpoznawana w tym języku, a poprawianie zachowuje w nim tekst. Automatycznie używa języków interfejsu i klawiatur tego komputera.",
+      "description": "Automatycznie używa języków interfejsu i klawiatur tego komputera.",
       "automatic": "Automatycznie",
       "automaticWith": "Automatycznie ({languages})",
       "noResults": "Nie znaleziono języków"

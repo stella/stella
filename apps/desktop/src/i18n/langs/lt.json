@@ -598,21 +598,21 @@
   },
   "dictation": {
     "title": "Diktavimas",
-    "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma. Įjungus DI taisymą, perrašytas tekstas (ne garsas) per stella siunčiamas jūsų organizacijos DI teikėjui, kad būtų ištaisytos klaidos ir formatavimas; stella jo nesaugo.",
+    "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma.",
     "descriptionCloud": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras programoje, kurią naudojate. Kalbą paverčia tekstu stella AI, o stella jos nesaugo.",
     "cleanup": {
       "title": "Taisyti su DI",
-      "description": "Kalba ir toliau paverčiama tekstu šiame kompiuteryje, o garsas niekada jo nepalieka. Įjungus taisymą, gautas tekstas per stella siunčiamas jūsų organizacijos DI teikėjui, kuris ištaiso atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“. stella jo nesaugo. Taisymui taip pat perduodama, į kokios rūšies programą diktuojate, pavyzdžiui, el. paštą ar pokalbių programą, kad tekstas jai tiktų.",
-      "descriptionCloud": "Įjungus taisymą, stella AI taip pat ištaiso gauto teksto atpažinimo klaidas ir pritaiko padiktuotus skyrybos ženklus bei formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“. Taisymui taip pat perduodama, į kokios rūšies programą diktuojate, pavyzdžiui, el. paštą ar pokalbių programą, kad tekstas jai tiktų."
+      "description": "Ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui. Per stella jūsų organizacijos DI teikėjui siunčiamas tik tekstas, ne garsas; stella jo nesaugo.",
+      "descriptionCloud": "stella AI taip pat ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui."
     },
     "context": {
       "windowTitle": {
         "title": "Bendrinti lango pavadinimą su DI taisymu",
-        "description": "Taisymui perduodamas ir lango, į kurį diktuojate, pavadinimas, kad būtų galima atskirti, pavyzdžiui, sutartį nuo vidinio pranešimo. Langų pavadinimuose gali būti klientų vardų ar bylų pavadinimų. Pavadinimas per stella siunčiamas jūsų organizacijos DI teikėjui, o stella jo nesaugo."
+        "description": "Padeda atskirti sutartį nuo pastabos. Langų pavadinimuose gali būti klientų ar bylų pavadinimų."
       },
       "textBeforeCursor": {
         "title": "Bendrinti tekstą prieš žymeklį su DI taisymu",
-        "description": "Taisymui perduodama ir iki {limit, number} simbolių prieš žymeklį, kad padiktuotas tekstas tęstų rašomą tekstą. Taip dalis dokumento, kuriame esate, per stella siunčiama jūsų organizacijos DI teikėjui, o stella jos nesaugo."
+        "description": "Iki {limit, number} simbolių iš dokumento, kuriame esate, kad diktuojamas tekstas derėtų prie to, ką rašote."
       }
     },
     "keptInHistory": "Kiekvienas diktavimas taip pat išsaugomas šio kompiuterio iškarpinės istorijoje.",
@@ -628,7 +628,7 @@
     },
     "language": {
       "title": "Diktavimo kalba",
-      "description": "Diktavimas atpažįstamas šia kalba, o taisant tekstas paliekamas šia kalba. Automatiškai naudojamos šio kompiuterio rodymo ir klaviatūrų kalbos.",
+      "description": "Automatinis naudoja šio kompiuterio ekrano ir klaviatūrų kalbas.",
       "automatic": "Automatiškai",
       "automaticWith": "Automatiškai ({languages})",
       "noResults": "Kalbų nerasta"

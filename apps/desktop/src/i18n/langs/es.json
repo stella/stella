@@ -598,21 +598,21 @@
   },
   "dictation": {
     "title": "Dictado",
-    "description": "Mantén pulsado {shortcut} y habla. El texto aparece en la aplicación que estás usando. La voz se transcribe en este ordenador y no se guarda. Con la corrección con IA activada, el texto transcrito, no el audio, se envía a través de stella al proveedor de IA de tu organización para corregir errores y formato; stella no lo guarda.",
+    "description": "Mantén pulsado {shortcut} y habla. El texto aparece en la aplicación que estás usando. La voz se transcribe en este ordenador y no se guarda.",
     "descriptionCloud": "Mantenga pulsado {shortcut} y hable. El texto aparece en la aplicación que está usando. stella AI transcribe la voz y stella no la guarda.",
     "cleanup": {
       "title": "Corregir con IA",
-      "description": "La voz se sigue transcribiendo en este ordenador y el audio nunca sale de él. Con la corrección activada, el texto transcrito se envía a través de stella al proveedor de IA de tu organización para corregir errores de reconocimiento y aplicar la puntuación y el formato dictados, como «nueva línea» o «negrita». stella no lo guarda. La corrección también recibe el tipo de aplicación en la que dictas, como el correo o un chat, para que el texto encaje en ella.",
-      "descriptionCloud": "Con la corrección activada, stella AI también corrige los errores de reconocimiento del texto transcrito y aplica la puntuación y el formato dictados, como «nueva línea» o «negrita». La corrección también recibe el tipo de aplicación en la que dictas, como el correo o un chat, para que el texto encaje en ella."
+      "description": "Corrige errores de reconocimiento y el formato dictado, como «nueva línea», y adapta el texto a la aplicación, como el correo. Solo el texto, no el audio, se envía a través de stella al proveedor de IA de tu organización; stella no lo guarda.",
+      "descriptionCloud": "stella AI también corrige errores de reconocimiento y el formato dictado, como «nueva línea», y adapta el texto a la aplicación, como el correo."
     },
     "context": {
       "windowTitle": {
         "title": "Compartir el título de la ventana con la corrección con IA",
-        "description": "La corrección también recibe el título de la ventana en la que dictas, para distinguir, por ejemplo, un contrato de una nota interna. Los títulos de las ventanas pueden contener nombres de clientes o de asuntos. El título se envía a través de stella al proveedor de IA de tu organización, y stella no lo guarda."
+        "description": "Ayuda a distinguir un contrato de una nota interna. Los títulos de ventana pueden contener nombres de clientes o asuntos."
       },
       "textBeforeCursor": {
         "title": "Compartir el texto antes del cursor con la corrección con IA",
-        "description": "La corrección también recibe hasta {limit, number} caracteres antes del cursor, para que el dictado continúe el texto que escribes. Así se envía parte del documento en el que estás a través de stella al proveedor de IA de tu organización, y stella no la guarda."
+        "description": "Hasta {limit, number} caracteres del documento en el que estás, para que el dictado encaje con lo que escribes."
       }
     },
     "keptInHistory": "Cada dictado también se guarda en el historial del portapapeles de este ordenador.",
@@ -628,7 +628,7 @@
     },
     "language": {
       "title": "Idioma del dictado",
-      "description": "La voz se reconoce en este idioma y la corrección mantiene el texto en él. Automático usa los idiomas de la interfaz y los teclados de este ordenador.",
+      "description": "Automático usa los idiomas de la pantalla y los teclados de este ordenador.",
       "automatic": "Automático",
       "automaticWith": "Automático ({languages})",
       "noResults": "No se encontraron idiomas"
