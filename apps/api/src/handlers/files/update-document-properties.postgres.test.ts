@@ -1,17 +1,24 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { once } from "node:events";
+import { createServer } from "node:http";
 
 import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
-import { withFakeTimers } from "@stll/test-kit";
+import { deferred, settledWithin, withFakeTimers } from "@stll/test-kit";
 
 import { rootDb } from "@/api/db/root";
 import { auditLogs, entities, entityVersions, fields } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createFileKey } from "@/api/lib/files/utils";
-import { S3ObjectBudgetError } from "@/api/lib/s3";
+import {
+  configureS3ForTesting,
+  getFreshAbortableS3,
+  resetS3ForTesting,
+  S3ObjectBudgetError,
+} from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
@@ -141,6 +148,119 @@ describe.skipIf(!enabled)("document property writes bound source reads", () => {
       }
     },
   );
+
+  test("the storage deadline cancels an SDK body after headers have arrived", async () => {
+    const source = await fixture.addDocument({
+      fileName: "stalled.docx",
+      mimeType: DOCX_MIME_TYPE,
+    });
+    const headersReceived = deferred<{
+      status: number | undefined;
+      length: unknown;
+    }>();
+    const bodyCancelled = deferred<undefined>();
+    const requests: { method: string | undefined; path: string }[] = [];
+    // A framed HTTP response retains Content-Length while its body stalls;
+    // Bun's streaming Response deliberately removes that header.
+    const server = createServer((request, response) => {
+      requests.push({
+        method: request.method,
+        path: new URL(request.url ?? "/", "http://127.0.0.1").pathname,
+      });
+      response.on("close", () => bodyCancelled.resolve(undefined));
+      response.writeHead(200, {
+        "content-length": "13",
+        "content-type": DOCX_MIME_TYPE,
+      });
+      response.write(new Uint8Array([1]));
+    }).listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    if (address === null || typeof address === "string") {
+      await server[Symbol.asyncDispose]();
+      throw new Error("Expected a loopback TCP listener");
+    }
+    configureS3ForTesting({ endpoint: `http://127.0.0.1:${address.port}` });
+    const client = await getFreshAbortableS3();
+    const middlewareName = "observeDocumentBodyHeaders";
+    // Mark real SDK header completion before advancing the storage deadline.
+    client.middlewareStack.add(
+      (handleRequest) => async (args) => {
+        const result = await handleRequest(args);
+        headersReceived.resolve({
+          status: result.output?.$metadata.httpStatusCode,
+          length:
+            result.output !== undefined && "ContentLength" in result.output
+              ? result.output.ContentLength
+              : undefined,
+        });
+        return result;
+      },
+      { step: "deserialize", priority: "high", name: middlewareName },
+    );
+    try {
+      await withFakeTimers(async (timers) => {
+        const state = { settled: false };
+        const failure = rejectionOf(
+          updateDocumentProperties({
+            fieldId: source.fieldId,
+            organizationId: fixture.organizationId,
+            workspaceId: fixture.workspaceId,
+            userId: fixture.userId,
+            safeDb: fixture.safeDb,
+            scopedDb: fixture.scopedDb,
+            recordAuditEvent: fixture.recordAuditEvent,
+            values: { title: "Revised title" },
+          }),
+        ).then((error) => {
+          state.settled = true;
+          return error;
+        });
+        expect(await headersReceived.promise).toEqual({
+          status: 200,
+          length: 13,
+        });
+        await timers.advance(29_999);
+        expect(state.settled).toBe(false);
+        expect(bodyCancelled.settled()).toBe(false);
+        await timers.advance(1);
+        expect(await failure).toMatchObject({
+          _tag: "TimeoutError",
+          timeoutMs: 30_000,
+        });
+      });
+      await settledWithin(bodyCancelled.promise, {
+        description: "the SDK closing the unfinished response body",
+        timeoutMs: 1000,
+      });
+      expect(
+        await rootDb
+          .select({ currentVersionId: entities.currentVersionId })
+          .from(entities)
+          .where(eq(entities.id, source.entityId)),
+      ).toEqual([{ currentVersionId: source.entityVersionId }]);
+      expect(
+        await rootDb
+          .select({ id: entityVersions.id })
+          .from(entityVersions)
+          .where(eq(entityVersions.entityId, source.entityId)),
+      ).toEqual([{ id: source.entityVersionId }]);
+      expect(requests).toEqual([
+        { method: "GET", path: `/${envBase.S3_BUCKET}/${source.key}` },
+      ]);
+      expect(
+        await rootDb
+          .select()
+          .from(auditLogs)
+          .where(eq(auditLogs.organizationId, fixture.organizationId)),
+      ).toEqual([]);
+    } finally {
+      client.middlewareStack.remove(middlewareName);
+      resetS3ForTesting();
+      server.closeAllConnections();
+      await server[Symbol.asyncDispose]();
+    }
+  });
 
   test("a bounded OOXML source still publishes the authored properties as a new audited version", async () => {
     const source = await fixture.addDocument({

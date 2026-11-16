@@ -33,6 +33,7 @@ describe.skipIf(!enabled)("folder downloads bound each stored body", () => {
     "overflow",
     "broken-stream",
     "http-error",
+    "http-error-cancel-rejected",
     "trickling-deadline",
     "caller-abort",
   ] as const)(
@@ -58,6 +59,8 @@ describe.skipIf(!enabled)("folder downloads bound each stored body", () => {
       );
       const requestAbort = new AbortController();
       let bodyCancelled = false;
+      let refusalBodyPulls = 0;
+      const refusalBytes = new TextEncoder().encode("storage refused");
       const requested: string[] = [];
       testFetch.set(
         Object.assign(
@@ -80,7 +83,30 @@ describe.skipIf(!enabled)("folder downloads bound each stored body", () => {
               case "overflow":
                 return new Response(overflow.body);
               case "http-error":
-                return new Response("storage refused", { status: 403 });
+              case "http-error-cancel-rejected":
+                expect(refusalBytes.byteLength).toBeGreaterThan(0);
+                return new Response(
+                  new ReadableStream<Uint8Array>(
+                    {
+                      start(controller) {
+                        controller.enqueue(refusalBytes);
+                      },
+                      pull() {
+                        refusalBodyPulls += 1;
+                      },
+                      async cancel() {
+                        bodyCancelled = true;
+                        if (fault === "http-error-cancel-rejected") {
+                          await Promise.reject(
+                            new Error("Cancellation rejected"),
+                          );
+                        }
+                      },
+                    },
+                    { highWaterMark: 0 },
+                  ),
+                  { status: 403 },
+                );
               case "broken-stream":
                 return new Response(
                   new ReadableStream({
@@ -194,6 +220,10 @@ describe.skipIf(!enabled)("folder downloads bound each stored body", () => {
         }
         if (fault === "trickling-deadline" || fault === "caller-abort") {
           expect(bodyCancelled).toBe(true);
+        }
+        if (fault === "http-error" || fault === "http-error-cancel-rejected") {
+          expect(bodyCancelled).toBe(true);
+          expect(refusalBodyPulls).toBe(0);
         }
       } finally {
         analytics.restore();

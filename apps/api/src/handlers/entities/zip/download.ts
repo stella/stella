@@ -105,6 +105,7 @@ const fetchArchiveFile = async ({
             signal,
           });
           if (!response.ok) {
+            await response.body?.cancel();
             return failed;
           }
           const data = await readBodyWithIdleDeadline(response, {
