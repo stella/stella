@@ -2,7 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { listTimeBillingRoutes } from "../../e2e/helpers/time-billing-routes";
 
@@ -33,6 +33,12 @@ const { workspacesNavigationOptions } =
 
 const CALLER = { userId: "unenrolled-owner", organizationId: "org-a" };
 
+/** Narrows a route hook to a callable taking the router's context object. */
+const isRouteHook = (
+  value: unknown,
+): value is (args: Record<string, unknown>) => unknown =>
+  typeof value === "function";
+
 const readRouteAdmission = async (filePath: string) => {
   const module: unknown = await import(filePath);
   if (typeof module !== "object" || module === null || !("Route" in module)) {
@@ -51,7 +57,7 @@ const readRouteAdmission = async (filePath: string) => {
     throw new TypeError(`Missing admission guard: ${filePath}`);
   }
   const beforeLoad = options.beforeLoad;
-  if (typeof beforeLoad !== "function") {
+  if (!isRouteHook(beforeLoad)) {
     throw new TypeError(`Missing admission guard: ${filePath}`);
   }
   return {
@@ -64,8 +70,8 @@ const redirectDestination = (routePath: string) => {
   if (routePath.startsWith("/_protected/workspaces/")) {
     return "/workspaces/$workspaceId";
   }
-  if (routePath.startsWith("/_protected/admin/")) {
-    return "/admin/members";
+  if (routePath.startsWith("/_protected/settings/organization/")) {
+    return "/settings/organization/members";
   }
   return "/workspaces";
 };
@@ -154,7 +160,7 @@ describe("organization settings admission request wave", () => {
           organizationSettingsAdmission: "time-billing",
         });
         const { beforeLoad } = await readRouteAdmission(
-          "@/routes/_protected.admin/route",
+          "@/routes/_protected.settings/organization",
         );
         const queryClient = new QueryClient({
           defaultOptions: { queries: { retry: false } },
@@ -260,7 +266,7 @@ describe("organization settings admission request wave", () => {
   }
   test("unrelated organization settings leave navigation to deferred chrome", async () => {
     const { beforeLoad } = await readRouteAdmission(
-      "@/routes/_protected.admin/route",
+      "@/routes/_protected.settings/organization",
     );
     const queryClient = new QueryClient();
     queryClient.setQueryData(roleOptions.queryKey, "owner");
@@ -273,7 +279,7 @@ describe("organization settings admission request wave", () => {
             activeOrganizationId: CALLER.organizationId,
           },
         },
-        location: { pathname: "/admin/members" },
+        location: { pathname: "/settings/organization/members" },
         matches: [{ staticData: {} }],
       });
       expect(

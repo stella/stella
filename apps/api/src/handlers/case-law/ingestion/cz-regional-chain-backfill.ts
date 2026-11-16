@@ -32,14 +32,6 @@ import { and, asc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  StoredRawReader,
-  StoredRawReparseOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   CZ_REGIONAL_AFFECTING_DOCS_METADATA_KEY,
   czRegionalAdapter,
   czRegionalEnvelopeWithChain,
@@ -48,6 +40,14 @@ import {
 import { applyStoredDecisionBackfill } from "@/api/handlers/case-law/ingestion/pipeline/stored-decision-backfill";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  StoredRawReader,
+  StoredRawReparseOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /**

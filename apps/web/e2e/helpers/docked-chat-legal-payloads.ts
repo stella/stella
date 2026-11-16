@@ -33,6 +33,8 @@ const decision = {
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
+  textIncompleteReason: null,
+  textWithheldReason: null,
   documentUrl: null,
   ecli: null,
   fulltext:
@@ -155,10 +157,11 @@ const {
 } = statute;
 const versions = {
   items: [
-    { ...version, amendedBy: null, isDefault: true },
+    { ...version, amendedBy: null, changes: null, isDefault: true },
     {
       ...version,
       amendedBy: null,
+      changes: null,
       id: olderStatute.id,
       status: olderStatute.status,
       effectiveDate: olderStatute.effectiveDate,

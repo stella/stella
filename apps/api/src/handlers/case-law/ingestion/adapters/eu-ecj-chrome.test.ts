@@ -1,13 +1,14 @@
 import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
+
+import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { SHELL_STEM } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
 import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { SHELL_STEM } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
+} from "@/api/lib/legal-search/ingestion-types";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 
 setDefaultTimeout(30_000);
@@ -81,7 +82,7 @@ describe("EU stored HTML excludes publisher chrome", () => {
         documentUrl: null,
         metadata: { celex: "62022CJ0128" },
       });
-      const $ = cheerio.load(html);
+      const $ = load(html);
       if (shellNames.has(name)) {
         // The source actually carries the fault; rejecting an empty fixture
         // would say nothing about scripts, navigation or close-button entities.

@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, spyOn, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
@@ -17,9 +17,15 @@ const { CALLER_FEATURE } =
   await import("@/lib/organization/feature-access/surfaces");
 const { Route } = await import("./_protected.workspaces/$workspaceId/lists");
 
+/** Narrows a route hook to a callable taking the router's context object. */
+const isRouteHook = (
+  value: unknown,
+): value is (args: Record<string, unknown>) => unknown =>
+  typeof value === "function";
+
 // Exercise the actual file-route loader with the same context shape the router supplies.
 const loader: unknown = Route.options.loader;
-if (typeof loader !== "function") {
+if (!isRouteHook(loader)) {
   throw new TypeError("Lists route must have an admission loader");
 }
 

@@ -12,11 +12,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import {
-  assertProperty,
-  propertyConfig,
-  propertySeed,
-} from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import type { ReporterCitationIdentifier } from "./decision-identifier.js";
 import {
@@ -50,9 +46,6 @@ import { projectionDigest, projectionPieces } from "./projection-digest.js";
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See
 // propertySeed in @stll/property-testing.
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 const NBSP = "\u00a0";
 
@@ -215,23 +208,25 @@ describe("plainTextOf (properties)", () => {
    * consumers rely on.
    */
   test("is exactly the tree's character sequence", () => {
-    fc.assert(
+    assertProperty(
+      "is exactly the tree's character sequence",
       fc.property(inlines, (tree) => {
         expect(plainTextOf(tree)).toBe(rawTextOf(tree));
       }),
-      config(400),
+      { numRuns: 400, seed: propertySeed() },
     );
   });
 
   /** No node's text depends on what sits beside it. */
   test("distributes over concatenation", () => {
-    fc.assert(
+    assertProperty(
+      "distributes over concatenation",
       fc.property(inlines, inlines, (left, right) => {
         expect(plainTextOf([...left, ...right])).toBe(
           plainTextOf(left) + plainTextOf(right),
         );
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 });
@@ -243,13 +238,14 @@ describe("projectPlainText (properties)", () => {
    * and what the reader is shown as the court's own words.
    */
   test("preserves the letters of the raw text", () => {
-    fc.assert(
+    assertProperty(
+      "preserves the letters of the raw text",
       fc.property(inlines, (tree) => {
         expect(letters(projectPlainText(tree))).toBe(
           letters(plainTextOf(tree)),
         );
       }),
-      config(400),
+      { numRuns: 400, seed: propertySeed() },
     );
   });
 
@@ -265,7 +261,7 @@ describe("projectPlainText (properties)", () => {
           flattenInlineText(tree).length,
         );
       }),
-      config(400),
+      { numRuns: 400, seed: propertySeed() },
     );
   });
 });
@@ -390,12 +386,13 @@ describe("wire round trip (properties)", () => {
    * cannot rebuild comes back with an empty string, not an error.
    */
   test("omitting the derivable text and parsing it back is the identity", () => {
-    fc.assert(
+    assertProperty(
+      "omitting the derivable text and parsing it back is the identity",
       fc.property(documentAst, (ast) => {
         const wire = omitDerivablePlainText(ast);
         expect(parseDocumentAst(JSON.stringify(wire))).toEqual(ast);
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
@@ -406,7 +403,8 @@ describe("wire round trip (properties)", () => {
    * the digest as they were.
    */
   test("preserves every piece's text and the projection digest", async () => {
-    await fc.assert(
+    await assertProperty(
+      "preserves every piece's text and the projection digest",
       fc.asyncProperty(documentAst, async (ast) => {
         const served = parseDocumentAst(
           JSON.stringify(omitDerivablePlainText(ast)),
@@ -420,7 +418,7 @@ describe("wire round trip (properties)", () => {
           await projectionDigest(ast),
         );
       }),
-      config(200),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 });

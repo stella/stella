@@ -1,10 +1,27 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { corpusIndexGenerations } from "@/api/db/schema";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  PROVISION_EXTRACTION_ADMISSION_REVISION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
+} from "@stll/legal-atlas/provision-extraction-admission";
+
+import {
+  caseLawDecisions,
+  caseLawProvisionExtractionScopes,
+  caseLawSitemapChanges,
+  caseLawSources,
+  corpusIndexGenerations,
+} from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import {
+  CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
+  CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER,
+} from "@/api/lib/case-law/population-count-limits";
 import {
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
@@ -16,12 +33,14 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import { isRecord } from "@/api/lib/type-guards";
 import type {
   GatedTestClientScope,
   GatedTestDb,
 } from "@/api/tests/gated-test-database";
 
 import { coverageIndexBuildSql } from "./coverage-indexes";
+import { withSeededTableMaintenance } from "./seeded-tables";
 
 /**
  * The corpus profile: public corpus tables seeded in the shape production
@@ -41,10 +60,31 @@ import { coverageIndexBuildSql } from "./coverage-indexes";
  *   table written over months.
  */
 const CORPUS_SCENARIO_ROWS = 60_000;
+// Outside the 00c2 coverage-source range and the provision (00c3) and replay
+// (00c4) sources, so no other scenario counts these rows as its own.
 const COMPLETION_SOURCE_ID = toSafeId<"caseLawSource">(
-  "01990000-00c2-7000-8000-000000000001",
+  "01990000-00c6-7000-8000-000000000001",
 );
 const COMPLETION_ROWS = 100_000;
+/**
+ * A source the background replay has caught up with: every decision stored
+ * with its raw input and parsed by the current parser, so the lag probe finds
+ * nothing. That is its worst case: the answer is known only once every row
+ * has been ruled out. Its id sits outside the 00c2 range the coverage
+ * scenario sources take by index, so their cleanup never walks these rows.
+ * The rows are listing-only, outside the published views: a published
+ * decision carries search documents, and these carry none, so published they
+ * would distort every per-country read of the views. The probe reads the
+ * decisions table itself.
+ */
+const REPLAY_SOURCE_ID = toSafeId<"caseLawSource">(
+  "01990000-00c4-7000-8000-000000000001",
+);
+const REPLAY_ROWS = 100_000;
+export const REPLAY_PARSER_VERSION = 3;
+const LISTING_ONLY_METADATA = JSON.stringify({
+  _stellaPartialObservation: { isListingOnly: true },
+});
 
 export type CaseLawScenarioGeneration =
   "case_law_v5" | "case_law_v6" | "case_law_v7" | "case_law_v8" | "case_law_v9";
@@ -112,8 +152,12 @@ export const LEGISLATION_CANDIDATE_COUNT = 300;
 
 /** Rows per seed statement, inside the fixture connection's statement timeout. */
 const SEED_CHUNK_ROWS = 20_000;
+const PROVISION_SEED_CHUNK_ROWS = 5000;
 
 const LEGISLATION_SOURCE_ID = "01990000-00a0-7000-8000-000000000001";
+const PROVISION_SOURCE_ID = toSafeId<"caseLawSource">(
+  "01990000-00c3-7000-8000-000000000001",
+);
 
 type SeedHandle = Pick<TransactionOf<GatedTestDb>, "execute">;
 
@@ -197,10 +241,10 @@ const uuidOf = (prefix: string, n: string) =>
 const generationPrefix = (generation: string) =>
   generation.replaceAll(/\D/gu, "").padStart(4, "0");
 
-const chunks = (rows: number) =>
-  Array.from({ length: Math.ceil(rows / SEED_CHUNK_ROWS) }, (_, index) => ({
-    first: index * SEED_CHUNK_ROWS + 1,
-    last: Math.min((index + 1) * SEED_CHUNK_ROWS, rows),
+const chunks = (rows: number, chunkRows = SEED_CHUNK_ROWS) =>
+  Array.from({ length: Math.ceil(rows / chunkRows) }, (_, index) => ({
+    first: index * chunkRows + 1,
+    last: Math.min((index + 1) * chunkRows, rows),
   }));
 
 const seedQuietChunk = async (
@@ -333,6 +377,132 @@ const seedLegislationChunk = async (
 };
 
 /**
+ * An unfolded change log the size of a population burst, below the
+ * maintenance high water so decision backfills stay admitted. The size is
+ * fixed, so both backfill sizes read the same backlog, and the rows cancel in
+ * pairs on one key, so a later fold moves no count.
+ */
+const POPULATION_BACKLOG_ROWS = CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER / 2;
+
+const seedPopulationBacklog = async (database: GatedTestDb) => {
+  await database.execute(sql`INSERT INTO case_law_population_deltas
+      (kind, country, source_id, value, delta)
+    SELECT 'court', 'CZE', ${PROVISION_SOURCE_ID}::uuid, 'Fixture court',
+      CASE WHEN n % 2 = 1 THEN 1 ELSE -1 END
+    FROM generate_series(1, 2 * greatest(0, (${POPULATION_BACKLOG_ROWS}::integer
+      - (SELECT count(*)::integer FROM case_law_population_deltas) + 1) / 2)) AS n
+    ORDER BY n`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_deltas`);
+};
+
+/** Grow the source rows read by the bounded provision-state run. */
+export const seedProvisionBackfillRows = async (
+  database: GatedTestDb,
+  rows: number,
+) => {
+  await database.execute(sql`INSERT INTO case_law_sources
+      (id, adapter_key, name, descriptor)
+    VALUES (${PROVISION_SOURCE_ID}, ${ADAPTER_KEYS.CZ_NS},
+      'Provision read budget fixture',
+      '{"license":"restricted","allowsDerivedAi":false,"attribution":null,"allowsRedistribution":false}'::jsonb) ON CONFLICT (id) DO NOTHING`);
+
+  for (const { first, last } of chunks(rows, PROVISION_SEED_CHUNK_ROWS)) {
+    const decisions = Array.from({ length: last - first + 1 }, (_, index) => {
+      const n = first + index;
+      const caseNumber = `provision-${String(n)}`;
+      return {
+        // Sort before the completion fixture's MD5 keys and sitemap decisions.
+        id: toSafeId<"caseLawDecision">(
+          `00000000-00b0-7000-8000-${n.toString(16).padStart(12, "0")}`,
+        ),
+        sourceId: PROVISION_SOURCE_ID,
+        ...decisionDocketColumns({
+          caseNumber,
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          country: "CZE",
+        }),
+        court: "Fixture court",
+        country: "CZE",
+        language: "cs",
+        decisionDate: "2020-01-01",
+        metadata: {},
+      };
+    });
+    // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
+    await database
+      .insert(caseLawDecisions)
+      .values(decisions)
+      .onConflictDoNothing({ target: caseLawDecisions.id });
+  }
+  await database.execute(sql`DELETE FROM case_law_provision_repair_cursors`);
+  await database.execute(sql`DELETE FROM case_law_provision_scope_transitions`);
+  await database.transaction(async (tx) => {
+    await tx.execute(
+      sql`ALTER TABLE case_law_provision_extraction_scopes DISABLE TRIGGER USER`,
+    );
+    await tx.execute(
+      sql`ALTER TABLE case_law_provision_admission DISABLE TRIGGER USER`,
+    );
+    await tx.execute(sql`DELETE FROM case_law_provision_extraction_scopes`);
+    await tx.execute(sql`DELETE FROM case_law_provision_admission`);
+    await tx.execute(
+      sql`ALTER TABLE case_law_provision_admission ENABLE TRIGGER USER`,
+    );
+    await tx.execute(
+      sql`ALTER TABLE case_law_provision_extraction_scopes ENABLE TRIGGER USER`,
+    );
+  });
+  await database.execute(sql`DELETE FROM database_backfill_states
+    WHERE name = 'caseLaw.backfillProvisionState.minutely'`);
+  await database.execute(sql`INSERT INTO case_law_provision_admission (key, revision)
+    VALUES ('global', ${PROVISION_EXTRACTION_ADMISSION_REVISION})`);
+  await database.insert(caseLawProvisionExtractionScopes).values(
+    PROVISION_EXTRACTION_ADMISSION_SCOPES.map(({ jurisdiction, language }) => ({
+      country: jurisdiction,
+      language,
+      status: "active" as const,
+      generation: 1,
+    })),
+  );
+  await database.execute(sql`INSERT INTO case_law_provision_repair_cursors
+    (name, completed_at) VALUES ('scope-bootstrap', now())`);
+  await seedPopulationBacklog(database);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
+};
+
+/** Grow the partial-index population read by the expression-id backfill. */
+export const seedExpressionIdBackfillRows = async (
+  database: GatedTestDb,
+  rows: number,
+) => {
+  const first = LEGISLATION_WORKS * LEGISLATION_VERSIONS_PER_WORK + 1;
+  await database.execute(
+    sql.raw(`
+    INSERT INTO legislation_documents
+      (id, source_id, eli, title, country, language, status, metadata,
+       created_at, updated_at)
+    SELECT ${uuidOf("00a2", "n")}, '${LEGISLATION_SOURCE_ID}',
+      'https://legislation.example.test/eli/cz/backfill/' || n,
+      'Backfill fixture act ' || n, 'CZE', 'cs', 'current', '{}'::jsonb,
+      '2026-08-01'::timestamptz, '2026-08-01'::timestamptz
+    FROM generate_series(${first}, ${rows}) AS n
+    ON CONFLICT (id) DO NOTHING
+  `),
+  );
+  await database.execute(sql`VACUUM (ANALYZE) legislation_documents`);
+};
+
+export const PROVISION_BACKFILL_SIZES = {
+  base: 20_000,
+  double: 40_000,
+} as const;
+
+export const EXPRESSION_ID_BACKFILL_SIZES = {
+  base: LEGISLATION_WORKS * LEGISLATION_VERSIONS_PER_WORK,
+  double: LEGISLATION_WORKS * LEGISLATION_VERSIONS_PER_WORK * 2,
+} as const;
+
+/**
  * Serves case law from `served`: `serving` becomes the family's serving
  * generation (the others are building) and each flipped jurisdiction points
  * at its generation, replacing any earlier pointers.
@@ -364,8 +534,9 @@ export const serveCaseLaw = async (
  * small specialised court to a large court system, so the facet table holds
  * thousands of rows and a source's facets are read the way they are served.
  */
+// Source adapter keys are unique; cz-ns belongs to the provision scenario.
 const FACET_SOURCE_KEYS = [
-  ADAPTER_KEYS.CZ_NS,
+  ADAPTER_KEYS.AT_COURTS,
   ADAPTER_KEYS.CZ_NSS,
   ADAPTER_KEYS.CZ_US,
   ADAPTER_KEYS.SK_COURTS,
@@ -401,8 +572,7 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
   } of FACET_SOURCES) {
     // db-await-in-loop: six fixed sources, each with its own facet rows.
     await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-      VALUES (${sourceId}::uuid, ${adapterKey}, ${`Facet fixture ${String(index + 1)}`}, false)
-      ON CONFLICT (id) DO NOTHING`);
+      VALUES (${sourceId}::uuid, ${adapterKey}, ${`Facet fixture ${String(index + 1)}`}, false)`);
     // db-await-in-loop: the source's facets follow the source row they reference.
     await database.execute(sql`INSERT INTO case_law_browse_facet_counts
       (kind, country, source_id, value, total)
@@ -417,95 +587,187 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
   }
 };
 
-export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
-  await database.insert(corpusIndexGenerations).values([
-    ...SCENARIO_GENERATIONS.map(({ generation }) => ({
-      family: "case_law" as const,
-      generation,
-      cluster: "q09" as const,
-      manifestDigest: corpusIndexManifestDigest(
-        CORPUS_INDEX_MANIFESTS[generation],
-      ),
-      status: "building" as const,
-    })),
-    {
-      family: "legislation" as const,
-      generation: LEGISLATION_GENERATION,
-      cluster: "q09" as const,
-      manifestDigest: corpusIndexManifestDigest(
-        CORPUS_INDEX_MANIFESTS[LEGISLATION_GENERATION],
-      ),
-      status: "serving" as const,
-    },
-  ]);
-  const rebuildIndexes = await deferSecondaryIndexes(database);
-  for (const { generation, kind, rows } of SCENARIO_GENERATIONS) {
-    for (const chunk of chunks(rows)) {
-      // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
-      await withoutTriggers(database, async (tx) => {
-        await (kind === "quiet"
-          ? seedQuietChunk(tx, generation, chunk)
-          : seedBusyChunk(tx, generation, rows, chunk));
-      });
-    }
+/** The country whose admitted courts the court catalog page reads. */
+export const COURT_CATALOG_COUNTRY = "XCC";
+const COURT_CATALOG_COURTS = 3000;
+const COURT_CATALOG_SOURCE_IDS = [
+  "01990000-00c4-7000-8000-000000000001",
+  "01990000-00c4-7000-8000-000000000002",
+  "01990000-00c4-7000-8000-000000000003",
+] as const;
+
+/**
+ * A country of many courts, each held by every one of three sources, as the
+ * folded population counts hold them: the court catalog reads one page of
+ * them, so the rows past the page are what it must not read.
+ */
+const seedCourtCatalogPopulation = async (database: GatedTestDb) => {
+  for (const [index, sourceId] of COURT_CATALOG_SOURCE_IDS.entries()) {
+    // db-await-in-loop: three fixed sources, each with its own court rows.
+    await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+      VALUES (${sourceId}::uuid, ${`query-perf-court-catalog-${String(index + 1)}`},
+        ${`Court catalog fixture ${String(index + 1)}`}, false)
+      ON CONFLICT (id) DO NOTHING`);
+    // db-await-in-loop: the source's court rows follow the source row they reference.
+    await database.execute(sql`INSERT INTO case_law_population_counts
+      (kind, country, source_id, value, total)
+      SELECT 'court', ${COURT_CATALOG_COUNTRY}, ${sourceId}::uuid,
+        'Catalog court ' || lpad(n::text, 5, '0'), 1 + n % 53
+      FROM generate_series(1, ${COURT_CATALOG_COURTS}) n
+      ON CONFLICT DO NOTHING`);
   }
-  await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-    VALUES (${COMPLETION_SOURCE_ID}, 'query-perf-completion', 'Completion query fixture', false)`);
-  for (const chunk of chunks(COMPLETION_ROWS)) {
-    await withoutTriggers(database, async (tx) => {
-      await tx.execute(sql`INSERT INTO case_law_decisions
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_counts`);
+};
+
+/**
+ * The coverage refresh reads every source's counts, so a fixture for another
+ * read's budget leaves this measurement's clone before it starts.
+ */
+const removeCourtCatalogPopulation = async (database: GatedTestDb) => {
+  await database.execute(
+    sql`DELETE FROM case_law_population_counts WHERE country = ${COURT_CATALOG_COUNTRY}`,
+  );
+  for (const sourceId of COURT_CATALOG_SOURCE_IDS) {
+    // db-await-in-loop: three fixed sources, after the counts that reference them.
+    await database.execute(
+      sql`DELETE FROM case_law_sources WHERE id = ${sourceId}::uuid`,
+    );
+  }
+};
+
+export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
+  await withSeededTableMaintenance(database, async () => {
+    await database.insert(corpusIndexGenerations).values([
+      ...SCENARIO_GENERATIONS.map(({ generation }) => ({
+        family: "case_law" as const,
+        generation,
+        cluster: "q09" as const,
+        manifestDigest: corpusIndexManifestDigest(
+          CORPUS_INDEX_MANIFESTS[generation],
+        ),
+        status: "building" as const,
+      })),
+      {
+        family: "legislation" as const,
+        generation: LEGISLATION_GENERATION,
+        cluster: "q09" as const,
+        manifestDigest: corpusIndexManifestDigest(
+          CORPUS_INDEX_MANIFESTS[LEGISLATION_GENERATION],
+        ),
+        status: "serving" as const,
+      },
+    ]);
+    const rebuildIndexes = await deferSecondaryIndexes(database);
+    for (const { generation, kind, rows } of SCENARIO_GENERATIONS) {
+      for (const chunk of chunks(rows)) {
+        // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
+        await withoutTriggers(database, async (tx) => {
+          await (kind === "quiet"
+            ? seedQuietChunk(tx, generation, chunk)
+            : seedBusyChunk(tx, generation, rows, chunk));
+        });
+      }
+    }
+    await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+    VALUES (${COMPLETION_SOURCE_ID}, ${ADAPTER_KEYS.EU_ECJ}, 'Completion query fixture', false)`);
+    for (const chunk of chunks(COMPLETION_ROWS)) {
+      await withoutTriggers(database, async (tx) => {
+        await tx.execute(sql`INSERT INTO case_law_decisions
         (id, source_id, case_number, country, court, language, parser_version, source_hash)
         SELECT md5(${COMPLETION_SOURCE_ID}::text || '-' || n::text)::uuid,
           ${COMPLETION_SOURCE_ID}, 'completion-' || n::text, 'EUR', 'fixture', 'en', 2, 'finished'
         FROM generate_series(${chunk.first}, ${chunk.last}) AS n`);
-    });
-  }
-  await database.execute(sql`INSERT INTO eu_completion_receipts
+      });
+    }
+    await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+      VALUES (${REPLAY_SOURCE_ID}, 'query-perf-replay', 'Replay probe fixture', false)`);
+    for (const chunk of chunks(REPLAY_ROWS)) {
+      // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
+      await withoutTriggers(database, async (tx) => {
+        await tx.execute(sql`INSERT INTO case_law_decisions
+          (id, source_id, case_number, country, court, language, parser_version,
+            source_hash, source_hash_version, source_raw_s3_key,
+            parsed_source_hash, parsed_source_hash_version, parsed_source_raw_s3_key,
+            metadata)
+          SELECT md5(${REPLAY_SOURCE_ID}::text || '-' || n::text)::uuid,
+            ${REPLAY_SOURCE_ID}, 'replay-' || n::text, 'POL', 'fixture', 'pl',
+            ${REPLAY_PARSER_VERSION}, 'stored-' || n::text, 1, 'case-law/raw/replay-' || n::text,
+            'stored-' || n::text, 1, 'case-law/raw/replay-' || n::text,
+            ${LISTING_ONLY_METADATA}::text::jsonb
+          FROM generate_series(${chunk.first}, ${chunk.last}) AS n`);
+      });
+    }
+    const [published] = v.parse(
+      v.tuple([v.object({ rows: v.number() })]),
+      executedRows(
+        await database.execute(sql`SELECT count(*)::integer AS rows
+          FROM case_law_published_decisions WHERE source_id = ${REPLAY_SOURCE_ID}`),
+      ),
+    );
+    if (published.rows !== 0) {
+      panic(
+        "The replay fixture's decisions must stay out of the published views",
+      );
+    }
+    await database.execute(sql`INSERT INTO eu_completion_receipts
     (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
     SELECT 'finished-' || id::text, source_id, id, 'dry-run', 2, 'dry-run', source_hash, now()
     FROM case_law_decisions WHERE source_id = ${COMPLETION_SOURCE_ID}`);
-  await database.execute(sql`INSERT INTO case_law_index_jobs (id, decision_id, operation, status)
+    await database.execute(sql`INSERT INTO case_law_index_jobs (id, decision_id, operation, status)
     SELECT md5('withdrawal-' || id::text)::uuid, id, 'withdraw', 'succeeded'
     FROM case_law_decisions WHERE source_id = ${COMPLETION_SOURCE_ID}`);
-  await database.execute(sql`INSERT INTO legislation_sources (id, adapter_key, name)
+    await database.execute(sql`INSERT INTO legislation_sources (id, adapter_key, name)
     VALUES (${LEGISLATION_SOURCE_ID}, 'read-budget-fixture', 'Read budget fixture')`);
-  for (const chunk of chunks(
-    LEGISLATION_WORKS * LEGISLATION_VERSIONS_PER_WORK,
-  )) {
-    // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
-    await withoutTriggers(database, async (tx) => {
-      await seedLegislationChunk(tx, chunk);
+    for (const chunk of chunks(
+      LEGISLATION_WORKS * LEGISLATION_VERSIONS_PER_WORK,
+    )) {
+      // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
+      await withoutTriggers(database, async (tx) => {
+        await seedLegislationChunk(tx, chunk);
+      });
+    }
+
+    await rebuildIndexes();
+    await seedBrowseFacetCounts(database);
+    await seedCourtCatalogPopulation(database);
+    const works = Array.from(
+      { length: LEGISLATION_CANDIDATE_COUNT },
+      // Spread over the works, as hits for a common term are.
+      (_, index) => ((index * 61) % LEGISLATION_WORKS) + 1,
+    );
+    const candidateIds: SafeId<"legislationDocument">[] = works.map((work) =>
+      toSafeId<"legislationDocument">(
+        `01990000-00a2-7000-8000-${(work * LEGISLATION_VERSIONS_PER_WORK).toString(16).padStart(12, "0")}`,
+      ),
+    );
+    const quoteSourceId = toSafeId<"caseLawSource">(
+      "01990000-00a3-7000-8000-000000000001",
+    );
+    const quoteDecisionId = toSafeId<"caseLawDecision">(
+      "01990000-00a4-7000-8000-000000000001",
+    );
+    await database.insert(caseLawSources).values({
+      id: quoteSourceId,
+      name: "Quote budget fixture",
+      adapterKey: QUOTE_FIXTURE_ADAPTER_KEY,
+      enabled: false,
     });
-  }
-  await rebuildIndexes();
-  await seedBrowseFacetCounts(database);
-  for (const table of [
-    "case_law_sources",
-    "case_law_browse_facet_counts",
-    "corpus_index_generations",
-    "corpus_index_projection_states",
-    "corpus_index_projection_intents",
-    "legislation_sources",
-    "legislation_documents",
-    "case_law_decisions",
-    "eu_completion_receipts",
-    "case_law_index_jobs",
-  ]) {
-    // db-await-in-loop: one VACUUM per seeded table; VACUUM cannot share a statement.
-    await database.execute(sql.raw(`VACUUM (ANALYZE) ${table}`));
-  }
-  const works = Array.from(
-    { length: LEGISLATION_CANDIDATE_COUNT },
-    // Spread over the works, as hits for a common term are.
-    (_, index) => ((index * 61) % LEGISLATION_WORKS) + 1,
-  );
-  const candidateIds: SafeId<"legislationDocument">[] = works.map((work) =>
-    toSafeId<"legislationDocument">(
-      `01990000-00a2-7000-8000-${(work * LEGISLATION_VERSIONS_PER_WORK).toString(16).padStart(12, "0")}`,
-    ),
-  );
-  return { candidateIds, completionSourceId: COMPLETION_SOURCE_ID };
-};
+    await database.insert(caseLawDecisions).values({
+      id: quoteDecisionId,
+      sourceId: quoteSourceId,
+      country: "CZE",
+      court: "Nejvyšší soud",
+      language: "cs",
+      caseNumber: "1 Test 1/2026",
+      fulltext: "Stored decision text.",
+    });
+    return {
+      candidateIds,
+      completionSourceId: COMPLETION_SOURCE_ID,
+      quoteDecisionId,
+      replaySourceId: REPLAY_SOURCE_ID,
+    };
+  });
 
 export type CorpusReadBudgetSeed = Awaited<
   ReturnType<typeof seedCorpusReadBudgets>
@@ -519,6 +781,9 @@ type SeedSitemapReadBudgetOptions = {
 
 /** The sitemap fixture's source; any registered adapter serves, its rows are synthetic. */
 const SITEMAP_FIXTURE_ADAPTER_KEY = ADAPTER_KEYS.CZ_REGIONAL;
+
+/** The quote fixture's source; no other fixture uses this adapter. */
+const QUOTE_FIXTURE_ADAPTER_KEY = ADAPTER_KEYS.UK_FCL;
 
 /** One available dirty month beside a growing backlog held by another run. */
 export const seedSitemapReadBudget = async ({
@@ -564,12 +829,17 @@ export const seedSitemapReadBudget = async ({
     (country, year, month, bucket, total, last_modified_at)
     SELECT 'XQN', (1000 + i / 12)::text, lpad((1 + i % 12)::text, 2, '0'),
       'all', 1, '2026-01-01'::timestamptz FROM generate_series(1, ${scenario.rows}) i`);
+  await database.execute(sql`DELETE FROM case_law_sitemap_refresh_cursor`);
+  await database.execute(sql`DELETE FROM case_law_sitemap_drain_progress`);
   await database.execute(sql`DELETE FROM case_law_sitemap_changes`);
   // Many committed changes of the same month exercise the bounded queue
-  // page and its full-month consumption without adding dirty months.
-  await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month, xact)
-    SELECT 'XQT', '2024', '01', (1000000 + i)::text::xid8
-    FROM generate_series(1, 2000) i`);
+  // discovery and retirement without adding dirty months.
+  for (let change = 0; change < 2000; change += 1) {
+    // db-await-in-loop: each change needs its own committed transaction id so
+    // it is visible below the measured run's snapshot xmin.
+    await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month)
+      VALUES ('XQT', '2024', '01')`);
+  }
   await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month, xact)
     SELECT 'XQN', '2024', '01', (2000000 + i)::text::xid8
     FROM generate_series(1, ${scenario.rows}) i`);
@@ -600,6 +870,13 @@ export const seedSitemapReadBudget = async ({
     await holding;
   };
 };
+
+/** Whether the sitemap measurement retired at least one visible fixture change. */
+export const sitemapRefreshRetiredChanges = async (database: GatedTestDb) =>
+  (await database.$count(
+    caseLawSitemapChanges,
+    eq(caseLawSitemapChanges.country, "XQT"),
+  )) < 2000;
 
 /**
  * The rows the coverage refresh writes: its summary, its backfill checkpoint
@@ -662,6 +939,30 @@ const replaceCoverageRefreshState = async (
 
 const COVERAGE_DECISION_ID_PREFIX = "01990000-00c3-7000-8000-";
 
+/** Read measurements start after fixture writes have reached the persisted owner. */
+const foldFixturePopulation = async (database: GatedTestDb) => {
+  let done = false;
+  while (!done) {
+    // db-await-in-loop: fixture preparation folds bounded batches before the measured read-only refresh.
+    const row = executedRows(
+      await database.execute(sql`
+      SELECT folded, done FROM public.fold_case_law_population_counts(${CASE_LAW_POPULATION_FOLD_BATCH_LIMIT})
+    `),
+    ).find(isRecord);
+    if (
+      !row ||
+      typeof row["folded"] !== "number" ||
+      typeof row["done"] !== "boolean"
+    ) {
+      panic("Invalid fixture population fold result");
+    }
+    if (row["folded"] === 0 && !row["done"]) {
+      panic("Fixture population fold owner is busy");
+    }
+    done = row["done"];
+  }
+};
+
 /**
  * The served sources' published decisions at the scenario's size, spread over
  * their facet courts and years, with the online coverage indexes production
@@ -722,6 +1023,10 @@ const seedCoverageDecisions = async ({
   }
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_search_documents`);
+  await foldFixturePopulation(database);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_counts`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_deltas`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_projections`);
 };
 
 /**
@@ -734,6 +1039,7 @@ export const prepareCoverageRefreshMeasurement = async (
   options: SeedSitemapReadBudgetOptions,
 ) => {
   const { database } = options;
+  await removeCourtCatalogPopulation(database);
   await seedCoverageDecisions(options);
   const found = await readCoverageRefreshState(database);
   await replaceCoverageRefreshState(

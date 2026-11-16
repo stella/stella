@@ -7,11 +7,10 @@ import {
   type PipelineRun,
 } from "@/components/inspector/pipeline-run-registry.logic";
 import { fetchPrintPdf } from "@/components/pdf/peek/peek-pdf-print";
-import { captureQueryError } from "@/lib/analytics/provider";
 import { detectFileAnonymizationTerms } from "@/lib/anonymize/file-anonymization-policy";
 import { extractPdfAnonymizationText } from "@/lib/anonymize/pdf-anonymization-geometry";
 import { ClientOperationError } from "@/lib/errors/client";
-import { readQueryResult } from "@/lib/errors/query-result";
+import { captureQueryError, readQueryResult } from "@/lib/errors/query-result";
 import {
   allocateEntityOverlayId,
   clearAnonymizationForField,

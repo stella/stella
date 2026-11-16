@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 
+import { moneyExportSchema } from "@stll/api-contract/billing-money";
 import { classifyFailure } from "@stll/errors";
+import { withBillingRead } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import { INVOICE_STATUS } from "@/api/db/schema";
@@ -14,6 +16,10 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
+import {
+  invoicePaymentState,
+  paidAmountOf,
+} from "@/api/lib/billing/invoice-payment-amounts";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -72,11 +78,12 @@ const invoiceRenderRejection = ({
 };
 
 const config = {
+  moneyResponse: moneyExportSchema,
   contract: "patch",
   contentDelivery: { type: "audited" },
   description:
     "Download an invoice, advance invoice or credit note as PDF, including its parties, lines, VAT breakdown and payment QR. Drafts have no document number. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
-  permissions: { workspace: ["read"] },
+  permissions: withBillingRead({ workspace: ["read"] }),
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
   access: "write",
@@ -216,6 +223,15 @@ export const createInvoicePdfExport = (
                   }),
                 },
                 totals: amounts.totals,
+                // The document's own gross, not the stored total: a legacy
+                // invoice (no stored lines) prints entries its stored total
+                // may not count, and the payment it asks for must match.
+                settlement: invoicePaymentState({
+                  documentType: loaded.invoice.documentType,
+                  status: loaded.invoice.status,
+                  totalAmount: amounts.totals.grossAmountMinor,
+                  paidAmount: paidAmountOf(loaded.invoice.payments),
+                }),
               },
             }),
           catch: invoiceRenderError,

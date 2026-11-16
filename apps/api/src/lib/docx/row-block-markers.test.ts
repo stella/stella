@@ -1,10 +1,9 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
-import { writeZipEntry } from "@stll/docx-utils";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { ZipArchive } from "@stll/docx-core/zip";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -30,9 +29,9 @@ const TR = (...cells: string[]) => `<w:tr>${cells.join("")}</w:tr>`;
 const TBL = (...rows: string[]) => `<w:tbl>${rows.join("")}</w:tbl>`;
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", documentXml);
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const parseBody = (xml: string): slimdom.Element => {
@@ -445,7 +444,8 @@ describe("row form and own-paragraph form agree", () => {
   });
 
   test("the two placements render the same rows for the same values", () => {
-    fc.assert(
+    assertProperty(
+      "the two placements render the same rows for the same values",
       fc.property(
         fc.array(item, { maxLength: 5 }),
         fc.boolean(),
@@ -465,7 +465,7 @@ describe("row form and own-paragraph form agree", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 });

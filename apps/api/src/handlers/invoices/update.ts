@@ -31,6 +31,7 @@ import { recalculateInvoiceTotals } from "@/api/lib/billing/invoice-lines";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  displayNameSchema,
   invoiceLanguageSchema,
   resourceIdSchema,
   workspaceParams,
@@ -55,9 +56,7 @@ const updateInvoiceBodySchema = v.object({
   sellerProfileId: v.exactOptional(
     v.nullable(resourceIdSchema("sellerProfile")),
   ),
-  buyerName: v.exactOptional(
-    v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
-  ),
+  buyerName: v.exactOptional(v.nullable(displayNameSchema({ maxLength: 512 }))),
   buyerRegistrationId: v.exactOptional(
     v.nullable(v.pipe(v.string(), v.maxLength(64))),
   ),

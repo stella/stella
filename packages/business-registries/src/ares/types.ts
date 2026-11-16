@@ -51,14 +51,14 @@ export type AresResResponse = {
 // ---------------------------------------------------------------------------
 
 /** Address entry in VR records (has validity dates). */
-export type AresVrAddressEntry = {
+type AresVrAddressEntry = {
   adresa?: AresRawAddress;
   datumZapisu?: string;
   datumVymazu?: string;
 };
 
 /** Company name entry with validity dates. */
-export type AresVrNameEntry = {
+type AresVrNameEntry = {
   hodnota: string;
   datumZapisu?: string;
   datumVymazu?: string;
@@ -75,27 +75,27 @@ export type AresVrSpisZn = {
 };
 
 /** Capital/deposit value. */
-export type AresVrDeposit = {
+type AresVrDeposit = {
   hodnota?: string;
   typObnos?: string;
 };
 
 /** Share capital entry. */
-export type AresVrShareCapital = {
+type AresVrShareCapital = {
   vklad?: AresVrDeposit;
   datumZapisu?: string;
   datumVymazu?: string;
 };
 
 /** Legal form entry with validity dates. */
-export type AresVrLegalFormEntry = {
+type AresVrLegalFormEntry = {
   hodnota?: string;
   datumZapisu?: string;
   datumVymazu?: string;
 };
 
 /** Physical person in VR data. */
-export type AresVrPhysicalPerson = {
+type AresVrPhysicalPerson = {
   jmeno?: string;
   prijmeni?: string;
   titulPredJmenem?: string;
@@ -105,7 +105,7 @@ export type AresVrPhysicalPerson = {
 };
 
 /** Legal entity in VR data. */
-export type AresVrLegalEntity = {
+type AresVrLegalEntity = {
   obchodniJmeno?: string;
   ico?: string;
   adresa?: AresRawAddress;

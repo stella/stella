@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narratives";
 import { companyFormatKeys } from "@/components/company-format-library";
@@ -12,10 +13,18 @@ import { documentAnnotationKeys } from "@/components/pdf/annotations/document-an
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { claimCommentKeys } from "@/features/avt/claim-comments-query";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
+import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
+import { chatLimitReminderOptions } from "@/features/chat/chat-limit-reminder";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
+import {
+  sharepointAccessOptions,
+  sharepointChildrenOptions,
+  sharepointDrivesOptions,
+  sharepointSitesOptions,
+} from "@/features/sharepoint/sharepoint-queries";
 import { timeTimersOptions } from "@/features/time-timers/queries";
 import { accountDataExportLatestOptions } from "@/lib/account/account-data-export-queries";
 import {
@@ -24,6 +33,7 @@ import {
   sessionsOptions,
 } from "@/lib/account/queries";
 import { professionalUseOptions } from "@/lib/auth-queries";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import {
   chatUnavailableSkillsOptions,
@@ -34,8 +44,13 @@ import {
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
+import { organizationAuditExportLatestOptions } from "@/lib/organization/audit-export-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { searchPreviewOptions } from "@/lib/search";
+import {
+  searchFacetOptions,
+  searchInfiniteOptions,
+  searchPreviewOptions,
+} from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
 import {
   DEFAULT_MATTER_ACTIVITY_FILTERS,
@@ -68,13 +83,13 @@ import {
   optionalOrganizationSettingsOptions,
   organizationSettingsOptions,
 } from "@/queries/organization-settings";
-import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
-import {
-  connectedAppsOptions,
-  sharepointConnectionOptions,
-} from "@/routes/_protected.settings/-queries/connections";
+import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
+import { auditLogOptions } from "@/routes/_protected.settings/organization/-queries/audit-logs";
+import { timeReportOptions } from "@/routes/_protected.time_.report/-components/report-query";
+
+import { API_CLIENT_REQUEST_METHODS } from "../../../.oxlint-plugins/api-client-chain";
 
 // API reads that answer for the signed-in user are cached under a key that
 // names that user. The manifests below list every such read:
@@ -127,6 +142,20 @@ const OAUTH_REDIRECT = "an OAuth redirect, not cached";
 const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 const READ_FRESH = "read fresh at each use, never cached";
+const SHAREPOINT_QUERIES = "features/sharepoint/sharepoint-queries.ts";
+const SHAREPOINT_VIEWER = { organizationId: ORG, userId: USER };
+
+const SEARCH_PROBE = {
+  editedByUserIds: [],
+  enabled: true,
+  kinds: [],
+  mimeTypes: [],
+  organizationId: ORG,
+  query: "query",
+  types: [],
+  userId: USER,
+  workspaceIds: [],
+};
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
@@ -139,6 +168,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [accountDataExportLatestOptions(USER).queryKey],
   },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  "organizations/audit-export/get.ts": {
+    kind: "keyed",
+    calls: ['api.organizations["audit-export"].get'],
+    files: ["lib/organization/audit-export-queries.ts"],
+    keys: () => [organizationAuditExportLatestOptions(ORG, USER).queryKey],
+  },
   "files/thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "search-history/list.ts": {
     kind: "keyed",
@@ -239,7 +274,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "audit-logs/list.ts": {
     kind: "keyed",
     calls: ['api["audit-logs"].get'],
-    files: ["routes/_protected.admin/-queries/audit-logs.ts"],
+    files: ["routes/_protected.settings/organization/-queries/audit-logs.ts"],
     keys: () => [
       auditLogOptions({
         viewer: { userId: USER, organizationId: ORG },
@@ -252,6 +287,30 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "not-per-user",
     reason:
       "The actor determines the read-audit receipt; returned run content is shared within the matter.",
+  },
+  "lists/verifications/graph/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipts; the returned graph is shared within the matter.",
+  },
+  "lists/verifications/chronology/export.ts": {
+    kind: "not-per-user",
+    reason: DOWNLOAD,
+  },
+  "lists/graph/nodes/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
+  "lists/graph/neighbours/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
+  "lists/graph/paths/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
   },
   "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
@@ -281,6 +340,8 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       "An uncached rewrite proposal; its thread lookup is owner-filtered.",
   },
   "chat/older-messages/list.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/queue/read-message.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/queue/read.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/read-file-thread.ts": {
     kind: "keyed",
     calls: ['api.chat.workspaces()["file-thread"].get'],
@@ -338,6 +399,29 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "chat/tool-grants/coverage.ts": { kind: "not-per-user", reason: READ_FRESH },
+  "chat/limit-reminder/get.ts": {
+    kind: "keyed",
+    calls: ['api.chat.threads()["limit-reminder"].get'],
+    files: ["features/chat/chat-limit-reminder.ts"],
+    keys: () => [
+      chatLimitReminderOptions({
+        activeOrganizationId: ORG,
+        threadRef: { scope: "global", threadId: toChatThreadId("thread") },
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "chat/browser-site-grants/list.ts": {
+    kind: "keyed",
+    calls: ['api.chat["browser-site-grants"].get'],
+    files: ["features/chat/browser-control/browser-site-grants.ts"],
+    keys: () => [
+      browserSiteGrantsOptions({
+        activeOrganizationId: ORG,
+        userId: USER,
+      }).queryKey,
+    ],
+  },
   "chat/skill-availability/list.ts": {
     kind: "keyed",
     calls: ['api.chat["skill-availability"].get'],
@@ -354,6 +438,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     opaqueKeys: {
       "chatKeys.decisionThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
     },
+  },
+  "chat/runs/list.ts": {
+    kind: "keyed",
+    calls: ["api.chat.runs.active.get"],
+    files: ["features/chat/active-runs.ts"],
+    keys: () => [chatKeys.activeRuns(ORG, USER)],
   },
   "chat/threads/list.ts": {
     kind: "keyed",
@@ -604,22 +694,56 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
-  "sharepoint/list-drive-root.ts": {
-    kind: "no-web-caller",
-    calls: ["api.sharepoint.drive.root.get"],
+  // Facet buckets count only the matters and result types the caller may see.
+  "search/facets/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.facets.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.facet(params)": KEY_TYPE_HAS_USER },
+    keys: () => [
+      searchFacetOptions({ ...SEARCH_PROBE, facet: "workspace", search: "" })
+        .queryKey,
+    ],
+  },
+  "search/results/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.query(params)": KEY_TYPE_HAS_USER },
+    keys: () => [searchInfiniteOptions(SEARCH_PROBE).queryKey],
+  },
+  "sharepoint/drives/items/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.drives().items().children.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [
+      sharepointChildrenOptions(SHAREPOINT_VIEWER, {
+        driveId: "drive-probe",
+        folderId: null,
+      }).queryKey,
+    ],
+  },
+  "sharepoint/drives/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.drives.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointDrivesOptions(SHAREPOINT_VIEWER, null).queryKey],
   },
   "sharepoint/oauth-callback.ts": {
     kind: "not-per-user",
     reason: OAUTH_REDIRECT,
   },
+  "sharepoint/sites/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.sites.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointSitesOptions(SHAREPOINT_VIEWER, "").queryKey],
+  },
   "sharepoint/status.ts": {
     kind: "keyed",
     calls: ["api.sharepoint.connection.get"],
-    files: ["routes/_protected.settings/-queries/connections.ts"],
-    keys: () => [
-      sharepointConnectionOptions({ organizationId: ORG, userId: USER })
-        .queryKey,
-    ],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointAccessOptions(SHAREPOINT_VIEWER).queryKey],
   },
   "signals/count.ts": {
     kind: "keyed",
@@ -680,6 +804,19 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [
       timeApprovalQueueOptions(ORG, USER, {}).queryKey,
       timeApprovalPendingOptions(ORG, USER).queryKey,
+    ],
+  },
+  "time-entries/report/get.ts": {
+    kind: "keyed",
+    calls: ['api["time-entries"].report.get'],
+    files: ["routes/_protected.time_.report/-components/report-query.ts"],
+    keys: () => [
+      timeReportOptions(ORG, USER, {
+        bucket: "day",
+        from: "2026-10-26",
+        groupBy: "member",
+        to: "2026-11-01",
+      }).queryKey,
     ],
   },
   "time-entries/me/list.ts": {
@@ -773,6 +910,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "workspaces/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
+  "workspaces/member-candidates/list.ts": {
+    kind: "not-per-user",
+    reason: JOINS_NAMES,
+  },
   "workspaces/read-active.ts": {
     kind: "no-web-caller",
     calls: ["api.workspaces.active.get"],
@@ -831,6 +972,10 @@ const AUTH_CLIENT_READS: Record<string, PerUserRead> = {
     calls: ["authClient.listSessions", "listAuthSessions"],
     files: ["lib/auth-client.ts", "lib/account/queries.ts"],
     keys: () => [sessionsOptions(USER).queryKey],
+  },
+  "authClient.organization.getActiveMember": {
+    kind: "session",
+    reason: "the signed-in member's own membership grants",
   },
   "authClient.organization.getActiveMemberRole": {
     kind: "session",
@@ -922,71 +1067,383 @@ const readHandlers = () => {
   return reads;
 };
 
-const IDENTIFIER = /[A-Za-z_$][\w$]*/uy;
-const BRACKETED = /\[\s*"([^"]+)"\s*\]/uy;
+type ReadBinding = {
+  value: Node | null;
+  stable: boolean;
+  root: string | null;
+};
+type ReadCall = { chain: string; start: number; end: number };
+const functionScope = (node: Node) =>
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression" ||
+  node.type === "ArrowFunctionExpression";
+const lexicalScope = (node: Node) =>
+  functionScope(node) ||
+  [
+    "Program",
+    "BlockStatement",
+    "CatchClause",
+    "ForStatement",
+    "ForOfStatement",
+    "ForInStatement",
+    "SwitchStatement",
+  ].includes(node.type);
 
-const closingParen = (source: string, open: number) => {
-  let depth = 0;
-  for (let index = open; index < source.length; index += 1) {
-    if (source[index] === "(") {
-      depth += 1;
-    } else if (source[index] === ")") {
-      depth -= 1;
-      if (depth === 0) {
-        return index;
-      }
-    }
+const bindingNames = (node: Node): string[] => {
+  if (node.type === "Identifier") {
+    return [node.name];
   }
-  return -1;
+  if (node.type === "ObjectPattern") {
+    return node.properties.flatMap((property) =>
+      bindingNames(
+        property.type === "RestElement" ? property.argument : property.value,
+      ),
+    );
+  }
+  if (node.type === "ArrayPattern") {
+    return node.elements.flatMap((element) =>
+      element ? bindingNames(element) : [],
+    );
+  }
+  if (node.type === "AssignmentPattern") {
+    return bindingNames(node.left);
+  }
+  if (node.type === "RestElement") {
+    return bindingNames(node.argument);
+  }
+  if (node.type === "TSParameterProperty") {
+    return bindingNames(node.parameter);
+  }
+  return [];
+};
+const clientModule = (name: string) => {
+  if (name === "api" || name === "apiClient") {
+    return "api";
+  }
+  if (name === "authClient") {
+    return "auth-client";
+  }
+  return null;
 };
 
-/**
- * Member chains starting at one of `roots`, with call arguments dropped:
- * `api.workspaces({ workspaceId }).activity.get({ … })` reads
- * `api.workspaces().activity.get()`.
- */
-const callChains = (source: string, roots: readonly string[]) => {
-  const chains: string[] = [];
-  const root = new RegExp(`(?<![\\w$.])(?:${roots.join("|")})(?![\\w$])`, "gu");
-  for (const match of source.matchAll(root)) {
-    let chain = match[0];
-    let index = match.index + chain.length;
-    for (;;) {
-      while (/\s/u.test(source[index] ?? "")) {
-        index += 1;
-      }
-      const next = source[index];
-      if (next === ".") {
-        IDENTIFIER.lastIndex = index + 1;
-        const name = IDENTIFIER.exec(source);
-        if (name === null) {
-          break;
+/** Actual calls, with immutable route receivers resolved in their lexical scope. */
+const readCalls = (
+  source: string,
+  roots: readonly string[],
+  fileName = "per-user-read.tsx",
+): ReadCall[] => {
+  const { program } = parseSource(fileName, source);
+  const parents = new Map<Node, Node>();
+  const bindings = new Map<Node, Map<string, ReadBinding>>();
+  const importedRoot = (module: string, name: string) => {
+    if (!roots.includes(name)) {
+      return null;
+    }
+    const owner = clientModule(name);
+    if (owner === null) {
+      return name;
+    }
+    return module === `@/lib/${owner}` ||
+      (module.startsWith(".") &&
+        nodePath
+          .resolve(nodePath.dirname(fileName), module)
+          .replace(/\.tsx?$/u, "") === nodePath.join(WEB_SOURCE, "lib", owner))
+      ? name
+      : null;
+  };
+  const dynamicImports = (
+    pattern: Node,
+    value: Node | null,
+  ): Map<string, string> => {
+    const imported = new Map<string, string>();
+    if (value?.type === "AwaitExpression") {
+      return dynamicImports(pattern, value.argument);
+    }
+    if (
+      pattern.type === "ObjectPattern" &&
+      value?.type === "ImportExpression" &&
+      value.source.type === "Literal" &&
+      typeof value.source.value === "string"
+    ) {
+      for (const property of pattern.properties) {
+        if (
+          property.type !== "Property" ||
+          property.computed ||
+          property.key.type !== "Identifier" ||
+          property.value.type !== "Identifier"
+        ) {
+          continue;
         }
-        chain += `.${name[0]}`;
-        index = IDENTIFIER.lastIndex;
-      } else if (next === "[") {
-        BRACKETED.lastIndex = index;
-        const name = BRACKETED.exec(source);
-        if (name === null) {
-          break;
+        const root = importedRoot(value.source.value, property.key.name);
+        if (root !== null) {
+          imported.set(property.value.name, root);
         }
-        chain += `["${name[1] ?? ""}"]`;
-        index = BRACKETED.lastIndex;
-      } else if (next === "(") {
-        const close = closingParen(source, index);
-        if (close === -1) {
-          break;
-        }
-        chain += "()";
-        index = close + 1;
-      } else {
-        break;
       }
     }
-    chains.push(chain);
-  }
-  return chains;
+    if (
+      pattern.type === "ArrayPattern" &&
+      value?.type === "CallExpression" &&
+      value.callee.type === "MemberExpression" &&
+      value.callee.object.type === "Identifier" &&
+      value.callee.object.name === "Promise" &&
+      !value.callee.computed &&
+      value.callee.property.type === "Identifier" &&
+      value.callee.property.name === "all"
+    ) {
+      const inputs = value.arguments.at(0);
+      if (inputs?.type === "ArrayExpression") {
+        for (const [index, element] of pattern.elements.entries()) {
+          const input = inputs.elements.at(index);
+          if (element && input) {
+            for (const [name, root] of dynamicImports(element, input)) {
+              imported.set(name, root);
+            }
+          }
+        }
+      }
+    }
+    return imported;
+  };
+
+  const declare = (scope: Node, name: string, binding: ReadBinding) => {
+    let names = bindings.get(scope);
+    if (!names) {
+      names = new Map();
+      bindings.set(scope, names);
+    }
+    names.set(
+      name,
+      names.has(name) ? { value: null, stable: false, root: null } : binding,
+    );
+  };
+  const opaque = (scope: Node, pattern: Node) => {
+    for (const name of bindingNames(pattern)) {
+      declare(scope, name, { value: null, stable: false, root: null });
+    }
+  };
+  walk(program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent) {
+      parents.set(node, parent);
+    }
+    const scope = ancestors.findLast(lexicalScope) ?? program;
+    if (
+      node.type === "VariableDeclarator" &&
+      parent?.type === "VariableDeclaration"
+    ) {
+      const owner =
+        parent.kind === "var"
+          ? (ancestors.findLast(
+              (ancestor) =>
+                functionScope(ancestor) || ancestor.type === "Program",
+            ) ?? program)
+          : scope;
+      const imported = dynamicImports(node.id, node.init);
+      for (const name of bindingNames(node.id)) {
+        const ownClient = clientModule(name);
+        const canonicalRoot =
+          owner === program &&
+          ownClient !== null &&
+          nodePath.resolve(fileName).replace(/\.tsx?$/u, "") ===
+            nodePath.join(WEB_SOURCE, "lib", ownClient) &&
+          roots.includes(name)
+            ? name
+            : null;
+        declare(owner, name, {
+          value: node.id.type === "Identifier" ? node.init : null,
+          stable:
+            parent.kind === "const" &&
+            (node.id.type === "Identifier" || imported.has(name)),
+          root: imported.get(name) ?? canonicalRoot,
+        });
+      }
+    }
+    if (
+      node.type === "FunctionDeclaration" ||
+      node.type === "FunctionExpression" ||
+      node.type === "ArrowFunctionExpression"
+    ) {
+      if (node.type !== "ArrowFunctionExpression" && node.id) {
+        opaque(node.type === "FunctionDeclaration" ? scope : node, node.id);
+      }
+      for (const parameter of node.params) {
+        opaque(node, parameter);
+      }
+    }
+    if (node.type === "CatchClause" && node.param) {
+      opaque(node, node.param);
+    }
+    if (node.type === "ClassDeclaration" && node.id) {
+      opaque(scope, node.id);
+    }
+    if (node.type === "ImportDeclaration") {
+      const module = node.source.value;
+      for (const specifier of node.specifiers) {
+        let root: string | null = null;
+        if (
+          node.importKind !== "type" &&
+          specifier.type === "ImportSpecifier" &&
+          specifier.importKind !== "type"
+        ) {
+          const name =
+            specifier.imported.type === "Identifier"
+              ? specifier.imported.name
+              : specifier.imported.value;
+          root = importedRoot(module, name);
+        }
+        declare(program, specifier.local.name, {
+          value: null,
+          stable: true,
+          root,
+        });
+      }
+    }
+  });
+  const bindingFor = (node: Node, name: string) => {
+    for (
+      let current: Node | undefined = node;
+      current;
+      current = parents.get(current)
+    ) {
+      const binding = bindings.get(current)?.get(name);
+      if (binding) {
+        return binding;
+      }
+    }
+    return undefined;
+  };
+  walk(program, (node) => {
+    if (node.type === "VariableDeclarator" && node.id.type === "ArrayPattern") {
+      const value =
+        node.init?.type === "AwaitExpression" ? node.init.argument : node.init;
+      if (
+        value?.type === "CallExpression" &&
+        value.callee.type === "MemberExpression" &&
+        value.callee.object.type === "Identifier" &&
+        value.callee.object.name === "Promise" &&
+        bindingFor(value.callee.object, "Promise")
+      ) {
+        for (const name of bindingNames(node.id)) {
+          const binding = bindingFor(node, name);
+          if (binding) {
+            binding.stable = false;
+          }
+        }
+      }
+    }
+    let target: Node | null = null;
+    if (node.type === "AssignmentExpression") {
+      target = node.left;
+    }
+    if (node.type === "UpdateExpression") {
+      target = node.argument;
+    }
+    if (target) {
+      for (const name of bindingNames(target)) {
+        const binding = bindingFor(node, name);
+        if (binding) {
+          binding.stable = false;
+        }
+      }
+    }
+  });
+  const memberName = (node: Node) => {
+    if (node.type !== "MemberExpression") {
+      return null;
+    }
+    if (!node.computed && node.property.type === "Identifier") {
+      return node.property.name;
+    }
+    return node.property.type === "Literal" &&
+      typeof node.property.value === "string"
+      ? node.property.value
+      : null;
+  };
+  const chainOf = (
+    node: Node,
+    seen: Set<Node>,
+    allowRequest: boolean,
+  ): string | null => {
+    if (seen.has(node)) {
+      return null;
+    }
+    const nextSeen = new Set(seen).add(node);
+    if (
+      node.type !== "Identifier" &&
+      node.type !== "MemberExpression" &&
+      node.type !== "CallExpression" &&
+      node.type !== "ParenthesizedExpression" &&
+      node.type !== "TSAsExpression" &&
+      node.type !== "TSSatisfiesExpression" &&
+      node.type !== "TSNonNullExpression"
+    ) {
+      return null;
+    }
+    switch (node.type) {
+      case "Identifier": {
+        const binding = bindingFor(node, node.name);
+        if (!binding) {
+          return roots.includes(node.name) ? node.name : null;
+        }
+        if (!binding.stable) {
+          return null;
+        }
+        return (
+          binding.root ??
+          (binding.value ? chainOf(binding.value, nextSeen, false) : null)
+        );
+      }
+      case "MemberExpression": {
+        const name = memberName(node);
+        const owner = chainOf(node.object, nextSeen, false);
+        return name !== null && owner !== null
+          ? `${owner}${node.computed ? `[${JSON.stringify(name)}]` : `.${name}`}`
+          : null;
+      }
+      case "CallExpression": {
+        const name = memberName(node.callee);
+        if (
+          !allowRequest &&
+          ((name === null && node.callee.type !== "CallExpression") ||
+            (name !== null &&
+              (API_CLIENT_REQUEST_METHODS.has(name) ||
+                ((name.startsWith("get") || name.startsWith("list")) &&
+                  chainOf(node.callee, nextSeen, false)?.startsWith(
+                    "authClient.",
+                  )))))
+        ) {
+          return null;
+        }
+        const callee = chainOf(node.callee, nextSeen, false);
+        return callee === null ? null : `${callee}()`;
+      }
+      case "ParenthesizedExpression":
+      case "TSAsExpression":
+      case "TSSatisfiesExpression":
+      case "TSNonNullExpression":
+        return chainOf(node.expression, nextSeen, allowRequest);
+      default:
+        return null;
+    }
+  };
+  const calls: ReadCall[] = [];
+  walk(program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
+    }
+    const chain = chainOf(node, new Set(), true);
+    if (chain !== null) {
+      calls.push({ chain, start: node.start, end: node.end });
+    }
+  });
+  return calls;
 };
+
+const callChains = (
+  source: string,
+  roots: readonly string[],
+  fileName?: string,
+) => readCalls(source, roots, fileName).map(({ chain }) => chain);
 
 const callsOf = (read: PerUserRead): readonly string[] =>
   "calls" in read ? read.calls : [];
@@ -995,15 +1452,31 @@ const rootsOf = (calls: readonly string[]) => [
   ...new Set(calls.map((call) => call.split(/[.[(]/u)[0] ?? call)),
 ];
 
-const reaches = (
-  source: string,
-  calls: readonly string[],
-  helpers: ReadonlySet<string>,
-) =>
-  callChains(source, rootsOf(calls)).some((chain) =>
-    calls.some((call) => chain.startsWith(`${call}()`)),
+type ReachesOptions = {
+  source: string;
+  calls: readonly string[];
+  helpers: ReadonlySet<string>;
+  observed: readonly ReadCall[];
+  start: number;
+  end: number;
+};
+const reaches = ({
+  source,
+  calls,
+  helpers,
+  observed,
+  start,
+  end,
+}: ReachesOptions) =>
+  observed.some(
+    (read) =>
+      read.start >= start &&
+      read.end <= end &&
+      calls.some((call) => read.chain.startsWith(`${call}()`)),
   ) ||
-  [...helpers].some((name) => new RegExp(`\\b${name}\\b`, "u").test(source));
+  [...helpers].some((name) =>
+    new RegExp(`\\b${name}\\b`, "u").test(source.slice(start, end)),
+  );
 
 /** Top-level declarations by name, each with the text up to the next one. */
 const topLevelDeclarations = (source: string) => {
@@ -1014,19 +1487,27 @@ const topLevelDeclarations = (source: string) => {
   ];
   return starts.map((start, index) => ({
     name: start[1] ?? "",
-    text: source.slice(start.index, starts[index + 1]?.index ?? source.length),
+    start: start.index,
+    end: starts[index + 1]?.index ?? source.length,
   }));
 };
 
 /** Top-level helpers in `source` that end up calling one of `calls`. */
-const helpersReaching = (source: string, calls: readonly string[]) => {
+const helpersReaching = (
+  source: string,
+  calls: readonly string[],
+  observed: readonly ReadCall[],
+) => {
   const declarations = topLevelDeclarations(source);
   const helpers = new Set<string>();
   let grew = true;
   while (grew) {
     grew = false;
-    for (const { name, text } of declarations) {
-      if (!helpers.has(name) && reaches(text, calls, helpers)) {
+    for (const { name, start, end } of declarations) {
+      if (
+        !helpers.has(name) &&
+        reaches({ source, calls, helpers, observed, start, end })
+      ) {
         helpers.add(name);
         grew = true;
       }
@@ -1090,8 +1571,13 @@ const NAMES_A_USER = /[uU]ser(?:Id\b|\.id\b)/u;
  * Query keys, in `source`, of queries that reach one of `calls` without
  * naming a user. A key held in a local `const` is read from its declaration.
  */
-const unkeyedQueries = (source: string, calls: readonly string[]) => {
-  const helpers = helpersReaching(source, calls);
+const unkeyedQueries = (
+  source: string,
+  calls: readonly string[],
+  fileName?: string,
+) => {
+  const observed = readCalls(source, rootsOf(calls), fileName);
+  const helpers = helpersReaching(source, calls, observed);
   const unkeyed: string[] = [];
   for (const match of source.matchAll(/(?<![\w$.])queryKey\b(?=\s*[:,}])/gu)) {
     const object = enclosingObject(source, match.index);
@@ -1099,8 +1585,16 @@ const unkeyedQueries = (source: string, calls: readonly string[]) => {
     if (source[object.start] !== "{") {
       continue;
     }
-    const text = source.slice(object.start, object.end + 1);
-    if (!reaches(text, calls, helpers)) {
+    if (
+      !reaches({
+        source,
+        calls,
+        helpers,
+        observed,
+        start: object.start,
+        end: object.end + 1,
+      })
+    ) {
       continue;
     }
     const after = match.index + match[0].length;
@@ -1125,7 +1619,7 @@ const webCallers = () => {
   const roots = rootsOf(calls);
   const callers = new Map<string, string[]>();
   for (const path of listFiles(WEB_SOURCE)) {
-    const chains = callChains(readSource(path), roots);
+    const chains = callChains(readSource(path), roots, path);
     for (const call of calls) {
       if (chains.some((chain) => chain.startsWith(`${call}()`))) {
         callers.set(call, [
@@ -1177,7 +1671,7 @@ describe("per-user reads", () => {
   test("every auth client list or get call is classified", () => {
     const found = new Set(
       listFiles(WEB_SOURCE).flatMap((path) =>
-        callChains(readSource(path), ["authClient"])
+        callChains(readSource(path), ["authClient"], path)
           .map((chain) => chain.split("(")[0] ?? chain)
           .filter((chain) => /\.(?:list|get)[A-Za-z]*$/u.test(chain)),
       ),
@@ -1221,6 +1715,7 @@ describe("per-user reads", () => {
               unkeyedQueries(
                 readSource(nodePath.join(WEB_SOURCE, file)),
                 read.calls,
+                nodePath.join(WEB_SOURCE, file),
               ),
             )
             .filter((expression) => !(expression in (read.opaqueKeys ?? {})))
@@ -1353,6 +1848,212 @@ test("organization settings skip authenticated reads until an organization is se
 });
 
 describe("the per-user read scan", () => {
+  test("a defining client module keeps nested local shadows opaque", () => {
+    const source = `
+export const authClient = createAuthClient();
+function local() {
+  const authClient = localClient;
+  return authClient.getSession();
+}
+authClient.listSessions();
+`;
+    expect(
+      callChains(
+        source,
+        ["authClient"],
+        nodePath.join(WEB_SOURCE, "lib/auth-client.ts"),
+      ),
+    ).toEqual(["authClient.listSessions()"]);
+  });
+
+  test("retains canonical dynamic imports and explicitly listed read helpers", () => {
+    expect(
+      callChains(
+        'const { authClient: auth } = await import("@/lib/auth-client"); auth.organization.getActiveMember();',
+        ["authClient"],
+      ),
+    ).toContain("authClient.organization.getActiveMember()");
+    expect(
+      callChains(
+        'const [{ api }] = await Promise.all([import("@/lib/api")]); api.me.get();',
+        ["api"],
+      ),
+    ).toContain("api.me.get()");
+    expect(
+      callChains(
+        'import { fetchWorkspaceNavigationPage as read } from "@/lib/memory-api"; read({});',
+        ["fetchWorkspaceNavigationPage"],
+      ),
+    ).toContain("fetchWorkspaceNavigationPage()");
+  });
+
+  test("an unrelated dynamic import or shadowed import aggregate is not an API root", () => {
+    expect(
+      callChains(
+        'const { api } = await import("./local-client"); api.me.get();',
+        ["api"],
+      ),
+    ).toEqual([]);
+    expect(
+      callChains(
+        'async function read(Promise) { const [{ api }] = await Promise.all([import("@/lib/api")]); return api.me.get(); }',
+        ["api"],
+      ),
+    ).not.toContain("api.me.get()");
+  });
+
+  test("a terminal auth request result cannot masquerade as a route", () => {
+    expect(
+      callChains(
+        'import { authClient } from "@/lib/auth-client"; const result = authClient.getSession(); result.organization.list();',
+        ["authClient"],
+      ),
+    ).not.toContain("authClient.getSession().organization.list()");
+  });
+
+  test("ignores strings and comments that merely name a request", () => {
+    expect(
+      callChains("const example = 'api.me.get()'; // api.me.get()\n", ["api"]),
+    ).toEqual([]);
+  });
+
+  test("follows stable route receivers without losing the original call chain", () => {
+    const source = `
+import { api as client } from "@/lib/api";
+const workspaceApi = client.chat.workspaces({ workspaceId });
+const alias = workspaceApi;
+async function read() {
+  return alias["file-thread"].get({ query: { entityId, fieldId } });
+}
+`;
+    expect(callChains(source, ["api"])).toContain(
+      'api.chat.workspaces()["file-thread"].get()',
+    );
+  });
+
+  test("an outer route receiver cannot hide a query that omits its user", () => {
+    const source = `
+import { api } from "@/lib/api";
+export const options = (workspaceId: string, userId: string) => {
+  const workspaceApi = api.chat.workspaces({ workspaceId });
+  return queryOptions({
+    queryKey: ["file-thread", workspaceId],
+    queryFn: () => workspaceApi["file-thread"].get({}),
+  });
+};
+`;
+    const calls = ['api.chat.workspaces()["file-thread"].get'];
+    expect(unkeyedQueries(source, calls)).toEqual([
+      '["file-thread", workspaceId]',
+    ]);
+    expect(
+      unkeyedQueries(
+        source.replace(
+          '["file-thread", workspaceId]',
+          '["file-thread", workspaceId, userId]',
+        ),
+        calls,
+      ),
+    ).toEqual([]);
+  });
+
+  test("follows a receiver in a local fetch helper when checking caller keys", () => {
+    const source = `
+import { api } from "@/lib/api";
+const route = api.chat.workspaces({ workspaceId });
+const fetchFile = async () => await route["file-thread"].get({});
+export const options = (workspaceId: string) =>
+  queryOptions({ queryKey: ["file-thread", workspaceId], queryFn: fetchFile });
+`;
+    expect(
+      unkeyedQueries(source, ['api.chat.workspaces()["file-thread"].get']),
+    ).toEqual(['["file-thread", workspaceId]']);
+  });
+
+  for (const { name, source } of [
+    {
+      name: "a parameter shadows a route",
+      source:
+        'const route = api.chat.workspaces({}); function read(route) { return route["file-thread"].get({}); }',
+    },
+    {
+      name: "a destructured parameter shadows a route",
+      source:
+        'const route = api.chat.workspaces({}); const read = ({ route }) => route["file-thread"].get({});',
+    },
+    {
+      name: "a block shadows a route",
+      source:
+        'const route = api.chat.workspaces({}); { const route = localClient; route["file-thread"].get({}); }',
+    },
+    {
+      name: "a mutable receiver",
+      source:
+        'let route = api.chat.workspaces({}); route["file-thread"].get({});',
+    },
+    {
+      name: "a reassigned receiver",
+      source:
+        'const route = api.chat.workspaces({}); route = localClient; route["file-thread"].get({});',
+    },
+    {
+      name: "cyclic aliases",
+      source:
+        'const first = second; const second = first; first["file-thread"].get({});',
+    },
+    {
+      name: "a destructured value",
+      source:
+        'const { route } = api.chat.workspaces({}); route["file-thread"].get({});',
+    },
+    {
+      name: "an awaited request result",
+      source:
+        'const route = await api.chat.workspaces({}).get(); route["file-thread"].get({});',
+    },
+    {
+      name: "a request promise",
+      source:
+        'const route = api.chat.workspaces({}).post({}); route["file-thread"].get({});',
+    },
+    {
+      name: "an opaque factory",
+      source:
+        'const make = () => api.chat.workspaces({}); const route = make(); route["file-thread"].get({});',
+    },
+    {
+      name: "a shadowed API root",
+      source:
+        'function read(api) { const route = api.chat.workspaces({}); return route["file-thread"].get({}); }',
+    },
+    {
+      name: "an unrelated API import",
+      source:
+        'import { api } from "./local-client"; const route = api.chat.workspaces({}); route["file-thread"].get({});',
+    },
+  ]) {
+    test(`does not assign a per-user route to ${name}`, () => {
+      expect(
+        callChains(source, ["api"]).filter((chain) =>
+          chain.endsWith('["file-thread"].get()'),
+        ),
+      ).toEqual([]);
+    });
+  }
+
+  test("keeps the outer receiver visible after a shadowed block", () => {
+    const source = `
+const route = api.chat.workspaces({});
+{ const route = localClient; route["file-thread"].get({}); }
+route["file-thread"].get({});
+`;
+    expect(
+      callChains(source, ["api"]).filter(
+        (chain) => chain === 'api.chat.workspaces()["file-thread"].get()',
+      ),
+    ).toHaveLength(1);
+  });
+
   test("sees the caller however a handler refers to it", () => {
     for (const reference of [
       "eq(timeEntries.userId, currentUser.id)",

@@ -142,6 +142,23 @@ describe("buildRegistryWriteSummaryRows", () => {
     ]);
   });
 
+  test("save_playbook names every position of a grouped save in full", () => {
+    const issues = Array.from(
+      { length: 5 },
+      (_, index) =>
+        `Limitation of liability for indirect and consequential loss ${String(index + 1)}`,
+    );
+    const rows = build("save_playbook", {
+      playbook_id: "playbook-1",
+      expected_updated_at: "2026-09-20T10:00:00.000Z",
+      positions: issues.map((issue) => ({ mode: "graded", issue })),
+    });
+
+    expect(rows.map(({ label, value }) => [label, value])).toEqual([
+      ["Positions added", issues.join("; ")],
+    ]);
+  });
+
   test("save_playbook reads a null as absent, as the server does", () => {
     const rows = build("save_playbook", {
       playbook_id: "playbook-1",

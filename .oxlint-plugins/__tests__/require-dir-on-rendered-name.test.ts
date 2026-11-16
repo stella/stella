@@ -18,8 +18,17 @@ const cases = [
   {
     title: "allows shared isolation and unrelated content",
     source:
-      "const view = <><BidiText>{user.displayName}</BidiText><UserText>{user.email}</UserText><span>{item.count}</span></>;",
+      "const view = <><BidiText>{user.displayName}</BidiText><UserText>{user.email}</UserText><IdentityText>{user.displayName}</IdentityText><span>{item.count}</span></>;",
     lines: [],
+    sourcePath: "source.tsx",
+  },
+  {
+    title: "allows an element that renders through an isolating one",
+    source: [
+      'const a = <TruncatedText render={<BidiText as="span" />}>{file.fileName}</TruncatedText>;',
+      "const b = <TruncatedText render={<span />}>{file.fileName}</TruncatedText>;",
+    ].join("\n"),
+    lines: [2],
     sourcePath: "source.tsx",
   },
 ];

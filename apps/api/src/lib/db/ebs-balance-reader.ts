@@ -6,8 +6,9 @@ import {
 } from "@aws-sdk/client-cloudwatch";
 import { Result, TaggedError } from "better-result";
 
-import { defaultConfig } from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
+
+import { loadGateHealthConfig } from "@/api/env-online-index";
 
 export class EbsBalanceReadError extends TaggedError("EbsBalanceReadError")<{
   message: string;
@@ -78,9 +79,9 @@ export const createEbsBalanceReader = ({
   instanceIdentifier,
   client: injectedClient,
   clock = () => Temporal.Now.instant().epochMilliseconds,
-  timeoutMs = defaultConfig.readTimeoutMs,
+  timeoutMs = loadGateHealthConfig().readTimeoutMs,
   timeoutSignal = (duration) => AbortSignal.timeout(duration),
-  maxStalenessMs = defaultConfig.maxStalenessMs,
+  maxStalenessMs = loadGateHealthConfig().maxStalenessMs,
 }: EbsBalanceReaderOptions) => {
   let client = injectedClient;
   return async () => {

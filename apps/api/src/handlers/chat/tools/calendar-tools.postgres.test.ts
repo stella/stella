@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
 import { isGrantableChatTool } from "@stll/api-contract/chat-tool-grants";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { systemClock } from "@stll/test-kit";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { organizationSettings, sharepointConnections } from "@/api/db/schema";
@@ -75,7 +76,7 @@ test("calendar executions use current stored grants, shared result provenance an
     userId,
     status: "connected",
     scope: "Calendars.Read",
-    expiresAt: new Date(Date.now() + 3_600_000),
+    expiresAt: new Date(systemClock.now() + 3_600_000),
     accessTokenEncrypted: encrypted.ciphertext,
     accessTokenIv: encrypted.iv,
     refreshTokenEncrypted: null,

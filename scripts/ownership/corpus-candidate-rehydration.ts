@@ -21,8 +21,8 @@ export default {
       "@/api/handlers/legislation/search",
     ],
     names: [
-      "candidateDecisionRowsStatement",
-      "pageDecisionRowsStatement",
+      "unresolvedCandidateDecisionRowsStatement",
+      "unresolvedPageDecisionRowsStatement",
       "rehydrateCorpusIndexProviderCandidatesStatement",
       "legislationCandidateRowsStatement",
     ],

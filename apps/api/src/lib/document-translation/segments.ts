@@ -1,7 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
-import { writeZipEntry } from "@stll/docx-utils";
 import { declareFingerprintFields } from "@stll/errors";
 import type { FolioReviewChangeKind } from "@stll/folio-core/server";
 
@@ -303,16 +302,16 @@ export const extractDocxTranslationSegments = async (
 ): Promise<Result<DocxTranslationDocument, DocxTranslationError>> =>
   await Result.gen(async function* () {
     const archive = yield* Result.await(loadTranslationArchive(buffer));
-    if (!archive.zip.file(MAIN_PART)) {
+    if (!archive.zip.entry(MAIN_PART)) {
       return fail(
         "missing-document",
         "DOCX archive is missing word/document.xml",
       );
     }
 
-    const paths = contentPartPaths(Object.keys(archive.zip.files));
+    const paths = contentPartPaths(archive.zip.paths());
     const contentXml = yield* Result.await(
-      inspectXmlParts(archive, Object.keys(archive.zip.files), paths),
+      inspectXmlParts(archive, archive.zip.paths(), paths),
     );
 
     const segments: DocxTranslationSegment[] = [];
@@ -513,7 +512,9 @@ export const applyDocxTranslationSegments = async (
     );
     for (const patchedPart of patchedParts) {
       const { path, xml } = yield* patchedPart;
-      writeZipEntry(archive.zip, path, xml);
+      archive.zip.set(path, xml);
     }
-    return Result.ok(await archive.zip.generateAsync({ type: "arraybuffer" }));
+    return Result.ok(
+      (await archive.zip.generate({ compression: "store" })).buffer,
+    );
   });

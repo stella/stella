@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -103,7 +103,7 @@ test.each(BACKFILL_OUTCOMES)(
               observationOrder: 2n,
               input: { rawHash: sourceHash ?? result.rawHash },
             });
-            return outcome;
+            return Result.ok(outcome);
           },
         },
       );

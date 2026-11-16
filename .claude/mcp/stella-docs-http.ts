@@ -1,5 +1,4 @@
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
@@ -269,10 +268,7 @@ const handleHttpRequest = async (
       },
     });
     const session: Session = { server, transport, lastActive: Date.now() };
-    // The SDK's HTTP transport declares optional callbacks without `| undefined`,
-    // which this package's exactOptionalPropertyTypes rejects; the runtime shape is a Transport.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SDK typing gap described above
-    await server.connect(transport as Transport);
+    await server.connect(transport);
     await transport.handleRequest(request, response, body);
   } catch (error) {
     if (error instanceof RequestBodyError) {

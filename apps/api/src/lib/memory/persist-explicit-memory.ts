@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
@@ -133,7 +134,7 @@ const resolveMemoryOwner = ({
       if (workspace === undefined) {
         return Result.err("workspace-not-found");
       }
-      if (workspace.status !== "active") {
+      if (!workspaceAcceptsWrites(workspace.status)) {
         return Result.err("workspace-not-active");
       }
       return Result.ok({

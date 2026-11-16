@@ -2,25 +2,22 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { AUTHORED_DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
+import { MARKED_PDF_EXPORT_MODES } from "@stll/api-contract/marked-pdf-export";
 
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
-import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
-import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
   STAMPED_DOWNLOAD_METADATA,
   stampedDownloadHandler,
 } from "@/api/handlers/files/get";
+import { readMarkedDownload } from "@/api/handlers/files/marked-download";
 import {
   OCR_EXPORT_FORMATS,
   readOcrExport,
 } from "@/api/handlers/files/ocr-export";
-import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
-import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
-import { routes } from "@/api/http/route";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
@@ -333,6 +330,50 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
   },
 );
 
+/**
+ * A PDF as uploaded, with the caller's visible marks appended as PDF
+ * annotations as `mode` says (highlights alone, or with comments and author
+ * names); the stored bytes unchanged when the file cannot take them without
+ * harm.
+ */
+export const markedDownloadEndpoint = createSafeHandler(
+  {
+    contract: "patch",
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    contentDelivery: { type: "audited" },
+    permissions: { workspace: ["read"] },
+    mcp: { type: "internal", reason: "upload_mechanics" },
+    access: "read",
+    params: workspaceParams({ fieldId: resourceIdSchema("field") }),
+    query: v.object({ mode: v.picklist(MARKED_PDF_EXPORT_MODES) }),
+  } satisfies WorkspaceHandlerConfig,
+  async function* ({
+    params: { fieldId },
+    query: { mode },
+    recordAuditEvent,
+    request,
+    safeDb,
+    scopedDb,
+    session,
+    user,
+    workspaceId,
+  }) {
+    // The plain Download of a PDF, so the same refusal as the uploaded bytes.
+    yield* checkDemoAccountOperation(user.email);
+    return yield* readMarkedDownload({
+      fieldId,
+      mode,
+      organizationId: session.activeOrganizationId,
+      recordAuditEvent,
+      requestSignal: request.signal,
+      safeDb,
+      scopedDb,
+      userId: user.id,
+      workspaceId,
+    });
+  },
+);
+
 export const ocrExportEndpoint = createSafeHandler(
   {
     contract: "patch",
@@ -371,30 +412,4 @@ export const ocrExportEndpoint = createSafeHandler(
     );
     return Result.ok(response);
   },
-);
-
-export const filesRoute = routes(
-  {
-    "/url/:fieldId": { GET: readFileEndpoint },
-    "/email-html/:fieldId": { GET: readEmailHtmlPreviewEndpoint },
-    "/office-citation/:entityId/:fieldId/:blockId": {
-      GET: officeCitationEndpoint,
-    },
-    "/print-pdf/:fieldId": { GET: printPdfEndpoint },
-    "/stamped/:fieldId": { GET: stampedDownloadEndpoint },
-    "/ocr-export/:fieldId": { GET: ocrExportEndpoint },
-    "/document-properties/:fieldId": {
-      GET: readDocumentPropertiesEndpoint,
-      PATCH: updateDocumentPropertiesEndpoint,
-    },
-    "/scrubbed/:fieldId": { GET: scrubbedDownloadEndpoint },
-    "/thumbnail/:fieldId": { GET: readFileThumbnailEndpoint },
-    "/email-attachment/:fieldId/:attachmentId": {
-      GET: emailAttachmentEndpoint,
-    },
-    "/email-attachment/:fieldId/:attachmentId/save": {
-      POST: saveEmailAttachmentEndpoint,
-    },
-  },
-  { prefix: "/files/:workspaceId" },
 );

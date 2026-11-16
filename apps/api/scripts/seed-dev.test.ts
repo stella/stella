@@ -1,9 +1,33 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
+
+import { ZipArchive } from "@stll/docx-core/zip";
+import { MARKETING_LOCALES } from "@stll/playwright-tools/marketing-locales";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  propertyContentSchema,
+  propertyToolSchema,
+} from "@/api/db/schema-validators";
+import { playbookDefinitionBodySchema } from "@/api/handlers/playbooks/schema";
+import { getPropertyExecutionPlan } from "@/api/lib/workflow/get-execution-plan";
+import {
+  findDuplicatePositionSourceId,
+  findDuplicateTierId,
+  gradedPositionHasContent,
+} from "@/api/lib/workflow/playbook-positions-validation";
+import { isTierStandard } from "@/api/lib/workflow/position-runtime";
+
+import { SEED_CONTENT_BY_LOCALE } from "./seed-content/locales";
+import {
+  buildAllPropertySeeds,
+  buildCzPlaybookDefinition,
+  buildDdGeneralPlaybookDefinition,
+  buildPropertySeedDependencies,
   createMockDocx,
   createSeedEmail,
-  SEED_EMAIL_FILE_NAMES,
+  seedRequiredCaseLaw,
   userFileCleanupKeys,
 } from "./seed-dev";
 import {
@@ -23,9 +47,8 @@ const nonEmptyBlockTexts = (title: string, bodyText: string): string[] =>
 // text list, so the guard exercises the real generator instead of only
 // re-deriving the same layout by hand.
 const paragraphTextsFromDocx = async (docx: Buffer): Promise<string[]> => {
-  const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(docx);
-  const documentXml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(docx);
+  const documentXml = await zip.entry("word/document.xml")?.text();
   if (documentXml === undefined) {
     throw new Error("seeded docx is missing word/document.xml");
   }
@@ -44,38 +67,44 @@ const paragraphTextsFromDocx = async (docx: Buffer): Promise<string[]> => {
   });
 };
 
-describe("Export Review citation seeds", () => {
-  test("every docx-folio citation's blockIndex points at the paragraph containing its quote", async () => {
-    const index = 0;
-    const metadata = buildExportReviewMetadata(index);
-    const fileName = "Sample_Export_Review_Contract.docx";
-    const title = fileName.replace(/\.\w+$/u, "").replaceAll("_", " ");
-    const bodyText = buildExportReviewDocumentText(fileName, index);
+describe.each(MARKETING_LOCALES)(
+  "Export Review citation seeds (%s)",
+  (locale) => {
+    test("every docx-folio citation's blockIndex points at the paragraph containing its quote", async () => {
+      const copy = SEED_CONTENT_BY_LOCALE[locale].exportReview;
+      const index = 0;
+      const metadata = buildExportReviewMetadata(copy, index);
+      const fileName = "Sample_Export_Review_Contract.docx";
+      const title = fileName.replace(/\.\w+$/u, "").replaceAll("_", " ");
+      const bodyText = buildExportReviewDocumentText(copy, fileName, index);
 
-    const docx = await createMockDocx(title, bodyText);
-    const paragraphs = await paragraphTextsFromDocx(docx);
-    const nonEmptyParagraphs = paragraphs.filter(
-      (text) => text.trim().length > 0,
-    );
+      const docx = await createMockDocx(title, bodyText);
+      const paragraphs = await paragraphTextsFromDocx(docx);
+      const nonEmptyParagraphs = paragraphs.filter(
+        (text) => text.trim().length > 0,
+      );
 
-    // Sanity-check the DOCX parsing itself against a plain-text
-    // reconstruction of the same title + body before trusting it below.
-    expect(nonEmptyParagraphs).toEqual(nonEmptyBlockTexts(title, bodyText));
+      // Sanity-check the DOCX parsing itself against a plain-text
+      // reconstruction of the same title + body before trusting it below.
+      expect(nonEmptyParagraphs).toEqual(nonEmptyBlockTexts(title, bodyText));
 
-    const citationSeeds = buildExportReviewCitationSeeds(metadata);
-    expect(citationSeeds.length).toBeGreaterThan(0);
+      const citationSeeds = buildExportReviewCitationSeeds(copy, metadata);
+      expect(citationSeeds.length).toBeGreaterThan(0);
 
-    for (const seed of citationSeeds) {
-      const paragraphText = nonEmptyParagraphs.at(seed.blockIndex - 1);
-      expect(paragraphText).toContain(seed.quote);
-    }
-  });
-});
+      for (const seed of citationSeeds) {
+        const paragraphText = nonEmptyParagraphs.at(seed.blockIndex - 1);
+        expect(paragraphText).toContain(seed.quote);
+      }
+    });
+  },
+);
 
-describe("email viewer seeds", () => {
+describe.each(MARKETING_LOCALES)("email viewer seeds (%s)", (locale) => {
   test("nested MIME boundaries cannot prefix one another", () => {
-    for (const fileName of SEED_EMAIL_FILE_NAMES) {
-      const source = createSeedEmail(fileName).toString("utf-8");
+    for (const [fileName, email] of Object.entries(
+      SEED_CONTENT_BY_LOCALE[locale].emails,
+    )) {
+      const source = createSeedEmail(fileName, email).toString("utf-8");
       const boundaries = Array.from(
         source.matchAll(/boundary="(?<value>[^"]+)"/gu),
         (match) => match.groups?.["value"] ?? "",
@@ -114,5 +143,90 @@ describe("chat attachment seed cleanup", () => {
       "user_1/uploader-source.png",
       "user_1/uploader-thumbnail.webp",
     ]);
+  });
+});
+
+test("a case-law backfill failure rejects the dev seed phase", async () => {
+  const unitFailure = new Error("Provision backfill unit state-seed failed");
+  let marketingStarted = false;
+
+  const outcome = seedRequiredCaseLaw(
+    async () => {
+      throw unitFailure;
+    },
+    async () => {
+      marketingStarted = true;
+    },
+  );
+
+  expect(await rejectionOf(outcome)).toBe(unitFailure);
+  expect(marketingStarted).toBe(false);
+});
+
+test("the workflow planner accepts every seeded column", () => {
+  const seeds = buildAllPropertySeeds();
+  const dependencies = buildPropertySeedDependencies(seeds);
+
+  const planned = getPropertyExecutionPlan({
+    properties: seeds.map(({ id, content, tool }) => ({
+      id,
+      content,
+      tool,
+      status: "stale",
+    })),
+    dependencies,
+  });
+
+  expect(Result.isOk(planned)).toBe(true);
+  expect(dependencies.length).toBeGreaterThan(0);
+});
+
+const issueMessages = <TSchema extends v.GenericSchema>(
+  result: v.SafeParseResult<TSchema>,
+): string[] =>
+  result.success ? [] : result.issues.map((issue) => issue.message);
+
+// The seed writes rows directly, so it never passes through the API's
+// validators. Each test below holds the seeded rows to the same owner the API
+// applies, so a seeded state the product could never create fails here.
+test("every seeded column stores content and a tool the API accepts", () => {
+  const rejected = buildAllPropertySeeds().flatMap((seed) => {
+    const problems = [
+      ...issueMessages(v.safeParse(propertyContentSchema, seed.content)),
+      ...issueMessages(v.safeParse(propertyToolSchema, seed.tool)),
+    ];
+    return problems.length === 0
+      ? []
+      : [`${seed.name}: ${problems.join("; ")}`];
+  });
+
+  expect(rejected).toEqual([]);
+});
+
+describe.each([
+  ["Czech commercial", buildCzPlaybookDefinition()],
+  ["general due diligence", buildDdGeneralPlaybookDefinition()],
+])("seeded %s playbook", (_label, definition) => {
+  test("is a body the playbook API accepts", () => {
+    const { id: _id, ...body } = definition;
+
+    expect(
+      issueMessages(v.safeParse(playbookDefinitionBodySchema, body)),
+    ).toEqual([]);
+  });
+
+  test("meets the position rules the playbook API enforces on save", () => {
+    const { positions } = definition;
+
+    expect(findDuplicatePositionSourceId(positions)).toBeNull();
+    for (const position of positions.items) {
+      if (position.mode !== "graded") {
+        continue;
+      }
+      expect(gradedPositionHasContent(position)).toBe(true);
+      if (isTierStandard(position)) {
+        expect(findDuplicateTierId(position)).toBeNull();
+      }
+    }
   });
 });

@@ -1,18 +1,10 @@
 import { env } from "@/env";
-import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
-import { betaFeaturesHostDefaultEnabled } from "@/lib/beta-features";
 
-// SSR-rendered shell decisions cannot consume the browser-only preview toggle:
-// the server and hydration render must build the same navigation tree.
-export const isPublicLawSsrRouteEnabled = (): boolean =>
-  env.VITE_PUBLIC_LAW_ENABLED || betaFeaturesHostDefaultEnabled();
-
-// Deployment-enabled and beta-host routes resolve during SSR. On other hosts,
-// client navigation is available only after this browser opts into the preview;
-// a direct server load remains closed because localStorage is intentionally not
-// treated as server-visible deployment configuration.
-export const isPublicLawRouteEnabled = (): boolean =>
-  isPublicLawSsrRouteEnabled() || isPublicLawPreviewEnabled();
+// Public law is a deployment capability, not a per-browser preview: the
+// server render and hydration must build the same navigation tree, so the
+// gate reads only build-time configuration. Local development always serves it.
+export const isPublicLawEnabled = (): boolean =>
+  import.meta.env.DEV || env.VITE_PUBLIC_LAW_ENABLED;
 
 // Sitemap XML serving: a deployment builds and serves the case-law sitemaps
 // once the public-law surface is indexing-ready. This keeps today's semantics

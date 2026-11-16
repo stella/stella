@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -13,20 +12,19 @@ const makeDocx = async (
   documentXml: string,
   numberingXml?: string,
 ): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", documentXml);
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
   if (numberingXml !== undefined) {
-    writeZipEntry(zip, "word/numbering.xml", numberingXml);
+    zip.set("word/numbering.xml", numberingXml);
   }
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="xml" ContentType="application/xml"/>
 </Types>`,
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const WRAP = (body: string) =>
@@ -118,9 +116,9 @@ describe("extractDocxDocument", () => {
   });
 
   test("handles missing document.xml", async () => {
-    const zip = new JSZip();
-    writeZipEntry(zip, "other.xml", "<root/>");
-    const docx = testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+    const zip = new ZipArchive();
+    zip.set("other.xml", "<root/>");
+    const docx = testDocxFile(await zip.generate({ compression: "store" }));
     const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs).toEqual([]);

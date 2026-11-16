@@ -19,6 +19,7 @@ const decision = {
   courtAbbreviation: "NS",
   decisionDate: "2023-01-06",
   decisionType: "Rozsudek",
+  decisionTypeKind: null,
   ecli: null,
   language: "cs",
   languageAlternates: [],

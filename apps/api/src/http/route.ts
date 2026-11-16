@@ -42,6 +42,8 @@ export type RouteConfig = {
   readonly response?: ResponseSchemas;
   /** How the body is read; by content type unless the route says otherwise. */
   readonly bodyMode?: BodyMode;
+  /** Tightens global multipart admission before the request body is buffered. */
+  readonly requestBodyMaxBytes?: number;
 };
 
 /**

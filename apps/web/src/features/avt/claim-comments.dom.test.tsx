@@ -11,8 +11,9 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
@@ -110,6 +111,8 @@ const comment = ({
   kind: "comment" as const,
   mine,
   quote: claim.text,
+  quotePrefix: "",
+  quoteSuffix: "",
   startOffset: 0,
   style: null,
   updatedAt: at,
@@ -220,7 +223,9 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
   fireEvent.click(screen.getByRole("button", { name: messages.folio.comment }));
   fireEvent.change(
     screen.getByRole("textbox", { name: messages.folio.comment }),
-    { target: { value: "Ask for the minutes." } },
+    {
+      target: { value: "Ask for the minutes." },
+    },
   );
   fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
   await waitFor(() => expect(requests).toHaveLength(2));
@@ -251,7 +256,9 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
   );
   fireEvent.change(
     screen.getByRole("textbox", { name: messages.folio.comment }),
-    { target: { value: "Ask for the signed minutes." } },
+    {
+      target: { value: "Ask for the signed minutes." },
+    },
   );
   fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
   await waitFor(() => expect(requests).toHaveLength(2));
@@ -290,7 +297,9 @@ test("editing and sharing a private comment stores its words before sharing them
     );
     fireEvent.change(
       screen.getByRole("textbox", { name: messages.folio.comment }),
-      { target: { value: "Final." } },
+      {
+        target: { value: "Final." },
+      },
     );
     fireEvent.click(
       screen.getByRole("button", {
@@ -338,7 +347,9 @@ test("a comment still being stored offers no controls until the server answers",
   fireEvent.click(screen.getByRole("button", { name: messages.folio.comment }));
   fireEvent.change(
     screen.getByRole("textbox", { name: messages.folio.comment }),
-    { target: { value: "Ask for the minutes." } },
+    {
+      target: { value: "Ask for the minutes." },
+    },
   );
   fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
   await waitFor(() => expect(requests).toHaveLength(1));
@@ -407,8 +418,16 @@ test("a comment being written on one claim is discarded when another claim is se
           contested={new Set()}
           factsById={new Map()}
           onReviewEvent={() => undefined}
-          runId={runId}
-          stepper={{ current: null, total: 0, onPrev: null, onNext: null }}
+          run={{
+            id: toSafeId<"legalListVerificationRun">(runId),
+            evidence: {
+              listId: toSafeId<"legalList">(
+                "0199a3c4-5b6d-7e8f-9a0b-000000009004",
+              ),
+              facts: [],
+            },
+          }}
+          recheckRun={{ state: "idle", start: () => undefined }}
           workspaceId={workspaceId}
         />
       </>
@@ -428,7 +447,9 @@ test("a comment being written on one claim is discarded when another claim is se
   fireEvent.click(screen.getByRole("button", { name: messages.folio.comment }));
   fireEvent.change(
     screen.getByRole("textbox", { name: messages.folio.comment }),
-    { target: { value: "Draft on the first claim." } },
+    {
+      target: { value: "Draft on the first claim." },
+    },
   );
   fireEvent.click(screen.getByRole("button", { name: NEXT_CLAIM }));
   expect(

@@ -13,7 +13,6 @@ import {
 } from "@/api/db/online-unique-indexes";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawIngestionFailures } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CASE_LAW_BATCH_FAILURE,
   CaseLawBatchApplyError,
@@ -55,6 +54,7 @@ import type {
   CorpusPackBatch,
   CorpusPackBatchOutcomes,
 } from "@/api/lib/legal-search/corpus-pack-batch";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -221,6 +221,8 @@ type ProcessRetryReason =
   (typeof PROCESS_DECISION_RETRY_REASON)[keyof typeof PROCESS_DECISION_RETRY_REASON];
 
 const RETRY_FAILURE = {
+  [PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY]:
+    CASE_LAW_BATCH_FAILURE.FALLBACK_IDENTITY,
   [PROCESS_DECISION_RETRY_REASON.CONTENTION]: CASE_LAW_BATCH_FAILURE.CONTENTION,
   [PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE]:
     CASE_LAW_BATCH_FAILURE.PACK_WRITE,
@@ -310,6 +312,7 @@ const settleDecision = (
           tally.corpusWriteFailures++;
           break;
         case PROCESS_DECISION_RETRY_REASON.CONTENTION:
+        case PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY:
           break;
         default:
           outcome.reason satisfies never;
@@ -597,13 +600,17 @@ export const applyDecisionBatch = async (
   let current = 0;
   const corpusBatch: CorpusPackBatch = {
     enqueue: (entry) => {
+      const enqueued = pack.enqueue(entry);
+      if (enqueued.isErr()) {
+        return enqueued;
+      }
       const indexes = queued.get(entry.decisionId);
       if (indexes === undefined) {
         queued.set(entry.decisionId, [current]);
       } else {
         indexes.push(current);
       }
-      pack.enqueue(entry);
+      return enqueued;
     },
     flush: pack.flush,
   };
@@ -628,7 +635,7 @@ export const applyDecisionBatch = async (
         continue;
       }
       const { decision: input, recordIdentity } = record;
-      const processed = await Result.tryPromise({
+      const attempt = await Result.tryPromise({
         try: async () =>
           // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
           await processDecision(
@@ -648,6 +655,7 @@ export const applyDecisionBatch = async (
           ),
         catch: (cause) => cause,
       });
+      const processed = attempt.andThen((outcome) => outcome);
       // A caller cancellation leaves the record for replay. An operation's
       // error without that signal remains a decision failure.
       if (signal?.aborted) {

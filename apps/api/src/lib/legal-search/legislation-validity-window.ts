@@ -114,6 +114,10 @@ export const applicableKind = (ref: LegislationVersionRef): SQL =>
 export const openedBy = (ref: LegislationVersionRef, asOf: SQLWrapper): SQL =>
   sql`(${ref.validFrom} IS NULL OR ${ref.validFrom} <= ${asOf})`;
 
+/** Whether a version has exactly the applied date supplied by a prior read. */
+export const opensOn = (ref: LegislationVersionRef, date: SQLWrapper): SQL =>
+  sql`(${eligibleExpression(ref)} AND ${ref.validFrom} = ${date})`;
+
 /**
  * Whether the version has a stated opening on or before `date`. Unlike
  * `openedBy`, a version with no opening never qualifies: counts of dated
@@ -129,6 +133,24 @@ export const opensBefore = (
   ref: LegislationVersionRef,
   date: SQLWrapper,
 ): SQL => sql`(${ref.validFrom} < ${date})`;
+
+/**
+ * Whether the version states an opening at all: the versions a Work's history
+ * steps through. A work kept as one unversioned text has none.
+ */
+export const isDated = (ref: LegislationVersionRef): SQL =>
+  sql`(${ref.validFrom} IS NOT NULL)`;
+
+/**
+ * Whether one version comes before another in its Work's history: an earlier
+ * opening, or the same opening and a lower id. The order the version list
+ * pages by, so a step from one version to the next is the same everywhere.
+ */
+export const precedesInHistory = (
+  earlier: { ref: LegislationVersionRef; id: SQLWrapper },
+  later: { ref: LegislationVersionRef; id: SQLWrapper },
+): SQL =>
+  sql`((${earlier.ref.validFrom}, ${earlier.id}) < (${later.ref.validFrom}, ${later.id}))`;
 
 /** Whether the version's window opens after `asOf`. */
 export const opensAfter = (ref: LegislationVersionRef, asOf: SQLWrapper): SQL =>

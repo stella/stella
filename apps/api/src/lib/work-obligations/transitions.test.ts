@@ -28,7 +28,10 @@ const closingTaskStatuses = WORK_OBLIGATION_TRANSITION_ACTIONS.filter(
 const OWNERSHIP_STATES = [
   { acknowledgedAt: null, ownerUserId: null },
   { acknowledgedAt: null, ownerUserId: "user_1" },
-  { acknowledgedAt: new Date(), ownerUserId: "user_1" },
+  {
+    acknowledgedAt: new Date("2026-04-30T09:00:00.000Z"),
+    ownerUserId: "user_1",
+  },
 ];
 
 describe("work obligation transition table", () => {
@@ -93,7 +96,7 @@ describe("resolveWorkObligationTransition", () => {
     const resolution = resolveWorkObligationTransition(
       WORK_OBLIGATION_TRANSITION_ACTION.COMPLETE,
       {
-        acknowledgedAt: new Date(),
+        acknowledgedAt: new Date("2026-04-30T09:00:00.000Z"),
         ownerUserId: "user_1",
         status: WORK_OBLIGATION_STATUS.ACTIVE,
       },

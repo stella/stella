@@ -1,3 +1,4 @@
+import type { RowSelectionState } from "@tanstack/react-table";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -81,13 +82,19 @@ describe("workspace table select-all state", () => {
   });
 
   test("select-all in a section keeps other sections' selections, drops stale", () => {
+    const rowSelection = {
+      "other-1": true,
+      stale: true,
+    } satisfies RowSelectionState;
+    const before = { ...rowSelection };
     expect(
       getNextSelectAllRowSelection({
         selectableRowIds: ["row-1", "row-2"],
-        rowSelection: { "other-1": true, stale: true },
+        rowSelection,
         preservableRowIds: ["row-1", "row-2", "other-1"],
       }),
     ).toEqual({ "other-1": true, "row-1": true, "row-2": true });
+    expect(rowSelection).toEqual(before);
   });
 
   test("clear-all in a section keeps other sections' selections, drops stale", () => {

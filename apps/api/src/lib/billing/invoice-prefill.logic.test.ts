@@ -2,12 +2,13 @@ import { describe, expect, test } from "bun:test";
 
 import type { VatTreatment } from "@stll/invoicing";
 
+import { EU_VAT_ID_SQL_PATTERN } from "@/api/db/eu-vat-id-format";
+
 import {
   addressCountry,
   buyerSnapshotFromContact,
   contactTaxIdentifiers,
   decideInvoiceVat,
-  EU_VAT_ID_SQL_PATTERN,
   euVatPrefix,
   invoiceDueDays,
   isWellFormedEuVatId,

@@ -4,14 +4,13 @@ import { and, eq } from "drizzle-orm";
 import { MICROSOFT365_CAPABILITIES } from "@stll/api-contract/microsoft365";
 
 import { sharepointConnections } from "@/api/db/schema";
+import { assertSharepointConnectionEnabled } from "@/api/handlers/sharepoint/enablement";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   capabilityEnabled,
   grantedCapabilities,
 } from "@/api/lib/auth/microsoft365/capabilities";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   contract: "patch",
@@ -26,11 +25,15 @@ const config = {
 const sharepointConnectionStatus = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user }) {
-    if (!isDeploymentFeatureEnabled("FEATURE_SHAREPOINT")) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Not found" }),
-      );
-    }
+    // 404 while the deployment does not offer SharePoint, 403 while the
+    // organization has not turned file reads on: clients read the gate from
+    // these answers.
+    yield* Result.await(
+      assertSharepointConnectionEnabled({
+        organizationId: session.activeOrganizationId,
+        safeDb,
+      }),
+    );
 
     const policy = yield* Result.await(
       safeDb((tx) =>

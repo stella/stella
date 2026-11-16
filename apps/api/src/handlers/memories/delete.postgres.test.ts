@@ -31,6 +31,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import deleteMemory from "./delete";
 
@@ -210,9 +211,7 @@ if (!databaseUrl || !runPostgresTests) {
             await db.$count(aiMemories, eq(aiMemories.id, derivedId)),
           ).toBe(1);
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });

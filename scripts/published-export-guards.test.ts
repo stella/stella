@@ -177,7 +177,8 @@ describe("import.meta.url targets", () => {
   const engine = {
     file: "dist/scan-engine.js",
     contents: [
-      'const response = await fetchWithTimeout(new URL("../generated/scan_engine_bg.wasm", import.meta.url), { timeout: { type: "idle", ms: WASM_LOAD_TIMEOUT_MS } });',
+      'const response = await fetchWithTimeout(new URL("../generated/scan_engine_bg.wasm", import.meta.url), { timeout: { type: "headers", ms: WASM_LOAD_TIMEOUT_MS } });',
+      "const bytes = await readBodyWithIdleDeadline(response, { idleMs: WASM_LOAD_TIMEOUT_MS });",
       'const createWorker = () => new Worker(new URL("scan-engine.worker.js", import.meta.url), { type: "module" });',
       "const icons = new URL('./icons/', import.meta.url);",
       'const remote = new URL("https://example.com/a.wasm", import.meta.url);',

@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 
 import { clampSelectedIndex } from "@/components/legal-reader/outline-jump-field.logic";
@@ -46,7 +47,8 @@ export const OutlineJumpField = ({
   };
 
   return (
-    <form
+    <Form
+      className="gap-0"
       onSubmit={(event) => {
         event.preventDefault();
         onJump();
@@ -83,6 +85,6 @@ export const OutlineJumpField = ({
       <span aria-live="polite" className="sr-only">
         {selectedText ?? ""}
       </span>
-    </form>
+    </Form>
   );
 };

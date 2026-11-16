@@ -6,7 +6,8 @@ import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/deskt
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { desktopPresence } from "@/api/db/schema";
+import { billingDraftUserSettings, desktopPresence } from "@/api/db/schema";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import readEndpoint from "@/api/handlers/desktop-presence/read";
 import { reportDesktopPresence } from "@/api/handlers/desktop-presence/service";
 import { HttpStatusResponse } from "@/api/http/status";
@@ -18,6 +19,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -110,6 +112,28 @@ test("organization removal clears only the departing member's presence and rejoi
         createdAt: new Date(),
       },
     ]);
+    const settingsOwners = [
+      { organizationId, userId },
+      { organizationId, userId: actorUserId },
+      { organizationId: otherOrganizationId, userId },
+    ];
+    await Promise.all(
+      settingsOwners.map(
+        async (owner) =>
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            owner.organizationId,
+            owner.userId,
+          )(async (tx) => {
+            await tx.insert(billingDraftUserSettings).values({
+              ...owner,
+              preference: "Keep my billing preference",
+              consentAt: new Date(),
+            });
+          }),
+      ),
+    );
     const report = {
       desktopId,
       version: "1.0.0",
@@ -141,6 +165,18 @@ test("organization removal clears only the departing member's presence and rejoi
           actorUserId,
         }),
     );
+    const remainingSettings = await Promise.all(
+      settingsOwners.map(
+        async (owner) =>
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            owner.organizationId,
+            owner.userId,
+          )(async (tx) => await tx.$count(billingDraftUserSettings)),
+      ),
+    );
+    expect(remainingSettings).toEqual([0, 1, 1]);
     expect(
       await db.$count(
         desktopPresence,
@@ -170,10 +206,8 @@ test("organization removal clears only the departing member's presence and rejoi
     await reportDesktopPresence({ scopedDb, organizationId, userId, report });
     expect((await readPresence()).type).toBe("current");
   } finally {
-    await db.delete(organization).where(eq(organization.id, organizationId));
-    await db
-      .delete(organization)
-      .where(eq(organization.id, otherOrganizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
+    await deleteOrganizationsForTest(db, [otherOrganizationId]);
     await db.delete(user).where(eq(user.id, userId));
     await db.delete(user).where(eq(user.id, actorUserId));
   }

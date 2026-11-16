@@ -8,10 +8,11 @@ import {
 } from "@tanstack/react-router";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
   decisionLawCrumbTrailOf,
@@ -111,7 +112,7 @@ const mount = async ({
   );
 };
 
-test("statute shell shows linked hierarchy, identity, short title and the full title tooltip", async () => {
+test("statute shell shows linked hierarchy, identity, short title and a tooltip with the full title and status", async () => {
   const { container } = await mount({ kind: "statute" });
   expect(
     screen
@@ -142,7 +143,7 @@ test("statute shell shows linked hierarchy, identity, short title and the full t
       screen
         .getByText(statute.title)
         .closest('[data-slot="tooltip-popup"][data-open]')?.textContent,
-    ).toBe(statute.title),
+    ).toBe(`${statute.title}${en.statutes.status.current}`),
   );
 });
 

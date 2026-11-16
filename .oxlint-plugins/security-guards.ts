@@ -413,8 +413,10 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           rawFilename:
-            "Use sanitizeFilename() before writing a request-supplied " +
-            "filename. Raw strings may contain path traversal segments.",
+            "Use sanitizeFilename() from @/api/lib/sanitize-filename before " +
+            "writing a request-supplied filename (ZIP entries, " +
+            "Content-Disposition headers, S3 keys). Raw strings may contain " +
+            "path traversal segments.",
         },
       },
       createOnce(context) {
@@ -721,8 +723,11 @@ export default eslintCompatPlugin({
           unscopedUserQuery:
             "A query reading the auth-schema 'user' table must reference " +
             "both member.userId and member.organizationId in the same query " +
-            "chain. Join through organization membership, or suppress " +
-            "narrowly with evidence for another authorized scope.",
+            "chain. Join through organization membership (an innerJoin on " +
+            "member filtered by session.activeOrganizationId); for a userId " +
+            "taken from the request, validate it first with validateOrgUserId " +
+            "from @/api/lib/validated-org-user-id. Or suppress narrowly with " +
+            "evidence for another authorized scope.",
         },
         schema: [
           {

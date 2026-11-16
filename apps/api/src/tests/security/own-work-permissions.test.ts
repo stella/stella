@@ -20,8 +20,10 @@ import deleteSavedSearch from "@/api/handlers/saved-searches/delete";
 import updateSavedSearch from "@/api/handlers/saved-searches/update";
 import connectSharepoint from "@/api/handlers/sharepoint/connect";
 import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
-import listSharepointDriveRoot from "@/api/handlers/sharepoint/list-drive-root";
+import listSharepointDriveItems from "@/api/handlers/sharepoint/drives/items/list";
+import listSharepointDrives from "@/api/handlers/sharepoint/drives/list";
 import sharepointOAuthCallback from "@/api/handlers/sharepoint/oauth-callback";
+import listSharepointSites from "@/api/handlers/sharepoint/sites/list";
 import sharepointConnectionStatus from "@/api/handlers/sharepoint/status";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -68,7 +70,9 @@ const READS = {
   "legal-reader/annotations/list.ts": listReaderAnnotations,
   "mcp-connectors/list-connections.ts": listMcpConnections,
   "mcp-connectors/list-connectors.ts": listMcpConnectors,
-  "sharepoint/list-drive-root.ts": listSharepointDriveRoot,
+  "sharepoint/drives/items/list.ts": listSharepointDriveItems,
+  "sharepoint/drives/list.ts": listSharepointDrives,
+  "sharepoint/sites/list.ts": listSharepointSites,
   "sharepoint/status.ts": sharepointConnectionStatus,
 } as const;
 

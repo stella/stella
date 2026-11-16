@@ -33,7 +33,7 @@ const NAME_PROPS = new Set([
   "citationText",
 ]);
 
-const SELF_ISOLATING = new Set(["BidiText", "UserText"]);
+const SELF_ISOLATING = new Set(["BidiText", "UserText", "IdentityText"]);
 const RAW_ISOLATING = new Set(["bdi", "bdo"]);
 
 const hasDirAttr = (opening) =>
@@ -42,6 +42,20 @@ const hasDirAttr = (opening) =>
       attr.type === "JSXAttribute" &&
       attr.name?.type === "JSXIdentifier" &&
       attr.name.name === "dir",
+  );
+
+// A Base UI `render` prop swaps the element for the one it names, so
+// `<TruncatedText render={<BidiText />}>` renders a BidiText.
+const rendersSelfIsolating = (opening) =>
+  opening.attributes.some(
+    (attr) =>
+      attr.type === "JSXAttribute" &&
+      attr.name?.type === "JSXIdentifier" &&
+      attr.name.name === "render" &&
+      attr.value?.type === "JSXExpressionContainer" &&
+      attr.value.expression.type === "JSXElement" &&
+      attr.value.expression.openingElement.name.type === "JSXIdentifier" &&
+      SELF_ISOLATING.has(attr.value.expression.openingElement.name.name),
   );
 
 const meaningfulChildren = (children) =>
@@ -85,7 +99,10 @@ export default eslintCompatPlugin({
             // keep inspecting their children instead of bailing out.
             const tagName =
               opening.name.type === "JSXIdentifier" ? opening.name.name : null;
-            if (tagName !== null && SELF_ISOLATING.has(tagName)) {
+            if (
+              (tagName !== null && SELF_ISOLATING.has(tagName)) ||
+              rendersSelfIsolating(opening)
+            ) {
               return;
             }
             const kids = meaningfulChildren(node.children);

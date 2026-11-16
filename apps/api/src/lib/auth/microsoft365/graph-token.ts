@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { Microsoft365Capability } from "@stll/api-contract/microsoft365";
+import { SHAREPOINT_REFUSAL_CODE } from "@stll/api-contract/sharepoint";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -45,7 +46,7 @@ const TOKEN_COLLABORATORS = {
 };
 
 /** Columns `ensureSharepointAccessToken` needs from a connection row. */
-type SharepointConnectionTokens = {
+export type SharepointConnectionTokens = {
   id: SafeId<"sharepointConnection">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -61,10 +62,18 @@ type SharepointConnectionTokens = {
 const reconnectRequiredError = (): HandlerError<409> =>
   new HandlerError({
     status: 409,
+    code: SHAREPOINT_REFUSAL_CODE.reconnectRequired,
     message: "SharePoint connection must be reconnected",
+    hint: "Reconnect the Microsoft account in stella's SharePoint settings.",
   });
 
-const markReconnectRequired = async ({
+/**
+ * Flags the connection for reconnect, but only while it still holds the
+ * access token the failing call used: a reconnect or refresh that replaced
+ * the tokens in the meantime must not be undone by a late failure of the old
+ * grant.
+ */
+export const markReconnectRequired = async ({
   connection,
   safeDb,
   recordAuditEvent,
@@ -100,6 +109,16 @@ const markReconnectRequired = async ({
       }),
   );
 
+/**
+ * A usable token and the ciphertext it is stored under, which names that
+ * grant: a caller whose Graph read was refused passes it to
+ * `markReconnectRequired` so only this grant is flagged.
+ */
+type UsableSharepointToken = {
+  accessToken: AccessToken;
+  accessTokenEncrypted: Buffer;
+};
+
 type TokenOptions = {
   connection: SharepointConnectionTokens;
   safeDb: SafeDb;
@@ -121,7 +140,10 @@ const refreshStoredSharepointAccessToken = async (
   }: TokenOptions & { requestedScope: string },
   collaborators = TOKEN_COLLABORATORS,
 ): Promise<
-  Result<AccessToken, HandlerError<403 | 409 | 500 | 502> | SafeDbError>
+  Result<
+    UsableSharepointToken,
+    HandlerError<403 | 409 | 500 | 502> | SafeDbError
+  >
 > =>
   await Result.gen(async function* () {
     if (!connection.refreshTokenEncrypted || !connection.refreshTokenIv) {
@@ -278,10 +300,13 @@ const refreshStoredSharepointAccessToken = async (
         userId: connection.userId,
       }),
     );
-    return Result.ok(accessToken);
+    return Result.ok({
+      accessToken,
+      accessTokenEncrypted: encryptedAccess.ciphertext,
+    });
   });
 
-export const ensureSharepointAccessToken = async (
+export const acquireSharepointAccessToken = async (
   {
     connection,
     safeDb,
@@ -292,7 +317,10 @@ export const ensureSharepointAccessToken = async (
   }: TokenOptions,
   collaborators = TOKEN_COLLABORATORS,
 ): Promise<
-  Result<AccessToken, HandlerError<403 | 409 | 500 | 502> | SafeDbError>
+  Result<
+    UsableSharepointToken,
+    HandlerError<403 | 409 | 500 | 502> | SafeDbError
+  >
 > =>
   await Result.gen(async function* () {
     if (connection.status !== "connected") {
@@ -427,7 +455,10 @@ export const ensureSharepointAccessToken = async (
           userId: connection.userId,
         }),
       );
-      return Result.ok(accessToken);
+      return Result.ok({
+        accessToken,
+        accessTokenEncrypted: connection.accessTokenEncrypted,
+      });
     }
 
     const refreshed = yield* Result.await(
@@ -446,3 +477,13 @@ export const ensureSharepointAccessToken = async (
     );
     return Result.ok(refreshed);
   });
+
+export const ensureSharepointAccessToken = async (
+  options: TokenOptions,
+  collaborators = TOKEN_COLLABORATORS,
+): Promise<
+  Result<AccessToken, HandlerError<403 | 409 | 500 | 502> | SafeDbError>
+> =>
+  (await acquireSharepointAccessToken(options, collaborators)).map(
+    ({ accessToken }) => accessToken,
+  );

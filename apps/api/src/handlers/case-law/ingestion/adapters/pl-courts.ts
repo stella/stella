@@ -1,3 +1,5 @@
+// parser-output-unchanged: The day listing and reconciliation page carry the existing totalResults count for the census; decision parsing and listed records are unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -23,37 +25,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionItem,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
@@ -74,11 +45,10 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  parsePlDecisionContent,
-  PL_DECISION_MARKUP,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { parsePlCommonCourtDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
+import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -90,8 +60,40 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionItem,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import { opaqueMetadataValue } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1498,21 +1500,23 @@ export const buildPlDecision = ({
 
   if (content) {
     try {
-      const parserResult = parsePlDecisionContent({
-        caseNumber,
-        ecli: undefined,
-        court: courtName,
-        decisionDate,
-        decisionType,
-        sourceUrl: publicSourceUrl(saosId),
-        documentUrl,
-        content,
-        keywords,
-        statutes,
-        documentId: upstreamId ?? String(saosId ?? caseNumber),
-        superscripts: true,
-        markup: PL_DECISION_MARKUP.COMMON_COURT,
-      });
+      const parserResult = parsePlCommonCourtDecision(
+        {
+          caseNumber,
+          ecli: undefined,
+          court: courtName,
+          decisionDate,
+          decisionType,
+          sourceUrl: publicSourceUrl(saosId),
+          documentUrl,
+          content,
+          keywords,
+          statutes,
+          documentId: upstreamId ?? String(saosId ?? caseNumber),
+          superscripts: true,
+        },
+        "pl-courts",
+      );
 
       documentAst = parserResult.documentAst;
       fulltext = parserResult.fulltext;
@@ -1871,6 +1875,7 @@ export type PlCourtsDayPage = {
   records: Record<string, unknown>[];
   /** 0 for a day the publisher lists no judgment for. */
   totalPages: number;
+  publisherCount: number;
 };
 
 /**
@@ -1975,7 +1980,7 @@ export const listPlCourtsDayPage = async ({
     });
   }
 
-  return { records, totalPages };
+  return { records, totalPages, publisherCount: totalResults };
 };
 
 const listPlCourtsSlicePage = async ({
@@ -1983,17 +1988,29 @@ const listPlCourtsSlicePage = async ({
   page,
   signal,
 }: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
-  const { records, totalPages } = await listPlCourtsDayPage({
+  const { records, totalPages, publisherCount } = await listPlCourtsDayPage({
     date: slice,
     page,
     ...(signal === undefined ? {} : { signal }),
   });
   return {
-    items: records.map((record) => ({
-      identity: plCourtsListingIdentity(normalizeSaosDumpItem(record)),
-      payload: record,
-    })),
+    items: records.map((record) => {
+      const normalized = normalizeSaosDumpItem(record);
+      const identity = plCourtsListingIdentity(normalized);
+      return {
+        identity,
+        payload: record,
+        ...(identity.type === "case-number"
+          ? {
+              censusCourtEvidence: observedCensusCourt(
+                normalized.division?.court?.name,
+              ),
+            }
+          : {}),
+      };
+    }),
     totalPages,
+    publisherCount,
   };
 };
 
@@ -2345,6 +2362,13 @@ const DISSENTING_OPINION_FIELD = {
   target: { type: "metadata", key: "dissentingOpinions" },
 } as const satisfies SourceFieldDisposition;
 
+type PlCourtsPublisherRecord = Readonly<
+  Record<
+    (typeof SOURCE_FIELDS)[number] | SourceRecordPaths<SaosItem, true>,
+    unknown
+  >
+>;
+
 const PL_COURTS_SOURCE_FIELDS = {
   id: { disposition: "stored", target: { type: "identity" } },
   href: { disposition: "stored", target: { type: "metadata", key: "href" } },
@@ -2469,7 +2493,7 @@ const PL_COURTS_SOURCE_FIELDS = {
   "dissentingOpinions[].textContent": DISSENTING_OPINION_FIELD,
   "dissentingOpinions[].authors": JUDGE_FIELD,
 } as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
+  keyof PlCourtsPublisherRecord,
   SourceFieldDisposition
 >;
 

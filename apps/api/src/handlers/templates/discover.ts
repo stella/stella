@@ -20,7 +20,9 @@ import {
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const discoverBodySchema = v.object({
-  file: v.optional(fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document })),
+  file: v.optional(
+    fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
+  ),
   templateId: v.optional(resourceIdSchema("template")),
 });
 

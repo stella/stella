@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { BoeSearchQuery } from "./query.js";
 import { buildSearchQuery } from "./query.js";
@@ -304,14 +304,15 @@ describe("BOE search query builder", () => {
   );
 
   test("INVARIANT (fuzz): no field lets attacker content escape its quoted phrase", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT (fuzz): no field lets attacker content escape its quoted phrase",
       fc.property(boeSearchQueryArb, (query) => {
         const q = extractQueryString(buildSearchQuery(query));
         const stripped = stripQuotedPhrases(q);
         expect(isParenBalanced(stripped)).toBe(true);
         expect(stripGrammarTokens(stripped)).toBe("");
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

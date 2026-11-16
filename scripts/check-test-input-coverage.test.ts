@@ -195,6 +195,30 @@ describe("target classification", () => {
     expect(classify("package.json").type).toBe("package-local");
   });
 
+  test("dotenv fixture names do not become source reads when local env exists", () => {
+    const names = [".env", ".env.local", ".env.test", ".env.production"];
+    // Directory listings are cached per path, so the env files exist in a
+    // root of their own before the first lookup, whatever order tests run in.
+    const envRoot = createRoot({
+      files: Object.fromEntries(names.map((name) => [name, "LOCAL_FIXTURE=1"])),
+      tasks: {},
+    });
+    const classifyInEnvRoot = (candidate: string) =>
+      classifyTarget({
+        candidate: { fromGlob: false, path: candidate },
+        packageDir: "apps/alpha",
+        root: envRoot,
+        testDir: "apps/alpha/src",
+      });
+    for (const name of names) {
+      expect(classifyInEnvRoot(name).type).toBe("absent");
+      expect(classifyInEnvRoot(`../../../${name}`)).toEqual({
+        target: name,
+        type: "repository",
+      });
+    }
+  });
+
   test("reports a path owned by another package", () => {
     expect(classify("apps/beta/src/route.ts")).toEqual({
       target: "apps/beta/src/route.ts",
@@ -295,6 +319,58 @@ describe("test input coverage", () => {
     expect(errors.at(0)).toContain(
       "apps/alpha/src/tests/helpers/fixtures.ts:1",
     );
+  });
+
+  test("counts local static, re-exported, and dynamic module imports", () => {
+    const root = createRoot({
+      files: {
+        "scripts/static-helper.ts": "export const value = 1;\n",
+        "scripts/reexported-helper.ts": "export const value = 2;\n",
+        "scripts/dynamic-helper.ts": "export const value = 3;\n",
+        "apps/alpha/src/guard.test.ts": [
+          'import { value as staticValue } from "../../../scripts/static-helper";',
+          'export { value } from "../../../scripts/reexported-helper.ts";',
+          'const dynamicValue = await import("../../../scripts/dynamic-helper");',
+          "expect([staticValue, dynamicValue]).toBeDefined();",
+        ].join("\n"),
+      },
+      tasks: {},
+    });
+
+    const errors = checkTestInputCoverage(root);
+    expect(errors).toHaveLength(3);
+    expect(errors.join("\n")).toContain("scripts/static-helper.ts");
+    expect(errors.join("\n")).toContain("scripts/reexported-helper.ts");
+    expect(errors.join("\n")).toContain("scripts/dynamic-helper.ts");
+  });
+
+  test("matches extensionless module imports to their declared source inputs", () => {
+    const root = createRoot({
+      files: {
+        "scripts/helper.ts": "export const value = 1;\n",
+        "apps/alpha/src/guard.test.ts":
+          'import { value } from "../../../scripts/helper";\n' +
+          "expect(value).toBeDefined();\n",
+      },
+      tasks: {
+        "@stll/alpha#test": {
+          inputs: ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/helper.ts"],
+        },
+      },
+    });
+
+    expect(checkTestInputCoverage(root)).toEqual([]);
+  });
+
+  test("leaves an unresolved local import to the test runner", () => {
+    const root = createRoot({
+      files: {
+        "apps/alpha/src/guard.test.ts": 'import "../../../scripts/missing";\n',
+      },
+      tasks: {},
+    });
+
+    expect(checkTestInputCoverage(root)).toEqual([]);
   });
 
   test("ignores a read of a workspace dependency, which Turbo already selects", () => {

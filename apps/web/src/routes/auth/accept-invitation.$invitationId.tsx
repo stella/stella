@@ -17,6 +17,7 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/frame";
+import { OutcomeScreen } from "@stll/ui/outcome-screen";
 import { cn } from "@stll/ui/utils";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
@@ -24,38 +25,53 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { pageTitleLiteral } from "@/lib/page-title";
+
+import { InvitationRefusal, loadInvitationView } from "./-invitation-view";
 
 export const Route = createFileRoute("/auth/accept-invitation/$invitationId")({
   beforeLoad: ({ context, location }) => {
-    if (!context.session) {
+    if (!context.session || !context.user) {
       throw redirect({
         to: "/auth",
         search: { redirectTo: location.pathname },
         replace: true,
       });
     }
+    return { signedInEmail: context.user.email };
   },
   loader: async ({ params }) => {
-    const { data } = await authClient.organization.getInvitation({
-      query: { id: params.invitationId },
-    });
+    const view = await loadInvitationView(params.invitationId);
 
-    if (data === null) {
+    if (view.type === "missing") {
       throw notFound();
     }
 
-    if (data.status !== "pending") {
-      throw notFound();
-    }
-
-    return { invitation: data };
+    return view;
   },
-  component: AcceptInvitation,
+  component: InvitationPage,
 });
 
-function AcceptInvitation() {
+function InvitationPage() {
+  const view = Route.useLoaderData();
+  const email = Route.useRouteContext({ select: (c) => c.signedInEmail });
+
+  if (view.type === "refused") {
+    return <InvitationRefusal code={view.code} email={email} />;
+  }
+
+  return <AcceptInvitation invitation={view.invitation} />;
+}
+
+type AcceptInvitationProps = {
+  invitation: Extract<
+    Awaited<ReturnType<typeof loadInvitationView>>,
+    { type: "invitation" }
+  >["invitation"];
+};
+
+function AcceptInvitation({ invitation }: AcceptInvitationProps) {
   const invitationId = Route.useParams({ select: (p) => p.invitationId });
-  const { invitation } = Route.useLoaderData();
   const analytics = useAnalytics();
   const navigate = Route.useNavigate();
   const invalidateSession = useInvalidateSession();
@@ -163,23 +179,24 @@ function AcceptInvitation() {
 
 const DeclinedState = () => {
   const t = useTranslations();
+  const title = t("auth.invitation.declined");
 
   return (
-    <Frame className="w-full max-w-sm">
-      <FrameHeader>
-        <FrameTitle>{t("auth.invitation.declined")}</FrameTitle>
-      </FrameHeader>
-      <FramePanel className="flex flex-col gap-4">
-        <FrameDescription>
-          {t("auth.invitation.declinedDescription")}
-        </FrameDescription>
+    <OutcomeScreen
+      actions={
         <Link
-          className={cn(buttonVariants({ variant: "default" }), "w-full")}
+          className={cn(buttonVariants({ variant: "outline" }))}
           to="/workspaces"
         >
           {t("auth.invitation.goToWorkspaces")}
         </Link>
-      </FramePanel>
-    </Frame>
+      }
+      description={t("auth.invitation.declinedDescription")}
+      documentTitle={pageTitleLiteral(title)}
+      note={t("common.closeTabNote")}
+      surface="embedded"
+      title={title}
+      tone="success"
+    />
   );
 };

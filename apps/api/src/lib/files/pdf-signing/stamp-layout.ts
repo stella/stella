@@ -9,6 +9,7 @@
 
 import { panic } from "better-result";
 
+import type { SrgbColor } from "@stll/brand";
 import {
   BIDI_DIRECTION,
   SHAPING_DIRECTION,
@@ -284,7 +285,7 @@ export type PositionedStampRow = {
   row: StampRow;
   fontSize: number;
   /** DeviceRGB components the row is filled with. */
-  color: string;
+  color: SrgbColor;
   /** Left end of the baseline in appearance space. */
   x: number;
   y: number;

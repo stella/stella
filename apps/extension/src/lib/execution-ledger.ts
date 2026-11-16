@@ -6,8 +6,8 @@ import {
   isReadOnlyBrowserCommand,
   parseBrowserControlResult,
 } from "@stll/api-contract/browser-control";
+import { browserControlError } from "@stll/browser-page/browser-control-result";
 
-import { browserControlError } from "./browser-control-result";
 import { BROWSER_EXECUTION_RECEIPTS_STORAGE_KEY } from "./storage-keys";
 
 type StartedExecutionReceipt = {

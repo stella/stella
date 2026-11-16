@@ -3,28 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { repoRelativePath } from "../packages/portable-path/src/index";
 import { repositoryCustomLintRunnerViolations } from "./check-custom-lint-test-runners";
-import { customLintTestTimeoutViolations as checkProductionTimeouts } from "./check-oxlint-test-timeouts.ts";
-
-const checkTimeouts = (
-  options: Parameters<typeof checkProductionTimeouts>[0] = {},
-) =>
-  checkProductionTimeouts({
-    ...options,
-    rollouts: [
-      {
-        id: "central-test-timeout",
-        type: "changed-lines",
-        expiresAt: "2026-10-20T00:00:00.000Z",
-        check: ["bun", "scripts/check-oxlint-test-timeouts.ts"],
-      },
-    ],
-  });
-
-const customLintTestTimeoutViolations = (
-  options: Parameters<typeof checkTimeouts>[0] = {},
-) => checkTimeouts({ now: new Date("2026-10-21T00:00:00.000Z"), ...options });
+import { customLintTestTimeoutViolations } from "./check-oxlint-test-timeouts.ts";
 
 const IMPORTS =
   'import { test, it, describe, setDefaultTimeout } from "bun:test";\n';
@@ -389,133 +369,23 @@ test("shared test helpers cannot change the central budget", () => {
 });
 
 test("custom lint test timeout overrides require a measured allow-list reason", () => {
-  expect(checkTimeouts()).toEqual([]);
+  expect(customLintTestTimeoutViolations()).toEqual([]);
   expect(repositoryCustomLintRunnerViolations()).toEqual([]);
 });
 
-const rolloutFixture = (directory: string, lines: readonly number[]) =>
-  new Map([
-    [
-      repoRelativePath(
-        path.resolve(import.meta.dirname, ".."),
-        path.join(directory, "fixture.test.ts"),
-      ),
-      new Set(lines),
-    ],
-  ]);
-
-for (const { name, now, changedLines, diagnostics } of [
-  {
-    name: "unchanged during rollout",
-    now: "2026-10-14",
-    changedLines: [],
-    diagnostics: [],
-  },
-  {
-    name: "changed inside the call during rollout",
-    now: "2026-10-14",
-    changedLines: [6],
-    diagnostics: [
-      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
-    ],
-  },
-  {
-    name: "unchanged after rollout expiry",
-    now: "2026-10-21",
-    changedLines: [],
-    diagnostics: [
-      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
-    ],
-  },
-]) {
-  test(`multiline custom lint timeout: ${name}`, () => {
+for (const [name, options] of [
+  ["spread over lines", "{\n    timeout: 60_000,\n  }"],
+  ["on one line", "{ timeout: 60_000 }"],
+] as const) {
+  test(`a multiline call rejects a timeout option ${name}`, () => {
     withFixture((directory, file) => {
       writeFileSync(
         file,
-        `${IMPORTS}test(\n  "case",\n  () => {},\n  {\n    timeout: 60_000,\n  },\n);\n`,
+        `${IMPORTS}test(\n  "case",\n  () => {},\n  ${options},\n);\n`,
       );
-      expect(
-        checkTimeouts({
-          directory,
-          now: new Date(now),
-          changedLines: rolloutFixture(directory, changedLines),
-        }),
-      ).toEqual(diagnostics);
+      expect(customLintTestTimeoutViolations({ directory })).toEqual([
+        "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+      ]);
     });
   });
 }
-
-test("the first week ignores an unchanged timeout and rejects a changed one", () => {
-  withFixture((directory, file) => {
-    writeFileSync(
-      file,
-      `${IMPORTS}test("legacy", () => {}, 60_000);\ntest("new", () => {}, 60_000);\n`,
-    );
-    const now = new Date("2026-10-14T00:00:00.000Z");
-    expect(
-      checkTimeouts({
-        directory,
-        now,
-        changedLines: rolloutFixture(directory, []),
-      }),
-    ).toEqual([]);
-    expect(
-      checkTimeouts({
-        directory,
-        now,
-        changedLines: rolloutFixture(directory, [3]),
-      }),
-    ).toEqual([
-      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
-    ]);
-  });
-});
-
-test("the rollout expires into full timeout enforcement", () => {
-  withFixture((directory, file) => {
-    writeFileSync(file, `${IMPORTS}test("legacy", () => {}, 60_000);\n`);
-    expect(
-      checkTimeouts({
-        directory,
-        now: new Date("2026-10-21T00:00:00.000Z"),
-        changedLines: rolloutFixture(directory, []),
-      }),
-    ).toEqual([
-      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
-    ]);
-  });
-});
-
-test("the changed timeout option is enforced inside a multiline call", () => {
-  withFixture((directory, file) => {
-    writeFileSync(
-      file,
-      `${IMPORTS}test(\n  "case",\n  () => {},\n  { timeout: 60_000 },\n);\n`,
-    );
-    expect(
-      checkTimeouts({
-        directory,
-        now: new Date("2026-10-14T00:00:00.000Z"),
-        changedLines: rolloutFixture(directory, [5]),
-      }),
-    ).toEqual([
-      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
-    ]);
-  });
-});
-
-test("full enforcement can be requested during rollout", () => {
-  withFixture((directory, file) => {
-    writeFileSync(file, `${IMPORTS}test("legacy", () => {}, 60_000);\n`);
-    expect(
-      checkTimeouts({
-        directory,
-        scope: "all",
-        now: new Date("2026-10-14T00:00:00.000Z"),
-        changedLines: rolloutFixture(directory, []),
-      }),
-    ).toEqual([
-      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
-    ]);
-  });
-});

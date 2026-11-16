@@ -9,7 +9,7 @@ import {
 import path from "node:path";
 
 import { compareCodeUnit } from "../../packages/collation/src/collation";
-import { refreshJobClassificationDigests } from "../check-ci-job-classification";
+import { pruneStaleJobClassificationDecisions } from "../check-ci-job-classification";
 import { decisionKeyFromPath } from "./decisions";
 import { readClassificationInputs } from "./generate";
 import { createGitProvider } from "./git-provider";
@@ -447,17 +447,16 @@ export const writeSnapshots = ({
     documents,
     origins,
   });
-  const refreshBase = base ?? gitBase(root);
-  const moves = pinMoves(root, refreshBase);
+  const moves = pinMoves(root, base ?? gitBase(root));
   const { replacements, copies } = pairSuppliers({ previous, retained, moves });
   reconcileDecisions({ root, previous, retained, replacements, copies });
   writeFileSync(snapshotFile, `${JSON.stringify(retained, null, 2)}\n`);
 
-  const refreshed = refreshJobClassificationDigests(root, refreshBase);
-  if (refreshed.isErr()) {
-    throw refreshed.error;
+  // A moved pin can drop a job or the privilege that had it reviewed.
+  const pruned = pruneStaleJobClassificationDecisions(root);
+  if (pruned.isErr()) {
+    throw pruned.error;
   }
-  return { refreshed: refreshed.value.refreshed };
 };
 
 const gitOutput = (root: string, args: readonly string[]) => {

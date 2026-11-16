@@ -28,7 +28,6 @@ import {
   relations,
 } from "@/api/db/schema";
 import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -43,6 +42,7 @@ import {
 import { STATED_ECLI_IDENTITY } from "@/api/lib/legal-search/adapter-manifest";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -64,6 +64,17 @@ const canonical = {
     putPacks: async ({ packs }) => {
       transferred.push(...packs);
       return await Promise.resolve(Result.ok(undefined));
+    },
+  },
+  // A write that replaces a document reads the one it replaces, to record
+  // where its anchors went.
+  readBytes: {
+    readRange: async ({ key, offset, length }) => {
+      const pack = transferred.find(({ packKey }) => packKey === key);
+      if (pack === undefined) {
+        throw new Error(`Pack not found: ${key}`);
+      }
+      return await Promise.resolve(pack.bytes.slice(offset, offset + length));
     },
   },
 } satisfies CaseLawCorpusDependencies;
@@ -197,6 +208,10 @@ const citationHeaders = async (decisionId: string): Promise<unknown> =>
  * on the chain returns a wrapped builder, so the hook fires when the whole
  * statement is sent, not when it starts being built.
  */
+/** Narrows a proxied member to a callable that can be bound to its owner. */
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
+
 const runningFirst = <T extends object>(
   target: T,
   before: () => Promise<void>,
@@ -260,7 +275,7 @@ const racingScopedDb = (
               });
             };
           }
-          return typeof value === "function" ? value.bind(object) : value;
+          return isCallable(value) ? value.bind(object) : value;
         },
       });
       return await callback(asTestRaw(racing));
@@ -274,15 +289,17 @@ const ingest = async (
   writer: ScopedDb = scopedDb,
 ) => {
   order += 1n;
-  const outcome = await processDecision({
-    input,
-    observationOrder: order,
-    sourceId,
-    scopedDb: writer,
-    observedAt: new Date(Date.UTC(2026, 8, 23, 12, 0, Number(order))),
-    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-    corpus,
-  });
+  const outcome = (
+    await processDecision({
+      input,
+      observationOrder: order,
+      sourceId,
+      scopedDb: writer,
+      observedAt: new Date(Date.UTC(2026, 8, 23, 12, 0, Number(order))),
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus,
+    })
+  ).unwrap();
   expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   return order;
 };
@@ -550,27 +567,29 @@ test("a stale equal fingerprint advances its version once without rewriting", as
   let reads = 0;
   const observe = async () => {
     order += 1n;
-    return await processDecision(
-      {
-        input: withDocument(caseNumber, "new-algorithm"),
-        observationOrder: order,
-        sourceId,
-        scopedDb,
-        observedAt: new Date(Date.UTC(2026, 8, 23, 13, 0, Number(order))),
-        corpus: canonical,
-        sourceFingerprintFromStoredRaw: async () => {
-          reads += 1;
-          return await Promise.resolve("new-algorithm");
+    return (
+      await processDecision(
+        {
+          input: withDocument(caseNumber, "new-algorithm"),
+          observationOrder: order,
+          sourceId,
+          scopedDb,
+          observedAt: new Date(Date.UTC(2026, 8, 23, 13, 0, Number(order))),
+          corpus: canonical,
+          sourceFingerprintFromStoredRaw: async () => {
+            reads += 1;
+            return await Promise.resolve("new-algorithm");
+          },
         },
-      },
-      async () =>
-        await Promise.resolve({
-          metadataUrlSchema: undefined,
-          sourceFingerprintVersion: 1,
-          statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
-          retention: sourceRetentionForAdapter("refresh-writes-fixture"),
-        }),
-    );
+        async () =>
+          await Promise.resolve({
+            metadataUrlSchema: undefined,
+            sourceFingerprintVersion: 1,
+            statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+            retention: sourceRetentionForAdapter("refresh-writes-fixture"),
+          }),
+      )
+    ).unwrap();
   };
   expect((await observe()).inserted).toBe(false);
   const upgraded = await storedRow(caseNumber);
@@ -594,27 +613,29 @@ test("a stale equal hash without stored raw follows the changed path", async () 
   `);
   let reads = 0;
   order += 1n;
-  const outcome = await processDecision(
-    {
-      input: withDocument(caseNumber, rawHash),
-      observationOrder: order,
-      sourceId,
-      scopedDb,
-      observedAt: new Date(Date.UTC(2026, 8, 23, 18, 0, Number(order))),
-      corpus: canonical,
-      sourceFingerprintFromStoredRaw: async () => {
-        reads += 1;
-        return await Promise.resolve(rawHash);
+  const outcome = (
+    await processDecision(
+      {
+        input: withDocument(caseNumber, rawHash),
+        observationOrder: order,
+        sourceId,
+        scopedDb,
+        observedAt: new Date(Date.UTC(2026, 8, 23, 18, 0, Number(order))),
+        corpus: canonical,
+        sourceFingerprintFromStoredRaw: async () => {
+          reads += 1;
+          return await Promise.resolve(rawHash);
+        },
       },
-    },
-    async () =>
-      await Promise.resolve({
-        metadataUrlSchema: undefined,
-        sourceFingerprintVersion: 1,
-        statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
-        retention: sourceRetentionForAdapter("refresh-writes-fixture"),
-      }),
-  );
+      async () =>
+        await Promise.resolve({
+          metadataUrlSchema: undefined,
+          sourceFingerprintVersion: 1,
+          statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          retention: sourceRetentionForAdapter("refresh-writes-fixture"),
+        }),
+    )
+  ).unwrap();
   expect(outcome.inserted).toBe(true);
   expect(reads).toBe(0);
   expect(await storedRow(caseNumber)).toMatchObject({
@@ -633,25 +654,27 @@ test("a stale unequal fingerprint follows the changed path", async () => {
      WHERE id = ${first.id}::uuid
   `);
   order += 1n;
-  const outcome = await processDecision(
-    {
-      input: withDocument(caseNumber, "new-algorithm"),
-      observationOrder: order,
-      sourceId,
-      scopedDb,
-      observedAt: new Date(Date.UTC(2026, 8, 23, 14, 0, Number(order))),
-      corpus: canonical,
-      sourceFingerprintFromStoredRaw: async () =>
-        await Promise.resolve("different-document"),
-    },
-    async () =>
-      await Promise.resolve({
-        metadataUrlSchema: undefined,
-        sourceFingerprintVersion: 1,
-        statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
-        retention: sourceRetentionForAdapter("refresh-writes-fixture"),
-      }),
-  );
+  const outcome = (
+    await processDecision(
+      {
+        input: withDocument(caseNumber, "new-algorithm"),
+        observationOrder: order,
+        sourceId,
+        scopedDb,
+        observedAt: new Date(Date.UTC(2026, 8, 23, 14, 0, Number(order))),
+        corpus: canonical,
+        sourceFingerprintFromStoredRaw: async () =>
+          await Promise.resolve("different-document"),
+      },
+      async () =>
+        await Promise.resolve({
+          metadataUrlSchema: undefined,
+          sourceFingerprintVersion: 1,
+          statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          retention: sourceRetentionForAdapter("refresh-writes-fixture"),
+        }),
+    )
+  ).unwrap();
   expect(outcome.inserted).toBe(true);
   const changed = await storedRow(caseNumber);
   expect(changed).toMatchObject({
@@ -670,25 +693,27 @@ test("an unavailable stale stored source follows the changed path", async () => 
      WHERE id = ${first.id}::uuid
   `);
   order += 1n;
-  const outcome = await processDecision(
-    {
-      input: withDocument(caseNumber, "new-algorithm"),
-      observationOrder: order,
-      sourceId,
-      scopedDb,
-      observedAt: new Date(Date.UTC(2026, 8, 23, 15, 0, Number(order))),
-      corpus: canonical,
-      sourceFingerprintFromStoredRaw: async () =>
-        await Promise.reject(new Error("stored object is missing")),
-    },
-    async () =>
-      await Promise.resolve({
-        metadataUrlSchema: undefined,
-        sourceFingerprintVersion: 1,
-        statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
-        retention: sourceRetentionForAdapter("refresh-writes-fixture"),
-      }),
-  );
+  const outcome = (
+    await processDecision(
+      {
+        input: withDocument(caseNumber, "new-algorithm"),
+        observationOrder: order,
+        sourceId,
+        scopedDb,
+        observedAt: new Date(Date.UTC(2026, 8, 23, 15, 0, Number(order))),
+        corpus: canonical,
+        sourceFingerprintFromStoredRaw: async () =>
+          await Promise.reject(new Error("stored object is missing")),
+      },
+      async () =>
+        await Promise.resolve({
+          metadataUrlSchema: undefined,
+          sourceFingerprintVersion: 1,
+          statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          retention: sourceRetentionForAdapter("refresh-writes-fixture"),
+        }),
+    )
+  ).unwrap();
   expect(outcome.inserted).toBe(true);
   expect(await storedRow(caseNumber)).toMatchObject({
     sourceHash: "new-algorithm",
@@ -707,28 +732,30 @@ test("a forced refresh does not read a stale stored source", async () => {
   `);
   let reads = 0;
   order += 1n;
-  const outcome = await processDecision(
-    {
-      input: withDocument(caseNumber, "new-algorithm"),
-      observationOrder: order,
-      sourceId,
-      scopedDb,
-      observedAt: new Date(Date.UTC(2026, 8, 23, 16, 0, Number(order))),
-      corpus: canonical,
-      refresh: DECISION_REFRESH.ALWAYS,
-      sourceFingerprintFromStoredRaw: async () => {
-        reads += 1;
-        return await Promise.resolve("old-algorithm");
+  const outcome = (
+    await processDecision(
+      {
+        input: withDocument(caseNumber, "new-algorithm"),
+        observationOrder: order,
+        sourceId,
+        scopedDb,
+        observedAt: new Date(Date.UTC(2026, 8, 23, 16, 0, Number(order))),
+        corpus: canonical,
+        refresh: DECISION_REFRESH.ALWAYS,
+        sourceFingerprintFromStoredRaw: async () => {
+          reads += 1;
+          return await Promise.resolve("old-algorithm");
+        },
       },
-    },
-    async () =>
-      await Promise.resolve({
-        metadataUrlSchema: undefined,
-        sourceFingerprintVersion: 1,
-        statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
-        retention: sourceRetentionForAdapter("refresh-writes-fixture"),
-      }),
-  );
+      async () =>
+        await Promise.resolve({
+          metadataUrlSchema: undefined,
+          sourceFingerprintVersion: 1,
+          statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          retention: sourceRetentionForAdapter("refresh-writes-fixture"),
+        }),
+    )
+  ).unwrap();
   expect(outcome.inserted).toBe(true);
   expect(reads).toBe(0);
 });
@@ -747,25 +774,27 @@ test("unchanged fixture bytes recompute a stale fingerprint without rewriting", 
      WHERE id = ${first.id}::uuid
   `);
   order += 1n;
-  const outcome = await processDecision(
-    {
-      input: withDocument(caseNumber, fingerprint),
-      observationOrder: order,
-      sourceId,
-      scopedDb,
-      observedAt: new Date(Date.UTC(2026, 8, 23, 17, 0, Number(order))),
-      corpus: canonical,
-      sourceFingerprintFromStoredRaw: async () =>
-        await Promise.resolve(sourceFingerprint({ sourceRaw })),
-    },
-    async () =>
-      await Promise.resolve({
-        metadataUrlSchema: undefined,
-        sourceFingerprintVersion: 1,
-        statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
-        retention: sourceRetentionForAdapter("refresh-writes-fixture"),
-      }),
-  );
+  const outcome = (
+    await processDecision(
+      {
+        input: withDocument(caseNumber, fingerprint),
+        observationOrder: order,
+        sourceId,
+        scopedDb,
+        observedAt: new Date(Date.UTC(2026, 8, 23, 17, 0, Number(order))),
+        corpus: canonical,
+        sourceFingerprintFromStoredRaw: async () =>
+          await Promise.resolve(sourceFingerprint({ sourceRaw })),
+      },
+      async () =>
+        await Promise.resolve({
+          metadataUrlSchema: undefined,
+          sourceFingerprintVersion: 1,
+          statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          retention: sourceRetentionForAdapter("refresh-writes-fixture"),
+        }),
+    )
+  ).unwrap();
   expect(outcome.inserted).toBe(false);
   expect(await storedRow(caseNumber)).toMatchObject({
     sourceHash: fingerprint,
@@ -940,7 +969,7 @@ test("a directory jurisdiction's decision is written with its court id, and ever
     refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
     corpus: canonical,
   }).then(
-    () => null,
+    (outcome) => (outcome.isErr() ? outcome.error : null),
     (error: unknown) => error,
   );
   expect(rejection).toMatchObject({

@@ -7,7 +7,9 @@ defaults:
 
 # Publishes the mobile app's JavaScript as a signed over-the-air update to
 # the downloads CDN, for the builds whose native fingerprint matches this
-# commit (apps/mobile/scripts/fingerprint.ts). Manual only, from main.
+# commit (apps/mobile/scripts/fingerprint.ts). From main only: Mobile
+# Release Plan starts the preview update after a merge that keeps native code
+# as the latest TestFlight build has it; production is started by hand.
 #
 # The manifest is signed here with the update signing key and never again:
 # the API's update route relays it unchanged, and a phone runs it only when

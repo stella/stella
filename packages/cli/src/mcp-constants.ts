@@ -3,9 +3,10 @@
 import { panic } from "better-result";
 
 import {
+  LEGAL_HOLD_ACTIVE,
   MCP_ERROR_CODES,
   type McpErrorCode,
-  VERIFICATION_RUN_CAP_CODES,
+  MODEL_RUN_CAP_CODES,
 } from "./generated/mcp-contract.js";
 
 export { MCP_HTTP_PATH } from "./generated/mcp-contract.js";
@@ -110,12 +111,15 @@ const MCP_ERROR_CODE_EXIT_MAP = {
   permission_denied: EXIT_CODES.permissionDenied,
   usage_limited: EXIT_CODES.usageLimited,
   conflict: EXIT_CODES.conflict,
+  [LEGAL_HOLD_ACTIVE]: EXIT_CODES.conflict,
   rate_limited: EXIT_CODES.server,
-  [VERIFICATION_RUN_CAP_CODES.active]: EXIT_CODES.server,
-  [VERIFICATION_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
+  [MODEL_RUN_CAP_CODES.active]: EXIT_CODES.server,
+  [MODEL_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
   upstream_unavailable: EXIT_CODES.server,
   public_read_timeout: EXIT_CODES.server,
   search_index_unavailable: EXIT_CODES.server,
+  continuation_expired: EXIT_CODES.server,
+  public_read_unfinished: EXIT_CODES.server,
   unknown_tool: EXIT_CODES.server,
   internal_error: EXIT_CODES.server,
 } as const satisfies Record<McpErrorCode, ExitCode>;

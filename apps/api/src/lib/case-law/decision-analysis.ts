@@ -15,6 +15,7 @@ import {
 import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
 import {
   parsePersistedCorpusAst,
+  readCorpusForRecovery,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
@@ -55,7 +56,10 @@ export const readDecisionAnalysis = definePublicLawSharedQuery(
     const [row] = await tx
       .select({
         ...decisionAnalysisColumns,
+        // The join key keeps a matched source from reading back as no source
+        // when its other columns are NULL; consumers ignore it.
         source: {
+          id: caseLawSources.id,
           adapterKey: caseLawSources.adapterKey,
           descriptor: caseLawSources.descriptor,
         },
@@ -115,23 +119,29 @@ export const readDecisionAnalysisAst = async (
   readTombstones: CorpusTombstoneReader,
   readPgAst?: () => Promise<DocumentAst | EmptyAst | null>,
 ): Promise<DocumentAst | null> => {
-  const readRowAst = async () =>
-    readPgAst === undefined
-      ? parsePersistedCorpusAst(documentAst, id)
-      : await readPgAst();
-  if (
-    corpusStorageMode === "off" ||
-    astS3Key === null ||
-    contentHash === null
-  ) {
-    return parseCachedDecisionAst(await readRowAst());
-  }
-  const stored = await readCorpusPayloadOrFallback({
+  const recovered = await readCorpusForRecovery({
     documentId: id,
-    key: astS3Key,
-    step: "analysis.readDecisionAst",
-    read: async () => await readCachedDecisionAst(astS3Key, readTombstones),
-    fallback: readRowAst,
+    read: async () => {
+      const readRowAst = async () =>
+        readPgAst === undefined
+          ? parsePersistedCorpusAst(documentAst, id)
+          : await readPgAst();
+      if (
+        corpusStorageMode === "off" ||
+        astS3Key === null ||
+        contentHash === null
+      ) {
+        return parseCachedDecisionAst(await readRowAst());
+      }
+      const stored = await readCorpusPayloadOrFallback({
+        documentId: id,
+        key: astS3Key,
+        step: "analysis.readDecisionAst",
+        read: async () => await readCachedDecisionAst(astS3Key, readTombstones),
+        fallback: readRowAst,
+      });
+      return parseCachedDecisionAst(stored);
+    },
   });
-  return parseCachedDecisionAst(stored);
+  return recovered.match({ ok: (ast) => ast, err: () => null });
 };

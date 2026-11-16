@@ -6,14 +6,6 @@ import { assertProperty } from "@stll/property-testing";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  StoredRawReadError,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
-import {
   readBodyText,
   type readPublisherText,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
@@ -33,6 +25,14 @@ import {
   readUnavailable,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  StoredRawReadError,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 import {
   openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,

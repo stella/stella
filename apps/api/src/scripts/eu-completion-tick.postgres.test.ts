@@ -5,6 +5,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
+import { createTestState } from "@stll/test-state";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -21,10 +22,6 @@ import {
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
-import {
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import sparqlFixture from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/eu-ecj-sparql.json";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import {
@@ -50,16 +47,29 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import {
+  guardPostgresSuiteSeeding,
+  insertProjectedFixtureDecisions,
+} from "@/api/tests/helpers/corpus-projection-seeding-guard-postgres";
 import { runEuCompletionTickFixture } from "@/api/tests/helpers/eu-completion-tick";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+const testFetchState = createTestFetch();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -78,7 +88,11 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("EU completion real scheduled wiring", () => {
-    const { db } = openGatedTestDatabase(databaseUrl);
+    const database = openGatedTestDatabase(databaseUrl);
+    // A generation of the suite's own, so the completion writer is held to
+    // the seeding rule.
+    guardPostgresSuiteSeeding(database, { generations: ["case_law_v10"] });
+    const { db } = database;
     const withSource = async (
       run: (sourceId: SafeId<"caseLawSource">) => Promise<void>,
     ) => {
@@ -117,38 +131,46 @@ if (!databaseUrl || !enabled) {
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         name: "EU completion scheduled fixture",
       });
-      process.env["CASE_LAW_EU_COMPLETION_ENABLED"] = "true";
-      process.env["CASE_LAW_EU_COMPLETION_KILL_SWITCH"] = "false";
-      process.env["CASE_LAW_EU_COMPLETION_MODE"] = "apply";
-      process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"] = "1";
+      testState.setEnv("CASE_LAW_EU_COMPLETION_ENABLED", "true");
+      testState.setEnv("CASE_LAW_EU_COMPLETION_KILL_SWITCH", "false");
+      testState.setEnv("CASE_LAW_EU_COMPLETION_MODE", "apply");
+      testState.setEnv("CASE_LAW_EU_COMPLETION_MAX_ROWS", "1");
       try {
         await run(sourceId);
       } finally {
         if (previousEnvironment.CASE_LAW_EU_COMPLETION_ENABLED === undefined) {
-          delete process.env["CASE_LAW_EU_COMPLETION_ENABLED"];
+          testState.deleteEnv("CASE_LAW_EU_COMPLETION_ENABLED");
         } else {
-          process.env["CASE_LAW_EU_COMPLETION_ENABLED"] =
-            previousEnvironment.CASE_LAW_EU_COMPLETION_ENABLED;
+          testState.setEnv(
+            "CASE_LAW_EU_COMPLETION_ENABLED",
+            previousEnvironment.CASE_LAW_EU_COMPLETION_ENABLED,
+          );
         }
         if (
           previousEnvironment.CASE_LAW_EU_COMPLETION_KILL_SWITCH === undefined
         ) {
-          delete process.env["CASE_LAW_EU_COMPLETION_KILL_SWITCH"];
+          testState.deleteEnv("CASE_LAW_EU_COMPLETION_KILL_SWITCH");
         } else {
-          process.env["CASE_LAW_EU_COMPLETION_KILL_SWITCH"] =
-            previousEnvironment.CASE_LAW_EU_COMPLETION_KILL_SWITCH;
+          testState.setEnv(
+            "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
+            previousEnvironment.CASE_LAW_EU_COMPLETION_KILL_SWITCH,
+          );
         }
         if (previousEnvironment.CASE_LAW_EU_COMPLETION_MODE === undefined) {
-          delete process.env["CASE_LAW_EU_COMPLETION_MODE"];
+          testState.deleteEnv("CASE_LAW_EU_COMPLETION_MODE");
         } else {
-          process.env["CASE_LAW_EU_COMPLETION_MODE"] =
-            previousEnvironment.CASE_LAW_EU_COMPLETION_MODE;
+          testState.setEnv(
+            "CASE_LAW_EU_COMPLETION_MODE",
+            previousEnvironment.CASE_LAW_EU_COMPLETION_MODE,
+          );
         }
         if (previousEnvironment.CASE_LAW_EU_COMPLETION_MAX_ROWS === undefined) {
-          delete process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"];
+          testState.deleteEnv("CASE_LAW_EU_COMPLETION_MAX_ROWS");
         } else {
-          process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"] =
-            previousEnvironment.CASE_LAW_EU_COMPLETION_MAX_ROWS;
+          testState.setEnv(
+            "CASE_LAW_EU_COMPLETION_MAX_ROWS",
+            previousEnvironment.CASE_LAW_EU_COMPLETION_MAX_ROWS,
+          );
         }
         await db
           .delete(euCompletionApprovals)
@@ -238,23 +260,25 @@ if (!databaseUrl || !enabled) {
       }
       const candidate = parsed.result;
       const id = createSafeId<"caseLawDecision">();
-      await db.insert(caseLawDecisions).values({
-        id,
-        sourceId,
-        caseNumber: candidate.caseNumber,
-        sourceDocumentId: candidate.sourceDocumentId,
-        court: candidate.court,
-        country: candidate.country,
-        language: candidate.language,
-        ecli: candidate.ecli,
-        decisionDate: candidate.decisionDate,
-        decisionType: candidate.decisionType,
-        sourceUrl: candidate.sourceUrl,
-        documentUrl: candidate.documentUrl,
-        metadata,
-        ...options.offloaded,
-        parserVersion: 1,
-      });
+      await insertProjectedFixtureDecisions(db, [
+        {
+          id,
+          sourceId,
+          caseNumber: candidate.caseNumber,
+          sourceDocumentId: candidate.sourceDocumentId,
+          court: candidate.court,
+          country: candidate.country,
+          language: candidate.language,
+          ecli: candidate.ecli,
+          decisionDate: candidate.decisionDate,
+          decisionType: candidate.decisionType,
+          sourceUrl: candidate.sourceUrl,
+          documentUrl: candidate.documentUrl,
+          metadata,
+          ...options.offloaded,
+          parserVersion: 1,
+        },
+      ]);
       const row = (
         await db
           .select()
@@ -391,26 +415,29 @@ if (!databaseUrl || !enabled) {
       clock?: () => number;
       run: (sent: { url: string; at: number }[]) => Promise<void>;
     }) => {
-      const original = globalThis.fetch;
       const sent: { url: string; at: number }[] = [];
-      globalThis.fetch = asFetchMock(
-        mock(async (input, init) => {
-          const url = input instanceof Request ? input.url : String(input);
-          const host = new URL(url).hostname;
-          if (!["publications.europa.eu", "eur-lex.europa.eu"].includes(host)) {
-            panic("Completion publisher fixture refuses an unrelated host");
-          }
-          sent.push({
-            url,
-            at: options.clock?.() ?? Temporal.Now.instant().epochMilliseconds,
-          });
-          return await options.respond(url, init);
-        }),
+      testFetchState.set(
+        asFetchMock(
+          mock(async (input, init) => {
+            const url = input instanceof Request ? input.url : String(input);
+            const host = new URL(url).hostname;
+            if (
+              !["publications.europa.eu", "eur-lex.europa.eu"].includes(host)
+            ) {
+              panic("Completion publisher fixture refuses an unrelated host");
+            }
+            sent.push({
+              url,
+              at: options.clock?.() ?? Temporal.Now.instant().epochMilliseconds,
+            });
+            return await options.respond(url, init);
+          }),
+        ),
       );
       try {
         await options.run(sent);
       } finally {
-        globalThis.fetch = original;
+        testFetchState.restore();
       }
     };
     const successfulPublisher = async (url: string, init?: RequestInit) => {
@@ -525,7 +552,7 @@ if (!databaseUrl || !enabled) {
           panic("Missing NEW dry-run fixture receipt");
         }
         expect(receipt.status).toBe("pending");
-        process.env["CASE_LAW_EU_COMPLETION_MODE"] = "dry-run";
+        testState.setEnv("CASE_LAW_EU_COMPLETION_MODE", "dry-run");
         const gate = fixtureGate();
         await withPublisher({
           respond: successfulPublisher,
@@ -680,20 +707,22 @@ if (!databaseUrl || !enabled) {
             "62021CJ0367",
           );
           const secondId = createSafeId<"caseLawDecision">();
-          await db.insert(caseLawDecisions).values({
-            ...row,
-            id: secondId,
-            caseNumber: "C-367/21",
-            sourceDocumentId: "62021CJ0367:en",
-            sourceUrl: secondSourceUrl,
-            ecli: "ECLI:EU:C:2024:61",
-            metadata: {
-              celex: "62021CJ0367",
+          await insertProjectedFixtureDecisions(db, [
+            {
+              ...row,
+              id: secondId,
+              caseNumber: "C-367/21",
+              sourceDocumentId: "62021CJ0367:en",
+              sourceUrl: secondSourceUrl,
               ecli: "ECLI:EU:C:2024:61",
-              decisionDate: "2024-01-18",
+              metadata: {
+                celex: "62021CJ0367",
+                ecli: "ECLI:EU:C:2024:61",
+                decisionDate: "2024-01-18",
+              },
             },
-          });
-          process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"] = "2";
+          ]);
+          testState.setEnv("CASE_LAW_EU_COMPLETION_MAX_ROWS", "2");
           const notice = new TextDecoder().decode(
             Bun.gunzipSync(
               await Bun.file(
@@ -1049,7 +1078,7 @@ if (!databaseUrl || !enabled) {
             changedAt: new Date(),
           });
         }
-        process.env["CASE_LAW_EU_COMPLETION_MODE"] = "dry-run";
+        testState.setEnv("CASE_LAW_EU_COMPLETION_MODE", "dry-run");
         let clock = 1000;
         const readClock = () => clock;
         const gate = fixtureGate({
@@ -1252,19 +1281,21 @@ if (!databaseUrl || !enabled) {
             "62021CJ0367",
           );
           const secondId = createSafeId<"caseLawDecision">();
-          await db.insert(caseLawDecisions).values({
-            ...row,
-            id: secondId,
-            caseNumber: "C-367/21",
-            sourceDocumentId: "62021CJ0367:en",
-            sourceUrl: secondSourceUrl,
-            ecli: "ECLI:EU:C:2024:61",
-            metadata: {
-              celex: "62021CJ0367",
+          await insertProjectedFixtureDecisions(db, [
+            {
+              ...row,
+              id: secondId,
+              caseNumber: "C-367/21",
+              sourceDocumentId: "62021CJ0367:en",
+              sourceUrl: secondSourceUrl,
               ecli: "ECLI:EU:C:2024:61",
-              decisionDate: "2024-01-18",
+              metadata: {
+                celex: "62021CJ0367",
+                ecli: "ECLI:EU:C:2024:61",
+                decisionDate: "2024-01-18",
+              },
             },
-          });
+          ]);
           // Hold the first reservation while independently reserving its neighbour.
           await db
             .update(euCompletionReceipts)
@@ -1285,7 +1316,7 @@ if (!databaseUrl || !enabled) {
             .update(euCompletionReceipts)
             .set({ retryAt: null })
             .where(eq(euCompletionReceipts.id, firstReceipt.id));
-          process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"] = "2";
+          testState.setEnv("CASE_LAW_EU_COMPLETION_MAX_ROWS", "2");
           let clock = 1000;
           const gate = fixtureGate({
             clock: () => clock,
@@ -1602,20 +1633,25 @@ if (!databaseUrl || !enabled) {
                     id: receipt.id,
                     decisionId: row.id,
                   });
-                  process.env["CASE_LAW_EU_COMPLETION_KILL_SWITCH"] = "true";
+                  testState.setEnv(
+                    "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
+                    "true",
+                  );
                 },
               },
             });
-            await processDecision({
-              input: candidate,
-              sourceId,
-              scopedDb: writer,
-              signal,
-              s3Policy: { mode: "replay-strict", signal },
-              observedAt: new Date(),
-              observationOrder,
-              refresh: DECISION_REFRESH.ALWAYS,
-            });
+            (
+              await processDecision({
+                input: candidate,
+                sourceId,
+                scopedDb: writer,
+                signal,
+                s3Policy: { mode: "replay-strict", signal },
+                observedAt: new Date(),
+                observationOrder,
+                refresh: DECISION_REFRESH.ALWAYS,
+              })
+            ).unwrap();
           } finally {
             await lease.release();
           }
@@ -1639,7 +1675,7 @@ if (!databaseUrl || !enabled) {
               })
             ).status,
           ).toBe("off");
-          process.env["CASE_LAW_EU_COMPLETION_KILL_SWITCH"] = "false";
+          testState.setEnv("CASE_LAW_EU_COMPLETION_KILL_SWITCH", "false");
           await withPublisher({
             respond: successfulPublisher,
             run: async (sent) => {
@@ -1801,15 +1837,17 @@ if (!databaseUrl || !enabled) {
           changedAt: new Date(),
         });
         const id = createSafeId<"caseLawDecision">();
-        await db.insert(caseLawDecisions).values({
-          id,
-          sourceId,
-          caseNumber: "C-1/26",
-          court: "Court of Justice",
-          country: "EU",
-          language: "en",
-          parserVersion: 1,
-        });
+        await insertProjectedFixtureDecisions(db, [
+          {
+            id,
+            sourceId,
+            caseNumber: "C-1/26",
+            court: "Court of Justice",
+            country: "EU",
+            language: "en",
+            parserVersion: 1,
+          },
+        ]);
         const before = (
           await db
             .select()

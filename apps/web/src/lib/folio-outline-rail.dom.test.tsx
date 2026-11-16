@@ -4,11 +4,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { installRenderProbe } from "@stll/render-probe";
 import { formatRenderReport } from "@stll/render-probe/report";
 import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // The outline the docx editor shows, through the app's folio adapter and the
 // design-system rail. Folio rebuilds its heading list after every edit: first

@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Starts the preview TestFlight build or signed update on main after a merge; dispatch only, no secrets."
+}

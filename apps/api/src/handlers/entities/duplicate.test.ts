@@ -51,13 +51,6 @@ import type {
 import { copyFileObject, resolveEntityName } from "./copy-utils";
 import { createDuplicateEntity } from "./duplicate";
 
-beforeEach(() => {
-  enqueueDocumentProcessingRunMock.mockClear();
-  enqueueEntitySearchRepairsMock.mockClear();
-  flushEntitySearchRepairsMock.mockClear();
-  requestNativeExtractionRunsMock.mockClear();
-});
-
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
     requests.map((_, index) =>
@@ -135,6 +128,10 @@ const secondarySourceKey = createFileKey({
 let fake: FakeS3;
 
 beforeEach(() => {
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
   fake = startFakeS3();
   fake.put(envBase.S3_BUCKET, sourceKey, sourceBytes, fileContent.mimeType);
   fake.put(
@@ -252,6 +249,7 @@ const createContext = ({
     server: null,
   };
 
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
   return {
     workspaceId,
     user: { id: userId },
@@ -263,7 +261,6 @@ const createContext = ({
     safeDb,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: () => createAuditRecorder(recorderBindings),
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
   } as Parameters<typeof duplicateEntity.handler>[0];
 };
 

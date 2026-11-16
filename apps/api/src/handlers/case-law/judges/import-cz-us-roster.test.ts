@@ -15,6 +15,7 @@ import {
   type StoredRosterJudge,
 } from "@/api/handlers/case-law/judges/import-cz-us-roster";
 import { judgeNameKey } from "@/api/handlers/case-law/judges/judge-name";
+import { PORTRAIT_MAX_BYTES } from "@/api/handlers/case-law/judges/portrait";
 import { createSafeId } from "@/api/lib/branded-types";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
@@ -216,6 +217,20 @@ const listingWith = (href: string, name: string): string =>
 
 const EMPTY_LISTING = '<div class="judges-list"></div>';
 
+// One red pixel: the seed every test image is scaled up from.
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+/** A photograph of the given size, as the court would publish one. */
+const photograph = async (
+  width: number,
+  height: number,
+  format: "jpeg" | "png" = "jpeg",
+): Promise<Uint8Array> =>
+  await new Bun.Image(ONE_PIXEL_PNG).resize(width, height)[format]().bytes();
+
 type FakeSite = {
   fetch: RosterFetch;
   puts: RosterPortrait[];
@@ -226,7 +241,7 @@ type FakeSite = {
 const fakeSite = async (): Promise<FakeSite> => {
   const justicePage = await fixture("cz-us-justice-sitting.html.gz");
   const puts: RosterPortrait[] = [];
-  let portrait: Uint8Array = new Uint8Array([1, 2, 3, 4]);
+  let portrait = await photograph(40, 60);
   const pages = new Map<string, string>([
     [SITTING_LISTING_URL, listingWith(SITTING_JUSTICE_URL, "Josef&nbsp;Baxa")],
     [EMERITUS_LISTING_URL, EMPTY_LISTING],
@@ -326,7 +341,8 @@ describe("importing the roster", () => {
     const store = fakeStore();
     await importedRoster(site, store);
     const stored = store.rows.get(judgeNameKey("Josef Baxa"));
-    site.setPortrait(new Uint8Array([9, 9, 9, 9, 9]));
+    const changed = await photograph(50, 70);
+    site.setPortrait(changed);
 
     const second = await importedRoster(site, store);
 
@@ -339,7 +355,9 @@ describe("importing the roster", () => {
     expect(refreshed?.externalRefs.portraitSha256).not.toBe(
       stored?.externalRefs.portraitSha256,
     );
-    expect(site.puts.at(1)?.bytes).toEqual(new Uint8Array([9, 9, 9, 9, 9]));
+    expect(
+      await new Bun.Image(site.puts.at(1)?.bytes ?? panic("no put")).metadata(),
+    ).toMatchObject({ height: 70, width: 50 });
   });
 
   test("reports the justices it could not read and applies the rest", async () => {
@@ -403,11 +421,78 @@ describe("importing the roster", () => {
   });
 });
 
+describe("the stored portrait", () => {
+  test("is a small JPEG of a print-size photograph, whatever its format", async () => {
+    for (const format of ["jpeg", "png"] as const) {
+      const site = await fakeSite();
+      const source = await photograph(2475, 3500, format);
+      site.setPortrait(source);
+
+      await importedRoster(site, fakeStore());
+
+      const stored = site.puts.at(0) ?? panic("no portrait stored");
+      expect(await new Bun.Image(stored.bytes).metadata()).toMatchObject({
+        format: "jpeg",
+        width: 320,
+      });
+      expect(stored.bytes.byteLength).toBeLessThan(source.byteLength);
+    }
+  });
+
+  test("is not enlarged from a small photograph", async () => {
+    const site = await fakeSite();
+    site.setPortrait(await photograph(100, 150));
+
+    await importedRoster(site, fakeStore());
+
+    expect(
+      await new Bun.Image(site.puts.at(0)?.bytes ?? panic("no put")).metadata(),
+    ).toMatchObject({ height: 150, width: 100 });
+  });
+
+  test("comes from a photograph past the size the route serves", async () => {
+    const site = await fakeSite();
+    const bulky = new Uint8Array(PORTRAIT_MAX_BYTES + 1);
+    bulky.set(await photograph(40, 60));
+    site.setPortrait(bulky);
+
+    const imported = await importedRoster(site, fakeStore());
+
+    expect(imported.failures).toEqual([]);
+    expect(site.puts.at(0)?.bytes.byteLength).toBeLessThan(PORTRAIT_MAX_BYTES);
+  });
+
+  test("replaces an older rendition of an unchanged photograph", async () => {
+    const site = await fakeSite();
+    const store = fakeStore();
+    await importedRoster(site, store);
+    const key = judgeNameKey("Josef Baxa");
+    const row = store.rows.get(key) ?? panic("justice missing");
+    const { portraitRendition: _stale, ...refs } = row.externalRefs;
+    store.rows.set(key, { ...row, externalRefs: refs });
+
+    const second = await importedRoster(site, store);
+
+    expect(second.portraitsStored).toBe(1);
+    expect(site.puts).toHaveLength(2);
+  });
+
+  test("a file that is no image fails that justice alone", async () => {
+    const site = await fakeSite();
+    site.setPortrait(new Uint8Array([0, 255, 1]));
+    const store = fakeStore();
+
+    const imported = await importedRoster(site, store);
+
+    expect(imported.failures.at(0)?.reason).toContain("read as an image");
+    expect(site.puts).toEqual([]);
+  });
+});
+
 test("portrait identities stored by the import match legacy SHA-256 bytes", async () => {
   for (const bytes of [
-    new Uint8Array(),
-    new Uint8Array([0, 255, 1]),
-    new TextEncoder().encode("Žluťoučký kůň e\u0301"),
+    await photograph(40, 60),
+    await photograph(50, 70, "png"),
   ]) {
     const site = await fakeSite();
     site.setPortrait(bytes);
@@ -418,6 +503,5 @@ test("portrait identities stored by the import match legacy SHA-256 bytes", asyn
     const stored =
       store.rows.get(judgeNameKey("Josef Baxa")) ?? panic("justice missing");
     expect(stored.externalRefs.portraitSha256).toBe(legacySha256Hex(bytes));
-    expect(site.puts.at(0)?.bytes).toEqual(bytes);
   }
 });

@@ -22,7 +22,7 @@ import {
   setAISuggestionsMeta,
   setFocusedSuggestionMeta,
 } from "@stll/folio-react";
-import type { DocxEditorRef } from "@stll/folio-react";
+import type { AISuggestionPreset, DocxEditorRef } from "@stll/folio-react";
 
 import { ChatEditorScope } from "@/components/chat-editor-provider";
 import {
@@ -111,6 +111,12 @@ export type FileViewerWithAIProps = {
    * a file is: the question carries the decision on screen.
    */
   activeLegal?: ActiveLegalDocument | undefined;
+  /**
+   * Prompts the surface offers as chips over the empty composer, sent as
+   * they are on a click. A legal reader's inspector offers the questions its
+   * page used to ask in a section of its own.
+   */
+  presets?: AISuggestionPreset[] | undefined;
   /** Optional class name applied to the wrapper. */
   className?: string | undefined;
   /** Live Folio editor ref used by the overlay's DOCX edit tool. */
@@ -265,6 +271,7 @@ export const FileChatOverlayHost = ({
   onDocxCommentsChange,
   onChatThreadIdChange,
   onActiveDraftChatBound,
+  presets,
   requestDocxEditMode,
 }: FileChatOverlayHostProps) => {
   const draftPersistence: CreateDocumentDraftPersistence =
@@ -347,6 +354,7 @@ export const FileChatOverlayHost = ({
           onDocxCommentsChange={onDocxCommentsChange}
           onActiveDraftChatBound={onActiveDraftChatBound}
           onNewThread={handleNewThread}
+          presets={presets}
           requestDocxEditMode={requestDocxEditMode}
           workspaceId={workspaceId}
         />

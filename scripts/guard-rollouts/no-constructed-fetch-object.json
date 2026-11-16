@@ -1,0 +1,17 @@
+{
+  "id": "no-constructed-fetch-object",
+  "rules": ["no-constructed-fetch-object/no-constructed-fetch-object"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-constructed-fetch-object/no-constructed-fetch-object",
+    "apps/mobile/src"
+  ]
+}

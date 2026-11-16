@@ -21,9 +21,13 @@ import {
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { Block } from "@stll/legal-ast/document-ast";
+import type { ReaderTextQuoteSelector } from "@stll/legal-ast/reader-text-quote";
 import { cents } from "@stll/money";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -54,6 +58,10 @@ import * as projectionModule from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import {
+  SOFT_LAW_DOCUMENT_CLASS,
+  SOFT_LAW_NATURE_NOTICE,
+} from "@/api/lib/legal-search/soft-law-read";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
@@ -72,6 +80,7 @@ import {
 } from "@/api/tests/helpers/invoice-tool-fixtures";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -79,35 +88,9 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
+const testState = createTestState({ file: import.meta.path, config: env });
 
-beforeEach(() => {
-  describeStoredTemplateMock.mockReset();
-  executeRegistryLookupMock.mockReset();
-  getLawTextBlockMock.mockReset();
-  listStatuteVersionsHandlerMock.mockReset();
-  readCaseLawCoverageHandlerMock.mockReset();
-  readGatedDecisionCitationDigestMock.mockReset();
-  readGatedDecisionCitationsMock.mockReset();
-  readGatedDecisionWithDocumentMock.mockReset();
-  readLegislationProvisionVersionsMock.mockReset();
-  readOverviewHandlerMock.mockReset();
-  readProvisionHistoryHandlerMock.mockReset();
-  readPublicLegislationHandlerMock.mockReset();
-  readVersionBlocksMock.mockReset();
-  readWorkspaceContactsHandlerMock.mockReset();
-  readWorkspaceHandlerMock.mockReset();
-  readWorkspaceMembersHandlerMock.mockReset();
-  resolveStatuteExpressionMock.mockReset();
-  resolveStatuteWorkVersionMock.mockReset();
-  searchConsolidatedLegislationMock.mockReset();
-  searchDecisionsHandlerMock.mockReset();
-  searchLegislationHandlerMock.mockReset();
-  searchProviderSearchMock.mockReset();
-});
+const testFetchState = createTestFetch();
 
 /**
  * Contract corpus over every chat-projectable read tool: run the real MCP
@@ -155,6 +138,8 @@ const readGatedDecisionCitationsMock = mock();
 const readGatedDecisionCitationDigestMock = mock();
 const withRedistributableSubjectMock = mock();
 const searchLegislationHandlerMock = mock();
+const searchServedSoftLawMock = mock();
+const readServedSoftLawMock = mock();
 const resolveStatuteExpressionMock = mock();
 const resolveStatuteWorkVersionMock = mock();
 const readPublicLegislationHandlerMock = mock();
@@ -246,6 +231,20 @@ const selectQueue = (queue: readonly (readonly unknown[])[]) => {
   };
 };
 
+const ANNOTATION_BLOCKS = [
+  { anchorId: "p-3", text: "The court held" },
+  { anchorId: "p-4", text: "that the claim was time-barred" },
+].map(
+  ({ anchorId, text }) =>
+    ({
+      type: "paragraph",
+      id: anchorId,
+      anchorId,
+      inlines: [{ type: "text", text }],
+      plainText: text,
+    }) satisfies Block,
+);
+
 const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
   const scopedDb = asTestRaw<ScopedDb>(
     async (run: (transaction: unknown) => unknown) => await run(tx),
@@ -260,6 +259,7 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
         pinnedIds: [],
       }),
+      workspaceStatusById: new Map([[WS, "active" as const]]),
       userId: toSafeId<"user">("user_1"),
       userEmail: "standard@example.test",
       testDependencies: {
@@ -283,6 +283,8 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         readGatedDecisionCitations: readGatedDecisionCitationsMock,
         readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
         searchLegislationHandler: searchLegislationHandlerMock,
+        searchServedSoftLaw: searchServedSoftLawMock,
+        readServedSoftLaw: readServedSoftLawMock,
         resolveStatuteExpression: resolveStatuteExpressionMock,
         resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
         readPublicLegislationHandler: readPublicLegislationHandlerMock,
@@ -294,7 +296,12 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         resolveAnnotationTarget: async () =>
           await Promise.resolve({
             status: "available" as const,
-            readBlocks: async () => await Promise.resolve([]),
+            readBlocks: async () => await Promise.resolve(ANNOTATION_BLOCKS),
+            readTextPieces: async () =>
+              await Promise.resolve(
+                ANNOTATION_BLOCKS.flatMap(readerAnchorPiecesOf),
+              ),
+            resolveHeldAnchors: async () => await Promise.resolve(new Map()),
           }),
         searchConsolidatedLegislation: searchConsolidatedLegislationMock,
         getLawTextBlock: getLawTextBlockMock,
@@ -339,11 +346,14 @@ const recordOutboundFetches = async <TResult>(
     },
     { preconnect: globalThis.fetch.preconnect },
   );
-  const spy = spyOn(globalThis, "fetch").mockImplementation(refuse);
+  const spy = Object.assign(mock(refuse), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(spy);
   try {
     return { result: await run(), fetched };
   } finally {
-    spy.mockRestore();
+    testFetchState.restore();
   }
 };
 
@@ -478,6 +488,32 @@ const entityRef = (refRegistry: ChatRefRegistry, entityId: string): string =>
     workspaceId: toSafeId<"workspace">(WS),
   });
 
+const guidanceFixture = (documentId: string) => ({
+  documentId: toSafeId<"softLawDocument">(documentId),
+  documentClass: SOFT_LAW_DOCUMENT_CLASS,
+  notice: SOFT_LAW_NATURE_NOTICE,
+  issuer: {
+    authority: "eu-edpb",
+    name: "European Data Protection Board",
+    jurisdiction: "EU",
+  },
+  kind: "guideline" as const,
+  sourceKind: "Guideline",
+  title: "Guidelines on consent",
+  reference: "05/2020",
+  issuedOn: "2020-05-04",
+  validity: { state: "not_stated", basis: "source_stated" },
+  language: "en",
+  publisherUrl: "https://publisher.example/guidelines-05-2020",
+  attribution: {
+    text: "European Data Protection Board, edpb.europa.eu",
+    termsUrl: "https://www.edpb.europa.eu/copyright_en",
+    conditions: ["Acknowledge the source."],
+    summaryDisclaimer: "Summary disclaimer the publisher requires.",
+  },
+  access: "text" as const,
+});
+
 const CONTRACT_CORPUS = {
   list_matters: [
     {
@@ -506,11 +542,16 @@ const CONTRACT_CORPUS = {
         readWorkspaceHandlerMock.mockResolvedValue({
           id: toSafeId<"workspace">(WS),
           organizationId: ORGANIZATION_ID,
+          externalSource: null,
+          externalId: null,
+          externalChangeKey: null,
+          importedAt: null,
           name: "Acme retainer",
           reference: "REF-1",
           clientId: toSafeId<"contact">(uid(61)),
           leadUserId: null,
           billingReference: null,
+          billingNarrativeLanguage: null,
           color: null,
           status: "active",
           lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -806,6 +847,9 @@ const CONTRACT_CORPUS = {
                 dateOfBirthMonth: null,
                 dateOfBirthDay: null,
                 nationalityCodes: [],
+                externalSource: "legacy",
+                externalId: uid(113),
+                externalChangeKey: "sample-change",
               }) satisfies Pick<
                 typeof contacts.$inferSelect,
                 keyof typeof READ_CONTACT_COLUMNS
@@ -814,6 +858,7 @@ const CONTRACT_CORPUS = {
         },
       }),
       expectRefPaths: ["contactId"],
+      expectPayloadContains: [uid(113)],
     },
   ],
   list_documents: [
@@ -1628,6 +1673,7 @@ const CONTRACT_CORPUS = {
               decisionDate: "2020-05-01",
               decisionId: uid(53),
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
               identifiers: [
                 {
@@ -1708,6 +1754,7 @@ const CONTRACT_CORPUS = {
               decisionDate: "2020-05-01",
               decisionId: uid(53),
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
               identifiers: [
                 {
@@ -1754,6 +1801,8 @@ const CONTRACT_CORPUS = {
           documentPending: false,
           documentReadFailed: false,
           documentUnavailable: false,
+          textIncompleteReason: null,
+          textWithheldReason: null,
           id: toSafeId<"caseLawDecision">(uid(54)),
           resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
           caseNumber: "22 Cdo 1000/2020",
@@ -1917,8 +1966,17 @@ const CONTRACT_CORPUS = {
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
+                citedPart: "not-stated",
+                polarityEvidence: {
+                  source: null,
+                  ruleId: null,
+                  classifierVersion: null,
+                  excerpt: null,
+                },
                 extractionWarnings: [],
                 textWithheldReason: null,
+                textIncompleteReason: null,
+                evidenceIncompleteReason: null,
                 sectionIndex: 1,
                 doctrine: "unread",
                 treatment: "positive",
@@ -1987,6 +2045,38 @@ const CONTRACT_CORPUS = {
       JSON.stringify({ match: { type: matchType } }).slice(1, -1),
     ],
   })),
+  search_guidance: [
+    {
+      mode: "search",
+      buildArgs: () => ({ query: "consent" }),
+      setup: () => {
+        searchServedSoftLawMock.mockResolvedValue({
+          items: [{ ...guidanceFixture(uid(96)), snippet: "valid consent" }],
+          nextOffset: null,
+        });
+      },
+      expectRefPaths: [],
+      expectPayloadContains: [SOFT_LAW_DOCUMENT_CLASS],
+    },
+  ],
+  read_guidance: [
+    {
+      mode: "read",
+      buildArgs: () => ({ document_id: uid(96) }),
+      setup: () => {
+        readServedSoftLawMock.mockResolvedValue({
+          ...guidanceFixture(uid(96)),
+          textState: "available",
+          text: "Consent must be freely given.",
+        });
+      },
+      expectRefPaths: [],
+      expectPayloadContains: [
+        SOFT_LAW_DOCUMENT_CLASS,
+        "Summary disclaimer the publisher requires.",
+      ],
+    },
+  ],
   read_statute: [
     {
       mode: "read",
@@ -2221,20 +2311,21 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ target_type: "decision", target_id: uid(60) }),
       tx: () => ({
         select: selectQueue([
-          [
-            ["p-3", "The court held"],
-            ["p-4", "that the claim was time-barred"],
-          ].map(([blockAnchorId, quote], index) => ({
+          ANNOTATION_BLOCKS.map(({ anchorId, plainText }, index) => ({
             id: uid(61 + index),
             groupId: uid(63),
             kind: "comment",
             visibility: "shared",
             color: null,
             style: null,
-            blockAnchorId,
-            startOffset: 0,
-            endOffset: 10,
-            quote,
+            ...({
+              blockAnchorId: anchorId,
+              startOffset: 0,
+              endOffset: plainText.length,
+              quote: plainText,
+              quotePrefix: "",
+              quoteSuffix: "",
+            } satisfies ReaderTextQuoteSelector),
             body: index === 0 ? "Check the limitation date" : null,
             createdAt: new Date("2026-01-01"),
             updatedAt: new Date("2026-01-01"),
@@ -2306,18 +2397,42 @@ const recordedExceptions = () =>
 
 // Production serves the public-law pages, so every corpus result carries an
 // `url`; a decision or statute without a slug is addressed by its id there.
-let previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
 
 afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   analytics?.restore();
   analytics = null;
-  env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
 });
 
 beforeEach(() => {
+  describeStoredTemplateMock.mockReset();
+  executeRegistryLookupMock.mockReset();
+  getLawTextBlockMock.mockReset();
+  listStatuteVersionsHandlerMock.mockReset();
+  readCaseLawCoverageHandlerMock.mockReset();
+  readGatedDecisionCitationDigestMock.mockReset();
+  readGatedDecisionCitationsMock.mockReset();
+  readGatedDecisionWithDocumentMock.mockReset();
+  readLegislationProvisionVersionsMock.mockReset();
+  readOverviewHandlerMock.mockReset();
+  readProvisionHistoryHandlerMock.mockReset();
+  readPublicLegislationHandlerMock.mockReset();
+  readVersionBlocksMock.mockReset();
+  readWorkspaceContactsHandlerMock.mockReset();
+  readWorkspaceHandlerMock.mockReset();
+  readWorkspaceMembersHandlerMock.mockReset();
+  resolveStatuteExpressionMock.mockReset();
+  resolveStatuteWorkVersionMock.mockReset();
+  searchConsolidatedLegislationMock.mockReset();
+  searchDecisionsHandlerMock.mockReset();
+  searchLegislationHandlerMock.mockReset();
+  searchServedSoftLawMock.mockReset();
+  readServedSoftLawMock.mockReset();
+  searchProviderSearchMock.mockReset();
   analytics = installRecordingAnalytics();
-  previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-  env.FEATURE_PUBLIC_LAW = true;
+
+  testState.setConfig("FEATURE_PUBLIC_LAW", true);
   for (const handlerMock of ALL_MOCKS) {
     handlerMock.mockReset();
   }
@@ -2338,8 +2453,8 @@ describe("registry projection contract", () => {
   for (const toolName of ["search_case_law", "search_legislation"] as const) {
     test(`${toolName} projects the publisher as primary when the deployment cannot serve the item`, async () => {
       const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-      const previous = env.FEATURE_PUBLIC_LAW;
-      env.FEATURE_PUBLIC_LAW = false;
+
+      testState.setConfig("FEATURE_PUBLIC_LAW", false);
       try {
         const call =
           corpusEntries()
@@ -2386,12 +2501,11 @@ describe("registry projection contract", () => {
           if (!isRecord(item)) {
             panic("Invalid citation result");
           }
-          expect(item["url"]).toBe(item["sourceUrl"]);
+          expect(item["sourceUrl"]).toBeUndefined();
           expect(item["url"]).toMatch(/^https:/u);
           expect(item["source_url"]).toBeUndefined();
         }
       } finally {
-        env.FEATURE_PUBLIC_LAW = previous;
         restore();
       }
     });
@@ -2487,16 +2601,12 @@ describe("registry projection contract", () => {
             "appUrl" in value,
             `${toolName}: primary/source links must not expose appUrl`,
           ).toBe(false);
-          if (
-            "url" in value &&
-            typeof value.url === "string" &&
-            "sourceUrl" in value &&
-            typeof value.sourceUrl === "string" &&
-            value.url !== new URL(value.sourceUrl).href
-          ) {
-            expect("source_url" in value && value.source_url).toBe(
-              new URL(value.sourceUrl).href,
+          // The publisher link is a distinct, parsed link or absent.
+          if ("source_url" in value) {
+            expect(value.source_url).toBe(
+              new URL(String(value.source_url)).href,
             );
+            expect("url" in value && value.url).not.toBe(value.source_url);
           }
           for (const child of Object.values(value)) {
             assertCitationLinks(child);
@@ -2603,6 +2713,8 @@ describe("decision text in chat projection", () => {
       documentPending: false,
       documentReadFailed: false,
       documentUnavailable: false,
+      textIncompleteReason: null,
+      textWithheldReason: null,
       id: toSafeId<"caseLawDecision">(uid(54)),
       resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
       caseNumber: "22 Cdo 1000/2020",

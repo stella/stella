@@ -152,8 +152,9 @@ for (const definition of [searchTool, noDefaultsTool, saveMatterTool]) {
         threadId,
         connection: {
           async *connect(messages, _data, _signal, runContext) {
-            if (runContext?.resume !== undefined) {
+            if (runContext.resume !== undefined) {
               submitted.resolve({
+                toolCallOwnership: "cloud",
                 message: assistantFromSdk(messages.at(-1)),
                 persistedMessage: stored,
                 refRegistry,
@@ -171,7 +172,7 @@ for (const definition of [searchTool, noDefaultsTool, saveMatterTool]) {
               messages,
               tools: chatToolMapToArray(tools),
               threadId,
-              runId: runContext?.runId,
+              runId: runContext.runId,
             });
           },
         },
@@ -186,6 +187,7 @@ for (const definition of [searchTool, noDefaultsTool, saveMatterTool]) {
         panic("The SDK approval must contain supported chat parts");
       }
       const canonicalParts = validateToolCallParts({
+        ownership: "cloud",
         message: {
           id: generated.id,
           role: generated.role,

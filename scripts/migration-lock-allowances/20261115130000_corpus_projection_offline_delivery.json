@@ -1,0 +1,4 @@
+{
+  "add-column": "One text column on corpus_index_projection_intents with a constant default and NOT NULL, so no row is rewritten; catalog-only under 1s lock_timeout and 5s statement_timeout, in the same statement as the checks.",
+  "add-constraint": "Four CHECK constraints on corpus_index_projection_intents, each added NOT VALID (two replace their predecessors in the same statement), so no row is scanned; catalog-only under 1s lock_timeout and 5s statement_timeout. The online phase validates them."
+}

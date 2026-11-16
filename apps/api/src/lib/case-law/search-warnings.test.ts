@@ -10,6 +10,8 @@ import {
   AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS,
   CASE_LAW_SEARCH_WARNING_PRODUCERS,
   caseLawSearchWarnings,
+  DECISION_QUERY_WARNING_CODES,
+  DECISION_QUERY_WARNING_PRODUCERS,
 } from "@/api/lib/case-law/search-warnings";
 
 describe("caseLawSearchWarnings", () => {
@@ -117,6 +119,16 @@ describe("warning code census", () => {
       expect(warning.code).toBe(code);
       // A hint that only restates the message is a dead end; every one of
       // these names a call to make or a filter to drop.
+      expect(warning.hint.length).toBeGreaterThan(0);
+      expect(warning.hint).not.toBe(warning.message);
+      expect(warning.message.endsWith(".")).toBe(true);
+    }
+  });
+
+  test("every decision-query code's producer emits that code, and says what to do", () => {
+    for (const code of DECISION_QUERY_WARNING_CODES) {
+      const warning = DECISION_QUERY_WARNING_PRODUCERS[code]();
+      expect(warning.code).toBe(code);
       expect(warning.hint.length).toBeGreaterThan(0);
       expect(warning.hint).not.toBe(warning.message);
       expect(warning.message.endsWith(".")).toBe(true);

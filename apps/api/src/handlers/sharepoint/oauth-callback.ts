@@ -3,6 +3,7 @@ import { eq, lt } from "drizzle-orm";
 import type { SelectResultFields } from "drizzle-orm/query-builders/select.types";
 import * as v from "valibot";
 
+import type { SharepointOAuthCallbackReason } from "@stll/api-contract/sharepoint";
 import { Temporal } from "@stll/time";
 
 import { sharepointConnections, sharepointOAuthState } from "@/api/db/schema";
@@ -51,7 +52,8 @@ const config = {
 } satisfies HandlerConfig;
 
 type CallbackRedirectInput =
-  { status: "connected" } | { status: "error"; reason: string };
+  | { status: "connected" }
+  | { status: "error"; reason: SharepointOAuthCallbackReason };
 
 const buildCallbackRedirectUrl = (
   frontendUrl: string,

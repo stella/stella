@@ -23,6 +23,9 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { TYPED_ABSENCE_DEBT } from "@/api/tests/helpers/case-law-publication-absence-debt";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const isStoredEcliAvailability = (
   value: unknown,
@@ -37,9 +40,8 @@ const storedEcliAvailability = (
 ): SkUsEcliAvailability | undefined =>
   isStoredEcliAvailability(value) ? value : undefined;
 
-const originalFetch = globalThis.fetch;
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 for (const reason of TEXT_ABSENCE_REASONS) {

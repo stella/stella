@@ -1,4 +1,4 @@
-import { Suspense, use, useState, useTransition } from "react";
+import { Suspense, use, useRef, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import {
@@ -10,25 +10,52 @@ import {
 } from "react-native";
 import { useTranslations } from "use-intl";
 
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  CHAT_SEND_INTENT,
+  CHAT_TURN_STEERING,
+  chatSendIntent,
+} from "@stll/api-contract/chat-send-intent";
+import { StellaMark } from "@stll/ui/stella-mark";
 import { Text } from "@stll/ui/text";
 
 import { ChatComposer } from "@/components/chat-composer";
+import type { ChatComposerHandle } from "@/components/chat-composer";
+import { ChatDraftDocuments } from "@/components/chat-draft-document";
+import { ChatInputCard } from "@/components/chat-input-card";
+import type { InputNotice } from "@/components/chat-input-card";
 import { ChatMessage } from "@/components/chat-message";
+import { ChatQueueList } from "@/components/chat-queue-list";
+import type { QueueThreadState } from "@/components/chat-queue-list";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
+import { ThreadMatter } from "@/components/thread-matter";
+import { ThreadSteps } from "@/components/thread-steps";
 import { useChatTurn } from "@/components/use-chat-turn";
 import type { LiveTurn } from "@/components/use-chat-turn";
+import { useMarkChatReadWhileOpen } from "@/components/use-mark-chat-read";
+import { WriteFailureNotice } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { Load } from "@/state/api-request";
+import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
 import {
   prependOlderPage,
   readChatThread,
   readOlderChatMessages,
 } from "@/state/chat-messages";
 import type { ChatEntry, ChatMessagesPage } from "@/state/chat-messages";
+import {
+  isSamePendingInput,
+  showsPendingInput,
+} from "@/state/chat-pending-input";
+import type { PendingAnswer } from "@/state/chat-pending-input";
 import { answerEntry } from "@/state/chat-stream";
 import { useAppColors } from "@/theme";
 
@@ -37,6 +64,9 @@ const EMPTY_PAGE: ChatMessagesPage = {
   olderCursor: null,
   activeTurnId: null,
   usedAnonymization: false,
+  pendingInput: null,
+  retry: null,
+  runTargetKind: CHAT_RUN_TARGET_KIND.cloud,
 };
 
 /**
@@ -47,12 +77,15 @@ const EMPTY_PAGE: ChatMessagesPage = {
 export const ChatThreadView = ({
   fresh,
   matterId,
+  shareId,
   source,
   threadId,
 }: {
   fresh: boolean;
   /** The thread's matter; the server refuses a matter's thread read without it. */
   matterId: string | undefined;
+  /** A share from another app a new conversation starts with. */
+  shareId: string | undefined;
   source: AccessTokenSource;
   threadId: string;
 }) => {
@@ -78,18 +111,25 @@ export const ChatThreadView = ({
   };
 
   return (
-    <Suspense
-      fallback={<ActivityIndicator color={colors.accent} style={styles.fill} />}
-    >
-      <LoadedThread
-        load={load}
-        matterId={matterId}
-        onReload={reload}
-        refreshing={refreshing}
-        source={source}
-        threadId={threadId}
-      />
-    </Suspense>
+    <ThreadMatter value={matterId}>
+      <ThreadSteps value={{ source, threadId }}>
+        <Suspense
+          fallback={
+            <ActivityIndicator color={colors.accent} style={styles.fill} />
+          }
+        >
+          <LoadedThread
+            load={load}
+            matterId={matterId}
+            onReload={reload}
+            refreshing={refreshing}
+            shareId={shareId}
+            source={source}
+            threadId={threadId}
+          />
+        </Suspense>
+      </ThreadSteps>
+    </ThreadMatter>
   );
 };
 
@@ -98,6 +138,7 @@ const LoadedThread = ({
   matterId,
   onReload,
   refreshing,
+  shareId,
   source,
   threadId,
 }: {
@@ -105,6 +146,7 @@ const LoadedThread = ({
   matterId: string | undefined;
   onReload: () => void;
   refreshing: boolean;
+  shareId: string | undefined;
   source: AccessTokenSource;
   threadId: string;
 }) => {
@@ -130,6 +172,7 @@ const LoadedThread = ({
       matterId={matterId}
       onReload={onReload}
       refreshing={refreshing}
+      shareId={shareId}
       source={source}
       threadId={threadId}
     />
@@ -141,13 +184,15 @@ const LoadedThread = ({
  * under it. The list is inverted so it opens on the latest message;
  * scrolling up past the oldest loaded one fetches the page before it. A turn
  * answering now sits after the stored messages until it is over and the
- * stored thread is loaded again in its place.
+ * stored thread is loaded again in its place. A turn that waits for the
+ * person ends the thread with what it waits for, answered right there.
  */
 const ThreadMessages = ({
   firstPage,
   matterId,
   onReload,
   refreshing,
+  shareId,
   source,
   threadId,
 }: {
@@ -155,6 +200,7 @@ const ThreadMessages = ({
   matterId: string | undefined;
   onReload: () => void;
   refreshing: boolean;
+  shareId: string | undefined;
   source: AccessTokenSource;
   threadId: string;
 }) => {
@@ -165,6 +211,11 @@ const ThreadMessages = ({
   const [cursor, setCursor] = useState(firstPage.olderCursor);
   const [older, setOlder] = useState<PagingState>("idle");
   const [anonymized, setAnonymized] = useState(firstPage.usedAnonymization);
+  const [runTargetKind, setRunTargetKind] = useState(firstPage.runTargetKind);
+  const [pending, setPending] = useState(firstPage.pendingInput);
+  const [retry, setRetry] = useState(firstPage.retry);
+  const [inputNotice, setInputNotice] = useState<InputNotice>();
+  const composer = useRef<ChatComposerHandle>(null);
   const turn = useChatTurn({
     activeTurnId: firstPage.activeTurnId,
     anonymized,
@@ -179,6 +230,10 @@ const ThreadMessages = ({
       if (Result.isOk(latest)) {
         setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
         setAnonymized(latest.value.usedAnonymization);
+        setRunTargetKind(latest.value.runTargetKind);
+        setPending(latest.value.pendingInput);
+        setRetry(latest.value.retry);
+        setInputNotice(undefined);
         return true;
       }
       if (latest.error._tag === "SignedOutError") {
@@ -191,10 +246,103 @@ const ThreadMessages = ({
     threadId,
   });
   const { live } = turn;
+  const markFailure = useMarkChatReadWhileOpen({
+    answer: live?.answer.status === "streaming" ? "streaming" : "settled",
+    matterId,
+    revision: entries.at(-1)?.id ?? null,
+    source,
+    threadId,
+  });
+  // A turn that resumes a paused message adds to it, so the stored message
+  // stays; any other live turn stands in for its stored copy, and for the
+  // failed answer it replaces.
   const shown = entries.filter(
     (entry) =>
-      entry.id !== live?.answer.messageId && entry.id !== live?.question?.id,
+      entry.id === live?.continues ||
+      (entry.id !== live?.answer.messageId &&
+        entry.id !== live?.question?.id &&
+        entry.id !== live?.replaces),
   );
+  // Only the thread's latest answer is answered again, and only while no
+  // turn runs.
+  const retryFor = (entry: ChatEntry) =>
+    retry === null || live !== null || entry.id !== retry.answerId
+      ? undefined
+      : () => {
+          turn.regenerate(retry);
+        };
+
+  /**
+   * Answers what the paused turn waits for. When the server does not take
+   * the answer, the thread is read again: a turn answered elsewhere no
+   * longer waits for this one, and the run that answer started is followed;
+   * a turn still waiting keeps its card, which says the answer failed.
+   */
+  /**
+   * Reads the thread again and shows it as stored; `null` when it could not
+   * be read (a lost sign-in ends the session).
+   */
+  const showStoredThread = async () => {
+    const latest = await readChatThread({ fetch, matterId, source, threadId });
+    if (Result.isError(latest)) {
+      if (latest.error._tag === "SignedOutError") {
+        end(source);
+      }
+      return null;
+    }
+    setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
+    setAnonymized(latest.value.usedAnonymization);
+    setRunTargetKind(latest.value.runTargetKind);
+    setPending(latest.value.pendingInput);
+    setRetry(latest.value.retry);
+    return latest.value;
+  };
+
+  const answer = (reply: PendingAnswer) => {
+    if (pending === null || pending.type === "elsewhere") {
+      return;
+    }
+    const asked = pending;
+    setInputNotice(undefined);
+    turn.answer(asked, reply, {
+      onAccepted: () => {
+        setPending(null);
+      },
+      onRefused: () => {
+        void (async () => {
+          const latest = await showStoredThread();
+          if (latest === null) {
+            setInputNotice("failed");
+            return;
+          }
+          const { activeTurnId, pendingInput } = latest;
+          if (isSamePendingInput(asked, pendingInput)) {
+            setInputNotice("failed");
+            return;
+          }
+          setInputNotice("alreadyAnswered");
+          if (activeTurnId !== null) {
+            turn.follow(activeTurnId, asked.messageId);
+          }
+        })();
+      },
+    });
+  };
+
+  /**
+   * The server sent a queued message as a turn this phone did not start:
+   * the thread is read again and that turn followed.
+   */
+  const followServerTurn = () => {
+    void (async () => {
+      const activeTurnId = (await showStoredThread())?.activeTurnId ?? null;
+      if (activeTurnId !== null) {
+        turn.follow(activeTurnId, undefined);
+      }
+    })();
+  };
+
+  const steerOffered = isSteerOfferedOnPhone(turn.busy, runTargetKind);
 
   const loadOlder = async () => {
     if (cursor === null || older === "loading") {
@@ -221,6 +369,40 @@ const ThreadMessages = ({
     setOlder("failed");
   };
 
+  // A conversation with nothing in it yet is the web's new chat: the mark,
+  // the greeting and the message box together, centred, not a card over a
+  // box at the bottom.
+  if (shown.length === 0 && live === null && cursor === null) {
+    return (
+      <View style={styles.fill}>
+        <View style={[screenStyles.readable, styles.landing]}>
+          <View style={styles.greeting}>
+            <StellaMark size={28} />
+            <Text className="text-center" variant="title">
+              {t("greeting")}
+            </Text>
+            <Text className="text-center" variant="caption">
+              {t("greetingSubtitle")}
+            </Text>
+          </View>
+          {/* The composer says why a send was refused, as in a thread. A
+              share starts only an empty conversation, so only this one
+              takes it. */}
+          <ChatComposer
+            busy={turn.busy}
+            canStop={turn.canStop}
+            onSend={turn.send}
+            onSteer={undefined}
+            onStop={turn.stop}
+            sendError={turn.sendError}
+            shareId={shareId}
+            steerRefusal={undefined}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.fill}>
       <FlatList
@@ -230,18 +412,6 @@ const ThreadMessages = ({
         keyExtractor={(entry) => entry.id}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
-        // An inverted list flips its empty component with its rows, so the
-        // card is flipped back to read the right way up.
-        ListEmptyComponent={
-          live === null ? (
-            <View style={styles.upright}>
-              <EmptyCard
-                description={t("threadEmptyDescription")}
-                title={t("threadTitle")}
-              />
-            </View>
-          ) : undefined
-        }
         // Inverted, the footer sits above the oldest message.
         ListFooterComponent={
           <PagingFooter
@@ -254,7 +424,28 @@ const ThreadMessages = ({
         }
         // And the header below the newest.
         ListHeaderComponent={
-          live === null ? undefined : <LiveTurnView turn={live} />
+          <View style={styles.live}>
+            {live === null ? null : (
+              <LiveTurnView accepted={turn.canStop} turn={live} />
+            )}
+            {showsPendingInput(
+              live === null
+                ? null
+                : {
+                    streaming: live.answer.status === "streaming",
+                    continues: live.continues,
+                  },
+            ) ? (
+              <ChatInputCard
+                busy={turn.busy}
+                notice={inputNotice}
+                onAnswer={answer}
+                pending={pending}
+                source={source}
+                threadId={threadId}
+              />
+            ) : null}
+          </View>
         }
         onEndReached={() => {
           void loadOlder();
@@ -267,27 +458,109 @@ const ThreadMessages = ({
             tintColor={colors.muted}
           />
         }
-        renderItem={({ item }) => <ChatMessage entry={item} />}
+        renderItem={({ item }) =>
+          item.drafts.length === 0 ? (
+            <ChatMessage entry={item} onRetry={retryFor(item)} />
+          ) : (
+            // The drafts the answer wrote follow it, each opening its pages.
+            <View style={styles.live}>
+              <ChatMessage entry={item} onRetry={retryFor(item)} />
+              <ChatDraftDocuments drafts={item.drafts} />
+            </View>
+          )
+        }
       />
-      {turn.sendFailed ? (
-        <Text style={[styles.notice, { color: colors.muted }]}>
-          {t("sendFailed")}
-        </Text>
-      ) : null}
       <View style={screenStyles.readable}>
+        {markFailure === null ? null : (
+          <View style={styles.markFailure}>
+            <WriteFailureNotice
+              failure={markFailure}
+              message={t("markReadFailed")}
+            />
+          </View>
+        )}
+        <ChatQueueList
+          onEdit={(text) => {
+            composer.current?.handBack(text);
+          }}
+          onSentByServer={followServerTurn}
+          source={source}
+          steerQueued={turn.steerQueued}
+          thread={queueThreadOf({
+            busy: turn.busy,
+            steerOffered,
+            waiting: pending !== null,
+          })}
+          threadId={threadId}
+        />
         <ChatComposer
           busy={turn.busy}
           canStop={turn.canStop}
+          handle={composer}
+          onQueue={turn.queue}
           onSend={turn.send}
+          onSteer={steerOffered ? turn.steer : undefined}
           onStop={turn.stop}
+          sendError={turn.sendError}
+          shareId={undefined}
+          steerRefusal={turn.steerRefusal}
         />
       </View>
     </View>
   );
 };
 
-/** The turn answering now: the message sent from here, and the answer as it arrives. */
-const LiveTurnView = ({ turn }: { turn: LiveTurn }) => {
+/**
+ * Whether the phone offers to hand a draft to the turn answering now: where
+ * a plain send steers it (`chatSendIntent`). The phone reads no runner list,
+ * so a turn on the member's computer counts as one that takes messages; a
+ * harness that does not is refused by the steer route, and the draft comes
+ * back with the reason.
+ */
+/** What the thread is doing, as Send now on a queued message reads it. */
+const queueThreadOf = ({
+  busy,
+  steerOffered,
+  waiting,
+}: {
+  busy: boolean;
+  steerOffered: boolean;
+  waiting: boolean;
+}): QueueThreadState => {
+  if (busy) {
+    return steerOffered ? "steerable" : "working";
+  }
+  return waiting ? "waiting" : "idle";
+};
+
+const isSteerOfferedOnPhone = (
+  busy: boolean,
+  runTargetKind: ChatRunTarget["kind"],
+): boolean =>
+  busy &&
+  chatSendIntent(
+    {
+      type: "working",
+      steering:
+        runTargetKind === CHAT_RUN_TARGET_KIND.local
+          ? CHAT_TURN_STEERING.steerable
+          : CHAT_TURN_STEERING.notSteerable,
+    },
+    CHAT_MEMBER_SEND_ACTION.send,
+  ) === CHAT_SEND_INTENT.steer;
+
+/**
+ * The turn answering now: the message sent from here, and the answer as it
+ * arrives. Until the server has `accepted` the message, its files are still
+ * going up.
+ */
+const LiveTurnView = ({
+  accepted,
+  turn,
+}: {
+  accepted: boolean;
+  turn: LiveTurn;
+}) => {
   const colors = useAppColors();
   const t = useTranslations("chat");
   const answer: ChatEntry = answerEntry(turn.answer, turn.startedAt);
@@ -296,28 +569,45 @@ const LiveTurnView = ({ turn }: { turn: LiveTurn }) => {
     streaming: undefined,
     finished: undefined,
     stopped: t("answerStopped"),
-    "needs-input": t("answerNeedsInput"),
-    failed: t("answerFailed"),
+    // The stored thread is read next, and says what the turn waits for.
+    "needs-input": t("answerAwaitingInput"),
+    failed:
+      turn.answer.failure === undefined
+        ? t("answerFailed")
+        : t(`failure.${CHAT_FAILURE_KEYS[turn.answer.failure]}`),
   }[status];
+  const steps =
+    status === "failed" && turn.answer.failure !== undefined
+      ? chatFailureStepsKey(turn.answer.failure)
+      : null;
+  const uploading =
+    !accepted &&
+    status === "streaming" &&
+    (turn.question?.files.length ?? 0) > 0;
 
   return (
     <View style={styles.live}>
       {turn.question === undefined ? null : (
-        <ChatMessage entry={turn.question} />
+        <ChatMessage entry={turn.question} uploading={uploading} />
       )}
-      {answer.text === "" && answer.tools.length === 0 ? null : (
-        <ChatMessage entry={answer} />
+      {answer.blocks.length === 0 ? null : (
+        <ChatMessage entry={answer} live={status === "streaming"} />
       )}
       {status === "streaming" ? (
         <View style={styles.working}>
           <ActivityIndicator color={colors.muted} size="small" />
           <Text style={[styles.notice, { color: colors.muted }]}>
-            {t("answerWorking")}
+            {uploading ? t("attachmentUploading") : t("answerWorking")}
           </Text>
         </View>
       ) : null}
       {note === undefined ? null : (
         <Text style={[styles.notice, { color: colors.muted }]}>{note}</Text>
+      )}
+      {steps === null ? null : (
+        <Text style={[styles.notice, { color: colors.muted }]}>
+          {t(`localRun.${steps}`)}
+        </Text>
       )}
     </View>
   );
@@ -333,8 +623,22 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
   },
+  greeting: {
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  landing: {
+    flex: 1,
+    gap: 24,
+    justifyContent: "center",
+  },
   live: {
     gap: 16,
+  },
+  markFailure: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   notice: {
     fontSize: 13,
@@ -344,10 +648,6 @@ const styles = StyleSheet.create({
   padded: {
     flex: 1,
     padding: 20,
-  },
-  upright: {
-    flex: 1,
-    transform: [{ scaleY: -1 }],
   },
   working: {
     alignItems: "center",

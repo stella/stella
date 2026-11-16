@@ -51,7 +51,11 @@ const connectSharepoint = createSafeRootHandler(
   async function* ({ body, safeDb, session, user }) {
     if (!isDeploymentFeatureEnabled("FEATURE_SHAREPOINT")) {
       return Result.err(
-        new HandlerError({ status: 404, message: "Not found" }),
+        new HandlerError({
+          status: 404,
+          code: "not_found",
+          message: "Not found",
+        }),
       );
     }
     // Deployed clients omit the body; their existing consent is file-only.

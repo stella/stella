@@ -1,5 +1,10 @@
 import { Result, TaggedError } from "better-result";
 
+import {
+  WORKSPACE_STATUS,
+  workspaceAcceptsWrites,
+} from "@stll/api-contract/workspace-status";
+
 import type { documentProcessingRuns, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -162,7 +167,7 @@ export const classifyOcrProjectionSource = ({
   source: CurrentDocumentSource | null;
   workspaceStatus: (typeof workspaces.$inferSelect)["status"] | undefined;
 }): "current" | "source_superseded" | "workspace_unavailable" => {
-  if (workspaceStatus !== "active") {
+  if (!workspaceAcceptsWrites(workspaceStatus)) {
     return "workspace_unavailable";
   }
   return isCurrentOcrSource({ run, source }) ? "current" : "source_superseded";
@@ -175,10 +180,13 @@ export const classifyOcrWorkspaceDispatch = ({
   requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
   workspaceStatus: (typeof workspaces.$inferSelect)["status"] | undefined;
 }): "available" | "deferred" | "workspace_unavailable" => {
-  if (workspaceStatus === "active") {
+  if (workspaceAcceptsWrites(workspaceStatus)) {
     return "available";
   }
-  if (workspaceStatus === "deleting" && requestSource === "manual") {
+  if (
+    workspaceStatus === WORKSPACE_STATUS.deleting &&
+    requestSource === "manual"
+  ) {
     return "deferred";
   }
   return "workspace_unavailable";

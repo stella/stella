@@ -15,7 +15,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
-import { editorialSupplementBlocks } from "@stll/decision-reader/decision-text.logic";
+import { editorialSupplementBlocks } from "@stll/decision-reader/reader-text-pieces.logic";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type {

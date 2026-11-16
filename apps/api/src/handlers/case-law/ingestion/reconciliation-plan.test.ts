@@ -19,7 +19,6 @@ import { describe, expect, test } from "bun:test";
 import { DAY_IN_MS } from "@stll/time";
 
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import type {
   FailedSliceCandidate,
   LedgerSlice,
@@ -44,6 +43,7 @@ import {
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 
 const NOW = new Date("2026-08-11T09:30:00.000Z");
 const FRESH = new Date("2026-08-11T06:00:00.000Z");

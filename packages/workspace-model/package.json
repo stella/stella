@@ -40,8 +40,8 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/workspace-model",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/workspace-model",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/workspace-model",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/workspace-model",
     "prepack": "bun run build"
   },
   "dependencies": {

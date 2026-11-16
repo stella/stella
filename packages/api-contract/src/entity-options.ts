@@ -7,7 +7,8 @@ export const truncateEntityName = (
 ): string => {
   const characters: string[] = [];
   let length = 0;
-  for (const character of value.toWellFormed()) {
+  // Unicode mode matches lone surrogates while preserving valid pairs.
+  for (const character of value.replace(/[\uD800-\uDFFF]/gu, "�")) {
     if (length + character.length > maxLength) {
       break;
     }

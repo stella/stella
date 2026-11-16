@@ -6,10 +6,16 @@ import {
 } from "@/lib/account/storage-families";
 import type { StorageArea } from "@/lib/account/storage-families";
 
+type BrowserStorageWindow = Pick<Window, "localStorage" | "sessionStorage">;
+
 /** Real browser storage for hydration, storage events, and strict persistence. */
-export const browserStorage = (area: StorageArea): Storage | null =>
+export const browserStorage = (
+  area: StorageArea,
+  target?: BrowserStorageWindow,
+): Storage | null =>
   Result.try(() => {
-    const browser = typeof window === "undefined" ? globalThis : window;
+    const browser =
+      target ?? (typeof window === "undefined" ? globalThis : window);
     return area === "local" ? browser.localStorage : browser.sessionStorage;
   }).unwrapOr(null) ?? null;
 
@@ -85,8 +91,11 @@ class BrowserStorageUnavailableError extends TaggedError(
 )<{ message: string; area: StorageArea }> {}
 
 /** Registered persistence that propagates blocked-storage and quota failures. */
-export const requireBrowserStorage = (area: StorageArea) => {
-  const storage = browserStorage(area);
+export const requireBrowserStorage = (
+  area: StorageArea,
+  target?: BrowserStorageWindow,
+) => {
+  const storage = browserStorage(area, target);
   if (storage === null) {
     return Result.err(
       new BrowserStorageUnavailableError({

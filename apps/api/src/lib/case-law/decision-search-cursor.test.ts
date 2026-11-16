@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { DecisionDatePosition } from "@/api/lib/case-law/decision-date-order";
@@ -17,7 +17,8 @@ const DECISION_ID = "5a3e6f52-1f0b-4f7e-9a44-3f2c1d0e9b8a";
 const decisionId = toSafeId<"caseLawDecision">(DECISION_ID);
 
 test("a relevance cursor round-trips its score", () => {
-  fc.assert(
+  assertProperty(
+    "a relevance cursor round-trips its score",
     fc.property(
       fc
         .double({ noDefaultInfinity: true, noNaN: true })
@@ -33,7 +34,7 @@ test("a relevance cursor round-trips its score", () => {
         ).toEqual(cursor);
       },
     ),
-    propertyConfig(),
+    {},
   );
 });
 
@@ -50,7 +51,8 @@ const datedPosition = fc
   }));
 
 test("a newest cursor round-trips its position in either band", () => {
-  fc.assert(
+  assertProperty(
+    "a newest cursor round-trips its position in either band",
     fc.property(
       fc.oneof(
         datedPosition,
@@ -65,7 +67,7 @@ test("a newest cursor round-trips its position in either band", () => {
         ).toEqual({ sort: "newest", position });
       },
     ),
-    propertyConfig(),
+    {},
   );
 });
 
@@ -92,15 +94,9 @@ test("a cursor is read only by the order that issued it", () => {
   }
 });
 
-// The form issued before the order travelled: relevance is the only order a
-// replica issuing it could have ranked its page in.
-test("reads a cursor from before the order field as a relevance page", () => {
-  expect(
-    decodeDecisionSearchCursor(encodeCursor(0.25, DECISION_ID), "relevance"),
-  ).toEqual({ id: DECISION_ID, sort: "relevance", sortKey: 0.25 });
-});
-
 test.each([
+  // A payload naming no order bounds no page.
+  DECISION_ID,
   // An order this service does not declare is not one it ranked a page in.
   `oldest:${DECISION_ID}`,
   `newest:${DECISION_ID}`,
@@ -129,7 +125,8 @@ test.each([
 });
 
 test("decode is total — never throws on arbitrary strings", () => {
-  fc.assert(
+  assertProperty(
+    "decode is total — never throws on arbitrary strings",
     fc.property(
       fc.string(),
       fc.constantFrom(...SEARCH_SORTS),
@@ -137,6 +134,6 @@ test("decode is total — never throws on arbitrary strings", () => {
         expect(() => decodeDecisionSearchCursor(input, sort)).not.toThrow();
       },
     ),
-    propertyConfig(),
+    {},
   );
 });

@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 /**
  * Seed the database with case-law decisions for local testing of the Case
- * Law feature: recorded production decisions, plus the synthetic decisions
- * of `seed-case-law-synthetic.ts` that give the public browser enough rows
- * to page, wrap and facet.
+ * Law feature. The default profile adds the synthetic decisions of
+ * `seed-case-law-synthetic.ts`, which give the public browser enough rows to
+ * page, wrap and facet. The recorded profile is reserved for public captures.
  *
  * Recorded data lives in `__fixtures__/case-law/<adapterKey>.json.gz` — one file per
  * source (cz-ns, cz-nss, cz-regional, cz-us, eu-ecj, pl-courts,
@@ -57,15 +57,16 @@ import {
 } from "./seed-case-law-provisions";
 import type { SeededDecision } from "./seed-case-law-provisions";
 import { syntheticCaseLawFixtures } from "./seed-case-law-synthetic";
-import { seedId } from "./seed-utils";
+import { globalSeedId } from "./seed-utils";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "__fixtures__", "case-law");
 /** The scheduler's budgets for the provision state backfill's session. */
 const PROVISION_BACKFILL_STATEMENT_TIMEOUT_MS = 60_000;
 const PROVISION_BACKFILL_LOCK_TIMEOUT_MS = 30_000;
 
+// The corpus is global, so its ids are the same from every organization's run.
 export const sourceIdFor = (adapterKey: string) =>
-  seedId(`case-law-source-${adapterKey}`);
+  globalSeedId(`case-law-source-${adapterKey}`);
 
 type FixtureSource = {
   adapter_key: string;
@@ -237,7 +238,7 @@ export const fixtureDecisionRow = ({
   const fulltext =
     d.fulltext ?? d.sections?.map((s) => s.text).join("\n\n") ?? "";
   return {
-    id: seedId(
+    id: globalSeedId(
       JSON.stringify([
         "case-law-dec",
         adapterKey,
@@ -292,14 +293,23 @@ export const fixtureDecisionRow = ({
 // the `stella_ingestion` role may write under RLS. The decision rows below
 // go in via the lane's `rootDb` (table owner), but `indexDecision` and the
 // slug backfill run their writes through its ingestion-scoped handle.
-const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
+export type CaseLawSeedProfile = "development" | "recorded";
+
+type SeedFixturesOptions = {
+  handles: CaseLawWriteHandles;
+  profile: CaseLawSeedProfile;
+};
+
+const seedFixtures = async ({
+  handles: { rootDb, ingestionDb },
+  profile,
+}: SeedFixturesOptions) => {
   await ensureSearchPreviewConfig(rootDb);
 
-  const fixtures = [
-    ...(await loadRecordedFixtures()),
-    ...syntheticCaseLawFixtures(),
-    planet49CaseLawFixture(),
-  ];
+  const fixtures = await loadRecordedFixtures();
+  if (profile === "development") {
+    fixtures.push(...syntheticCaseLawFixtures(), planet49CaseLawFixture());
+  }
   validateFixtureDecisionIdentities(fixtures);
   console.log(`Found ${fixtures.length} fixtures.`);
 
@@ -462,14 +472,14 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
   console.log("Done. Case law data seeded successfully.");
 };
 
-export async function seedCaseLaw() {
+export async function seedCaseLaw(profile: CaseLawSeedProfile = "development") {
   requireLocalDevOpen("Seeding");
 
   // The dev seed route runs this inside the API process, so the lane is
   // released here rather than left to the process exit.
   const lane = await enterCaseLawMaintenanceLane();
   try {
-    await seedFixtures(lane);
+    await seedFixtures({ handles: lane, profile });
   } finally {
     await lane.release();
   }

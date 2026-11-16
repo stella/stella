@@ -1,15 +1,15 @@
 import { panic, Result } from "better-result";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import * as ts from "tsrs/unstable/ast";
+import * as ts from "tsrs/ast";
 import {
   API,
   type Checker,
   ModuleKind,
   ModuleResolutionKind,
   type Symbol as CompilerSymbol,
-} from "tsrs/unstable/async";
-import { serverFS } from "tsrs/unstable/fs";
+} from "tsrs/async";
+import { serverFS } from "tsrs/fs";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -752,6 +752,11 @@ export const validateSchemaIntrospection = async ({
                 {},
               )
             ).resolvedModule;
+            // A published `@stll/` package installed from the registry is a
+            // dependency like any other, not workspace source to walk.
+            if (resolved?.isExternalLibraryImport === true) {
+              return;
+            }
             if (
               resolved === undefined ||
               resolved.resolvedFileName.endsWith(".d.ts")

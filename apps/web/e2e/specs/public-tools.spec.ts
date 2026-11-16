@@ -6,7 +6,12 @@ import { matterChromeStyle } from "@stll/ui/matter-colors";
 
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
+import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import { expect, test } from "../helpers/test";
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_1_SECOND_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS,
+} from "../helpers/wait-budgets";
 
 const PUBLIC_SSR_TIMEOUT_MS = 45_000;
 const identityValue = v.pipe(v.string(), v.nonEmpty());
@@ -146,6 +151,7 @@ test("anonymous visitors can search and browse by legal task", async ({
   context,
   page,
 }) => {
+  const policy = await installContentSecurityPolicyCollector(page);
   await context.clearCookies();
   const pageErrors: string[] = [];
   const hydrationErrors: string[] = [];
@@ -180,9 +186,9 @@ test("anonymous visitors can search and browse by legal task", async ({
     await search.fill("");
     await search.fill("Companies House");
     await expect(page.getByText("1 result", { exact: true })).toBeVisible({
-      timeout: 1000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_1_SECOND_MS,
     });
-  }).toPass({ timeout: 15_000 });
+  }).toPass({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS });
 
   // Resolve canonical chrome values through CSS without mirroring each palette.
   // Pass plain entries across Playwright's serialization boundary so its
@@ -235,6 +241,17 @@ test("anonymous visitors can search and browse by legal task", async ({
     page.getByRole("link", { name: /Contract Review/u }),
   ).toBeVisible();
   await expect(page.getByText("1 result", { exact: true })).toBeVisible();
+  await policy.assertClean();
+  await page.getByRole("link", { name: /Contract Review/u }).click();
+  await expect(page).toHaveURL(/\/tools\/contract-review-anthropic$/u);
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Contract Review",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await policy.assertClean();
   expect(pageErrors).toEqual([]);
   expect(hydrationErrors).toEqual([]);
 });

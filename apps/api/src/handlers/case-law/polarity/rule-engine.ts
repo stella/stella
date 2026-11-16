@@ -18,35 +18,38 @@ import { caseLawPolarityRules } from "@/api/db/schema";
 import { aggregateMentionPolarities } from "@/api/handlers/case-law/polarity/aggregate";
 import {
   CLASSIFIABLE_POLARITIES,
-  isClassifiablePolarity,
   POLARITY_PRECEDENCE,
   REPORTED_PARTY_SUBMISSION_GROUP,
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
-import type {
-  ClassifiablePolarity,
-  Polarity,
-} from "@/api/handlers/case-law/polarity/consts";
-import { captureError } from "@/api/lib/analytics/capture";
+import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
+import {
+  invalidRuleKindPolarityMessage,
+  isValidRuleKindPolarity,
+  typedRuleKindPolarity,
+} from "@/api/handlers/case-law/polarity/rule-kind";
+import type { ValidRuleKindPolarity } from "@/api/handlers/case-law/polarity/rule-kind";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
-export type CompiledRule = {
+const invalidPolarityRule = failureSink({
+  event: "case_law.polarity.invalid_rule",
+  expected: [],
+});
+
+type CompiledRuleBase = {
   id: SafeId<"caseLawPolarityRule">;
   regex: RegExp;
-  /**
-   * Narrower than the column, which the CHECK constraint still lets carry any
-   * `Polarity`. A rule reads one mention, so it can neither assert that
-   * classification did not happen (`unknown`) nor that two mentions disagreed
-   * (`mixed`); both are the pipeline's own words about a citation.
-   */
-  polarity: ClassifiablePolarity;
   /** Kept for the specificity tiebreak; the compiled regex hides its length. */
   pattern: string;
   confidence: number;
 };
+
+/** A compiled rule; its kind decides which polarity it may carry. */
+export type CompiledRule = CompiledRuleBase & ValidRuleKindPolarity;
 
 /** The rule tier's label for one citation, over all of its mentions. */
 export type CitationPolarityVerdict = {
@@ -149,8 +152,10 @@ export const rankPolarityRulesByTier = (language: string) =>
     .select({
       id: caseLawPolarityRules.id,
       pattern: caseLawPolarityRules.pattern,
+      kind: caseLawPolarityRules.kind,
       polarity: caseLawPolarityRules.polarity,
       confidence: caseLawPolarityRules.confidence,
+      source: caseLawPolarityRules.source,
       tierRank: sql<number>`row_number() over (
         partition by ${caseLawPolarityRules.polarity}
         order by length(${caseLawPolarityRules.pattern}) desc, ${caseLawPolarityRules.id}
@@ -169,7 +174,7 @@ export const rankPolarityRulesByTier = (language: string) =>
 /** The columns `compileRules` reads; the DB read that produces them is the caller's. */
 type PolarityRuleRow = Pick<
   typeof caseLawPolarityRules.$inferSelect,
-  "id" | "pattern" | "polarity" | "confidence"
+  "id" | "pattern" | "polarity" | "confidence" | "kind"
 >;
 
 /**
@@ -195,27 +200,21 @@ export const compileRules = (
   for (const row of rows) {
     const regex = compilePattern(row.pattern);
     if (!regex) {
-      captureError(
+      observeFailure(
         new TelemetryError({
           message: "Polarity rule pattern does not compile",
         }),
-        handlerErrorContext("polarity.compileRules.pattern", {
-          pattern: row.pattern,
-          ruleId: row.id,
-        }),
+        { sink: invalidPolarityRule, ctx: { entityId: row.id } },
       );
       continue;
     }
 
-    if (!isClassifiablePolarity(row.polarity)) {
-      captureError(
+    if (!isValidRuleKindPolarity(row)) {
+      observeFailure(
         new TelemetryError({
-          message: "Polarity rule carries a polarity no match may assign",
+          message: invalidRuleKindPolarityMessage(row.polarity),
         }),
-        handlerErrorContext("polarity.compileRules.polarity", {
-          polarity: row.polarity,
-          ruleId: row.id,
-        }),
+        { sink: invalidPolarityRule, ctx: { entityId: row.id } },
       );
       continue;
     }
@@ -223,9 +222,9 @@ export const compileRules = (
     compiled.push({
       id: row.id,
       regex,
-      polarity: row.polarity,
       pattern: row.pattern,
       confidence: row.confidence,
+      ...typedRuleKindPolarity(row),
     });
   }
 
@@ -374,6 +373,7 @@ export const loadRules = async (
         pattern: ranked.pattern,
         polarity: ranked.polarity,
         confidence: ranked.confidence,
+        kind: ranked.kind,
       })
       .from(ranked)
       .where(lte(ranked.tierRank, RULES_PER_POLARITY)),

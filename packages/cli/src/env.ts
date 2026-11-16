@@ -29,3 +29,6 @@ export const XDG_CACHE_HOME: string | undefined = process.env["XDG_CACHE_HOME"];
 
 /** Home directory, the `~/.cache` fallback root for the registry cache. */
 export const HOME: string | undefined = process.env["HOME"];
+
+/** Opt-in phase durations on stderr. */
+export const STELLA_TIMING: string | undefined = process.env["STELLA_TIMING"];

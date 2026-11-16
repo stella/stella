@@ -109,16 +109,6 @@ describe("budget rejection observations", () => {
           expect(JSON.parse(metrics.at(-1) ?? "{}")).toEqual({
             budgetName: name,
             RateLimitRejected: 1,
-            _aws: {
-              Timestamp: expect.any(Number),
-              CloudWatchMetrics: [
-                {
-                  Namespace: "Stella/Api",
-                  Dimensions: [["budgetName"]],
-                  Metrics: [{ Name: "RateLimitRejected", Unit: "Count" }],
-                },
-              ],
-            },
           });
         }
       }

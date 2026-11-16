@@ -1,15 +1,24 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
+  acceptSourceChanges,
   buildCommonValueMap,
   emptyBaseline,
   findCommonDuplicates,
   findSharedValueDuplicates,
+  findSourceChanges,
   findStaleBaselineEntries,
   findUntranslated,
+  flattenMessages,
   isSorted,
+  parseSourceLock,
+  serializeSourceLock,
   sortKeys,
   syncMessages,
+  syncSourceLock,
 } from "./i18n-check";
 import type { CheckBaseline, NestedMessages } from "./i18n-check";
 
@@ -423,3 +432,130 @@ describe("findStaleBaselineEntries", () => {
     );
   });
 });
+
+describe("source lock", () => {
+  // Flat, dot-free keys: nesting is syncMessages' concern, not the lock's.
+  const messages = fc.dictionary(
+    fc.stringMatching(/^[a-z][a-zA-Z]{0,6}$/u),
+    fc.string({ maxLength: 8 }),
+  );
+
+  test("sync never clears a changed source and is a fixed point", () => {
+    assertProperty(
+      "sync never clears a changed source and is a fixed point",
+      fc.property(messages, messages, (source, locked) => {
+        const lock = new Map(Object.entries(locked));
+        const synced = syncSourceLock(source, lock);
+
+        expect([...synced.keys()].toSorted()).toEqual(
+          Object.keys(source).toSorted(),
+        );
+        for (const [key, value] of Object.entries(source)) {
+          expect(synced.get(key)).toBe(lock.get(key) ?? value);
+        }
+        expect(
+          findSourceChanges(source, synced)
+            .map(({ key }) => key)
+            .toSorted(),
+        ).toEqual(
+          Object.entries(source)
+            .filter(([key, value]) => lock.has(key) && lock.get(key) !== value)
+            .map(([key]) => key)
+            .toSorted(),
+        );
+        expect(syncSourceLock(source, synced)).toEqual(synced);
+      }),
+    );
+  });
+
+  test("accepting a key clears its change and no other", () => {
+    const source: NestedMessages = {
+      nav: { knowledge: "Intelligence", matters: "Matters" },
+    };
+    const lock = new Map([
+      ["nav.knowledge", "Knowledge"],
+      ["nav.matters", "Cases"],
+    ]);
+    expect(findSourceChanges(source, lock)).toHaveLength(2);
+
+    const accepted = acceptSourceChanges({
+      source,
+      lock,
+      keys: ["nav.knowledge"],
+    });
+
+    expect(findSourceChanges(source, accepted)).toEqual([
+      { key: "nav.matters", locked: "Cases", current: "Matters" },
+    ]);
+  });
+
+  test("accepting a key the source does not have fails", () => {
+    expect(() =>
+      acceptSourceChanges({
+        source: { nav: { matters: "Matters" } },
+        lock: new Map([["nav.matters", "Matters"]]),
+        keys: ["nav.missing"],
+      }),
+    ).toThrow("nav.missing is not in en.json");
+  });
+
+  test("a lock round-trips through its file and rejects other shapes", () => {
+    const lock = new Map([
+      ["a.b", "Line\nbreak “quoted” ä"],
+      ["c", ""],
+    ]);
+    expect(parseSourceLock(serializeSourceLock(lock), "lock.json")).toEqual(
+      lock,
+    );
+    expect(() => parseSourceLock('{"a":{"b":"x"}}', "lock.json")).toThrow(
+      "lock.json is not a map of message keys to English values",
+    );
+  });
+});
+
+test("catalog sync preserves inputs and is a fixed point", () => {
+  const key = fc.stringMatching(/^[a-z]{1,6}$/u);
+  const leaf = fc.string({ maxLength: 12 });
+  const catalog = fc.dictionary(key, fc.oneof(leaf, fc.dictionary(key, leaf)));
+  assertProperty(
+    "catalog sync preserves inputs and is a fixed point",
+    fc.property(catalog, catalog, (source, target) => {
+      const originalSource = structuredClone(source);
+      const originalTarget = structuredClone(target);
+      const result = syncMessages(source, target);
+      expect(source).toEqual(originalSource);
+      expect(target).toEqual(originalTarget);
+      expect([...flattenMessages(result).keys()].toSorted()).toEqual(
+        [...flattenMessages(source).keys()].toSorted(),
+      );
+      expect(syncMessages(source, result)).toEqual(result);
+    }),
+    { numRuns: 100 },
+  );
+});
+
+test.each([
+  {
+    name: "leaf to namespace",
+    source: { caption: "Caption" },
+    target: "Old caption",
+  },
+  {
+    name: "namespace to leaf",
+    source: "Caption",
+    target: { old: "Old caption" },
+  },
+])(
+  "sync keeps replacement messages when changing $name",
+  ({ source, target }) => {
+    const english = { section: { value: source, sibling: "Keep" } };
+    const translated = { section: { value: target, sibling: "Translation" } };
+    const original = structuredClone(translated);
+    const result = syncMessages(english, translated);
+    expect(result).toEqual({
+      section: { value: source, sibling: "Translation" },
+    });
+    expect(translated).toEqual(original);
+    expect(syncMessages(english, result)).toEqual(result);
+  },
+);

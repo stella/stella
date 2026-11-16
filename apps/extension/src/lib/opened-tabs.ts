@@ -59,9 +59,11 @@ export const judgeOpenedTab = async (tab: chrome.tabs.Tab): Promise<void> => {
  * `target=_blank`, a middle click), from any frame. A tab one of the user's
  * pages opened is the user's. Any other stays confined, even when it was
  * already given to the user: this report wins whenever it arrives. One a
- * page chat operates opened is closed when its first URL fails the policy or
- * the page has opened too many; chat never operates it. The tab's
- * `openerTabId` is not used: Chrome may set it to whichever tab was active.
+ * page in chat's tabs opened becomes chat's, which chat may switch to; one
+ * a merely confined tab opened is confined but never chat's, and either is
+ * closed when its first URL fails the policy or too many tabs are open. One
+ * an unknown tab opened is confined, never chat's. The tab's `openerTabId` is not used: Chrome may set it to
+ * whichever tab was active.
  */
 export const sortNavigationTarget = async ({
   sourceTabId,
@@ -79,13 +81,16 @@ export const sortNavigationTarget = async ({
     await releaseToUser(tabId);
     return;
   }
-  const fromControl = source === "controlled" || source === "opened";
-  const containment = await containOpenedTab(tabId, { limited: fromControl });
+  // Whether the source is chat's is decided again where the tab is recorded.
+  const containment = await containOpenedTab(tabId, { sourceTabId });
   if (containment === "over-limit") {
     await chrome.tabs.remove(tabId);
     return;
   }
-  if (containment === "contained" && fromControl) {
+  if (
+    (containment === "chat" || containment === "confined") &&
+    (source === "controlled" || source === "chat" || source === "confined")
+  ) {
     awaitingFirstUrl.add(tabId);
     await judgeOpenedTab({
       ...(await chrome.tabs.get(tabId)),

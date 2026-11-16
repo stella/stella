@@ -31,16 +31,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  LegacyRawShape,
-  SourceSurfaceDisposition,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   getSourceRegistration,
   listSourceRegistrations,
   type SourceRegistrationKey,
@@ -48,14 +38,24 @@ import {
 import baseline from "@/api/handlers/case-law/ingestion/adapters/source-surface-backlog-baseline.json";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
   LEGACY_BACKLOG_ADAPTERS,
   LEGACY_RAW_SHAPES,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  LegacyRawShape,
+  SourceSurfaceDisposition,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   atFindokFixture,
   atRisFixture,
   type AtRisFixtureAdapter,
+  brTjdftFixture,
+  brTstAcordaoFixture,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
@@ -81,14 +81,15 @@ import {
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
 import { deferredSkDocumentRawFixture } from "@/api/tests/helpers/sk-document-raw-storage";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 // ── Where an envelope can be read back from ──────────────
@@ -139,6 +140,7 @@ const SURFACE_EVIDENCE = {
   ],
   [ADAPTER_KEYS.CZ_REGIONAL]: [{ kind: "built", fixture: czRegionalFixture }],
   [ADAPTER_KEYS.CZ_UOHS]: [{ kind: "built", fixture: czUohsFixture }],
+  [ADAPTER_KEYS.BR_TST]: [{ kind: "built", fixture: brTstAcordaoFixture }],
   [ADAPTER_KEYS.SK_COURTS]: [
     { kind: "built", fixture: skCourtsFixture },
     { kind: "page-recording", file: "sk-courts-page.json.gz" },
@@ -184,6 +186,7 @@ const SURFACE_EVIDENCE = {
     { kind: "built", fixture: plUokikFixture },
     { kind: "built", fixture: plUokikRulingFixture },
   ],
+  [ADAPTER_KEYS.BR_TJDFT]: [{ kind: "built", fixture: brTjdftFixture }],
 } as const satisfies Record<SourceRegistrationKey, readonly SurfaceEvidence[]>;
 
 // ── Reading a stored raw back into part names ────────────

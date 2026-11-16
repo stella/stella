@@ -157,6 +157,44 @@ export const fetchManagedOpenRouterCompletion = async (completion: Request) => {
   return Result.ok(response);
 };
 
+/**
+ * Where audio goes: the organization's region, or the global endpoint for a
+ * model its region does not serve, which a member chose knowing it leaves
+ * the region. Every endpoint gets the same zero-retention provider policy.
+ */
+export const MANAGED_TRANSCRIPTION_URLS = {
+  eu: `${MANAGED_EU_ORIGIN}/api/v1/audio/transcriptions`,
+  us: `${MANAGED_US_ORIGIN}/api/v1/audio/transcriptions`,
+  global: `${MANAGED_PUBLIC_ORIGIN}/api/v1/audio/transcriptions`,
+} as const satisfies Record<ManagedAIResidency | "global", string>;
+
+const TRANSCRIPTION_ORIGINS = [
+  ...MANAGED_PROVIDER_ORIGINS,
+  MANAGED_PUBLIC_ORIGIN,
+] as const;
+
+/** Audio requests go only to a known transcription endpoint and refuse
+ *  redirects. */
+export const fetchManagedOpenRouterTranscription = async (
+  input: string | URL,
+  init: FetchWithTimeoutInit,
+) => {
+  const target = restrictOutboundUrl({
+    rawUrl: String(input),
+    hostPolicy: { type: "exact-origin", origins: TRANSCRIPTION_ORIGINS },
+    pathPrefixes: ["/api/v1/audio/transcriptions"],
+  });
+  if (
+    target === null ||
+    !Object.values(MANAGED_TRANSCRIPTION_URLS).some(
+      (url) => url === target.href,
+    )
+  ) {
+    return panic("Transcription target is outside the provider policy.");
+  }
+  return await fetchWithTimeout(target, { ...init, redirect: "error" });
+};
+
 export const isManagedProviderAvailable = (
   provider: ManagedProvider,
   dataClass: AIDataClass,

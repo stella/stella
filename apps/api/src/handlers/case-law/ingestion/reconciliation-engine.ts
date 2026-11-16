@@ -90,15 +90,20 @@ import {
   SLICE_LISTING_PROOF,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
+import { censusScope } from "@/api/lib/case-law/completeness-census";
+import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
-import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import {
+  rowHoldsDocumentFor,
+  supplementIsMergedFor,
+} from "@/api/lib/case-law/stored-payload";
 import {
   errorFingerprint,
   errorSystemFields,
   errorTag,
 } from "@/api/lib/errors/utils";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type {
   HeldRowRules,
   IngestionResult,
@@ -651,9 +656,7 @@ const selectHeldDocumentIds = async (
     supplements: await tx
       .select({
         sourceDocumentId: caseLawDecisionSupplements.sourceDocumentId,
-        decisionId: caseLawDecisionSupplements.decisionId,
-        sourceHash: caseLawDecisionSupplements.sourceHash,
-        mergedSourceHash: caseLawDecisionSupplements.mergedSourceHash,
+        merged: supplementIsMergedFor(caseLawDecisionSupplements),
       })
       .from(caseLawDecisionSupplements)
       .where(
@@ -669,12 +672,7 @@ const selectHeldDocumentIds = async (
   const supplementStateById = new Map(
     supplements.map(
       (row) =>
-        [
-          row.sourceDocumentId,
-          row.decisionId !== null && row.mergedSourceHash === row.sourceHash
-            ? "merged"
-            : "unmerged",
-        ] as const,
+        [row.sourceDocumentId, row.merged ? "merged" : "unmerged"] as const,
     ),
   );
   const rowsById = new Map(
@@ -1209,7 +1207,8 @@ const writeInOrder = async (
     return panic("writeInOrder needs a row to write");
   }
   const processed = await write(first);
-  return processed.status === PROCESS_DECISION_STATUS.RETRYABLE ||
+  return processed.isErr() ||
+    processed.value.status === PROCESS_DECISION_STATUS.RETRYABLE ||
     rest.length === 0
     ? processed
     : await writeInOrder(rest, write);
@@ -1230,6 +1229,31 @@ type IngestItemOptions = {
   summary: ReconciliationUnitSummary;
   failureDisposition?: "park" | "hold";
   signal?: AbortSignal | undefined;
+};
+
+type WriteListedDecisionOptions = Pick<
+  IngestItemOptions,
+  "lease" | "scopedDb" | "sourceId" | "now" | "resolveSourceContract"
+> & { input: IngestionResult };
+
+const writeListedDecision = async ({
+  input,
+  lease,
+  scopedDb,
+  sourceId,
+  now,
+  resolveSourceContract,
+}: WriteListedDecisionOptions): Promise<Processed> => {
+  await lease.beforeDatabaseMark();
+  const observationOrder = await allocateSourceObservationOrder({
+    leaseToken: lease.leaseToken,
+    scopedDb,
+    sourceId,
+  });
+  return await processDecision(
+    { input, sourceId, scopedDb, observedAt: now, observationOrder },
+    resolveSourceContract,
+  );
 };
 
 /**
@@ -1283,6 +1307,40 @@ const ingestListedItem = async ({
     }
   };
 
+  const failed = async (error: unknown) => {
+    if (signal?.aborted === true) {
+      throw error;
+    }
+    summary.failed += 1;
+    logger.warn("case_law.reconciliation.item_failed", {
+      adapterKey,
+      slice,
+      identityKey: item.identityKey,
+      // The park below keeps only the tag, which cannot separate a publisher
+      // refusing one document from the corpus refusing to store it. These
+      // carry that distinction as fixed vocabulary (driver and system codes,
+      // the SQLSTATE, the schema identifiers Postgres names) rather than as
+      // message text, which quotes the statement and can quote the row that
+      // failed; the logger's sanitizer is a key denylist, so text this sink
+      // emitted would reach telemetry verbatim.
+      //
+      // `errorFingerprint` is first so the two below keep the last word on
+      // every key they state. It adds what the vocabulary above cannot
+      // supply for a throw that carries no code at all — a bare `TypeError`
+      // from a helper reports its tag and nothing else, which names the
+      // class of defect but not the site. `error.frame` is the top stack
+      // frame as `file:line:col`: code identity, not row data, and so inside
+      // the same policy as the codes.
+      ...errorFingerprint(error),
+      ...errorSystemFields(error),
+      ...pgErrorFields(error),
+    });
+    if (failureDisposition === "hold") {
+      return;
+    }
+    await park(errorTag(error));
+  };
+
   try {
     const timeoutSignal = AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS);
     const built = await buildDecision(
@@ -1326,24 +1384,15 @@ const ingestListedItem = async ({
         return;
       }
       case "built": {
-        const write = async (input: IngestionResult): Promise<Processed> => {
-          await lease.beforeDatabaseMark();
-          const observationOrder = await allocateSourceObservationOrder({
-            leaseToken: lease.leaseToken,
+        const write = async (input: IngestionResult) =>
+          await writeListedDecision({
+            input,
+            lease,
             scopedDb,
             sourceId,
-          });
-          return await processDecision(
-            {
-              input,
-              sourceId,
-              scopedDb,
-              observedAt: now,
-              observationOrder,
-            },
+            now,
             resolveSourceContract,
-          );
-        };
+          });
         // The decision first, then what its page states beside it. A
         // companion that cannot be written parks the item: a rebuild writes
         // both again under the same identities.
@@ -1353,8 +1402,12 @@ const ingestListedItem = async ({
             : [built.decision, ...built.companions],
           write,
         );
-        if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-          await park(`retryable:${processed.reason}`);
+        if (processed.isErr()) {
+          await failed(processed.error);
+          return;
+        }
+        if (processed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+          await park(`retryable:${processed.value.reason}`);
           return;
         }
         summary.written += 1;
@@ -1393,8 +1446,12 @@ const ingestListedItem = async ({
           },
           resolveSourceContract,
         );
-        if (placed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-          await park(`retryable:${placed.reason}`);
+        if (placed.isErr()) {
+          await failed(placed.error);
+          return;
+        }
+        if (placed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+          await park(`retryable:${placed.value.reason}`);
           return;
         }
         // A judgment can be unreadable and return COMPLETE without writing
@@ -1431,41 +1488,12 @@ const ingestListedItem = async ({
       }
     }
   } catch (error) {
-    if (signal?.aborted === true) {
-      throw error;
-    }
-    summary.failed += 1;
-    logger.warn("case_law.reconciliation.item_failed", {
-      adapterKey,
-      slice,
-      identityKey: item.identityKey,
-      // The park below keeps only the tag, which cannot separate a publisher
-      // refusing one document from the corpus refusing to store it. These
-      // carry that distinction as fixed vocabulary (driver and system codes,
-      // the SQLSTATE, the schema identifiers Postgres names) rather than as
-      // message text, which quotes the statement and can quote the row that
-      // failed; the logger's sanitizer is a key denylist, so text this sink
-      // emitted would reach telemetry verbatim.
-      //
-      // `errorFingerprint` is first so the two below keep the last word on
-      // every key they state. It adds what the vocabulary above cannot
-      // supply for a throw that carries no code at all — a bare `TypeError`
-      // from a helper reports its tag and nothing else, which names the
-      // class of defect but not the site. `error.frame` is the top stack
-      // frame as `file:line:col`: code identity, not row data, and so inside
-      // the same policy as the codes.
-      ...errorFingerprint(error),
-      ...errorSystemFields(error),
-      ...pgErrorFields(error),
-    });
-    if (failureDisposition === "hold") {
-      return;
-    }
-    await park(errorTag(error));
+    await failed(error);
   }
 };
 
 type WalkSliceOptions = {
+  publisherScope: ReturnType<typeof censusScope>;
   adapterKey: string;
   fetchDelayMs: number;
   ingestBudget: number;
@@ -1491,6 +1519,7 @@ type WalkSliceOptions = {
  * slice whose misses exceeded the budget records short and is selected again.
  */
 const walkSlice = async ({
+  publisherScope,
   adapterKey,
   fetchDelayMs,
   ingestBudget,
@@ -1645,6 +1674,17 @@ const walkSlice = async ({
       reported: summary.keyable,
       collected: summary.heldBefore + summary.written,
     },
+  });
+  await lease.beforeDatabaseMark();
+  await recordCompletenessCensus(scopedDb, {
+    adapterKey,
+    sourceId,
+    leaseToken: lease.leaseToken,
+    slice,
+    scope: publisherScope,
+    identities: listing.value.censusIdentities,
+    publisherCount: listing.value.publisherCount,
+    observedAt: now(),
   });
   return summary;
 };
@@ -1942,6 +1982,7 @@ type ExecuteReconciliationUnitOptions = Pick<
   | "sourceId"
   | "signal"
 > & {
+  publisherScope: ReturnType<typeof censusScope>;
   readStoredRaw: StoredRawResultReader;
   reconciliation: SourceReconciliation;
   sliceIngestBudget: number;
@@ -1950,6 +1991,7 @@ type ExecuteReconciliationUnitOptions = Pick<
 };
 
 const executeReconciliationUnit = async ({
+  publisherScope,
   adapterKey,
   fetchDelayMs,
   now,
@@ -1967,120 +2009,115 @@ const executeReconciliationUnit = async ({
   if (unit.type === "idle") {
     return { type: "idle" };
   }
-  const lease = await acquireCaseLawSourceIngestionLease({
-    scopedDb,
-    sourceId,
-  });
-  if (lease === null) {
-    return { type: "leased" };
-  }
-
-  const resolveSourceContract = createSourceContractResolver(scopedDb);
-  try {
-    switch (unit.type) {
-      case "parked-retries":
-        return {
-          type: "worked",
-          summary: await retryParkedItems({
-            adapterKey,
-            fetchDelayMs,
-            lease,
-            now,
-            reconciliation,
-            reparseStoredRaw,
-            scopedDb,
-            resolveSourceContract,
-            sleep,
-            sourceId,
-            signal,
-          }),
-        };
-      case "textless-detail-rechecks":
-        return {
-          type: "worked",
-          summary: await recheckTextlessHeldRows({
-            adapterKey,
-            fetchDelayMs,
-            lease,
-            now,
-            readStoredRaw,
-            reconciliation,
-            reparseStoredRaw,
-            scopedDb,
-            resolveSourceContract,
-            sleep,
-            sourceId,
-            signal,
-          }),
-        };
-      case "slice":
-        return {
-          type: "worked",
-          summary: await walkSlice({
-            adapterKey,
-            fetchDelayMs,
-            ingestBudget: sliceIngestBudget,
-            lease,
-            now,
-            reason: unit.reason,
-            reconciliation,
-            reparseStoredRaw,
-            scopedDb,
-            resolveSourceContract,
-            slice: unit.slice,
-            sleep,
-            sourceId,
-            signal,
-          }).catch(async (error: unknown) => {
-            if (signal?.aborted === true) {
-              throw error;
-            }
-            // The walk is all-or-nothing by design: a listing that failed part
-            // way through writes no counts, so the slice is owed exactly as
-            // much as before. Recorded as failed, so the sweep's frontier and
-            // the backlog move past it and the retry arm owns it; and held in
-            // this process for its retry, because the tip is re-derived from
-            // the clock and would otherwise be handed straight back. Named
-            // here because the loop's window tally reports how many turns
-            // threw without saying over what; the slice a source cannot walk
-            // is the one fact that turns a standing error rate into something
-            // an operator can reproduce. Measured from the failure, not from
-            // the unit's start: a slice is several paginated requests and a
-            // walk can spend most of the runner's deadline before it throws,
-            // which would leave the hold shorter than it says or already
-            // expired.
-            sliceRetries.set(
-              unit.slice,
-              now().getTime() + RECONCILIATION_SLICE_RETRY_MS,
-            );
-            await recordSliceWalkFailure(scopedDb, {
-              sourceId,
-              slice: unit.slice,
-              walkError: describeWalkError(error),
-            });
-            logger.warn("case_law.reconciliation.slice_failed", {
+  const outcome = await withCaseLawSourceIngestionLease(
+    { scopedDb, sourceId },
+    async (lease): Promise<ReconciliationUnitOutcome> => {
+      const resolveSourceContract = createSourceContractResolver(scopedDb);
+      switch (unit.type) {
+        case "parked-retries":
+          return {
+            type: "worked",
+            summary: await retryParkedItems({
               adapterKey,
-              slice: unit.slice,
+              fetchDelayMs,
+              lease,
+              now,
+              reconciliation,
+              reparseStoredRaw,
+              scopedDb,
+              resolveSourceContract,
+              sleep,
+              sourceId,
+              signal,
+            }),
+          };
+        case "textless-detail-rechecks":
+          return {
+            type: "worked",
+            summary: await recheckTextlessHeldRows({
+              adapterKey,
+              fetchDelayMs,
+              lease,
+              now,
+              readStoredRaw,
+              reconciliation,
+              reparseStoredRaw,
+              scopedDb,
+              resolveSourceContract,
+              sleep,
+              sourceId,
+              signal,
+            }),
+          };
+        case "slice":
+          return {
+            type: "worked",
+            summary: await walkSlice({
+              publisherScope,
+              adapterKey,
+              fetchDelayMs,
+              ingestBudget: sliceIngestBudget,
+              lease,
+              now,
               reason: unit.reason,
-              // Same reason as the item sink above: a walk that throws
-              // without a code is otherwise reported as a bare tag.
-              ...errorFingerprint(error),
-              ...errorSystemFields(error),
-              ...pgErrorFields(error),
-            });
-            throw error;
-          }),
-        };
-      default: {
-        unit satisfies never;
-        return panic(
-          `Unhandled reconciliation work unit: ${JSON.stringify(unit)}`,
-        );
+              reconciliation,
+              reparseStoredRaw,
+              scopedDb,
+              resolveSourceContract,
+              slice: unit.slice,
+              sleep,
+              sourceId,
+              signal,
+            }).catch(async (error: unknown) => {
+              if (signal?.aborted === true) {
+                throw error;
+              }
+              // The walk is all-or-nothing by design: a listing that failed part
+              // way through writes no counts, so the slice is owed exactly as
+              // much as before. Recorded as failed, so the sweep's frontier and
+              // the backlog move past it and the retry arm owns it; and held in
+              // this process for its retry, because the tip is re-derived from
+              // the clock and would otherwise be handed straight back. Named
+              // here because the loop's window tally reports how many turns
+              // threw without saying over what; the slice a source cannot walk
+              // is the one fact that turns a standing error rate into something
+              // an operator can reproduce. Measured from the failure, not from
+              // the unit's start: a slice is several paginated requests and a
+              // walk can spend most of the runner's deadline before it throws,
+              // which would leave the hold shorter than it says or already
+              // expired.
+              sliceRetries.set(
+                unit.slice,
+                now().getTime() + RECONCILIATION_SLICE_RETRY_MS,
+              );
+              await recordSliceWalkFailure(scopedDb, {
+                sourceId,
+                slice: unit.slice,
+                walkError: describeWalkError(error),
+              });
+              logger.warn("case_law.reconciliation.slice_failed", {
+                adapterKey,
+                slice: unit.slice,
+                reason: unit.reason,
+                // Same reason as the item sink above: a walk that throws
+                // without a code is otherwise reported as a bare tag.
+                ...errorFingerprint(error),
+                ...errorSystemFields(error),
+                ...pgErrorFields(error),
+              });
+              throw error;
+            }),
+          };
+        default: {
+          unit satisfies never;
+          return panic(
+            `Unhandled reconciliation work unit: ${JSON.stringify(unit)}`,
+          );
+        }
       }
-    }
-  } finally {
-    await lease.release();
-  }
+    },
+  );
+  return outcome ?? { type: "leased" };
 };
 
 /**
@@ -2274,6 +2311,7 @@ export const runReconciliationWorkUnit = async ({
   const executed = await Result.tryPromise({
     try: async () =>
       await executeReconciliationUnit({
+        publisherScope: censusScope(adapterReconciliation, startedAt),
         adapterKey,
         fetchDelayMs,
         now,

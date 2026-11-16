@@ -1,17 +1,16 @@
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
 
+import type { ExactRequestBody } from "@stll/api-client";
+
 import { APIError } from "@/lib/errors/api";
 
 import {
-  batchDeleteTimeEntries,
-  batchUpdateTimeEntries,
   createTimeEntry,
   type CreateTimeEntryBody,
   decideTimeSuggestion,
   deleteTimeEntry,
   fetchTimeEntries,
   fetchTimeEntrySummary,
-  splitTimeEntry,
   updateTimeEntry,
 } from "./time-entries-api";
 
@@ -97,16 +96,6 @@ test.each([
   },
 );
 
-test("a batch delete accepts the batch count answer", async () => {
-  responses = [{ updated: 2 }];
-  expect(
-    await batchDeleteTimeEntries("workspace-1", ["entry-1", "entry-2"]),
-  ).toEqual({ updated: 2 });
-  expect(requests).toEqual([
-    { body: { ids: ["entry-1", "entry-2"] }, method: "DELETE" },
-  ]);
-});
-
 afterAll(() => {
   globalThis.fetch = originalFetch;
 });
@@ -157,12 +146,40 @@ test("time-entry mutations send only route-schema fields", async () => {
   ]);
 });
 
-// Cache metadata is not part of the API's create schema, so a body carrying a
-// query key does not type-check.
-const createBodyOmitsCacheMetadata: "queryKey" extends keyof CreateTimeEntryBody
+// A captured value and a spread must remain forbidden, not just fresh literals.
+const cachedCreateBody = {
+  dateWorked: "2026-10-29",
+  timezoneId: "UTC",
+  durationMinutes: 30,
+  narrative: "Review documents",
+  queryKey: ["time-entries", "matter"],
+};
+const spreadCreateBody = { ...cachedCreateBody };
+true satisfies typeof cachedCreateBody extends ExactRequestBody<
+  CreateTimeEntryBody,
+  typeof cachedCreateBody
+>
   ? false
-  : true = true;
-void createBodyOmitsCacheMetadata;
+  : true;
+true satisfies typeof spreadCreateBody extends ExactRequestBody<
+  CreateTimeEntryBody,
+  typeof spreadCreateBody
+>
+  ? false
+  : true;
+const createBodyWithClientMetadata = {
+  dateWorked: "2026-10-29",
+  timezoneId: "UTC",
+  durationMinutes: 30,
+  narrative: "Review documents",
+  optimisticId: "temporary",
+};
+true satisfies typeof createBodyWithClientMetadata extends ExactRequestBody<
+  CreateTimeEntryBody,
+  typeof createBodyWithClientMetadata
+>
+  ? false
+  : true;
 
 const cases = [
   {
@@ -170,6 +187,13 @@ const cases = [
     method: "PUT",
     path: "/time-entries/matter",
     response: { id: "entry" },
+    body: {
+      dateWorked: "2026-10-29",
+      timezoneId: "UTC",
+      durationMinutes: 30,
+      narrative: "Review documents",
+      billable: true,
+    },
     send: async () =>
       await createTimeEntry("matter", {
         dateWorked: "2026-10-29",
@@ -184,6 +208,7 @@ const cases = [
     method: "PATCH",
     path: "/time-entries/matter",
     response: { id: "entry" },
+    body: { id: "entry", narrative: "Reviewed" },
     send: async () =>
       await updateTimeEntry("matter", { id: "entry", narrative: "Reviewed" }),
   },
@@ -192,39 +217,17 @@ const cases = [
     method: "DELETE",
     path: "/time-entries/matter",
     response: { deleted: true },
+    body: { id: "entry" },
     send: async () => await deleteTimeEntry("matter", "entry"),
   },
   {
-    name: "batch update",
-    method: "POST",
-    path: "/time-entries/matter/batch",
-    response: { updated: 1 },
-    send: async () =>
-      await batchUpdateTimeEntries("matter", {
-        ids: ["entry"],
-        action: "approve",
-      }),
-  },
-  {
-    name: "batch delete",
-    method: "DELETE",
-    path: "/time-entries/matter/batch",
-    response: { updated: 1 },
-    send: async () => await batchDeleteTimeEntries("matter", ["entry"]),
-  },
-  {
-    name: "split",
-    method: "POST",
-    path: "/time-entries/matter/split",
-    response: { entryIds: ["split-entry"], splitGroupId: "split-group" },
-    send: async () =>
-      await splitTimeEntry("matter", {
-        id: "entry",
-        splits: [{ workItemId: "task", percentage: 100 }],
-      }),
-  },
-  {
     name: "suggestion decision",
+    body: {
+      fingerprint: "suggestion",
+      date: "2026-10-29",
+      timezoneId: "UTC",
+      decision: { type: "dismiss" },
+    },
     method: "POST",
     path: "/time-entries/matter/suggestions/decisions",
     response: {
@@ -243,10 +246,11 @@ const cases = [
 ] as const;
 
 test.each(cases)(
-  "$name uses typed transport without an idempotency key",
-  async ({ method, path, response, send }) => {
+  "$name sends the exact API body without cache metadata or an idempotency key",
+  async ({ body, method, path, response, send }) => {
     responses = [response];
     await send();
+    expect(requests).toEqual([{ method, body }]);
     expect(transportRequests).toHaveLength(1);
     const request = transportRequests.at(0);
     expect(request?.url).toEndWith(path);

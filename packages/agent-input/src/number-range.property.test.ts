@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { normalizeNumberInRange } from "./number";
 
@@ -14,7 +14,8 @@ const rangeArb = fc
 
 describe("bounded counts", () => {
   test("any number reads into the range", () => {
-    fc.assert(
+    assertProperty(
+      "any number reads into the range",
       fc.property(
         rangeArb,
         fc.double({ noNaN: true, noDefaultInfinity: true }),
@@ -26,12 +27,13 @@ describe("bounded counts", () => {
           expect(read).toBeLessThanOrEqual(range.maximum);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("an integer in range is unchanged with nothing to report", () => {
-    fc.assert(
+    assertProperty(
+      "an integer in range is unchanged with nothing to report",
       fc.property(rangeArb, fc.nat(), (range, offset) => {
         const value =
           range.minimum + (offset % (range.maximum - range.minimum + 1));
@@ -39,7 +41,7 @@ describe("bounded counts", () => {
           normalizeNumberInRange(value, { ...range, integer: true }),
         ).toEqual({ ok: true, value });
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

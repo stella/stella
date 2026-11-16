@@ -50,18 +50,21 @@ const collectHandlers = () => {
     "rename-chat": () => {
       calls.push("rename-chat");
     },
+    "make-skill": () => {
+      calls.push("make-skill");
+    },
   };
   return { calls, handlers };
 };
 
 describe("getReservedChatCommands", () => {
-  test("offers /rename-chat only alongside a persisted thread", () => {
+  test("offers /rename-chat and /make-skill only alongside a persisted thread", () => {
     expect(
       getReservedChatCommands({ hasPersistedThread: false }).map((c) => c.id),
     ).toEqual(["new"]);
     expect(
       getReservedChatCommands({ hasPersistedThread: true }).map((c) => c.id),
-    ).toEqual(["new", "rename-chat"]);
+    ).toEqual(["new", "rename-chat", "make-skill"]);
   });
 });
 
@@ -122,6 +125,9 @@ describe("runReservedChatCommand", () => {
       },
       "rename-chat": (args) => {
         seen.push(args);
+      },
+      "make-skill": () => {
+        throw new Error("wrong handler");
       },
     };
     expect(

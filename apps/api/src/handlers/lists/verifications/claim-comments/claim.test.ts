@@ -16,6 +16,8 @@ describe("a claim comment's span", () => {
       startOffset: 4,
       endOffset: 31,
       quote: "The parties met on 4 March.",
+      quotePrefix: "",
+      quoteSuffix: "",
     });
   });
 

@@ -10,9 +10,10 @@ import { Button } from "@stll/ui/button";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  FilePenLineIcon,
+  EditPagesIcon,
   PrinterIcon,
 } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
 import { ToolbarIconAction } from "@stll/ui/toolbar-icon-action";
 
@@ -221,12 +222,14 @@ export const PdfViewerControls = ({
           >
             <ChevronDownIcon className="size-3.5" />
           </Button>
-          <div className="ms-1.5 me-2 flex gap-x-1.5 text-sm">
-            <input
+          {/* The "/ total" sits on the field's centre line, so it never
+              floats above the box. */}
+          <div className="ms-1.5 me-2 flex items-center gap-x-1.5 text-sm tabular-nums">
+            <Input
               aria-label={t("common.currentPage")}
               autoComplete="off"
+              className="me-1 w-14 *:text-end"
               dir="ltr"
-              className="me-1 w-14 rounded border px-1 text-end"
               inputMode="numeric"
               onBlur={() => {
                 if (
@@ -251,6 +254,7 @@ export const PdfViewerControls = ({
                 }
                 e.currentTarget.blur();
               }}
+              size="sm"
               value={pageInputValue}
             />
             <span>/</span>
@@ -270,7 +274,7 @@ export const PdfViewerControls = ({
               <ToolbarIconAction
                 density="toolbar"
                 disabled={totalPages === 0}
-                icon={<FilePenLineIcon className="size-3.5" />}
+                icon={<EditPagesIcon className="size-3.5" />}
                 label={t("workspaces.pdf.pageEditor.editPages")}
                 onClick={onEditPages}
               />

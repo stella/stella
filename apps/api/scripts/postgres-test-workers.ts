@@ -143,6 +143,7 @@ type RunPostgresWorkersOptions = PlanPostgresWorkersOptions & {
   }) => Child;
   registerSignal?: (handler: (signal: NodeJS.Signals) => void) => () => void;
   now?: () => number;
+  sleep?: (milliseconds: number) => Promise<void>;
   log?: (message: string) => void;
 };
 
@@ -153,6 +154,89 @@ const databaseUrlWithName = (source: URL, databaseName: string) => {
   const result = new URL(source);
   result.pathname = `/${databaseName}`;
   return result.toString();
+};
+
+const dropClone = async (admin: PostgresAdmin, databaseName: string) => {
+  // Only client sessions: an owner role may not terminate autovacuum
+  // workers, and DROP DATABASE already stops those on its own.
+  await admin.query(
+    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend'",
+    [databaseName],
+  );
+  await admin.query(`DROP DATABASE IF EXISTS ${quoteIdentifier(databaseName)}`);
+};
+
+// Health probes such as pg_isready hold sub-second sessions. CREATE DATABASE
+// waits five seconds for other sessions before refusing, so only sessions
+// that outlast the same window fail the run.
+const TEMPLATE_CONNECTION_SAMPLES = 10;
+const TEMPLATE_CONNECTION_SAMPLE_INTERVAL_MS = 500;
+
+type AssertTemplateQuietOptions = {
+  admin: PostgresAdmin;
+  sleep: (milliseconds: number) => Promise<void>;
+  template: string;
+};
+
+const assertTemplateQuiet = async ({
+  admin,
+  sleep,
+  template,
+}: AssertTemplateQuietOptions): Promise<void> => {
+  const readForeignConnections = async () => {
+    const foreignRows = await admin.query(
+      "SELECT pid, application_name, client_addr::text, backend_type FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid() ORDER BY pid",
+      [template],
+    );
+    return foreignRows.flatMap((row) => {
+      // CREATE DATABASE stops autovacuum itself while acquiring the template;
+      // every client and unknown backend must still pass the connection check.
+      if (
+        typeof row === "object" &&
+        row !== null &&
+        "backend_type" in row &&
+        row.backend_type === "autovacuum worker"
+      ) {
+        return [];
+      }
+      if (
+        typeof row !== "object" ||
+        row === null ||
+        !("pid" in row) ||
+        !("application_name" in row) ||
+        !("client_addr" in row)
+      ) {
+        return [];
+      }
+      return [
+        {
+          pid: Number(row.pid),
+          application_name: String(row.application_name),
+          client_addr:
+            typeof row.client_addr === "string" ? row.client_addr : null,
+        },
+      ];
+    });
+  };
+  let foreign = await readForeignConnections();
+  for (
+    let sample = 1;
+    foreign.length > 0 && sample < TEMPLATE_CONNECTION_SAMPLES;
+    sample += 1
+  ) {
+    await sleep(TEMPLATE_CONNECTION_SAMPLE_INTERVAL_MS);
+    foreign = await readForeignConnections();
+  }
+  if (foreign.length > 0) {
+    const connections = foreign.map(
+      ({ pid, application_name, client_addr }) =>
+        `pid=${pid} application_name=${application_name || "<unset>"} client_addr=${client_addr ?? "local"}`,
+    );
+    throw new PostgresTemplateConnectionError({
+      message: `Template database ${template} has foreign connections: ${connections.join("; ")}`,
+      connections,
+    });
+  }
 };
 
 export const runPostgresWorkers = async ({
@@ -178,6 +262,9 @@ export const runPostgresWorkers = async ({
     };
   },
   now = Date.now,
+  sleep = async (milliseconds) => {
+    await Bun.sleep(milliseconds);
+  },
   log = console.log,
 }: RunPostgresWorkersOptions): Promise<number> => {
   const templateUrl = new URL(databaseUrl);
@@ -207,39 +294,7 @@ export const runPostgresWorkers = async ({
     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND application_name = $2 AND pid <> pg_backend_pid()",
     [template, applicationName],
   );
-  const foreignRows = await admin.query(
-    "SELECT pid, application_name, client_addr::text FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid() ORDER BY pid",
-    [template],
-  );
-  const foreign = foreignRows.flatMap((row) => {
-    if (
-      typeof row !== "object" ||
-      row === null ||
-      !("pid" in row) ||
-      !("application_name" in row) ||
-      !("client_addr" in row)
-    ) {
-      return [];
-    }
-    return [
-      {
-        pid: Number(row.pid),
-        application_name: String(row.application_name),
-        client_addr:
-          typeof row.client_addr === "string" ? row.client_addr : null,
-      },
-    ];
-  });
-  if (foreign.length > 0) {
-    const connections = foreign.map(
-      ({ pid, application_name, client_addr }) =>
-        `pid=${pid} application_name=${application_name || "<unset>"} client_addr=${client_addr ?? "local"}`,
-    );
-    throw new PostgresTemplateConnectionError({
-      message: `Template database ${template} has foreign connections: ${connections.join("; ")}`,
-      connections,
-    });
-  }
+  await assertTemplateQuiet({ admin, sleep, template });
 
   const clusterFiles = files.filter((file) => clusterExclusivePaths.has(file));
   const plan = planPostgresWorkers({
@@ -265,17 +320,7 @@ export const runPostgresWorkers = async ({
       `CREATE DATABASE ${quoteIdentifier(databaseName)} TEMPLATE ${quoteIdentifier(template)}`,
     );
   };
-  const dropClone = async (databaseName: string) => {
-    // Only client sessions: an owner role may not terminate autovacuum
-    // workers, and DROP DATABASE already stops those on its own.
-    await admin.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend'",
-      [databaseName],
-    );
-    await admin.query(
-      `DROP DATABASE IF EXISTS ${quoteIdentifier(databaseName)}`,
-    );
-  };
+
   try {
     for (const databaseName of databaseNames) {
       await cloneTemplate(databaseName);
@@ -307,7 +352,7 @@ export const runPostgresWorkers = async ({
             databaseName !== undefined &&
             batch.every((file) => exclusivePaths.has(file))
           ) {
-            await dropClone(databaseName);
+            await dropClone(admin, databaseName);
             await cloneTemplate(databaseName);
           }
           if (signal !== undefined) {
@@ -340,7 +385,7 @@ export const runPostgresWorkers = async ({
       const clusterStarted = now();
       statuses.push(await runBatch([file], 0));
       log(
-        `Postgres cluster migration ${file}: ${((now() - clusterStarted) / 1000).toFixed(1)}s`,
+        `Postgres cluster-exclusive ${file}: ${((now() - clusterStarted) / 1000).toFixed(1)}s`,
       );
     }
     const slowest = [...files]
@@ -358,7 +403,7 @@ export const runPostgresWorkers = async ({
   } finally {
     unregister();
     for (const databaseName of databaseNames.toReversed()) {
-      await dropClone(databaseName);
+      await dropClone(admin, databaseName);
     }
     await admin.close();
   }

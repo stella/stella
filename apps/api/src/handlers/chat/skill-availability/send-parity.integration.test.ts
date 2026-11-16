@@ -203,6 +203,7 @@ const callerContext = () => ({
   orgAIConfig,
   safeDb,
   scopedDb,
+  set: { headers: {}, status: 200 },
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
 });
@@ -283,7 +284,12 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
   };
   const forwardedProps = {
     ...(chat.browserExtension
-      ? { browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION } }
+      ? {
+          browserExtension: {
+            protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+            status: "connected" as const,
+          },
+        }
       : {}),
     ...(chat.editApplyMode === undefined
       ? {}

@@ -193,7 +193,7 @@ test("only exempts explicit owners, online migration modules, tests, and scripts
     "apps/api/src/db/online-migrations.ts",
     "apps/api/src/db/online-index-gate.ts",
     "apps/api/src/db/corpus-schema-lane.ts",
-    "apps/api/src/db/corpus-projection-delete-receipt-repair.ts",
+    "apps/api/src/db/chat-content-v3-backfill.ts",
     "apps/api/src/db/better-auth-oauth-resource-repair.ts",
     "apps/api/src/db/decision-date-ceiling-repair.ts",
     "apps/api/src/db/client-invoice-backfill.ts",
@@ -201,9 +201,12 @@ test("only exempts explicit owners, online migration modules, tests, and scripts
     "apps/api/src/handlers/example.test.ts",
   ]) {
     expect(isTimeoutMutationSource(file)).toBe(false);
-    expect(findApiTimeoutMutations(file, "SET statement_timeout = 0")).toEqual(
-      [],
-    );
+    expect(
+      findApiTimeoutMutations(
+        file,
+        'export const statement = "SET statement_timeout = 0";',
+      ),
+    ).toEqual([]);
   }
   expect(
     isTimeoutMutationSource("apps/api/src/handlers/fake-migration.ts"),

@@ -3,6 +3,7 @@ import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import { panic } from "better-result";
 
+import { TruncatedText } from "../components/truncated-text";
 import { cn } from "../lib/utils";
 import {
   CalendarCell,
@@ -182,13 +183,13 @@ export const ResourceCalendar = ({
                 id={resourceHeaderId}
                 role="rowheader"
               >
-                <span className="block truncate text-sm font-semibold">
+                <TruncatedText className="text-sm font-semibold">
                   {resource.label}
-                </span>
+                </TruncatedText>
                 {resource.meta === undefined ? null : (
-                  <span className="text-muted-foreground mt-1 block truncate text-xs">
+                  <TruncatedText className="text-muted-foreground mt-1 text-xs">
                     {resource.meta}
-                  </span>
+                  </TruncatedText>
                 )}
               </CalendarCell>
               {columns.map((column, columnIndex) => {
@@ -267,9 +268,9 @@ const ResourceCalendarEntryView = ({
   } satisfies CSSProperties;
   const content = (
     <>
-      <span className="block truncate">{entry.label}</span>
+      <TruncatedText>{entry.label}</TruncatedText>
       {entry.meta === undefined ? null : (
-        <span className="block truncate opacity-75">{entry.meta}</span>
+        <TruncatedText className="opacity-75">{entry.meta}</TruncatedText>
       )}
     </>
   );

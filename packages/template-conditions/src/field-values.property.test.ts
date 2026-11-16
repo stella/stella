@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { DATE_FORMAT_STYLES, formatDate } from "./field-values";
 
@@ -53,7 +53,8 @@ const invalidIsoDate = fc
 
 describe("formatDate (properties)", () => {
   test("the 'iso' style returns a valid date unchanged", () => {
-    fc.assert(
+    assertProperty(
+      "the 'iso' style returns a valid date unchanged",
       fc.property(
         validIsoDate,
         fc.constantFrom(...LOCALES),
@@ -61,13 +62,14 @@ describe("formatDate (properties)", () => {
           expect(formatDate(value, { locale, style: "iso" })).toBe(value);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a localized style renders a valid date to a non-empty string", () => {
     const localizedStyle = fc.constantFrom("long", "medium", "short" as const);
-    fc.assert(
+    assertProperty(
+      "a localized style renders a valid date to a non-empty string",
       fc.property(
         validIsoDate,
         fc.constantFrom(...LOCALES),
@@ -78,12 +80,13 @@ describe("formatDate (properties)", () => {
           expect((rendered ?? "").length).toBeGreaterThan(0);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a non-existent calendar date is rejected for every style", () => {
-    fc.assert(
+    assertProperty(
+      "a non-existent calendar date is rejected for every style",
       fc.property(
         invalidIsoDate,
         fc.constantFrom(...LOCALES),
@@ -92,7 +95,7 @@ describe("formatDate (properties)", () => {
           expect(formatDate(value, { locale, style })).toBeNull();
         },
       ),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 });

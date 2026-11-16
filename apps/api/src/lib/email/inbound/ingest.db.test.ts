@@ -41,6 +41,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -146,7 +147,7 @@ if (!databaseUrl || !runPostgresTests) {
     const gated = openGatedTestDatabase(databaseUrl);
     db = gated.db;
     gated.cleanUp(async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       for (const id of [memberId, colleagueId, adminId, snapshotUserId]) {
         await db.delete(user).where(eq(user.id, id));
       }

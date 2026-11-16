@@ -4,6 +4,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { isVerificationScopeRefusal } from "@stll/api-contract/verification-scope";
+import type { VerificationScopeRefusal } from "@stll/api-contract/verification-scope";
+
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import {
@@ -22,6 +25,16 @@ const RUN_ALREADY_ACTIVE_STATUS = 409;
 export type VerificationTarget = {
   entityId: string;
   fileFieldId: string;
+  /** A paragraph range as the API takes it (`82-136`); absent for the
+   *  whole document. */
+  paragraphs?: string;
+};
+
+/** A range the server refused when the run was asked for: told to the
+ *  reviewer beside the range they typed, not as a toast. */
+export type ScopeRefusal = {
+  target: VerificationTarget;
+  code: VerificationScopeRefusal;
 };
 
 type StartVerificationArgs = {
@@ -51,9 +64,13 @@ export const useStartVerification = ({
     React.useState<VerificationTarget | null>(null);
   const [sizeConfirmation, setSizeConfirmation] =
     React.useState<SizeConfirmation | null>(null);
+  const [scopeRefusal, setScopeRefusal] = React.useState<ScopeRefusal | null>(
+    null,
+  );
 
   const start = async (target: VerificationTarget, confirmedUnits?: number) => {
     setSizeConfirmation(null);
+    setScopeRefusal(null);
     setStartingFor(target);
     const sent = await Result.tryPromise(async () => {
       const { data, error } = await submit.run({
@@ -66,6 +83,9 @@ export const useStartVerification = ({
           listId: toSafeId<"legalList">(listId),
           entityId: toSafeId<"entity">(target.entityId),
           fileFieldId: toSafeId<"field">(target.fileFieldId),
+          ...(target.paragraphs === undefined
+            ? {}
+            : { paragraphs: target.paragraphs }),
           ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
         },
       });
@@ -92,6 +112,11 @@ export const useStartVerification = ({
       const detail = runSizeConfirmationDetail(response.error);
       if (detail !== null) {
         setSizeConfirmation({ ...detail, target });
+        return;
+      }
+      const { code } = toAPIError(response.error);
+      if (isVerificationScopeRefusal(code)) {
+        setScopeRefusal({ target, code });
         return;
       }
       if (response.error.status === RUN_ALREADY_ACTIVE_STATUS) {
@@ -141,6 +166,8 @@ export const useStartVerification = ({
     start,
     startingFor,
     sizeConfirmation,
+    scopeRefusal,
+    clearScopeRefusal: () => setScopeRefusal(null),
     dismissSizeConfirmation: () => {
       submit.reset();
       setSizeConfirmation(null);

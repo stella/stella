@@ -37,6 +37,7 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -114,10 +115,17 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   };
 
   const handleSetClient = (contact: { id: string; displayName: string }) => {
+    if (!workspace) {
+      return;
+    }
     updateWorkspace.mutate(
       {
         workspaceId,
-        update: { type: "clientId", value: contact.id },
+        update: {
+          type: "clientId",
+          value: contact.id,
+          expectedClientId: workspace.client?.id ?? null,
+        },
       },
       {
         onSuccess: () => {
@@ -193,13 +201,17 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
                 <BuildingIcon className="text-muted-foreground size-4" />
               </span>
             )}
-            <Link
-              className="min-w-0 truncate text-sm font-medium hover:underline"
-              params={{ contactId: client.id }}
-              to="/contacts/$contactId"
+            <TruncatedText
+              className="text-sm font-medium hover:underline"
+              render={
+                <Link
+                  params={{ contactId: client.id }}
+                  to="/contacts/$contactId"
+                />
+              }
             >
               <BidiText>{client.displayName}</BidiText>
-            </Link>
+            </TruncatedText>
           </div>
         </section>
       )}
@@ -426,6 +438,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
         update: {
           type: "clientId",
           value: selectedContact.id,
+          expectedClientId: null,
         },
       },
       {

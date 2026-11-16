@@ -76,6 +76,7 @@ const filter = (query: string, jurisdictionFilter = new Set<string>()) =>
     entries,
     filter: "all",
     jurisdictionFilter,
+    localizedDescription: (entry) => entry.description,
     localizedName: (entry) => entry.displayName,
     query,
   });
@@ -88,6 +89,20 @@ describe("knowledge tool catalogue filtering", () => {
     ]);
     expect(filter("legal").map(({ slug }) => slug)).toEqual(["source"]);
     expect(filter("law").map(({ slug }) => slug)).toEqual(["source"]);
+  });
+
+  test("finds an entry by the description the reader sees", () => {
+    const matches = filterToolsCatalogueEntries({
+      compareName,
+      entries,
+      filter: "all",
+      jurisdictionFilter: new Set(),
+      localizedDescription: (entry) =>
+        entry.slug === "source" ? "Vyhledávání v rejstříku" : entry.description,
+      localizedName: (entry) => entry.displayName,
+      query: "rejstřík",
+    });
+    expect(matches.map(({ slug }) => slug)).toEqual(["source"]);
   });
 
   test("blank search keeps all entries and jurisdiction filters retain universal entries", () => {
@@ -124,6 +139,7 @@ describe("knowledge tool catalogue filtering", () => {
         ],
         filter: "all",
         jurisdictionFilter: new Set(),
+        localizedDescription: (entry) => entry.description,
         localizedName: (entry) => entry.displayName,
         query: "+",
       }).map(({ displayName }) => displayName),
@@ -142,6 +158,7 @@ describe("knowledge tool catalogue filtering", () => {
         ],
         filter: "all",
         jurisdictionFilter: new Set(),
+        localizedDescription: (entry) => entry.description,
         localizedName: (entry) => entry.displayName,
         query: "cafe strasse",
       }).map(({ displayName }) => displayName),
@@ -173,6 +190,7 @@ describe("knowledge tool catalogue filtering", () => {
         entries: source,
         filter: "all",
         jurisdictionFilter: new Set(),
+        localizedDescription: (entry) => entry.description,
         localizedName: (entry) => entry.displayName,
         query,
       });
@@ -241,6 +259,7 @@ describe("knowledge tool catalogue filtering", () => {
               entries: generatedEntries,
               filter: filterKind,
               jurisdictionFilter,
+              localizedDescription: (entry) => entry.description,
               localizedName,
               query,
             }),

@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 
+import { TruncatedText } from "../components/truncated-text";
 import { cn } from "../lib/utils";
 
 /**
@@ -103,9 +104,9 @@ export const KanbanCollapsedBandCaption = ({
   >
     {/* The band's own name, at the weight the open caption sets it in: a
         folded band still names the columns it stands for. */}
-    <span className="max-h-40 truncate font-semibold [writing-mode:vertical-rl]">
+    <TruncatedText className="max-h-40 font-semibold [writing-mode:vertical-rl]">
       {label}
-    </span>
+    </TruncatedText>
     <span className="tabular-nums">{meta}</span>
   </div>
 );

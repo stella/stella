@@ -1,11 +1,14 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { assemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { assemblePlKioDecision as uncheckedAssemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { RETENTION_TEXT_ABSENCE } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { plKioRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-kio";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
 
 const FIXTURES_DIR = new URL("../../adapters/__fixtures__/", import.meta.url);
 
@@ -21,7 +24,7 @@ const gzFixtureText = async (name: string): Promise<string> =>
 
 const project = async (sourceRaw: string) =>
   plKioRetention.type === "checked"
-    ? await plKioRetention.project(sourceRaw)
+    ? await plKioRetention.project(sourceRaw, { sourceRawObjects: {} })
     : panic("pl-kio is a checked source");
 
 /** The recorded rulings the adapter's tests build from all three pages. */

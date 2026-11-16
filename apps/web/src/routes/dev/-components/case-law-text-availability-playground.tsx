@@ -29,6 +29,7 @@ const metadataDecision = {
   languageAlternates: [],
   decisionDate: "2026-01-15",
   decisionType: "resolution",
+  decisionTypeKind: null,
   headnote: {
     type: TEXT_FIELD_TYPE.PRESENT,
     text: "Synthetic publisher summary retained without the decision text.",

@@ -53,6 +53,10 @@ import type { CorpusTombstoneEntry } from "@/api/lib/legal-search/corpus-tombsto
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { MissingCorpusObjectError } from "@/api/lib/s3";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 /** Nothing erased: the denial list a read consults when the case is not it. */
@@ -350,6 +354,86 @@ describe("persisted corpus JSON validation", () => {
     // character the unknown inline carried.
     expect(parsed?.blocks.map((block) => block.id)).toEqual(["p1"]);
     expect(parsed?.blocks.at(0)?.plainText).toBe("NS");
+  });
+
+  test("a read of late head matter logs the row and captures no exception", () => {
+    const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
+    try {
+      const paragraph = (id: string, role: string) => ({
+        id,
+        anchorId: id,
+        type: "paragraph",
+        role,
+        inlines: [{ type: "text", text: id }],
+      });
+      parsePersistedCorpusAst(
+        {
+          version: 1,
+          blocks: [
+            paragraph("reasons", "argumentation"),
+            paragraph("publisher", "apparatus"),
+          ],
+        },
+        "decision-stored-before-order-rule",
+      );
+      expect(analytics.exceptions()).toEqual([]);
+      expect(
+        logs.records.filter(
+          ({ message }) =>
+            message === "case_law.decision.stored_ast_head_matter_order",
+        ),
+      ).toMatchObject([
+        {
+          attributes: {
+            documentId: "decision-stored-before-order-rule",
+            lateBlockCount: 1,
+          },
+        },
+      ]);
+    } finally {
+      logs.restore();
+      analytics.restore();
+    }
+  });
+
+  test("a read of undeclared vocabulary is still captured", () => {
+    const analytics = installRecordingAnalytics();
+    try {
+      parsePersistedCorpusAst({
+        version: 1,
+        blocks: [{ id: "s1", anchorId: "s-1", type: "sidebar", body: "aside" }],
+      });
+      expect(analytics.exceptions()).toHaveLength(1);
+    } finally {
+      analytics.restore();
+    }
+  });
+
+  test("serves a row stored with head matter after the body, in stored order", () => {
+    const paragraph = (id: string, role: string) => ({
+      id,
+      anchorId: id,
+      type: "paragraph",
+      role,
+      inlines: [{ type: "text", text: id }],
+    });
+    const parsed = parsePersistedCorpusAst(
+      {
+        version: 1,
+        blocks: [
+          paragraph("caption", "apparatus"),
+          paragraph("reasons", "argumentation"),
+          paragraph("publisher", "apparatus"),
+        ],
+      },
+      "decision-stored-before-order-rule",
+    );
+    expect(parsed?.blocks.map((block) => block.id)).toEqual([
+      "caption",
+      "reasons",
+      "publisher",
+    ]);
   });
 });
 
@@ -909,7 +993,7 @@ describe("deleteCorpusDocument", () => {
   });
 });
 
-test("standalone writes validate structure before comparing the stored payload", async () => {
+test("standalone writes repair repeated identities before comparing the stored payload", async () => {
   const invalidAst = {
     version: 1,
     source: {
@@ -944,13 +1028,18 @@ test("standalone writes validate structure before comparing the stored payload",
       },
     ],
   } satisfies DocumentAst;
-  expect(v.safeParse(persistedDocumentAstSchema, invalidAst).success).toBe(
-    false,
-  );
+  const repaired = v.parse(persistedDocumentAstSchema, invalidAst);
+  expect(repaired).not.toEqual(invalidAst);
+  expect(
+    repaired.blocks.map(({ anchorId, plainText }) => [anchorId, plainText]),
+  ).toEqual([
+    ["p1", "Body."],
+    ["p1-2", "Body."],
+  ]);
   const payload = {
     text: "Synthetic decision.",
     sections: null,
-    ast: EMPTY_AST,
+    ast: repaired,
   };
   expect(corpusContentHash({ ...payload, ast: invalidAst })).not.toBe(
     corpusContentHash(payload),
@@ -964,17 +1053,19 @@ test("standalone writes validate structure before comparing the stored payload",
   if (plan.type !== "put") {
     expect.unreachable("Fixture must carry text");
   }
-  // A rejected AST must converge to the already stored text-only payload. The
+  // The repaired AST must converge to the already stored document. The
   // aborted signal makes any unintended transfer fail before reaching S3.
-  const outcome = await writeCorpusDocument(
-    {
-      ...payload,
-      ast: invalidAst,
-      documentId: "synthetic",
-      jurisdiction: "SVK",
-      stored: plan.written,
-    },
-    { signal: AbortSignal.abort() },
-  );
+  const outcome = (
+    await writeCorpusDocument(
+      {
+        ...payload,
+        ast: invalidAst,
+        documentId: "synthetic",
+        jurisdiction: "SVK",
+        stored: plan.written,
+      },
+      { signal: AbortSignal.abort() },
+    )
+  ).unwrap();
   expect(outcome).toEqual({ type: "skipped-unchanged", written: plan.written });
 });

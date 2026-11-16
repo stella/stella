@@ -93,6 +93,8 @@ type FileChatOverlayBoundaryProps = {
   children: ReactNode;
   /** The document the overlay belongs to; a dismissal holds for it. */
   overlayKey: string;
+  /** Holds the overlay's place while its chunk loads. */
+  pending: ReactNode;
   /** Prepare a fresh attempt before the boundary re-renders its children. */
   onRetry: () => void;
 };
@@ -107,6 +109,7 @@ export const FileChatOverlayBoundary = ({
   children,
   overlayKey,
   onRetry,
+  pending,
 }: FileChatOverlayBoundaryProps) => {
   const [dismissedOverlayKeys, setDismissedOverlayKeys] = useState<
     ReadonlySet<string>
@@ -132,7 +135,7 @@ export const FileChatOverlayBoundary = ({
         />
       )}
       resetKeys={[overlayKey]}
-      suspenseFallback={null}
+      suspenseFallback={pending}
     >
       {children}
     </QuerySuspenseBoundary>

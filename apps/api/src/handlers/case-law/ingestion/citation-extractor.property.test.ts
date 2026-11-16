@@ -6,7 +6,6 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   assertProperty,
-  propertyConfig,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -166,14 +165,15 @@ test(
 test(
   "identifier normalization reaches a fixed point",
   () => {
-    fc.assert(
+    assertProperty(
+      "identifier normalization reaches a fixed point",
       fc.property(identifier, (input) => {
         const value = normalizeDecisionIdentifier(input);
         expect(normalizeDecisionIdentifier({ type: input.type, value })).toBe(
           value,
         );
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -182,7 +182,8 @@ test(
 test(
   "embedded dockets preserve verbatim text and section ownership",
   () => {
-    fc.assert(
+    assertProperty(
+      "embedded dockets preserve verbatim text and section ownership",
       fc.property(
         noise,
         docket.map((value) => `sp. zn. ${value}`),
@@ -210,7 +211,7 @@ test(
           expect(decision.value.reading.type).toBe("patterns");
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -219,7 +220,8 @@ test(
 test(
   "reporter occurrences shift with their source text",
   () => {
-    fc.assert(
+    assertProperty(
+      "reporter occurrences shift with their source text",
       fc.property(noise, noise, noise, (before, after, prefix) => {
         const citation = "410 U.S. 113";
         const text = `${before}; ${citation}; ${after}`;
@@ -258,7 +260,7 @@ test(
         }
         expect(adjustedOccurrences).toEqual(original.value.occurrences);
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -267,7 +269,8 @@ test(
 test(
   "long separator runs retain an embedded citation",
   () => {
-    fc.assert(
+    assertProperty(
+      "long separator runs retain an embedded citation",
       fc.property(
         fc.constantFrom(" ", "I ", "/", "9", "§", "\u00a0", "\u2003", " , / "),
         fc.integer({ min: 1000, max: 48_000 }),
@@ -287,7 +290,7 @@ test(
           }
         },
       ),
-      propertyConfig({ numRuns: 20, seed: propertySeed() }),
+      { numRuns: 20, seed: propertySeed() },
     );
   },
   propertyTestTimeout(15_000),

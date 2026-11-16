@@ -53,7 +53,11 @@ export const createSetSharepointCapabilities = (
 
       if (!deploymentEnabled("FEATURE_SHAREPOINT")) {
         return Result.err(
-          new HandlerError({ status: 404, message: "Not found" }),
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "Not found",
+          }),
         );
       }
 

@@ -78,6 +78,8 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
         owner: "ci",
       },
       "Select changed PR e2e shards": { class: "advisory", owner: "ci" },
+      // "Plan every browser suite spec" runs every spec when it fails.
+      "Plan changed browser suite specs": { class: "advisory", owner: "ci" },
     },
   },
   "docker-checks": {
@@ -111,6 +113,8 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       },
       "SQL performance baseline": { class: "budget", owner: "api-performance" },
       "Failure-as-empty baseline": { class: "budget", owner: "code-health" },
+      // Warns only; the release gate runs the same script with --require.
+      "Release queue history guard": { class: "advisory", owner: "release" },
     },
   },
   "generated-sources": {

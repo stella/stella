@@ -72,8 +72,10 @@ reviewers yet; classify it using the Section 5 precedence.
 ## 4. Record Dispositions in the PR Body
 
 Record one entry in the PR body for each handled bot finding, whether it came
-from a review thread or a top-level comment. Name the finding (reviewer and file
-or topic) and keep each entry short and factual:
+from a review thread or a top-level comment. Key the entry by the finding's
+review-thread or comment node ID (or its URL), so two findings from one reviewer
+on one file stay distinct; add the reviewer and file or topic for readers. Keep
+each entry short and factual:
 
 - implemented in `<sha>`, with the relevant behavior and the evidence that
   shows it (a test, a check, or the changed code)

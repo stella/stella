@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, inArray, isNull, like } from "drizzle-orm";
 import { appendFile } from "node:fs/promises";
 
@@ -42,8 +43,8 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { errorTag } from "@/api/lib/errors/utils";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
-  acquireCaseLawSourceIngestionLease,
   type CaseLawSourceIngestionLease,
+  withCaseLawSourceIngestionLease,
 } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { operatorFlags } from "@/api/scripts/operator-flags";
@@ -276,6 +277,31 @@ type VariantIngestOptions = {
   signal: AbortSignal;
 };
 
+/** A rejected write remains retryable rather than completing the listed variant. */
+export const classifyVariantWrite = (
+  processed: Awaited<ReturnType<typeof processDecision>>,
+): EcjVariantIngestOutcome => {
+  switch (processed.status) {
+    case "error":
+      return { type: "retryable", reason: errorTag(processed.error) };
+    case "ok": {
+      const outcome = processed.value;
+      switch (outcome.status) {
+        case PROCESS_DECISION_STATUS.RETRYABLE:
+          return { type: "retryable", reason: outcome.reason };
+        case PROCESS_DECISION_STATUS.COMPLETE:
+          return { type: "written" };
+        default:
+          outcome satisfies never;
+          return panic("Unknown decision process outcome");
+      }
+    }
+    default:
+      processed satisfies never;
+      return panic("Unknown decision write result");
+  }
+};
+
 /** Fetch one variant through the adapter and write it through the pipeline. */
 const ingestVariantWith = ({
   ingestionDb,
@@ -322,9 +348,7 @@ const ingestVariantWith = ({
         },
         resolveSourceContract,
       );
-      return processed.status === PROCESS_DECISION_STATUS.RETRYABLE
-        ? { type: "retryable", reason: processed.reason }
-        : { type: "written" };
+      return classifyVariantWrite(processed);
     } catch (error) {
       return { type: "retryable", reason: errorTag(error) };
     }
@@ -413,31 +437,6 @@ const runBackfillSession = async ({
   return report.status === "held" ? 1 : 0;
 };
 
-type UnderSourceLeaseOptions<T> = {
-  /** Null in a plan run, which holds no lease. */
-  sourceLease: { release: () => Promise<void> } | null;
-  prepare: () => Promise<void>;
-  work: () => Promise<T>;
-};
-
-/**
- * Prepare and run the work under an acquired source lease, releasing it
- * however either ends: a lease left held blocks the source's ingestion
- * until it expires.
- */
-export const underSourceLease = async <T>({
-  sourceLease,
-  prepare,
-  work,
-}: UnderSourceLeaseOptions<T>): Promise<T> => {
-  try {
-    await prepare();
-    return await work();
-  } finally {
-    await sourceLease?.release();
-  }
-};
-
 export const runEuEcjLanguageBackfill = async (
   argv: readonly string[],
 ): Promise<number> => {
@@ -465,35 +464,33 @@ export const runEuEcjLanguageBackfill = async (
       console.error("No case-law source configured for adapter eu-ecj");
       return 1;
     }
-    const sourceLease = flags.apply
-      ? await acquireCaseLawSourceIngestionLease({
-          scopedDb: ingestionDb,
-          sourceId: source.id,
-        })
-      : null;
-    if (flags.apply && sourceLease === null) {
+    const run = async (sourceLease: CaseLawSourceIngestionLease | null) => {
+      if (flags.apply) {
+        await refreshS3();
+        await refreshCorpusS3();
+      }
+      return await runBackfillSession({
+        flags,
+        rootDb,
+        ingestionDb,
+        sourceId: source.id,
+        sourceLease,
+      });
+    };
+    if (!flags.apply) {
+      return await run(null);
+    }
+    const exit = await withCaseLawSourceIngestionLease(
+      { scopedDb: ingestionDb, sourceId: source.id },
+      run,
+    );
+    if (exit === null) {
       console.error(
         "Source eu-ecj is being ingested right now (lease held). Retry later.",
       );
       return 1;
     }
-    return await underSourceLease({
-      sourceLease,
-      prepare: async () => {
-        if (flags.apply) {
-          await refreshS3();
-          await refreshCorpusS3();
-        }
-      },
-      work: async () =>
-        await runBackfillSession({
-          flags,
-          rootDb,
-          ingestionDb,
-          sourceId: source.id,
-          sourceLease,
-        }),
-    });
+    return exit;
   } finally {
     await lane.release();
   }

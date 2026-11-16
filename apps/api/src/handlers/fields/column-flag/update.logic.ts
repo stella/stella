@@ -7,6 +7,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { carriedCellMetadata } from "@/api/lib/fields/cell-override";
 
 const CELL_METADATA_VERSION = 1;
 const VERIFIED_FLAG_ID = REVIEW_FLAG.VERIFIED;
@@ -125,6 +126,7 @@ export const buildColumnFlagMutation = ({
         flagProvenance,
         ...((existing?.locked === true || willAutoLock) && { locked: true }),
         ...(nextLockProvenance && { lockProvenance: nextLockProvenance }),
+        ...carriedCellMetadata(existing),
       };
 
       insertValues.push({
@@ -191,6 +193,7 @@ export const buildColumnFlagMutation = ({
         existing.lockProvenance && {
           lockProvenance: existing.lockProvenance,
         }),
+      ...carriedCellMetadata(existing),
     };
 
     insertValues.push({
@@ -270,6 +273,7 @@ export const buildColumnLockMutation = ({
           reason: "explicit" as const,
         },
       }),
+      ...carriedCellMetadata(existing),
     };
 
     insertValues.push({

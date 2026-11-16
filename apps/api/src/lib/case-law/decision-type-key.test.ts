@@ -11,6 +11,7 @@ import {
   isDocketShapedDecisionType,
 } from "@/api/lib/case-law/decision-type-key";
 import {
+  classifiedDecisionTypeKind,
   decisionTypeFilter,
   decisionTypeKind,
   KINDED_DECISION_TYPES,
@@ -18,6 +19,12 @@ import {
   STATED_DECISION_TYPE_KINDS,
   statedDecisionTypesOf,
 } from "@/api/lib/case-law/decision-type-kind";
+
+test("a response kind is present only for classified publisher wording", () => {
+  expect(classifiedDecisionTypeKind("nález")).toBe("finding");
+  expect(classifiedDecisionTypeKind("atypický akt")).toBeNull();
+  expect(classifiedDecisionTypeKind(null)).toBeNull();
+});
 
 test("decision type comparison converges across casing and Unicode spellings", () => {
   expect(normalizeUnicode("Nález", "NFD")).not.toBe("Nález");

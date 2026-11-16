@@ -75,7 +75,7 @@ describe("bulk rejecting pending docx suggestions", () => {
       status: "accepted",
       appliedMode: "direct",
       resolvedByUserId: ids.userA1,
-      resolvedAt: new Date(),
+      resolvedAt: new Date("2026-04-30T09:00:00.000Z"),
     });
     const otherEntity = await insertSuggestion({ entityId: siblingEntityId });
 

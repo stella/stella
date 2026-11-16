@@ -12,6 +12,7 @@ import {
   enqueueAccountExport,
 } from "@/api/lib/account-export/enqueue";
 import type { AccountExportJob } from "@/api/lib/account-export/enqueue";
+import { buildOrganizationAuditArchive } from "@/api/lib/account-export/organization-audit-archive";
 import type { AccountExportDataDb } from "@/api/lib/account-export/pages";
 import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import {
@@ -25,9 +26,11 @@ import {
   listRecoverableAccountExports,
 } from "@/api/lib/account-export/store";
 import type {
+  AccountExportBuild,
   AccountExportClaim,
   AccountExportDb,
   AccountExportRow,
+  AccountExportSubject,
 } from "@/api/lib/account-export/store";
 import { detached } from "@/api/lib/analytics/capture";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
@@ -76,8 +79,8 @@ export type AccountExportProcessDeps = {
     options: Omit<
       Parameters<typeof buildAccountExportArchive>[0],
       "projections" | "deps"
-    >,
-  ) => Promise<void>;
+    > & { subject: AccountExportSubject },
+  ) => Promise<AccountExportBuild>;
   complete: typeof completeAccountExport;
   fail: typeof failAccountExport;
   canReclaim: typeof canReclaimAccountExportAttempt;
@@ -89,8 +92,25 @@ const createProcessDeps = (
   projections: AccountExportProjections,
 ): AccountExportProcessDeps => ({
   claim: claimAccountExport,
-  build: async (options) =>
-    await buildAccountExportArchive({ ...options, projections }),
+  build: async ({ subject, ...options }) => {
+    switch (subject.kind) {
+      case "account":
+        await buildAccountExportArchive({ ...options, projections });
+        return { kind: "account" };
+      case "organization_audit":
+        return {
+          kind: "organization_audit",
+          coverage: await buildOrganizationAuditArchive({
+            ...options,
+            organizationId: subject.organizationId,
+          }),
+        };
+      default: {
+        subject satisfies never;
+        return panic("Unknown account export subject");
+      }
+    }
+  },
   complete: completeAccountExport,
   fail: failAccountExport,
   canReclaim: canReclaimAccountExportAttempt,
@@ -157,9 +177,10 @@ export const processAccountExport = async ({
           ? timeout
           : AbortSignal.any([timeout, parentSignal]);
       signal.throwIfAborted();
-      await deps.build({
+      const built = await deps.build({
         db,
         userId: claim.userId,
+        subject: claim.subject,
         objectKey: claim.objectKey,
         signal,
       });
@@ -168,6 +189,7 @@ export const processAccountExport = async ({
       const completed = await deps.complete({
         claim,
         objectKey: claim.objectKey,
+        built,
         db,
       });
       if (!completed) {
@@ -298,67 +320,64 @@ export const createAccountExportWorker =
       ]);
       // Re-read on every check: a tick ends at its deadline or on shutdown.
       const stopped = () => signal.aborted;
-      detached(
-        (async () => {
-          try {
-            const sweep = await Result.tryPromise({
-              try: async () => {
-                // Resume where the previous tick stopped; the first read after
-                // a finished sweep starts from the beginning again.
-                const resumeFrom = cursor;
-                const pages = iterateCursorPages(
-                  async (next) =>
-                    await listRecoverableAccountExports(db, next ?? resumeFrom),
-                );
-                if (stopped()) {
+      detached(async () => {
+        try {
+          const sweep = await Result.tryPromise({
+            try: async () => {
+              // Resume where the previous tick stopped; the first read after
+              // a finished sweep starts from the beginning again.
+              const resumeFrom = cursor;
+              const pages = iterateCursorPages(
+                async (next) =>
+                  await listRecoverableAccountExports(db, next ?? resumeFrom),
+              );
+              if (stopped()) {
+                return;
+              }
+              let pagesRead = 0;
+              for await (const rows of pages) {
+                // A page past this tick's budget is left for the next tick,
+                // which resumes after the last recovered row.
+                if (pagesRead >= RECOVERY_PAGES_PER_TICK) {
                   return;
                 }
-                let pagesRead = 0;
-                for await (const rows of pages) {
-                  // A page past this tick's budget is left for the next tick,
-                  // which resumes after the last recovered row.
-                  if (pagesRead >= RECOVERY_PAGES_PER_TICK) {
+                for (const row of rows) {
+                  if (stopped()) {
                     return;
                   }
-                  for (const row of rows) {
-                    if (stopped()) {
-                      return;
-                    }
-                    const recovered = await Result.tryPromise({
-                      try: async () =>
-                        // db-await-in-loop: rows recover one at a time so each row's state transition, storage cleanup, and failure stay isolated and the tick deadline is honoured between rows; a tick reads at most RECOVERY_PAGES_PER_TICK pages
-                        await recoverAccountExport({ row, db, signal }),
-                      catch: (cause) => cause,
+                  const recovered = await Result.tryPromise({
+                    try: async () =>
+                      // db-await-in-loop: rows recover one at a time so each row's state transition, storage cleanup, and failure stay isolated and the tick deadline is honoured between rows; a tick reads at most RECOVERY_PAGES_PER_TICK pages
+                      await recoverAccountExport({ row, db, signal }),
+                    catch: (cause) => cause,
+                  });
+                  if (Result.isError(recovered)) {
+                    observeFailure(recovered.error, {
+                      sink: RECOVERY_FAILED_SINK,
+                      ctx: { jobId: row.id },
                     });
-                    if (Result.isError(recovered)) {
-                      observeFailure(recovered.error, {
-                        sink: RECOVERY_FAILED_SINK,
-                        ctx: { jobId: row.id },
-                      });
-                    }
-                    // Retain progress within a page when this tick's deadline
-                    // ends; one slow row cannot pin recovery to the first page.
-                    // After a page's last row this equals its next cursor.
-                    cursor = encodePaginationCursor([row.id]);
                   }
-                  pagesRead += 1;
+                  // Retain progress within a page when this tick's deadline
+                  // ends; one slow row cannot pin recovery to the first page.
+                  // After a page's last row this equals its next cursor.
+                  cursor = encodePaginationCursor([row.id]);
                 }
-                cursor = null;
-              },
-              catch: (cause) => cause,
+                pagesRead += 1;
+              }
+              cursor = null;
+            },
+            catch: (cause) => cause,
+          });
+          if (Result.isError(sweep)) {
+            observeFailure(sweep.error, {
+              sink: RECOVERY_FAILED_SINK,
+              ctx: { queue: ACCOUNT_EXPORT_QUEUE_NAME },
             });
-            if (Result.isError(sweep)) {
-              observeFailure(sweep.error, {
-                sink: RECOVERY_FAILED_SINK,
-                ctx: { queue: ACCOUNT_EXPORT_QUEUE_NAME },
-              });
-            }
-          } finally {
-            reconciling = false;
           }
-        })(),
-        "account-export.reconcile",
-      );
+        } finally {
+          reconciling = false;
+        }
+      }, "account-export.reconcile");
     };
     reconcile();
     const interval = setInterval(reconcile, RECONCILE_INTERVAL_MS);

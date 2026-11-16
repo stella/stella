@@ -26,6 +26,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import {
   BookmarkIcon,
   BookmarkPlusIcon,
@@ -33,9 +34,11 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import type { OverlayLayer } from "@stll/ui/overlay-layer";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import {
@@ -286,9 +289,9 @@ export const SavedSearches = ({
                 variant="ghost"
               >
                 <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
-                <BidiText as="span" className="truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {savedSearch.name}
-                </BidiText>
+                </TruncatedText>
               </Button>
               <Button
                 aria-label={t("common.rename")}
@@ -368,16 +371,17 @@ export const SavedSearches = ({
                 : t("search.saveSearchTitle")}
             </DialogTitle>
           </DialogHeader>
-          <form
+          <Form
+            className="gap-0"
             onSubmit={(event) => {
               event.preventDefault();
               saveName();
             }}
           >
             <div className="px-6 pb-6">
-              <label className="sr-only" htmlFor="saved-search-name">
+              <Label className="sr-only" htmlFor="saved-search-name">
                 {t("common.name")}
-              </label>
+              </Label>
               <Input
                 autoFocus
                 dir={contentDir(dialogName)}
@@ -414,7 +418,7 @@ export const SavedSearches = ({
                 {t("common.save")}
               </Button>
             </DialogFooter>
-          </form>
+          </Form>
         </DialogPopup>
       </Dialog>
 

@@ -195,7 +195,12 @@ export const splitPropertiesForSystemOne = (
   const systemOne: AIBatchProperty[] = [];
   const generative: AIBatchProperty[] = [];
   for (const property of properties) {
-    if (isSystemOneAnswerable(property.content)) {
+    // System One cites one block, and a graded clause needs every block that
+    // qualifies it.
+    if (
+      property.answerShape === "value" &&
+      isSystemOneAnswerable(property.content)
+    ) {
       systemOne.push(property);
       continue;
     }
@@ -259,7 +264,7 @@ export const outputFromSystemOneOutcomes = ({
   SystemOneOutcomeResult,
   WorkflowIntegrationError
 > => {
-  const output: WorkflowDataOutput = {};
+  const outputEntries: [string, WorkflowDataOutput[string]][] = [];
   const fallbackPropertyIds: SafeId<"property">[] = [];
   const refusedPropertyIds: SafeId<"property">[] = [];
   for (const property of properties) {
@@ -296,21 +301,28 @@ export const outputFromSystemOneOutcomes = ({
       case "not_stated":
         break;
       case "answered":
-        output[property.id] = {
-          answer: outcome.answer,
-          justification: justificationFor(
-            outcome.rationale,
-            outcome.sourceId === null
-              ? undefined
-              : locators.get(outcome.sourceId),
-          ),
-        };
+        outputEntries.push([
+          property.id,
+          {
+            answer: outcome.answer,
+            justification: justificationFor(
+              outcome.rationale,
+              outcome.sourceId === null
+                ? undefined
+                : locators.get(outcome.sourceId),
+            ),
+          },
+        ]);
         continue;
       default:
         outcome satisfies never;
         panic("Unhandled System One outcome state");
     }
-    output[property.id] = { answer: null, justification: [] };
+    outputEntries.push([property.id, { answer: null, justification: [] }]);
   }
-  return Result.ok({ output, fallbackPropertyIds, refusedPropertyIds });
+  return Result.ok({
+    output: Object.fromEntries(outputEntries),
+    fallbackPropertyIds,
+    refusedPropertyIds,
+  });
 };

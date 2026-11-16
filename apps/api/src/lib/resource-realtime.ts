@@ -1,4 +1,5 @@
 import {
+  RESOURCE_TYPE,
   type ResourceChange,
   resourceDeletedRealtimeEvent,
   type ResourceRef,
@@ -38,21 +39,47 @@ export const broadcastWorkspaceResourceChanges = (
   broadcast(workspaceId, resourcesChangedRealtimeEvent(changes));
 };
 
+type ResourceSetBroadcastOptions = {
+  mutationDigest?: string;
+  broadcastEvent?: typeof broadcast;
+};
+
 export const broadcastWorkspaceResourceSetUpdated = (
   workspaceId: SafeId<"workspace">,
   resourceType: ResourceType,
-  broadcastEvent: typeof broadcast = broadcast,
+  {
+    mutationDigest,
+    broadcastEvent = broadcast,
+  }: ResourceSetBroadcastOptions = {},
 ): void => {
-  broadcastEvent(workspaceId, resourceSetUpdatedRealtimeEvent(resourceType));
+  broadcastEvent(
+    workspaceId,
+    resourceSetUpdatedRealtimeEvent(resourceType, mutationDigest),
+  );
+};
+
+/**
+ * Tell every open tab of the organization that its address book changed, so
+ * contact lists and pages refresh without a reload. Call after the write
+ * commits; a static census holds every contact writer to it.
+ */
+export const announceContactSetChanged = (
+  organizationId: SafeId<"organization">,
+): void => {
+  broadcastOrganizationResourceSetUpdated(
+    organizationId,
+    RESOURCE_TYPE.CONTACT,
+  );
 };
 
 /** Organization fan-out carries a public resource type, never a resource ID. */
 export const broadcastOrganizationResourceSetUpdated = (
   organizationId: SafeId<"organization">,
   resourceType: ResourceType,
+  { mutationDigest }: Pick<ResourceSetBroadcastOptions, "mutationDigest"> = {},
 ): void => {
   broadcastToOrganization(
     organizationId,
-    resourceSetUpdatedRealtimeEvent(resourceType),
+    resourceSetUpdatedRealtimeEvent(resourceType, mutationDigest),
   );
 };

@@ -112,6 +112,7 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
   }
 
   const scope = yield* resolveChatScope({
+    admitted: "active-or-archived",
     getWorkspaceAccess,
     workspaceId,
   });

@@ -42,6 +42,7 @@ type GroupName<J extends CaseLawJurisdiction> =
  */
 export const CASE_LAW_INDEX_GROUP_OF = {
   AUT: "aut",
+  BRA: "bra",
   CZE: "cs_sk",
   EU: "eu",
   GBR: "gbr",
@@ -105,6 +106,7 @@ export const CORPUS_INDEX_ENROLLMENT_CONTRACTS = [
  */
 export const CASE_LAW_INDEX_GROUP_CONTRACT_OF = {
   aut: "base",
+  bra: "base",
   cs_sk: "base",
   cze: "provision_keys_v1",
   eu: "base",

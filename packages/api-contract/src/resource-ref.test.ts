@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   isResourceType,
@@ -65,7 +65,8 @@ describe("canonical resource identity", () => {
   });
 
   test("URL-normalized names round-trip arbitrary opaque IDs", () => {
-    fc.assert(
+    assertProperty(
+      "URL-normalized names round-trip arbitrary opaque IDs",
       fc.property(
         fc.string({ minLength: 1, maxLength: 64, unit: "binary" }),
         (id) => {
@@ -82,7 +83,7 @@ describe("canonical resource identity", () => {
           expect(parseResourceName(normalizedName)).toEqual(resource);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 

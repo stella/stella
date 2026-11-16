@@ -111,7 +111,10 @@ const budgetViolations = (candidate: typeof job) => {
                 "github.event.pull_request.head.repo.fork": false,
                 "github.token": "test-token",
                 "matrix.shard": shard,
+                "steps.checkout.outcome": "success",
                 "steps.e2e-stack.outcome": "success",
+                // Merge groups plan every production leg.
+                "needs.ci-plan.outputs.e2e_production_mode": "full",
               },
               // Include failure-only uploads as well as tests for a conservative cap.
               status: {
@@ -344,6 +347,8 @@ test("the workflow publishes computed deadlines and an over-budget shard fails w
   }
   const result = Bun.spawnSync([
     process.execPath,
+    "--preload",
+    path.join(import.meta.dir, "offline-network-preload.ts"),
     path.join(import.meta.dir, "e2e-shard-deadline.ts"),
     "--check",
     "2",

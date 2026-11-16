@@ -9,21 +9,79 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { withoutCiEventContext } from "../packages/scripts/src/without-ci-event-context";
 import {
   readDecisions,
   writeDecision,
 } from "./ci-job-classification/decisions";
 import {
+  generateClassification,
+  readClassificationInputs,
+  readClassificationInputsAtRevision,
+} from "./ci-job-classification/generate";
+import {
   CLASSIFICATION_DECISIONS_PATH,
   CLASSIFICATION_INPUT_GLOBS,
+  CLASSIFICATION_INPUT_PATHS,
+  decisionDirectoryForKey,
   decisionPathForKey,
+  isClassificationInput,
 } from "./ci-job-classification/inputs";
+import { writeClassificationFixtureInputs } from "./ci-job-classification/test-fixtures";
 import { AdmissionError, parseDocument } from "./ci-job-classification/yaml";
 import { GENERATORS } from "./generated-files";
 
+const repositoryRoot = path.resolve(import.meta.dir, "..");
+
+const classificationReads = () => {
+  const reads = new Set<string>();
+  const inputs = readClassificationInputs(repositoryRoot, {
+    observeRead: (file) => {
+      reads.add(file);
+    },
+  });
+  generateClassification(inputs);
+  return reads;
+};
+
+const covers = (input: string, file: string) =>
+  file === input || file.startsWith(`${input}/`);
+
+test("every repository file read by classification is an input", () => {
+  const uncovered = [...classificationReads()].filter(
+    (file) => !isClassificationInput(file),
+  );
+  expect(uncovered).toEqual([]);
+});
+
+test("every classification input is read by the real program", async () => {
+  const runtimeReads = classificationReads();
+  const build = await Bun.build({
+    entrypoints: [path.join(import.meta.dir, "check-ci-job-classification.ts")],
+    target: "bun",
+    metafile: true,
+  });
+  expect(
+    build.success,
+    build.logs.map(({ message }) => message).join("\n"),
+  ).toBe(true);
+  const executableReads = new Set(
+    Object.values(build.metafile?.outputs ?? {}).flatMap((output) =>
+      Object.keys(output.inputs),
+    ),
+  );
+  const unread = CLASSIFICATION_INPUT_PATHS.filter(
+    (input) =>
+      ![...runtimeReads, ...executableReads].some((file) =>
+        covers(input, file),
+      ),
+  );
+  expect(unread).toEqual([]);
+});
+
 test("the classification generator reads and writes every input it owns", () => {
   const generator = GENERATORS.find(
-    ({ id }) => id === "ci-job-classification-digests",
+    ({ id }) => id === "ci-job-classification-decisions",
   );
   expect(generator?.inputs).toEqual(CLASSIFICATION_INPUT_GLOBS);
   expect(generator?.outputs).toEqual([
@@ -66,6 +124,48 @@ test("the classification input paths load alone, without packages or siblings", 
   }
 });
 
+test("a revision from before the global rule manifest still classifies, and records it", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "classification-revision-"));
+  try {
+    writeClassificationFixtureInputs(root);
+    // The base a branch forked from before the manifest existed.
+    rmSync(path.join(root, ".github/global-rule-inputs.json"));
+    writeFileSync(
+      path.join(root, ".github/workflows/ci.yml"),
+      "jobs: {check: {steps: []}}",
+    );
+    const git = (...args: string[]) =>
+      Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=Classification Test",
+          "-c",
+          "user.email=classification-test@example.invalid",
+          "-c",
+          "commit.gpgsign=false",
+          "-C",
+          root,
+          ...args,
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+    expect(git("init", "--quiet").exitCode).toBe(0);
+    expect(git("add", ".").exitCode).toBe(0);
+    expect(git("commit", "--quiet", "-m", "base").exitCode).toBe(0);
+    const reads = new Set<string>();
+    const inputs = readClassificationInputsAtRevision(root, "HEAD", {
+      observeRead: (file) => {
+        reads.add(file);
+      },
+    });
+    expect(generateClassification(inputs).isOk()).toBe(true);
+    expect(reads.has(".github/global-rule-inputs.json")).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 const SCRIPT = path.join(import.meta.dir, "check-ci-job-classification.ts");
 const decoder = new TextDecoder();
 const roots: string[] = [];
@@ -102,6 +202,7 @@ const reviewed = (workflow: string, job: string, kind = "ordinary") => ({
 const repository = (base: Fixture, head: Fixture, commit = false) => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-refresh-"));
   roots.push(root);
+  writeClassificationFixtureInputs(root);
   mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
   const write = ({ workflow, decisions }: Fixture) => {
     writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
@@ -148,10 +249,6 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
       message,
     );
   };
-  writeFileSync(
-    path.join(root, ".github/ci-job-classification-sources.json"),
-    "{}",
-  );
   write(base);
   git("init", "--quiet");
   commitAll("base");
@@ -163,9 +260,14 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
   return { root, commitAll };
 };
 
-const run = (root: string, ...args: string[]) => {
+const runIn = (
+  root: string,
+  eventContext: Record<string, string>,
+  ...args: string[]
+) => {
   const result = Bun.spawnSync([process.execPath, SCRIPT, ...args], {
     cwd: root,
+    env: { ...withoutCiEventContext(), ...eventContext },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -175,6 +277,7 @@ const run = (root: string, ...args: string[]) => {
     stderr: decoder.decode(result.stderr),
   };
 };
+const run = (root: string, ...args: string[]) => runIn(root, {}, ...args);
 
 const decisionsIn = (root: string) =>
   readDecisions({ type: "working-tree", root });
@@ -190,32 +293,30 @@ const storedDecisions = (decisions: Record<string, Decision>) =>
     ]),
   );
 
+// Not privileged: no write permission, secret, environment or runner label.
 const BEFORE =
   "jobs: {check: {steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}}";
 const AFTER =
   "jobs: {check: {steps: [{uses: acme/check@1111111111111111111111111111111111111111}]}}";
+// The same job with an OIDC token, which makes it privileged.
+const PRIVILEGED_BEFORE =
+  "jobs: {check: {permissions: {id-token: write}, steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}}";
+const PRIVILEGED_AFTER =
+  "jobs: {check: {permissions: {id-token: write}, steps: [{uses: acme/check@1111111111111111111111111111111111111111}]}}";
+const SENSITIVE = `::error title=Sensitive classification change::${keyOf("check")}\n`;
 
-test("an ordinary step change needs no refreshed approval", () => {
-  const ordinaryBefore = `jobs: {check: {steps: [{env: {TOKEN: '\${{ github.token }}'}, run: gh api /repos}, {run: bun test one}]}}`;
-  const ordinaryAfter = `jobs: {check: {steps: [{env: {TOKEN: '\${{ github.token }}'}, run: gh api /repos}, {run: bun test two}]}}`;
-  const decisions = reviewed(ordinaryBefore, "check");
+test("a job that is not privileged needs no decision, however it changes", () => {
   const { root } = repository(
-    { workflow: ordinaryBefore, decisions },
-    { workflow: ordinaryAfter, decisions },
+    { workflow: BEFORE, decisions: {} },
+    { workflow: AFTER, decisions: {} },
   );
-  expect(run(root, "--check").exitCode).toBe(0);
-
-  const write = run(root, "--write");
-  expect(write.exitCode).toBe(0);
-  expect(write.stdout).toBe("");
-  expect(decisionsIn(root)).toEqual(storedDecisions(decisions));
   expect(run(root, "--check")).toEqual({
     exitCode: 0,
     stdout: "Classified 1 workflows\n",
     stderr: "",
   });
-  // A second refresh is a no-op.
   expect(run(root, "--write")).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+  expect(decisionsIn(root)).toEqual({});
 });
 
 test.each([
@@ -276,6 +377,11 @@ test.each([
     "untrusted checkouts",
     `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test one}]}}`,
     `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test two}]}}`,
+  ],
+  [
+    "untrusted checkouts through the shared retrying checkout",
+    `jobs: {check: {steps: [{uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test one}]}}`,
+    `jobs: {check: {steps: [{uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test two}]}}`,
   ],
 ] as const)(
   "privilege source: %s requires approval for an ordinary run change",
@@ -358,119 +464,131 @@ test.each([
   expect(digestOf(after, "check")).not.toBe(digestOf(before, "check"));
 });
 
+const SECRET_BEFORE = "jobs: {check: {env: {TOKEN: secrets.TOKEN}, steps: []}}";
 for (const scenario of [
   {
-    name: "a job that becomes privileged",
+    // The transition is the protection: no record at the base or the head
+    // lets the job through.
+    name: "a job that becomes privileged without ever having a decision",
     before: BEFORE,
     after: "jobs: {check: {permissions: {contents: write}, steps: []}}",
-    kind: "ordinary",
-  },
-  {
-    name: "a job that stops being privileged",
-    before: "jobs: {check: {permissions: {contents: write}, steps: []}}",
-    after: AFTER,
-    kind: "ordinary",
+    decisions: {},
   },
   {
     name: "a privileged job",
     // A secret reference anywhere in the projected shape is privileged.
-    before: "jobs: {check: {env: {TOKEN: secrets.TOKEN}, steps: []}}",
+    before: SECRET_BEFORE,
     after: "jobs: {check: {env: {TOKEN: secrets.TOKEN, MODE: two}, steps: []}}",
-    kind: "ordinary",
+    decisions: reviewed(SECRET_BEFORE, "check"),
   },
   {
     name: "a priority job",
     before: BEFORE,
     after: AFTER,
-    kind: "priority",
+    decisions: reviewed(BEFORE, "check", "priority"),
   },
 ] as const) {
   test(`a sensitive digest change still fails: ${scenario.name}`, () => {
-    const decisions = reviewed(scenario.before, "check", scenario.kind);
     const { root } = repository(
-      { workflow: scenario.before, decisions },
-      { workflow: scenario.after, decisions },
+      { workflow: scenario.before, decisions: scenario.decisions },
+      { workflow: scenario.after, decisions: scenario.decisions },
     );
+    // Nothing a reviewer decides is ever written for them.
     expect(run(root, "--write")).toEqual({
       exitCode: 0,
       stdout: "",
       stderr: "",
     });
-    expect(decisionsIn(root)).toEqual(storedDecisions(decisions));
+    expect(decisionsIn(root)).toEqual(storedDecisions(scenario.decisions));
     const check = run(root, "--check");
     expect(check.exitCode).toBe(1);
-    expect(check.stdout).toContain(
-      `::error title=Sensitive classification change::${keyOf("check")}`,
-    );
+    expect(check.stdout).toBe(SENSITIVE);
+    expect(check.stderr).toContain("Missing or changed job review");
+    expect(check.stderr).toContain(decisionPathForKey(keyOf("check")));
   });
 }
 
-test("a new job is never classified by the refresh", () => {
-  const decisions = reviewed(BEFORE, "check");
-  const head =
-    "jobs: {check: {steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}, added: {steps: []}}";
+test("a job that stops being privileged leaves a stale decision for --write to remove", () => {
+  const decisions = reviewed(PRIVILEGED_BEFORE, "check");
   const { root } = repository(
-    { workflow: BEFORE, decisions },
-    { workflow: head, decisions },
+    { workflow: PRIVILEGED_BEFORE, decisions },
+    { workflow: AFTER, decisions },
   );
-  expect(run(root, "--write").exitCode).toBe(0);
-  expect(decisionsIn(root)).toEqual(storedDecisions(decisions));
+  const stale = run(root, "--check");
+  expect(stale.exitCode).toBe(1);
+  expect(stale.stderr).toContain(`Stale decisions: ${keyOf("check")}.`);
+  expect(stale.stderr).toContain(decisionDirectoryForKey(keyOf("check")));
+  expect(stale.stderr).not.toContain("Missing or changed job review");
+
+  expect(run(root, "--write")).toEqual({
+    exitCode: 0,
+    stdout: `Removed 1 stale classification decision(s): ${keyOf("check")}\n`,
+    stderr: "",
+  });
+  expect(decisionsIn(root)).toEqual({});
+  // Losing the privilege passes, and is still reported as sensitive.
+  expect(run(root, "--check")).toEqual({
+    exitCode: 0,
+    stdout: `${SENSITIVE}Classified 1 workflows\n`,
+    stderr: "",
+  });
+  // A second removal is a no-op.
+  expect(run(root, "--write")).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+});
+
+test("a decision for a removed job is stale", () => {
+  const decisions = reviewed(PRIVILEGED_BEFORE, "check");
+  const { root } = repository(
+    { workflow: PRIVILEGED_BEFORE, decisions },
+    { workflow: "jobs: {other: {steps: []}}", decisions },
+  );
+  const stale = run(root, "--check");
+  expect(stale.exitCode).toBe(1);
+  expect(stale.stderr).toContain(`Stale decisions: ${keyOf("check")}.`);
+  expect(run(root, "--write").stdout).toContain(keyOf("check"));
+  expect(run(root, "--check").exitCode).toBe(0);
+});
+
+test("a new privileged job waits for a reviewer", () => {
+  const head =
+    "jobs: {check: {steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}, added: {permissions: {id-token: write}, steps: []}}";
+  const { root } = repository(
+    { workflow: BEFORE, decisions: {} },
+    { workflow: head, decisions: {} },
+  );
+  expect(run(root, "--write")).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+  expect(decisionsIn(root)).toEqual({});
   const check = run(root, "--check");
   expect(check.exitCode).toBe(1);
   expect(check.stderr).toContain(decisionPathForKey(keyOf("added")));
   expect(check.stderr).toContain("<choose ordinary, support, or priority>");
+  expect(check.stderr).not.toContain(decisionPathForKey(keyOf("check")));
 });
 
-test("a job whose new decision lacks a base decision is never refreshed", () => {
-  const base = "jobs: {other: {steps: []}}";
+test("approvals without a decision fail instead of being skipped", () => {
+  const decisions = reviewed(PRIVILEGED_BEFORE, "check");
   const { root } = repository(
-    { workflow: base, decisions: reviewed(base, "other") },
-    {
-      workflow: AFTER,
-      decisions: {
-        [keyOf("check")]: {
-          kind: "ordinary",
-          qualifier: "Reviewed checks",
-          reviewedDigest: digestOf(BEFORE, "check"),
-        },
-      },
-    },
+    { workflow: PRIVILEGED_BEFORE, decisions },
+    { workflow: PRIVILEGED_BEFORE, decisions },
   );
-  expect(run(root, "--write").stdout).toBe("");
-  expect(run(root, "--check").exitCode).toBe(1);
+  rmSync(path.join(root, decisionPathForKey(keyOf("check"))));
+  const check = run(root, "--check");
+  expect(check.exitCode).toBe(1);
+  expect(check.stderr).toContain(
+    `Approvals without a decision: ${decisionDirectoryForKey(keyOf("check"))}`,
+  );
 });
-
-for (const change of [
-  { name: "kind", edit: { kind: "support" } },
-  { name: "qualifier", edit: { qualifier: "Re-described checks" } },
-] as const) {
-  test(`a ${change.name} change with a stale digest still needs review`, () => {
-    const decisions = reviewed(BEFORE, "check");
-    const original = decisions[keyOf("check")];
-    if (original === undefined) {
-      throw new AdmissionError({ message: "fixture decision missing" });
-    }
-    const edited = { [keyOf("check")]: { ...original, ...change.edit } };
-    const { root } = repository(
-      { workflow: BEFORE, decisions },
-      { workflow: AFTER, decisions: edited },
-    );
-    expect(run(root, "--write").exitCode).toBe(0);
-    expect(decisionsIn(root)).toEqual(storedDecisions(edited));
-    expect(run(root, "--check").exitCode).toBe(1);
-  });
-}
 
 test("pre-push skips pushes that touch no classification input", () => {
-  const decisions = reviewed(BEFORE, "check");
   const { root, commitAll } = repository(
-    { workflow: BEFORE, decisions },
-    { workflow: BEFORE, decisions },
+    { workflow: BEFORE, decisions: {} },
+    { workflow: BEFORE, decisions: {} },
   );
   writeFileSync(path.join(root, "README.md"), "docs\n");
   commitAll("docs");
-  // Even a stale working tree is not checked when the push cannot affect it.
-  writeFileSync(path.join(root, ".github/workflows/ci.yml"), AFTER);
+  // Even a working tree that needs review is not checked when the push
+  // cannot affect it.
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), PRIVILEGED_AFTER);
   expect(run(root, "--pre-push")).toEqual({
     exitCode: 0,
     stdout: "",
@@ -478,34 +596,32 @@ test("pre-push skips pushes that touch no classification input", () => {
   });
 });
 
-test("pre-push refreshes a mechanical digest and asks for a commit, then passes", () => {
-  const decisions = reviewed(BEFORE, "check");
+test("pre-push removes a stale decision and asks for a commit, then passes", () => {
+  const decisions = reviewed(PRIVILEGED_BEFORE, "check");
   const { root, commitAll } = repository(
-    { workflow: BEFORE, decisions },
+    { workflow: PRIVILEGED_BEFORE, decisions },
     { workflow: AFTER, decisions },
     true,
   );
-  const first = run(root, "--pre-push");
-  expect(first.exitCode).toBe(1);
-  expect(first.stdout).toContain("Refreshed 1 mechanical");
-  expect(first.stderr).toBe(
-    `Commit the refreshed decision files (${decisionPathForKey(keyOf("check"))}) and push again.\n`,
-  );
-  commitAll("refresh");
+  expect(run(root, "--pre-push")).toEqual({
+    exitCode: 1,
+    stdout: `Removed 1 stale classification decision(s): ${keyOf("check")}\n`,
+    stderr: `Commit the changes under ${CLASSIFICATION_DECISIONS_PATH} and push again.\n`,
+  });
+  commitAll("remove the stale decision");
   expect(run(root, "--pre-push")).toEqual({
     exitCode: 0,
-    stdout: "Classified 1 workflows\n",
+    stdout: `${SENSITIVE}Classified 1 workflows\n`,
     stderr: "",
   });
 });
 
 test("pre-push fails on a change that needs review", () => {
-  const decisions = reviewed(BEFORE, "check");
   const { root } = repository(
-    { workflow: BEFORE, decisions },
+    { workflow: BEFORE, decisions: {} },
     {
       workflow: "jobs: {check: {permissions: {contents: write}, steps: []}}",
-      decisions,
+      decisions: {},
     },
     true,
   );
@@ -514,13 +630,18 @@ test("pre-push fails on a change that needs review", () => {
   expect(result.stderr).toContain("Missing or changed job review");
 });
 
-test("independent privileged approvals merge without conflict", () => {
+test("independent approvals of privileged jobs merge without conflict", () => {
+  // Privileged digests bind the run commands, so each branch owes the job
+  // it edits a new approval; one add-only file per digest keeps the two
+  // approvals from touching the same file.
   const baseWorkflow = `jobs:
   x:
+    permissions: {id-token: write}
     steps:
       - run: echo x-old
 
   y:
+    permissions: {id-token: write}
     steps:
       - run: echo y-old
 `;
@@ -556,6 +677,7 @@ test("independent privileged approvals merge without conflict", () => {
 
   git("switch", "-c", "approve-x");
   const workflowX = baseWorkflow.replace("echo x-old", "echo x-new");
+  expect(digestOf(workflowX, "x")).not.toBe(digestOf(baseWorkflow, "x"));
   writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflowX);
   writeDecision(root, keyOf("x"), {
     kind: "ordinary",
@@ -577,18 +699,123 @@ test("independent privileged approvals merge without conflict", () => {
 
   expect(run(root, "--check")).toEqual({
     exitCode: 0,
+    stdout: `::error title=Sensitive classification change::${keyOf("x")}, ${keyOf("y")}\nClassified 1 workflows\n`,
+    stderr: "",
+  });
+});
+
+const MERGE_GROUP = {
+  GITHUB_EVENT_NAME: "merge_group",
+  GITHUB_REF: `refs/heads/gh-readonly-queue/main/pr-42-${"a".repeat(40)}`,
+};
+
+test("a merge group whose combined tree needs review names its pull request", () => {
+  const decisions = reviewed(PRIVILEGED_BEFORE, "check");
+  const { root } = repository(
+    { workflow: PRIVILEGED_BEFORE, decisions },
+    { workflow: PRIVILEGED_AFTER, decisions },
+  );
+  const refusal = "classification needs re-approval after #42";
+  const output = path.join(root, "step-output");
+  const result = runIn(
+    root,
+    { ...MERGE_GROUP, GITHUB_OUTPUT: output },
+    "--check",
+  );
+  expect(result.exitCode).toBe(1);
+  expect(result.stdout).toBe(
+    `${SENSITIVE}::error title=Classification refusal::${refusal}\n`,
+  );
+  expect(result.stderr.startsWith(`${refusal}\n`)).toBe(true);
+  expect(result.stderr).toContain("Missing or changed job review");
+  expect(readFileSync(output, "utf-8")).toBe(
+    `privileged_classification_change=true\nclassification_refusal=${refusal}\n`,
+  );
+  const report = runIn(root, MERGE_GROUP, "--check", "--json");
+  expect(report.exitCode).toBe(1);
+  expect(JSON.parse(report.stdout)).toEqual({
+    status: "stale",
+    stale: [keyOf("check")],
+    mechanical: [],
+    privileged: [keyOf("check")],
+    refusal,
+  });
+});
+
+test("a merge group that passes never reads its ref", () => {
+  const decisions = reviewed(PRIVILEGED_BEFORE, "check");
+  const { root } = repository(
+    { workflow: PRIVILEGED_BEFORE, decisions },
+    { workflow: PRIVILEGED_BEFORE, decisions },
+  );
+  expect(runIn(root, { GITHUB_EVENT_NAME: "merge_group" }, "--check")).toEqual({
+    exitCode: 0,
     stdout: "Classified 1 workflows\n",
     stderr: "",
   });
 });
 
 test("conflicting modes are rejected", () => {
-  const decisions = reviewed(BEFORE, "check");
   const { root } = repository(
-    { workflow: BEFORE, decisions },
-    { workflow: BEFORE, decisions },
+    { workflow: BEFORE, decisions: {} },
+    { workflow: BEFORE, decisions: {} },
   );
   const result = run(root, "--write", "--check");
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("usage:");
+});
+
+const jsonRun = (root: string, ...args: string[]) => {
+  const result = run(root, "--check", ...args, "--json");
+  return { exitCode: result.exitCode, report: JSON.parse(result.stdout) };
+};
+
+test("--json rejects other modes and unknown flags", () => {
+  const { root } = repository(
+    { workflow: BEFORE, decisions: {} },
+    { workflow: BEFORE, decisions: {} },
+  );
+  for (const args of [
+    ["--check", "--unknown", "--json"],
+    ["--write", "--json"],
+    ["--pre-push", "--json"],
+  ]) {
+    const result = run(root, ...args);
+    expect(result.exitCode, args.join(" ")).toBe(2);
+    expect(JSON.parse(result.stdout).status).toBe("error");
+  }
+});
+
+test("--json reports an admissible tree", () => {
+  const decisions = reviewed(PRIVILEGED_BEFORE, "check");
+  const { root } = repository(
+    { workflow: PRIVILEGED_BEFORE, decisions },
+    { workflow: PRIVILEGED_BEFORE, decisions },
+  );
+  expect(jsonRun(root)).toEqual({
+    exitCode: 0,
+    report: { status: "ok", privileged: [] },
+  });
+});
+
+test("--json separates a required review from a decision --write removes", () => {
+  const base =
+    "jobs: {lost: {permissions: {id-token: write}, steps: []}, gained: {steps: []}}";
+  const head =
+    "jobs: {lost: {steps: []}, gained: {permissions: {id-token: write}, steps: []}}";
+  const decisions = reviewed(base, "lost");
+  const { root } = repository(
+    { workflow: base, decisions },
+    { workflow: head, decisions },
+    true,
+  );
+  expect(jsonRun(root)).toEqual({
+    exitCode: 1,
+    report: {
+      status: "stale",
+      stale: [keyOf("gained"), keyOf("lost")],
+      mechanical: [keyOf("lost")],
+      privileged: [keyOf("lost"), keyOf("gained")],
+    },
+  });
 });

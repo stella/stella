@@ -8,12 +8,12 @@ import {
   LockKeyholeIcon,
 } from "@stll/ui/icons";
 
-import { SettingsPageHeader } from "@/components/settings-page-header";
 import { env } from "@/env";
 import { DesktopConnectionCard } from "@/features/desktop/desktop-connection-card";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
 import { pageTitle } from "@/lib/page-title";
 import { routePresentation } from "@/routes/-route-presentation";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/settings/account/desktop")({
   head: () => ({ meta: [{ title: pageTitle("settings.account.desktop") }] }),

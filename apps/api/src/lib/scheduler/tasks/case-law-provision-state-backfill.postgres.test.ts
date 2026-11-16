@@ -19,8 +19,8 @@ import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import { runSchedulerOnce } from "@/api/lib/scheduler/runner";
 import type {
@@ -131,7 +131,7 @@ const withFixture = async (
       }: FixtureOptions = {}) => {
         // A resumed worker must start after any hold persisted by earlier runs.
         if (phase === "resumed") {
-          now += SCHEDULER_BACKFILL_CONFIG.holdBackoffCapMs;
+          now += schedulerBackfillConfig().holdBackoffCapMs;
         }
         const events: string[] = [];
         const failures: unknown[] = [];
@@ -146,7 +146,7 @@ const withFixture = async (
               await session.unsafe(`SET search_path TO ${schema}, public`);
               return session;
             },
-            cancelBackend: async (pid) =>
+            cancelBackend: async (pid): Promise<unknown> =>
               await operator.unsafe("SELECT pg_cancel_backend($1)", [pid]),
             signal,
             work: async (session, setTransactionBudget) =>
@@ -158,7 +158,7 @@ const withFixture = async (
                     unsafe: async (
                       statement: string,
                       parameters: unknown[] = [],
-                    ) => {
+                    ): Promise<unknown> => {
                       await beforeQuery(statement, session);
                       // Production catalog reads intentionally name public; isolate
                       // those reads alongside the real cloned constraints here.

@@ -6,22 +6,25 @@ import {
   API_CALENDAR_DATE_CHECK,
   apiDateSchema,
 } from "@stll/api-contract/api-date";
+import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import type { SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
 import {
   entities,
+  legalListFactDetails,
   legalListItems,
   LIST_ITEM_TYPES,
   type WorkObligationSource,
   workspaces,
 } from "@/api/db/schema";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
   AGENDA_ITEM_KIND,
@@ -31,6 +34,7 @@ import {
 } from "@/api/lib/entity-constants";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { afterCommit } from "@/api/lib/idempotency/commit-effects";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -44,6 +48,11 @@ import {
   writeTaskAssignments,
 } from "@/api/lib/tasks/assignment-membership";
 import {
+  fileTaskAssignedNotifications,
+  taskAssignedNotifications,
+} from "@/api/lib/tasks/assignment-notifications";
+import type { FileTaskAssignedNotifications } from "@/api/lib/tasks/assignment-notifications";
+import {
   deployedTaskFeatures,
   type TaskDeploymentFeatures,
 } from "@/api/lib/tasks/deployment-features";
@@ -52,11 +61,14 @@ import { includes } from "@/api/lib/type-guards";
 import { createWorkObligation } from "@/api/lib/work-obligations/create-work-obligation";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 
+/** Longest task name; a proposal that becomes a task is held to it too. */
+export const TASK_NAME_MAX_LENGTH = 255;
+
 export const createTaskBodySchema = v.object({
   name: v.pipe(
     v.string(),
     v.minLength(1),
-    v.maxLength(255),
+    v.maxLength(TASK_NAME_MAX_LENGTH),
     v.description("Task name; required when creating"),
   ),
   parentId: v.optional(resourceIdSchema("entity")),
@@ -118,6 +130,18 @@ type CreateTaskWorkObligationSource = {
   entityId?: SafeId<"entity">;
 };
 
+/** The evidential detail a fact item is created with, in its own transaction. */
+export type CreateTaskFactDetails = Pick<
+  typeof legalListFactDetails.$inferInsert,
+  | "occurredOn"
+  | "occurredOnPrecision"
+  | "evidenceKind"
+  | "medium"
+  | "confidence"
+  | "interpretationNote"
+  | "scoring"
+>;
+
 export type CreateTaskEntityHandlerProps = SafeDbOrTx & {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
@@ -126,6 +150,9 @@ export type CreateTaskEntityHandlerProps = SafeDbOrTx & {
   entityId?: SafeId<"entity">;
   features?: TaskDeploymentFeatures;
   workObligationSource?: CreateTaskWorkObligationSource;
+  fileNotifications?: FileTaskAssignedNotifications;
+  /** Written with a `fact` list item, so it is never read without them. */
+  factDetails?: CreateTaskFactDetails;
 };
 
 export const createTaskEntityHandler = async function* ({
@@ -139,6 +166,8 @@ export const createTaskEntityHandler = async function* ({
     entityId: requestedEntityId,
     features = deployedTaskFeatures(),
     workObligationSource,
+    fileNotifications = fileTaskAssignedNotifications,
+    factDetails,
   } = props;
   const agendaKind = body.agendaKind ?? AGENDA_ITEM_KIND.TASK;
   const taskStatus = body.status ?? "open";
@@ -364,7 +393,7 @@ export const createTaskEntityHandler = async function* ({
         kind: "task",
         listItemType,
         parentId: body.parentId ?? null,
-        name: body.name,
+        name: normalizeEntityName(body.name),
         createdBy: userId,
         agendaKind,
         status: taskStatus,
@@ -409,19 +438,34 @@ export const createTaskEntityHandler = async function* ({
           description: body.listDescription ?? null,
           addedBy: userId,
         });
+        if (
+          factDetails !== undefined &&
+          body.listItemType === LIST_ITEM_TYPE.FACT
+        ) {
+          await tx.insert(legalListFactDetails).values({
+            ...factDetails,
+            itemEntityId: entityId,
+            workspaceId,
+            listId: body.listId,
+            updatedBy: userId,
+          });
+        }
       }
 
-      if (validAssigneeIds.length > 0) {
-        await writeTaskAssignments({
-          tx,
-          workspaceId,
-          assignments: validAssigneeIds.map((assigneeId) => ({
-            entityId,
-            userId: assigneeId,
-            role: "assignee",
-          })),
-        });
-      }
+      const writtenAssignments = await writeTaskAssignments({
+        tx,
+        workspaceId,
+        assignments: validAssigneeIds.map((assigneeId) => ({
+          entityId,
+          userId: assigneeId,
+          role: "assignee",
+        })),
+      });
+      const notifications = await taskAssignedNotifications(tx, {
+        actorUserId: userId,
+        workspaceId,
+        written: writtenAssignments,
+      });
 
       if (governsWork) {
         await createWorkObligation({
@@ -482,7 +526,7 @@ export const createTaskEntityHandler = async function* ({
 
       await enqueueEntitySearchRepairs(tx, [entityId]);
 
-      return { ok: true as const, entityId };
+      return { ok: true as const, entityId, notifications };
     }),
   );
 
@@ -497,12 +541,26 @@ export const createTaskEntityHandler = async function* ({
 
   // A caller-provided transaction has not committed yet. Its owner flushes
   // after commit so the repair worker cannot race an invisible entity.
+  // Assignment notifications wait for the same commit: filed now, they would
+  // point a colleague at a task that may still roll back. The callers that
+  // pass a transaction today assign only their own actor, so they owe none.
+  // Under a replayable request the handler's transaction is a savepoint of the
+  // receipt's, so both wait for that commit and never rerun on a replay.
   if (props.tx === undefined) {
-    flushEntitySearchRepairs([txResult.entityId]).catch(
-      createErrorCapture(
-        handlerErrorContext("createTaskEntityHandler.flushEntitySearchRepairs"),
-      ),
-    );
+    afterCommit(() => {
+      fileNotifications(txResult.notifications);
+      detached(
+        async () =>
+          flushEntitySearchRepairs([txResult.entityId]).catch(
+            createErrorCapture(
+              handlerErrorContext(
+                "createTaskEntityHandler.flushEntitySearchRepairs",
+              ),
+            ),
+          ),
+        "create-task-entity.flush-entity-search-repairs",
+      );
+    });
   }
 
   return Result.ok({ entityId: txResult.entityId });

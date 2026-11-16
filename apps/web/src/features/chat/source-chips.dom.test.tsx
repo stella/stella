@@ -9,8 +9,9 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import englishMessages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const {
@@ -155,11 +156,10 @@ test("shows cited court groups and keeps consulted decisions collapsed", () => {
   expect(
     screen.getByText(/I\. ÚS 1\/26/u, { selector: ".font-medium" }),
   ).toBeTruthy();
-  const disclosure = screen.getByText("Also consulted (1)");
-  const details = disclosure.closest("details");
-  expect(details?.open).toBe(false);
+  const disclosure = screen.getByRole("button", { name: "Also consulted (1)" });
+  expect(disclosure.getAttribute("aria-expanded")).toBe("false");
   fireEvent.click(disclosure);
-  expect(details?.open).toBe(true);
+  expect(disclosure.getAttribute("aria-expanded")).toBe("true");
   expect(screen.getByRole("heading", { name: "Supreme courts" })).toBeTruthy();
   expect(screen.getAllByText(/2 Cdo 2\/26/u).length).toBeGreaterThan(0);
   for (const abbreviation of ["ÚS", "NS", "NSS", "VS", "KS", "MS", "OS"]) {
@@ -171,9 +171,80 @@ test("shows cited court groups and keeps consulted decisions collapsed", () => {
   }
 });
 
+test("a cited decision is one uncapped line in the answer footer row", () => {
+  renderSources();
+  const citations = document.querySelector("[data-chat-answer-citations]");
+  // The tier label and its decisions are items of the footer row itself, so
+  // they sit beside Copy and Retry rather than in a full-width block below.
+  expect(citations?.className).toBe("contents");
+  // After the divider, the cited sources are items of that row too.
+  expect(
+    citations?.querySelector(":scope > [data-chat-answer-citations-divider]")
+      ?.nextElementSibling?.className,
+  ).toBe("contents");
+  const label = screen.getByText(/I\. ÚS 1\/26 · /u, {
+    selector: ".font-medium",
+  });
+  // The case number and date keep the row's width, not the compact 20ch cap.
+  const chipLabel = label.closest("bdi");
+  expect(chipLabel?.className).toContain("min-w-0");
+  expect(chipLabel?.className).not.toContain("max-w-[20ch]");
+  // The holding is hover text, never a second row inside the chip.
+  expect(label.parentElement?.className).toContain("items-center");
+  expect(screen.queryByText("Holding for I. ÚS 1/26")).toBeNull();
+});
+
+test("cited sources alone leave no disclosure in the footer row", () => {
+  const { container } = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <SourceChips
+            messageId="answer"
+            parts={[
+              {
+                type: "tool-call",
+                id: "search",
+                name: "infosoud_lookup_case",
+                state: "complete",
+                arguments: "{}",
+                input: {},
+                output: {
+                  results: [
+                    hit(
+                      "https://example.test/cases/cited",
+                      "I. ÚS 1/26",
+                      "Ústavní soud",
+                      "ÚS",
+                    ),
+                  ],
+                },
+              },
+              {
+                type: "text",
+                content: "[authority](https://example.test/cases/cited)",
+              },
+            ]}
+          />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+  expect(
+    screen.getByText(/I\. ÚS 1\/26/u, { selector: ".font-medium" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Also consulted/u })).toBeNull();
+  // The divider still parts the cited sources from Copy and Retry in the row.
+  expect(
+    container.querySelector("[data-chat-answer-citations-divider]"),
+  ).not.toBeNull();
+});
+
 test("renders a case-law source without an invalid decision date", () => {
   renderInvalidDateSource();
-  const disclosure = screen.getByText("Also consulted (1)");
+  const disclosure = screen.getByRole("button", {
+    name: "Also consulted (1)",
+  });
   fireEvent.click(disclosure);
   expect(
     screen.getByText("3 Cdo 3/26", { selector: ".font-medium" }),

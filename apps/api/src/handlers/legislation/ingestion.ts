@@ -63,6 +63,7 @@ import {
   eligibleExpression,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { recoverVersionChanges } from "@/api/lib/legal-search/legislation-version-changes-recovery";
 import { syncLegislationWorkIdentifiersTx } from "@/api/lib/legal-search/legislation-work-identifiers";
 import { syncLegislationWorkNamesTx } from "@/api/lib/legal-search/legislation-work-names";
 import {
@@ -596,7 +597,12 @@ const writeDecidedVersionTx = async (
       .where(eq(legislationDocuments.id, id));
   }
   await syncLegislationWorkNamesTx(tx, [
-    { id, country: values.country, title: values.title },
+    {
+      id,
+      country: values.country,
+      title: values.title,
+      documentType: values.documentType ?? null,
+    },
   ]);
   return id;
 };
@@ -638,7 +644,7 @@ const commitLegislationVersion = async ({
     // Settle and the write-error retry take the projection source before the
     // row; this write takes them in the same order so they cannot deadlock.
     const projectionLock =
-      corpusMode === "off" || existing === undefined
+      existing === undefined
         ? null
         : await lockActiveCorpusProjectionSourceTx(tx, {
             family: "legislation",
@@ -680,7 +686,11 @@ const commitLegislationVersion = async ({
     };
     const id = await writeDecidedVersionTx(tx, row, decidedValues, publisherId);
     await syncLegislationWorkIdentifiersTx(tx, input);
-    if (bodyChanged && projectionLock !== null) {
+    // Every update of an existing version projects it: the decided values
+    // (country, title, withdrawal window) are projection inputs whether or
+    // not the body changed. A new version is not projectable until its
+    // settle transaction writes its content hash and projects it.
+    if (row !== undefined && projectionLock !== null) {
       await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
         lock: projectionLock,
         subject: { family: "legislation", entityId: id },
@@ -980,6 +990,11 @@ export const processLegislationDocument = async (
       projection: revision.withoutCorpusWrite(classification),
       scopedDb,
     });
+    await recoverVersionChanges({
+      db: scopedDb,
+      works: [revisionInput],
+      around: existing.id,
+    });
     return {
       type: "stored",
       id: existing.id,
@@ -1029,26 +1044,35 @@ export const processLegislationDocument = async (
   // either way. Treating `canonical` as `dual-write` here is the scope
   // decision, not an oversight.
   if (corpus.mode !== "off") {
-    try {
-      const projection = await revision.writeCorpus({
-        documentId: id,
-        stored: existing === undefined ? null : storedCorpusWrite(existing),
-        classification,
-        write: corpus.write,
-      });
-      // An unchanged outcome means the row already records exactly these
-      // pointers; a written or skipped-empty outcome records the keys, or
-      // null pointers where the payload carried no document. The empty
-      // payload's hash is still recorded: the corpus indexer's missing and
-      // stale scans require a non-null content hash, so a row whose indexed
-      // document refreshed to empty must stay visible to them — with a null
-      // hash the previously indexed text would remain searchable forever.
-      await settleLegislationCorpusProjection({
-        documentId: id,
-        projection,
-        scopedDb,
-      });
-    } catch (error) {
+    const mirrored = (
+      await Result.tryPromise(async () => {
+        const projected = await revision.writeCorpus({
+          documentId: id,
+          stored: existing === undefined ? null : storedCorpusWrite(existing),
+          classification,
+          write: corpus.write,
+        });
+        if (projected.isErr()) {
+          return projected;
+        }
+        const projection = projected.value;
+        // An unchanged outcome means the row already records exactly these
+        // pointers; a written or skipped-empty outcome records the keys, or
+        // null pointers where the payload carried no document. The empty
+        // payload's hash is still recorded: the corpus indexer's missing and
+        // stale scans require a non-null content hash, so a row whose indexed
+        // document refreshed to empty must stay visible to them — with a null
+        // hash the previously indexed text would remain searchable forever.
+        await settleLegislationCorpusProjection({
+          documentId: id,
+          projection,
+          scopedDb,
+        });
+        return Result.ok(undefined);
+      })
+    ).andThen((outcome) => outcome);
+    if (mirrored.isErr()) {
+      const error = mirrored.error;
       corpusWriteFailed = true;
       captureError(
         error,
@@ -1072,6 +1096,14 @@ export const processLegislationDocument = async (
       scopedDb,
     });
   }
+
+  // Last: settling the corpus pointers advances the payload revision, and a
+  // summary records the revision it was computed from.
+  await recoverVersionChanges({
+    db: scopedDb,
+    works: [revisionInput],
+    around: id,
+  });
 
   return {
     type: "stored",

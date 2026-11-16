@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { systemClock } from "@stll/test-kit";
+
 import { organization } from "@/api/db/auth-schema";
 import { organizationSettings } from "@/api/db/schema";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
@@ -32,7 +34,7 @@ if (!databaseUrl || !enabled) {
         id: organizationId,
         name: "SharePoint policy lock fixture",
         slug: `sharepoint-policy-${organizationId}`,
-        createdAt: new Date(),
+        createdAt: new Date(systemClock.now()),
       });
       try {
         await withInterleaving({

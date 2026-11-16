@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -49,7 +49,7 @@ const corpus = {
   mode: "dual-write",
   write: async (input) => {
     const plan = planCorpusDocumentWrite(input);
-    return await Promise.resolve(
+    return Result.ok(
       plan.type === "put"
         ? { type: "written" as const, written: plan.written }
         : plan,

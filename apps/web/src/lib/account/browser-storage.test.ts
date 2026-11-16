@@ -223,3 +223,21 @@ describe("required registered persistence", () => {
     }
   });
 });
+
+test("required storage targets the selected window without writing to this tab", () => {
+  const target = {
+    localStorage: memoryStorage(),
+    sessionStorage: memoryStorage(),
+  };
+  const key = DEVICE_STORAGE_FAMILIES.find(
+    ({ area }) => area === "session",
+  )?.prefix;
+  if (!key) {
+    throw new TypeError("A session storage family must be registered");
+  }
+  const storage = requireBrowserStorage("session", target).unwrap();
+  storage.setItem(key, "popup value");
+  expect(storage.getItem(key)).toBe("popup value");
+  expect(target.sessionStorage.getItem(key)).toBe("popup value");
+  expect(browserStorage("session")?.getItem(key)).toBeNull();
+});

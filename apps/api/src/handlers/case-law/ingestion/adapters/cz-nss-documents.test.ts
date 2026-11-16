@@ -1,14 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { gunzipSync } from "node:zlib";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   czNssAdapter,
   parseCzNssDetailMetadata,
@@ -20,17 +14,21 @@ import {
   nssRegistryUrl,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@/api/lib/legal-search/ingestion-types";
 import { czNssFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
   nssRecoveryFixture,
   nssRecoveryReference,
 } from "@/api/tests/helpers/cz-nss-recovery";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const originalFetch = globalThis.fetch;
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-});
+const testFetchState = createTestFetch();
 
 const fixtures = new URL("__fixtures__/", import.meta.url);
 
@@ -300,9 +298,11 @@ describe("NSS document recovery", () => {
         .subarray(0, 5)
         .toString(),
     ).toBe("%PDF-");
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Replay must not fetch");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Replay must not fetch");
+      }),
+    );
     const reparse = czNssAdapter.reparseStoredRaw;
     if (reparse === undefined) {
       throw new TypeError("NSS replay required");

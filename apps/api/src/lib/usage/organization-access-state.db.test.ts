@@ -58,6 +58,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -342,9 +343,7 @@ describe("moving keyless organizations to the free floor", () => {
       }
 
       await testDb.delete(apikey).where(eq(apikey.id, personalKeyId));
-      await testDb
-        .delete(organization)
-        .where(inArray(organization.id, organizationIds));
+      await deleteOrganizationsForTest(testDb, organizationIds);
       await testDb.delete(usagePolicies).where(eq(usagePolicies.id, policyId));
     }
   });
@@ -409,9 +408,7 @@ describe("moving keyless organizations to the free floor", () => {
         ORGANIZATION_ACCESS_STATE.evaluationPeriod,
       );
     } finally {
-      await testDb
-        .delete(organization)
-        .where(inArray(organization.id, [endedId, evaluationId]));
+      await deleteOrganizationsForTest(testDb, [endedId, evaluationId]);
     }
   });
 });
@@ -514,9 +511,7 @@ afterAll(async () => {
   await testDb
     .delete(member)
     .where(inArray(member.organizationId, fixtureOrgIds));
-  await testDb
-    .delete(organization)
-    .where(inArray(organization.id, fixtureOrgIds));
+  await deleteOrganizationsForTest(testDb, fixtureOrgIds);
   await releaseTestDb();
 });
 

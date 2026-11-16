@@ -1,3 +1,4 @@
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 /**
  * Lazy adapter module registry.
  *
@@ -8,11 +9,11 @@
 
 import { panic } from "better-result";
 
-import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 
 type AdapterLoader = () => Promise<SourceAdapter>;
 
@@ -28,6 +29,7 @@ export const ADAPTER_MODULES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: async () =>
     (await import("./cz-regional")).czRegionalAdapter,
   [ADAPTER_KEYS.CZ_UOHS]: async () => (await import("./cz-uohs")).czUohsAdapter,
+  [ADAPTER_KEYS.BR_TST]: async () => (await import("./br-tst")).brTstAdapter,
   [ADAPTER_KEYS.SK_COURTS]: async () =>
     (await import("./sk-courts")).skCourtsAdapter,
   [ADAPTER_KEYS.SK_US]: async () => (await import("./sk-us")).skUsAdapter,
@@ -61,6 +63,8 @@ export const ADAPTER_MODULES = {
   [ADAPTER_KEYS.PL_UODO]: async () => (await import("./pl-uodo")).plUodoAdapter,
   [ADAPTER_KEYS.PL_UOKIK]: async () =>
     (await import("./pl-uokik")).plUokikAdapter,
+  [ADAPTER_KEYS.BR_TJDFT]: async () =>
+    (await import("./br-tjdft")).brTjdftAdapter,
 } as const satisfies Record<AdapterKey, AdapterLoader>;
 
 const adapterKeyFromString = (key: string): AdapterKey | undefined =>

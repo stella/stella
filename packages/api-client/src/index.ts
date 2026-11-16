@@ -143,18 +143,50 @@ type OptionsArgs<TRoute extends RouteShape> =
     ? [options?: RequestOptions<TRoute>]
     : [options: RequestOptions<TRoute>];
 
-type BodyArgs<TRoute extends RouteShape> =
+// Computed-key payloads expose an index signature, not a known extra field.
+type KnownBodyKeys<TBody> = keyof {
+  [
+    TKey in keyof TBody as string extends TKey
+      ? never
+      : number extends TKey
+        ? never
+        : TKey
+  ]: unknown;
+};
+
+type BodyKeys<TBody> = TBody extends unknown ? keyof TBody : never;
+
+export type ExactRequestBody<
+  TBody,
+  TActual extends TBody,
+> = unknown extends TBody
+  ? TActual
+  : TActual & Record<Exclude<KnownBodyKeys<TActual>, BodyKeys<TBody>>, never>;
+
+type BodyArgs<TRoute extends RouteShape, TActual extends TRoute["body"]> =
   NoOptions extends RequestOptions<TRoute>
     ? undefined extends TRoute["body"]
-      ? [body?: TRoute["body"], options?: RequestOptions<TRoute>]
-      : [body: TRoute["body"], options?: RequestOptions<TRoute>]
-    : [body: TRoute["body"], options: RequestOptions<TRoute>];
+      ? [
+          body?: ExactRequestBody<TRoute["body"], TActual>,
+          options?: RequestOptions<TRoute>,
+        ]
+      : [
+          body: ExactRequestBody<TRoute["body"], TActual>,
+          options?: RequestOptions<TRoute>,
+        ]
+    : [
+        body: ExactRequestBody<TRoute["body"], TActual>,
+        options: RequestOptions<TRoute>,
+      ];
 
-type MethodCall<TName extends MethodName, TRoute extends RouteShape> = (
-  ...args: TName extends BodilessMethodName
-    ? OptionsArgs<TRoute>
-    : BodyArgs<TRoute>
-) => Promise<ApiResult<TRoute["response"]>>;
+type MethodCall<
+  TName extends MethodName,
+  TRoute extends RouteShape,
+> = TName extends BodilessMethodName
+  ? (...args: OptionsArgs<TRoute>) => Promise<ApiResult<TRoute["response"]>>
+  : <TActual extends TRoute["body"]>(
+      ...args: BodyArgs<TRoute, TActual>
+    ) => Promise<ApiResult<TRoute["response"]>>;
 
 type ParamKey<TNode> = Extract<keyof TNode, `:${string}`>;
 

@@ -2,7 +2,9 @@ import {
   toPersonalChatMessageResponse,
   toPersonalChatMessageRevisionResponse,
   toPersonalChatThreadResponse,
+  toPersonalQueuedChatMessageResponse,
 } from "@/api/handlers/chat/personal-data-response";
+import { toBillingDraftSettingsAccountExport } from "@/api/handlers/desktop-time-entries/billing-draft-settings-export";
 import { projectPrivateAnnotationForAccountExport } from "@/api/handlers/legal-reader/annotations/personal-data-response";
 import { projectPrivateReaderAnswerForAccountExport } from "@/api/handlers/legal-reader/answers/personal-data-response";
 import { toMemoryResponse } from "@/api/handlers/memories/response";
@@ -37,10 +39,12 @@ export const ACCOUNT_EXPORT_PROJECTIONS = {
   legal_reader_annotations: projectPrivateAnnotationForAccountExport,
   legal_reader_answers: projectPrivateReaderAnswerForAccountExport,
   saved_time_narratives: toSavedTimeNarrativeItem,
+  billing_draft_user_settings: toBillingDraftSettingsAccountExport,
   template_lookup_format_user_defaults: toUserDefaultAccountExport,
   chat_threads: toPersonalChatThreadResponse,
   chat_messages: toPersonalChatMessageResponse,
   chat_message_revisions: toPersonalChatMessageRevisionResponse,
+  chat_queued_messages: toPersonalQueuedChatMessageResponse,
   ai_memories: toMemoryResponse,
   agent_skills: toAgentSkillResponse,
   agent_skill_revisions: toAgentSkillRevisionResponse,

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { sortDeep } from "./sort-deep";
 
@@ -40,18 +40,20 @@ const normalizeJsonValue = (value: unknown): unknown => {
 
 describe("sortDeep", () => {
   test("idempotent: sorting twice yields the same result", () => {
-    fc.assert(
+    assertProperty(
+      "idempotent: sorting twice yields the same result",
       fc.property(jsonArbitrary, (input) => {
         const once = sortDeep(input);
         const twice = sortDeep(once);
         expect(twice).toEqual(once);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("preserves JSON serialisation roundtrip", () => {
-    fc.assert(
+    assertProperty(
+      "preserves JSON serialisation roundtrip",
       fc.property(jsonArbitrary, (input) => {
         const sorted = sortDeep(input);
         const serialised = JSON.stringify(sorted);
@@ -61,7 +63,7 @@ describe("sortDeep", () => {
         // JSON.stringify(-0) → "0" and toEqual uses Object.is.
         expect(JSON.stringify(JSON.parse(serialised))).toBe(serialised);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -86,16 +88,18 @@ describe("sortDeep", () => {
       }
     };
 
-    fc.assert(
+    assertProperty(
+      "non-index string keys are sorted ascending at every level",
       fc.property(jsonArbitrary, (input) => {
         assertKeysSorted(sortDeep(input));
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("sorting preserves all values (deep equality ignoring key order)", () => {
-    fc.assert(
+    assertProperty(
+      "sorting preserves all values (deep equality ignoring key order)",
       fc.property(jsonArbitrary, (input) => {
         const sorted = sortDeep(input);
         // Rebuild objects from entries so prototype quirks
@@ -103,22 +107,24 @@ describe("sortDeep", () => {
         // structural comparison.
         expect(normalizeJsonValue(sorted)).toEqual(normalizeJsonValue(input));
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("preserves array element order", () => {
-    fc.assert(
+    assertProperty(
+      "preserves array element order",
       fc.property(fc.array(fc.oneof(fc.integer(), fc.string())), (arr) => {
         const sorted = sortDeep(arr);
         expect(sorted).toEqual(arr);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("primitives pass through unchanged", () => {
-    fc.assert(
+    assertProperty(
+      "primitives pass through unchanged",
       fc.property(
         fc.oneof(
           fc.string(),
@@ -131,7 +137,7 @@ describe("sortDeep", () => {
           expect(sortDeep(prim)).toBe(prim);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

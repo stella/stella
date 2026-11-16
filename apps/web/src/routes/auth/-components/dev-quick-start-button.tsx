@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
 
@@ -9,16 +10,19 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useMountEffect } from "@/hooks/use-effect";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
+import { updateUserResource } from "@/lib/account/update-user";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient, isTwoFactorRedirect } from "@/lib/auth-client";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { createSubmitIntent } from "@/lib/idempotency/idempotent-submit.logic";
 import { createRandomValue } from "@/lib/uuid";
 
 import { devQuickStartRuntime } from "./dev-quick-start-runtime";
@@ -151,14 +155,25 @@ const createOrganization = async (identity: DevQuickStartIdentity) => {
       return listed.data;
     },
     createOrganization: async ({ organizationName, organizationSlug }) => {
-      const created = await authClient.organization.create({
-        name: organizationName,
-        slug: organizationSlug,
-      });
-      if (created.error) {
-        throw toAuthClientError(created.error);
-      }
-      return created.data.id;
+      const intent = createSubmitIntent(() => organizationSlug);
+      const replayRequest = intent.request();
+      const created = await invokeCapability(
+        "organizations.create",
+        async (request) =>
+          unwrapApiResponse(
+            await api.organizations.post(
+              { name: organizationName, slug: organizationSlug },
+              {
+                ...request,
+                headers: {
+                  "Idempotency-Key": replayRequest.headers["Idempotency-Key"],
+                  ...request.headers,
+                },
+              },
+            ),
+          ),
+      );
+      return created.organizationId;
     },
   });
   if (Result.isError(resolved)) {
@@ -314,6 +329,7 @@ export const DevQuickStartContinuation = ({
 }) => {
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
+  const queryClient = useQueryClient();
   const phase = useSyncExternalStore(
     devQuickStartRuntime.subscribe,
     devQuickStartRuntime.getPhase,
@@ -336,11 +352,13 @@ export const DevQuickStartContinuation = ({
 
     const result = await Result.tryPromise({
       try: async () => {
-        const updated = await authClient.updateUser({
-          name: "Dev Quick Start",
+        const updated = await updateUserResource({
+          queryClient,
+          input: { name: "Dev Quick Start" },
+          owner: null,
         });
-        if (updated.error) {
-          throw toAuthClientError(updated.error);
+        if (Result.isError(updated)) {
+          throw updated.error;
         }
 
         await runDevQuickStart({

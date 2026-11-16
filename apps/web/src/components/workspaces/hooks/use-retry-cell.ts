@@ -28,12 +28,12 @@ export const useRetryCell = (workspaceId: WorkspaceId) => {
 
   return async ({ entityId, propertyId }: RetryCellArgs) => {
     try {
-      const response = await api
-        .workspaces({ workspaceId })
-        ["cell-retry"].post({
-          entityId,
-          propertyId,
-        });
+      const workspaceApi = api.workspaces({ workspaceId });
+
+      const response = await workspaceApi["cell-retry"].post({
+        entityId,
+        propertyId,
+      });
 
       if (response.error) {
         const apiError = toAPIError(response.error);

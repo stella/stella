@@ -65,14 +65,14 @@ const readStringRecord = (
     throw new RailwayTemplateDraftError(`${label} must be an object`);
   }
 
-  const result: Record<string, string> = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (typeof item !== "string") {
-      throw new RailwayTemplateDraftError(`${label}.${key} must be a string`);
-    }
-    result[key] = item;
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => {
+      if (typeof item !== "string") {
+        throw new RailwayTemplateDraftError(`${label}.${key} must be a string`);
+      }
+      return [key, item] as const;
+    }),
+  );
 };
 
 const readServiceBuild = (
@@ -111,34 +111,38 @@ const readManifest = (): TemplateManifest => {
     );
   }
 
-  const services: Record<string, ServiceTemplate> = {};
-  for (const [serviceName, service] of Object.entries(value["services"])) {
-    if (!isRecord(service)) {
-      throw new RailwayTemplateDraftError(
-        `${MANIFEST_PATH} service ${serviceName} must be an object`,
+  const services = Object.fromEntries(
+    Object.entries(value["services"]).map(([serviceName, service]) => {
+      if (!isRecord(service)) {
+        throw new RailwayTemplateDraftError(
+          `${MANIFEST_PATH} service ${serviceName} must be an object`,
+        );
+      }
+      const build = readServiceBuild(
+        service["build"],
+        `services.${serviceName}.build`,
       );
-    }
-    const build = readServiceBuild(
-      service["build"],
-      `services.${serviceName}.build`,
-    );
-    const volumeMountPath =
-      service["volumeMountPath"] === undefined
-        ? undefined
-        : getString(service, "volumeMountPath");
-    services[serviceName] = {
-      requiredUserInputs: readStringRecord(
-        service["requiredUserInputs"] ?? {},
-        `services.${serviceName}.requiredUserInputs`,
-      ),
-      variables: readStringRecord(
-        service["variables"] ?? {},
-        `services.${serviceName}.variables`,
-      ),
-      ...(build === undefined ? {} : { build }),
-      ...(volumeMountPath === undefined ? {} : { volumeMountPath }),
-    };
-  }
+      const volumeMountPath =
+        service["volumeMountPath"] === undefined
+          ? undefined
+          : getString(service, "volumeMountPath");
+      return [
+        serviceName,
+        {
+          requiredUserInputs: readStringRecord(
+            service["requiredUserInputs"] ?? {},
+            `services.${serviceName}.requiredUserInputs`,
+          ),
+          variables: readStringRecord(
+            service["variables"] ?? {},
+            `services.${serviceName}.variables`,
+          ),
+          ...(build === undefined ? {} : { build }),
+          ...(volumeMountPath === undefined ? {} : { volumeMountPath }),
+        },
+      ] as const;
+    }),
+  );
 
   return { services, buckets: readManifestBuckets(value["buckets"]) };
 };

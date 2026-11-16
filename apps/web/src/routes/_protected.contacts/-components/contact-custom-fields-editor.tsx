@@ -4,6 +4,7 @@ import { useFormStatus } from "react-dom";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
@@ -121,11 +122,12 @@ export const ContactCustomFieldsEditor = ({
             {t("contacts.customFields.empty")}
           </p>
         )}
-        <form
+        <Form
           action={() => {
             addCustomField();
           }}
-          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]"
+          className="grid sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]"
+          density="compact"
         >
           <Input
             disabled={isPending}
@@ -145,7 +147,7 @@ export const ContactCustomFieldsEditor = ({
             disabled={isPending || labelDraft.trim().length === 0}
             label={t("contacts.customFields.addField")}
           />
-        </form>
+        </Form>
       </div>
     </section>
   );

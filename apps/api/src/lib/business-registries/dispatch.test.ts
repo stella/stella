@@ -33,6 +33,7 @@ import {
 import { RpoAPIError, RpoRequestError } from "@stll/business-registries/rpo";
 import { ViesAPIError, ViesRequestError } from "@stll/business-registries/vies";
 import { readFailureBrand } from "@stll/errors";
+import { createTestState } from "@stll/test-state";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
@@ -47,6 +48,11 @@ import {
 } from "@/api/lib/business-registries/dispatch";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { WebSearchProvider } from "@/api/lib/web-search/types";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+const testFetchState = createTestFetch();
 
 const permit = grantThirdPartyOutboundPermit();
 
@@ -205,15 +211,19 @@ describe("ORSR lookup detail", () => {
   ): Promise<{ paths: string[]; result: unknown }> => {
     const paths: string[] = [];
     const original = globalThis.fetch;
-    globalThis.fetch = Object.assign(
-      async (input: URL | Request | string) => {
-        const { pathname } = new URL(
-          typeof input === "string" || input instanceof URL ? input : input.url,
-        );
-        paths.push(pathname);
-        return Response.json(BODY_BY_PATH[pathname]);
-      },
-      { preconnect: original.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async (input: URL | Request | string) => {
+          const { pathname } = new URL(
+            typeof input === "string" || input instanceof URL
+              ? input
+              : input.url,
+          );
+          paths.push(pathname);
+          return Response.json(BODY_BY_PATH[pathname]);
+        },
+        { preconnect: original.preconnect },
+      ),
     );
     try {
       const result = await executeRegistryLookup({
@@ -226,7 +236,7 @@ describe("ORSR lookup detail", () => {
       });
       return { paths, result };
     } finally {
-      globalThis.fetch = original;
+      testFetchState.restore();
     }
   };
 
@@ -381,17 +391,18 @@ describe("Companies House hit address", () => {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: original.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: original.preconnect,
+      }),
+    );
     return (): void => {
-      globalThis.fetch = original;
+      testFetchState.restore();
     };
   };
 
   test("prepends care_of and po_box to line1 for agent-held addresses", async () => {
-    const previous = process.env["COMPANIES_HOUSE_API_KEY"];
-    process.env["COMPANIES_HOUSE_API_KEY"] = "test-key";
+    testState.setEnv("COMPANIES_HOUSE_API_KEY", "test-key");
     const restore = stubCompaniesHouseFetch({
       company_name: "ACME SECRETARIAT LTD",
       company_number: "12345678",
@@ -419,52 +430,30 @@ describe("Companies House hit address", () => {
       );
     } finally {
       restore();
-      if (previous === undefined) {
-        delete process.env["COMPANIES_HOUSE_API_KEY"];
-      } else {
-        process.env["COMPANIES_HOUSE_API_KEY"] = previous;
-      }
     }
   });
 });
 
 describe("EDGAR deployment gating", () => {
   test("does not expose the US handler when EDGAR_USER_AGENT is missing", () => {
-    const previous = process.env["EDGAR_USER_AGENT"];
-    delete process.env["EDGAR_USER_AGENT"];
-    try {
-      expect(getRegistryHandlerByCountry("US")).toBeUndefined();
-      expect(isBusinessRegistryNativeToolDeployAvailable("edgar")).toBe(false);
-    } finally {
-      if (previous === undefined) {
-        delete process.env["EDGAR_USER_AGENT"];
-      } else {
-        process.env["EDGAR_USER_AGENT"] = previous;
-      }
-    }
+    testState.deleteEnv("EDGAR_USER_AGENT");
+
+    expect(getRegistryHandlerByCountry("US")).toBeUndefined();
+    expect(isBusinessRegistryNativeToolDeployAvailable("edgar")).toBe(false);
   });
 
   test("exposes the US handler when EDGAR_USER_AGENT is configured", () => {
-    const previous = process.env["EDGAR_USER_AGENT"];
-    process.env["EDGAR_USER_AGENT"] = "Stella stella@example.com";
-    try {
-      expect(getRegistryHandlerByCountry("US")?.slug).toBe("edgar");
-      expect(isBusinessRegistryNativeToolDeployAvailable("edgar")).toBe(true);
-    } finally {
-      if (previous === undefined) {
-        delete process.env["EDGAR_USER_AGENT"];
-      } else {
-        process.env["EDGAR_USER_AGENT"] = previous;
-      }
-    }
+    testState.setEnv("EDGAR_USER_AGENT", "Stella stella@example.com");
+
+    expect(getRegistryHandlerByCountry("US")?.slug).toBe("edgar");
+    expect(isBusinessRegistryNativeToolDeployAvailable("edgar")).toBe(true);
   });
 });
 
 describe("DENUE deployment gating", () => {
   test("normalizes lookup hits and preserves the DENUE enrichment payload", async () => {
-    const previousToken = process.env["INEGI_DENUE_API_TOKEN"];
     const originalFetch = globalThis.fetch;
-    process.env["INEGI_DENUE_API_TOKEN"] = "test-token";
+    testState.setEnv("INEGI_DENUE_API_TOKEN", "test-token");
     const stub = async (): Promise<Response> =>
       new Response(
         JSON.stringify([
@@ -486,9 +475,11 @@ describe("DENUE deployment gating", () => {
           headers: { "Content-Type": "application/json" },
         },
       );
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
     try {
       const hit = await BUSINESS_REGISTRY_DISPATCH.denue.lookup("6281106", {
         observer: "unobserved",
@@ -506,43 +497,22 @@ describe("DENUE deployment gating", () => {
         }),
       });
     } finally {
-      globalThis.fetch = originalFetch;
-      if (previousToken === undefined) {
-        delete process.env["INEGI_DENUE_API_TOKEN"];
-      } else {
-        process.env["INEGI_DENUE_API_TOKEN"] = previousToken;
-      }
+      testFetchState.restore();
     }
   });
 
   test("does not expose the MX handler when INEGI_DENUE_API_TOKEN is missing", () => {
-    const previous = process.env["INEGI_DENUE_API_TOKEN"];
-    delete process.env["INEGI_DENUE_API_TOKEN"];
-    try {
-      expect(getRegistryHandlerByCountry("MX")).toBeUndefined();
-      expect(isBusinessRegistryNativeToolDeployAvailable("denue")).toBe(false);
-    } finally {
-      if (previous === undefined) {
-        delete process.env["INEGI_DENUE_API_TOKEN"];
-      } else {
-        process.env["INEGI_DENUE_API_TOKEN"] = previous;
-      }
-    }
+    testState.deleteEnv("INEGI_DENUE_API_TOKEN");
+
+    expect(getRegistryHandlerByCountry("MX")).toBeUndefined();
+    expect(isBusinessRegistryNativeToolDeployAvailable("denue")).toBe(false);
   });
 
   test("exposes the MX handler when INEGI_DENUE_API_TOKEN is configured", () => {
-    const previous = process.env["INEGI_DENUE_API_TOKEN"];
-    process.env["INEGI_DENUE_API_TOKEN"] = "test-token";
-    try {
-      expect(getRegistryHandlerByCountry("MX")?.slug).toBe("denue");
-      expect(isBusinessRegistryNativeToolDeployAvailable("denue")).toBe(true);
-    } finally {
-      if (previous === undefined) {
-        delete process.env["INEGI_DENUE_API_TOKEN"];
-      } else {
-        process.env["INEGI_DENUE_API_TOKEN"] = previous;
-      }
-    }
+    testState.setEnv("INEGI_DENUE_API_TOKEN", "test-token");
+
+    expect(getRegistryHandlerByCountry("MX")?.slug).toBe("denue");
+    expect(isBusinessRegistryNativeToolDeployAvailable("denue")).toBe(true);
   });
 });
 

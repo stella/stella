@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { GitBranchIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ForkProvenance } from "@/features/chat/queries";
@@ -41,7 +42,7 @@ export const ChatForkedFromBanner = ({
         <div className="mx-auto w-full max-w-5xl px-4 pt-2">
           <span className={BANNER_CLASSNAME}>
             <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0" />
-            <span className="truncate">{t("chat.forkedFromUnavailable")}</span>
+            <TruncatedText>{t("chat.forkedFromUnavailable")}</TruncatedText>
           </span>
         </div>
       );
@@ -58,7 +59,7 @@ export const ChatForkedFromBanner = ({
             {...chatThreadRoute({ threadId, workspaceId })}
           >
             <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0" />
-            <span className="truncate">
+            <TruncatedText>
               {t.rich("chat.forkedFrom", {
                 bdi: (chunks: ReactNode) => <BidiText>{chunks}</BidiText>,
                 // Threads are titled asynchronously, so a very fresh parent is
@@ -68,7 +69,7 @@ export const ChatForkedFromBanner = ({
                   ? t("chat.newChat")
                   : title,
               })}
-            </span>
+            </TruncatedText>
           </Link>
         </div>
       );

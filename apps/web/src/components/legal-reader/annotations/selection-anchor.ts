@@ -9,14 +9,17 @@
  * words alone.
  */
 
+import { readerTextQuoteContext } from "@stll/legal-ast/reader-text-quote";
+import type { ReaderTextQuoteSelector } from "@stll/legal-ast/reader-text-quote";
+
 const READER_CHROME_ATTRIBUTE = "data-reader-chrome";
 
-export type SelectionAnchor = {
-  blockAnchorId: string;
-  endOffset: number;
-  quote: string;
-  startOffset: number;
-};
+/**
+ * One paragraph's share of a selection, with the words either side of it in
+ * the block: a re-parse can move the anchor and offsets, and the words are
+ * what find the mark again.
+ */
+export type SelectionAnchor = ReaderTextQuoteSelector;
 
 export type ReaderSelectionContainmentAction =
   "ignore" | "remember" | "restore";
@@ -173,6 +176,10 @@ export const selectionAnchorsFrom = (
       endOffset: trimmedEnd,
       quote: words.slice(trimmedStart, trimmedEnd),
       startOffset: trimmedStart,
+      ...readerTextQuoteContext(words, {
+        startOffset: trimmedStart,
+        endOffset: trimmedEnd,
+      }),
     });
   }
   return spans;

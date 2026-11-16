@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { createFetchWithTimeout } from "./index";
-import type { FetchWithTimeoutInit } from "./index";
+import type { Fetcher, FetchWithTimeoutInit } from "./index";
 
 describe("createFetchWithTimeout", () => {
   for (const code of [
@@ -50,6 +50,16 @@ describe("createFetchWithTimeout", () => {
       expect(response).toBe(transportResponse);
       expect(await response.text()).toBe("payload");
       expect(received?.signal?.aborted).toBe(false);
+    });
+
+    test(`a ${form} deadline turns off the runtime's own idle limit`, async () => {
+      let received: Parameters<Fetcher>[1];
+      const request = createFetchWithTimeout(async (_input, init) => {
+        received = init;
+        return new Response("payload");
+      });
+      await request("https://example.com", deadline(1000));
+      expect(received?.timeout).toBe(false);
     });
 
     test(`a ${form} deadline still bounds the whole exchange`, async () => {
@@ -188,4 +198,15 @@ describe("createFetchWithTimeout", () => {
     callerController.abort();
     expect(capturedSignal?.aborted).toBe(true);
   });
+});
+
+test("a headers policy keeps the runtime's idle limit, as nothing else bounds its body", async () => {
+  let received: Parameters<Fetcher>[1];
+  const request = createFetchWithTimeout(async (_input, init) => {
+    received = init;
+    return new Response("payload");
+  });
+  const policy = { type: "headers", ms: 1000 } as const;
+  await request("https://example.com", { timeout: policy });
+  expect(received?.timeout).toEqual(policy);
 });

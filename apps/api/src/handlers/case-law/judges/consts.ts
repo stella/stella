@@ -11,10 +11,12 @@ export type JudgeExternalRefs = {
   sourceUrl?: string;
   wikidataId?: string;
   /**
-   * The hash of the stored portrait's bytes, so a re-import transfers one
-   * only where the court has changed it.
+   * The hash of the bytes the court published, so a re-import transfers a
+   * portrait only where the court has changed it.
    */
   portraitSha256?: string;
+  /** Which rendition the stored portrait is, so a new one replaces it. */
+  portraitRendition?: number;
 };
 
 /**

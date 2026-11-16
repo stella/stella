@@ -12,6 +12,7 @@ import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { mintAuthProviderId } from "./auth-provider-id";
 import { withInterleaving } from "./transaction-interleaving";
@@ -106,7 +107,7 @@ if (!databaseUrl || !runPostgresTests) {
               sql`SELECT * FROM recorder_workspaces w WHERE id IN (SELECT id FROM recorder_entities) FOR UPDATE OF w`,
             ]) {
               trace.events.length = 0;
-              const rows = await tx.execute(statement);
+              const rows = await tx.execute(statement, "objects");
               expect(rows).toHaveLength(1);
               expect(
                 trace.events.map((event) => [
@@ -179,7 +180,10 @@ if (!databaseUrl || !runPostgresTests) {
         const holder = openClient();
         const contender = openClient();
         const pid = (
-          await holder.db.execute(sql`SELECT pg_backend_pid() AS pid`)
+          await holder.db.execute(
+            sql`SELECT pg_backend_pid() AS pid`,
+            "objects",
+          )
         ).at(0)?.["pid"];
         if (typeof pid !== "number") {
           panic("Missing fixture backend pid");
@@ -506,7 +510,7 @@ if (!databaseUrl || !runPostgresTests) {
           }
         } finally {
           await owner.db.execute(sql`DROP TABLE IF EXISTS ${rows}`);
-          await owner.db.delete(organization).where(eq(organization.id, orgId));
+          await deleteOrganizationsForTest(owner.db, [orgId]);
           await owner.db.delete(user).where(eq(user.id, userId));
         }
       });

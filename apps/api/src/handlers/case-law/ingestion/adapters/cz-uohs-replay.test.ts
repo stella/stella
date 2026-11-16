@@ -1,36 +1,36 @@
 import { panic, Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import {
+  CZ_UOHS_SYNTHETIC_LISTING,
+  czUohsSyntheticPdf,
+} from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
+import {
+  buildCzUohsDecision as uncheckedBuildCzUohsDecision,
+  czUohsAdapter,
+  parseCzUohsListing,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
   StoredRawReadError,
-} from "@/api/handlers/case-law/ingestion/adapter";
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
   StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  CZ_UOHS_SYNTHETIC_LISTING,
-  czUohsSyntheticPdf,
-} from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
-import {
-  buildCzUohsDecision,
-  czUohsAdapter,
-  parseCzUohsListing,
-} from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
+} from "@/api/lib/legal-search/ingestion-types";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const originalFetch = globalThis.fetch;
+const buildCzUohsDecision = guardParser(uncheckedBuildCzUohsDecision);
+const testFetchState = createTestFetch();
 const reparse = czUohsAdapter.reparseStoredRaw ?? panic("ÚOHS replay required");
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-});
 
 const replayInput = (decision: IngestionResult) => {
   const objects = decision.sourceRawObjects ?? {};
@@ -69,8 +69,8 @@ const replayInput = (decision: IngestionResult) => {
 };
 
 const rejectPublisherReads = () => {
-  globalThis.fetch = asFetchMock(async () =>
-    panic("Replay must not request the publisher"),
+  testFetchState.set(
+    asFetchMock(async () => panic("Replay must not request the publisher")),
   );
 };
 
@@ -89,15 +89,17 @@ describe("ÚOHS stored document replay", () => {
     };
     const invalid = new TextEncoder().encode("%PDF-unreadable-fixture");
     const valid = czUohsSyntheticPdf();
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request) =>
-        new Response(
-          (input instanceof Request ? input.url : input.toString()).endsWith(
-            "/first.pdf",
-          )
-            ? invalid
-            : valid,
-        ),
+    testFetchState.set(
+      asFetchMock(
+        async (input: string | URL | Request) =>
+          new Response(
+            (input instanceof Request ? input.url : input.toString()).endsWith(
+              "/first.pdf",
+            )
+              ? invalid
+              : valid,
+          ),
+      ),
     );
     const decision = await buildCzUohsDecision(record);
     expect(decision.documentUrl).toBe("https://uohs.gov.cz/second.pdf");
@@ -121,8 +123,8 @@ describe("ÚOHS stored document replay", () => {
     const record =
       parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING).at(0) ??
       panic("Missing test record");
-    globalThis.fetch = asFetchMock(
-      async () => new Response(czUohsSyntheticPdf()),
+    testFetchState.set(
+      asFetchMock(async () => new Response(czUohsSyntheticPdf())),
     );
     const decision = await buildCzUohsDecision(record);
     const input = replayInput(decision);
@@ -149,8 +151,8 @@ test("stored read failures retain their typed rejection across the adapter callb
   const record =
     parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING).at(0) ??
     panic("Missing test record");
-  globalThis.fetch = asFetchMock(
-    async () => new Response(czUohsSyntheticPdf()),
+  testFetchState.set(
+    asFetchMock(async () => new Response(czUohsSyntheticPdf())),
   );
   const decision = await buildCzUohsDecision(record);
   const error = new StoredRawReadError({

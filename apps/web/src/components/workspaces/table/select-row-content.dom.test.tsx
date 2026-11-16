@@ -9,6 +9,7 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { ROW_FIRST_LINE } from "@/components/workspaces/table/select-row-content";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
@@ -18,7 +19,6 @@ import type {
 } from "@/components/workspaces/table/types";
 import { TABLE_CONTENT_MODES } from "@/lib/workspaces/table-store.logic";
 import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -110,6 +110,7 @@ const decisions = Array.from(
         slug: null,
         decisionDate: "2026-01-01",
         decisionType: null,
+        decisionTypeKind: null,
         headline: null,
         headnote: {
           type: TEXT_FIELD_TYPE.ABSENT,

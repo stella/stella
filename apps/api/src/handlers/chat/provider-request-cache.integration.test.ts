@@ -1,12 +1,13 @@
 import { toolDefinition } from "@tanstack/ai";
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { propertyTestTimeout } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -70,7 +71,7 @@ import {
   wireOrgAIConfig,
   wireSideModel,
 } from "@/api/tests/helpers/provider-wire-contract";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   ProviderWireReplay,
   ReplayedRequest,
@@ -88,6 +89,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // What the chat request builder (`chat-request.ts`) promises each provider's
 // prompt cache, held on the request bodies the provider SDKs write. A
@@ -133,9 +136,15 @@ let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
 let fakeS3: FakeS3;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+
 const seededThreadIds: SafeId<"chatThread">[] = [];
+
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ passThroughOrigins: [fakeS3.endpoint] }),
+});
 
 /** A member of the organization, as the send path sees them. */
 type Member = {
@@ -165,7 +174,7 @@ const memberOf = (
   };
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -175,24 +184,19 @@ beforeAll(async () => {
   safeDb = toSafeDbMock(scopedDb);
   firstMember = { id: ids.userA1, safeDb, scopedDb };
   secondMember = memberOf(ids.userA2);
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
+
+  testState.setConfig("USE_MOCK_AI", false);
+
+  testState.setEnv(
+    "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+  );
   fakeS3 = startFakeS3();
-  replay = installProviderWireReplay({ passThroughOrigins: [fakeS3.endpoint] });
 });
 
 afterAll(async () => {
-  replay.restore();
   fakeS3.stop();
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
-  }
+
   if (seededThreadIds.length > 0) {
     // Uploaded attachments belong to their thread.
     await testDb
@@ -357,12 +361,14 @@ const cacheableSystemTextOf = (system: string): string => {
   return system.slice(0, at + PRACTICE_JURISDICTION_LINE.length);
 };
 
-/** A fresh thread's first turn, as `member` sends it with caching on. */
+/** A fresh thread's first turn with the organization's caching choice. */
 const firstTurnBody = async ({
+  caching = "on",
   endpoint,
   member,
   tools,
 }: {
+  caching?: CachingSetting;
   endpoint: CacheEndpoint;
   member: Member;
   tools: ToolSurface;
@@ -371,7 +377,7 @@ const firstTurnBody = async ({
   seededThreadIds.push(threadId);
   replay.forgetSignedCalls();
   const session = await openSession({
-    caching: "on",
+    caching,
     chatModel: endpoint.chatModel,
     endpoint: { provider: endpoint.provider, slot: "recorded" },
     member,
@@ -392,6 +398,18 @@ const firstTurnBody = async ({
   } finally {
     await session.close();
   }
+};
+
+const expectDisabledCacheRequest = async (endpoint: CacheEndpoint) => {
+  const body = await firstTurnBody({
+    caching: "off",
+    endpoint,
+    member: firstMember,
+    tools: "default",
+  });
+  expect(cacheMarkersOf(body)).toEqual([]);
+  expect(body).not.toHaveProperty("prompt_cache_key");
+  expect(body).not.toHaveProperty("prompt_cache_retention");
 };
 
 /**
@@ -550,7 +568,7 @@ const expectMembersShareThePrefix = async (
 describe("chat requests: the cached prefix", () => {
   let previousJurisdictions: PracticeJurisdiction[] = [];
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     const [row] = await testDb
       .select({
         practiceJurisdictions: organizationSettings.practiceJurisdictions,
@@ -587,6 +605,14 @@ describe("chat requests: the cached prefix", () => {
   });
 
   for (const endpoint of CACHE_ENDPOINTS) {
+    test(
+      `${endpoint.key}: disabled caching emits no automatic markers or key`,
+      async () => {
+        await expectDisabledCacheRequest(endpoint);
+      },
+      propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+    );
+
     test(
       `${endpoint.key}: history and every tool-loop iteration reuse the cached prefix`,
       async () => {

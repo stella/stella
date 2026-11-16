@@ -1,5 +1,5 @@
 import { PDF } from "@libpdf/core";
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type {
@@ -13,9 +13,11 @@ import type { BBoxItem } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { recordText } from "@/api/lib/fields/record-text";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { readS3BytesBounded } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export type GenerateBBoxesProps = {
@@ -176,6 +178,8 @@ const getFieldContentAsString = (content?: FieldContent) => {
       return `${content.amountCents} ${content.currency}`;
     case "person":
       return content.name;
+    case "record":
+      return recordText(content.state);
     case "error":
     case "pending":
     case "unsupported":
@@ -183,7 +187,8 @@ const getFieldContentAsString = (content?: FieldContent) => {
     case "clip":
       return null;
     default:
-      return null;
+      content satisfies never;
+      return panic(`Unhandled content: ${String(content)}`);
   }
 };
 
@@ -274,8 +279,11 @@ export const prepareJustificationData = async (
       mimeType: PDF_MIME_TYPE,
     });
 
-    const fileBuffer = await readS3ArrayBuffer(fileKey);
-    const pdf = await PDF.load(new Uint8Array(fileBuffer));
+    const fileBytes = await readS3BytesBounded({
+      key: fileKey,
+      maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    });
+    const pdf = await PDF.load(fileBytes);
 
     return Result.ok({
       prompt: tool.prompt,

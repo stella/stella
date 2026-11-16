@@ -1,1 +1,0 @@
-{"[&_code]:flex":{"valid":true,"declarations":[[">","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"bg-primary/10":{"valid":true,"declarations":[["","background-color","color-mix(in oklab, var(--primary) 10%, transparent)"]],"values":{"color-mix(in oklab, var(--primary) 10%, transparent)":{"p":["--primary"],"f":[],"u":false}}}}

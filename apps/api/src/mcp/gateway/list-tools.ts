@@ -58,6 +58,7 @@ import type {
   McpToolInputSchema,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import { withMcpToolSchemaVersion } from "@/api/mcp/tool-versions";
 import {
   mcpToolAuthorityRefusal,
   type McpWriteToolPermissions,
@@ -566,7 +567,7 @@ export const toMcpTools = (
   return definitions.map(
     ({ _meta, annotations, description, inputSchema, name }) => {
       const outputContract = resolveMcpToolOutputContract(name, mode);
-      return {
+      return withMcpToolSchemaVersion({
         ...(_meta === undefined ? {} : { _meta }),
         annotations,
         description: scopeDescription(name, description),
@@ -584,7 +585,7 @@ export const toMcpTools = (
                   : toScopedWireSchema(outputContract.outputSchema, hidden),
             }),
         title: annotations.title,
-      };
+      });
     },
   );
 };

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { Fetch } from "@/connection/http";
 import {
   createAccessTokenSource,
+  createSessionStore,
   type StoredSession,
 } from "@/connection/session";
 
@@ -16,6 +17,7 @@ import {
 } from "./document-file";
 
 const SESSION: StoredSession = {
+  signInId: "sign-in-1",
   serverUrl: "https://stella.example.com",
   issuer: "https://stella.example.com/api/auth",
   clientId:
@@ -31,18 +33,22 @@ const DOCX =
 const XLSX =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-const sourceFor = (fetch: Fetch) =>
-  createAccessTokenSource({
+const sourceFor = (fetch: Fetch) => {
+  const store = createSessionStore({
+    read: async () => SESSION,
+    write: async () => {},
+    prepareClear: async () => {},
+    clear: async () => {},
+  });
+  return createAccessTokenSource({
     fetch,
     initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
     now: () => 0,
     session: SESSION,
-    store: {
-      read: async () => SESSION,
-      write: async () => {},
-      clear: async () => {},
-    },
+    store,
+    generation: store.generation(),
   });
+};
 
 /** A server answering each path with `respond`, recording what was asked. */
 const server = (respond: (path: string) => Response) => {
@@ -57,13 +63,17 @@ const server = (respond: (path: string) => Response) => {
 
 const history = (
   currentVersionId: string | null,
-  versions: { id: string; file: { fieldId: string } | null }[],
+  versions: {
+    id: string;
+    versionNumber?: number;
+    file: { fieldId: string } | null;
+  }[],
 ) => ({
   entityId: "entity-1",
   currentVersionId,
   versions: versions.map((version) => ({
-    ...version,
     versionNumber: 1,
+    ...version,
     file:
       version.file === null
         ? null
@@ -125,6 +135,25 @@ describe("the current version's file", () => {
     ).toBe("field-2");
   });
 
+  test("names the version its file is of, so an edit can start from it", () => {
+    const current = (currentVersionId: string) =>
+      currentVersionFile(
+        history(currentVersionId, [
+          { id: "version-3", versionNumber: 3, file: null },
+          { id: "version-2", versionNumber: 2, file: { fieldId: "field-2" } },
+          { id: "version-1", versionNumber: 1, file: { fieldId: "field-1" } },
+        ]),
+      );
+    expect(current("version-1")).toMatchObject({
+      fieldId: "field-1",
+      versionNumber: 1,
+    });
+    expect(current("version-3")).toMatchObject({
+      fieldId: "field-2",
+      versionNumber: 2,
+    });
+  });
+
   test("is missing for a document without a file", () => {
     expect(
       currentVersionFile(history(null, [{ id: "version-1", file: null }])),
@@ -162,6 +191,8 @@ describe("reading a document's file", () => {
     );
     const result = await read(fetch);
     expect(result.isOk() ? result.value : result.error).toEqual({
+      propertyId: "property-1",
+      versionNumber: 1,
       fileName: "Smlouva.docx",
       mimeType: "application/pdf",
       url: "https://storage.example.com/file-1?signature=abc",

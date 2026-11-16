@@ -6,6 +6,7 @@ import type { RequestListener } from "node:http";
 
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { settledWithin, waitFor } from "@stll/test-kit";
 
 import {
   fetchStreamWithResolvedAddress,
@@ -15,6 +16,7 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { fetchStreamFollowingRedirects } from "@/api/lib/redirect-fetch";
 import {
   OUTBOUND_IPV6_POLICY,
+  OUTBOUND_USER_AGENT,
   parseSafeOutboundUrl,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
@@ -42,23 +44,47 @@ describe("bounded metadata transfers", () => {
   test("a progressing slow-drip body still expires at the total deadline", async () => {
     let chunks = 0;
     const completeAfter = 40;
+    let dripTarget: { write: (chunk: string) => void; end: () => void } | null =
+      null;
     await withHttpServer(
       (_request, response) => {
         response.writeHead(200);
         response.write("start");
         chunks++;
-        const drip = setInterval(() => {
-          chunks++;
-          response.write(".");
-          if (chunks === completeAfter) {
-            clearInterval(drip);
-            response.end();
-          }
-        }, 10);
-        response.on("close", () => clearInterval(drip));
+        dripTarget = response;
+        response.on("close", () => {
+          dripTarget = null;
+        });
       },
       async (port) => {
-        const result = await fetchMetadataAt({ port, totalTimeoutMs: 200 });
+        let settled:
+          { value: Awaited<ReturnType<typeof fetchMetadataAt>> } | undefined;
+        const pending = fetchMetadataAt({ port, totalTimeoutMs: 200 }).then(
+          (value) => {
+            settled = { value };
+            return value;
+          },
+        );
+        // Each re-check drips one more byte while the transfer is admitted,
+        // so the body keeps progressing until the total deadline ends it.
+        const { value: result } = await waitFor(
+          () => {
+            if (settled === undefined && dripTarget !== null) {
+              chunks++;
+              dripTarget.write(".");
+              if (chunks === completeAfter) {
+                dripTarget.end();
+              }
+            }
+            return settled;
+          },
+          {
+            description: "the slow-drip transfer to settle",
+            intervalMs: 10,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+          },
+        );
+        await pending;
         expect(result.isErr()).toBe(true);
         if (result.isErr()) {
           expect(result.error.message).toBe("Request timed out");
@@ -97,12 +123,9 @@ describe("bounded metadata transfers", () => {
         response.writeHead(302, {
           Location: "https://elsewhere.example/target",
         });
+        // The body stays open, so only the client can end the connection.
         response.write("redirect body");
-        const drip = setInterval(() => {
-          response.write(".");
-        }, 10);
         response.on("close", () => {
-          clearInterval(drip);
           closed.resolve(true);
         });
       },
@@ -112,12 +135,10 @@ describe("bounded metadata transfers", () => {
         if (result.isErr()) {
           expect(result.error.message).toBe("Redirects are not allowed");
         }
-        const closeDeadline = setTimeout(
-          () => closed.resolve(false),
-          HAPPY_PATH_TIMEOUT_MS,
-        );
-        const observedClosed = await closed.promise;
-        clearTimeout(closeDeadline);
+        const observedClosed = await settledWithin(closed.promise, {
+          description: "the refused redirect's connection to close",
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+        });
         expect(observedClosed).toBe(true);
         expect(requests).toBe(1);
         expect(host).toBe(`metadata.example.test:${port}`);
@@ -174,6 +195,60 @@ describe("fetchWithResolvedAddress", () => {
 
         expect(new TextDecoder().decode(result.value.body)).toBe(
           `example.test:${port}`,
+        );
+      },
+    );
+  });
+
+  test("names stella as the User-Agent unless the caller names one", async () => {
+    await withHttpServer(
+      (request, response) => {
+        response.end(request.headers["user-agent"] ?? "(none)");
+      },
+      async (port) => {
+        const userAgentSent = async (headers?: Record<string, string>) => {
+          const result = await fetchWithResolvedAddress({
+            permit: grantThirdPartyOutboundPermit(),
+            addresses: [{ address: "127.0.0.1", family: 4 }],
+            maxBytes: 1024,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+            url: new URL(`http://example.test:${port}/probe`),
+            ...(headers === undefined ? {} : { headers }),
+          });
+          if (Result.isError(result)) {
+            throw result.error;
+          }
+          return new TextDecoder().decode(result.value.body);
+        };
+
+        expect(await userAgentSent()).toBe(OUTBOUND_USER_AGENT);
+        expect(OUTBOUND_USER_AGENT).toStartWith("stella-api/");
+        expect(await userAgentSent({ "User-Agent": "stella-ingestion" })).toBe(
+          "stella-ingestion",
+        );
+      },
+    );
+  });
+
+  test("streams name stella as the User-Agent too", async () => {
+    await withHttpServer(
+      (request, response) => {
+        response.end(request.headers["user-agent"] ?? "(none)");
+      },
+      async (port) => {
+        const result = await fetchStreamWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+          url: new URL(`http://example.test:${port}/probe`),
+        });
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+
+        expect(await new Response(result.value.body).text()).toBe(
+          OUTBOUND_USER_AGENT,
         );
       },
     );

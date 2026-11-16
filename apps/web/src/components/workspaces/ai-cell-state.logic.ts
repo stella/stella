@@ -9,6 +9,7 @@ export type AiCellState =
   | { type: "running" }
   | { type: "done" }
   | { type: "not_stated" }
+  | { type: "not_found_in_cut_document" }
   | { type: "failed" }
   | { type: "refused"; reason: "modelRefusal" }
   | { type: "refused_budget" };
@@ -26,6 +27,8 @@ export const propertyAiCellState = (
         return { type: "done" };
       case "notStated":
         return { type: "not_stated" };
+      case "notFoundInCutDocument":
+        return { type: "not_found_in_cut_document" };
       case "refused":
         return { type: "refused", reason: aiSettlement.reason };
       case "failed":
@@ -50,6 +53,7 @@ export const propertyAiCellState = (
     case "money":
     case "person":
     case "clip":
+    case "record":
       return { type: "done" };
     default:
       content satisfies never;

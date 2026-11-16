@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -9,14 +8,11 @@ import { readEvidence } from "@/api/lib/observability/failure-evidence";
 const buildArchive = async (
   files: { path: string; content: string | Uint8Array }[],
 ): Promise<ArrayBuffer> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   for (const file of files) {
-    writeZipEntry(zip, file.path, file.content);
+    zip.set(file.path, file.content);
   }
-  return await zip.generateAsync({
-    type: "arraybuffer",
-    compression: "DEFLATE",
-  });
+  return (await zip.generate()).buffer;
 };
 
 const captureRejection = async <T>(promise: Promise<T>): Promise<unknown> => {

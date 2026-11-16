@@ -4,8 +4,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Hex } from "@stll/sha256/browser";
+import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { AlertTriangleIcon, FileTextIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
@@ -20,6 +22,7 @@ import { contactsKeys } from "@/lib/contacts/queries";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { validateUploadFileSize } from "@/lib/files/upload-file-validation";
 import { customFieldId } from "@/routes/_protected.contacts/-import-candidate";
 import type {
   ImportCandidate,
@@ -31,9 +34,6 @@ import {
   useImportReview,
 } from "@/routes/_protected.contacts/-import-review";
 import type { ImportReview } from "@/routes/_protected.contacts/-import-review";
-
-const EXTRACTION_SOURCE_MAX_BYTES = 50 * 1024 * 1024;
-const EXTRACTION_UPLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 
 /** A procuração states Brazilian tax ids, so the batch is checksum-checked. */
 const PROCURACAO_TAX_ID_SCHEME = "br_cpf_cnpj" as const;
@@ -151,8 +151,9 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
       notifyUserProblem(t("contacts.extractProcuracao.invalidFileType"));
       return;
     }
-    if (file.size > EXTRACTION_SOURCE_MAX_BYTES) {
-      notifyUserProblem(t("contacts.extractProcuracao.fileTooLarge"));
+    const size = validateUploadFileSize(file.size);
+    if (Result.isError(size)) {
+      notifyUserProblem(size.error.message);
       return;
     }
 
@@ -175,7 +176,7 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
           method: "PUT",
           headers: presignResponse.data.headers,
           body: file,
-          timeoutMs: EXTRACTION_UPLOAD_TIMEOUT_MS,
+          timeoutMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
         });
         if (!putResponse.ok) {
           throw new ClientOperationError({
@@ -289,33 +290,42 @@ export const ProcuracaoDropZone = ({
 
   return (
     <div ref={ref}>
-      <button
+      {/* Not `disabled` while extracting: the zone keeps its colour behind
+          the loader (a disabled Button dims) and shows a busy cursor;
+          `openPicker` already ignores the click. */}
+      <Button
         aria-busy={isExtracting}
-        className={cn(
-          "bg-muted/20 hover:bg-muted/40 focus-visible:ring-ring flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed px-4 py-5 text-center focus-visible:ring-2 focus-visible:outline-none",
-          isDropTarget && "border-primary bg-primary/5",
-          isExtracting && "cursor-progress",
-        )}
-        disabled={isExtracting}
+        aria-disabled={isExtracting || undefined}
+        tabIndex={isExtracting ? -1 : undefined}
+        className="w-full items-stretch"
         onClick={openPicker}
-        type="button"
+        variant="plain"
       >
-        {isExtracting ? (
-          <Loader className="size-5" size="sm" variant="decorative" />
-        ) : (
-          <FileTextIcon className="text-muted-foreground size-5" />
-        )}
-        <span className="text-sm font-medium">
-          {t(
-            isExtracting
-              ? "contacts.extractProcuracao.extracting"
-              : "contacts.extractProcuracao.dropZone",
+        {/* The drop surface, lit while a file is dragged over it. */}
+        <span
+          className={cn(
+            "bg-muted/20 hover:bg-muted/40 flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed px-4 py-5 text-center",
+            isDropTarget && "border-primary bg-primary/5",
+            isExtracting && "cursor-progress",
           )}
+        >
+          {isExtracting ? (
+            <Loader className="size-5" size="sm" variant="decorative" />
+          ) : (
+            <FileTextIcon className="text-muted-foreground size-5" />
+          )}
+          <span className="text-sm font-medium">
+            {t(
+              isExtracting
+                ? "contacts.extractProcuracao.extracting"
+                : "contacts.extractProcuracao.dropZone",
+            )}
+          </span>
+          <span className="text-muted-foreground text-xs">
+            {t("contacts.extractProcuracao.fileHint")}
+          </span>
         </span>
-        <span className="text-muted-foreground text-xs">
-          {t("contacts.extractProcuracao.fileHint")}
-        </span>
-      </button>
+      </Button>
     </div>
   );
 };

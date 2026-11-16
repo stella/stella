@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The expanded account-audit CHECK is added NOT VALID without scanning existing audit rows; the preceding drop and replacement are atomic, lock acquisition is bounded by 1s and each catalog statement by 10s, and the registered online phase validates after the schema lock is released."
+}

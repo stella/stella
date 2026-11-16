@@ -3,13 +3,13 @@ import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
+import type { ProcessSupplementOptions } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   IngestionResult,
   StoredRawReadError,
   StoredRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { ProcessSupplementOptions } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/legal-search/ingestion-types";
 
 type RebuildStoredJudgmentOptions = {
   judgmentId: SafeId<"caseLawDecision">;

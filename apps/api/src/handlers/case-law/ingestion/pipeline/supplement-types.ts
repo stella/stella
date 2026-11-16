@@ -1,9 +1,4 @@
 import type { ScopedDb } from "@/api/db/safe-db";
-import type {
-  DecisionSupplement,
-  SourceAdapter,
-  StoredRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type {
   PROCESS_DECISION_RETRY_REASON,
@@ -13,10 +8,32 @@ import type {
 import type { absorbStandaloneSupplementRow } from "@/api/handlers/case-law/ingestion/supplement-absorption";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
+import type {
+  DecisionSupplement,
+  SourceAdapter,
+  StoredRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
 
 /** Emitted when a supplement's judgment could not be rebuilt to compose it. */
 export const SUPPLEMENT_JUDGMENT_UNREADABLE =
   "case_law.ingestion.supplement_judgment_unreadable";
+
+/** Emitted when a supplement's row is deleted while it leaves a judgment. */
+export const SUPPLEMENT_REMOVED_WHILE_LEAVING =
+  "case_law.ingestion.supplement_removed_while_leaving";
+
+/**
+ * The modules that delete supplement rows, each for an erasure or a
+ * takedown: the erasure of a decision, and a placement that finds the
+ * supplement's own row erased or its judgment redacted. The `removed`
+ * disposition rests on this: a supplement whose row is gone is never placed
+ * again by the step that found it gone. A census test holds the list to the
+ * code.
+ */
+export const SUPPLEMENT_ROW_DELETERS = [
+  "apps/api/src/handlers/case-law/erasure.ts",
+  "apps/api/src/handlers/case-law/ingestion/pipeline/supplement-placement.ts",
+] as const;
 
 /** Emitted when a supplement's judgment payload could not be read this time. */
 export const SUPPLEMENT_JUDGMENT_READ_FAILED =
@@ -56,7 +73,17 @@ export type SupplementDisposition =
    * Its own standalone row is erased. The erasure covers the supplement, so
    * nothing of it is kept or placed.
    */
-  | { type: "erased"; decisionId: SafeId<"caseLawDecision"> };
+  | { type: "erased"; decisionId: SafeId<"caseLawDecision"> }
+  /**
+   * Its row was deleted while it was leaving a judgment a correction moved
+   * it off. Only an erasure or a takedown deletes one (see
+   * `SUPPLEMENT_ROW_DELETERS`), so nothing of it is placed; the publisher's
+   * next observation places it from the start.
+   */
+  | {
+      type: "removed";
+      formerJudgmentId: SafeId<"caseLawDecision">;
+    };
 
 export type ProcessSupplementResult =
   | {

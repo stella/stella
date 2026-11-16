@@ -1,7 +1,10 @@
-import { HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import {
+  buttonStyle,
+  controlSize,
   font,
   foregroundStyle,
+  labelStyle,
   lineLimit,
   monospacedDigit,
   padding,
@@ -14,15 +17,18 @@ import type {
   LiveActivityLayout,
 } from "expo-widgets";
 
+import { TIMER_ACTIVITY_NAME } from "@stll/api-contract/timer-activity";
+import type { TimerActivityProps } from "@stll/api-contract/timer-activity";
+
 import { LIVE_ACTIVITIES } from "@/env";
-import type { TimerActivityProps } from "@/state/timer-activity";
 
 /**
  * A running timer on the Lock Screen and in the Dynamic Island, as t3code
  * shows a working agent: what is being timed, its matter, and the clock,
  * which the system counts itself while the timer runs, so the app need not
  * wake each second. A paused timer shows its clock still. A tap opens the
- * timers.
+ * timers; on a phone that holds a key, a button pauses or resumes the
+ * timer without opening the app (`modules/timer-actions` answers it).
  */
 const TimerActivityLayout = (
   props: TimerActivityProps,
@@ -57,6 +63,20 @@ const TimerActivityLayout = (
         {props.clock}
       </Text>
     );
+  // The button names its action and timer for the app's native side.
+  const action = (labelled: boolean) =>
+    props.actions ? (
+      <Button
+        label={props.actionLabel}
+        modifiers={[
+          buttonStyle("bordered"),
+          controlSize("small"),
+          labelStyle(labelled ? "titleAndIcon" : "iconOnly"),
+        ]}
+        systemImage={props.running ? "pause.fill" : "play.fill"}
+        target={props.actionTarget}
+      />
+    ) : null;
   const glyph = (
     <Image
       modifiers={[foregroundStyle(props.running ? primary : secondary)]}
@@ -89,7 +109,10 @@ const TimerActivityLayout = (
           </Text>
         </VStack>
         <Spacer />
-        {clock(24)}
+        <VStack alignment="trailing" spacing={6}>
+          {clock(24)}
+          {action(false)}
+        </VStack>
       </HStack>
     ),
     compactLeading: glyph,
@@ -100,6 +123,7 @@ const TimerActivityLayout = (
           {props.status}
         </Text>
         <Spacer />
+        {action(true)}
       </HStack>
     ),
     expandedLeading: (
@@ -136,7 +160,7 @@ const TimerActivityLayout = (
 export const TimerActivity: LiveActivityFactory<TimerActivityProps> | null =
   LIVE_ACTIVITIES
     ? createLiveActivity<TimerActivityProps>(
-        "TimerActivity",
+        TIMER_ACTIVITY_NAME,
         TimerActivityLayout,
       )
     : null;

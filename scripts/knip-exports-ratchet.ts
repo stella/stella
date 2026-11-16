@@ -119,38 +119,57 @@ const parseKnipReport = (report: unknown): readonly KnipFileReport[] => {
   return rows;
 };
 
-const sortedSummary = (summary: Summary): Summary => {
-  const sorted: Summary = {};
-  for (const workspace of Object.keys(summary).toSorted()) {
-    const snapshot =
-      summary[workspace] ?? panic(`workspace ${workspace} vanished`);
-    const files: Record<string, number> = {};
-    for (const file of Object.keys(snapshot.files).toSorted()) {
-      files[file] = snapshot.files[file] ?? panic(`file ${file} vanished`);
-    }
-    sorted[workspace] = { count: snapshot.count, files };
-  }
-  return sorted;
-};
+const sortedSummary = (summary: Summary): Summary =>
+  Object.fromEntries(
+    Object.keys(summary)
+      .toSorted()
+      .map((workspace) => {
+        const snapshot =
+          summary[workspace] ?? panic(`workspace ${workspace} vanished`);
+        const files = Object.fromEntries(
+          Object.keys(snapshot.files)
+            .toSorted()
+            .map(
+              (file) =>
+                [
+                  file,
+                  snapshot.files[file] ?? panic(`file ${file} vanished`),
+                ] as const,
+            ),
+        );
+        return [workspace, { count: snapshot.count, files }] as const;
+      }),
+  );
 
 // The knip json reporter emits `{ issues: [{ file, exports, types, ... }] }`,
 // one entry per file, each issue type an array of symbols.
 export const summarizeKnipReport = (report: unknown): Summary => {
-  const summary: Record<
+  const summary = new Map<
     string,
-    { count: number; files: Record<string, number> }
-  > = {};
+    { count: number; files: Map<string, number> }
+  >();
   for (const { file, issues } of parseKnipReport(report)) {
     if (issues.length === 0) {
       continue;
     }
     const workspace = workspaceOf(file);
-    const snapshot = summary[workspace] ?? { count: 0, files: {} };
+    const snapshot = summary.get(workspace) ?? {
+      count: 0,
+      files: new Map<string, number>(),
+    };
     snapshot.count += issues.length;
-    snapshot.files[file] = (snapshot.files[file] ?? 0) + issues.length;
-    summary[workspace] = snapshot;
+    snapshot.files.set(file, (snapshot.files.get(file) ?? 0) + issues.length);
+    summary.set(workspace, snapshot);
   }
-  return sortedSummary(summary);
+  return sortedSummary(
+    Object.fromEntries(
+      Array.from(
+        summary,
+        ([workspace, { count, files }]) =>
+          [workspace, { count, files: Object.fromEntries(files) }] as const,
+      ),
+    ),
+  );
 };
 
 // Symbol names per file, so a failing gate names what to delete rather than
@@ -158,15 +177,15 @@ export const summarizeKnipReport = (report: unknown): Summary => {
 export const collectIssueSymbols = (
   report: unknown,
 ): Record<string, readonly string[]> => {
-  const symbols: Record<string, string[]> = {};
+  const symbols = new Map<string, string[]>();
   for (const { file, issues } of parseKnipReport(report)) {
     for (const { type, name } of issues) {
-      const named = symbols[file] ?? [];
+      const named = symbols.get(file) ?? [];
       named.push(`${name} (${type})`);
-      symbols[file] = named;
+      symbols.set(file, named);
     }
   }
-  return symbols;
+  return Object.fromEntries(symbols);
 };
 
 // --- Diffing ----------------------------------------------------------------
@@ -210,19 +229,26 @@ export const diffSummaries = (
   current: Summary,
   baseline: Summary,
 ): readonly WorkspaceDiff[] => {
+  const currentByWorkspace = new Map(Object.entries(current));
+  const baselineByWorkspace = new Map(Object.entries(baseline));
   const workspaces = [
-    ...new Set([...Object.keys(current), ...Object.keys(baseline)]),
+    ...new Set([...currentByWorkspace.keys(), ...baselineByWorkspace.keys()]),
   ].toSorted();
 
   return workspaces.map((workspace) => {
-    const now = current[workspace] ?? { count: 0, files: {} };
-    const before = baseline[workspace] ?? { count: 0, files: {} };
+    const now = currentByWorkspace.get(workspace) ?? { count: 0, files: {} };
+    const before = baselineByWorkspace.get(workspace) ?? {
+      count: 0,
+      files: {},
+    };
+    const currentFiles = new Map(Object.entries(now.files));
+    const baselineFiles = new Map(Object.entries(before.files));
     const changedFiles = [
-      ...new Set([...Object.keys(before.files), ...Object.keys(now.files)]),
+      ...new Set([...baselineFiles.keys(), ...currentFiles.keys()]),
     ]
       .flatMap((file) => {
-        const from = before.files[file] ?? 0;
-        const to = now.files[file] ?? 0;
+        const from = baselineFiles.get(file) ?? 0;
+        const to = currentFiles.get(file) ?? 0;
         return to !== from ? [{ file, from, to }] : [];
       })
       .toSorted((a, b) => compareCodeUnit(a.file, b.file));
@@ -274,13 +300,13 @@ const readBaseline = (): Summary => {
     panic(`${BASELINE_REL} must be a JSON object`);
   }
 
-  const baseline: Summary = {};
+  const baseline = new Map<string, WorkspaceSnapshot>();
   for (const [workspace, snapshot] of Object.entries(parsed.value)) {
     const reportedFiles = isRecord(snapshot) ? snapshot["files"] : undefined;
     if (!isRecord(snapshot) || !isRecord(reportedFiles)) {
       panic(`${BASELINE_REL} entry ${workspace} must carry count and files`);
     }
-    const files: Record<string, number> = {};
+    const files = new Map<string, number>();
     let total = 0;
     for (const [file, value] of Object.entries(reportedFiles)) {
       if (
@@ -292,7 +318,7 @@ const readBaseline = (): Summary => {
           `${BASELINE_REL} entry ${workspace} has an invalid count for ${file}`,
         );
       }
-      files[file] = value;
+      files.set(file, value);
       total += value;
     }
     const declared = snapshot["count"];
@@ -301,9 +327,9 @@ const readBaseline = (): Summary => {
         `${BASELINE_REL} entry ${workspace} count ${String(declared)} does not equal its per-file total ${total}`,
       );
     }
-    baseline[workspace] = { count: total, files };
+    baseline.set(workspace, { count: total, files: Object.fromEntries(files) });
   }
-  return baseline;
+  return Object.fromEntries(baseline);
 };
 
 // --- knip -------------------------------------------------------------------

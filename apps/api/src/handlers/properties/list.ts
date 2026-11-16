@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { properties, propertyDependencies } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -46,33 +46,34 @@ const toPropertyListItem = (
     createdAt: property.createdAt,
   };
 
-  if (property.tool.type === "ai-model") {
-    return {
-      ...projected,
-      tool: deserializeAITool({ ...property.tool, dependencies }),
-    };
+  const { tool } = property;
+  switch (tool.type) {
+    case "ai-model":
+      return {
+        ...projected,
+        tool: deserializeAITool({ ...tool, dependencies }),
+      };
+    case "manual-input":
+      return { ...projected, tool: { ...tool, dependencies } };
+    case "playbook-verdict":
+      // The web client has first-class read-only support for verdicts,
+      // pairing each onto its ASK column via `tool.askPropertyId`; masking it
+      // as manual-input would render verdicts as editable single-select
+      // columns. The grading inputs (rule/severity/standard) stay server-side.
+      // The view-templates and update-by-id masking are separate contracts.
+      return {
+        ...projected,
+        tool: {
+          version: tool.version,
+          type: tool.type,
+          askPropertyId: tool.askPropertyId,
+          dependencies,
+        },
+      };
+    default:
+      tool satisfies never;
+      return panic(`Unhandled property tool: ${String(tool)}`);
   }
-
-  if (property.tool.type === "manual-input") {
-    return { ...projected, tool: { ...property.tool, dependencies } };
-  }
-
-  // The only remaining tool type is the playbook verdict. The web
-  // client has first-class read-only support for it, pairing each
-  // verdict onto its ASK column via `tool.askPropertyId`; masking it as
-  // manual-input would render verdicts as editable single-select
-  // columns. The grading inputs (rule/severity/standard) stay
-  // server-side. The view-templates and update-by-id masking are
-  // separate contracts.
-  return {
-    ...projected,
-    tool: {
-      version: property.tool.version,
-      type: property.tool.type,
-      askPropertyId: property.tool.askPropertyId,
-      dependencies,
-    },
-  };
 };
 
 type PropertyListItem = ReturnType<typeof toPropertyListItem>;

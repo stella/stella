@@ -2,7 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 
 import { declareFingerprintFields } from "@stll/errors";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 /** An upstream record that cannot safely become a decision. */
 export type RejectedCaseLawIngestionRecord = {
@@ -85,6 +85,7 @@ class CaseLawBatchBoundsError extends TaggedError("CaseLawBatchBoundsError")<{
 
 /** Why an applied batch returned no receipt. */
 export const CASE_LAW_BATCH_FAILURE = {
+  FALLBACK_IDENTITY: "fallback-identity",
   /** The source lease was not held when the batch ordered or settled. */
   LEASE_LOST: "lease-lost",
   ABORTED: "aborted",

@@ -38,9 +38,12 @@ export const isMcpDescriptorFeatureEnabled = (
   const snapshot =
     args.context?.testDependencies?.featureAccessSnapshot ??
     args.context?.featureAccessSnapshot;
+  if (args.context === undefined) {
+    return false;
+  }
   if (
     snapshot === undefined ||
-    args.context?.organizationId === undefined ||
+    args.context.organizationId === undefined ||
     args.context.userId === undefined
   ) {
     return false;

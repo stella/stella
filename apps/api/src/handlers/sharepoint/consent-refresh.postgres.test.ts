@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { systemClock } from "@stll/test-kit";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   organizationSettings,
@@ -431,7 +433,7 @@ test("a committed newer consent invalidates an unexpired calendar token snapshot
     .where(eq(organizationSettings.organizationId, ids.orgA));
   await testDb
     .update(sharepointConnections)
-    .set({ expiresAt: new Date(Date.now() + 3_600_000) })
+    .set({ expiresAt: new Date(systemClock.now() + 3_600_000) })
     .where(eq(sharepointConnections.id, seeded.id));
   const snapshot = await testDb.query.sharepointConnections.findFirst({
     where: { id: { eq: seeded.id } },

@@ -1,229 +1,279 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import {
-  MICROSOFT365_CAPABILITIES,
-  type Microsoft365Capability,
-} from "@stll/api-contract/microsoft365";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+  DialogTrigger,
+} from "@stll/ui/dialog";
+import { LibraryIcon } from "@stll/ui/icons";
 import {
   List,
   ListGroup,
-  ListGroupDescription,
-  ListGroupHeader,
-  ListGroupHeading,
-  ListGroupTitle,
   ListItem,
   ListItemActions,
   ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
   ListItemStatus,
   ListItemTitle,
 } from "@stll/ui/list";
 
-import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
-import { usePermissions } from "@/hooks/use-permissions";
-import { useAnalytics } from "@/lib/analytics/provider";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
-  sharepointCapabilities,
-  sharepointConnect,
-  sharepointDisable,
-  sharepointDisconnect,
-} from "@/lib/api";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
-import { readQueryResult } from "@/lib/errors/query-result";
-import { notifyUserError } from "@/lib/errors/user-toast";
-import { sharepointConnectionOptions } from "@/routes/_protected.settings/-queries/connections";
+  SHAREPOINT_ACCESS,
+  SHAREPOINT_CONNECTION_STATE,
+  type SharepointAccess,
+  sharepointConnectionState,
+} from "@/features/sharepoint/sharepoint-access.logic";
+import {
+  type SharepointAccessView,
+  useSharepointAccess,
+  useSharepointConnect,
+  useSharepointDisconnect,
+} from "@/features/sharepoint/sharepoint-hooks";
+import type { SharepointConnection } from "@/features/sharepoint/sharepoint-queries";
+import { matchesConnectionQuery } from "@/lib/account/connections.logic";
+import { formatRelativeTime } from "@/lib/relative-time";
 
-import { SharepointConnectionActions } from "./sharepoint-connection-actions";
+type FailedSharepointRead = Extract<SharepointAccessView, { type: "error" }>;
 
-export const SharepointGroup = () => {
+/** What the row shows: the gate's answer, or a read that failed. */
+type SharepointRowState =
+  | Exclude<SharepointAccess, { type: typeof SHAREPOINT_ACCESS.unavailable }>
+  | { type: "failed"; read: FailedSharepointRead };
+
+export type SharepointConnectionRow =
+  | { visible: false }
+  | { visible: true; state: SharepointRowState; access: SharepointAccessView };
+
+const rowState = (access: SharepointAccessView): SharepointRowState | null => {
+  switch (access.type) {
+    case "pending":
+    case "empty":
+      return null;
+    case "error":
+      return { type: "failed", read: access };
+    case "items":
+      return access.items.type === SHAREPOINT_ACCESS.unavailable
+        ? null
+        : access.items;
+    default:
+      access satisfies never;
+      return panic("Unknown SharePoint gate view");
+  }
+};
+
+/**
+ * The member's SharePoint row, when the deployment offers SharePoint (or the
+ * gate could not be read) and the row matches the search. Nothing is shown
+ * while the gate is loading or when the deployment does not offer it.
+ */
+export const useSharepointConnectionRow = (
+  query: string,
+): SharepointConnectionRow => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
-  const { id: userId, activeOrganizationId: organizationId } =
-    useAuthenticatedUser();
-  const options = sharepointConnectionOptions({ organizationId, userId });
-  const { data, error, isError, refetch } = useQuery(options);
-  const canManage = usePermissions({ organizationSettings: ["update"] });
-  const onError = (failure: unknown) => {
-    notifyUserError(failure, t("errors.actionFailed"));
-    analytics.captureError(failure, {
-      fingerprintKey: "SharepointGroup:failure",
-      scope: { type: "handler", handlerId: "SharepointGroup:failure" },
-    });
-  };
-  const invalidate = async () => {
-    await queryClient.invalidateQueries({ queryKey: options.queryKey });
-  };
-  const connect = useMutation({
-    mutationFn: async (capability: Microsoft365Capability) =>
-      readQueryResult(await sharepointConnect.start(capability)),
-    onSuccess: ({ authorizeUrl }) => window.location.assign(authorizeUrl),
-    onError,
-  });
-  const updateCapabilities = useMutation({
-    mutationFn: async (capabilities: Microsoft365Capability[]) =>
-      readQueryResult(await sharepointCapabilities.update(capabilities)),
-    onSuccess: invalidate,
-    onError,
-  });
-  const disable = useMutation({
-    mutationFn: async () => readQueryResult(await sharepointDisable.disable()),
-    onSuccess: invalidate,
-    onError,
-  });
-  const disconnect = useMutation({
-    mutationFn: async () =>
-      readQueryResult(await sharepointDisconnect.disconnect()),
-    onSuccess: invalidate,
-    onError,
-  });
+  const access = useSharepointAccess();
+  const state = rowState(access);
+  if (state === null) {
+    return { visible: false };
+  }
+  const accountLabel =
+    state.type === SHAREPOINT_ACCESS.enabled
+      ? (state.connection?.accountLabel ?? "")
+      : "";
+  return matchesConnectionQuery(query, [
+    t("sharepoint.title"),
+    t("sharepoint.description"),
+    accountLabel,
+  ])
+    ? { visible: true, state, access }
+    : { visible: false };
+};
 
-  if (isError && !(APIError.is(error) && error.status === 404)) {
-    return (
-      <RecoverableErrorStatus
-        className="flex items-center gap-2"
-        message={t("settings.connections.microsoft365Error")}
-        actions={
-          <Button
-            onClick={() => detached(refetch(), "sharepoint-connection.retry")}
-            size="sm"
-            variant="outline"
-          >
-            {t("common.retry")}
-          </Button>
-        }
-      />
-    );
-  }
-  if (!data) {
-    return null;
-  }
-  if (data.type === "upgrade_required") {
-    return (
-      <ListGroup aria-labelledby="microsoft365-heading">
-        <ListGroupHeader>
-          <ListGroupHeading>
-            <ListGroupTitle id="microsoft365-heading">
-              {t("settings.connections.microsoft365Title")}
-            </ListGroupTitle>
-          </ListGroupHeading>
-        </ListGroupHeader>
-        <RecoverableErrorStatus
-          className="flex items-center gap-2"
-          message={t("settings.connections.microsoft365Error")}
-          actions={
-            <Button
-              onClick={() =>
-                detached(invalidate(), "sharepoint-connection.upgrade-retry")
-              }
-              size="sm"
-              variant="outline"
-            >
-              {t("common.retry")}
-            </Button>
-          }
-        />
-      </ListGroup>
-    );
-  }
-  const connection = data.value;
-  const enabled = connection.enabledCapabilities;
-  const pending =
-    connect.isPending ||
-    updateCapabilities.isPending ||
-    disable.isPending ||
-    disconnect.isPending;
+/**
+ * The member's own Microsoft connection for SharePoint and OneDrive. A failed
+ * refetch keeps the last known row and says so, with a retry.
+ */
+export const SharepointGroup = ({
+  state,
+  access,
+}: {
+  state: SharepointRowState;
+  access: SharepointAccessView;
+}) => {
+  const t = useTranslations();
   return (
-    <ListGroup aria-labelledby="microsoft365-heading">
-      <ListGroupHeader>
-        <ListGroupHeading>
-          <ListGroupTitle id="microsoft365-heading">
-            {t("settings.connections.microsoft365Title")}
-          </ListGroupTitle>
-        </ListGroupHeading>
-        <ListGroupDescription>
-          {t("settings.connections.microsoft365Description")}
-        </ListGroupDescription>
-      </ListGroupHeader>
+    <ListGroup aria-label={t("sharepoint.title")}>
       <List>
-        {MICROSOFT365_CAPABILITIES.map((capability) => {
-          const allowed = enabled.includes(capability);
-          const connected =
-            connection.connection?.status === "connected" &&
-            connection.connection.capabilities.includes(capability);
-          const reconnect =
-            allowed && connection.connection?.status === "reconnect_required";
-          let status = t("common.notConnected");
-          if (reconnect) {
-            status = t("knowledge.mcp.needsReauth");
-          } else if (connected && allowed) {
-            status = t("common.connected");
-          }
-          return (
-            <ListItem key={capability}>
-              <ListItemContent>
-                <ListItemTitle>
-                  {capability === "calendar.read"
-                    ? t("appearance.calendar")
-                    : t("common.files")}
-                </ListItemTitle>
-              </ListItemContent>
-              <ListItemStatus
-                tone={connected && allowed ? "success" : "neutral"}
-              >
-                {status}
-              </ListItemStatus>
-              <ListItemActions>
-                {canManage && (
-                  <Button
-                    disabled={pending}
-                    onClick={() =>
-                      updateCapabilities.mutate(
-                        allowed
-                          ? enabled.filter((value) => value !== capability)
-                          : [...enabled, capability],
-                      )
-                    }
-                    size="sm"
-                    variant="ghost"
-                  >
-                    {t(
-                      allowed
-                        ? "knowledge.mcp.disable"
-                        : "knowledge.mcp.enable",
-                    )}
-                  </Button>
-                )}
-                {allowed && (
-                  <Button
-                    disabled={pending}
-                    onClick={() => connect.mutate(capability)}
-                    size="sm"
-                    variant="outline"
-                  >
-                    {t(
-                      connected || reconnect
-                        ? "knowledge.mcp.reconnect"
-                        : "common.connect",
-                    )}
-                  </Button>
-                )}
-              </ListItemActions>
-            </ListItem>
-          );
-        })}
+        <ListItem>
+          <ListItemMedia>
+            <LibraryIcon />
+          </ListItemMedia>
+          <SharepointRowContent state={state} />
+        </ListItem>
       </List>
-      <SharepointConnectionActions
-        connected={connection.connection !== null}
-        enabled={enabled.length > 0 || connection.connection !== null}
-        canManage={canManage}
-        pending={pending}
-        onDisconnect={() => disconnect.mutate()}
-        onDisable={() => disable.mutate()}
-      />
+      {state.type !== "failed" && <QueryViewFeedback view={access} />}
     </ListGroup>
+  );
+};
+
+const SharepointRowContent = ({ state }: { state: SharepointRowState }) => {
+  const t = useTranslations();
+  switch (state.type) {
+    case "failed":
+      return (
+        <ListItemContent>
+          <ListItemTitle>{t("sharepoint.title")}</ListItemTitle>
+          <QueryViewFeedback view={state.read} />
+        </ListItemContent>
+      );
+    case SHAREPOINT_ACCESS.disabled:
+      return (
+        <>
+          <ListItemContent>
+            <ListItemTitle>{t("sharepoint.title")}</ListItemTitle>
+            <ListItemDescription>
+              {t("sharepoint.askAdmin")}
+            </ListItemDescription>
+          </ListItemContent>
+          <ListItemActions>
+            <ListItemStatus>
+              {t("settings.connections.turnedOff")}
+            </ListItemStatus>
+          </ListItemActions>
+        </>
+      );
+    case SHAREPOINT_ACCESS.enabled:
+      return <SharepointConnectionContent connection={state.connection} />;
+    default:
+      state satisfies never;
+      return panic("Unknown SharePoint row state");
+  }
+};
+
+const SharepointConnectionContent = ({
+  connection,
+}: {
+  connection: SharepointConnection | null;
+}) => {
+  const t = useTranslations();
+  const connect = useSharepointConnect();
+  const state = sharepointConnectionState(connection);
+  const connectButton = (label: string) => (
+    <Button
+      loading={connect.isPending}
+      onClick={() => connect.mutate()}
+      size="xs"
+      variant="outline"
+    >
+      {label}
+    </Button>
+  );
+
+  switch (state) {
+    case SHAREPOINT_CONNECTION_STATE.notConnected:
+      return (
+        <>
+          <ListItemContent>
+            <ListItemTitle>{t("sharepoint.title")}</ListItemTitle>
+            <ListItemDescription>
+              {t("sharepoint.description")}
+            </ListItemDescription>
+          </ListItemContent>
+          <ListItemActions>
+            {connectButton(t("common.connect"))}
+          </ListItemActions>
+        </>
+      );
+    case SHAREPOINT_CONNECTION_STATE.connected:
+    case SHAREPOINT_CONNECTION_STATE.reconnectRequired: {
+      const reconnect = state === SHAREPOINT_CONNECTION_STATE.reconnectRequired;
+      return (
+        <>
+          <ListItemContent>
+            <ListItemTitle>{t("sharepoint.title")}</ListItemTitle>
+            <ListItemDescription>
+              {connection !== null && (
+                <ConnectionDescription connection={connection} />
+              )}
+            </ListItemDescription>
+          </ListItemContent>
+          <ListItemActions>
+            <ListItemStatus tone={reconnect ? "warning" : "success"}>
+              {reconnect
+                ? t("sharepoint.reconnectRequired")
+                : t("common.connected")}
+            </ListItemStatus>
+            {reconnect && connectButton(t("common.reconnect"))}
+            <DisconnectButton />
+          </ListItemActions>
+        </>
+      );
+    }
+    default:
+      state satisfies never;
+      return panic("Unknown SharePoint connection state");
+  }
+};
+
+/** The Microsoft account, or when it was connected if Microsoft named none. */
+const ConnectionDescription = ({
+  connection,
+}: {
+  connection: SharepointConnection;
+}) => {
+  const t = useTranslations();
+  if (connection.accountLabel) {
+    return <BidiText>{connection.accountLabel}</BidiText>;
+  }
+  return t("settings.connections.connectedAgo", {
+    time: formatRelativeTime(connection.createdAt),
+  });
+};
+
+const DisconnectButton = () => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const disconnect = useSharepointDisconnect();
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger render={<Button size="xs" variant="ghost" />}>
+        {t("common.disconnect")}
+      </DialogTrigger>
+      <DialogPopup>
+        <DialogHeader>
+          <DialogTitle>{t("sharepoint.disconnectTitle")}</DialogTitle>
+          <DialogDescription>
+            {t("sharepoint.disconnectDescription")}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button
+            loading={disconnect.isPending}
+            onClick={() => {
+              disconnect.mutate(undefined, {
+                onSuccess: () => setOpen(false),
+              });
+            }}
+            variant="destructive"
+          >
+            {t("common.disconnect")}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
   );
 };

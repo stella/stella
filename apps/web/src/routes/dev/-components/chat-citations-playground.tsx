@@ -172,7 +172,6 @@ export function ChatCitationsPlayground({
               onCreateDocumentResolve={noop}
               onOpenCreatedDocument={noop}
               onResend={noop}
-              showThinkingIndicator
               streamdownComponents={STREAMDOWN_COMPONENTS}
             />
           </div>

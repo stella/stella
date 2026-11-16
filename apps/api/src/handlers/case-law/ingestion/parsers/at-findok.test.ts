@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 
-import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
+import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
 
 const fixture = async (): Promise<string> =>
   await Bun.file(
@@ -65,4 +68,29 @@ it("excludes script and style text from embedded XHTML", () => {
     "Visible decision",
   ]);
   expect(parsed.fulltext).toBe("Title\n\nVisible decision");
+});
+
+it("keeps a line break between the sentences it separates", async () => {
+  const parsed = parseFindokDecisionXml({
+    caseNumber: "RV/2100288/2018",
+    court: "BFG",
+    decisionDate: "2019-08-13",
+    decisionType: "erkenntnis",
+    sourceDocumentId: "test",
+    sourceUrl: "https://findok.bmf.gv.at/",
+    xml: await Bun.file(
+      new URL("__fixtures__/at-findok-bfg-umbrueche.xml", import.meta.url),
+    ).text(),
+  }).unwrap();
+
+  expect(parsed.textFidelity).toBeUndefined();
+  expect(parsed.fulltext).toContain("Sitz haben.\nMit Bescheid vom25.6.2015");
+  expect(parsed.fulltext).not.toMatch(/\p{Ll}{2}[.;:]\p{Lu}/u);
+  expect(
+    parsed.documentAst.blocks.some(
+      (block) =>
+        block.type === "paragraph" &&
+        block.inlines.some((inline) => inline.type === "line-break"),
+    ),
+  ).toBe(true);
 });

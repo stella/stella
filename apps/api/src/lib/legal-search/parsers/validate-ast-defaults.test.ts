@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { validateAst } from "./validate-ast";
@@ -18,7 +18,7 @@ test("a reused parsed document retains fresh-parse diagnostics", () => {
     },
   ] satisfies Block[];
 
-  expect(validateAst(html, blocks, { document: cheerio.load(html) })).toEqual(
+  expect(validateAst(html, blocks, { document: load(html) })).toEqual(
     validateAst(html, blocks),
   );
 });
@@ -35,7 +35,7 @@ test("validation reads an explicitly supplied parsed document", () => {
   ] satisfies Block[];
 
   const result = validateAst("<p>different source words</p>", blocks, {
-    document: cheerio.load("<p>Parsed document words</p>"),
+    document: load("<p>Parsed document words</p>"),
   });
 
   expect(result.stats.missingWords).toEqual([]);

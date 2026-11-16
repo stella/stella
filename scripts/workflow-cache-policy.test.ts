@@ -1,15 +1,18 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { API } from "tsrs/unstable/async";
+import { API } from "tsrs/async";
+import { toRootedFilePath } from "tsrs/path";
 import * as v from "valibot";
 
 import { CACHE_SAVE_REVISION } from "./ci-store-save";
 import { storeSaverCensus } from "./ci-store-save-policy";
 import { mainHeavyJobs } from "./main-heavy-plan";
 import {
+  BUN_SETUP_EXEMPTIONS,
   jobCachePolicy,
   MAIN_ONLY_BUN_CACHE_SAVE,
+  usedBunSetupExemptions,
   workflowCacheProblems,
 } from "./workflow-cache-policy.ts";
 
@@ -18,6 +21,66 @@ const cached = {
   uses: "stella/.github/actions/setup-bun-cached@fixture",
   with: { save: MAIN_ONLY_BUN_CACHE_SAVE },
 };
+const NO_CACHE_PROBLEM =
+  "job 'fixture': oven-sh/setup-bun no-cache: true only turns off the cached Bun executable (setup-bun has no package cache), so every run downloads Bun from GitHub releases and fails whenever they do; drop it, or list the job in CACHE_FREE_BUN_JOBS (scripts/workflow-cache-policy.ts) with why it must restore no cache";
+
+test("setup-bun no-cache is allowed only where a job must restore no cache", () => {
+  const job = (fields: Record<string, unknown> = {}) => ({
+    ...fields,
+    steps: [raw],
+  });
+  const problems = (
+    on: string[],
+    fields: Record<string, unknown> = {},
+    file?: string,
+  ) => workflowCacheProblems({ on, jobs: { fixture: job(fields) } }, file);
+  // An ordinary job keeps the cached executable; no-cache would only make it
+  // download Bun from GitHub releases on every run.
+  expect(problems(["pull_request"])).toEqual([NO_CACHE_PROBLEM]);
+  expect(
+    problems(["merge_group"], { permissions: { contents: "read" } }),
+  ).toEqual([NO_CACHE_PROBLEM]);
+  // Default-scope and publish-chain jobs restore no cache by structure.
+  expect(problems(["workflow_run"])).toEqual([]);
+  expect(problems(["push"], { permissions: { "id-token": "write" } })).toEqual(
+    [],
+  );
+  expect(problems(["push"], { permissions: { contents: "write" } })).toEqual(
+    [],
+  );
+  // A listed job is exempt only under its own file and job id.
+  const listed = ".github/workflows/release-rehearsal.yml";
+  expect(problems(["push"], {}, listed)).toEqual([NO_CACHE_PROBLEM]);
+  expect(
+    workflowCacheProblems({ on: ["push"], jobs: { rehearse: job() } }, listed),
+  ).toEqual([]);
+  expect(
+    workflowCacheProblems(
+      { on: ["push"], jobs: { rehearse: job() } },
+      ".github/workflows/ci.yml",
+    ),
+  ).toEqual([NO_CACHE_PROBLEM.replace("'fixture'", "'rehearse'")]);
+});
+
+test("raw Bun setup outside the shared install owner needs a listed reason", () => {
+  const setup = {
+    uses: raw.uses,
+    with: { "bun-version-file": "package.json" },
+  };
+  const workflow = {
+    on: ["pull_request"],
+    jobs: { "regenerate-scope": { steps: [setup] } },
+  };
+  const problem =
+    "job 'regenerate-scope': raw Bun setup needs the shared install-cache action";
+  expect(workflowCacheProblems(workflow)).toEqual([problem]);
+  expect(
+    workflowCacheProblems(workflow, ".github/workflows/autofix.yml"),
+  ).toEqual([]);
+  expect(workflowCacheProblems(workflow, ".github/workflows/ci.yml")).toEqual([
+    problem,
+  ]);
+});
 
 test("parallel groups cannot hide cache writers from protected jobs", () => {
   const cache = { uses: "actions/cache@fixture", with: { path: "dist" } };
@@ -44,9 +107,10 @@ test("raw setup and cache prohibition share the same job classification", () => 
         : [];
     const job = { steps: [...contract, raw] };
     expect(jobCachePolicy({ workflow, job })).toBe(protection);
+    // Only default-scope jobs may skip the Bun executable cache by structure.
     expect(
       workflowCacheProblems({ ...workflow, jobs: { fixture: job } }),
-    ).toEqual([]);
+    ).toEqual(protection === "default-scope" ? [] : [NO_CACHE_PROBLEM]);
     // Preserve explicit runtime policy when replacing its setup implementation.
     const mutated = {
       steps: [
@@ -146,11 +210,13 @@ test("all committed workflows and composite actions obey the shared cache policy
     ...new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({ cwd: root }),
   ];
   expect(files.length).toBeGreaterThan(0);
+  const exemptions: string[] = [];
   const problems = files.flatMap((file) => {
     const workflow: unknown = Bun.YAML.parse(
       readFileSync(`${root}/${file}`, "utf-8"),
     );
-    return workflowCacheProblems(workflow).map(
+    exemptions.push(...usedBunSetupExemptions(file, workflow));
+    return workflowCacheProblems(workflow, file).map(
       (problem) => `${file}: ${problem}`,
     );
   });
@@ -177,13 +243,16 @@ test("all committed workflows and composite actions obey the shared cache policy
     const workflow = {
       jobs: { composite: { steps: Reflect.get(runs, "steps") } },
     };
+    exemptions.push(...usedBunSetupExemptions(file, workflow));
     problems.push(
-      ...workflowCacheProblems(workflow).map(
+      ...workflowCacheProblems(workflow, file).map(
         (problem) => `${file}: ${problem}`,
       ),
     );
   }
   expect(problems).toEqual([]);
+  // A listed exemption that no committed job needs any more must go.
+  expect(exemptions.toSorted()).toEqual(BUN_SETUP_EXEMPTIONS.toSorted());
 });
 
 test("Bun install cache restore remains available but saves require the exact main boundary", () => {
@@ -296,9 +365,10 @@ test("dropping save from a real Bun caller violates the repository contract", ()
   if (!step.with) {
     expect.unreachable("Missing real Bun cache caller");
   }
-  expect(workflowCacheProblems(workflow)).toEqual([]);
+  const file = ".github/workflows/ci.yml";
+  expect(workflowCacheProblems(workflow, file)).toEqual([]);
   delete step.with["save"];
-  expect(workflowCacheProblems(workflow)).toContain(
+  expect(workflowCacheProblems(workflow, file)).toContain(
     `job '${id}': Bun install cache saves must be main-only`,
   );
 });
@@ -511,11 +581,14 @@ test("scoped store saves are non-fatal in-step saves, and containers cannot rest
   expect(project.options.allowJs).toBe(true);
   expect(project.options.checkJs).toBe(true);
   expect(project.fileNames).toContain(
-    fileURLToPath(
-      new URL(
-        `../.github/actions/ci-store-save/${cleanup.runs.main}`,
-        import.meta.url,
+    toRootedFilePath(
+      fileURLToPath(
+        new URL(
+          `../.github/actions/ci-store-save/${cleanup.runs.main}`,
+          import.meta.url,
+        ),
       ),
+      undefined,
     ),
   );
 });

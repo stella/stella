@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { compareCodeUnit } from "../packages/collation/src/collation";
 import { isPathInside } from "../packages/portable-path/src/index";
 import { evaluate } from "./github-expression";
 
@@ -54,6 +55,7 @@ const stepNamed = (name: string, candidate = source) => {
 };
 
 const PROOF_STEPS = [
+  "Configure flaky-test quarantine",
   "Run staging web smoke",
   "Run staging response policy checks",
   "Run staging API chat smoke",
@@ -61,7 +63,7 @@ const PROOF_STEPS = [
   "Check staging corpus search backend",
   "Run staging MCP user journeys",
   "Run deployed application journeys",
-  "Run mock-model application journeys",
+  "Require mock-model journey success",
 ];
 const assertReadinessGates = (candidate = source) => {
   const steps = promotionSteps(candidate);
@@ -418,5 +420,288 @@ test("proof tooling failures remain distinct before waiver evaluation", () => {
     expect(result).toStartWith("error|Staging proof tooling failure:");
     expect(result).not.toContain("rerun");
     expect(result).not.toContain("waived:");
+  }
+});
+
+const workflowJobs = () => {
+  const workflow: unknown = Bun.YAML.parse(source);
+  if (!isRecord(workflow) || !isRecord(workflow["jobs"])) {
+    throw new TypeError("Workflow jobs are required");
+  }
+  return workflow["jobs"];
+};
+
+test("mock-model journeys run alongside promotion for the same eligible commit with only Docker Hub secrets", () => {
+  const jobs = workflowJobs();
+  const promotion = jobs["promote-staging"];
+  const journeys = jobs["mock-model-journeys"];
+  if (
+    !isRecord(promotion) ||
+    !isRecord(journeys) ||
+    !Array.isArray(journeys["steps"])
+  ) {
+    throw new TypeError("Both staging jobs are required");
+  }
+  expect(journeys["needs"]).toEqual(promotion["needs"]);
+  expect(journeys["if"]).toBe(promotion["if"]);
+  expect(promotion["needs"]).not.toContain("mock-model-journeys");
+  expect(journeys["environment"]).toBeUndefined();
+  const serialized = JSON.stringify(journeys);
+  const secrets = [...serialized.matchAll(/secrets\.([A-Z_]+)/gu)].map(
+    (match) => match[1] ?? "",
+  );
+  expect(secrets.toSorted(compareCodeUnit)).toEqual([
+    "DOCKERHUB_TOKEN",
+    "DOCKERHUB_USERNAME",
+  ]);
+  const steps = journeys["steps"].filter(isRecord);
+  const checkout = steps.find(
+    (step) => step["name"] === "Checkout journey source",
+  );
+  const run = steps.find((step) => step["id"] === "mock-journeys");
+  expect(checkout?.["with"]).toMatchObject({
+    ref: `\${{ needs.resolve.outputs.sha }}`,
+  });
+  expect(run?.["uses"]).toBe("./.github/actions/user-journeys");
+  expect(run?.["with"]).toMatchObject({
+    project: "local-stack",
+    "expected-commit": `\${{ needs.resolve.outputs.sha }}`,
+  });
+  expect(
+    steps.find((step) => step["uses"] === "./.github/actions/user-journeys"),
+  ).toBe(run);
+  expect(
+    promotionSteps().some(
+      (step) =>
+        isRecord(step["with"]) && step["with"]["project"] === "local-stack",
+    ),
+  ).toBe(false);
+  expect(journeys["name"]).toBe("Mock-model application journeys");
+  const barrier = stepNamed("Require mock-model journey success");
+  expect(barrier["id"]).toBe("mock-journeys");
+  expect(stepNamed("Record staging verification")["env"]).toMatchObject({
+    MOCK_JOURNEYS: `\${{ steps.mock-journeys.outcome }}`,
+    DEPLOY_SHA: `\${{ needs.resolve.outputs.sha }}`,
+  });
+});
+
+const runJourneyBarrier = (responses: readonly string[]) => {
+  const directory = mkdtempSync(
+    path.resolve(import.meta.dir, "../.staging-journey-barrier-"),
+  );
+  try {
+    const helper = path.join(directory, "api.sh");
+    writeFileSync(
+      path.join(directory, "responses.json"),
+      JSON.stringify(responses),
+    );
+    writeFileSync(
+      helper,
+      `#!/usr/bin/env bash
+set -euo pipefail
+[[ "$*" == "api --paginate --slurp repos/stella/stella/actions/runs/7/attempts/2/jobs?per_page=100" ]] || exit 2
+counter_file="$BARRIER_DIRECTORY/counter"
+count=0
+if [[ -f "$counter_file" ]]; then count="$(cat "$counter_file")"; fi
+jq -er --argjson index "$count" '.[$index] // error("No response")' "$BARRIER_DIRECTORY/responses.json"
+echo "$((count + 1))" > "$counter_file"
+`,
+    );
+    const result = Bun.spawnSync(
+      [
+        "bash",
+        "-c",
+        `sleep() { :; }; export -f sleep
+${text(stepNamed("Require mock-model journey success"), "run")}`,
+      ],
+      {
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          GH_RETRY_SCRIPT: helper,
+          GITHUB_REPOSITORY: "stella/stella",
+          GITHUB_RUN_ID: "7",
+          GITHUB_RUN_ATTEMPT: "2",
+          BARRIER_DIRECTORY: directory,
+        },
+      },
+    );
+    return {
+      code: result.exitCode,
+      stderr: result.stderr.toString(),
+      stdout: result.stdout.toString(),
+    };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+const journeyResponse = (status: string, conclusion: string | null) =>
+  JSON.stringify([
+    {
+      jobs: [
+        {
+          name: "Mock-model application journeys",
+          status,
+          conclusion,
+        },
+      ],
+    },
+  ]);
+
+test("verification's locked barrier requires the current run attempt's completed successful journey job", () => {
+  expect(
+    runJourneyBarrier([journeyResponse("completed", "success")]).code,
+  ).toBe(0);
+  expect(
+    runJourneyBarrier([
+      journeyResponse("queued", null),
+      journeyResponse("in_progress", null),
+      journeyResponse("completed", "success"),
+    ]).code,
+  ).toBe(0);
+  for (const conclusion of [
+    "failure",
+    "cancelled",
+    "skipped",
+    "timed_out",
+    "neutral",
+    null,
+  ]) {
+    const result = runJourneyBarrier([
+      journeyResponse("completed", conclusion),
+    ]);
+    expect(result.code, JSON.stringify({ conclusion, ...result })).not.toBe(0);
+  }
+  for (const response of [
+    "invalid",
+    JSON.stringify([{ jobs: [] }]),
+    JSON.stringify([
+      {
+        jobs: [
+          {
+            name: "Mock-model application journeys",
+            status: "completed",
+            conclusion: "success",
+          },
+          {
+            name: "Mock-model application journeys",
+            status: "completed",
+            conclusion: "failure",
+          },
+        ],
+      },
+    ]),
+  ]) {
+    expect(runJourneyBarrier([response]).code).not.toBe(0);
+  }
+  for (const outcome of ["failure", "skipped", "cancelled", ""]) {
+    expect(recordProof({ MOCK_JOURNEYS: outcome })).toStartWith("failure|");
+  }
+});
+
+test("quarantine tooling survives a deployed checkout without the action", () => {
+  const root = mkdtempSync(
+    path.resolve(import.meta.dir, "../.quarantine-tooling-test-"),
+  );
+  try {
+    const workspace = path.join(root, "workspace");
+    const runnerTemp = path.join(root, "runner-temp");
+    mkdirSync(runnerTemp, { recursive: true });
+    const checkout = stepNamed("Checkout quarantine tooling");
+    if (!isRecord(checkout["with"])) {
+      throw new TypeError("Quarantine checkout inputs are required");
+    }
+    expect(checkout["uses"]).toBe(
+      stepNamed("Checkout deployed source")["uses"],
+    );
+    expect(checkout["with"]).toMatchObject({
+      ref: `\${{ github.workflow_sha }}`,
+      "persist-credentials": false,
+      path: ".quarantine-tooling",
+    });
+    for (const relativeFile of text(checkout["with"], "sparse-checkout")
+      .trim()
+      .split(/\s+/u)) {
+      copySparseCheckoutFile({
+        fixtureRoot: workspace,
+        checkoutPath: ".quarantine-tooling",
+        relativeFile,
+      });
+    }
+    const environment = {
+      PATH: process.env["PATH"] ?? "",
+      GITHUB_WORKSPACE: workspace,
+      RUNNER_TEMP: runnerTemp,
+      GITHUB_ENV: path.join(root, "github-env"),
+    };
+    const preserve = stepNamed(
+      "Preserve quarantine tooling across source checkouts",
+    );
+    const restore = stepNamed(
+      "Restore quarantine tooling after source checkout",
+    );
+    for (const step of [
+      checkout,
+      preserve,
+      restore,
+      stepNamed("Configure flaky-test quarantine"),
+    ]) {
+      expect(step["env"]).toBeUndefined();
+    }
+    const steps = promotionSteps();
+    const target = steps.findIndex(
+      (step) => step["name"] === "Checkout deployed source",
+    );
+    expect(
+      steps.indexOf(
+        steps.find((step) => step["name"] === "Checkout quarantine tooling") ??
+          {},
+      ),
+    ).toBeLessThan(target);
+    expect(
+      Bun.spawnSync(["bash", "-c", text(preserve, "run")], {
+        cwd: workspace,
+        env: environment,
+      }).exitCode,
+    ).toBe(0);
+    rmSync(workspace, { recursive: true, force: true });
+    mkdirSync(workspace);
+    expect(
+      existsSync(
+        path.join(
+          workspace,
+          ".github/actions/flaky-test-quarantine/action.yml",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      Bun.spawnSync(["bash", "-c", text(restore, "run")], {
+        cwd: workspace,
+        env: environment,
+      }).exitCode,
+    ).toBe(0);
+    const tooling = path.join(workspace, ".quarantine-tooling");
+    for (const entry of ["main.mjs", "post.mjs"]) {
+      expect(
+        assertPreservedImports(
+          path.join(tooling, ".github/actions/flaky-test-quarantine", entry),
+        ),
+      ).toBeGreaterThan(1);
+    }
+    const configured = Bun.spawnSync(
+      [
+        process.execPath,
+        path.join(tooling, ".github/actions/flaky-test-quarantine/main.mjs"),
+      ],
+      { cwd: workspace, env: environment },
+    );
+    expect(configured.exitCode, configured.stderr.toString()).toBe(0);
+    expect(readFileSync(environment.GITHUB_ENV, "utf-8")).toContain(
+      `--preload=${tooling}/scripts/flaky-test-quarantine-preload.ts`,
+    );
+    expect(stepNamed("Configure flaky-test quarantine")["with"]).toEqual({
+      token: `\${{ github.token }}`,
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

@@ -1,14 +1,16 @@
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
 
 import {
+  API_TEST_FILES_ENCODED_ENV,
   API_TEST_SHARD_ENV,
   parseApiTestShard as parseApiTestShardResult,
   partitionTestFiles as partitionTestFilesResult,
   type TestShardPlanningResult,
 } from "@stll/scripts/src/test-shard-planning";
 
-export { API_TEST_SHARD_ENV };
+import { decodePlanFileList } from "../../../scripts/plan-output-codec";
+
+export { API_TEST_FILES_ENCODED_ENV, API_TEST_SHARD_ENV };
 
 const unwrapPlanningResult = <T>(result: TestShardPlanningResult<T>): T =>
   result.status === "ok" ? result.value : panic(result.message);
@@ -30,21 +32,18 @@ export const restrictApiTestFiles = (
   if (selection === undefined || selection === "") {
     return files;
   }
-  const source = /\.test\.tsx?(?:\r?\n|$)/u.test(selection)
-    ? selection
-    : readFileSync(selection, "utf-8");
-  const selected = source.split(/\r?\n/u).filter((file) => file !== "");
+  const selected = decodePlanFileList(selection);
   if (selected.length === 0) {
-    panic("API_TEST_FILES selected zero test files");
+    panic("API_TEST_FILES_ENCODED selected zero test files");
   }
   const known = new Set(files);
   for (const file of selected) {
     if (!known.has(file)) {
-      panic(`Unknown API_TEST_FILES path: ${file}`);
+      panic(`Unknown API_TEST_FILES_ENCODED path: ${file}`);
     }
   }
   if (new Set(selected).size !== selected.length) {
-    panic("API_TEST_FILES paths must be unique");
+    panic("API_TEST_FILES_ENCODED paths must be unique");
   }
   const wanted = new Set(selected);
   return files.filter((file) => wanted.has(file));

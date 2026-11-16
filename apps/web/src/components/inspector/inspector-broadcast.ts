@@ -11,6 +11,9 @@ import {
   inspectorMinimizedEntry,
   inspectorRestorePendingEntry,
   inspectorStateEntry,
+  isInspectorRestorePending,
+  isPersistedInspectorPaneOpen,
+  startInspectorPageLoad,
 } from "@/components/inspector/inspector-storage-keys";
 import {
   type ChatTab,
@@ -30,6 +33,7 @@ import {
   getInspectorPersistenceReference,
   getInspectorView,
 } from "@/components/inspector/view-registry";
+import { scheduleIdle } from "@/lib/platform/schedule-idle";
 import "@/components/inspector/inspector-persistence-references";
 import {
   decisionChatKey,
@@ -147,7 +151,7 @@ type PageLoad = {
 };
 
 const createPageLoad = (): PageLoad => ({
-  id: createUuid(),
+  id: startInspectorPageLoad(),
   restoreHolds: 0,
   settlingScope: null,
   settleTimer: null,
@@ -155,14 +159,6 @@ const createPageLoad = (): PageLoad => ({
 });
 
 let pageLoad = createPageLoad();
-
-const readRestorePending = (scope: InspectorBroadcastScope): boolean => {
-  const pendingPageLoad = readPersistedState(
-    inspectorRestorePendingEntry,
-    scope,
-  );
-  return pendingPageLoad !== "" && pendingPageLoad !== pageLoad.id;
-};
 
 const writeRestorePending = (
   scope: InspectorBroadcastScope,
@@ -209,11 +205,7 @@ const scheduleRestoreSettle = (load: PageLoad): void => {
         settleRestore(load, scope);
       }
     };
-    if (typeof globalThis.requestIdleCallback === "function") {
-      globalThis.requestIdleCallback(clear);
-    } else {
-      clear();
-    }
+    scheduleIdle(clear);
   }, RESTORE_SETTLE_DELAY_MS);
 };
 
@@ -676,6 +668,15 @@ const readPersistedInspectorState = (
   };
 };
 
+/** The same restore policy as the store, available before its tabs hydrate. */
+export const readPersistedInspectorPaneOpen = (
+  scope: InspectorBroadcastScope,
+) =>
+  isPersistedInspectorPaneOpen(
+    scope,
+    (tabScope) => readPersistedInspectorState(tabScope)?.tabs.length ?? 0,
+  );
+
 const writePersistedInspectorState = (
   scope: InspectorBroadcastScope,
   state: InspectorTabsStore,
@@ -908,7 +909,7 @@ const initializeInspectorScope = (
   pageLoad.scopeOwnership.set(store, scopeKey);
   const persistedMinimized = readPersistedMinimized(scope);
   // The previous restore never settled: keep the pane closed this time.
-  const recovering = readRestorePending(scope);
+  const recovering = isInspectorRestorePending(scope);
   const minimized = persistedMinimized || recovering;
   if (store.getState().minimized !== minimized) {
     store.setState({ minimized });
