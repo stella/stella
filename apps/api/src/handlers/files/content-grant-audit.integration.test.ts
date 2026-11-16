@@ -843,11 +843,17 @@ type StreamedPath = {
 };
 
 /** A plain object answer is the JSON body of a 200. */
-const answeredStatus = (answer: unknown) => {
+const answeredStatus = (answer: unknown): number => {
   if (answer instanceof Response) {
     return answer.status;
   }
-  return answer instanceof HttpStatusResponse ? answer.code : 200;
+  if (answer instanceof HttpStatusResponse) {
+    // `instanceof` cannot name the class's code parameter, so the narrowed
+    // value reads it as the class's declared bound.
+    const { code }: HttpStatusResponse = answer;
+    return code;
+  }
+  return 200;
 };
 
 const STREAMED_PATHS: readonly StreamedPath[] = [

@@ -274,11 +274,12 @@ const maskTsxComments = (source: string, masked: string[]): void => {
     }
     if (templateExpressionDepths.length > 0) {
       const depthIndex = templateExpressionDepths.length - 1;
+      const depth = templateExpressionDepths[depthIndex] ?? 0;
       if (character === "{") {
-        templateExpressionDepths[depthIndex] += 1;
+        templateExpressionDepths[depthIndex] = depth + 1;
       } else if (character === "}") {
-        templateExpressionDepths[depthIndex] -= 1;
-        if (templateExpressionDepths[depthIndex] === 0) {
+        templateExpressionDepths[depthIndex] = depth - 1;
+        if (depth - 1 === 0) {
           templateExpressionDepths.pop();
           mode = "template";
           index += 1;

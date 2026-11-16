@@ -18,7 +18,7 @@ describe.skipIf(!runValkeyTests)("admission policy over Valkey", () => {
     let refresh = () => {};
     const commands = {
       send: async (command: string, args: string[]) => {
-        const reply = await raw.send(command, args);
+        const reply: unknown = await raw.send(command, args);
         if (
           command !== "INFO" ||
           override === undefined ||

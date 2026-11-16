@@ -59,6 +59,7 @@ import type {
 
 import {
   READ_TOOL_REF_FIELD_MAP,
+  type RegistryRefFieldMapEntry,
   WRITE_TOOL_REF_FIELD_MAP,
 } from "./ref-field-map";
 
@@ -1093,7 +1094,7 @@ describe("projectForChat", () => {
       READ_TOOL_REF_FIELD_MAP,
       WRITE_TOOL_REF_FIELD_MAP,
     ]) {
-      for (const entry of Object.values(fieldMap)) {
+      for (const entry of Object.values<RegistryRefFieldMapEntry>(fieldMap)) {
         if (entry.chatProjectable) {
           expect(() => deriveRefMediationEntry(entry.projection)).not.toThrow();
         }

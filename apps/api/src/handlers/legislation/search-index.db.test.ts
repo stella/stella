@@ -109,7 +109,7 @@ const searchReadDb: LegislationReadDb = async (callback) => {
   const tx = new Proxy(db, {
     get: (target, property, receiver) => {
       if (property !== "execute") {
-        return Reflect.get(target, property, receiver);
+        return Reflect.get(target, property, receiver) as unknown;
       }
       return async (...args: Parameters<typeof db.execute>) =>
         (await db.execute(...args)).rows;

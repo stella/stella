@@ -226,7 +226,7 @@ const runScripted = async ({
       () => null,
       (error: unknown) => error,
     );
-    const events: unknown[] = stdout.mock.calls.map((call) =>
+    const events: unknown[] = stdout.mock.calls.map((call): unknown =>
       JSON.parse(String(call.at(0))),
     );
     return { outcome, attempts, sleeps, events, lockTimeouts };

@@ -183,7 +183,8 @@ const databaseClaimingBeforeFirstUpdate = (claim: () => Promise<void>) => {
               armed = false;
               await claim();
             }
-            return await Reflect.apply(value, target, args);
+            const result: unknown = await Reflect.apply(value, target, args);
+            return result;
           };
         }
         return (...args: unknown[]) => {

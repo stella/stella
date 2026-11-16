@@ -444,7 +444,7 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
         }
 
         const distance = Math.max(0, content.scrollWidth - this.clientWidth);
-        this.dataset.overflowing = distance > 0 ? "true" : "false";
+        this.dataset["overflowing"] = distance > 0 ? "true" : "false";
         this.style.setProperty("--marquee-distance", `${distance}px`);
         this.style.setProperty(
           "--marquee-duration",

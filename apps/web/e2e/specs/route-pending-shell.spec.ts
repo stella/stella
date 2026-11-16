@@ -15,9 +15,16 @@ const cases = [
   { path: "/contacts", listPath: "/v1/contacts" },
 ] as const;
 
+// The router slice this spec patches; AnyRouter types it as any.
+type HeldRoute = {
+  options: { loader?: (context: unknown) => unknown };
+  update: (options: { loader: (context: unknown) => unknown }) => void;
+};
+type HeldRouter = { routesById: Record<string, HeldRoute | undefined> };
+
 const holdProtectedLoader = async (page: Page, path: string) => {
   await page.evaluate((targetPath) => {
-    const router = window.__TSR_ROUTER__;
+    const router = window.__TSR_ROUTER__ as unknown as HeldRouter | undefined;
     const route = router?.routesById["/_protected"];
     const original = route?.options.loader;
     if (route === undefined || typeof original !== "function") {

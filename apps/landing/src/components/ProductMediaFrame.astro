@@ -29,8 +29,8 @@ type Props = {
    * every call site for a planned faint background-accent pass; do not
    * delete them as dead props before that pass lands.
    */
-  variant?: FrameVariant;
-  accent?: FrameAccent;
+  variant?: FrameVariant | undefined;
+  accent?: FrameAccent | undefined;
 };
 const { media, compact = false, deferThemeImage = false, thumbnail = false } = Astro.props;
 

@@ -16,7 +16,8 @@ describe.skipIf(!enabled)("monitoring mint counters", () => {
       const context = new RedisRateLimitContext({
         failurePolicy: "fail_closed",
         createRedis: () => ({
-          send: async (command, args) => client.send(command, args),
+          send: async (command, args): Promise<unknown> =>
+            client.send(command, args),
         }),
       });
       const prefix = Bun.randomUUIDv7();

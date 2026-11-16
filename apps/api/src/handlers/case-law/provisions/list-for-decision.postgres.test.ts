@@ -37,7 +37,7 @@ if (!databaseUrl || !runPostgresTests) {
       const listingOnlyId = createSafeId<"caseLawDecision">();
       const redactedId = createSafeId<"caseLawDecision">();
       const language = "cs";
-      const [initialScope] = await owner`
+      const [initialScope] = await owner<{ status: string }[]>`
         SELECT status FROM case_law_provision_extraction_scopes
         WHERE country = 'CZE' AND language = ${language}`;
       const setStatusGrants = async (mode: "grant" | "revoke") => {
@@ -78,7 +78,7 @@ if (!databaseUrl || !runPostgresTests) {
           );
         }
       };
-      const [initialAccess] = await owner`
+      const [initialAccess] = await owner<{ enabled: boolean }[]>`
         SELECT has_function_privilege(
           'stella_public_law_reader',
           'public.case_law_provision_extraction_in_scope(character varying,character varying)',
@@ -219,7 +219,7 @@ if (!databaseUrl || !runPostgresTests) {
           (jurisdiction, desired_revision, min_current_revision)
           VALUES ('CZE', 1, 1)
           ON CONFLICT (jurisdiction) DO NOTHING`;
-        const [revision] = await owner`
+        const [revision] = await owner<{ floor: unknown }[]>`
           SELECT min_current_revision AS floor
           FROM case_law_provision_extraction_revisions
           WHERE jurisdiction = 'CZE'`;

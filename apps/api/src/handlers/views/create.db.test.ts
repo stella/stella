@@ -164,7 +164,7 @@ describe("one correspondence view per matter", () => {
             new Proxy(tx, {
               get(target, property, receiver) {
                 if (property !== "insert") {
-                  return Reflect.get(target, property, receiver);
+                  return Reflect.get(target, property, receiver) as unknown;
                 }
                 return (table: typeof workspaceViews) => {
                   const insert = target.insert(table);

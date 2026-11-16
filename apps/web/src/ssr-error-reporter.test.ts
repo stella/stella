@@ -19,7 +19,7 @@ test("SSR diagnostics precede analytics and survive analytics failures", () => {
   });
   report(renderFailure);
   expect(captured).toEqual([renderFailure]);
-  expect(diagnostics.map((line) => JSON.parse(line))).toEqual([
+  expect(diagnostics.map((line) => JSON.parse(line) as unknown)).toEqual([
     { severity: "ERROR", message: "ssr.response_failed", error: "TypeError" },
     { severity: "ERROR", message: "ssr.telemetry_failed", error: "RangeError" },
   ]);

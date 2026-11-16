@@ -95,7 +95,8 @@ describe("organization-scoped machine key lifecycle", () => {
     );
 
     expect(revoked.isOk()).toBe(true);
-    const call = updateApiKey.mock.calls[0]?.[0];
+    const call: { body?: { enabled?: unknown; userId?: unknown } } | undefined =
+      updateApiKey.mock.calls[0]?.[0];
     expect(call?.body?.userId).toBe(ADMIN_B);
     expect(call?.body?.enabled).toBe(false);
     // The acting admin must not appear anywhere in the call: if the caller's id
@@ -116,7 +117,9 @@ describe("organization-scoped machine key lifecycle", () => {
       updateApiKey,
     );
 
-    expect(updateApiKey.mock.calls[0]?.[0]?.headers).toBeUndefined();
+    const call: { headers?: unknown } | undefined =
+      updateApiKey.mock.calls[0]?.[0];
+    expect(call?.headers).toBeUndefined();
   });
 
   test("a key in a different organization is not found, and reports 404 rather than 403", async () => {

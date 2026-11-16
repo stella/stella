@@ -202,7 +202,9 @@ const registrationSources = await Promise.all(
 await Promise.all(
   registrationSources
     .filter(({ source }) => /\bregisterInspectorView\s*(?:<|\()/u.test(source))
-    .map(async ({ path }) => import(new URL(path, sourceRoot).pathname)),
+    .map(async ({ path }) => {
+      await import(new URL(path, sourceRoot).pathname);
+    }),
 );
 
 const panelFixtures = [

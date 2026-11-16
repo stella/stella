@@ -1,5 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 
+import type { DocxEditorRef } from "@stll/folio-react";
+
 import type { ReviewSuggestion } from "./review-store";
 import { stageReviewSuggestions } from "./review-suggestion-staging";
 
@@ -110,23 +112,25 @@ describe("native review suggestion staging", () => {
 
   test("removes managed Folio suggestions when the review session resets", () => {
     const liveSuggestionIds = new Set<string>();
-    const applyDocumentOperations = mock((options) => {
-      const operation = options.batch.operations.at(0);
-      if (operation?.suggestionId !== undefined) {
-        liveSuggestionIds.add(operation.suggestionId);
-      }
-      return {
-        applied: [
-          {
-            id: "proposal-1",
-            revisionIds: [7, 8],
-            suggestionId: "proposal-1",
-          },
-        ],
-        skipped: [],
-        undoHandle: { id: "undo", type: "documentOperationUndo" as const },
-      };
-    });
+    const applyDocumentOperations = mock(
+      (options: Parameters<DocxEditorRef["applyDocumentOperations"]>[0]) => {
+        const operation = options.batch.operations.at(0);
+        if (operation?.suggestionId !== undefined) {
+          liveSuggestionIds.add(operation.suggestionId);
+        }
+        return {
+          applied: [
+            {
+              id: "proposal-1",
+              revisionIds: [7, 8],
+              suggestionId: "proposal-1",
+            },
+          ],
+          skipped: [],
+          undoHandle: { id: "undo", type: "documentOperationUndo" as const },
+        };
+      },
+    );
     const rejectSuggestion = mock((suggestionId: string) =>
       liveSuggestionIds.delete(suggestionId),
     );

@@ -130,7 +130,7 @@ describe("raw storage metrics count successful object writes", () => {
         );
       }
     }
-    expect(lines.map((line) => JSON.parse(line))).toEqual(expected);
+    expect(lines.map((line): unknown => JSON.parse(line))).toEqual(expected);
     expect(fake.objects.size).toBe(expected.length);
   });
 
@@ -177,7 +177,7 @@ describe("raw storage metrics count successful object writes", () => {
       ),
     ).toBe(true);
     expect([...fake.versions.values()]).toEqual([2]);
-    expect(lines.map((line) => JSON.parse(line))).toEqual([
+    expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
       metricRecord({
         family: RAW_SOURCE_FAMILY.CASE_LAW,
         source: SOURCE,

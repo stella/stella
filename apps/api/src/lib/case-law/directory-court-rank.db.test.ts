@@ -48,7 +48,11 @@ const rowsOf = (result: unknown): Record<string, unknown>[] => {
     typeof result === "object" && result !== null && "rows" in result
       ? result.rows
       : result;
-  return Array.isArray(rows) ? rows : [];
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  const records: Record<string, unknown>[] = rows;
+  return records;
 };
 
 test("both Postgres searches rank a United States decision by its court id's tier", async () => {

@@ -121,9 +121,11 @@ describe.skipIf(!enabled)("root pool observation with PostgreSQL", () => {
       const readOnlyResult = await client.begin(
         "read only",
         async (session) =>
-          await session`SELECT current_setting('transaction_read_only') AS enabled`,
+          await session<
+            { enabled: string }[]
+          >`SELECT current_setting('transaction_read_only') AS enabled`,
       );
-      expect(readOnlyResult).toEqual([{ enabled: "on" }]);
+      expect([...readOnlyResult]).toEqual([{ enabled: "on" }]);
       expect(
         window.flush(1, { status: "observed", size: 1, inUse: 0, idle: 1 }),
       ).toMatchObject({

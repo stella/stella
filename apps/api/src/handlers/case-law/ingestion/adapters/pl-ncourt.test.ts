@@ -1925,10 +1925,11 @@ describe("the walk", () => {
       previous: position.previous,
       next: position.next,
     });
-    const stored = JSON.parse(
-      decodeSourceRawEnvelope(quarantine.sourceRaw ?? "")?.["quarantine"] ??
-        "{}",
-    );
+    const stored: { previous: { xml: unknown }; next: { xml: unknown } } =
+      JSON.parse(
+        decodeSourceRawEnvelope(quarantine.sourceRaw ?? "")?.["quarantine"] ??
+          "{}",
+      );
     expect(stored.previous.xml).toBe(rows.get(POISONED_OFFSET - 1));
     expect(stored.next.xml).toBe(rows.get(POISONED_OFFSET + 1));
     expect(cursors).toContain(

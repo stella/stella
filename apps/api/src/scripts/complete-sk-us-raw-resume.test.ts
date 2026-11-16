@@ -71,7 +71,7 @@ const readJournal = async (checkpointPath: string) =>
     (await readFile(`${checkpointPath}.outcomes.jsonl`, "utf-8"))
       .trim()
       .split("\n")
-      .map((line) => JSON.parse(line)),
+      .map((line) => JSON.parse(line) as unknown),
   );
 
 test("killing a multi-page batch resumes its durable checkpoint without duplicate effects or skipped rows", async () => {
@@ -209,7 +209,7 @@ test("killing a multi-page batch resumes its durable checkpoint without duplicat
           (await readFile(path.join(directory, "fetches.jsonl"), "utf-8"))
             .trim()
             .split("\n")
-            .map((line) => JSON.parse(line)),
+            .map((line) => JSON.parse(line) as unknown),
         );
         expect(fetches).toEqual(
           pauseAt === "before_write"
@@ -237,7 +237,7 @@ test("killing a multi-page batch resumes its durable checkpoint without duplicat
             (await readFile(path.join(directory, "fetches.jsonl"), "utf-8"))
               .trim()
               .split("\n")
-              .map((line) => JSON.parse(line)),
+              .map((line) => JSON.parse(line) as unknown),
           ),
         ).toEqual(fetches);
         for (const row of rows) {

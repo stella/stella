@@ -885,21 +885,21 @@ describe("the stored content of a local run's steps", () => {
       // member is the test database's own.
       return asTestRaw<DesktopRunnerDb>(
         new Proxy(runnerDb(), {
-          get: (store, member) =>
+          get: (store, member): unknown =>
             member === "transaction"
               ? async (run: (tx: object) => Promise<unknown>) =>
                   await store.transaction(
                     async (tx) =>
                       await run(
                         new Proxy(tx, {
-                          get: (inner, name) => {
+                          get: (inner, name): unknown => {
                             const value: unknown = Reflect.get(inner, name);
                             if (name !== "insert") {
                               return typeof value === "function"
                                 ? value.bind(inner)
                                 : value;
                             }
-                            return (table: unknown) => {
+                            return (table: unknown): unknown => {
                               if (
                                 table === chatLocalRunStepContents &&
                                 failures > 0

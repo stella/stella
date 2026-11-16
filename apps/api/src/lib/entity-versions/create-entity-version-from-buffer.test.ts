@@ -53,7 +53,8 @@ beforeEach(() => {
   writeFileVersionMock.mockReset();
 });
 
-const writeFileVersionMock = mock();
+const writeFileVersionMock =
+  mock<CreateEntityVersionFromBufferDependencies["writeFileVersion"]>();
 const processExtractionMock = mock();
 const requestNativeExtractionRunMock = mock();
 const enqueueSearchRepairsMock = mock();
@@ -343,7 +344,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
 
@@ -401,7 +402,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
     const pdf = new Uint8Array(await createEncryptedPdf()).slice().buffer;
@@ -439,7 +440,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
     const submitted = await stampedDocxBytes();
@@ -555,7 +556,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
     const commitError = new Error("connection lost after commit");
@@ -602,7 +603,7 @@ describe("createEntityVersionFromBuffer", () => {
         filePropertyId: toSafeId<"property">("property_1"),
         versionNumber: 2,
       };
-      await input.afterWrite(result);
+      await input.afterWrite?.(result);
       return result;
     });
 

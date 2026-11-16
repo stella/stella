@@ -681,7 +681,10 @@ if (!databaseUrl || !runPostgresTests) {
       const records = after
         .trim()
         .split("\n")
-        .map((line) => JSON.parse(line));
+        .map((line) => {
+          const record: { id: unknown; attempt: unknown } = JSON.parse(line);
+          return record;
+        });
       expect(records.map(({ id }) => id)).toEqual(ids);
       expect(records.every(({ attempt }) => attempt === 1)).toBe(true);
     });

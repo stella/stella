@@ -821,7 +821,7 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
       const discoveryDb = new Proxy(db, {
         get(target, property, receiver) {
           if (property !== "transaction") {
-            return Reflect.get(target, property, receiver);
+            return Reflect.get(target, property, receiver) as unknown;
           }
           return new Proxy(target.transaction, {
             async apply(transaction, thisArg, args) {

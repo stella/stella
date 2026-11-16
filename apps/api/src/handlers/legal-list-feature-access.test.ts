@@ -18,6 +18,10 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 
+/** A handler export, called with a test context it is not typed against. */
+const isHandler = (value: unknown): value is (context: unknown) => unknown =>
+  typeof value === "function";
+
 for (const grants of [
   [],
   [LEGAL_LISTS_FEATURE_ID],
@@ -63,7 +67,7 @@ for (const grants of [
       if (
         !isRecord(endpoint) ||
         !isRecord(endpoint["config"]) ||
-        typeof endpoint["handler"] !== "function"
+        !isHandler(endpoint["handler"])
       ) {
         panic("List endpoint definition required");
       }

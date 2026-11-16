@@ -130,7 +130,10 @@ describe("persisted citation scopes", () => {
       documentAst: annotated,
       metadata: { [CITATION_SCOPE_METADATA_KEY]: envelope },
     });
-    const stored = JSON.parse(storedJson);
+    const stored: {
+      documentAst: typeof annotated;
+      metadata: Record<string, unknown>;
+    } = JSON.parse(storedJson);
     const checked = validatedCitationScopes(
       stored.metadata,
       stored.documentAst,

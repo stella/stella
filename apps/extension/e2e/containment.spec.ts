@@ -155,7 +155,11 @@ const downloads = async ({ worker }: Harness) =>
 const latestPong = async (stella: Page): Promise<unknown> =>
   await stella.evaluate(() => {
     const pongs: unknown = Reflect.get(window, "__pongs");
-    return Array.isArray(pongs) ? pongs.at(-1) : null;
+    if (!Array.isArray(pongs)) {
+      return null;
+    }
+    const received: unknown[] = pongs;
+    return received.at(-1);
   });
 
 /** Opens the containment fixture; the first load of a new tab can miss routing. */

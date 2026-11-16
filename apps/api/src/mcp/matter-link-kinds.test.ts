@@ -25,9 +25,11 @@ test("every matter-link kind has the complete MCP and CLI capability set", async
       ids.filter((id) => id.startsWith(`${kind}.matter-links.`)).toSorted(),
     ).toEqual(expected);
     for (const id of expected) {
-      const capability = await Bun.file(
-        path.join(CATALOG, `${id}.json`),
-      ).json();
+      const capability: {
+        id: string;
+        handlerKind: string;
+        mcp?: { type: string };
+      } = await Bun.file(path.join(CATALOG, `${id}.json`)).json();
       expect(capability.id).toBe(id);
       expect(capability.handlerKind).toBe("workspace");
       expect(capability.mcp?.type).toBe("capability");

@@ -202,8 +202,13 @@ const start = async ({
   );
 };
 
-const statusOf = (result: unknown) =>
-  result instanceof HttpStatusResponse ? result.code : null;
+const statusOf = (result: unknown) => {
+  if (!(result instanceof HttpStatusResponse)) {
+    return null;
+  }
+  const response: HttpStatusResponse = result;
+  return response.code;
+};
 
 const activeRuns = async () =>
   (

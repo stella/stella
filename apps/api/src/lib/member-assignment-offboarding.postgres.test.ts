@@ -1384,7 +1384,7 @@ if (!databaseUrl || !runPostgresTests) {
             expect.objectContaining({
               changes: { status: { old: "awaiting_review", new: "cancelled" } },
             }),
-            ...persistedSteps.map((step) =>
+            ...persistedSteps.map((step): unknown =>
               expect.objectContaining({
                 changes: {
                   stepStatus: {

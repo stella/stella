@@ -62,7 +62,7 @@ const pauseAfterFirstInsert = ({
   return new Proxy(tx, {
     get(target, property, receiver) {
       if (property !== "insert") {
-        return Reflect.get(target, property, receiver);
+        return Reflect.get(target, property, receiver) as unknown;
       }
 
       return (table: typeof aiMemories) => {
@@ -75,7 +75,7 @@ const pauseAfterFirstInsert = ({
                 builderTarget,
                 builderProperty,
                 builderReceiver,
-              );
+              ) as unknown;
             }
 
             return (values: typeof aiMemories.$inferInsert) => {

@@ -13,7 +13,7 @@ import { defaultLocale, isLocale } from "../i18n/config";
 // Shared primary nav (Product mega-menu + section links), used by both the
 // homepage header and SiteHeader so the menu stays in one place. Sourced from
 // the products registry. `current` marks the active entry.
-type Props = { current?: string };
+type Props = { current?: string | undefined };
 const { current } = Astro.props;
 
 const rawLocale = Astro.currentLocale ?? defaultLocale;

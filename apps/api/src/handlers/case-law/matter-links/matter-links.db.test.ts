@@ -463,13 +463,19 @@ describe("pinning a selection into a matter", () => {
     // Both calls saw two free slots if the cap were counted outside a lock;
     // under the lock the second one finds none and says so.
     expect(held?.value ?? 0).toBe(cap);
-    const refused = [outcomeA, outcomeB].flatMap((outcome) =>
-      typeof outcome === "object" &&
-      outcome !== null &&
-      "rejected" in outcome &&
-      Array.isArray(outcome.rejected)
-        ? outcome.rejected
-        : [],
+    const refused = [outcomeA, outcomeB].flatMap(
+      (outcome): { reason?: unknown }[] => {
+        if (
+          typeof outcome === "object" &&
+          outcome !== null &&
+          "rejected" in outcome &&
+          Array.isArray(outcome.rejected)
+        ) {
+          const rejected: { reason?: unknown }[] = outcome.rejected;
+          return rejected;
+        }
+        return [];
+      },
     );
     expect(refused).toHaveLength(2);
     expect(refused.every((entry) => entry.reason === "limit")).toBe(true);

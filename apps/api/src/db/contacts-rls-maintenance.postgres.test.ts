@@ -87,7 +87,7 @@ describe.skipIf(!enabled)("contacts RLS maintenance (postgres)", () => {
             await client.unsafe(query, [...params]);
           },
           query: async (query: string, params: readonly unknown[] = []) =>
-            await client.unsafe(query, [...params]),
+            await client.unsafe<unknown[]>(query, [...params]),
           release: () => {},
         };
         const repair = createContactVatIdRepair({

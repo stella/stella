@@ -41,9 +41,9 @@ describe("binary database driver decoding", () => {
   test.each([null, {}, [0, 255], new DataView(new ArrayBuffer(2)), 42])(
     "rejects unsupported driver values instead of guessing their encoding",
     (value) => {
-      expect(() =>
-        businessRegistryCredentials.ciphertext.mapFromDriverValue(value),
-      ).toThrow("Unexpected bytea driver value");
+      expect(() => {
+        businessRegistryCredentials.ciphertext.mapFromDriverValue(value);
+      }).toThrow("Unexpected bytea driver value");
     },
   );
 });

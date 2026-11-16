@@ -244,9 +244,10 @@ if (!databaseUrl || !enabled) {
               },
               query: async (statement, params = []) => {
                 repairQueries.push(statement);
-                const rows = await session.unsafe(redirect(statement), [
-                  ...params,
-                ]);
+                const rows = await session.unsafe<unknown[]>(
+                  redirect(statement),
+                  [...params],
+                );
                 if (statement.includes("WITH RECURSIVE countries AS")) {
                   pageSizes.push(rows.length);
                 }

@@ -438,7 +438,7 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
                             }
                             return result;
                           }
-                        : Reflect.get(target, property, receiver),
+                        : (Reflect.get(target, property, receiver) as unknown),
                   }),
                 ),
             ),
@@ -656,7 +656,11 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
                                 }
                                 return await target.execute(query);
                               }
-                            : Reflect.get(target, property, receiver),
+                            : (Reflect.get(
+                                target,
+                                property,
+                                receiver,
+                              ) as unknown),
                       }),
                     ),
                 ),
