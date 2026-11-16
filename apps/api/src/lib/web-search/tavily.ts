@@ -3,6 +3,10 @@ import * as v from "valibot";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { JURISDICTION_ALLOWLIST_DOMAINS } from "@/api/lib/web-search/allowlists";
+import {
+  discardResponseBody,
+  readResponseTextPrefix,
+} from "@/api/lib/web-search/response-text-prefix";
 import type {
   WebSearchProvider,
   WebSearchProviderArgs,
@@ -17,6 +21,7 @@ const VALIDATE_TIMEOUT_MS = 10_000;
 // its own AbortSignal.timeout into `signal` before calling fetch(); this
 // is a backstop matching that caller's WEB_SEARCH_TIMEOUT_MS budget.
 const SEARCH_TIMEOUT_MS = 10_000;
+const ERROR_PREFIX_MAX_CHARS = 200;
 
 /**
  * Probe a Tavily key with a minimal search before persisting it.
@@ -39,6 +44,7 @@ export const validateTavilyKey = async (apiKey: string): Promise<void> => {
     }),
     timeoutMs: VALIDATE_TIMEOUT_MS,
   });
+  discardResponseBody(response);
   if (!response.ok) {
     throw new WebSearchProviderError({
       provider: "tavily",
@@ -125,11 +131,15 @@ export const createTavilyProvider = ({
       timeoutMs: SEARCH_TIMEOUT_MS,
     });
     if (!response.ok) {
-      const body = await response.text();
+      const { content } = await readResponseTextPrefix(response, {
+        maxChars: ERROR_PREFIX_MAX_CHARS,
+        idleMs: SEARCH_TIMEOUT_MS,
+        signal,
+      });
       throw new WebSearchProviderError({
         provider: "tavily",
         status: response.status,
-        message: `Tavily search failed (${response.status}): ${body.slice(0, 200)}`,
+        message: `Tavily search failed (${response.status}): ${content}`,
       });
     }
     const json = v.parse(tavilyResponseSchema, await response.json());
