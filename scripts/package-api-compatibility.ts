@@ -330,6 +330,23 @@ export const isGenericTypeDeclaration = (
   node.name !== undefined &&
   (node.typeParameters?.length ?? 0) > 0;
 
+export const omittedTypeArgumentCounts = (
+  declaration: GenericTypeDeclaration,
+): number[] => {
+  const counts: number[] = [];
+  for (
+    let provided = declaration.typeParameters.length - 1;
+    provided >= 0;
+    provided -= 1
+  ) {
+    if (declaration.typeParameters[provided]?.default === undefined) {
+      break;
+    }
+    counts.push(provided);
+  }
+  return counts;
+};
+
 /**
  * The probe declared beside a generic type, found among the statements of
  * the block that declares it: the probe's result names the type.
@@ -455,37 +472,36 @@ export const withGenericTypeProbes = (
     );
   };
   const visitBlock = (statements: readonly ts.Statement[]): void => {
-    // Merged declarations of one name in one block share their type
-    // parameters, so one probe per name and block covers them.
+    // A later merged declaration can add a value space or defaults. Deduplicate
+    // only identical probe contracts, after considering every declaration.
     const probed = new Set<string>();
     for (const statement of statements) {
       if (ts.isModuleDeclaration(statement)) {
         visitModule(statement);
-      } else if (
-        isGenericTypeDeclaration(statement) &&
-        !probed.has(statement.name.text)
-      ) {
-        probed.add(statement.name.text);
-        const text = [probe(statement, "type")];
+      } else if (isGenericTypeDeclaration(statement)) {
+        const text: string[] = [];
+        const add = (
+          space: "type" | "value",
+          provided = statement.typeParameters.length,
+        ): void => {
+          const key = `${statement.name.text}:${space}:${provided}`;
+          if (!probed.has(key)) {
+            probed.add(key);
+            text.push(probe(statement, space, provided));
+          }
+        };
+        add("type");
         if (ts.isClassDeclaration(statement)) {
-          text.push(probe(statement, "value"));
+          add("value");
         }
         // Resolve each valid omitted suffix through the compiler, including
         // defaults depending on earlier, explicitly supplied type arguments.
-        for (
-          let provided = statement.typeParameters.length - 1;
-          provided >= 0;
-          provided -= 1
-        ) {
-          if (statement.typeParameters[provided]?.default === undefined) {
-            break;
-          }
-          text.push(probe(statement, "type", provided));
+        for (const provided of omittedTypeArgumentCounts(statement)) {
+          add("type", provided);
         }
-        probes.push({
-          end: statement.end,
-          text: text.join("\n"),
-        });
+        if (text.length > 0) {
+          probes.push({ end: statement.end, text: text.join("\n") });
+        }
       }
     }
   };

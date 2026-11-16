@@ -42,6 +42,7 @@ const enclosingParameters = (node: ts.Node): ts.TypeParameterDeclaration[] => {
 type Probe = { file: string; position: number; name: string; text: string };
 type ProbeOptions = {
   checker: ts.TypeChecker;
+  files: ReadonlyMap<string, string>;
   signature: ts.Signature;
   root: ts.Declaration;
   name: string;
@@ -55,11 +56,16 @@ const signatureDeclaration = (
 
 const signatureProbe = ({
   checker,
+  files,
   signature,
   root,
   name,
 }: ProbeOptions): Probe => {
-  const declaration = signatureDeclaration(signature) ?? root;
+  const inherited = signatureDeclaration(signature);
+  const declaration =
+    inherited !== undefined && files.has(inherited.getSourceFile().fileName)
+      ? inherited
+      : root;
   const scope = enclosingScope(declaration);
   const source = scope.getSourceFile();
   const node = checker.signatureToSignatureDeclaration(
@@ -157,12 +163,14 @@ export const createSignatureInputComparison = ({
     const id = sequence++;
     const before = signatureProbe({
       checker,
+      files,
       signature: old,
       root: oldLocation,
       name: `__api_old_call_${id}`,
     });
     const after = signatureProbe({
       checker,
+      files,
       signature: next,
       root: nextLocation,
       name: `__api_new_call_${id}`,

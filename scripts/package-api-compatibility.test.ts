@@ -617,3 +617,156 @@ test.each(["interface-first", "class-first"])(
     ).toEqual([]);
   },
 );
+
+test.each(["interface-first", "class-first"])(
+  "merged constructor inputs reject broken consumers: %s",
+  (order) => {
+    const declarations = [
+      "export interface Client<T> { value: T }",
+      "export declare class Client<T> { constructor(value: INPUT); }",
+    ];
+    const shape = (
+      order === "interface-first" ? declarations : declarations.toReversed()
+    ).join("\n");
+    const before = shape.replace("INPUT", "string | number");
+    const after = shape.replace("INPUT", "string");
+    const consumer = "new Client(1);";
+    expect(consumerDiagnostics(before, consumer)).toEqual([]);
+    expect(consumerDiagnostics(after, consumer).length).toBeGreaterThan(0);
+    expect(
+      breakingApiChanges({
+        before: report(before),
+        after: report(after),
+        packageDir: process.cwd(),
+      }).length,
+    ).toBeGreaterThan(0);
+  },
+);
+
+const MERGED_DEFAULT_CASES = [
+  {
+    name: "a later interface default",
+    before:
+      "export interface Client<T> { value: T } export interface Client<T = string> {}",
+    after:
+      "export interface Client<T> { value: T } export interface Client<T = number> {}",
+    consumer:
+      "declare const client: Client; const value: string = client.value;",
+  },
+  {
+    name: "a later dependent default",
+    before:
+      "export interface Client<T, U> { value: U } export interface Client<T, U = T[]> {}",
+    after:
+      "export interface Client<T, U> { value: U } export interface Client<T, U = T> {}",
+    consumer:
+      "declare const client: Client<number>; const value: number[] = client.value;",
+  },
+  {
+    name: "a readonly member in a default",
+    before: "export interface Client<T = { option: number }> { value: T }",
+    after:
+      "export interface Client<T = { readonly option: number }> { value: T }",
+    consumer: "declare const client: Client; client.value.option = 1;",
+  },
+  {
+    name: "an optional member in a default",
+    before:
+      "export interface Client<T = { stable: string; option?: number }> { value: T }",
+    after: "export interface Client<T = { stable: string }> { value: T }",
+    consumer:
+      "declare const client: Client; const option: number | undefined = client.value.option;",
+  },
+  {
+    name: "a readonly member in a dependent default",
+    before: "export interface Client<T, U = { option: T }> { value: U }",
+    after:
+      "export interface Client<T, U = { readonly option: T }> { value: U }",
+    consumer: "declare const client: Client<number>; client.value.option = 1;",
+  },
+  {
+    name: "a namespace-merged constructor",
+    before:
+      'export declare class Client<T> { value: T; constructor(value: string | number); } export declare namespace Client { const kind: "client"; }',
+    after:
+      'export declare class Client<T> { value: T; constructor(value: string); } export declare namespace Client { const kind: "client"; }',
+    consumer: "new Client(1);",
+  },
+  {
+    name: "a namespace-merged writable static member",
+    before:
+      'export declare class Client<T> { value: T; static option: number; } export declare namespace Client { const kind: "client"; }',
+    after:
+      'export declare class Client<T> { value: T; static readonly option: number; } export declare namespace Client { const kind: "client"; }',
+    consumer: "Client.option = 1;",
+  },
+  {
+    name: "a namespace-only member beside a class",
+    before:
+      'export declare class Client<T> { value: T; } export declare namespace Client { const kind: "client"; const option: number; }',
+    after:
+      'export declare class Client<T> { value: T; } export declare namespace Client { const kind: "client"; }',
+    consumer: "const value: number = Client.option;",
+  },
+  {
+    name: "an inherited library constructor",
+    before: "export declare class Client<T> extends Error { value: T }",
+    after:
+      'export declare class Client<T> extends Error { value: T; constructor(message: "allowed"); }',
+    consumer: 'new Client<string>("message");',
+  },
+] as const;
+
+test.each(MERGED_DEFAULT_CASES)(
+  "merged and inherited contracts reject loss of $name",
+  ({ before, after, consumer }) => {
+    expect(consumerDiagnostics(before, consumer)).toEqual([]);
+    expect(consumerDiagnostics(after, consumer).length).toBeGreaterThan(0);
+    expect(
+      breakingApiChanges({
+        before: report(before),
+        after: report(after),
+        packageDir: process.cwd(),
+      }).length,
+    ).toBeGreaterThan(0);
+  },
+);
+
+test.each([
+  {
+    name: "a later merged default",
+    declaration:
+      "export interface Client<T> { value: T } export interface Client<T = string> {}",
+    consumer:
+      "declare const client: Client; const value: string = client.value;",
+  },
+  {
+    name: "a namespace-merged class",
+    declaration:
+      'export declare class Client<T> { value: T; constructor(value: string | number); } export declare namespace Client { const kind: "client"; }',
+    consumer: 'new Client<number>(1); const kind: "client" = Client.kind;',
+  },
+  {
+    name: "an inherited library constructor",
+    declaration: "export declare class Client<T> extends Error { value: T }",
+    consumer: 'new Client<string>("message", { cause: new Error("cause") });',
+  },
+  {
+    name: "an inherited package constructor with scoped parameter aliases",
+    declaration:
+      "export declare namespace Base { export type Input = string | number; export class Parent<T> { constructor(value: Input); value: T; } } export declare class Client<T> extends Base.Parent<T> {}",
+    consumer: 'new Client<number>(1); new Client<string>("value");',
+  },
+])(
+  "merged and inherited contracts preserve $name",
+  ({ declaration, consumer }) => {
+    expect(consumerDiagnostics(declaration, consumer)).toEqual([]);
+    expect(
+      breakingApiChanges({
+        before: report(declaration),
+        after: report(`${declaration}\nexport declare const added: number;`),
+        packageDir: process.cwd(),
+      }),
+    ).toEqual([]);
+  },
+);

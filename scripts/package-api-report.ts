@@ -16,6 +16,7 @@ import {
   isGenericTypeDeclaration,
   isGenericTypeProbeName,
   normalizeCompatibilityDeclarations,
+  omittedTypeArgumentCounts,
   withGenericTypeProbes,
 } from "./package-api-compatibility";
 import { hasRuntimeExport } from "./package-api-export-space";
@@ -811,11 +812,13 @@ const genericTypeComparison = ({
   label,
   space = "type",
 }: GenericComparisonOptions): GenericComparison | undefined => {
-  const declaration = symbol.declarations?.find(isGenericTypeDeclaration);
-  if (
-    declaration === undefined ||
-    (space === "value" && !ts.isClassDeclaration(declaration))
-  ) {
+  const declarations =
+    symbol.declarations?.filter(isGenericTypeDeclaration) ?? [];
+  const declaration =
+    space === "value"
+      ? declarations.find(ts.isClassDeclaration)
+      : declarations.at(0);
+  if (declaration === undefined) {
     return undefined;
   }
   const count = declaration.typeParameters.length;
@@ -828,15 +831,16 @@ const genericTypeComparison = ({
     return fail(`${label}: generic type has no comparison probe`);
   }
   if (space === "type") {
-    for (let provided = count - 1; provided >= 0; provided -= 1) {
-      if (declaration.typeParameters[provided]?.default === undefined) {
-        break;
+    // The compiler's symbol collects declarations across merged blocks/files;
+    // the instantiated probe resolves their effective defaults itself.
+    for (const merged of declarations) {
+      for (const provided of omittedTypeArgumentCounts(merged)) {
+        const omitted = genericTypeProbe(merged, { provided });
+        if (omitted === undefined) {
+          return fail(`${label}: generic default has no comparison probe`);
+        }
+        defaults.set(provided, checker.getTypeFromTypeNode(omitted));
       }
-      const omitted = genericTypeProbe(declaration, { provided });
-      if (omitted === undefined) {
-        return fail(`${label}: generic default has no comparison probe`);
-      }
-      defaults.set(provided, checker.getTypeFromTypeNode(omitted));
     }
   }
   return { count, probe: checker.getTypeFromTypeNode(probe), defaults };
@@ -876,6 +880,15 @@ const incompatibleTypeSignatures = ({
       } else if (!mutuallyAssignable(checker, oldDefault, nextDefault)) {
         breaks.push(
           `${label}: incompatible default after ${provided} type arguments`,
+        );
+      } else {
+        breaks.push(
+          ...narrowedMembers(
+            checker,
+            oldDefault,
+            nextDefault,
+            `${label}<${provided} arguments>`,
+          ),
         );
       }
     }
@@ -920,7 +933,7 @@ const incompatibleSymbolSignatures = ({
         : checker.isTypeAssignableTo(nextType, oldType);
     if (!compatible) {
       breaks.push(`${label}: incompatible value signature`);
-    } else if (!hasSymbolFlag(old, ts.SymbolFlags.Module)) {
+    } else {
       if (aligned) {
         // The value probe aligns the class's type parameters while preserving
         // its constructors, static members and prototype. Construct signatures
@@ -950,7 +963,12 @@ const incompatibleSymbolSignatures = ({
         }
       }
       // A namespace's members are its exports, compared one by one below.
-      breaks.push(...narrowedMembers(checker, oldType, nextType, label));
+      if (
+        !hasSymbolFlag(old, ts.SymbolFlags.Module) ||
+        hasSymbolFlag(old, ts.SymbolFlags.Class)
+      ) {
+        breaks.push(...narrowedMembers(checker, oldType, nextType, label));
+      }
     }
   }
   if (hasSymbolFlag(old, ts.SymbolFlags.Type)) {
@@ -963,6 +981,27 @@ type ApiBreak = {
   type: "removal" | "signature";
   entrypoint: string;
   message: string;
+};
+
+const namespaceExports = (
+  checker: ts.TypeChecker,
+  symbol: ts.Symbol,
+): ts.Symbol[] => {
+  const exports = publicExports(checker.getExportsOfModule(symbol));
+  if (!hasSymbolFlag(symbol, ts.SymbolFlags.Class)) {
+    return exports;
+  }
+  // A merged class's static members and synthetic prototype belong to its
+  // value contract. Only namespace-owned exports need the namespace walk.
+  return exports.filter(
+    (member) =>
+      !hasSymbolFlag(member, ts.SymbolFlags.Prototype) &&
+      member.declarations?.every(
+        (declaration) =>
+          ts.isClassDeclaration(declaration.parent) ||
+          ts.isClassExpression(declaration.parent),
+      ) !== true,
+  );
 };
 
 // Both declaration trees live in one checker so assignability uses TypeScript's
@@ -1113,8 +1152,8 @@ export const breakingApiChanges = ({
           comparedTargets.add(next);
           compared.set(old, comparedTargets);
           pending.push({
-            oldSymbols: publicExports(checker.getExportsOfModule(old)),
-            newSymbols: publicExports(checker.getExportsOfModule(next)),
+            oldSymbols: namespaceExports(checker, old),
+            newSymbols: namespaceExports(checker, next),
             prefix: `${label}.`,
           });
         }
