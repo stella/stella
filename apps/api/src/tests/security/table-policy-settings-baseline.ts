@@ -85,7 +85,6 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "corpus_index_projection_intents",
   "corpus_index_projection_revisions",
   "corpus_index_projection_states",
-  "corpus_index_route_proofs",
   "desktop_edit_handoffs",
   "desktop_edit_sessions",
   "document_counters",

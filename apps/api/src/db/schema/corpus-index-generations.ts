@@ -6,6 +6,7 @@ import {
   QUICKWIT_CLUSTERS,
 } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  CORPUS_INDEX_INCARNATION_MAX_LENGTH,
   CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS,
   CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS,
 } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
@@ -351,16 +352,26 @@ export const corpusIndexJurisdictionServing = p.pgTable(
   ],
 );
 
+const routeProofsOwnerAccess = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.corpus_index_route_proofs'::regclass)`;
+
 /**
  * The readiness proof of one physical index (route) of a generation: the
- * census pass walking it, and the last pass that found it exactly as
- * PostgreSQL records it. A pass never restarts when the projection writes:
- * a revision applied during it was proven present at its apply, and one
- * settled or withdrawn during it was proven gone when it got that status, so
- * ordinary writes leave the row alone. Only a repair of drift the census
- * found on the route revokes it, in the repair's own transaction, and starts
- * a fresh pass. A rebuild deletes the generation's registration, and the
- * cascade deletes its proofs with it.
+ * census pass walking it, and the last clean pass. A pass is a sweep, not a
+ * snapshot: every revision it walked was found exactly as PostgreSQL records
+ * it at the instant its page was read, somewhere between the pass's start
+ * and its end, on the one engine incarnation of the index the pass started
+ * and ended on. It says nothing of a loss after a page was read, nor of
+ * documents PostgreSQL does not know.
+ *
+ * A pass never restarts when the projection writes, because every move into
+ * applied, settled or withdrawn carries its own exact engine observation
+ * (the branded presence and settlement proofs), so a row entering the walked
+ * sets during the pass, at any key, was checked by its own transition. A
+ * writer that adds rows to those sets without such an observation must
+ * revoke the route. What does revoke it, each in the transaction of its own
+ * change: a census drift repair, the engine reporting another incarnation of
+ * the index, and the group's attestation withdrawn or given anew. A rebuild
+ * deletes the generation's registration, and the cascade deletes its proofs.
  */
 export const corpusIndexRouteProofs = p.pgTable(
   "corpus_index_route_proofs",
@@ -408,22 +419,37 @@ export const corpusIndexRouteProofs = p.pgTable(
       .bigint("pass_inspected", { mode: "number" })
       .default(0)
       .notNull(),
+    /**
+     * The engine incarnation of the index (`CorpusIndexIncarnation`) the pass
+     * under way read first; null until it reads the engine. Every page and
+     * the pass's end must read the same one.
+     */
+    passIndexIncarnation: p.varchar("pass_index_incarnation", {
+      length: CORPUS_INDEX_INCARNATION_MAX_LENGTH,
+    }),
     /** The number of the last clean pass; null until one completes. */
     provenPassNumber: p.bigint("proven_pass_number", { mode: "number" }),
-    /** When the last clean pass started. */
+    /** When the last clean pass started: its oldest observation. */
     provenPassStartedAt: timestamptz("proven_pass_started_at"),
     /** When the last clean pass completed. */
     provenAt: timestamptz("proven_at"),
     /** Revisions the last clean pass inspected. */
     provenInspected: p.bigint("proven_inspected", { mode: "number" }),
-    /** When a drift repair on the route last revoked the proof. */
+    /**
+     * The incarnation the last clean pass started and ended on; a reader
+     * that finds another one in the engine holds no proof of this index.
+     */
+    provenIndexIncarnation: p.varchar("proven_index_incarnation", {
+      length: CORPUS_INDEX_INCARNATION_MAX_LENGTH,
+    }),
+    /** When a change voiding the proof last revoked it. */
     revokedAt: timestamptz("revoked_at"),
     /**
      * The pass the last revocation started: only a pass numbered this or
      * later proves the route again.
      */
     revokedPassNumber: p.bigint("revoked_pass_number", { mode: "number" }),
-    /** Which drift it was (`CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS`). */
+    /** Which change it was (`CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS`). */
     revokeReason: p.text("revoke_reason", {
       enum: CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS,
     }),
@@ -469,6 +495,7 @@ export const corpusIndexRouteProofs = p.pgTable(
       sql`(${t.provenAt} IS NULL) = (${t.provenPassStartedAt} IS NULL)
         AND (${t.provenAt} IS NULL) = (${t.provenInspected} IS NULL)
         AND (${t.provenAt} IS NULL) = (${t.provenPassNumber} IS NULL)
+        AND (${t.provenAt} IS NULL) = (${t.provenIndexIncarnation} IS NULL)
         AND (${t.provenPassNumber} IS NULL OR ${t.provenPassNumber} < ${t.passNumber})
         AND (${t.provenAt} IS NULL OR ${t.provenAt} >= ${t.provenPassStartedAt})`,
     ),
@@ -479,6 +506,14 @@ export const corpusIndexRouteProofs = p.pgTable(
         AND (${t.revokedPassNumber} IS NULL OR ${t.revokedPassNumber} <= ${t.passNumber})
         AND (${t.revokeReason} IS NULL OR ${t.revokeReason} IN (${sqlValues(CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS)}))`,
     ),
+    // Row security is forced, so the owner-run projection transactions need a
+    // policy too; grants still decide what each other role may do.
+    p.pgPolicy("corpus_index_route_proofs_owner_access", {
+      for: "all",
+      to: "public",
+      using: routeProofsOwnerAccess,
+      withCheck: routeProofsOwnerAccess,
+    }),
     ...globalCaseLawPolicies(),
   ],
 );

@@ -4281,6 +4281,16 @@
   },
   {
     "schema": "public",
+    "table": "corpus_index_route_proofs",
+    "policy": "corpus_index_route_proofs_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('corpus_index_route_proofs'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('corpus_index_route_proofs'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "correspondence",
     "policy": "correspondence_owner_offboarding_select",
     "command": "SELECT",

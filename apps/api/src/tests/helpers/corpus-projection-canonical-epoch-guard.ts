@@ -11,6 +11,19 @@
  * reconcile, retirement, the ranking-signal drain), it fails the statement
  * that breaks the rule. A state no writer touches may trail the counter; the
  * guard never looks at it.
+ *
+ * Why it is not a production trigger. The rule is not one comparison on the
+ * written row: it reads the canonical row of another table on every
+ * desired-state write, the projection's hottest path (seeding writes one row
+ * per decision and generation). Under concurrent writers it is also not the
+ * writer's invariant: a writer stamps the epoch it read, and a canonical
+ * update committed between that read and the trigger's own statement
+ * snapshot would fail a correct write, so the trigger would need every
+ * writer to hold the canonical row's lock first, which not all do. A
+ * weaker, race-free form (never ahead of the canonical epoch) does not catch
+ * the defect it exists for, a per-generation counter that trails. So the rule
+ * stays a property every writer suite checks, and the flip parity read
+ * (`corpus-index-flip-parity.ts`) states that it depends on it.
  */
 import type { PGlite } from "@electric-sql/pglite";
 

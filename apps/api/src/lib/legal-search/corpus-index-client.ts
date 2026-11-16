@@ -18,6 +18,7 @@ import {
   CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
+import { CORPUS_INDEX_INCARNATION_MAX_LENGTH } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   getPublicReadSignal,
   withPublicReadIo,
@@ -519,6 +520,15 @@ export type CorpusIndexPublishedSplitCount = {
   publishedSplits: number;
 };
 
+/**
+ * Which incarnation of an index id the engine holds now. The engine gives
+ * every index it creates a fresh uid (`index_uid`, the id plus a ULID), so
+ * an index deleted and created again under the same id, or restored from
+ * another metastore, never reads as the one an earlier read saw.
+ */
+export type CorpusIndexIncarnation =
+  { type: "missing" } | { type: "present"; incarnation: string };
+
 type CorpusIndexPublishedSplitCountsInput = {
   includes: (indexId: string) => boolean;
   observer: RegistryRequestObservation;
@@ -539,6 +549,11 @@ export type CorpusIndexClient = {
     indexId: string,
     observer: RegistryRequestObservation,
   ) => Promise<Result<boolean, CorpusIndexError>>;
+  /** The incarnation of `indexId` the search endpoint reads now. */
+  readIndexIncarnation: (
+    indexId: string,
+    observer: RegistryRequestObservation,
+  ) => Promise<Result<CorpusIndexIncarnation, CorpusIndexError>>;
   /**
    * Published split count of each index the predicate admits, from the search
    * endpoint, which answers while the build lane is parked.
@@ -1639,6 +1654,64 @@ const buildClient = (
             return true;
           },
         ),
+      catch: toCorpusIndexError,
+    }),
+
+  readIndexIncarnation: async (indexId, observer) =>
+    await Result.tryPromise({
+      try: async () => {
+        const request = {
+          observer,
+          // The endpoint the census reads, so the incarnation is the one the
+          // census pages observed.
+          baseUrl: searchBaseUrl(cluster),
+          path: `/api/v1/indexes/${indexId}`,
+          init: { method: "GET" },
+          timeoutMs: ADMIN_TIMEOUT_MS,
+        } satisfies CorpusIndexRequest;
+        return await sendRequest(
+          request,
+          async (response, bounded): Promise<CorpusIndexIncarnation> => {
+            if (response.status === 404) {
+              return { type: "missing" };
+            }
+            if (!response.ok) {
+              throw new CorpusIndexError({
+                message: `corpus index ${requestLabel(request)} -> ${response.status}`,
+                status: response.status,
+              });
+            }
+            const metadata = await response.json().catch((error: unknown) => {
+              throw requestFailure({
+                request: bounded,
+                error,
+                unaborted: "returned an unreadable body",
+                reach: bodyReadReach(error),
+              });
+            });
+            const incarnation = isRecord(metadata)
+              ? metadata["index_uid"]
+              : undefined;
+            const config = isRecord(metadata)
+              ? metadata["index_config"]
+              : undefined;
+            // An uid names its index id first: `<index id>:<ULID>`.
+            if (
+              typeof incarnation !== "string" ||
+              !incarnation.startsWith(`${indexId}:`) ||
+              incarnation.length <= indexId.length + 1 ||
+              incarnation.length > CORPUS_INDEX_INCARNATION_MAX_LENGTH ||
+              !isRecord(config) ||
+              config["index_id"] !== indexId
+            ) {
+              throw new CorpusIndexError({
+                message: `corpus index ${indexId} metadata named no incarnation of it`,
+              });
+            }
+            return { type: "present", incarnation };
+          },
+        );
+      },
       catch: toCorpusIndexError,
     }),
 
