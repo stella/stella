@@ -820,7 +820,7 @@
     "apps/api/src/handlers/style-sets/storage.ts": 1,
     "apps/api/src/handlers/templates/update.ts": 1,
     "apps/api/src/handlers/time-entries/batch/delete.ts": 1,
-    "apps/api/src/handlers/time-entries/batch/update.ts": 2,
+    "apps/api/src/handlers/time-entries/batch/update.ts": 1,
     "apps/api/src/handlers/time-entries/delete.ts": 1,
     "apps/api/src/handlers/time-entries/update.ts": 1,
     "apps/api/src/handlers/uploads/agent-skill.ts": 1,
