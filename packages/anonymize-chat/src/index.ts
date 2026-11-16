@@ -161,6 +161,13 @@ export type ChatTransportErrorPayload = v.InferOutput<
   typeof chatTransportErrorPayloadSchema
 >;
 
+export const createThirdPartyBoundaryRefusalPayload = (
+  message: string,
+): ChatTransportErrorPayload => ({
+  code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+  message,
+});
+
 export const parseChatTransportErrorPayload = (
   payload: unknown,
 ): ChatTransportErrorPayload | null => {
