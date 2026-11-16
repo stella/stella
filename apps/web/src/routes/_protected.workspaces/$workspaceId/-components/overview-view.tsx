@@ -148,8 +148,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const locale = useFormattingLocale();
   const firstWeekday = getFirstWeekday(locale);
   const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
-  const userId = useAuthenticatedUser().id;
-  const { data } = useSuspenseQuery(overviewOptions(workspaceId));
+  const user = useAuthenticatedUser();
+  const userId = user.id;
+  const { data } = useSuspenseQuery(
+    overviewOptions({ workspaceId, organizationId: user.activeOrganizationId }),
+  );
   const [upcomingMenu, setUpcomingMenu] = useState<UpcomingMenuState>({
     open: false,
     anchor: null,

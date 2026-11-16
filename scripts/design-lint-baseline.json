@@ -706,7 +706,6 @@
     "apps/api/src/lib/review-organization/reset-scope.ts": 1,
     "apps/api/src/lib/search/detect-language.ts": 1,
     "apps/api/src/lib/search/extraction-worker.ts": 1,
-    "apps/api/src/lib/search/query.ts": 3,
     "apps/api/src/lib/synthetic-principal/credential-policy.ts": 1,
     "apps/api/src/lib/system-audit/modules.ts": 1,
     "apps/api/src/lib/tanstack-ai-generate.ts": 1,

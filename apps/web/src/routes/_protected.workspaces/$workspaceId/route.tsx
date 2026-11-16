@@ -116,7 +116,14 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
           ),
         () =>
           detached(
-            prefetchRouteQuery(qc, overviewOptions(wsId), onPrefetchError),
+            prefetchRouteQuery(
+              qc,
+              overviewOptions({
+                workspaceId: wsId,
+                organizationId: context.user.activeOrganizationId,
+              }),
+              onPrefetchError,
+            ),
             "workspaces.prefetch",
           ),
         () =>

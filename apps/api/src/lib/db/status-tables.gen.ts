@@ -383,6 +383,7 @@ export const ENUM_COLUMNS = {
     "family",
     "last_failure_kind",
   ],
+  corpus_index_route_proofs: ["family", "pass_expectation", "revoke_reason"],
   corpus_index_route_seedings: ["family"],
   correspondence: [
     "channel",
