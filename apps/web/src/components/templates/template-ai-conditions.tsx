@@ -264,12 +264,17 @@ type DecideConditionsOptionsInput = QueryOptionsInput<
 
 const requestConditionDecisions =
   (key: DecideConditionsKey, values: Record<string, unknown>) =>
-  async ({ signal }: { signal: AbortSignal }) =>
-    unwrapApiResponse(
-      await api
-        .templates({ templateId: toSafeId<"template">(key.templateId) })
-        ["decide-conditions"].post({ values }, { fetch: { signal } }),
+  async ({ signal }: { signal: AbortSignal }) => {
+    const templateApi = api.templates({
+      templateId: toSafeId<"template">(key.templateId),
+    });
+    return unwrapApiResponse(
+      await templateApi["decide-conditions"].post(
+        { values },
+        { fetch: { signal } },
+      ),
     );
+  };
 
 const decideConditionsOptions = ({
   key,

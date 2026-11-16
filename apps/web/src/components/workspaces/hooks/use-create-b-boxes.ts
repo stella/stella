@@ -58,12 +58,13 @@ export const useCreateBBoxes = ({
       }
 
       inflight.add(justification.id);
+      const workspaceApi = api.workspaces({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
 
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["bounding-boxes"].post({
-          justificationId: toSafeId<"justification">(justification.id),
-        });
+      const response = await workspaceApi["bounding-boxes"].post({
+        justificationId: toSafeId<"justification">(justification.id),
+      });
 
       return unwrapApiResponse(response);
     },

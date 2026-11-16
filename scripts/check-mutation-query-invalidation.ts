@@ -233,6 +233,15 @@ const indexSource = ({ file, text }: Source): ModuleIndex => {
         mutable: true,
       });
     }
+    if (ts.isFunctionExpression(node) && node.name) {
+      bindings.push({
+        name: node.name.text,
+        scope: node,
+        mutable: false,
+        value: node,
+        functionLike: node,
+      });
+    }
     if (ts.isFunctionDeclaration(node) && node.name) {
       bindings.push({
         name: node.name.text,
@@ -363,14 +372,20 @@ const localBinding = (
       break;
     }
   }
-  return module.bindings
-    .filter(
-      (binding) => binding.name === name && scopes.includes(binding.scope),
-    )
-    .toSorted(
-      (left, right) => scopes.indexOf(left.scope) - scopes.indexOf(right.scope),
-    )
-    .at(0);
+  return (
+    module.bindings
+      .filter(
+        (binding) => binding.name === name && scopes.includes(binding.scope),
+      )
+      // A named expression's self-binding is outside its parameter environment.
+      .toSorted(
+        (left, right) =>
+          scopes.indexOf(left.scope) - scopes.indexOf(right.scope) ||
+          Number(left.functionLike === left.scope) -
+            Number(right.functionLike === right.scope),
+      )
+      .at(0)
+  );
 };
 
 const resolveLocal = (

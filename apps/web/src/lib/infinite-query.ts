@@ -18,7 +18,29 @@ export const nullableStringCursorSeed = (): string | null => null;
 type VisitCursorPagesOptions<TPage extends { nextCursor: string | null }> = {
   getPage: (cursor: string | undefined) => Promise<TPage>;
   visit: (page: TPage) => void;
+  /** False stops after visiting this page, leaving its successor unread. */
+  shouldContinue?: (page: TPage) => boolean;
 };
+
+type IterateCursorPagesOptions<TCursor, TPage> = {
+  initialCursor: TCursor;
+  getPage: (cursor: TCursor) => Promise<TPage>;
+  getNextCursor: (page: TPage) => TCursor | null;
+};
+
+/** Each successor is fetched only when the consumer asks for another page. */
+export async function* iterateCursorPages<TCursor, TPage>({
+  initialCursor,
+  getPage,
+  getNextCursor,
+}: IterateCursorPagesOptions<TCursor, TPage>): AsyncGenerator<TPage> {
+  let cursor: TCursor | null = initialCursor;
+  while (cursor !== null) {
+    const page = await getPage(cursor);
+    yield page;
+    cursor = getNextCursor(page);
+  }
+}
 
 // A page owns the only cursor that can select its successor.
 export const visitCursorPages = async <
@@ -26,11 +48,16 @@ export const visitCursorPages = async <
 >({
   getPage,
   visit,
+  shouldContinue,
 }: VisitCursorPagesOptions<TPage>) => {
-  let cursor: string | undefined;
-  do {
-    const page = await getPage(cursor);
+  for await (const page of iterateCursorPages({
+    initialCursor: stringCursorSeed(),
+    getPage,
+    getNextCursor: (result) => result.nextCursor,
+  })) {
     visit(page);
-    cursor = page.nextCursor ?? undefined;
-  } while (cursor !== undefined);
+    if (shouldContinue?.(page) === false) {
+      return;
+    }
+  }
 };

@@ -70,18 +70,23 @@ export const useFactDetailActions = (scope: ListScope) => {
   const save = useMutation({
     mutationKey,
     scope: { id: mutationKey.join(":") },
-    mutationFn: async ({ targetIds: [itemEntityId], details }: SaveVariables) =>
-      unwrapApiResponse(
-        await api
-          .lists({ workspaceId: toSafeId<"workspace">(scope.workspaceId) })
-          ["item-fact-details"].put(
-            toFactDetailsBody({
-              listId: toSafeId<"legalList">(scope.listId),
-              itemEntityId,
-              details,
-            }),
-          ),
-      ),
+    mutationFn: async ({
+      targetIds: [itemEntityId],
+      details,
+    }: SaveVariables) => {
+      const listsApi = api.lists({
+        workspaceId: toSafeId<"workspace">(scope.workspaceId),
+      });
+      return unwrapApiResponse(
+        await listsApi["item-fact-details"].put(
+          toFactDetailsBody({
+            listId: toSafeId<"legalList">(scope.listId),
+            itemEntityId,
+            details,
+          }),
+        ),
+      );
+    },
     onMutate: async ({
       targetIds: [itemEntityId],
       details,
