@@ -478,7 +478,6 @@
     "apps/api/src/handlers/sharepoint/graph-oauth.ts": 1,
     "apps/api/src/lib/deepl/client.ts": 2,
     "apps/api/src/lib/files/gotenberg.ts": 1,
-    "apps/api/src/lib/hosted-usage-provider/client.ts": 1,
     "apps/api/src/lib/web-search/tavily.ts": 1
   },
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {
