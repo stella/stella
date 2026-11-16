@@ -367,9 +367,11 @@ const skillBindingNoRowSeed = (constraint: string): NoRowSeed => ({
 
 /**
  * A filing-year index rebuild changes no row: one decision gives every
- * dependent index an entry to rebuild beside the snapshot.
+ * dependent index an entry to rebuild beside the snapshot. The migrated
+ * scratch database has already run the rebuild, so the seed clears its
+ * checkpoint to leave it pending.
  */
-const filingYearReindexSeed: NoRowSeed = {
+const filingYearReindexSeed = (checkpoint: string): NoRowSeed => ({
   kind: "no-row-work",
   tables: ["case_law_decisions"],
   snapshot: async (client) =>
@@ -381,14 +383,18 @@ const filingYearReindexSeed: NoRowSeed = {
     await client.unsafe(
       `INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language) VALUES ('${ID_2}', '${ID}', '21 Cdo 1234/2019', 'Court', 'CZE', 'cs')`,
     );
+    await client.unsafe(
+      "DELETE FROM public.database_backfill_states WHERE name = $1",
+      [checkpoint],
+    );
   },
-};
+});
 
 const FILING_YEAR_REINDEX_SEEDS = Object.fromEntries(
   FUNCTION_DEPENDENT_INDEX_REINDEXES.filter(
     ({ functionSignature }) =>
       functionSignature === CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE,
-  ).map(({ name }) => [name, filingYearReindexSeed]),
+  ).map(({ name }) => [name, filingYearReindexSeed(name)]),
 );
 
 const SEEDS = {
