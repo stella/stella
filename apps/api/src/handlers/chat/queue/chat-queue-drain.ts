@@ -231,10 +231,7 @@ const sendNextQueuedChatMessage = async ({
   };
 
   const { runTarget } = send;
-  if (
-    runTarget !== undefined &&
-    runTarget.kind !== CHAT_RUN_TARGET_KIND.cloud
-  ) {
+  if (runTarget.kind !== CHAT_RUN_TARGET_KIND.cloud) {
     // A message for a computer that is away waits for it instead of being
     // sent and failing; the computer's next report releases the hold.
     const route = await dependencies.routeLocalRun({
