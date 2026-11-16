@@ -68,17 +68,18 @@ type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
 const appendGuidance = (
   schema: Record<string, unknown>,
   annotation: AgentInputNormalizationAnnotation,
-): void => {
+): Record<string, unknown> => {
   const description = schema["description"];
-  Object.assign(
-    schema,
-    agentInputNormalizationMetadata(
+  return {
+    ...schema,
+    ...agentInputNormalizationMetadata(
       annotation,
       typeof description === "string" ? description : undefined,
     ),
-  );
+  };
 };
 
+/** Rebuild only branches containing the declared path; absence stays explicit. */
 const annotateSchemaPath = ({
   schema,
   path,
@@ -87,50 +88,60 @@ const annotateSchemaPath = ({
   schema: Record<string, unknown>;
   path: readonly string[];
   annotation: AgentInputNormalizationAnnotation;
-}): boolean => {
+}): Record<string, unknown> | undefined => {
   const segment = path.at(0);
   if (segment === undefined) {
-    appendGuidance(schema, annotation);
-    return true;
+    return appendGuidance(schema, annotation);
   }
-  let found = false;
+  let annotated: Record<string, unknown> | undefined;
   for (const keyword of ["anyOf", "oneOf", "allOf"] as const) {
     const branches = schema[keyword];
-    if (!Array.isArray(branches)) {
+    if (!isUnknownArray(branches)) {
       continue;
     }
-    for (const branch of branches) {
-      if (isSchemaRecord(branch)) {
-        found =
-          annotateSchemaPath({ schema: branch, path, annotation }) || found;
-      }
+    const updated = branches.map((branch) =>
+      isSchemaRecord(branch)
+        ? annotateSchemaPath({ schema: branch, path, annotation })
+        : undefined,
+    );
+    if (updated.some((branch) => branch !== undefined)) {
+      annotated = {
+        ...(annotated ?? schema),
+        [keyword]: branches.map((branch, index) => updated[index] ?? branch),
+      };
     }
   }
   if (segment === "[]") {
     const items = schema["items"];
-    return isSchemaRecord(items)
-      ? annotateSchemaPath({
-          schema: items,
-          path: path.slice(1),
-          annotation,
-        }) || found
-      : found;
+    const updated = isSchemaRecord(items)
+      ? annotateSchemaPath({ schema: items, path: path.slice(1), annotation })
+      : undefined;
+    return updated === undefined
+      ? annotated
+      : { ...(annotated ?? schema), items: updated };
   }
   const arraySegment = segment.endsWith("[]");
   const propertyName = arraySegment ? segment.slice(0, -2) : segment;
   const properties = schema["properties"];
-  const property = isSchemaRecord(properties) ? properties[propertyName] : null;
+  if (!isSchemaRecord(properties) || !Object.hasOwn(properties, propertyName)) {
+    return annotated;
+  }
+  const property = properties[propertyName];
   if (!isSchemaRecord(property)) {
-    return found;
+    return annotated;
   }
   // Resolve the property before its items so nullable arrays traverse their union.
-  return (
-    annotateSchemaPath({
-      schema: property,
-      path: arraySegment ? ["[]", ...path.slice(1)] : path.slice(1),
-      annotation,
-    }) || found
-  );
+  const updated = annotateSchemaPath({
+    schema: property,
+    path: arraySegment ? ["[]", ...path.slice(1)] : path.slice(1),
+    annotation,
+  });
+  return updated === undefined
+    ? annotated
+    : {
+        ...(annotated ?? schema),
+        properties: { ...properties, [propertyName]: updated },
+      };
 };
 
 /**
@@ -200,18 +211,19 @@ const applyInputNormalizationPlan = (
   if (plan === undefined) {
     return schema;
   }
+  let annotatedSchema = schema;
   for (const [path, annotation] of Object.entries(plan)) {
-    if (
-      !annotateSchemaPath({
-        schema,
-        path: path.split("."),
-        annotation,
-      })
-    ) {
+    const annotated = annotateSchemaPath({
+      schema: annotatedSchema,
+      path: path.split("."),
+      annotation,
+    });
+    if (annotated === undefined) {
       return panic(`Agent input normalization path does not exist: ${path}`);
     }
+    annotatedSchema = { ...annotated, type: schema.type };
   }
-  return schema;
+  return annotatedSchema;
 };
 
 const deriveMcpInputSchema = (
