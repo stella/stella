@@ -323,6 +323,32 @@ describe("reading a thread", () => {
     expect(await read(pageFor(undefined))).toBe(false);
   });
 
+  test("says whether the turn it waits on or runs takes a message mid-turn", async () => {
+    const pageFor =
+      (activeTurnSteering?: string): Fetch =>
+      async () =>
+        Response.json({
+          messages: [],
+          olderCursor: null,
+          activeTurnId: "turn-1",
+          ...(activeTurnSteering === undefined ? {} : { activeTurnSteering }),
+        });
+    const read = async (fetch: Fetch) => {
+      const page = await readChatThread({
+        fetch,
+        matterId: undefined,
+        source: sourceFor(fetch),
+        threadId: "t1",
+      });
+      return page.isOk() ? page.value.activeTurnSteering : page.error._tag;
+    };
+    expect(await read(pageFor("steerable"))).toBe("steerable");
+    expect(await read(pageFor("not_steerable"))).toBe("not_steerable");
+    // A server from before the field: the turn takes none, so nothing waits
+    // on a guess.
+    expect(await read(pageFor(undefined))).toBe("not_steerable");
+  });
+
   test("a global thread is read without a matter", () => {
     expect(messagesQuery({ matterId: undefined })).toBe("");
     expect(messagesQuery({ before: "c", matterId: undefined })).toBe(

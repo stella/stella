@@ -9,6 +9,11 @@ import {
   CHAT_LOCAL_RUN_STEER_SOURCE,
   type ChatLocalRunSteerRefusal,
 } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+  type ChatTurnSteering,
+} from "@stll/api-contract/chat-send-intent";
 
 import { useChanged } from "@/components/changes";
 import { epochMilliseconds } from "@/connection/clock";
@@ -22,6 +27,7 @@ import type { ChatEntry, ChatRetry } from "@/state/chat-messages";
 import { continuationOf } from "@/state/chat-pending-input";
 import type { PendingAnswer, PendingInput } from "@/state/chat-pending-input";
 import { enqueueChatMessage, queuesInstead } from "@/state/chat-queue";
+import type { QueuedChatItem } from "@/state/chat-queue";
 import {
   applyChatEvent,
   cancelChatTurn,
@@ -108,6 +114,7 @@ const newConnection = (turnId: string | undefined): Connection => ({
  */
 export const useChatTurn = ({
   activeTurnId,
+  activeTurnSteering,
   anonymized,
   matterId,
   onSettled,
@@ -115,6 +122,8 @@ export const useChatTurn = ({
   threadId,
 }: {
   activeTurnId: string | null;
+  /** Whether that turn takes a message mid-turn, as the thread's page says. */
+  activeTurnSteering: ChatTurnSteering;
   /** The thread has sent anonymized text, so a message sent now is anonymized too. */
   anonymized: boolean;
   matterId: string | undefined;
@@ -125,7 +134,7 @@ export const useChatTurn = ({
   const { end } = useSession();
   // What every request about this thread names.
   const thread = { matterId, source, threadId };
-  const turn = useLiveTurn(activeTurnId);
+  const turn = useLiveTurn(activeTurnId, activeTurnSteering);
   const { connection } = turn;
   const [sendError, setSendError] = useState<SendRefusal>();
 
@@ -202,7 +211,11 @@ export const useChatTurn = ({
     {
       onAccepted,
       onRefused,
-    }: { readonly onAccepted: () => void; readonly onRefused: () => void },
+    }: {
+      /** The server took the answer: `turnId` goes on with it. */
+      readonly onAccepted: (turnId: string) => void;
+      readonly onRefused: () => void;
+    },
   ): boolean => {
     const settles = continuationOf(pending, reply);
     if (connection.current !== null || settles === undefined) {
@@ -228,7 +241,7 @@ export const useChatTurn = ({
           onEvent: turn.applyEvent,
           onTurn: (accepted) => {
             turn.accept(opened, accepted);
-            onAccepted();
+            onAccepted(accepted);
           },
           runId: randomUUID(),
           runTarget:
@@ -242,41 +255,13 @@ export const useChatTurn = ({
     return true;
   };
 
-  /**
-   * Answers the thread's latest message again once its answer failed,
-   * unless a turn is still answering. A refusal before the server named a
-   * turn is shown where a send's is; the message stays in the thread.
-   */
-  const regenerate = (retry: ChatRetry): boolean => {
-    if (connection.current !== null) {
-      return false;
-    }
-    setSendError(undefined);
-    const opened = turn.open(undefined, {
-      type: "replaces",
-      messageId: retry.answerId,
-    });
-    start(
-      opened,
-      async () =>
-        await regenerateChatTurn({
-          ...thread,
-          anonymized,
-          fetch: streamingFetch,
-          onEvent: turn.applyEvent,
-          onTurn: (accepted) => {
-            turn.accept(opened, accepted);
-          },
-          retry,
-          runId: randomUUID(),
-          signal: opened.controller.signal,
-        }),
-      (error) => {
-        setSendError(sendRefusal(error, false));
-      },
-    );
-    return true;
-  };
+  const regenerate = regenerateOf({
+    anonymized,
+    setSendError,
+    start,
+    thread,
+    turn,
+  });
 
   /**
    * Follows a turn the server is running that this phone did not start,
@@ -289,6 +274,16 @@ export const useChatTurn = ({
     }
     void rejoin(turn.follow(turnId, continues));
   };
+
+  const steers = useTurnSteer({ signedOut, thread, turn });
+
+  const declineAndSteer = declineAndSteerOf({
+    answer,
+    busy: () => connection.current !== null,
+    enqueue,
+    setSendError,
+    steerQueuedInto: steers.steerQueuedInto,
+  });
 
   const stop = () => {
     stopTurn({ signedOut, thread, turn });
@@ -335,10 +330,138 @@ export const useChatTurn = ({
     regenerate,
     send,
     sendError,
-    ...useTurnSteer({ signedOut, thread, turn }),
+    declineAndSteer,
+    steering: turn.steering,
+    ...steers,
     stop,
   };
 };
+
+/**
+ * Answers the thread's latest message again once its answer failed, unless a
+ * turn is still answering. A refusal before the server named a turn is shown
+ * where a send's is; the message stays in the thread.
+ */
+function regenerateOf({
+  anonymized,
+  setSendError,
+  start,
+  thread,
+  turn,
+}: {
+  anonymized: boolean;
+  setSendError: (refusal: SendRefusal | undefined) => void;
+  start: ReturnType<typeof turnStreams>["start"];
+  thread: {
+    matterId: string | undefined;
+    source: AccessTokenSource;
+    threadId: string;
+  };
+  turn: ReturnType<typeof useLiveTurn>;
+}) {
+  return (retry: ChatRetry): boolean => {
+    if (turn.connection.current !== null) {
+      return false;
+    }
+    setSendError(undefined);
+    const opened = turn.open(undefined, {
+      type: "replaces",
+      messageId: retry.answerId,
+    });
+    start(
+      opened,
+      async () =>
+        await regenerateChatTurn({
+          ...thread,
+          anonymized,
+          fetch: streamingFetch,
+          onEvent: turn.applyEvent,
+          onTurn: (accepted) => {
+            turn.accept(opened, accepted);
+          },
+          retry,
+          runId: randomUUID(),
+          signal: opened.controller.signal,
+        }),
+      (error) => {
+        setSendError(sendRefusal(error, false));
+      },
+    );
+    return true;
+  };
+}
+
+/**
+ * Hands a draft to a turn that waits on its coding agent's approval, as the
+ * web does: the draft is queued, the approval declined with `decline`, and
+ * the resumed turn steered with the queued message at the revision queued.
+ * A turn that does not take it sends it next, from the queue. `onRefused`
+ * hands the draft back when it was not queued; the decline's fate goes to
+ * `onAccepted` and `onDeclineRefused`, as an answer's does.
+ */
+function declineAndSteerOf({
+  answer,
+  busy,
+  enqueue,
+  setSendError,
+  steerQueuedInto,
+}: {
+  answer: (
+    pending: AnswerablePendingInput,
+    reply: PendingAnswer,
+    callbacks: {
+      readonly onAccepted: (turnId: string) => void;
+      readonly onRefused: () => void;
+    },
+  ) => boolean;
+  busy: () => boolean;
+  enqueue: (
+    draft: ChatDraft,
+    messageId: string,
+    onRefused: () => void,
+  ) => Promise<QueuedChatItem | undefined>;
+  setSendError: (refusal: SendRefusal | undefined) => void;
+  steerQueuedInto: (turnId: string, queued: QueuedSteer) => Promise<boolean>;
+}) {
+  return (
+    pending: AnswerablePendingInput,
+    decline: PendingAnswer,
+    draft: ChatDraft,
+    {
+      onAccepted,
+      onDeclineRefused,
+      onRefused,
+    }: {
+      readonly onAccepted: () => void;
+      readonly onDeclineRefused: () => void;
+      readonly onRefused: () => void;
+    },
+  ): boolean => {
+    if (busy() || draft.files.length > 0) {
+      return false;
+    }
+    setSendError(undefined);
+    void (async () => {
+      const queued = await enqueue(draft, randomUUID(), onRefused);
+      if (queued === undefined) {
+        return;
+      }
+      answer(pending, decline, {
+        onAccepted: (turnId) => {
+          onAccepted();
+          void steerQueuedInto(turnId, {
+            id: queued.id,
+            revision: queued.revision,
+            text: draft.text,
+          });
+        },
+        // The message stays queued, and is sent once the thread is free.
+        onRefused: onDeclineRefused,
+      });
+    })();
+    return true;
+  };
+}
 
 /** Asks the server to stop the turn; its stream then ends with the answer stopped. */
 function stopTurn({
@@ -393,7 +516,7 @@ function useTurnQueue({
     draft: ChatDraft,
     messageId: string,
     onRefused: () => void,
-  ) => {
+  ): Promise<QueuedChatItem | undefined> => {
     const queued = await enqueueChatMessage({
       fetch,
       send: queuedChatSend({
@@ -411,9 +534,10 @@ function useTurnQueue({
         setSendError(sendRefusal(queued.error, draft.files.length > 0));
         onRefused();
       }
-      return;
+      return undefined;
     }
     changed("chatQueues");
+    return queued.value;
   };
 
   /** Queues the draft behind the turn answering now and what waits already. */
@@ -492,19 +616,16 @@ function useTurnSteer({
    * answering now. Taken, the server removes it from the queue; `false`
    * when the turn did not take it, so the caller sends it next instead.
    */
-  const steerQueued = async ({
-    id,
-    revision,
-    text,
-  }: {
-    readonly id: string;
-    readonly revision: number;
-    readonly text: string;
-  }): Promise<boolean> => {
+  const steerQueued = async (queued: QueuedSteer): Promise<boolean> => {
     const { turnId } = turn;
-    if (turnId === undefined) {
-      return false;
-    }
+    return turnId === undefined ? false : await steerQueuedInto(turnId, queued);
+  };
+
+  /** `steerQueued`, into turn `turnId`, which this render may not know yet. */
+  const steerQueuedInto = async (
+    turnId: string,
+    { id, revision, text }: QueuedSteer,
+  ): Promise<boolean> => {
     const settled = turn.awaitSteer(id);
     const asked = await steerChatTurn({
       ...thread,
@@ -521,8 +642,15 @@ function useTurnSteer({
     }
     return (await settled).type === "steered";
   };
-  return { steer, steerQueued, steerRefusal };
+  return { steer, steerQueued, steerQueuedInto, steerRefusal };
 }
+
+/** A queued message read whole at `revision`, to hand to a running turn. */
+type QueuedSteer = {
+  readonly id: string;
+  readonly revision: number;
+  readonly text: string;
+};
 
 /**
  * The stream side of a turn: settling a stream that ended, rejoining one
@@ -663,7 +791,10 @@ function turnStreams({
  * in the same callback that read its last event, before React has rendered
  * it. A turn the thread opened on starts out live, joined by the effect.
  */
-function useLiveTurn(activeTurnId: string | null) {
+function useLiveTurn(
+  activeTurnId: string | null,
+  activeTurnSteering: ChatTurnSteering,
+) {
   const [live, setLive] = useState<LiveTurn | null>(() =>
     activeTurnId === null
       ? null
@@ -677,6 +808,17 @@ function useLiveTurn(activeTurnId: string | null) {
   );
   const [busy, setBusy] = useState(activeTurnId !== null);
   const [turnId, setTurnId] = useState(activeTurnId ?? undefined);
+  /**
+   * Whether the turn running or waiting takes a message mid-turn, as the
+   * server tells it: the thread's page for the turn it opened on, then the
+   * turn's stream. It outlives the stream, since a wait on the member needs
+   * it; a new turn takes none until its stream says so.
+   */
+  const [steering, setSteering] = useState<ChatTurnSteering>(
+    activeTurnId === null
+      ? CHAT_TURN_STEERING.notSteerable
+      : activeTurnSteering,
+  );
   const connection = useRef<Connection | null>(null);
   // The connection whose turn is on screen. It outlives `connection`, which
   // is let go as soon as the answer ends, while the thread is still reloading.
@@ -701,9 +843,14 @@ function useLiveTurn(activeTurnId: string | null) {
     busy,
     connection,
     live,
+    steering,
     turnId,
     applyEvent: (event: ChatEvent) => {
       if (event.type === "CUSTOM") {
+        if (event.name === CHAT_TURN_STEERING_EVENT) {
+          setSteering(event.value.steering);
+          return;
+        }
         const { inputId, status } = event.value;
         settleSteer(
           inputId,
@@ -740,6 +887,7 @@ function useLiveTurn(activeTurnId: string | null) {
       });
       setBusy(true);
       setTurnId(undefined);
+      setSteering(CHAT_TURN_STEERING.notSteerable);
       return opened;
     },
     /** A turn the server is running already, which `continues` a stored message. */
@@ -758,6 +906,7 @@ function useLiveTurn(activeTurnId: string | null) {
       });
       setBusy(true);
       setTurnId(known);
+      setSteering(CHAT_TURN_STEERING.notSteerable);
       return opened;
     },
     /** A connection to the turn the thread opened on, which starts out live. */
