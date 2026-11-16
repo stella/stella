@@ -1343,7 +1343,6 @@
     "scripts/suppression-waivers.ts": 1
   },
   "eslint/max-params": {
-    "apps/web/src/lib/render-storm-canary.ts": 2,
     "packages/template-conditions/src/index.ts": 1
   },
   "react/no-children-prop": {},
