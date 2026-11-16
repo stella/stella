@@ -15,6 +15,9 @@ import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census
 import type { CensusListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
+// Leases are checked against the database clock, so a held one expires far ahead of it.
+const LEASE_EXPIRES_AT = new Date("2100-01-01T00:00:00Z");
+
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
@@ -39,7 +42,7 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
           adapterKey: `census-identity-${id}`,
           name: "Retained publisher identity fixture",
           ingestionLeaseToken: leaseToken,
-          ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+          ingestionLeaseExpiresAt: LEASE_EXPIRES_AT,
         })),
       );
       try {
@@ -201,7 +204,7 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
         adapterKey: `census-case-number-${sourceId}`,
         name: "Case-number listing fixture",
         ingestionLeaseToken: leaseToken,
-        ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+        ingestionLeaseExpiresAt: LEASE_EXPIRES_AT,
       });
       try {
         await db.insert(caseLawDecisions).values({

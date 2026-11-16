@@ -21,6 +21,9 @@ import type { CensusListingIdentity } from "@/api/lib/legal-search/ingestion-typ
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
+// Leases are checked against the database clock, so a held one expires far ahead of it.
+const LEASE_EXPIRES_AT = new Date("2100-01-01T00:00:00Z");
+
 test("court evidence distinguishes equal dockets and leaves unknown court observations unmeasured", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
@@ -35,7 +38,7 @@ test("court evidence distinguishes equal dockets and leaves unknown court observ
       adapterKey: `census-court-${sourceId}`,
       name: "Court census fixture",
       ingestionLeaseToken: leaseToken,
-      ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+      ingestionLeaseExpiresAt: LEASE_EXPIRES_AT,
     });
     await db.insert(caseLawDecisions).values({
       sourceId,

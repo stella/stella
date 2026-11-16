@@ -11,6 +11,9 @@ import { sourceCensusSchema } from "@/api/lib/case-law/completeness-census-contr
 import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
+// Leases are checked against the database clock, so a held one expires far ahead of it.
+const LEASE_EXPIRES_AT = new Date("2100-01-01T00:00:00Z");
+
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 describe.skipIf(!enabled)("overlapping publisher slices (postgres)", () => {
@@ -35,7 +38,7 @@ describe.skipIf(!enabled)("overlapping publisher slices (postgres)", () => {
         adapterKey: "hu-bhgy",
         name: "Overlapping colleges fixture",
         ingestionLeaseToken: leaseToken,
-        ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+        ingestionLeaseExpiresAt: LEASE_EXPIRES_AT,
       });
       try {
         await db.insert(caseLawDecisions).values({
