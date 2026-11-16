@@ -2250,7 +2250,7 @@ test("an addition that failed midway finishes as first submitted, its fields hel
   const sources = seen.filter(({ path }) => path === `${lists}/item-sources`);
   expect(sources).toHaveLength(2);
   const [firstSource, replayedSource] = sources;
-  expect(firstSource?.idempotencyKey).toEqual(expect.any(String));
+  expect(firstSource?.idempotencyKey).toBeTruthy();
   expect(replayedSource?.idempotencyKey).toBe(
     firstSource?.idempotencyKey ?? "",
   );
