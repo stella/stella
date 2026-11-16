@@ -21,16 +21,16 @@ import { measureScheduledTaskReplay } from "./scheduled-task-replay";
 import { QUERY_PERF_CONNECTION_SETTINGS } from "./settings";
 
 const ORGANIZATION_ID = toSafeId<"organization">(
-  "01990000-00c4-7000-8000-000000000001",
+  "01990000-00d1-7000-8000-000000000001",
 );
-const USER_ID = toSafeId<"user">("01990000-00c4-7000-8000-000000000002");
+const USER_ID = toSafeId<"user">("01990000-00d1-7000-8000-000000000002");
 const THREAD_ID = toSafeId<"chatThread">(
-  "01990000-00c4-7000-8000-000000000003",
+  "01990000-00d1-7000-8000-000000000003",
 );
 const MESSAGE_ID = toSafeId<"chatMessage">(
-  "01990000-00c4-7000-8000-000000000004",
+  "01990000-00d1-7000-8000-000000000004",
 );
-const TURN_ID = toSafeId<"chatTurn">("01990000-00c4-7000-8000-000000000005");
+const TURN_ID = toSafeId<"chatTurn">("01990000-00d1-7000-8000-000000000005");
 const NOW = new Date("2026-10-29T00:00:00Z");
 /** Receipts past their retention: the run's fixed batch. */
 const EXPIRED_RECEIPTS = 25;
@@ -72,7 +72,7 @@ const seedReceipts = async (db: GatedTestDb, history: number) => {
   await db.insert(chatThreads).values({
     id: THREAD_ID,
     organizationId: ORGANIZATION_ID,
-    title: "Receipt measurement",
+    title: "Command receipt measurement",
     userId: USER_ID,
     workspaceId: null,
   });
@@ -119,10 +119,10 @@ export const measureChatCommandReceiptSweepHistory = async (
   await db
     .insert(user)
     .values({
-      email: "receipt-measurement@example.test",
+      email: "command-receipt-measurement@example.test",
       emailVerified: true,
       id: USER_ID,
-      name: "Receipt measurement",
+      name: "Command receipt measurement",
     })
     .onConflictDoNothing();
   await db
@@ -130,8 +130,8 @@ export const measureChatCommandReceiptSweepHistory = async (
     .values({
       createdAt: NOW,
       id: ORGANIZATION_ID,
-      name: "Receipt measurement",
-      slug: "receipt-measurement",
+      name: "Command receipt measurement",
+      slug: "command-receipt-measurement",
     })
     .onConflictDoNothing();
   const measurements = [];
