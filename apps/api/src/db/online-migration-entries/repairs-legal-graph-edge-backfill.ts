@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-legal-graph-edge-backfill",
   revision: 1450,
+  lifecycle: "finalized",
   type: "repairs",
   values: [LEGAL_GRAPH_EDGE_BACKFILL],
 } satisfies OnlineMigrationEntry;

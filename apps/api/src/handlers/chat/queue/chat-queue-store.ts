@@ -38,6 +38,9 @@ export type ChatQueueItem = {
   preview: string;
   attachmentCount: number;
   runTarget: QueuedChatSend["runTarget"] | null;
+  /** Whether it goes anonymized; a client hands a running turn only a
+   *  message queued to be sent raw. */
+  sendMode: QueuedChatSend["sendMode"];
   createdAt: Date;
 };
 
@@ -93,6 +96,7 @@ const itemOfRow = (row: {
     preview: text.slice(0, CHAT_QUEUE_PREVIEW_MAX_CHARS),
     attachmentCount: send.message.parts.filter(isChatAttachmentPart).length,
     runTarget: send.runTarget ?? null,
+    sendMode: send.sendMode,
     createdAt: row.createdAt,
   };
 };

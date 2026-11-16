@@ -158,16 +158,22 @@ test("a fresh reader shows specific copy when the API refuses its first chat que
   const composer = await openFreshReader(page);
   await composer.getByRole("textbox").fill(QUESTION);
   await composer.getByRole("button", { name: "Send message" }).click();
-  await expect(page.locator('[data-slot="docked-chat-thread"]')).toContainText(
-    messages.errors.api.unauthorized,
-  );
+  // Not sent: the question is back in the composer, not in the thread, and
+  // the notice is the sign-in one, never the server's own wording.
   await expect(
-    page.getByRole("button", { name: "Resend", exact: true }),
+    page
+      .getByText(messages.errors.api.unauthorized)
+      .or(page.getByText(messages.auth.sessionExpired, { exact: true }))
+      .first(),
   ).toBeVisible();
+  await expect(composer.getByRole("textbox")).toContainText(QUESTION);
   await expect(
     page.locator('[data-slot="docked-chat-thread"]'),
-  ).not.toContainText(messages.chat.sendError);
+  ).not.toContainText(QUESTION);
   await expect(
-    page.locator('[data-slot="docked-chat-thread"]'),
-  ).not.toContainText("Private authentication diagnostics");
+    page.getByText(messages.chat.sendError, { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Private authentication diagnostics"),
+  ).toHaveCount(0);
 });

@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-decisions-docket-family-key-idx",
   revision: 510,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

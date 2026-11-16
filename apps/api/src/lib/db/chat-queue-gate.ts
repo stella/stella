@@ -93,19 +93,24 @@ const closePositionGapOnTx = async ({
 
 export type QueuedMessageRemoval =
   | { type: "removed"; request: unknown }
+  | { type: "changed" }
   | { type: "sent" }
   | { type: "not-found" };
 
 /**
- * Remove a queued message, keeping positions 1..n and the hold only while
- * something is queued. The caller holds the thread lock.
+ * Remove a queued message at the revision the caller read, keeping positions
+ * 1..n and the hold only while something is queued. One edited since
+ * (another revision) stays and answers `changed`. The caller holds the
+ * thread lock.
  */
 export const removeQueuedChatMessageOnTx = async ({
   id,
+  revision,
   threadId,
   tx,
 }: {
   id: SafeId<"chatMessage">;
+  revision: number;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<QueuedMessageRemoval> => {
@@ -116,6 +121,7 @@ export const removeQueuedChatMessageOnTx = async ({
       and(
         eq(chatQueuedMessages.id, id),
         eq(chatQueuedMessages.threadId, threadId),
+        eq(chatQueuedMessages.revision, revision),
       ),
     )
     .returning({
@@ -123,6 +129,19 @@ export const removeQueuedChatMessageOnTx = async ({
       request: chatQueuedMessages.request,
     });
   if (removed === undefined) {
+    const queued = await tx
+      .select({ id: chatQueuedMessages.id })
+      .from(chatQueuedMessages)
+      .where(
+        and(
+          eq(chatQueuedMessages.id, id),
+          eq(chatQueuedMessages.threadId, threadId),
+        ),
+      )
+      .limit(1);
+    if (queued.length > 0) {
+      return { type: "changed" };
+    }
     return (await wasSentOnTx({ id, threadId, tx }))
       ? { type: "sent" }
       : { type: "not-found" };
@@ -423,7 +442,12 @@ export const takeQueuedChatMessageOnTx = async ({
   if (!(await isDueHeadOnTx({ id, revision, threadId, tx }))) {
     return "not-due";
   }
-  const removed = await removeQueuedChatMessageOnTx({ id, threadId, tx });
+  const removed = await removeQueuedChatMessageOnTx({
+    id,
+    revision,
+    threadId,
+    tx,
+  });
   return removed.type === "removed" ? "taken" : "not-due";
 };
 

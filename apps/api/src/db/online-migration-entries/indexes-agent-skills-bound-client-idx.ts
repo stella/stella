@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-agent-skills-bound-client-idx",
   revision: 70,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

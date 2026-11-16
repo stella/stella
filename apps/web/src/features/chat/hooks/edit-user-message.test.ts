@@ -13,13 +13,13 @@ import {
   buildEditedUserMessage,
   createUserMessageEditDraft,
 } from "@/components/chat/user-message-edit.logic";
+import { snapshotChatRequestOptions } from "@/features/chat/chat-queue.logic";
 import {
   createChatRuntime,
   resetChatRequestStateForTests,
   sendThreadChatMessage,
 } from "@/features/chat/chat-runtime";
 import { planTruncatedReplay } from "@/features/chat/hooks/edit-user-message";
-import { snapshotChatRequestOptions } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
 
