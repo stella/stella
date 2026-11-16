@@ -266,6 +266,7 @@ const unreadBuild = async (
   );
 
 export const czNsFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: { "Senátní značka": CZ_NS_DETAIL_PAGE },
   buildDecision: async () =>
     await withTestFetch(
       asFetchMock(async (input: string | URL | Request) => {
@@ -419,20 +420,41 @@ const CZ_NSS_FIXTURE_FIELD_IDS = [
   "vyrokrozhodnuti",
   "zastupce",
   "zobrazovanedatum",
+  "evidencniznackars",
+  "spzncjpredkladacirozhodnutinss",
+  "spzncjnapadenarozhodnutinss",
+  "anotace",
+  "datumpredlozenirs",
+  "datumrozhodnutirs",
+  "rozhodnutonapursnss",
+  "nssjudikat",
+  "nsssesit",
+  "nssrok",
+  "vyhledavanidlehesel",
+  "rozpornaprejudikatura",
+  "nadpis",
+  "vztahkpredpisům",
+  "datumvydanivsbnss",
+  "pravnivetaan",
 ] as const;
 
 /** Stands in wherever the value carries nothing the assertions read. */
 const CZ_NSS_PLACEHOLDER_VALUE = "Ne";
+/** The values the fixture's detail page states a second time, by field. */
+const CZ_NSS_FIXTURE_REPEATED_VALUES: Readonly<Record<string, string[]>> = {
+  krajskysoud: ["Krajský soud v Ostravě"],
+  ecli: ["ECLI:CZ:NSS:2016:5.As.140.2014.53"],
+  datumvydanirozhodnuti: ["26.05.2016"],
+};
+
+const czNssFixtureValue = (fieldId: string) =>
+  CZ_NSS_FIXTURE_VALUES[fieldId] ?? CZ_NSS_PLACEHOLDER_VALUE;
 
 const CZ_NSS_DETAIL_PAGE = `<html><body>${CZ_NSS_FIXTURE_FIELD_IDS.map(
-  (fieldId) =>
-    czNssDetailField(
-      fieldId,
-      CZ_NSS_FIXTURE_VALUES[fieldId] ?? CZ_NSS_PLACEHOLDER_VALUE,
-    ),
+  (fieldId) => czNssDetailField(fieldId, czNssFixtureValue(fieldId)),
 ).join(
   "",
-)}<table><tbody><tr><td class="det-textval" data-field-id="ecli">ECLI:CZ:NSS:2016:5.As.140.2014.53</td><td class="det-textval" data-field-id="datumvydanirozhodnuti">26.05.2016</td></tr></tbody></table></body></html>`;
+)}<div data-field-id="krajskysoud"><span class="det-textval"><a href="/DokumentDetail/Index/641750">Krajský soud v Ostravě</a></span></div><table><tbody><tr><td class="det-textval" data-field-id="ecli">ECLI:CZ:NSS:2016:5.As.140.2014.53</td><td class="det-textval" data-field-id="datumvydanirozhodnuti">26.05.2016</td></tr></tbody></table></body></html>`;
 
 const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   <p>ČESKÁ REPUBLIKA</p>
@@ -446,6 +468,17 @@ const CZ_NSS_DOCUMENT_PAGE = `<html><body>
 export const czNssFixture = (
   detailHtml = CZ_NSS_DETAIL_PAGE,
 ): EnrolledAdapterFixture => ({
+  rawFieldValues: Object.fromEntries(
+    CZ_NSS_FIXTURE_FIELD_IDS.map((fieldId) => [
+      fieldId.replace("&#xA7;", "§"),
+      [
+        czNssFixtureValue(fieldId),
+        // The detail page states these again: the regional court as a link,
+        // the identifier and date in the table of related decisions.
+        ...(CZ_NSS_FIXTURE_REPEATED_VALUES[fieldId] ?? []),
+      ],
+    ]),
+  ),
   buildDecision: async () =>
     await withTestFetch(
       asFetchMock(async (input: string | URL | Request) => {
@@ -517,7 +550,7 @@ const czRegionalParagraph = (
  * empty on most decisions, and a fixture that left them so would certify
  * neither the EU-relevance markers nor the publisher's relation graph.
  */
-const CZ_REGIONAL_DOCUMENT_PAYLOAD = JSON.stringify({
+const CZ_REGIONAL_DOCUMENT_RECORD = {
   uuid: "00000000-0000-4000-8000-000000000001",
   header: [
     czRegionalParagraph(
@@ -618,7 +651,10 @@ const CZ_REGIONAL_DOCUMENT_PAYLOAD = JSON.stringify({
       italic: false,
     },
   ],
-});
+};
+const CZ_REGIONAL_DOCUMENT_PAYLOAD = JSON.stringify(
+  CZ_REGIONAL_DOCUMENT_RECORD,
+);
 
 /**
  * The chain payload: one later decision affecting this one, with the id the
@@ -648,6 +684,13 @@ const CZ_REGIONAL_CHAIN_PAYLOAD = JSON.stringify([
  * than of a payload written by hand.
  */
 export const czRegionalFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "document.metadata": CZ_REGIONAL_DOCUMENT_RECORD.metadata,
+    "document.tableCellInfo": CZ_REGIONAL_DOCUMENT_PAYLOAD,
+    "document.styles[].alignment": ["LEFT", "LEFT"],
+    "document.styles[].hasSpaceBefore": [false, true],
+    "document.styles[].hasSpaceAfter": [false, true],
+  },
   buildDecision: async () =>
     await withTestFetch(
       asFetchMock(async (input: string | URL | Request) => {
@@ -1272,6 +1315,10 @@ const CZ_US_PAGES: Readonly<Record<string, string>> = {
  * the text, the record card and the abstract, each read from the court.
  */
 export const czUsFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "Název soudu": CZ_US_RECORD_CARD,
+    "URL adresa": CZ_US_RECORD_CARD,
+  },
   buildDecision: async () =>
     await withTestFetch(
       asFetchMock(async (input: string | URL | Request) => {
