@@ -398,6 +398,14 @@ test("folio defaults preserve frozen app catalogs and app-owned messages", async
   };
   const before = structuredClone(appMessages);
   const folioCatalog = await folioMessageLoaders.cs();
+  const editorDefaults = folioCatalog.folio["editor"];
+  if (editorDefaults === undefined || typeof editorDefaults === "string") {
+    throw new TypeError("The editor catalog must contain message defaults");
+  }
+  const accessibleName = editorDefaults["accessibleName"];
+  if (typeof accessibleName !== "string") {
+    throw new TypeError("The editor catalog must contain its accessible name");
+  }
   const catalogBefore = structuredClone(folioCatalog);
   const loader = spyOn(messageLoaders, "cs").mockResolvedValue(appMessages);
   try {
@@ -405,7 +413,7 @@ test("folio defaults preserve frozen app catalogs and app-owned messages", async
     expect(merged.folio.editor).not.toBe(appMessages.folio.editor);
     expect(merged.folio.editor.outlineDepthAll).toBe("App outline depths");
     expect(merged.folio.editor).toMatchObject({
-      accessibleName: folioCatalog.folio.editor.accessibleName,
+      accessibleName,
     });
     expect(appMessages).toEqual(before);
     expect(folioCatalog).toEqual(catalogBefore);
