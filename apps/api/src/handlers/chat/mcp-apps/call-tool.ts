@@ -181,7 +181,11 @@ const runMemberRead = async ({
     userId,
     userEmail: execution.userEmail,
     featureAccessSnapshot: execution.featureAccessSnapshot,
-    memberRole: withCurrentMemberRole(memberRole, execution.role),
+    memberRole: withCurrentMemberRole({
+      authority: memberRole,
+      role: execution.role,
+      billingAccess: execution.billingAccess,
+    }),
     pinServerValidatedWorkspaceId: execution.pinServerValidatedWorkspaceId,
     safeDb: execution.safeDb,
     scopedDb: execution.scopedDb,

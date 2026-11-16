@@ -179,9 +179,19 @@ const approveFor = async (
     asTestRaw<ApproveCtx>({ ...context(actor, role), body: { ids: selected } }),
   );
 
-const queueFor = async (actor: SafeId<"user">, role: Role = "member") =>
+const queueFor = async (
+  actor: SafeId<"user">,
+  {
+    role = "member",
+    billingAccess = false,
+  }: { role?: Role; billingAccess?: boolean } = {},
+) =>
   await list.handler(
-    asTestRaw<ListCtx>({ ...context(actor, role), query: {} }),
+    asTestRaw<ListCtx>({
+      ...context(actor, role),
+      memberRole: sessionMemberRole(role, billingAccess),
+      query: {},
+    }),
   );
 
 const byEntryId = (a: { id: string }, b: { id: string }) =>
@@ -364,7 +374,7 @@ describe("a draft edited between the submit's read and its write", () => {
 });
 
 describe("the approval queue", () => {
-  test("lists submitted entries only, with names, rate and a pending count", async () => {
+  test("lists submitted entries and shows rates only with billing access", async () => {
     const submitted = await seedEntry({ status: "submitted" });
     await seedEntry({ narrative: "Still being written" });
     const queue = await queueFor(ids.userA2);
@@ -376,9 +386,12 @@ describe("the approval queue", () => {
     expect(queue.items[0]).toMatchObject({
       status: "submitted",
       matterName: "WS A2",
-      rateAtEntry: 120_000,
+      rateAtEntry: null,
       currency: "USD",
       timekeeperName: expect.any(String),
+    });
+    expect(await queueFor(ids.userA2, { billingAccess: true })).toMatchObject({
+      items: [{ id: submitted, rateAtEntry: 120_000 }],
     });
   });
 });

@@ -6,6 +6,7 @@ import {
 } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_INDEX_APPEND_DELIVERIES,
+  CORPUS_INDEX_APPEND_FAULTS,
   CORPUS_INDEX_DESIRED_ACTIONS,
   CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES,
   CORPUS_INDEX_INTENT_STATUSES,
@@ -84,6 +85,13 @@ export const corpusIndexProjectionIntents = p.pgTable(
     appendRequestId: p.uuid("append_request_id"),
     appendRequestRevisionCount: p.integer("append_request_revision_count"),
     appendCommittedAt: timestamptz("append_committed_at"),
+    /**
+     * What a failure of a committed offline revision is charged to
+     * (`CORPUS_INDEX_APPEND_FAULTS`), written with its commit by the record or
+     * the expired-lease sweep. Every prover and the offline request cap read
+     * it. Null on every ingest revision and on an offline one not committed.
+     */
+    appendFault: p.text("append_fault", { enum: CORPUS_INDEX_APPEND_FAULTS }),
     expectedDocumentCount: p.integer("expected_document_count"),
     appliedAt: timestamptz("applied_at"),
     appendPublishBarrierAt: timestamptz("append_publish_barrier_at"),
@@ -208,6 +216,12 @@ export const corpusIndexProjectionIntents = p.pgTable(
       .index("corpus_index_projection_intents_append_request_idx")
       .on(t.appendRequestId)
       .where(sql`${t.appendRequestId} IS NOT NULL`),
+    // The latest offline start of a route, which a new holder of the route's
+    // build waits out: one probe however long the revision history grows.
+    p
+      .index("corpus_index_projection_intents_offline_start_idx")
+      .on(t.family, t.generation, t.indexId, t.appendStartedAt)
+      .where(sql`${t.appendDelivery} = 'offline_indexer'`),
     // The absent census's other half: withdrawn revisions the engine must not
     // hold either, read beside the settled ones by the same page.
     p
@@ -262,6 +276,16 @@ export const corpusIndexProjectionIntents = p.pgTable(
           AND (${t.appendCommittedAt} IS NULL OR ${t.appendPublishBarrierAt} IS NOT NULL)
         ELSE false
       END`,
+    ),
+    p.check(
+      "corpus_index_projection_intents_append_fault_values",
+      sql`${t.appendFault} IN (${sqlValues(CORPUS_INDEX_APPEND_FAULTS)})`,
+    ),
+    // An offline revision states what its failure costs from its commit on
+    // (the commit instant is immutable); nothing else carries a fault.
+    p.check(
+      "corpus_index_projection_intents_append_fault_shape",
+      sql`(${t.appendFault} IS NOT NULL) = (${t.appendDelivery} = 'offline_indexer' AND ${t.appendCommittedAt} IS NOT NULL)`,
     ),
     p.check(
       "corpus_index_projection_intents_epoch_positive",

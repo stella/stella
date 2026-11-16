@@ -12,7 +12,7 @@ import {
   nullableRegistryString,
   registryMutation,
   registryString,
-} from "../shared/property-test-helpers.test.js";
+} from "../shared/tests/test-helpers.js";
 import { lookupByUid } from "./client.js";
 import { parseFirm, parseSearchEntry } from "./parse.js";
 import type { ZefixCompany, ZefixRawFirm } from "./types.js";

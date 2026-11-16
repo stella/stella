@@ -64,6 +64,11 @@ export default {
     names: MODEL_OPERATION_NAMES,
     allowed: [
       {
+        path: "apps/api/src/lib/chat/ai-data-policy.contract.type-test.ts",
+        reason:
+          "Checks generation entry-point request policy types; sends no model request.",
+      },
+      {
         // The one model caller under desktop-time-entries: billing drafts
         // and the narrative route reach the model only through it.
         path: "apps/api/src/handlers/desktop-time-entries/drafting-model.ts",
