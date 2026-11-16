@@ -18,7 +18,7 @@ type ChatLocalFilesUndoFixture = {
  * however many undos were asked before or events the runs stored.
  */
 export const chatLocalFilesUndoScalingScenario = {
-  name: "chat local files undo",
+  name: "chat message local files undo",
   definition: readLocalFilesUndo,
   measure: async ({
     control,

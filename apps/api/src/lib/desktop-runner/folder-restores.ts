@@ -4,7 +4,6 @@ import {
   asc,
   desc,
   eq,
-  exists,
   gte,
   inArray,
   isNull,
@@ -53,6 +52,7 @@ import {
   withAggregateLock,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   transitionLifecycle,
   transitionLifecycleBatch,
@@ -130,9 +130,7 @@ const pending = (now: Date) =>
 
 /** Runs that took the checkpoint they were asked for before their turn. */
 const tookCheckpoint = (runId: SQLWrapper) =>
-  exists(
-    sql`select 1 from ${events} where ${events.runId} = ${runId} and ${events.type} = 'run.event' and ${events.message} -> 'chunk' ->> 'type' = 'CUSTOM' and ${events.message} -> 'chunk' ->> 'name' = ${DESKTOP_RUNNER_CHECKPOINT_EVENT} and ${events.message} -> 'chunk' -> 'value' ->> 'status' = 'taken'`,
-  );
+  sql<boolean>`exists (select 1 from ${events} where ${events.runId} = ${runId} and ${events.type} = 'run.event' and ${events.message} -> 'chunk' ->> 'type' = 'CUSTOM' and ${events.message} -> 'chunk' ->> 'name' = ${DESKTOP_RUNNER_CHECKPOINT_EVENT} and ${events.message} -> 'chunk' -> 'value' ->> 'status' = 'taken')`;
 
 /**
  * A run that may have worked in its folder: one the computer refused, or
@@ -193,10 +191,6 @@ type UndoTarget = {
   desktopId: string;
   linkedFolderId: string | null;
 };
-
-/** The target run's own start, read in the database at full precision. */
-const startOf = (target: UndoTarget) =>
-  sql`(select r.created_at from desktop_runner_runs r where r.run_id = ${target.runId})`;
 
 /** The same folder on the same computer as `target`'s. */
 const sameFolder = (target: UndoTarget, threadId: SafeId<"chatThread">) =>
@@ -336,8 +330,7 @@ const assessUndo = async (
           eq(runs.organizationId, owner.organizationId),
           sameFolder(target, threadId),
           sql`${runs.chatThreadId} IS DISTINCT FROM ${threadId}::uuid`,
-          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
-          sql`${runs.createdAt} > ${startOf(target)}`,
+          sql`${runs.createdAt} > (select r.created_at from desktop_runner_runs r where r.run_id = ${target.runId})`,
           mayHaveTouchedFolder,
         ),
       )
@@ -363,10 +356,8 @@ const assessUndo = async (
         eq(restores.state, "restored"),
         sameFolder(target, threadId),
         ne(runs.runId, target.runId),
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
-        sql`${runs.createdAt} <= ${startOf(target)}`,
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
-        sql`${restores.createdAt} > ${startOf(target)}`,
+        sql`${runs.createdAt} <= (select r.created_at from desktop_runner_runs r where r.run_id = ${target.runId})`,
+        sql`${restores.createdAt} > (select r.created_at from desktop_runner_runs r where r.run_id = ${target.runId})`,
       ),
     )
     .limit(1);
@@ -384,22 +375,24 @@ const assessUndo = async (
       reason: "no_checkpoint",
     };
   }
-  // The computer keeps the newest checkpoints of a folder only.
-  const later = await db
-    .select({ runId: runs.runId })
-    .from(runs)
-    .where(
-      and(
-        eq(runs.userId, owner.userId),
-        eq(runs.organizationId, owner.organizationId),
-        sameFolder(target, threadId),
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
-        sql`${runs.createdAt} > ${startOf(target)}`,
-        tookCheckpoint(runs.runId),
+  // The computer keeps the newest checkpoints of a folder only: with as many
+  // later ones as it keeps, this one is gone.
+  const later = await readBounded(
+    db
+      .select({ runId: runs.runId })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+          sameFolder(target, threadId),
+          sql`${runs.createdAt} > (select r.created_at from desktop_runner_runs r where r.run_id = ${target.runId})`,
+          tookCheckpoint(runs.runId),
+        ),
       ),
-    )
-    .limit(DESKTOP_RUNNER_CHECKPOINTS_KEPT);
-  if (later.length >= DESKTOP_RUNNER_CHECKPOINTS_KEPT) {
+    DESKTOP_RUNNER_CHECKPOINTS_KEPT - 1,
+  );
+  if (later.type === "overflow") {
     return {
       type: "refused",
       targetRunId: target.runId,
@@ -900,10 +893,9 @@ export const settleFolderRestore = async (
             eq(runs.chatThreadId, restores.chatThreadId),
             eq(runs.desktopId, target.desktopId),
             sql`${runs.linkedFolderId} IS NOT DISTINCT FROM ${target.linkedFolderId}`,
-            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
-            sql`${runs.createdAt} >= ${target.createdAt}`,
-            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are read in the database at full precision; nothing round-trips through a Date
-            sql`${runs.createdAt} <= ${restores.createdAt}`,
+            // Both bounds are read in the database, at full precision.
+            sql`${runs.createdAt} >= (select t.created_at from desktop_runner_runs t where t.run_id = ${restores.runId})`,
+            sql`${runs.createdAt} <= (select fr.created_at from desktop_runner_folder_restores fr where fr.id = ${restoreId})`,
           ),
         )
         .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
