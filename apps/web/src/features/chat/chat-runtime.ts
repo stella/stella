@@ -37,6 +37,12 @@ import {
   type ChatLocalRunSteerRefusal,
   type ChatLocalRunSteerSource,
 } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+  type ChatTurnSteering,
+  chatTurnSteeringEventSchema,
+} from "@stll/api-contract/chat-send-intent";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -193,6 +199,10 @@ type ChatRuntimeSnapshot = {
    *  `null` while it runs. A rejoin replays the run's events, so a reload
    *  reads the same. */
   computerWait: ChatComputerWait | null;
+  /** Whether the turn running or waiting now takes a message mid-turn, as
+   *  the server tells it (the turn's stream, else the thread's page). A new
+   *  turn takes none until its stream says so; a cloud turn never does. */
+  turnSteering: ChatTurnSteering;
   /** When this page sent the message its running request carries, on the
    *  `performance.now()` clock: the start every turn's live elapsed time
    *  counts from, on stella or on the member's computer alike. `null` once
@@ -418,6 +428,9 @@ type CreateChatRuntimeProps = {
   /** The thread's turn not yet settled when the page loaded, which Stop
    *  cancels until a request names a newer one. */
   activeTurnId: SafeId<"chatTurn"> | null;
+  /** Whether that turn takes a message mid-turn; absent where the thread's
+   *  turns run on stella and take none. */
+  activeTurnSteering?: ChatTurnSteering | undefined;
   context: ChatThreadOptionsContext | undefined;
   initialMessages: PersistedChatMessage[];
   key: ChatThreadKey;
@@ -559,6 +572,7 @@ const hasUserMessage = (
 
 export const createChatRuntime = ({
   activeTurnId,
+  activeTurnSteering = CHAT_TURN_STEERING.notSteerable,
   context,
   initialMessages,
   key,
@@ -587,6 +601,10 @@ export const createChatRuntime = ({
     stop: { status: "idle" },
     turnAbandoned: false,
     computerWait: null,
+    turnSteering:
+      activeTurnId === null
+        ? CHAT_TURN_STEERING.notSteerable
+        : activeTurnSteering,
     turnSentAt: null,
     turnsStarted,
   };
@@ -646,6 +664,7 @@ export const createChatRuntime = ({
     stopBeforeHeaders = "none";
     setSnapshot({
       turnSentAt: performance.now(),
+      turnSteering: CHAT_TURN_STEERING.notSteerable,
       turnsStarted: snapshot.turnsStarted + 1,
       ...(snapshot.stop.status === "idle" ? {} : { stop: { status: "idle" } }),
     });
@@ -1193,6 +1212,14 @@ export const createChatRuntime = ({
         }
         return;
       }
+      if (name === CHAT_TURN_STEERING_EVENT) {
+        // Unreadable, the turn keeps what it was told: a message then waits.
+        const steering = v.safeParse(chatTurnSteeringEventSchema, value);
+        if (steering.success) {
+          setSnapshot({ turnSteering: steering.output.steering });
+        }
+        return;
+      }
       if (name !== CHAT_LOCAL_RUN_COMPUTER_EVENT) {
         return;
       }
@@ -1637,10 +1664,6 @@ export const createChatRuntime = ({
       loadingGeneration === loading && snapshot.isLoading && !isStoppedTurn();
     if (!running()) {
       return STEER_UNSETTLED;
-    }
-    // A cloud turn takes nothing mid-turn.
-    if (context?.getRunTarget?.().kind !== "local") {
-      return { type: "refused", reason: "harness_cannot_steer" };
     }
     const settled = new Promise<ChatSteerOutcome>((resolve) => {
       pendingSteers.set(inputId, resolve);

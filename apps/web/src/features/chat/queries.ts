@@ -15,6 +15,10 @@ import {
   type DocxSuggestionSurface,
 } from "@stll/api-contract/chat-docx-suggestions";
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  type ChatTurnSteering,
+} from "@stll/api-contract/chat-send-intent";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -177,6 +181,8 @@ type ThreadFetch = {
   newestLocalTurn?: NewestLocalTurn | undefined;
   /** The thread's turn not yet settled; null when every turn has settled. */
   activeTurnId: SafeId<"chatTurn"> | null;
+  /** Whether that turn takes a message mid-turn, as the server knows it. */
+  activeTurnSteering: ChatTurnSteering;
   attachedFiles: ChatThreadAttachedFiles;
   /** Where this thread's opening history came from. */
   forkProvenance: ForkProvenance;
@@ -249,6 +255,7 @@ const fetchThreadMessages = async (
     return {
       activeSkill: null,
       activeTurnId: null,
+      activeTurnSteering: CHAT_TURN_STEERING.notSteerable,
       attachedFiles: EMPTY_ATTACHED_FILES,
       forkProvenance: { type: "none" },
       messages: [],
@@ -270,6 +277,7 @@ const fetchThreadMessages = async (
   return {
     activeSkill: data.activeSkill,
     activeTurnId: data.activeTurnId,
+    activeTurnSteering: data.activeTurnSteering,
     ...(data.newestLocalTurn === null
       ? {}
       : { newestLocalTurn: data.newestLocalTurn }),
@@ -552,6 +560,12 @@ export type ChatThreadFetched = {
    * composer's Stop cancels. Null when every turn has settled.
    */
   activeTurnId: SafeId<"chatTurn"> | null;
+  /**
+   * Whether that turn takes a message mid-turn (`ChatTurnSteering`), as the
+   * server knows it; absent for a file thread, whose turns run on stella and
+   * take none.
+   */
+  activeTurnSteering?: ChatTurnSteering | undefined;
   /**
    * The files the thread attached, for the header's file stack. Read with
    * the page because older messages page in on demand, so the transcript
