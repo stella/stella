@@ -34,6 +34,10 @@ import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-pr
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { CORPUS_ROW_PROJECTABLE } from "@/api/lib/legal-search/corpus-projectability";
 import type { isRedistributable } from "@/api/lib/legal-search/corpus-source";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedLegislationDocumentId,
+} from "@/api/lib/safe-id-boundaries";
 
 /**
  * Upper bound for one bootstrap transaction. This bounds row locks and the
@@ -241,7 +245,10 @@ const selectUnprojectable = async (
             .from(caseLawDecisions)
             .where(
               and(
-                inArray(caseLawDecisions.id, entityIds),
+                inArray(
+                  caseLawDecisions.id,
+                  entityIds.map(brandPersistedCaseLawDecisionId),
+                ),
                 not(CORPUS_ROW_PROJECTABLE.case_law),
               ),
             )
@@ -256,7 +263,10 @@ const selectUnprojectable = async (
             .from(legislationDocuments)
             .where(
               and(
-                inArray(legislationDocuments.id, entityIds),
+                inArray(
+                  legislationDocuments.id,
+                  entityIds.map(brandPersistedLegislationDocumentId),
+                ),
                 not(CORPUS_ROW_PROJECTABLE.legislation),
               ),
             )
