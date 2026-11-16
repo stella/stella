@@ -2103,6 +2103,8 @@ test("an addition that failed midway finishes as first submitted, its fields hel
   const seeded = seededRun();
   const documentId = "0199a3c4-5b6d-7e8f-9a0b-000000009201";
   const versionId = "0199a3c4-5b6d-7e8f-9a0b-000000009202";
+  const laterVersionId = "0199a3c4-5b6d-7e8f-9a0b-000000009206";
+  let currentVersionId = versionId;
   const addedFactId = "0199a3c4-5b6d-7e8f-9a0b-000000009203";
   const lists = `/v1/lists/${workspaceId}`;
   let sourceWrites = 0;
@@ -2111,8 +2113,7 @@ test("an addition that failed midway finishes as first submitted, its fields hel
     new Map([
       [
         `GET /v1/entities/${workspaceId}/entity/${documentId}`,
-        () =>
-          Response.json({ entityId: documentId, currentVersionId: versionId }),
+        () => Response.json({ entityId: documentId, currentVersionId }),
       ],
       [
         `PUT /v1/tasks/${workspaceId}`,
@@ -2184,6 +2185,8 @@ test("an addition that failed midway finishes as first submitted, its fields hel
   });
   fireEvent.click(save);
   await waitFor(() => expect(sourceWrites).toBe(1));
+  currentVersionId = laterVersionId;
+  expect(currentVersionId).not.toBe(versionId);
   await waitFor(() =>
     expect(
       within(sheet)
@@ -2226,7 +2229,6 @@ test("an addition that failed midway finishes as first submitted, its fields hel
       `PUT /v1/tasks/${workspaceId}`,
       `GET /v1/entities/${workspaceId}/entity/${documentId}`,
       `POST ${lists}/item-sources`,
-      `GET /v1/entities/${workspaceId}/entity/${documentId}`,
       `POST ${lists}/item-sources`,
       `POST ${lists}/claim-reviews`,
       `POST ${lists}/claim-rechecks`,
@@ -2235,10 +2237,25 @@ test("an addition that failed midway finishes as first submitted, its fields hel
   );
   // One key for the addition's re-check, so a re-check that landed but lost
   // its answer is replayed, not graded again.
-  expect(seen.at(6)?.body).toMatchObject({ requestKey: expect.any(String) });
-  expect(seen.at(7)?.body).toEqual(seen.at(6)?.body);
-  // The fact was added once, and sourced from the document first chosen.
-  expect(seen.at(4)?.body).toMatchObject({
+  const rechecks = seen.filter(
+    ({ path }) => path === `${lists}/claim-rechecks`,
+  );
+  expect(rechecks).toHaveLength(2);
+  expect(rechecks.at(0)?.body).toMatchObject({
+    requestKey: expect.any(String),
+  });
+  expect(rechecks.at(1)?.body).toEqual(rechecks.at(0)?.body);
+  // Retrying after leaving the claim replays the first source, even if its
+  // document now has a newer version.
+  const sources = seen.filter(({ path }) => path === `${lists}/item-sources`);
+  expect(sources).toHaveLength(2);
+  const [firstSource, replayedSource] = sources;
+  expect(firstSource?.idempotencyKey).toEqual(expect.any(String));
+  expect(replayedSource?.idempotencyKey).toBe(
+    firstSource?.idempotencyKey ?? "",
+  );
+  expect(replayedSource?.body).toEqual(firstSource?.body);
+  expect(replayedSource?.body).toMatchObject({
     itemEntityId: addedFactId,
     sourceEntityId: documentId,
     sourceEntityVersionId: versionId,
