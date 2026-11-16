@@ -1,0 +1,6 @@
+{
+  "metric": "unclassified-handler-failures",
+  "file": "apps/api/src/handlers/chat/turns/settle.ts",
+  "delta": 3,
+  "reason": "Moved unchanged with the streamed-turn settlement from apps/api/src/handlers/chat/send-message.ts, which drops by the same 3; the repository total stays 336. They are internal defects (invalid generated tool parts, a failed or thrown settlement write) that should keep alerting as unclassified."
+}
