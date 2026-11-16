@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import type { ConditionNode, Operand } from "@stll/conditions";
+import { isSafeFieldPath } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -89,7 +90,6 @@ import type { LookupRegistry } from "@/components/templates/template-field-manif
 import {
   arrayIndexKey,
   buildInitialValues,
-  buildSubmitValues,
   getDefaultValue,
   groupFieldsByPrefix,
   isFieldVisible,
@@ -185,6 +185,128 @@ const isValidKrsNumber = (value: string): boolean =>
 
 type FieldErrors = Record<string, string | undefined>;
 type TouchedFields = Record<string, boolean>;
+
+type SubmitValuesOptions = {
+  values: FormValues;
+  fields: ResolvedField[];
+  /** The template's AI-decided conditions. They render no input, so a value
+   *  exists under one only while the user has taken it over; sending it makes
+   *  the fill engine's "user value wins" rule keep it over the model's
+   *  answer. */
+  conditionFields: readonly ResolvedField[];
+  conditions: NamedCondition[];
+};
+
+const buildSubmitValues = ({
+  values,
+  fields,
+  conditionFields,
+  conditions,
+}: SubmitValuesOptions): Record<string, unknown> => {
+  const result = new Map<string, unknown>();
+
+  for (const field of [...fields, ...conditionFields]) {
+    // Skip hidden fields
+    if (!isFieldVisible(field, values, conditions)) {
+      continue;
+    }
+
+    if (field.kind === "array") {
+      const arrayKey = arrayIndexKey(field.path);
+      const items = readArrayIndices(values, arrayKey);
+      const arrayValues: Record<string, unknown>[] = [];
+
+      for (let i = 0; i < items.length; i++) {
+        const itemValues = new Map<string, unknown>();
+        // Like a hidden field, an item field this item's branch prunes is
+        // not sent.
+        for (const subField of visibleItemFields({
+          field,
+          index: i,
+          itemCount: items.length,
+          values,
+          conditions,
+        })) {
+          const path = `${field.path}[${i}].${subField.path}`;
+          const val = values[path];
+          if (
+            val !== undefined &&
+            val !== "" &&
+            isSafeFieldPath(subField.path)
+          ) {
+            itemValues.set(subField.path, coerceValue(subField, val));
+          }
+        }
+        arrayValues.push({
+          __proto__: null,
+          ...Object.fromEntries(itemValues),
+        });
+      }
+
+      result.set(field.path, arrayValues);
+      continue;
+    }
+
+    const val = values[field.path];
+    if (val !== undefined && val !== "") {
+      setNestedValue(result, field.path, coerceValue(field, val));
+    }
+  }
+
+  return { __proto__: null, ...Object.fromEntries(result) };
+};
+
+const coerceValue = (field: ResolvedField, value: unknown): unknown => {
+  if (field.kind === "boolean") {
+    return value === true;
+  }
+  if (field.inputType === "number" && typeof value === "string") {
+    const num = Number(value);
+    return Number.isNaN(num) ? value : num;
+  }
+  return value;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const createNullRecord = (): Record<string, unknown> => ({ __proto__: null });
+
+const setNestedValue = (
+  entries: Map<string, unknown>,
+  path: string,
+  value: unknown,
+): void => {
+  if (!isSafeFieldPath(path)) {
+    return;
+  }
+  const parts = path.split(".");
+  const first = parts.shift();
+  if (first === undefined) {
+    return;
+  }
+  const last = parts.pop();
+  if (last === undefined) {
+    entries.set(first, value);
+    return;
+  }
+  if (last === "") {
+    return;
+  }
+  const ancestors: { record: FormValues; key: string }[] = [];
+  const rootValue = entries.get(first);
+  let current = isRecord(rootValue) ? rootValue : createNullRecord();
+  for (const part of parts) {
+    ancestors.push({ record: current, key: part });
+    const next = Object.hasOwn(current, part) ? current[part] : undefined;
+    current = isRecord(next) ? next : createNullRecord();
+  }
+  let updated: FormValues = { __proto__: null, ...current, [last]: value };
+  for (const { record, key } of ancestors.toReversed()) {
+    updated = { __proto__: null, ...record, [key]: updated };
+  }
+  entries.set(first, updated);
+};
 
 type ValidationError =
   | { kind: "required" }

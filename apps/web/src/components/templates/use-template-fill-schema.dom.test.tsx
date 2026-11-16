@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
@@ -27,9 +29,17 @@ const linkedClause = () => ({
   variantDeleted: false,
 });
 const requests: string[] = [];
+const submittedFills: unknown[] = [];
 const fakeFetch = async (input: string | URL | Request, init?: RequestInit) => {
   const url = new URL(input instanceof Request ? input.url : String(input));
   requests.push(url.pathname);
+  if (url.pathname === `/v1/templates/${TEMPLATE_ID}/fill`) {
+    if (typeof init?.body !== "string") {
+      throw new TypeError("Expected JSON fill body");
+    }
+    submittedFills.push(JSON.parse(init.body));
+    return Response.json({ message: "Fill unavailable" }, { status: 503 });
+  }
   if (url.pathname.startsWith("/api/auth/")) {
     return Response.json(null);
   }
@@ -113,38 +123,11 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-test("saved-template discovery supplies a required clause-only input to the mounted fill form", async () => {
+const renderFillPage = (children: ReactNode) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const values: Record<string, unknown>[] = [];
-  const FillPage = () => {
-    const schema = useTemplateFillSchema(TEMPLATE_ID);
-    if (schema.state !== "ready") {
-      return <span>{schema.state}</span>;
-    }
-    return (
-      <>
-        <ClauseDriftPopover
-          outdated={[linkedClause()]}
-          templateId={TEMPLATE_ID}
-        />
-        <TemplateForm
-          fields={schema.schema.fields}
-          conditions={schema.schema.conditions}
-          structureErrors={schema.schema.structureErrors}
-          fileName={schema.fileName}
-          templateId={TEMPLATE_ID}
-          onBack={() => undefined}
-          onDone={() => undefined}
-          onValuesChange={(value) => {
-            values.push(value);
-          }}
-        />
-      </>
-    );
-  };
-  const rootRoute = router.createRootRoute({ component: FillPage });
+  const rootRoute = router.createRootRoute({ component: () => children });
   const appRouter = router.createRouter({
     routeTree: rootRoute,
     history: router.createMemoryHistory({ initialEntries: ["/"] }),
@@ -172,6 +155,38 @@ test("saved-template discovery supplies a required clause-only input to the moun
       </AuthenticatedUserProvider>
     </QueryClientProvider>,
   );
+  return { view, queryClient };
+};
+
+test("saved-template discovery supplies a required clause-only input to the mounted fill form", async () => {
+  const values: Record<string, unknown>[] = [];
+  const FillPage = () => {
+    const schema = useTemplateFillSchema(TEMPLATE_ID);
+    if (schema.state !== "ready") {
+      return <span>{schema.state}</span>;
+    }
+    return (
+      <>
+        <ClauseDriftPopover
+          outdated={[linkedClause()]}
+          templateId={TEMPLATE_ID}
+        />
+        <TemplateForm
+          fields={schema.schema.fields}
+          conditions={schema.schema.conditions}
+          structureErrors={schema.schema.structureErrors}
+          fileName={schema.fileName}
+          templateId={TEMPLATE_ID}
+          onBack={() => undefined}
+          onDone={() => undefined}
+          onValuesChange={(value) => {
+            values.push(value);
+          }}
+        />
+      </>
+    );
+  };
+  const { view, queryClient } = renderFillPage(<FillPage />);
   try {
     await waitFor(() =>
       expect(
@@ -219,6 +234,120 @@ test("saved-template discovery supplies a required clause-only input to the moun
     ).toBe(2);
     expect(view.queryByRole("textbox", { name: /^Clause party/u })).toBeNull();
   } finally {
+    view.unmount();
+    queryClient.clear();
+  }
+});
+
+test("submitting restored values copies nested paths and preserves existing numeric and repeat values", async () => {
+  submittedFills.length = 0;
+  const restoredAddress = { city: "Prague" };
+  const segments = Array.from(
+    { length: 1024 },
+    (_, index) => `section${index}`,
+  );
+  const deepPath = [...segments, "title"].join(".");
+  const initialValues = {
+    address: restoredAddress,
+    "address.street": "Main",
+    amount: " 12.5 ",
+    scientific: "1e3",
+    unbounded: "Infinity",
+    approved: false,
+    hidden: "not sent",
+    show_hidden: false,
+    "__array_signers.people": [0],
+    "signers.people[0].address.city": "Brno",
+    "signers.people[0].amount": "3",
+    [deepPath]: "Deep clause",
+    "section.": "not sent",
+  };
+  const { view, queryClient } = renderFillPage(
+    <TemplateForm
+      conditions={[]}
+      fields={[
+        { path: "address", kind: "string", count: 1 },
+        { path: "address.street", kind: "string", count: 1 },
+        { path: "amount", kind: "string", inputType: "number", count: 1 },
+        { path: "scientific", kind: "string", inputType: "number", count: 1 },
+        { path: "unbounded", kind: "string", inputType: "number", count: 1 },
+        { path: "approved", kind: "boolean", count: 1 },
+        {
+          path: "hidden",
+          kind: "string",
+          visibleWhen: "show_hidden",
+          count: 1,
+        },
+        {
+          path: "signers.people",
+          kind: "array",
+          count: 1,
+          itemFields: [
+            { path: "address.city", kind: "string", count: 1 },
+            { path: "amount", kind: "string", inputType: "number", count: 1 },
+          ],
+        },
+        { path: deepPath, kind: "string", count: 1 },
+        { path: "section.", kind: "string", count: 1 },
+      ]}
+      fileName="Restored_Contract.docx"
+      initialValues={initialValues}
+      onBack={() => undefined}
+      onDone={() => undefined}
+      structureErrors={[]}
+      templateId={TEMPLATE_ID}
+    />,
+  );
+  try {
+    fireEvent.click(
+      await view.findByRole("button", { name: messages.common.download }),
+    );
+    fireEvent.click(
+      await view.findByRole("menuitem", {
+        name: messages.templates.downloadDocx,
+      }),
+    );
+    // A restored object value displays as an empty scalar; keep the real
+    // optional-field confirmation in the submission path.
+    fireEvent.click(
+      await view.findByRole("button", {
+        name: messages.templates.downloadAnyway,
+      }),
+    );
+    await waitFor(() => expect(submittedFills.length).toBe(1));
+    expect(restoredAddress).toEqual({ city: "Prague" });
+    const submitted = submittedFills.at(0);
+    expect(submitted).toMatchObject({
+      values: {
+        address: { city: "Prague", street: "Main" },
+        amount: 12.5,
+        scientific: 1000,
+        // JSON transport preserves the existing Number("Infinity") serialization.
+        unbounded: null,
+        approved: false,
+        "signers.people": [{ "address.city": "Brno", amount: 3 }],
+      },
+    });
+    if (
+      typeof submitted !== "object" ||
+      submitted === null ||
+      !("values" in submitted)
+    ) {
+      throw new TypeError("Expected submitted fill values");
+    }
+    let current: unknown = submitted.values;
+    expect(current).not.toHaveProperty("hidden");
+    expect(current).not.toHaveProperty("section");
+    for (const segment of [...segments, "title"]) {
+      if (typeof current !== "object" || current === null) {
+        throw new TypeError("Submitted path ended before its field value");
+      }
+      current = Reflect.get(current, segment);
+    }
+    expect(current).toBe("Deep clause");
+    expect(initialValues[deepPath]).toBe("Deep clause");
+  } finally {
+    submittedFills.length = 0;
     view.unmount();
     queryClient.clear();
   }
