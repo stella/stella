@@ -126,7 +126,7 @@ type Fixture = {
 /** A source, a decision and a building registration no other suite uses. */
 const withFixture = async (run: (fixture: Fixture) => Promise<void>) => {
   if (databaseUrl === undefined) {
-    return panic("DATABASE_URL is required");
+    panic("DATABASE_URL is required");
   }
   await withGatedTestClients(databaseUrl, async ({ openClient }) => {
     const { db: writerDb } = openClient();
@@ -189,8 +189,8 @@ const withFixture = async (run: (fixture: Fixture) => Promise<void>) => {
 };
 
 /** Runs the fenced phase on `db`, resolving its backend pid first. */
-const startFlip = (db: GatedTestDb, pid: PromiseWithResolvers<number>) =>
-  runCorpusIndexGenerationFlip(
+const startFlip = async (db: GatedTestDb, pid: PromiseWithResolvers<number>) =>
+  await runCorpusIndexGenerationFlip(
     async (work) =>
       await db.transaction(async (tx) => {
         const row = executedRows(

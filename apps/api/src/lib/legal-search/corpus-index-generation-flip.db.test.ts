@@ -171,7 +171,7 @@ const proveRoutes = async (generation: Generation) => {
       }),
   );
   if (read.type !== "not_ready" && read.type !== "all_current") {
-    return panic(`Unexpected route proofs: ${read.type}`);
+    panic(`Unexpected route proofs: ${read.type}`);
   }
   for (const { indexId } of read.routes) {
     if (!incarnations.has(indexId)) {
@@ -187,7 +187,7 @@ const proveRoutes = async (generation: Generation) => {
         limit: 8,
       });
       if (step.isErr() || page > 50) {
-        return panic(`Route census failed on ${indexId}`);
+        panic(`Route census failed on ${indexId}`);
       }
       if (step.value.type === "proven") {
         break;
@@ -212,7 +212,7 @@ const seedRoutes = async (generation: Generation) => {
       return;
     }
   }
-  return panic(`Seeding did not end: ${generation}`);
+  panic(`Seeding did not end: ${generation}`);
 };
 
 /** A decision the generation shows at `epoch`, held by the engine. */
@@ -413,7 +413,7 @@ test("a dry run checks everything and writes nothing; the flip swaps the pair wi
 
   const flipped = await commit(plan);
   if (flipped.isErr() || flipped.value.type !== "flipped") {
-    return panic(`Expected a flip: ${refusalOf(flipped)}`);
+    panic(`Expected a flip: ${refusalOf(flipped)}`);
   }
   expect(await statuses()).toEqual({ [V7]: "building", [V10]: "serving" });
   expect(flipped.value.evidence).toMatchObject({
@@ -462,7 +462,7 @@ test("a dry run checks everything and writes nothing; the flip swaps the pair wi
       sourceId,
     });
     if (lock === null) {
-      return panic("expected an active projection lock");
+      panic("expected an active projection lock");
     }
     await synchronizeLockedCaseLawProjectionBatchTx(tx, {
       lock,

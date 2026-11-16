@@ -724,9 +724,9 @@ const commitCorpusIndexGenerationFlipTx = async (
   }
   const parity =
     plan.walk === null
-      ? null
+      ? Result.ok(null)
       : await decideCorpusIndexFlipParityTx(tx, plan.walk, { exemptMinutes });
-  if (parity !== null && parity.isErr()) {
+  if (parity.isErr()) {
     return parity.error._tag === "CorpusIndexFlipPairRefusedError"
       ? refuse(
           parity.error.reason === "jurisdiction_serving_pointer"
@@ -739,7 +739,7 @@ const commitCorpusIndexGenerationFlipTx = async (
           parity.error.message,
         );
   }
-  const decided = parity === null ? null : parity.value;
+  const decided = parity.value;
   if (decided !== null && decided.verdict.type !== "no_regression") {
     const { verdict } = decided;
     return verdict.type === "regressions"
@@ -782,14 +782,14 @@ const commitCorpusIndexGenerationFlipTx = async (
   }
   const servingSeedings =
     plan.serving === null
-      ? null
+      ? Result.ok(null)
       : await readSeededTx(
           tx,
           family,
           plan.serving.generation,
           "serving_unseeded",
         );
-  if (servingSeedings !== null && servingSeedings.isErr()) {
+  if (servingSeedings.isErr()) {
     return Result.err(servingSeedings.error);
   }
   const evidence: CorpusIndexFlipEvidence = {
@@ -810,7 +810,7 @@ const commitCorpusIndexGenerationFlipTx = async (
     documents: plan.documents,
     seedings: {
       candidate: candidateSeedings.value,
-      serving: servingSeedings === null ? null : servingSeedings.value,
+      serving: servingSeedings.value,
     },
   };
   const evidenceDigest = digestOf(evidence);
