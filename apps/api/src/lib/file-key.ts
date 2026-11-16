@@ -31,7 +31,9 @@ const fileExtensionMap: Record<string, string> = {
 };
 
 export const getFileExtension = (mimeType: string): string =>
-  fileExtensionMap[mimeType] ?? "bin";
+  Object.hasOwn(fileExtensionMap, mimeType)
+    ? (fileExtensionMap[mimeType] ?? "bin")
+    : "bin";
 
 type CreateFileKeyProps = {
   organizationId: SafeId<"organization">;
