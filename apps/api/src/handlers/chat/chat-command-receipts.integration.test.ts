@@ -55,7 +55,9 @@ beforeAll(async () => {
   );
   // Classifies database failures as a request's handle does: the losing
   // first send of a new thread recovers from the thread's key conflict.
-  safeDb = createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1);
+  safeDb = asTestRaw<SafeDb>(
+    createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+  );
 });
 
 afterAll(async () => {
