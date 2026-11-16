@@ -1,5 +1,0 @@
-{
-  "metric": "duplicate-token-blocks",
-  "delta": 2,
-  "reason": "The fact extraction worker follows the verification worker's one-shot run shape (queue registration, failure and error hooks, reconcile scan); the two run kinds keep separate tables, error codes and lifecycles, so the shared shape stays explicit in each queue module."
-}

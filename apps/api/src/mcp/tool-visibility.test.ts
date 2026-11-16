@@ -36,6 +36,27 @@ describe("MCP tool audiences", () => {
     expect(isMcpToolVisibleTo(definition, "app")).toBe(true);
   });
 
+  test("filtered registries retain only each audience's literal definitions", () => {
+    const definitions = [
+      { name: "shared" },
+      { name: "model", _meta: { ui: { visibility: ["model"] } } },
+      { name: "app", _meta: { ui: { visibility: ["app"] } } },
+      { name: "both", _meta: { ui: { visibility: ["model", "app"] } } },
+    ] as const;
+    const model = definitions.filter((tool) =>
+      isMcpToolVisibleTo(tool, "model"),
+    );
+    const app = definitions.filter((tool) => isMcpToolVisibleTo(tool, "app"));
+    const modelNames = model.map(({ name }) => name) satisfies (
+      "shared" | "model" | "both"
+    )[];
+    const appNames = app.map(({ name }) => name) satisfies (
+      "shared" | "app" | "both"
+    )[];
+    expect(modelNames).toEqual(["shared", "model", "both"]);
+    expect(appNames).toEqual(["shared", "app", "both"]);
+  });
+
   test("invalid UI metadata fails instead of silently exposing tools", () => {
     for (const ui of [null, "app", ["app"]]) {
       expect(() => isMcpToolVisibleTo({ _meta: { ui } }, "model")).toThrow(

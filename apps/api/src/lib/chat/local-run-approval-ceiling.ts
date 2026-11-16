@@ -1,7 +1,9 @@
 import { and, eq } from "drizzle-orm";
 
-import { CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS } from "@stll/api-contract/chat-run-target";
-import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
+import {
+  CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
+  type ChatLocalRunApprovalCeiling,
+} from "@stll/api-contract/chat-run-target";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -14,8 +16,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 /** A settings row's ceiling; every mode for an organization without one. */
 export const localRunApprovalCeilingOf = (
   row:
-    { localRunMaxApprovalMode: DesktopRunnerApprovalMode } | null | undefined,
-): DesktopRunnerApprovalMode =>
+    { localRunMaxApprovalMode: ChatLocalRunApprovalCeiling } | null | undefined,
+): ChatLocalRunApprovalCeiling =>
   row?.localRunMaxApprovalMode ?? CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS;
 
 /**
@@ -43,7 +45,7 @@ export const readLocalRunApprovalCeiling = async (
 
 type UpdateLocalRunApprovalCeilingOptions = {
   organizationId: SafeId<"organization">;
-  maxApprovals: DesktopRunnerApprovalMode;
+  maxApprovals: ChatLocalRunApprovalCeiling;
   recordAuditEvent: AuditRecorder;
 };
 

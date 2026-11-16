@@ -68,6 +68,9 @@
   "connectStella": {
     "message": "Prijungti „stella“"
   },
+  "openStella": {
+    "message": "Atverti „stella“"
+  },
   "adoptTab": {
     "message": "Naudoti šį skirtuką su „stella“"
   },
@@ -85,5 +88,17 @@
   },
   "connectStellaInstead": {
     "message": "Vietoj to prijungti „stella“ čia"
+  },
+  "allowDesktop": {
+    "message": "Naudoti su stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop prijungta"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop neveikia"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Atnaujinkite stella desktop ir šį plėtinį"
   }
 }

@@ -11,7 +11,7 @@ import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const saveDocumentBodySchema = v.object({
-  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
 });
 
 const saveDocumentParamsSchema = v.object({

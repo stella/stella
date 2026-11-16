@@ -5,6 +5,7 @@ import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { DocumentProcessingStatus } from "@/api/db/schema";
+import { searchProvenanceAnswer } from "@/api/handlers/search/provenance-error";
 import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
@@ -175,7 +176,7 @@ export const searchHandler = async ({
 
   const types = body.types.length > 0 ? body.types : body.kinds;
 
-  const result = await search(
+  const searched = await search(
     {
       query: body.query,
       organizationId,
@@ -194,6 +195,10 @@ export const searchHandler = async ({
     { scopedDb },
   );
 
+  if (searched.isErr()) {
+    return searchProvenanceAnswer(searched.error);
+  }
+  const result = searched.value;
   const entityHits = result.hits.filter(isEntitySearchHit);
   const processingStatuses =
     entityHits.length === 0

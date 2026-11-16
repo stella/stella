@@ -29,6 +29,7 @@ import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   createCaseLawProvisionStateBackfillTask,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import type { DataExportMaintenanceDependencies } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import { createLegislationExpressionIdBackfill } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { isRecord } from "@/api/lib/type-guards";
@@ -36,6 +37,7 @@ import type {
   GatedTestClientScope,
   GatedTestDb,
 } from "@/api/tests/gated-test-database";
+import { createLeasedSchedulerJobFixture } from "@/api/tests/helpers/leased-scheduler-job";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -45,7 +47,11 @@ import {
   sumMetrics,
 } from "./measurement";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
-import { analyzePlan, type PlanViolation } from "./plan-analyzer";
+import {
+  analyzePlan,
+  type PlanViolation,
+  relationRowsVisited,
+} from "./plan-analyzer";
 import {
   applyPlannerSettings,
   assertPlannerSettings,
@@ -63,11 +69,45 @@ type MeasuredStatement = {
   kind: "read" | "write";
   metrics: QueryPerfMetrics;
   planViolations: PlanViolation[];
+  queuedExportRead: ReturnType<typeof queuedExportReadWork>;
+  queuedReadPlan: PlanNode | undefined;
   statement: string;
   writtenRows: number;
 };
 
 type PlanNode = Record<string, unknown>;
+
+/** The captured query supplies its page bound, including readCursorPage's lookahead. */
+export const queuedExportReadWork = ({
+  text,
+  params,
+  plan,
+}: {
+  text: string;
+  params: readonly unknown[];
+  plan: PlanNode;
+}) => {
+  if (!text.includes('"queued_export_keys"')) {
+    return undefined;
+  }
+  const parameter = /\blimit\s+\$(\d+)\s*;?\s*$/iu.exec(text)?.at(1);
+  const parameterIndex = Number(parameter) - 1;
+  const lookaheadLimit =
+    Number.isSafeInteger(parameterIndex) && parameterIndex >= 0
+      ? params.at(parameterIndex)
+      : undefined;
+  if (
+    typeof lookaheadLimit !== "number" ||
+    !Number.isSafeInteger(lookaheadLimit) ||
+    lookaheadLimit <= 0
+  ) {
+    return panic("Queued export read has no positive bound parameter");
+  }
+  return {
+    lookaheadLimit,
+    rowsVisited: relationRowsVisited(plan, "organization_data_exports"),
+  };
+};
 
 const childPlans = (node: PlanNode): readonly PlanNode[] => {
   const plans = node["Plans"];
@@ -393,10 +433,17 @@ export const measureScheduledStatementsInOrder = async ({
             ? {}
             : { observedWrittenRows: statement.writtenRows }),
         });
+        const queuedExportRead = queuedExportReadWork({
+          ...statement,
+          plan: plan.Plan,
+        });
         measured.push({
           actualRows,
           ...classification,
           metrics: metricsFromPlan(plan),
+          queuedExportRead,
+          queuedReadPlan:
+            queuedExportRead === undefined ? undefined : plan.Plan,
           planViolations: analyzePlan({
             document: plan,
             owner: jobId,
@@ -601,6 +648,7 @@ export const measureScheduledJobRun = async ({
   openClient,
   jobId,
   task: taskName,
+  dataExportMaintenance,
   admission = QUERY_PERF_ADMISSION,
   now = new Date("2026-01-10T12:00:00Z"),
 }: {
@@ -610,6 +658,7 @@ export const measureScheduledJobRun = async ({
   task: string;
   /** The governor's verdict; a test passes a hold to prove the measurement notices one. */
   admission?: Verdict;
+  dataExportMaintenance?: DataExportMaintenanceDependencies;
   now?: Date;
 }) => {
   const job =
@@ -647,6 +696,7 @@ export const measureScheduledJobRun = async ({
             readVerdict: async () => await Promise.resolve(admission),
           }),
       }),
+      dataExportMaintenance === undefined ? {} : { dataExportMaintenance },
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   // The search configuration is cached for 60 s, and the scheduled jobs run
   // minutes apart, so a production run reads it cold. Every measured run does
@@ -659,7 +709,12 @@ export const measureScheduledJobRun = async ({
       await task(
         asTestRaw<SchedulerTaskContext>({
           db,
-          job: { id: job.id, task: job.task },
+          job: createLeasedSchedulerJobFixture({
+            id: job.id,
+            task: job.task,
+            nextRunAt: now,
+            payload: "payload" in job ? job.payload : null,
+          }),
           payload: "payload" in job ? job.payload : null,
           dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
           runId: createSafeId<"schedulerJobRun">(),
@@ -683,9 +738,15 @@ export const measureScheduledJobRun = async ({
   }
   const statements = measured.statements.map(({ query, plan }) => {
     const statement = query.text.replaceAll(/\s+/gu, " ").slice(0, 160);
+    const queuedExportRead = queuedExportReadWork({
+      ...query,
+      plan: plan.Plan,
+    });
     return {
       ...classifyMeasuredStatement({ statement: query.text, plan: plan.Plan }),
       metrics: metricsFromPlan(plan),
+      queuedExportRead,
+      queuedReadPlan: queuedExportRead === undefined ? undefined : plan.Plan,
       planViolations: analyzePlan({
         document: plan,
         owner: jobId,

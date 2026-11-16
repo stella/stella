@@ -57,7 +57,7 @@ const stashRawDateValues = (
   values: Record<string, unknown>,
   fields: readonly FieldMeta[],
 ): void => {
-  const rawDates: Record<string, string> = {};
+  const rawDates = new Map<string, string>();
   for (const field of fields) {
     if (field.inputType !== "date" || field.dateFormat === undefined) {
       continue;
@@ -79,7 +79,7 @@ const stashRawDateValues = (
         ({ row, subPath, index, containerPath }) => {
           const iso = raw(readRowSubPath(row, subPath));
           if (iso !== null) {
-            rawDates[`${containerPath}.${index}.${subPath}`] = iso;
+            rawDates.set(`${containerPath}.${index}.${subPath}`, iso);
           }
         },
       );
@@ -87,11 +87,11 @@ const stashRawDateValues = (
     }
     const iso = raw(incoming);
     if (iso !== null) {
-      rawDates[field.path] = iso;
+      rawDates.set(field.path, iso);
     }
   }
-  if (Object.keys(rawDates).length > 0) {
-    Reflect.set(values, CONDITION_RAW_VALUES, rawDates);
+  if (rawDates.size > 0) {
+    Reflect.set(values, CONDITION_RAW_VALUES, Object.fromEntries(rawDates));
   }
 };
 

@@ -640,7 +640,7 @@ const buildAnchorsByPieceId = ({
     annotations,
     blocks,
   );
-  const anchorsByPieceId: Record<string, TextAnchor[]> = {};
+  const anchorsByPiece = new Map<string, TextAnchor[]>();
   const blockIds = new Set([
     ...Object.keys(citationSpans),
     ...Object.keys(unresolvedCitationSpans),
@@ -804,8 +804,9 @@ const buildAnchorsByPieceId = ({
     const marks = anchors
       .filter((anchor) => anchor.key.startsWith("annotation:"))
       .flatMap((mark) => splitAroundLinks(mark, links));
-    anchorsByPieceId[blockId] = dropOverlappingSpans([...links, ...marks]);
+    anchorsByPiece.set(blockId, dropOverlappingSpans([...links, ...marks]));
   }
+  const anchorsByPieceId = Object.fromEntries(anchorsByPiece);
   const provisionsByAnchorId = new Map<string, ReactNode>();
   for (const block of blocks) {
     if (!hasBlockInlines(block)) {

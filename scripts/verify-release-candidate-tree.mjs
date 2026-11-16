@@ -13,10 +13,17 @@ const DATA_PATH_PATTERNS = [
   /^docs\/changelog\/v[^/]+\.md$/u,
   /^packages\/[^/]+\/CHANGELOG\.md$/u,
 ];
+const RELEASE_DATES_PATH = "apps/landing/src/data/changelog-release-dates.json";
+// The API refuses desktop builds below the version this file names, and the
+// maintenance cut moves it in the version commit.
+const DESKTOP_SUPPORT_FLOOR_PATH =
+  "apps/api/src/lib/mcp-connectors/desktop-support-floor.json";
+const STABLE_VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+$/u;
 const FIXED_DATA_PATHS = new Set([
   "VERSION",
   "apps/landing/public/media/products/recordings-manifest.json",
-  "apps/landing/src/data/changelog-release-dates.json",
+  RELEASE_DATES_PATH,
+  DESKTOP_SUPPORT_FLOOR_PATH,
 ]);
 // Generated files our own bots rewrite on the release branch. A class's paths
 // pass only when every release-range commit touching the class is that bot's,
@@ -375,6 +382,36 @@ for (const path of FIXED_DATA_PATHS) {
         ))
     ) {
       refuse(`${path} must map release names to timestamps or null`);
+    }
+    if (path === DESKTOP_SUPPORT_FLOOR_PATH) {
+      if (!isRecord(value)) {
+        refuse(`${path} must contain a JSON object`);
+      }
+      const { minimumVersion, supportDays } = value;
+      if (
+        Object.keys(value).length !== 2 ||
+        typeof minimumVersion !== "string" ||
+        !STABLE_VERSION_PATTERN.test(minimumVersion) ||
+        typeof supportDays !== "number" ||
+        !Number.isSafeInteger(supportDays) ||
+        supportDays < 1
+      ) {
+        refuse(`${path} must hold only minimumVersion and supportDays`);
+      }
+      // A floor is a build users hold, so it is a release that reached
+      // production. Whether that release built the desktop is the cut's check.
+      const releases = parseJson(
+        show(candidateSha, RELEASE_DATES_PATH),
+        RELEASE_DATES_PATH,
+      );
+      if (
+        !isRecord(releases) ||
+        typeof releases[`v${minimumVersion}`] !== "string"
+      ) {
+        refuse(
+          `${path} names ${minimumVersion}, which ${RELEASE_DATES_PATH} does not record as promoted`,
+        );
+      }
     }
   }
 }

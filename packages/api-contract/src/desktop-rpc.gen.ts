@@ -20,6 +20,8 @@ export type DesktopAccountSnapshot = { "status": "disconnected", server: string,
 
 export type DesktopEditFileType = "docx" | "xlsx" | "pptx";
 
+export type DesktopLinkFailure = "account_conflict" | "switch_declined" | "declined" | "update_required" | "unavailable";
+
 export type DesktopNotificationPreferences = { documentReady: boolean, revisionCreated: boolean, syncIssues: boolean, };
 
 export type DesktopUpdateSnapshot = { baseUrl: string | null, channel: string | null, currentHash: string | null, currentVersion: string | null, lastCheckedAt: string | null, latestHash: string | null, latestVersion: string | null, status: DesktopUpdateStatus, statusMessage: string, updateAvailable: boolean, updateReady: boolean, };

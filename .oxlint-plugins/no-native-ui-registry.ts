@@ -218,6 +218,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   "file-picker": notComponent(
     "an imperative file chooser; native file inputs are no-raw-file-input's",
   ),
+  "file-size": notComponent("byte size formatting"),
   form: native("Form from @stll/ui/form", { elements: ["form"] }),
   frame: noNative("a layout surface with header and footer slots"),
   "hex-color-picker": owned(
@@ -318,6 +319,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   "review-severity-dot": noNative("a review severity marker"),
   "review-status-badge": noNative("a review status badge"),
   "review-word-diff": notComponent("word diff computation"),
+  "run-state-mark": owned(
+    "no-hand-drawn-run-state/no-hand-drawn-run-state",
+    "a run state drawn outside the mark is reported there",
+  ),
   "scroll-area": owned(
     OVERFLOW_RULE,
     "raw overflow scrolling is reported there",

@@ -104,6 +104,7 @@ export const TURN_STATUS_CLAIM = {
   accepted: "unsettled",
   running: "unsettled",
   "awaiting-user": "none",
+  "handed-over": "unsettled",
   completed: "answered",
   failed: "failed",
   cancelled: "none",

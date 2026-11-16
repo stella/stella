@@ -140,9 +140,12 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         await db.execute(sql`SET search_path TO ${schema}, public`);
         await db.execute(caseLawPublishedDecisionsFixtureSql);
         const index = CASE_LAW_PROVISION_SEARCH_INDEX;
-        const clones = await db.execute(sql`SELECT indexname FROM pg_indexes
+        const clones = await db.execute(
+          sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'case_law_decisions'
-            AND indexdef LIKE '%(country, citation_authority DESC, id DESC)%'`);
+            AND indexdef LIKE '%(country, citation_authority DESC, id DESC)%'`,
+          "objects",
+        );
         for (const row of clones) {
           const name = row["indexname"];
           if (typeof name !== "string") {
@@ -161,10 +164,12 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
               ),
           ),
         );
-        const subtreeClones =
-          await db.execute(sql`SELECT indexname FROM pg_indexes
+        const subtreeClones = await db.execute(
+          sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'case_law_provision_citations'
-            AND indexdef LIKE '%(jurisdiction, work_identifier, anchor COLLATE "C", decision_date, decision_id, span_start)%'`);
+            AND indexdef LIKE '%(jurisdiction, work_identifier, anchor COLLATE "C", decision_date, decision_id, span_start)%'`,
+          "objects",
+        );
         for (const row of subtreeClones) {
           const name = row["indexname"];
           if (typeof name !== "string") {
@@ -174,8 +179,11 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           await db.execute(sql`DROP INDEX ${schema}.${sql.identifier(name)}`);
         }
         const subtree = (
-          await db.execute(sql`SELECT indexdef FROM pg_indexes
-          WHERE schemaname = 'public' AND indexname = 'case_law_provision_citations_work_citing_idx'`)
+          await db.execute(
+            sql`SELECT indexdef FROM pg_indexes
+          WHERE schemaname = 'public' AND indexname = 'case_law_provision_citations_work_citing_idx'`,
+            "objects",
+          )
         ).at(0)?.["indexdef"];
         if (typeof subtree !== "string") {
           panic("The migrated provision subtree index is absent");
@@ -285,6 +293,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           const pagePlan = explainRoot(
             await db.execute(
               sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${pageQuery.getSQL()}`,
+              "objects",
             ),
           );
           expect(
@@ -374,6 +383,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         const sparsePlan = explainRoot(
           await db.execute(
             sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sparseQuery.getSQL()}`,
+            "objects",
           ),
         );
         for (const scan of citationScans(sparsePlan)) {
@@ -408,14 +418,17 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           WHERE decision.id = ranked.id AND ranked.rank % 500 = 0`);
         await db.execute(sql`VACUUM (ANALYZE) ${schema}.case_law_decisions`);
         const expectedFiltered = (
-          await db.execute(sql`SELECT decision.id FROM case_law_decisions decision
+          await db.execute(
+            sql`SELECT decision.id FROM case_law_decisions decision
             WHERE decision.court = ${RARE_COURT}
               AND decision.decision_date BETWEEN DATE '2020-01-01' AND DATE '2020-12-31'
               AND EXISTS (
                 SELECT 1 FROM case_law_provision_citations link
                 WHERE link.decision_id = decision.id
                   AND link.anchor = ${PROVISION.anchor}
-              )`)
+              )`,
+            "objects",
+          )
         ).map((row) => String(row["id"]));
         // Ranks 1000, 3000, ... 29000 of the 30,000 decisions.
         expect(expectedFiltered).toHaveLength(15);
@@ -453,6 +466,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           const filteredPlan = explainRoot(
             await db.execute(
               sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${filteredQuery.getSQL()}`,
+              "objects",
             ),
           );
           for (const scan of rankScans(filteredPlan)) {
@@ -574,6 +588,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         const noMatchPlan = explainRoot(
           await db.execute(
             sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${noMatchProbe.getSQL()}`,
+            "objects",
           ),
         );
         for (const scan of citationScans(noMatchPlan)) {
@@ -606,6 +621,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           const continuationPlan = explainRoot(
             await db.execute(
               sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${continuationProbe}`,
+              "objects",
             ),
           );
           for (const scan of citationScans(continuationPlan)) {
@@ -621,9 +637,9 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
               (node) => node["Node Type"] === "Sort",
             ),
           ).toBe(false);
-          const outcome = (await db.execute(continuationProbe)).at(0)?.[
-            "outcome"
-          ];
+          const outcome = (await db.execute(continuationProbe, "objects")).at(
+            0,
+          )?.["outcome"];
           if (!isRecord(outcome) || typeof outcome["type"] !== "string") {
             panic("The membership probe returned an invalid outcome");
           }
@@ -670,6 +686,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
                   spanStart: sql`${position.spanStart}::integer`,
                 },
               })} AS matched`,
+              "objects",
             )
           ).at(0)?.["matched"];
         const firstPosition =

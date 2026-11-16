@@ -12,6 +12,11 @@ starts.
 | `ServerWebOrigin`  | String  | With `ServerApiURL`: the self-hosted server trusted without the approval prompt.         |
 | `ServerApiURL`     | String  | With `ServerWebOrigin`: that server's API. "Connect to stella web" links to this server. |
 
+`DisableUpdates` leaves deployment to the organization. The server supports a
+desktop build until a newer one has been published for 30 days and then refuses
+it (see "Desktop Support" in `docs/releases.md`), and a refused desktop cannot
+update itself under this setting: deploy each new build within that time.
+
 Both server keys must be set, as exact HTTPS origins without a path; a
 server named by only one of them, or by an invalid URL, is ignored. The
 managed server is trusted alongside the hosted service rather than in place

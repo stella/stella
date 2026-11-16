@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 import { panic, Result } from "better-result";
 
@@ -86,10 +87,7 @@ import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapter
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  parsePlDecisionContent,
-  PL_DECISION_MARKUP,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { parsePlCommonCourtDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import type { PlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
@@ -112,7 +110,6 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -542,9 +539,16 @@ const PL_NCOURT_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "documentTypes" },
   },
-  excerpt: legacyExcludedSourceField(
-    "the opening characters of the document the document part holds whole",
-  ),
+  excerpt: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: [],
+      reason:
+        "The exact excerpt is retained in the original listing XML, independently of the selected document rendition",
+    },
+  },
   chairman: JUDGES_FIELD,
   judges: JUDGES_FIELD,
   themePhrases: {
@@ -608,9 +612,16 @@ const PL_NCOURT_SOURCE_FIELDS = {
   "xPart@xClassifier": DOCUMENT_FIELD,
   "xPart@xClassifierFullName": DOCUMENT_FIELD,
   "xPart@xClassified": DOCUMENT_FIELD,
-  "xPart@xml:space": legacyExcludedSourceField(
-    "a serialisation directive for the XML, not a statement about the judgment",
-  ),
+  "xPart@xml:space": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "document",
+      path: [],
+      reason:
+        "The original XML retains its whitespace directive with the complete xPart document",
+    },
+  },
 } as const satisfies Record<
   keyof PlNcourtPublisherRecord,
   SourceFieldDisposition
@@ -954,7 +965,7 @@ const unmappedFieldsOf = ({
   return unmapped;
 };
 
-type ParsedDocument = ReturnType<typeof parsePlDecisionContent>;
+type ParsedDocument = ReturnType<typeof parsePlCommonCourtDecision>;
 
 /** The document parsed as a Polish decision, or `null` where there is none. */
 const parseDocument = ({
@@ -975,22 +986,24 @@ const parseDocument = ({
   }
   const parsed = Result.try({
     try: () =>
-      parsePlDecisionContent({
-        caseNumber: keyed.caseNumber,
-        ecli: undefined,
-        court: keyed.court,
-        decisionDate: keyed.decisionDate,
-        decisionType: keyed.decisionType,
-        sourceUrl: portalUrlOf(id),
-        documentUrl: contentUrlOf(id),
-        content: content.html,
-        keywords,
-        statutes,
-        documentId: id,
-        sourceSystem: PL_NCOURT_SOURCE_SYSTEM,
-        superscripts: true,
-        markup: PL_DECISION_MARKUP.COMMON_COURT,
-      }),
+      parsePlCommonCourtDecision(
+        {
+          caseNumber: keyed.caseNumber,
+          ecli: undefined,
+          court: keyed.court,
+          decisionDate: keyed.decisionDate,
+          decisionType: keyed.decisionType,
+          sourceUrl: portalUrlOf(id),
+          documentUrl: contentUrlOf(id),
+          content: content.html,
+          keywords,
+          statutes,
+          documentId: id,
+          sourceSystem: PL_NCOURT_SOURCE_SYSTEM,
+          superscripts: true,
+        },
+        "pl-ncourt",
+      ),
     catch: errorTag,
   });
   if (Result.isError(parsed)) {

@@ -18,6 +18,8 @@ import { tauriInvocations } from "./tauri-ipc";
 const done = (trayLocation: TrayLocation | null): OnboardingSnapshot => ({
   activityAvailable: true,
   activityPermissions: ["accessibility"],
+  dictationAvailable: false,
+  dictationPermissions: [],
   documentApp: null,
   linked: true,
   mode: { type: "tour" },

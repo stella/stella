@@ -3,6 +3,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import { MAX_CONTACT_NATIONALITY_CODES } from "@stll/api-contract/contact-write";
 import { COUNTRY_CODES } from "@stll/country-codes";
+import { createTestState } from "@stll/test-state";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -36,6 +37,8 @@ import {
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // @ts-expect-error The anonymous boundary must not accept a tenant-scoped handle.
 const scopedHandleIsPublic: ScopedDb extends SanctionsPublicReadDb
@@ -596,7 +599,7 @@ describe("anonymous sanctions search", () => {
     const analytics = installRecordingAnalytics();
     const logger = installRecordingLogger();
     const previousDebug = env.DEBUG_UNREDACTED_ERRORS;
-    env.DEBUG_UNREDACTED_ERRORS = true;
+    testState.setConfig("DEBUG_UNREDACTED_ERRORS", true);
     const secret = "Private Query Sentinel";
     try {
       for (const screen of [
@@ -620,7 +623,7 @@ describe("anonymous sanctions search", () => {
       expect(JSON.stringify(logger.records)).not.toContain(secret);
       expect(JSON.stringify(analytics.events)).not.toContain(secret);
     } finally {
-      env.DEBUG_UNREDACTED_ERRORS = previousDebug;
+      testState.setConfig("DEBUG_UNREDACTED_ERRORS", previousDebug);
       logger.restore();
       analytics.restore();
     }

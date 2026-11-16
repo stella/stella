@@ -215,6 +215,7 @@ test("chat inherits only its organization's instructions and retains granted too
         route: "/v1/chat" satisfies ApiRoutePath,
         safeDb,
         scopedDb,
+        set: { headers: {}, status: 200 },
         session: { activeOrganizationId: tenant.organizationId },
         user: { id: tenant.userId },
       }),

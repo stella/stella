@@ -261,7 +261,9 @@ test.each([
       ({ message }) => message === "mcp.tool_call.completed",
     );
     const phaseRecord = metricLines
-      .map((line) => JSON.parse(line))
+      .map((line) =>
+        asTestRaw<{ event?: unknown; toolName?: unknown }>(JSON.parse(line)),
+      )
       .find((record) => record.event === "mcp.request.phases");
     expect(phaseRecord?.toolName).toBe(toolCallRecord?.attributes?.["tool"]);
   },

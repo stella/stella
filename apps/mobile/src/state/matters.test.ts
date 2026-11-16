@@ -8,7 +8,12 @@ import {
 } from "@/connection/session";
 
 import { needsConsent } from "./api-request";
-import { createMatter, listMatters } from "./matters";
+import {
+  createMatter,
+  listMatters,
+  listMemberCandidates,
+  newMatterMembers,
+} from "./matters";
 
 const SESSION: StoredSession = {
   serverUrl: "https://stella.example.com",
@@ -27,7 +32,7 @@ const MATTER = {
   name: "Novák v. Svoboda",
   reference: "2026/014",
   lastActivityAt: "2026-10-20T09:30:00.000Z",
-  client: { displayName: "Novák" },
+  client: { id: "contact-1", displayName: "Novák" },
   // Fields the app does not show ride along and are ignored.
   openTaskCount: 3,
 };
@@ -87,7 +92,7 @@ describe("listing matters", () => {
         name: "Novák v. Svoboda",
         reference: "2026/014",
         lastActivityAt: "2026-10-20T09:30:00.000Z",
-        client: { displayName: "Novák" },
+        client: { id: "contact-1", displayName: "Novák" },
       },
     ]);
     expect(calls).toEqual([
@@ -117,6 +122,23 @@ describe("listing matters", () => {
     const { fetch } = server(() => Response.json({ workspaces: [{ id: 7 }] }));
     expect(await outcome(fetch)).toBe("ApiRequestError");
   });
+
+  test("the archived ones come from the same route, filtered by status", async () => {
+    const { fetch, calls } = server(() =>
+      Response.json({ workspaces: [MATTER] }),
+    );
+    const archived = await listMatters({
+      fetch,
+      source: sourceFor(fetch),
+      status: "archived",
+    });
+    expect(archived.isOk() ? archived.value.map(({ id }) => id) : []).toEqual([
+      "matter-1",
+    ]);
+    expect(calls).toEqual([
+      "https://stella.example.com/v1/workspaces?status=archived Bearer access-0",
+    ]);
+  });
 });
 
 describe("opening a matter", () => {
@@ -130,8 +152,10 @@ describe("opening a matter", () => {
       return await fetch(input, init);
     };
     const created = await createMatter({
+      clientId: null,
       fetch: recording,
       id: "matter-9",
+      memberUserIds: ["user-2"],
       name: "Harbor lease renewal",
       source: sourceFor(recording),
     });
@@ -139,8 +163,46 @@ describe("opening a matter", () => {
     expect(calls).toEqual([
       "https://stella.example.com/v1/workspaces Bearer access-0",
     ]);
+    // Without a client the matter is personal: no one else is sent.
     expect(bodies).toEqual([
       {
+        filePropertyName: "Documents",
+        id: "matter-9",
+        name: "Harbor lease renewal",
+      },
+    ]);
+  });
+
+  test("a client matter carries its client and the people it is shared with", async () => {
+    const bodies: unknown[] = [];
+    const { fetch } = server(() => Response.json({ id: "matter-9" }));
+    const recording: Fetch = async (input, init) => {
+      if (init?.method === "PUT" && typeof init.body === "string") {
+        bodies.push(JSON.parse(init.body));
+      }
+      return await fetch(input, init);
+    };
+    const open = async (memberUserIds: readonly string[]) =>
+      await createMatter({
+        clientId: "contact-1",
+        fetch: recording,
+        id: "matter-9",
+        memberUserIds,
+        name: "Harbor lease renewal",
+        source: sourceFor(recording),
+      });
+    await open(["user-2", "user-3"]);
+    await open([]);
+    expect(bodies).toEqual([
+      {
+        clientId: "contact-1",
+        filePropertyName: "Documents",
+        id: "matter-9",
+        memberUserIds: ["user-2", "user-3"],
+        name: "Harbor lease renewal",
+      },
+      {
+        clientId: "contact-1",
         filePropertyName: "Documents",
         id: "matter-9",
         name: "Harbor lease renewal",
@@ -157,11 +219,61 @@ describe("opening a matter", () => {
         }),
     );
     const created = await createMatter({
+      clientId: null,
       fetch,
       id: "matter-9",
+      memberUserIds: [],
       name: "Harbor lease renewal",
       source: sourceFor(fetch),
     });
     expect(created.isErr() && needsConsent(created.error)).toBe(true);
+  });
+});
+
+describe("who a new matter is shared with", () => {
+  const chosen = new Set(["user-1", "user-2", "user-3"]);
+
+  test("everyone chosen but the creator, who is on every matter they open", () => {
+    expect(
+      newMatterMembers({ chosen, clientId: "contact-1", creatorId: "user-1" }),
+    ).toEqual(["user-2", "user-3"]);
+  });
+
+  test("no one on a personal matter, whoever was chosen before the client was cleared", () => {
+    expect(
+      newMatterMembers({ chosen, clientId: null, creatorId: "user-1" }),
+    ).toEqual([]);
+  });
+});
+
+describe("the people a matter can be shared with", () => {
+  test("reads the organization's members from their own route", async () => {
+    const { fetch, calls } = server(() =>
+      Response.json({
+        members: [
+          {
+            userId: "user-2",
+            name: "Eva Dvořáková",
+            email: "eva@example.com",
+            image: null,
+          },
+        ],
+      }),
+    );
+    const members = await listMemberCandidates({
+      fetch,
+      source: sourceFor(fetch),
+    });
+    expect(members.isOk() ? members.value : members.error).toEqual([
+      {
+        userId: "user-2",
+        name: "Eva Dvořáková",
+        email: "eva@example.com",
+        image: null,
+      },
+    ]);
+    expect(calls).toEqual([
+      "https://stella.example.com/v1/workspaces/member-candidates Bearer access-0",
+    ]);
   });
 });

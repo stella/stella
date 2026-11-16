@@ -46,7 +46,8 @@ const recordSelectionFrames = async (page: Page) => {
 
 const stopSelectionFrames = async (page: Page): Promise<FrameSample[]> =>
   await page.evaluate(() => {
-    const stop: unknown = Reflect.get(window, "stopSelectionFrames");
+    const stop = Reflect.get(window, "stopSelectionFrames") as
+      (() => unknown) | undefined;
     if (typeof stop !== "function") {
       throw new TypeError("Selection recorder was not installed");
     }

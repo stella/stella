@@ -21,12 +21,15 @@ if (!runPostgresTests) {
     const indexName = "sanctions_contact_marks_organization_retry_idx";
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       await openClient().db.transaction(async (tx) => {
-        const installed = await tx.execute(sql`
+        const installed = await tx.execute(
+          sql`
           SELECT i.indisvalid, i.indisready
           FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
           JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE n.nspname = 'public' AND c.relname = ${indexName}
-        `);
+        `,
+          "objects",
+        );
         expect(installed).toEqual([{ indisvalid: true, indisready: true }]);
         await tx.execute(sql`
           CREATE TEMP TABLE monitoring_retry_index_plan (
@@ -59,14 +62,17 @@ if (!runPostgresTests) {
           FROM generate_series(1, 20000) n
         `);
         await tx.execute(sql`ANALYZE monitoring_retry_index_plan`);
-        const plan = await tx.execute(sql`
+        const plan = await tx.execute(
+          sql`
           EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
           SELECT contact_id FROM monitoring_retry_index_plan
           WHERE organization_id = 'target'
             AND next_attempt_at <= TIMESTAMPTZ '2026-10-05 12:00:00+00'
             AND scheduled_at <= TIMESTAMPTZ '2026-10-05 12:00:00+00'
           ORDER BY next_attempt_at, scheduled_at, contact_id LIMIT 101
-        `);
+        `,
+          "objects",
+        );
         const text = plan.map((row) => String(row["QUERY PLAN"])).join("\n");
         expect(text).toContain(indexName);
         expect(text).toContain("Index Cond:");

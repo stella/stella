@@ -229,6 +229,19 @@ export const findAdHocSplitButtons = (
     if (name.endsWith("Icon")) {
       return true;
     }
+    // A component handed an icon or a label to draw shows it, as an icon
+    // element does ("<CopyControlFeedback icon={CopyIcon} />").
+    if (
+      element.attributes.some(
+        (attribute) =>
+          attribute.type === "JSXAttribute" &&
+          (jsxName(attribute.name) === "icon" ||
+            jsxName(attribute.name) === "label") &&
+          attribute.value !== null,
+      )
+    ) {
+      return true;
+    }
     if (node.children.some(hasVisibleLabel)) {
       return true;
     }

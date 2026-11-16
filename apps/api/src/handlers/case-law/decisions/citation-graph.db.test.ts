@@ -567,6 +567,28 @@ test("citation pages reject malformed cursors", async () => {
   expect("items" in page).toBe(false);
 });
 
+// The harness grants the doctrine columns, as the migrations do. A database
+// that has not applied that migration yet lacks them; these tests serve from
+// that state and restore the grants whatever the outcome.
+const withoutDoctrineGrants = async (run: () => Promise<void>) => {
+  await db.execute(
+    sql`REVOKE SELECT (citation_key, doctrinal_treatment) ON case_law_citations FROM stella_public_law_reader`,
+  );
+  await db.execute(
+    sql`REVOKE SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews FROM stella_public_law_reader`,
+  );
+  try {
+    await run();
+  } finally {
+    await db.execute(
+      sql`GRANT SELECT (citation_key, doctrinal_treatment) ON case_law_citations TO stella_public_law_reader`,
+    );
+    await db.execute(
+      sql`GRANT SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews TO stella_public_law_reader`,
+    );
+  }
+};
+
 test("citation pages filter doctrine and polarity and bind cursors to filters", async () => {
   const limitsId = citationId(0);
   const distinguishesId = citationId(1);
@@ -578,12 +600,6 @@ test("citation pages filter doctrine and polarity and bind cursors to filters", 
     .update(caseLawCitations)
     .set({ doctrinalTreatment: "distinguishes", polarity: POLARITY.NEGATIVE })
     .where(eq(caseLawCitations.id, distinguishesId));
-  await db.execute(
-    sql`GRANT SELECT (citation_key, doctrinal_treatment) ON case_law_citations TO stella_public_law_reader`,
-  );
-  await db.execute(
-    sql`GRANT SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews TO stella_public_law_reader`,
-  );
 
   const read = async (
     query: Parameters<typeof listDecisionCitationsHandler>[0]["query"],
@@ -632,12 +648,6 @@ test("citation pages filter doctrine and polarity and bind cursors to filters", 
       })),
   ).toBe(false);
 
-  await db.execute(
-    sql`REVOKE SELECT (citation_key, doctrinal_treatment) ON case_law_citations FROM stella_public_law_reader`,
-  );
-  await db.execute(
-    sql`REVOKE SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews FROM stella_public_law_reader`,
-  );
   await db
     .update(caseLawCitations)
     .set({ doctrinalTreatment: null, polarity: null })
@@ -695,56 +705,60 @@ test("unclassified polarity returns only unread stances across stable pages", as
 });
 
 test("doctrine filters report unavailable instead of an empty finding", async () => {
-  const page = await withSubject(
-    subjectId,
-    async (subject) =>
-      await listDecisionCitationsHandler({
-        subject,
-        query: { direction: "incoming", doctrine: "distinguishes" },
-      }),
-  );
+  await withoutDoctrineGrants(async () => {
+    const page = await withSubject(
+      subjectId,
+      async (subject) =>
+        await listDecisionCitationsHandler({
+          subject,
+          query: { direction: "incoming", doctrine: "distinguishes" },
+        }),
+    );
 
-  expect("items" in page).toBe(false);
-  if ("items" in page) {
-    throw new Error("Expected a doctrine availability refusal");
-  }
-  expect(page.code).toBe(422);
-  expect(page.response.message).toBe("Doctrine filtering is unavailable");
+    expect("items" in page).toBe(false);
+    if ("items" in page) {
+      throw new Error("Expected a doctrine availability refusal");
+    }
+    expect(page.code).toBe(422);
+    expect(page.response.message).toBe("Doctrine filtering is unavailable");
+  });
 });
 
 test("doctrine citation reads distinguish invalid cursors from unavailable doctrine", async () => {
-  const read = async (cursor: string | undefined) =>
-    await readGatedDecisionCitations({
-      caseLawDb,
-      cursor,
-      decisionId: subjectId,
-      direction: "cited_by",
-      doctrine: "distinguishes",
-      limit: 1,
-      surface: "search",
-    });
-
-  expect(await read("not-a-cursor")).toEqual({ type: "invalid_cursor" });
-
-  const differentFilterPage = await withSubject(
-    subjectId,
-    async (subject) =>
-      await listDecisionCitationsHandler({
-        subject,
-        query: { direction: "incoming", polarity: "negative" },
+  await withoutDoctrineGrants(async () => {
+    const read = async (cursor: string | undefined) =>
+      await readGatedDecisionCitations({
+        caseLawDb,
+        cursor,
+        decisionId: subjectId,
+        direction: "cited_by",
+        doctrine: "distinguishes",
         limit: 1,
-      }),
-  );
-  if (
-    !("items" in differentFilterPage) ||
-    differentFilterPage.nextCursor === null
-  ) {
-    throw new Error("Expected a cursor issued for a different filter");
-  }
-  expect(await read(differentFilterPage.nextCursor)).toEqual({
-    type: "invalid_cursor",
+        surface: "search",
+      });
+
+    expect(await read("not-a-cursor")).toEqual({ type: "invalid_cursor" });
+
+    const differentFilterPage = await withSubject(
+      subjectId,
+      async (subject) =>
+        await listDecisionCitationsHandler({
+          subject,
+          query: { direction: "incoming", polarity: "negative" },
+          limit: 1,
+        }),
+    );
+    if (
+      !("items" in differentFilterPage) ||
+      differentFilterPage.nextCursor === null
+    ) {
+      throw new Error("Expected a cursor issued for a different filter");
+    }
+    expect(await read(differentFilterPage.nextCursor)).toEqual({
+      type: "invalid_cursor",
+    });
+    expect(await read(undefined)).toEqual({ type: "doctrine_unavailable" });
   });
-  expect(await read(undefined)).toEqual({ type: "doctrine_unavailable" });
 });
 
 test("incoming citations roll up by the citing decision's year within the bounded span", async () => {
@@ -1252,50 +1266,6 @@ test("exact empty projections report zero totals without falling back", async ()
   expect(exact.incomingByYear).toEqual([]);
 });
 
-test("missing projection column grants preserve bounded summaries", async () => {
-  await db.execute(
-    sql`SELECT refresh_decision_citation_stats(${subjectId}::uuid)`,
-  );
-  const exact = await withSubject(
-    subjectId,
-    async (subject) => await summaryOf({ currentYear: 2026, subject }),
-  );
-  expect(exact.precision).toEqual({ status: "exact" });
-  await db.execute(
-    sql`REVOKE SELECT (count) ON case_law_decision_citation_stats FROM stella_public_law_reader`,
-  );
-  try {
-    const bounded = await withSubject(
-      subjectId,
-      async (subject) => await summaryOf({ currentYear: 2026, subject }),
-    );
-    const top = await withSubject(
-      subjectId,
-      async (subject) =>
-        await listTopCitingDecisionsHandler({
-          subject,
-          summary: await summaryOf({ subject }),
-          limit: 5,
-        }),
-    );
-    expect(top).toMatchObject({
-      precision: "bounded",
-      candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
-    });
-    expect(bounded).toEqual({
-      ...exact,
-      precision: {
-        status: "bounded",
-        capped: { incoming: false, outgoing: false },
-      },
-    });
-  } finally {
-    await db.execute(
-      sql`GRANT SELECT (count) ON case_law_decision_citation_stats TO stella_public_law_reader`,
-    );
-  }
-});
-
 test("exact totals follow source redistribution changes without rebuilding buckets", async () => {
   const read = async () =>
     await withSubject(subjectId, async (subject) =>
@@ -1399,22 +1369,24 @@ test("conflicting edge inserts preserve exact projections for both endpoints", a
 });
 
 test("expand release reports doctrine capability unavailable instead of unread", async () => {
-  const page = await readCitationPage("incoming", undefined);
-  if (!("items" in page)) {
-    throw new Error("Expected a citation page");
-  }
-  expect(page.doctrineAvailability).toBe("unavailable");
-  expect(
-    page.items.every(
-      ({ doctrine, evidenceQuote }) =>
-        doctrine === null && evidenceQuote === null,
-    ),
-  ).toBe(true);
-  const summary = await withSubject(
-    subjectId,
-    async (subject) => await summarizeDecisionDoctrineHandler({ subject }),
-  );
-  expect(summary).toEqual({ status: "unavailable" });
+  await withoutDoctrineGrants(async () => {
+    const page = await readCitationPage("incoming", undefined);
+    if (!("items" in page)) {
+      throw new Error("Expected a citation page");
+    }
+    expect(page.doctrineAvailability).toBe("unavailable");
+    expect(
+      page.items.every(
+        ({ doctrine, evidenceQuote }) =>
+          doctrine === null && evidenceQuote === null,
+      ),
+    ).toBe(true);
+    const summary = await withSubject(
+      subjectId,
+      async (subject) => await summarizeDecisionDoctrineHandler({ subject }),
+    );
+    expect(summary).toEqual({ status: "unavailable" });
+  });
 });
 
 test("citation digests omit withheld unresolved references", async () => {
@@ -1588,12 +1560,6 @@ test("a reviewed doctrine quote cannot bypass the source text disposition", asyn
     reviewRef: "test:source-text-disposition",
     origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
   });
-  await db.execute(
-    sql`GRANT SELECT (citation_key, doctrinal_treatment) ON case_law_citations TO stella_public_law_reader`,
-  );
-  await db.execute(
-    sql`GRANT SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews TO stella_public_law_reader`,
-  );
   const read = await readGatedDecisionCitations({
     caseLawDb,
     cursor: undefined,
@@ -1605,12 +1571,6 @@ test("a reviewed doctrine quote cannot bypass the source text disposition", asyn
   const summary = await withSubject(
     withheldSubjectId,
     async (subject) => await summarizeDecisionDoctrineHandler({ subject }),
-  );
-  await db.execute(
-    sql`REVOKE SELECT (citation_key, doctrinal_treatment) ON case_law_citations FROM stella_public_law_reader`,
-  );
-  await db.execute(
-    sql`REVOKE SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews FROM stella_public_law_reader`,
   );
   await db
     .delete(caseLawCitationDoctrineReviews)

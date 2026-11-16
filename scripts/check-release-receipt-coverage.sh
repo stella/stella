@@ -3,8 +3,8 @@
 # for main/heavy and main/pr-depth? A merge-group run validates only its own
 # group's final diff, so the receipt covers the release only when every commit
 # after a fully proven one (the newest earlier main commit with main/heavy and
-# main/pr-depth green, else the previous release tag) reached main through a
-# validated merge group.
+# main/pr-depth green, else where the previous release last took main) reached
+# main through a validated merge group.
 # An admin merge or a direct push in that range, history this checkout cannot
 # read, or a missing Bun all keep both statuses required: unknown is not safe.
 #
@@ -38,13 +38,16 @@ not_covered() {
   || not_covered "the queue history check reads only $history_repository."
 command -v bun >/dev/null 2>&1 \
   || not_covered "Bun is not available, so the release history cannot be checked."
-previous_tag=$(git describe --tags --abbrev=0 --match 'v*' "$sha^" 2>/dev/null) && [[ -n "$previous_tag" ]] \
-  || not_covered "no previous release tag is reachable from $sha in this checkout."
+# Where the previous release last took main; release tags sit on release
+# branches main never contains, so the queue history script owns this rule.
+previous_release=$(bun "$queue_history" --previous-release --base "$sha" --repo-dir "$PWD") \
+  && [[ "$previous_release" =~ ^[0-9a-f]{40}$ ]] \
+  || not_covered "no previous release is known for $sha in this checkout."
 # The newest earlier main commit whose main/heavy and main/pr-depth both passed
 # (the cut gate requires both on the cut base) anchors the history: its suites
 # ran on its whole tree, so only the commits after it need merge-group
-# validation. Without one since the previous tag, the tag is the anchor.
-anchor="$previous_tag"
+# validation. Without one since the previous release, that release anchors it.
+anchor="$previous_release"
 while read -r candidate; do
   [[ -n "$candidate" ]] || continue
   states=$(bash "$gh_retry_script" api "repos/$repo/commits/$candidate/statuses?per_page=100" \
@@ -56,7 +59,7 @@ while read -r candidate; do
     anchor="$candidate"
     break
   fi
-done < <(git rev-list --first-parent --max-count=50 "$previous_tag..$sha^" 2>/dev/null)
+done < <(git rev-list --first-parent --max-count=50 "$previous_release..$sha^" 2>/dev/null)
 GH_RETRY_SCRIPT="$gh_retry_script" bun "$queue_history" --require \
   --from "$anchor" --base "$sha" --repo-dir "$PWD" >&2 \
   || not_covered "history since $anchor is not validated through the merge queue."

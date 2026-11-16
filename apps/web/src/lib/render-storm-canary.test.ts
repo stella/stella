@@ -57,7 +57,7 @@ describe("createRenderStormMonitor", () => {
     // ~20 commits/sec for 3 windows worth of time — legitimate streaming rate.
     for (let window = 0; window < 3; window += 1) {
       for (let commit = 0; commit < 20; commit += 1) {
-        monitor.onRender("app", PHASE, 1, 1, time, time);
+        monitor.onCommit({ phase: PHASE, commitTime: time });
         time += RENDER_STORM_WINDOW_MS / 20;
       }
     }
@@ -78,13 +78,13 @@ describe("createRenderStormMonitor", () => {
     // A final commit closes window 2 and evaluates it.
     for (let window = 0; window < 3; window += 1) {
       for (let commit = 0; commit < commitsPerWindow; commit += 1) {
-        monitor.onRender("app", PHASE, 1, 1, time, time);
+        monitor.onCommit({ phase: PHASE, commitTime: time });
         time += RENDER_STORM_WINDOW_MS / commitsPerWindow;
       }
       time = (window + 1) * RENDER_STORM_WINDOW_MS;
     }
     // One more commit far enough ahead to force the last window closed.
-    monitor.onRender("app", PHASE, 1, 1, time, time + 1);
+    monitor.onCommit({ phase: PHASE, commitTime: time + 1 });
 
     expect(emitted.length).toBeGreaterThanOrEqual(1);
     expect(emitted[0]?.commitsPerSecond).toBeGreaterThan(
@@ -103,12 +103,12 @@ describe("createRenderStormMonitor", () => {
     // Ten consecutive storming windows, well past the rate-limit interval.
     for (let window = 0; window < 10; window += 1) {
       for (let commit = 0; commit < commitsPerWindow; commit += 1) {
-        monitor.onRender("app", PHASE, 1, 1, time, time);
+        monitor.onCommit({ phase: PHASE, commitTime: time });
         time += RENDER_STORM_WINDOW_MS / commitsPerWindow;
       }
       time = (window + 1) * RENDER_STORM_WINDOW_MS;
     }
-    monitor.onRender("app", PHASE, 1, 1, time, time + 1);
+    monitor.onCommit({ phase: PHASE, commitTime: time + 1 });
 
     // 10 windows spanning ~10s at the rate limit boundary should emit far
     // fewer than once per window.
@@ -126,12 +126,12 @@ describe("createRenderStormMonitor", () => {
     const commitsPerWindow = RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND + 20;
     for (let window = 0; window < 2; window += 1) {
       for (let commit = 0; commit < commitsPerWindow; commit += 1) {
-        monitor.onRender("app", "nested-update", 1, 1, time, time);
+        monitor.onCommit({ phase: "nested-update", commitTime: time });
         time += RENDER_STORM_WINDOW_MS / commitsPerWindow;
       }
       time = (window + 1) * RENDER_STORM_WINDOW_MS;
     }
-    monitor.onRender("app", PHASE, 1, 1, time, time + 1);
+    monitor.onCommit({ phase: PHASE, commitTime: time + 1 });
 
     expect(emitted.length).toBeGreaterThanOrEqual(1);
     expect(emitted[0]?.phaseCounts["nested-update"]).toBeGreaterThan(0);
@@ -145,24 +145,17 @@ describe("createRenderStormMonitor", () => {
 
     const commitsPerBurst = RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND + 20;
     for (let commit = 0; commit < commitsPerBurst; commit += 1) {
-      monitor.onRender("app", PHASE, 1, 1, commit, commit);
+      monitor.onCommit({ phase: PHASE, commitTime: commit });
     }
 
     const afterFirstIdle = 30_000;
-    monitor.onRender("app", PHASE, 1, 1, afterFirstIdle, afterFirstIdle);
+    monitor.onCommit({ phase: PHASE, commitTime: afterFirstIdle });
     for (let commit = 1; commit < commitsPerBurst; commit += 1) {
-      monitor.onRender(
-        "app",
-        PHASE,
-        1,
-        1,
-        afterFirstIdle + commit,
-        afterFirstIdle + commit,
-      );
+      monitor.onCommit({ phase: PHASE, commitTime: afterFirstIdle + commit });
     }
 
     const afterSecondIdle = 60_000;
-    monitor.onRender("app", PHASE, 1, 1, afterSecondIdle, afterSecondIdle);
+    monitor.onCommit({ phase: PHASE, commitTime: afterSecondIdle });
 
     expect(emitted).toEqual([]);
   });
@@ -178,7 +171,7 @@ describe("createRenderStormMonitor", () => {
     const commitsPerWindow = RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND + 50;
     for (let window = 0; window < 3; window += 1) {
       for (let commit = 0; commit < commitsPerWindow; commit += 1) {
-        monitor.onRender("app", PHASE, 1, 1, time, time);
+        monitor.onCommit({ phase: PHASE, commitTime: time });
         // Two regions commit in the same pass; "chat-composer" on every
         // commit, "inspector" on every fourth, so the report must rank the
         // composer first.
@@ -190,7 +183,7 @@ describe("createRenderStormMonitor", () => {
       }
       time = (window + 1) * RENDER_STORM_WINDOW_MS;
     }
-    monitor.onRender("app", PHASE, 1, 1, time, time + 1);
+    monitor.onCommit({ phase: PHASE, commitTime: time + 1 });
 
     // Full tuples: an implementation that records each active region once
     // (presence without counts) would still pass a presence-only check.
@@ -209,20 +202,20 @@ describe("createRenderStormMonitor", () => {
 
     // Window 1: quiet, but a region commits — its count must not leak into
     // the storm report produced by later windows.
-    monitor.onRender("app", PHASE, 1, 1, 0, 0);
+    monitor.onCommit({ phase: PHASE, commitTime: 0 });
     monitor.onRegionRender("stale-region");
 
     let time = RENDER_STORM_WINDOW_MS;
     const commitsPerWindow = RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND + 50;
     for (let window = 1; window < 4; window += 1) {
       for (let commit = 0; commit < commitsPerWindow; commit += 1) {
-        monitor.onRender("app", PHASE, 1, 1, time, time);
+        monitor.onCommit({ phase: PHASE, commitTime: time });
         monitor.onRegionRender("storming-region");
         time += RENDER_STORM_WINDOW_MS / commitsPerWindow;
       }
       time = (window + 1) * RENDER_STORM_WINDOW_MS;
     }
-    monitor.onRender("app", PHASE, 1, 1, time, time + 1);
+    monitor.onCommit({ phase: PHASE, commitTime: time + 1 });
 
     expect(emitted.at(0)?.regionCounts).toEqual([
       ["storming-region", commitsPerWindow],

@@ -6,7 +6,7 @@ import type { PrismTheme, Token } from "prism-react-renderer";
 
 import { cn } from "@stll/ui/utils";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 
 const TOOL_CODE_THEME = {
   plain: {
@@ -87,7 +87,7 @@ export const ToolCallCodeBlock = ({
         className="absolute end-1 top-1 opacity-0 transition-opacity duration-150 group-hover/code:opacity-100 focus-within:opacity-100 motion-reduce:transition-none pointer-coarse:opacity-100"
         data-chat-copy-exclude
       >
-        <CopyActionButton iconOnly size="icon-xs" text={code} variant="muted" />
+        <CopyControl iconOnly size="icon-xs" text={code} variant="muted" />
       </div>
       <pre
         className={cn(

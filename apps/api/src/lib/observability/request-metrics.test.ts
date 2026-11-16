@@ -60,7 +60,7 @@ test("new raw object metrics count stored bytes and objects by source without do
       }
     }
     expect(lines).toHaveLength(Object.values(RAW_SOURCE_FAMILY).length * 2);
-    expect(lines.map((line) => JSON.parse(line))).toEqual(
+    expect(lines.map((line): unknown => JSON.parse(line))).toEqual(
       Object.values(RAW_SOURCE_FAMILY).flatMap((family) =>
         ["document", "payload"].map((kind) => ({
           family,
@@ -414,6 +414,7 @@ const SETTLED_OUTCOMES = {
   completed: "completed",
   failed: "failed",
   interrupted: "interrupted",
+  paused: "paused",
 } as const satisfies { [TOutcome in ChatTurnOutcome["type"]]: TOutcome };
 
 describe("buildChatTurnSettlementRecord", () => {

@@ -12,10 +12,12 @@ import {
   sql,
 } from "drizzle-orm";
 
-import type {
-  ChatLocalFilesUndoComputerRefusal,
-  ChatLocalFilesUndoRefusal,
-  ChatLocalFilesUndoState,
+import {
+  CHAT_LOCAL_FILES_UNDONE_METADATA_KEY,
+  type ChatLocalFilesUndoComputerRefusal,
+  type ChatLocalFilesUndone,
+  type ChatLocalFilesUndoRefusal,
+  type ChatLocalFilesUndoState,
 } from "@stll/api-contract/chat-local-files-undo";
 import {
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
@@ -24,13 +26,20 @@ import {
 } from "@stll/api-contract/desktop-runner";
 
 import {
+  chatMessages,
   chatTurns,
   desktopRunnerEvents,
   desktopRunnerFolderRestores,
   desktopRunnerRuns,
   desktopRunners,
 } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import {
   withAggregateLock,
@@ -48,6 +57,7 @@ import type {
   RunnerBinding,
   RunOwner,
 } from "@/api/lib/desktop-runner/store";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Folder restores: a member's request to put a chat's folder back as the
@@ -193,7 +203,7 @@ const readOwnedTurn = async (
   { owner, threadId, turnId }: TurnOptions,
 ) => {
   const [turn] = await db
-    .select({ id: chatTurns.id, createdAt: chatTurns.createdAt })
+    .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(
       and(
@@ -226,11 +236,7 @@ export const readTurnFolderRestore = async (
   const run = await readTurnRun(db, options);
   const restore = await readTurnRestore(db, options);
   // As the undo itself decides: only the thread's newest turn is undone.
-  const newest = !(await readNewerTurn(db, {
-    owner: options.owner,
-    threadId: options.threadId,
-    turn,
-  }));
+  const newest = await readIsNewestTurn(db, options);
   return {
     undoable: newest && run?.state === "finished" && run.tookCheckpoint,
     restore: restore === null ? null : viewOf(restore, options.now),
@@ -287,16 +293,15 @@ const readThreadBusy = async (
   return run !== undefined;
 };
 
-/** A later turn of the owner's in the thread. */
-const readNewerTurn = async (
+/**
+ * Whether the turn is the newest of the owner's in the thread, in the order
+ * turns were accepted (`NEWEST_CHAT_TURN_FIRST`).
+ */
+const readIsNewestTurn = async (
   db: Pick<DesktopRunnerDb, "select">,
-  {
-    owner,
-    threadId,
-    turn,
-  }: ThreadOf & { turn: { id: string; createdAt: Date } },
+  { owner, threadId, turnId }: TurnOptions,
 ) => {
-  const [newer] = await db
+  const [newest] = await db
     .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(
@@ -304,11 +309,11 @@ const readNewerTurn = async (
         eq(chatTurns.organizationId, owner.organizationId),
         eq(chatTurns.userId, owner.userId),
         eq(chatTurns.threadId, threadId),
-        sql`(${chatTurns.createdAt}, ${chatTurns.id}) > (${turn.createdAt}::timestamptz, ${turn.id}::uuid)`,
       ),
     )
+    .orderBy(...NEWEST_CHAT_TURN_FIRST)
     .limit(1);
-  return newer !== undefined;
+  return newest?.id === turnId;
 };
 
 /**
@@ -356,7 +361,7 @@ export const requestFolderRestore = async (
       ) {
         return { type: "existing", restore: viewOf(existing, now) };
       }
-      if (await readNewerTurn(tx, { owner, threadId, turn })) {
+      if (!(await readIsNewestTurn(tx, options))) {
         return { type: "refused", reason: "not_newest" };
       }
       if (await readThreadBusy(tx, options)) {
@@ -424,6 +429,8 @@ export const requestFolderRestore = async (
 export type FolderRestoreToSend = {
   readonly restoreId: string;
   readonly folderId: string;
+  /** The folder linked on the computer the run worked in, if any. */
+  readonly linkedFolderId: string | null;
   readonly runId: string;
 };
 
@@ -444,6 +451,47 @@ const ofComputer = (binding: RunnerBinding): SQL =>
     eq(restores.desktopId, binding.desktopId),
     eq(restores.deviceJkt, binding.deviceJkt),
   ) ?? panic("A computer's restores are named by its binding");
+
+/**
+ * The restores of device keys a relink retired, queued or sent, end as
+ * expired: no socket of those keys takes or answers one again, and a sent
+ * one would otherwise block the thread's runs on that computer forever.
+ */
+export const expireFolderRestoresOfKeys = async (
+  tx: Parameters<typeof transitionLifecycleBatch>[0]["tx"] &
+    Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    desktopId,
+    deviceJkts,
+    now,
+  }: {
+    owner: RunOwner;
+    desktopId: string;
+    deviceJkts: readonly string[];
+    now: Date;
+  },
+) => {
+  const ofKeys = and(
+    eq(restores.userId, owner.userId),
+    eq(restores.organizationId, owner.organizationId),
+    eq(restores.desktopId, desktopId),
+    inArray(restores.deviceJkt, [...deviceJkts]),
+  );
+  const unsettled = await tx
+    .select({ id: restores.id })
+    .from(restores)
+    .where(and(ofKeys, inArray(restores.state, ["queued", "sent"])));
+  await transitionLifecycleBatch({
+    tx,
+    spec: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+    ids: unsettled.map(({ id }) => id),
+    moves: { state: { from: ["queued", "sent"], to: "expired" } },
+    guard: ofKeys ?? panic("A key's restores are named by its account"),
+    set: { settledAt: now },
+    recordTransitionAuditEvent: skipRestoreAudit,
+  });
+};
 
 /**
  * The restores this socket sends now: queued ones still in time, marked sent
@@ -504,8 +552,13 @@ export const claimFolderRestores = async (
           state: restores.state,
           folderId: restores.chatThreadId,
           runId: restores.runId,
+          linkedFolderId: desktopRunnerRuns.linkedFolderId,
         })
         .from(restores)
+        .innerJoin(
+          desktopRunnerRuns,
+          eq(desktopRunnerRuns.runId, restores.runId),
+        )
         .where(
           and(
             ofComputer(binding),
@@ -533,7 +586,12 @@ export const claimFolderRestores = async (
             });
       return due
         .filter(({ id, state }) => state === "sent" || sent.includes(id))
-        .map(({ id, folderId, runId }) => ({ restoreId: id, folderId, runId }));
+        .map(({ id, folderId, linkedFolderId, runId }) => ({
+          restoreId: id,
+          folderId,
+          linkedFolderId,
+          runId,
+        }));
     },
   );
 
@@ -571,7 +629,71 @@ export const settleFolderRestore = async (
       set: { reason: outcome === "restored" ? null : outcome, settledAt: now },
       recordTransitionAuditEvent: skipRestoreAudit,
     });
-    return settled.type === "transitioned" ? "settled" : "unknown";
+    if (settled.type !== "transitioned") {
+      return "unknown";
+    }
+    if (to === "restored") {
+      // The lasting marker rides on the turn's answer, in the same
+      // transaction: the page renders it from the message it already reads,
+      // after newer turns and a move to the cloud alike. Only the server
+      // writes this key; incoming client metadata never carries it.
+      const marker = {
+        [CHAT_LOCAL_FILES_UNDONE_METADATA_KEY]: {
+          at: now.toISOString(),
+        } satisfies ChatLocalFilesUndone,
+      };
+      // At most one row: the turn's answer.
+      const [answer] = await tx
+        .update(chatMessages)
+        .set({
+          content: sql`jsonb_set(${chatMessages.content}, '{metadata}', coalesce(${chatMessages.content} -> 'metadata', '{}'::jsonb) || ${JSON.stringify(marker)}::text::jsonb)`,
+        })
+        .where(
+          eq(
+            chatMessages.id,
+            sql`(select ${chatTurns.assistantMessageId} from ${chatTurns} join ${restores} on ${restores.chatTurnId} = ${chatTurns.id} where ${restores.id} = ${restoreId})`,
+          ),
+        )
+        .returning({
+          id: chatMessages.id,
+          workspaceId: chatMessages.workspaceId,
+        });
+      if (answer === undefined) {
+        // A turn stopped before it answered keeps no answer to mark; the
+        // restore still settles, and the folder is back as it was.
+        logger.info("desktop_runner.folder_restore.no_answer_to_mark", {
+          "desktop_runner.restore_id": restoreId,
+        });
+        return "settled";
+      }
+      // The computer, not the member, changed the answer: the desktop
+      // runner records it on the member's behalf.
+      const recordAuditEvent = createBackgroundAuditRecorder({
+        execution: {
+          performer: {
+            type: "service",
+            id: "desktop-runner",
+            name: "Desktop runner",
+          },
+          trigger: {
+            type: "system",
+            source: "folder_restore",
+            sourceId: restoreId,
+          },
+        },
+        organizationId: binding.organizationId,
+        userId: binding.userId,
+        workspaceId: null,
+      });
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+        resourceId: answer.id,
+        workspaceId: answer.workspaceId,
+        metadata: { reason: "local_files_undone", undoId: restoreId },
+      });
+    }
+    return "settled";
   });
 
 type QueuedSessionsOptions = {

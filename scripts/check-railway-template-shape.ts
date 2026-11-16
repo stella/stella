@@ -104,15 +104,15 @@ const getStringRecord = (
     return {};
   }
 
-  const result: Record<string, string> = {};
-  for (const [recordKey, recordValue] of Object.entries(next)) {
-    if (typeof recordValue !== "string") {
-      failures.push(`Expected ${key}.${recordKey} to be a string`);
-      continue;
-    }
-    result[recordKey] = recordValue;
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(next).flatMap(([recordKey, recordValue]) => {
+      if (typeof recordValue !== "string") {
+        failures.push(`Expected ${key}.${recordKey} to be a string`);
+        return [];
+      }
+      return [[recordKey, recordValue] as const];
+    }),
+  );
 };
 
 const validateServiceConfig = ({

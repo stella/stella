@@ -32,6 +32,8 @@ const requests: {
   body: string;
   headers: Headers;
 }[] = [];
+/** The saved AI-config body; the assertions only read the model overrides. */
+type SettingsWrite = { overrideModels: unknown };
 let settingsFailure: { code: string; message: string } | undefined;
 let reflectProviderOrder = false;
 let previewBarrier: Promise<void> | undefined;
@@ -104,6 +106,7 @@ const config = {
   providerDefaultModels: [],
   instanceProvisioned: false,
   decisionInstanceProvisioned: false,
+  verificationDecisionModel: { enabled: false, available: false },
 } satisfies OrganizationAIConfig;
 const savedConfig = {
   configured: true,
@@ -113,6 +116,7 @@ const savedConfig = {
   ],
   instanceProvisioned: false,
   decisionInstanceProvisioned: false,
+  verificationDecisionModel: { enabled: false, available: false },
   providers: [
     { provider: "google", apiKeyMasked: "AIza****1234", region: "global" },
   ],
@@ -414,8 +418,12 @@ const mount = async (
     name: messages.settings.organization.promptCaching.toggleLabel,
   });
   await waitFor(() => {
-    expect(document.querySelector("#web-search-key-search")).not.toBeNull();
-    expect(document.querySelector("#web-search-key-fetch")).not.toBeNull();
+    expect(document.querySelector("#web-search-key-search") === null).toBe(
+      false,
+    );
+    expect(document.querySelector("#web-search-key-fetch") === null).toBe(
+      false,
+    );
   });
   return appRouter;
 };
@@ -482,7 +490,7 @@ test("organization instruction edits block navigation before the editor debounce
   const appRouter = await mount();
   await screen.findByRole("button", { name: messages.common.save });
   await waitFor(() =>
-    expect(document.querySelector(".md-editor")).not.toBeNull(),
+    expect(document.querySelector(".md-editor") === null).toBe(false),
   );
   const element = document.querySelector(".md-editor");
   if (!(element instanceof HTMLElement) || !("editContext" in element)) {
@@ -554,7 +562,7 @@ test("instruction refetches preserve drafts and compare edits with the latest sa
     name: messages.common.save,
   });
   await waitFor(() =>
-    expect(document.querySelector(".md-editor")).not.toBeNull(),
+    expect(document.querySelector(".md-editor") === null).toBe(false),
   );
   const element = document.querySelector(".md-editor");
   if (!(element instanceof HTMLElement) || !("editContext" in element)) {
@@ -774,7 +782,8 @@ test("Advanced shows catalog defaults, saves only explicit overrides and resets 
   expect(JSON.parse(write?.body ?? "null")).toMatchObject({
     overrideModels: { chat: { provider: "google", modelId: overrideId } },
   });
-  expect(JSON.parse(write?.body ?? "null").overrideModels).toEqual({
+  const written: SettingsWrite = JSON.parse(write?.body ?? "null");
+  expect(written.overrideModels).toEqual({
     chat: { provider: "google", modelId: overrideId },
   });
   fireEvent.click(advanced);
@@ -936,16 +945,17 @@ test("switching providers uses the server's per-provider default model", async (
     fireEvent.pointerDown(provider, { pointerType: "mouse", button: 0 });
     fireEvent.click(provider);
   });
-  await waitFor(() =>
-    expect(
-      within(row).getByLabelText(
-        messages.organization.aiConfig.modelForRole.replace(
-          "{role}",
-          () => messages.organization.aiConfig.roles.fast,
-        ),
+  await waitFor(() => {
+    const model = within(row).getByLabelText(
+      messages.organization.aiConfig.modelForRole.replace(
+        "{role}",
+        () => messages.organization.aiConfig.roles.fast,
       ),
-    ).toHaveProperty("value", modelId),
-  );
+    );
+    expect(model instanceof HTMLInputElement ? model.value : null).toBe(
+      modelId,
+    );
+  });
   expect(previewRequests).toEqual([]);
 });
 
@@ -1105,7 +1115,8 @@ test("replacing the first saved key preserves provider order and every default r
       { provider: "anthropic" },
     ],
   });
-  expect(JSON.parse(write?.body ?? "null").overrideModels).toBeNull();
+  const written: SettingsWrite = JSON.parse(write?.body ?? "null");
+  expect(written.overrideModels).toBeNull();
   expect(hasUnsavedWork()).toBe(false);
 });
 
@@ -1189,16 +1200,17 @@ const selectDecisionProvider = async (): Promise<"typesafe"> => {
     fireEvent.pointerDown(option, { pointerType: "mouse", button: 0 });
     fireEvent.click(option);
   });
-  await waitFor(() =>
-    expect(
-      within(decisionRow()).getByLabelText(
-        messages.organization.aiConfig.modelForRole.replace(
-          "{role}",
-          () => messages.organization.aiConfig.decision.label,
-        ),
+  await waitFor(() => {
+    const model = within(decisionRow()).getByLabelText(
+      messages.organization.aiConfig.modelForRole.replace(
+        "{role}",
+        () => messages.organization.aiConfig.decision.label,
       ),
-    ).toHaveProperty("disabled", false),
-  );
+    );
+    expect(model instanceof HTMLInputElement ? model.disabled : null).toBe(
+      false,
+    );
+  });
   return provider;
 };
 
@@ -1626,7 +1638,7 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   expect(
     writes()
       .filter(({ url }) => url.endsWith("/web-search-key"))
-      .map(({ body }) => JSON.parse(body)),
+      .map(({ body }) => JSON.parse(body) as unknown),
   ).toEqual([
     { kind: "search", apiKey: "fixture-search-key" },
     { kind: "fetch", apiKey: "fixture-reader-key" },
@@ -1634,7 +1646,7 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   expect(
     writes()
       .filter(({ url }) => url.endsWith("/organization-settings"))
-      .map(({ body }) => JSON.parse(body)),
+      .map(({ body }) => JSON.parse(body) as unknown),
   ).toEqual([
     { promptCachingEnabled: true },
     { documentProcessingMode: "searchable-text" },
@@ -1689,11 +1701,14 @@ test("a failed auxiliary section retains its draft while successful sections cle
     auxiliaryFailure.message,
   );
   await waitFor(() => expect(search).toHaveProperty("value", ""));
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: messages.common.saveChanges }),
-    ).toHaveProperty("disabled", false),
-  );
+  await waitFor(() => {
+    const save = screen.getByRole("button", {
+      name: messages.common.saveChanges,
+    });
+    expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
+      false,
+    );
+  });
   expect(deepl).toHaveProperty("value", "fixture-deepl-key");
   const failedSection = settingsSectionQueries(
     messages.translate.settings.title,
@@ -1801,7 +1816,7 @@ test("provider removal is staged until Save and preserves remaining credentials"
     await screen.findByRole("button", { name: messages.common.confirm }),
   );
   await waitFor(() =>
-    expect(screen.queryByText("sk-or-v1****5678")).toBeNull(),
+    expect(screen.queryByText("sk-or-v1****5678") === null).toBe(true),
   );
   expect(writes()).toEqual([]);
   expect(hasUnsavedWork()).toBe(true);
@@ -1837,7 +1852,9 @@ test("removing the last provider stages a delete and keeps the leave prompt unti
   fireEvent.click(
     await screen.findByRole("button", { name: messages.common.confirm }),
   );
-  await waitFor(() => expect(screen.queryByText("AIza****1234")).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByText("AIza****1234") === null).toBe(true),
+  );
   expect(writes()).toEqual([]);
   expect(hasUnsavedWork()).toBe(true);
   savePage();
@@ -1861,11 +1878,14 @@ test("page Save refuses writes after the session organization changes and retain
   sessionOrganization = "another-organization";
   savePage();
   await screen.findAllByRole("alert");
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: messages.common.saveChanges }),
-    ).toHaveProperty("disabled", false),
-  );
+  await waitFor(() => {
+    const save = screen.getByRole("button", {
+      name: messages.common.saveChanges,
+    });
+    expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
+      false,
+    );
+  });
   expect(writes()).toEqual([]);
   expect(deepl).toHaveProperty("value", "fixture-deepl-key");
   expect(
@@ -1902,11 +1922,14 @@ test.each([false, true])(
     }
     savePage();
     await waitFor(() => expect(deepl).toHaveProperty("value", ""));
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: messages.common.saveChanges }),
-      ).toHaveProperty("disabled", !deleteFails),
-    );
+    await waitFor(() => {
+      const save = screen.getByRole("button", {
+        name: messages.common.saveChanges,
+      });
+      expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
+        !deleteFails,
+      );
+    });
     expect(writes()).toHaveLength(2);
     const removal = writes().find(({ url }) => url.includes("ai-config"));
     expect(removal?.method).toBe("DELETE");

@@ -15,7 +15,8 @@ import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { libpdfColor, PDF_NEUTRALS } from "@/api/lib/files/pdf-color";
 import { savePdfForModelInput } from "@/api/lib/files/pdf-signatures";
 import { createFileKey } from "@/api/lib/files/utils";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { readS3BytesBounded } from "@/api/lib/s3";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import {
   canPrepareExtractedTextFile,
@@ -62,10 +63,10 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 export { isAISupportedFile };
 
 const addBatesNumbers = async (
-  pdfBuffer: ArrayBuffer,
+  pdfBuffer: Uint8Array,
   simplifiedName: string,
 ): Promise<{ content: Uint8Array; pageCount: number }> => {
-  const pdfDocument = await PDF.load(new Uint8Array(pdfBuffer));
+  const pdfDocument = await PDF.load(pdfBuffer);
   const font = Standard14Font.of(StandardFonts.Helvetica);
   const pages = pdfDocument.getPages();
   const fontSize = 10;
@@ -207,7 +208,10 @@ export const fetchAndPrepareFiles = async (
         fileId: pdfFileId,
         mimeType: PDF_MIME_TYPE,
       });
-      const fileBuffer = await readS3ArrayBuffer(fileKey);
+      const fileBuffer = await readS3BytesBounded({
+        key: fileKey,
+        maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+      });
       const preparedPdf = await addBatesNumbers(fileBuffer, simplifiedName);
       return {
         kind: "pdf",

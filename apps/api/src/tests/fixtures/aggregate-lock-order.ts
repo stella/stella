@@ -91,6 +91,10 @@ export const aggregateFences = () => {
       aggregate: "caseLawRepublication",
       id: "global",
     },
+    corpusProjectionOfflineRequest: {
+      aggregate: "corpusProjectionOfflineRequest",
+      id: "0198e331-e578-7000-8000-0000000000b7",
+    },
     caseLawSitemapMonth: {
       aggregate: "caseLawSitemapMonth",
       id: { country: "CZE", year: "2020", month: "03" },

@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
+import readDecisionAnchorRedirectsRoute from "@/api/handlers/case-law/decisions/anchor-redirects";
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
@@ -24,6 +25,7 @@ import {
 } from "@/api/handlers/case-law/decisions/list";
 import listDecisionCitations from "@/api/handlers/case-law/decisions/list-citations";
 import { createSafePublicSubjectFollowUpHandler } from "@/api/handlers/case-law/decisions/public-subject";
+import verifyQuotation from "@/api/handlers/case-law/decisions/quotes/check";
 import readCaseLawCoverage from "@/api/handlers/case-law/decisions/read-coverage";
 import {
   projectDecisionReader,
@@ -515,6 +517,9 @@ export const publicCaseLawRoute = routes(
     "/decisions/latest": { GET: listLatestDecisions },
     "/decisions/by-slug/:slug": { GET: readDecisionBySlug },
     "/decisions/:decisionId": { GET: readDecision },
+    "/decisions/:decisionId/anchor-redirects": {
+      GET: readDecisionAnchorRedirectsRoute,
+    },
     "/decisions/:decisionId/citations": { GET: listDecisionCitations },
     "/decisions/:decisionId/citations/summary": {
       GET: summarizeDecisionCitations,
@@ -526,6 +531,7 @@ export const publicCaseLawRoute = routes(
     "/provisions/citing-decisions": { GET: listCitingDecisions },
     "/provisions/citation-counts": { GET: readStatuteCitationCounts },
     "/decisions/search": { POST: searchDecisions },
+    "/decisions/quotes/verify": { POST: verifyQuotation },
     "/sitemap/shards": { GET: listSitemapShards },
     "/sitemap/decisions/shard": { GET: listSitemapShardDecisions },
   },

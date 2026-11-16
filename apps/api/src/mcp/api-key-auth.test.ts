@@ -84,6 +84,7 @@ const createCredential = async () => {
     membership.role === null
       ? null
       : {
+          billingAccess: false,
           memberId: "stream-member",
           email: "stream@example.test",
           role: membership.role,

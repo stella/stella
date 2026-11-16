@@ -18,10 +18,10 @@ afterEach(() => {
 const RUN_ID = "run-local";
 const THREAD_ID = "thread-local";
 
-const computerEvent = (status: ChatLocalRunComputerEvent["status"]) => ({
+const computerEvent = (value: ChatLocalRunComputerEvent) => ({
   type: "CUSTOM",
   name: CHAT_LOCAL_RUN_COMPUTER_EVENT,
-  value: { status } satisfies ChatLocalRunComputerEvent,
+  value,
 });
 
 /**
@@ -133,24 +133,26 @@ test("a page loaded while the turn's computer is away shows the wait until outpu
     { type: "RUN_STARTED", runId: RUN_ID, threadId: THREAD_ID },
     { type: "TEXT_MESSAGE_START", messageId: "answer", role: "assistant" },
     { type: "TEXT_MESSAGE_CONTENT", messageId: "answer", delta: "Lease " },
-    computerEvent("waiting"),
+    computerEvent({ status: "waiting" }),
   );
   const runtime = openLoadedTurn();
   const unsubscribe = runtime.subscribe(() => undefined);
   try {
-    await awaitSnapshot(runtime, (snapshot) => snapshot.waitingForComputer);
+    await awaitSnapshot(runtime, (snapshot) => snapshot.computerWait !== null);
     expect(runtime.getSnapshot()).toMatchObject({
       isLoading: true,
-      waitingForComputer: true,
+      computerWait: { status: "waiting" },
     });
     expect(answerText(runtime)).toBe("Lease ");
+    // The page joined this turn; its live status counts from the server.
+    expect(runtime.getSnapshot().turnSentAt).toBeNull();
 
-    server.send(computerEvent("connected"), {
+    server.send(computerEvent({ status: "connected" }), {
       type: "TEXT_MESSAGE_CONTENT",
       messageId: "answer",
       delta: "one",
     });
-    await awaitSnapshot(runtime, (snapshot) => !snapshot.waitingForComputer);
+    await awaitSnapshot(runtime, (snapshot) => snapshot.computerWait === null);
     // The computer is back while the turn still runs, not because it ended.
     expect(runtime.getSnapshot().isLoading).toBe(true);
 
@@ -161,7 +163,7 @@ test("a page loaded while the turn's computer is away shows the wait until outpu
     server.end();
     await awaitSnapshot(runtime, (snapshot) => !snapshot.isLoading);
     expect(answerText(runtime)).toBe("Lease one");
-    expect(runtime.getSnapshot().waitingForComputer).toBe(false);
+    expect(runtime.getSnapshot().computerWait).toBeNull();
   } finally {
     unsubscribe();
   }
@@ -171,12 +173,12 @@ test("a turn that ends while its computer is away leaves no wait behind", async 
   const server = installRunningTurn();
   server.send(
     { type: "RUN_STARTED", runId: RUN_ID, threadId: THREAD_ID },
-    computerEvent("waiting"),
+    computerEvent({ status: "waiting" }),
   );
   const runtime = openLoadedTurn();
   const unsubscribe = runtime.subscribe(() => undefined);
   try {
-    await awaitSnapshot(runtime, (snapshot) => snapshot.waitingForComputer);
+    await awaitSnapshot(runtime, (snapshot) => snapshot.computerWait !== null);
     server.send({
       type: "RUN_ERROR",
       runId: RUN_ID,
@@ -186,7 +188,37 @@ test("a turn that ends while its computer is away leaves no wait behind", async 
     });
     server.end();
     await awaitSnapshot(runtime, (snapshot) => !snapshot.isLoading);
-    expect(runtime.getSnapshot().waitingForComputer).toBe(false);
+    expect(runtime.getSnapshot().computerWait).toBeNull();
+  } finally {
+    unsubscribe();
+  }
+});
+
+test("a turn its computer has not picked up yet waits from when it was sent, until the computer has it", async () => {
+  const sentAt = "2026-11-11T08:56:51.000Z";
+  const server = installRunningTurn();
+  server.send(
+    { type: "RUN_STARTED", runId: RUN_ID, threadId: THREAD_ID },
+    computerEvent({ status: "delivering", since: sentAt }),
+  );
+  const runtime = openLoadedTurn();
+  const unsubscribe = runtime.subscribe(() => undefined);
+  try {
+    await awaitSnapshot(runtime, (snapshot) => snapshot.computerWait !== null);
+    expect(runtime.getSnapshot().computerWait).toEqual({
+      status: "delivering",
+      since: sentAt,
+    });
+    server.send(computerEvent({ status: "connected" }), {
+      type: "TEXT_MESSAGE_START",
+      messageId: "answer",
+      role: "assistant",
+    });
+    await awaitSnapshot(runtime, (snapshot) => snapshot.computerWait === null);
+    expect(runtime.getSnapshot().isLoading).toBe(true);
+    server.send({ type: "RUN_FINISHED", runId: RUN_ID, threadId: THREAD_ID });
+    server.end();
+    await awaitSnapshot(runtime, (snapshot) => !snapshot.isLoading);
   } finally {
     unsubscribe();
   }

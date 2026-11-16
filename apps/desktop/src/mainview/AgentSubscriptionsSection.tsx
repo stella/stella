@@ -217,6 +217,7 @@ export const AgentSubscriptionsSection = ({
         onSignOut={() => {
           void runClaudeCode(async () => invoke("claude_code_auth_sign_out"));
         }}
+        onCheckAgain={refreshClaudeCode}
         status={claudeCode}
       />
     );

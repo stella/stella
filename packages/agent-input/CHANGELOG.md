@@ -1,5 +1,20 @@
 # @stll/agent-input
 
+## 0.4.4
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+- Updated dependencies [[`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f)]:
+  - @stll/template-conditions@0.6.6
+
+## 0.4.3
+
+### Patch Changes
+
+- Updated dependencies [[`74bfae6`](https://github.com/stella/stella/commit/74bfae60cecf3be82e6d9554cf3448ef9a3c17eb)]:
+  - @stll/text-normalize@0.8.0
+
 ## 0.4.2
 
 ### Patch Changes

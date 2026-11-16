@@ -5,7 +5,8 @@ import { POLARITY_RULE_KIND_REPAIR } from "../polarity-rule-kind-repair";
 // The seed kinds land before the rule checks validate.
 export default {
   id: "repairs-citation-polarity-evidence",
-  revision: 1437,
+  revision: 1484,
+  lifecycle: "pending",
   type: "repairs",
   values: [
     POLARITY_RULE_KIND_REPAIR,

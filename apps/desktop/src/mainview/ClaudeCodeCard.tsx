@@ -13,6 +13,7 @@ export const ClaudeCodeCard = ({
   onCancel,
   onOpenSignInPage,
   onSignOut,
+  onCheckAgain,
 }: ClaudeCodeCardProps) => {
   const t = useTranslations("agentSubscriptions");
   const signedInWithEmail =
@@ -51,6 +52,11 @@ export const ClaudeCodeCard = ({
           {status.state === "signed_out" || status.state === "failed" ? (
             <Button onClick={onSignIn}>{t("claudeCode.signIn")}</Button>
           ) : null}
+          {status.state === "unknown" ? (
+            <Button onClick={onCheckAgain} variant="outline">
+              {t("claudeCode.checkAgain")}
+            </Button>
+          ) : null}
         </div>
       </div>
       {install}
@@ -72,6 +78,8 @@ type ClaudeCodeCardProps = {
   onCancel: () => void;
   onOpenSignInPage: () => void;
   onSignOut: () => void;
+  /** Reads the status again; the native side still waits out its backoff. */
+  onCheckAgain: () => void;
 };
 
 const FAILURE_MESSAGES = {
@@ -86,6 +94,7 @@ const STATE_MESSAGES = {
   signing_in: "signingIn",
   signed_in: "claudeCode.signedIn",
   api_key: "claudeCode.apiKey",
+  unknown: "claudeCode.unknown",
 } as const satisfies Record<
   Exclude<ClaudeCodeStatus["state"], "failed">,
   string

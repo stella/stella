@@ -1,15 +1,26 @@
 import { Result } from "better-result";
 
+import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 import { fetchWithTimeout } from "@stll/fetch";
+import {
+  iterateBodyWithIdleDeadline,
+  readBodyJsonWithIdleDeadline,
+} from "@stll/fetch/body-reader";
 
 import { ChatRequestError } from "@/features/chat/chat-request-error";
 import { toAPIError } from "@/lib/errors/api";
 import type { APIError } from "@/lib/errors/api";
 
-// Matches the backend's own AI-call budget (send-message.ts'
-// CHAT_METERED_AI_TIMEOUT_MS) so the client doesn't cut a slow-but-healthy
-// model response off before the server would.
-const CHAT_FETCH_TIMEOUT_MS = 600_000;
+// How long the server may take to answer a chat request with its headers.
+// Only the headers have a deadline. The stream that follows is bounded by its
+// liveness (`SSE_SILENCE_BOUND_MS`), never by how long it has run: how long a
+// turn may take is the server's to enforce, and a turn on the member's
+// computer runs for as long as that computer answers.
+const CHAT_HEADERS_TIMEOUT_MS = 600_000;
+
+// How long a refusal's body may stall between chunks. Its status is already
+// known, so a body that never completes costs the envelope, not the refusal.
+const CHAT_REFUSAL_BODY_IDLE_MS = 10_000;
 
 /**
  * The typed error for a chat response the API refused.
@@ -29,14 +40,50 @@ export const chatResponseError = async (
   response: Response,
 ): Promise<APIError> => {
   const body = await Result.tryPromise(
-    async (): Promise<unknown> => await response.json(),
+    async () =>
+      await readBodyJsonWithIdleDeadline(response, {
+        idleMs: CHAT_REFUSAL_BODY_IDLE_MS,
+      }),
   );
   return toAPIError({
     status: response.status,
-    // A refusal from a proxy ahead of the API carries no JSON envelope.
+    // A refusal from a proxy ahead of the API carries no JSON envelope, and
+    // one whose body stalls is read as far as its status.
     value: Result.isOk(body) ? body.value : response.statusText,
   });
 };
+
+type StreamOfChunksOptions = {
+  /** The transport body `chunks` reads. */
+  body: ReadableStream<Uint8Array>;
+  /** Aborted when the stream is cancelled; it ends a read in flight. */
+  cancelled: AbortController;
+  chunks: AsyncGenerator<Uint8Array, void, void>;
+};
+
+/** A byte stream over `chunks` that releases the transport when cancelled. */
+const streamOfChunks = ({ body, cancelled, chunks }: StreamOfChunksOptions) =>
+  new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const next = await chunks.next();
+      if (next.done === true) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(next.value);
+    },
+    async cancel(reason: unknown) {
+      // A read in flight holds the iterator, so `return()` alone would wait
+      // for the next chunk: the abort ends that read, and the iterator then
+      // releases the transport on its way out.
+      cancelled.abort(reason);
+      await chunks.return();
+      if (!body.locked) {
+        // The iterator never started, so nothing else holds the transport.
+        await body.cancel(reason);
+      }
+    },
+  });
 
 export const chatFetchClient = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -54,7 +101,7 @@ export const chatFetchClient = Object.assign(
           {
             ...requestInit,
             ...(signal === null ? {} : { signal }),
-            timeoutMs: CHAT_FETCH_TIMEOUT_MS,
+            timeout: { type: "headers", ms: CHAT_HEADERS_TIMEOUT_MS },
           },
         ),
       catch: (cause) => {
@@ -79,7 +126,32 @@ export const chatFetchClient = Object.assign(
     if (!response.ok) {
       throw await chatResponseError(response);
     }
-    return response;
+    if (response.body === null) {
+      return response;
+    }
+    // A stream that stays silent past the bound fails its read, which the
+    // transport rejoins exactly as it does a dropped connection. The body is
+    // rebuilt because the parser that reads it is the SDK's: only a read made
+    // here can be held to the bound.
+    const cancelled = new AbortController();
+    return new Response(
+      streamOfChunks({
+        body: response.body,
+        cancelled,
+        chunks: iterateBodyWithIdleDeadline(response, {
+          idleMs: SSE_SILENCE_BOUND_MS,
+          signal:
+            effectiveSignal === undefined
+              ? cancelled.signal
+              : AbortSignal.any([effectiveSignal, cancelled.signal]),
+        }),
+      }),
+      {
+        headers: response.headers,
+        status: response.status,
+        statusText: response.statusText,
+      },
+    );
   },
   // Bun augments the global fetch type with this optional optimization.
   // TanStack accepts `typeof globalThis.fetch`; the browser transport does

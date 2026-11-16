@@ -1,4 +1,4 @@
 {
   "kind": "ordinary",
-  "qualifier": "Checks; report-only, no publication, tag creation, or deployment."
+  "qualifier": "Checks; no publication, tag creation, or deployment."
 }

@@ -10,6 +10,7 @@ import { useCallback, useState } from "react";
 import type { RefObject } from "react";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -169,9 +170,9 @@ export const AlphabetIndex = ({
             style={{ top: `${m.pct}%`, transform: "translateY(-50%)" }}
             variant="plain"
           >
-            <span
+            <TruncatedText
               className={cn(
-                "text-3xs truncate rounded-full px-2.5 py-1 leading-none font-semibold shadow-sm transition-[max-width,opacity,font-size] duration-150",
+                "text-3xs rounded-full px-2.5 py-1 leading-none font-semibold shadow-sm transition-[max-width,opacity,font-size] duration-150",
                 isHovered ? "text-2xs max-w-72 opacity-100" : "max-w-52",
                 (() => {
                   if (active) {
@@ -195,7 +196,7 @@ export const AlphabetIndex = ({
               }}
             >
               {m.label}
-            </span>
+            </TruncatedText>
             <div
               className="shrink-0 rounded-full transition-[width,height,opacity] duration-150"
               style={{

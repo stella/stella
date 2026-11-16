@@ -1,0 +1,11 @@
+{
+  "extends": "@stll/typescript-config/react-library.json",
+  "compilerOptions": {
+    "types": ["bun-types", "office-js"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "scripts"],
+  "exclude": ["dist", "node_modules"]
+}

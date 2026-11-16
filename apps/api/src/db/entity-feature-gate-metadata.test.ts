@@ -5,7 +5,6 @@ import {
   getTableConfig,
   pgPolicy,
   PgRole,
-  PgTable,
   pgTable,
   text,
   uuid,
@@ -28,6 +27,7 @@ import {
   effectiveEntityFeatureGateDefinitions,
   readEffectiveEntityFeatureGateDefinitions,
 } from "./entity-feature-gate-migrations";
+import { schemaTables } from "./schema-tables";
 
 const scopePolicies = (tableName: string) => {
   const workspaceScope = sql`CASE WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) THEN true ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw) END`;
@@ -278,7 +278,7 @@ test("a new unpaired relationship without its derived workspace array fails cens
 });
 
 test("the live entity gate census has scope keys and parent-first ordering", () => {
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const tables = schemaTables(schema);
   const descriptors = entityFeatureGateMetadata(tables);
   const positions = new Map(
     descriptors.map(({ tableName }, index) => [tableName, index]),
@@ -470,7 +470,7 @@ test("the migration trigger graph exactly matches the schema-derived census", as
   const graphText = /\$metadata\$(.+)\$metadata\$/u.exec(migration)?.at(1);
   expect(graphText).toBeDefined();
   const graph: unknown = JSON.parse(graphText ?? "null");
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const tables = schemaTables(schema);
   const descriptors = entityFeatureGateMetadata(tables);
   expect(graph).toEqual(
     Object.fromEntries(
@@ -487,7 +487,7 @@ test("migration propagation plans are derived from the complete gate census", as
     (await readEffectiveEntityFeatureGateDefinitions()).functions.get(
       "entity_feature_gate_propagate",
     ) ?? "";
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const tables = schemaTables(schema);
   const expected = entityFeatureGatePropagationSql(
     entityFeatureGateMetadata(tables),
   );
@@ -501,7 +501,7 @@ test("migration propagation plans are derived from the complete gate census", as
 test("the migration grants maintenance policies only to the dedicated gate role", async () => {
   const effective = await readEffectiveEntityFeatureGateDefinitions();
   const migration = [...effective.policies.values()].join("\n");
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const tables = schemaTables(schema);
   const descriptors = entityFeatureGateMetadata(tables);
   const expected = await createPolicyStatementsOf(
     entityFeaturePolicyDefinitions(tables, "entity_feature_gate_maintenance"),
@@ -569,7 +569,7 @@ test("migration maintenance grants match each descriptor's read and write column
   const migration = [
     ...(await readEffectiveEntityFeatureGateDefinitions()).grants.values(),
   ].join("\n");
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const tables = schemaTables(schema);
   const descriptors = entityFeatureGateMetadata(tables);
   const grants = [
     ...migration.matchAll(
@@ -617,9 +617,7 @@ test("migration maintenance grants match each descriptor's read and write column
 });
 
 test("the version gate's direct parent lookup covers its complete inherited scope", () => {
-  const descriptors = entityFeatureGateMetadata(
-    Object.values(schema).filter((table) => is(table, PgTable)),
-  );
+  const descriptors = entityFeatureGateMetadata(schemaTables(schema));
   const versions = descriptors.find(
     ({ tableName }) => tableName === "entity_versions",
   );

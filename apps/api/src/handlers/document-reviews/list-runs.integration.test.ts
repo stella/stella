@@ -89,7 +89,7 @@ const seedRun = async (target: {
     executor: target.executor ?? DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
     total: 0,
     completed: 0,
-    finishedAt: new Date(),
+    finishedAt: new Date("2026-04-30T09:10:00.000Z"),
     requestedBy: ids.userA1,
   });
   return runId;

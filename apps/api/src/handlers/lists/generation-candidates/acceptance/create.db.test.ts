@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import type { ListItemType } from "@stll/api-contract/entity-options";
+import { compareCodeUnit } from "@stll/collation";
 import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -12,6 +13,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
+  legalGraphEdges,
   legalListFactDetails,
   legalListGenerationCandidates,
   legalListGenerationCandidateSources,
@@ -545,6 +547,54 @@ test("an accepted fact gets its proposed details, scored as included", async () 
     scoring: "included",
     updatedBy: seeded.userId,
   });
+});
+
+// The graph names who asserted each link: the extraction run whose proposal
+// the reviewer accepted, one edge per cited passage.
+test("an accepted fact is sourced from each passage its extraction cited", async () => {
+  const seeded = await seedAcceptance({
+    itemType: LIST_ITEM_TYPE.FACT,
+    ownership: "created-here",
+    sources: "cited",
+  });
+
+  const entityId = await acceptGovernedEntityId(seeded);
+
+  const sources = await testDb
+    .select({
+      id: legalListItemSources.id,
+      documentId: legalListItemSources.sourceEntityId,
+    })
+    .from(legalListItemSources)
+    .where(eq(legalListItemSources.itemEntityId, entityId));
+  expect(sources).toHaveLength(2);
+  const edges = await testDb
+    .select({
+      kind: legalGraphEdges.kind,
+      toEntityId: legalGraphEdges.toEntityId,
+      sourceId: legalGraphEdges.sourceId,
+      producerKind: legalGraphEdges.producerKind,
+      producerId: legalGraphEdges.producerId,
+    })
+    .from(legalGraphEdges)
+    .where(eq(legalGraphEdges.fromEntityId, entityId));
+  expect(
+    edges.toSorted((left, right) =>
+      compareCodeUnit(String(left.sourceId), String(right.sourceId)),
+    ),
+  ).toEqual(
+    sources
+      .map(({ id, documentId }) => ({
+        kind: "sourced-from" as const,
+        toEntityId: documentId,
+        sourceId: id,
+        producerKind: "extraction" as const,
+        producerId: seeded.runId,
+      }))
+      .toSorted((left, right) =>
+        compareCodeUnit(left.sourceId, right.sourceId),
+      ),
+  );
 });
 
 test("an accepted fact the candidate holds stays held with its note", async () => {

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 
 import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
+import { replacedBlockAnchorsOf } from "@stll/legal-ast/anchor-redirects";
 import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -145,6 +146,51 @@ const storedScopeState = async ({
       })
     : row?.documentAst;
   return { row, ast };
+};
+
+type ReadReplacedBlockAnchorsOptions = Pick<
+  StoredScopeStateOptions,
+  "scopedDb" | "corpus"
+> & {
+  signal: AbortSignal | undefined;
+  s3Policy: S3CredentialRefreshOptions | undefined;
+  existing: ExistingDecision | undefined;
+  incomingCarriesDocument: boolean;
+  storedPayloadUnchanged: boolean;
+};
+
+/**
+ * The anchors and words of the document this write replaces, read before the
+ * transaction (a canonical row's document is in object storage), so the write
+ * can record where each anchor the new document drops went. Null when the
+ * write replaces no stored document.
+ */
+const readReplacedBlockAnchors = async ({
+  existing,
+  incomingCarriesDocument,
+  storedPayloadUnchanged,
+  scopedDb,
+  corpus,
+  signal,
+  s3Policy,
+}: ReadReplacedBlockAnchorsOptions) => {
+  if (
+    existing === undefined ||
+    !incomingCarriesDocument ||
+    storedPayloadUnchanged
+  ) {
+    return null;
+  }
+  const { ast } = await storedScopeState({
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
+    decisionId: existing.id,
+    scopedDb,
+    corpus,
+  });
+  return ast !== undefined && hasPreparedUsableAst(ast)
+    ? replacedBlockAnchorsOf(ast)
+    : null;
 };
 
 type VerifyStoredCitationScopesOptions = Omit<
@@ -571,6 +617,31 @@ const preparedCitationMetadata = (
     : ordinaryMetadata;
 };
 
+/** The decision's identifiers, and the rows that store them. */
+const plannedIdentifiers = (
+  result: IngestionResult,
+  caseNumberType: ReturnType<typeof parsePrimaryReferenceType>,
+) => {
+  const decisionIdentifiers = decisionIdentifiersFromMetadata({
+    caseNumber: result.caseNumber,
+    caseNumberType,
+    ecli: result.ecli ?? null,
+    identifiers: result.identifiers,
+    jurisdiction: result.country,
+  });
+  return {
+    decisionIdentifiers,
+    identifierRows: decisionIdentifiers.map((identifier) => ({
+      type: identifier.type,
+      value: identifier.value,
+      normalizedValue: normalizeDecisionIdentifierIn(
+        result.country,
+        identifier,
+      ),
+    })),
+  };
+};
+
 /**
  * Everything the row write needs, computed before its transaction opens:
  * the payload and where it is stored, the identifiers, and the references
@@ -676,18 +747,10 @@ export const planDecisionWrite = async ({
   );
 
   const caseNumberType = parsePrimaryReferenceType(result.caseNumberType);
-  const decisionIdentifiers = decisionIdentifiersFromMetadata({
-    caseNumber: result.caseNumber,
+  const { decisionIdentifiers, identifierRows } = plannedIdentifiers(
+    result,
     caseNumberType,
-    ecli: result.ecli ?? null,
-    identifiers: result.identifiers,
-    jurisdiction: result.country,
-  });
-  const identifierRows = decisionIdentifiers.map((identifier) => ({
-    type: identifier.type,
-    value: identifier.value,
-    normalizedValue: normalizeDecisionIdentifierIn(result.country, identifier),
-  }));
+  );
   const citations = extraction.value.citations.filter(
     (c) => !isSelfCitation(c.citationText, decisionIdentifiers),
   );
@@ -795,6 +858,15 @@ export const planDecisionWrite = async ({
         ? payloadColumns
         : { ...payloadColumns, extractionWarnings },
     pendingMirrorPayload,
+    replacedBlockAnchors: await readReplacedBlockAnchors({
+      existing,
+      incomingCarriesDocument,
+      storedPayloadUnchanged,
+      scopedDb,
+      corpus,
+      signal,
+      s3Policy,
+    }),
     storedPayloadUnchanged,
   });
 };

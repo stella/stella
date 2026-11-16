@@ -1,8 +1,19 @@
 import type { ComponentProps } from "react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import {
+  answersInOwnWords,
+  canSubmitLocalRunAnswers,
+  EMPTY_LOCAL_RUN_QUESTION_DRAFT,
+  localRunAnswerOf,
+  localRunAnswersOf,
+  localRunOptionLayout,
+  type LocalRunQuestionDraft,
+  type LocalRunQuestionPause,
+  toggleLocalRunOption,
+} from "@stll/api-contract/chat-local-run-question";
 import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
@@ -13,21 +24,17 @@ import { Step, Steps } from "@stll/ui/steps";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
-import {
-  answersInOwnWords,
-  canSubmitLocalRunAnswers,
-  EMPTY_LOCAL_RUN_QUESTION_DRAFT,
-  localRunAnswerOf,
-  localRunAnswersOf,
-  type LocalRunQuestionDraft,
-  type LocalRunQuestionPause,
-  toggleLocalRunOption,
-} from "@/components/chat/local-run-question.logic";
+import { useChatEditorManager } from "@/components/chat-editor-provider";
+import { unsentOwnWords } from "@/components/chat/local-run-question.logic";
 import { SecretInput } from "@/components/secret-input";
+import type { LocalRunAnswerDelivery } from "@/features/chat/chat-runtime";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import {
   useFormattingLocale,
   useStepsMarkerStyle,
 } from "@/i18n/formatting-context";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 
 type LocalRunQuestionCardProps = {
@@ -36,7 +43,9 @@ type LocalRunQuestionCardProps = {
   onAnswer: (
     interruptId: string,
     answers: Record<string, string[]> | null,
-  ) => Promise<void>;
+  ) => Promise<LocalRunAnswerDelivery>;
+  /** See `ChatLocalRunQuestionContextValue`. */
+  threadRef: ChatThreadRef;
 };
 
 type Sent = { type: "answered" } | { type: "dismissed" } | null;
@@ -51,6 +60,7 @@ type Sent = { type: "answered" } | { type: "dismissed" } | null;
 export const LocalRunQuestionCard = ({
   pause,
   onAnswer,
+  threadRef,
 }: LocalRunQuestionCardProps) => {
   const t = useTranslations();
   const formattingLocale = useFormattingLocale();
@@ -59,6 +69,7 @@ export const LocalRunQuestionCard = ({
     {},
   );
   const [sent, setSent] = useState<Sent>(null);
+  const cardId = useId();
   const { questions } = pause;
   const canSubmit =
     sent === null && canSubmitLocalRunAnswers(questions, drafts);
@@ -84,10 +95,31 @@ export const LocalRunQuestionCard = ({
   const send = (answers: Record<string, string[]> | null) => {
     setSent(answers === null ? { type: "dismissed" } : { type: "answered" });
     detached(
-      onAnswer(pause.interruptId, answers),
+      (async () => {
+        // An answer that did not go out leaves the card usable again,
+        // never on a spinner that waits for nothing.
+        if ((await onAnswer(pause.interruptId, answers)) === "not_sent") {
+          setSent(null);
+        }
+      })(),
       "local-run-question-card.answer",
     );
   };
+
+  // Words typed into the card and not sent (the turn stopped, a new
+  // message replaced it, it was answered elsewhere) go to the composer, so
+  // they are not lost; a secret's never do.
+  // Through the live composer when one is on screen, so the member's latest
+  // typing there, not yet in the stored draft, stays.
+  const { appendParagraphToThread } = useChatEditorManager();
+  const keepUnsent = useLatestCallback(() => {
+    const words = sent === null ? unsentOwnWords(questions, drafts) : "";
+    if (words !== "") {
+      appendParagraphToThread(threadRef, words);
+    }
+  });
+  // Only on unmount: the callback is stable, so no re-render runs it.
+  useExternalSyncEffect(() => () => keepUnsent(), [keepUnsent]);
 
   const handleSubmit: NonNullable<ComponentProps<"form">["onSubmit"]> = (
     event,
@@ -128,15 +160,9 @@ export const LocalRunQuestionCard = ({
         <div>
           <div className="border-border/50 border-t px-3 py-3">
             <Steps lang={formattingLocale} markerStyle={markerStyle}>
-              {questions.map((question) => {
+              {questions.map((question, questionIndex) => {
                 const draft = draftOf(question);
                 const ownWords = answersInOwnWords(question, draft);
-                const pickedDescriptions = question.options
-                  .filter(
-                    ({ label, description }) =>
-                      description !== "" && draft.picked.includes(label),
-                  )
-                  .map(({ label, description }) => ({ label, description }));
                 return (
                   <Step key={question.id}>
                     <div className="space-y-1.5">
@@ -168,30 +194,56 @@ export const LocalRunQuestionCard = ({
                       ) : (
                         <>
                           {!ownWords && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {question.options.map((option) => {
+                            <div
+                              className={cn(
+                                "flex gap-1.5",
+                                localRunOptionLayout(question) === "list"
+                                  ? "flex-col items-start"
+                                  : "flex-wrap",
+                              )}
+                            >
+                              {question.options.map((option, optionIndex) => {
                                 const isPicked = draft.picked.includes(
                                   option.label,
                                 );
+                                const descriptionId = `${cardId}-${questionIndex}-${optionIndex}`;
                                 return (
-                                  <Button
-                                    aria-pressed={isPicked}
+                                  <div
+                                    className="space-y-0.5"
                                     key={option.label}
-                                    onClick={() =>
-                                      updateDraft(question, (current) =>
-                                        toggleLocalRunOption(
-                                          question,
-                                          current,
-                                          option.label,
-                                        ),
-                                      )
-                                    }
-                                    selected={isPicked}
-                                    size="xs"
-                                    variant="outline"
                                   >
-                                    <bdi>{option.label}</bdi>
-                                  </Button>
+                                    <Button
+                                      aria-describedby={
+                                        option.description === ""
+                                          ? undefined
+                                          : descriptionId
+                                      }
+                                      aria-pressed={isPicked}
+                                      onClick={() =>
+                                        updateDraft(question, (current) =>
+                                          toggleLocalRunOption(
+                                            question,
+                                            current,
+                                            option.label,
+                                          ),
+                                        )
+                                      }
+                                      selected={isPicked}
+                                      size="xs"
+                                      variant="outline"
+                                    >
+                                      <bdi>{option.label}</bdi>
+                                    </Button>
+                                    {option.description !== "" && (
+                                      <p
+                                        className="text-muted-foreground text-xs"
+                                        dir="auto"
+                                        id={descriptionId}
+                                      >
+                                        {option.description}
+                                      </p>
+                                    )}
+                                  </div>
                                 );
                               })}
                               {question.allowsFreeText && (
@@ -211,17 +263,6 @@ export const LocalRunQuestionCard = ({
                               )}
                             </div>
                           )}
-                          {!ownWords &&
-                            pickedDescriptions.map(({ label, description }) => (
-                              <p
-                                className="text-muted-foreground text-xs"
-                                dir="auto"
-                                key={label}
-                              >
-                                {description}
-                              </p>
-                            ))}
-
                           {ownWords && (
                             <div className="flex gap-1.5">
                               {question.secret ? (

@@ -9,9 +9,7 @@
   <body>
     <main>
       <div class="title-row">
-        <div class="mark" aria-hidden="true">
-          <img src="/brand/stella-symbol.svg" alt="" width="20" height="21" />
-        </div>
+        <img class="mark" src="/icon/128.png" alt="" width="32" height="32" />
         <h1 id="title"></h1>
         <p id="status" class="status" role="status">
           <span class="status-marker" aria-hidden="true"></span>
@@ -28,6 +26,13 @@
       <div class="actions">
         <button id="primary" type="button" hidden></button>
         <div id="secondary-actions" class="secondary-actions"></div>
+      </div>
+      <div id="desktop" class="desktop">
+        <p id="desktop-status" class="status" hidden>
+          <span class="status-marker" aria-hidden="true"></span>
+          <span id="desktop-status-text"></span>
+        </p>
+        <button id="desktop-allow" class="link" type="button" hidden></button>
       </div>
     </main>
     <script type="module" src="./main.ts"></script>

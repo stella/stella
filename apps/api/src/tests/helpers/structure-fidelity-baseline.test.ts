@@ -35,8 +35,14 @@ const census = (
 
 test("finding identity detects equal-count replacements and duplicate growth", () => {
   const before = census([finding]);
+  // Re-minted anchors move no finding: identity is fixture, rule and text.
+  expect(
+    structureFidelityDrift({
+      actual: census([{ ...finding, anchorId: "x0123456789" }]),
+      expected: before,
+    }),
+  ).toEqual({ added: [], stale: [] });
   for (const replacement of [
-    { ...finding, anchorId: "p2" },
     { ...finding, excerpt: "Different text" },
     { ...finding, rule: "page-number-block" as const },
   ]) {
@@ -147,9 +153,10 @@ test("updater rejects working-file growth and committed growth, preserving the b
         documentedAdapters: new Set(["source"]),
       }),
     });
-    expect(JSON.parse(readFileSync(baselinePath, "utf-8")).findings).toEqual(
-      census([]),
+    const baseline: { findings: unknown } = JSON.parse(
+      readFileSync(baselinePath, "utf-8"),
     );
+    expect(baseline.findings).toEqual(census([]));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

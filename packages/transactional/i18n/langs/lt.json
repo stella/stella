@@ -36,6 +36,7 @@
     "flowRunAwaitingApproval": "Darbo eiga laukia jūsų patvirtinimo",
     "flowRunCompleted": "Darbo eiga baigta",
     "flowRunFailed": "Darbo eiga nepavyko",
+    "localRunLimitReset": "Programavimo agentas jūsų kompiuteryje gali tęsti jūsų pokalbį",
     "mention": "Jus paminėjo komentare",
     "taskAssigned": "Jums priskirta užduotis"
   },

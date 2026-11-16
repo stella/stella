@@ -8,6 +8,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { BUFFER_OBJECT_CLEANUP_INTENT_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const s3DeleteMock = mock(
@@ -23,6 +24,7 @@ const {
   reconcileBufferObjectCleanupIntents,
   reconcileStaleBufferIntentsGlobally,
   releaseObjectCleanupIntentsForLifecycle,
+  reserveObjectCleanupIntentsForKey,
   reserveObjectCleanupIntents,
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } = await import("@/api/lib/buffer-intent-reconciliation");
@@ -188,7 +190,7 @@ test("reserves multi-workspace ownership under one ordered lock", async () => {
       }),
   );
 
-  const result = await reserveObjectCleanupIntents({
+  const result = await reserveObjectCleanupIntentsForKey({
     objectKey: `${organizationId}/shared-object`,
     organizationId,
     safeDb,
@@ -204,6 +206,89 @@ test("reserves multi-workspace ownership under one ordered lock", async () => {
     expect.objectContaining({ workspaceId }),
     expect.objectContaining({ workspaceId: otherWorkspaceId }),
   ]);
+});
+
+test("reserves several objects in one transaction, each under every owner", async () => {
+  let transactions = 0;
+  let advisoryLocks = 0;
+  let workspaceReads = 0;
+  const inserts: unknown[][] = [];
+  const tx = asTestRaw<Transaction>({
+    execute: async () => {
+      advisoryLocks += 1;
+    },
+    insert: () => ({
+      values: async (rows: unknown[]) => {
+        inserts.push(rows);
+      },
+    }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => ({
+              for: async () => {
+                workspaceReads += 1;
+                return [
+                  { id: workspaceId, status: "active" },
+                  { id: otherWorkspaceId, status: "active" },
+                ];
+              },
+            }),
+          }),
+        }),
+      }),
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) => {
+      transactions += 1;
+      return await Result.tryPromise({
+        try: async () => await run(tx),
+        catch: (cause) => cause,
+      });
+    },
+  );
+  const file = `${organizationId}/scan.png`;
+  const thumbnail = `${organizationId}/scan.thumbnail.webp`;
+
+  const result = await reserveObjectCleanupIntents({
+    objectKeys: [file, thumbnail],
+    organizationId,
+    safeDb,
+    workspaceIds: [otherWorkspaceId, workspaceId],
+  });
+
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  // One transaction, one lock, one check and one insert for both objects.
+  expect({ transactions, advisoryLocks, workspaceReads }).toEqual({
+    transactions: 1,
+    advisoryLocks: 1,
+    workspaceReads: 1,
+  });
+  expect(inserts).toHaveLength(1);
+  const rows = inserts[0] ?? [];
+  expect(rows).toEqual([
+    expect.objectContaining({ objectKey: file, workspaceId }),
+    expect.objectContaining({ objectKey: file, workspaceId: otherWorkspaceId }),
+    expect.objectContaining({ objectKey: thumbnail, workspaceId }),
+    expect.objectContaining({
+      objectKey: thumbnail,
+      workspaceId: otherWorkspaceId,
+    }),
+  ]);
+  // Each key answers exactly the intents inserted for it.
+  const idsOf = (objectKey: string) =>
+    rows.flatMap((row) =>
+      isRecord(row) && row["objectKey"] === objectKey ? [row["id"]] : [],
+    );
+  for (const objectKey of [file, thumbnail]) {
+    expect(result.value.get(objectKey)?.map(String)).toEqual(
+      idsOf(objectKey).map(String),
+    );
+  }
 });
 
 test("reserves organization-scoped ownership without inventing a matter", async () => {
@@ -227,7 +312,7 @@ test("reserves organization-scoped ownership without inventing a matter", async 
       }),
   );
 
-  const result = await reserveObjectCleanupIntents({
+  const result = await reserveObjectCleanupIntentsForKey({
     objectKey: "user-id/global-chat-file",
     organizationId,
     safeDb,
@@ -270,7 +355,7 @@ test("reserves chat ownership for archived scope while deletion stays fenced", a
       }),
   );
 
-  const result = await reserveObjectCleanupIntents({
+  const result = await reserveObjectCleanupIntentsForKey({
     objectKey: "user-id/archived-chat-file",
     organizationId,
     safeDb,

@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
 import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 
-import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
 import type { NormalizedChatMessageParts } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatPart } from "@/api/handlers/chat/types";
 
@@ -35,8 +35,7 @@ export const hasUnsettledRevisionContent = ({
   parts,
   metadata,
 }: NormalizedChatMessageParts) =>
-  getAwaitingUserInteractions({ role: "assistant", parts, metadata }).length >
-    0 ||
+  memberWaitsOf({ role: "assistant", parts, metadata }).length > 0 ||
   parts.some(
     (part) =>
       (part.type === "tool-call" && !isRevisionToolCallSettled(part)) ||

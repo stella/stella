@@ -267,6 +267,63 @@ export const DECISION_DOCKET_IDENTITY_FIXTURES = {
       leads: ["", "case ", "Case ", "Rechtssache ", "affaire ", "věc "],
     },
   },
+  BRA: {
+    // A superior court's case as the adapters store it: no thousands dot,
+    // no state of origin. Numbers start far above any the STF has issued.
+    filed: (n) => `RE ${String(90_000_000 + n)}`,
+    readerSpellings: (n) => {
+      const number = (90_000_000 + n).toLocaleString("pt-BR");
+      return [`RE ${number}`, `re ${number}/SP`, ` RE ${number}/DF `];
+    },
+    sheet: {
+      type: "unsupported",
+      reason:
+        "Every digit of a class number or CNJ number is the case; nothing trails it as a sheet.",
+    },
+    generated: {
+      dockets: fc.oneof(
+        fc
+          .tuple(
+            fc.constantFrom("RE", "ARE", "ADI", "HC", "REsp", "AREsp"),
+            fc.integer({ min: 1, max: 99_999_999 }),
+          )
+          .chain(([className, number]) => {
+            const filed = `${className} ${String(number)}`;
+            const dotted = number.toLocaleString("pt-BR");
+            return fc
+              .constantFrom(
+                filed,
+                `${className} ${dotted}`,
+                `${className.toLowerCase()} ${dotted}/SP`,
+              )
+              .map((written) => ({ filed, written, partSibling: KEYED }));
+          }),
+        withWritten(
+          fc
+            .tuple(
+              fc.integer({ min: 1, max: 9_999_999 }),
+              twoDigits,
+              year,
+              fc.integer({ min: 1, max: 9 }),
+              fc.integer({ min: 0, max: 27 }),
+              fc.integer({ min: 0, max: 9999 }),
+            )
+            .map(
+              ([sequence, check, filingYear, branch, tribunal, origin]) =>
+                `${String(sequence).padStart(7, "0")}-${check}.${filingYear}.${String(branch)}.${String(tribunal).padStart(2, "0")}.${String(origin).padStart(4, "0")}`,
+            ),
+          (filed) =>
+            fc.constantFrom(
+              filed,
+              filed.replace(/^0+/u, ""),
+              `RR - ${filed.replace(/^0+/u, "")}`,
+              filed.replaceAll(/[-.]/gu, ""),
+            ),
+        ),
+      ),
+      leads: [""],
+    },
+  },
   GBR: {
     filed: (n) => `[2099] UKSC ${String(n)}`,
     readerSpellings: (n) => [

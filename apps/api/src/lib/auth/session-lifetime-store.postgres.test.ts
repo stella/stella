@@ -144,8 +144,12 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const first = openClient();
         const second = openClient();
-        const firstBackend = await first.sql`SELECT pg_backend_pid() AS pid`;
-        const secondBackend = await second.sql`SELECT pg_backend_pid() AS pid`;
+        const firstBackend = await first.sql<
+          { pid: number }[]
+        >`SELECT pg_backend_pid() AS pid`;
+        const secondBackend = await second.sql<
+          { pid: number }[]
+        >`SELECT pg_backend_pid() AS pid`;
         expect(firstBackend.at(0)?.pid).not.toBe(secondBackend.at(0)?.pid);
         const userId = mintAuthProviderIdValue();
         const sessionId = mintAuthProviderIdValue();

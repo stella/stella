@@ -164,14 +164,14 @@ describe("local run question answers", () => {
 });
 
 describe("an organization's ceiling on local run approvals", () => {
-  test("orders the modes ask, auto, full auto, and the default ceiling allows every mode", () => {
+  test("orders the modes plan, ask, auto, full auto, and the default ceiling allows every mode", () => {
     const allowed = (ceiling: (typeof DESKTOP_RUNNER_APPROVAL_MODES)[number]) =>
       DESKTOP_RUNNER_APPROVAL_MODES.filter((mode) =>
         isApprovalModeWithin(mode, ceiling),
       );
-    expect(allowed("ask")).toEqual(["ask"]);
-    expect(allowed("auto")).toEqual(["ask", "auto"]);
-    expect(allowed("full_auto")).toEqual(["ask", "auto", "full_auto"]);
+    expect(allowed("ask")).toEqual(["plan", "ask"]);
+    expect(allowed("auto")).toEqual(["plan", "ask", "auto"]);
+    expect(allowed("full_auto")).toEqual(["plan", "ask", "auto", "full_auto"]);
     expect(allowed(CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS)).toEqual([
       ...DESKTOP_RUNNER_APPROVAL_MODES,
     ]);

@@ -32,11 +32,13 @@ import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { Textarea } from "@stll/ui/textarea";
 import { TimeField, TimeFieldGroup } from "@stll/ui/time-field";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { detectDesktopPlatform, formatShortcut } from "../shared/shortcut-keys";
 import type { ShortcutKeys } from "../shared/shortcut-keys";
 import {
   appRows,
+  hasWindowTitles,
   titleRows,
   wallClockTime,
   withMovedEdge,
@@ -110,6 +112,9 @@ type ActivitySuggestionCardProps = {
   editable: boolean;
   timeLabel: string;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+  /** Why no window titles were recorded, with the action that changes it;
+   * `null` when no action would. */
+  titlesNotice: React.ReactElement | null;
   assist: DraftAssistView;
   /** The user's earlier entries the current draft followed. */
   earlierEntries: CardDraft["earlierEntries"];
@@ -171,6 +176,7 @@ export const ActivitySuggestionCard = ({
   editable,
   timeLabel,
   sourceAppVisuals,
+  titlesNotice,
   assist,
   earlierEntries,
   flags,
@@ -284,7 +290,7 @@ export const ActivitySuggestionCard = ({
             {edit.matter === null ? null : (
               <MatterIcon matter={edit.matter} className="size-4 shrink-0" />
             )}
-            <bdi className="truncate">{title}</bdi>
+            <TruncatedText render={<bdi />}>{title}</TruncatedText>
           </h2>
           <p className="text-muted-foreground text-xs tabular-nums">
             {timeLabel}
@@ -354,6 +360,13 @@ export const ActivitySuggestionCard = ({
               card.current?.focus();
             }}
           />
+          {titlesNotice !== null && !hasWindowTitles(suggestion) ? (
+            // The description falls back to app names without titles; say
+            // why next to it, where the gap shows.
+            <div className="text-xs" data-activity-titles-reason="">
+              {titlesNotice}
+            </div>
+          ) : null}
           <Textarea
             aria-label={t("entryNarrative")}
             className="min-h-16 shrink-0 resize-none"
@@ -976,7 +989,7 @@ const Evidence = ({
     return null;
   }
   // Untitled time alone would only repeat the Apps tab.
-  const titled = titles.some(({ type }) => type === "named");
+  const titled = hasWindowTitles(suggestion);
   return (
     <Tabs defaultValue={titled ? "titles" : "apps"}>
       <TabsList variant="underline">
@@ -1035,12 +1048,13 @@ const EvidenceRows = ({
           </div>
           {row.matter === null || row.matter.id === matterId ? null : (
             // Under the title, past the icon's width and gap.
-            <bdi
-              className="text-foreground-subtle -mt-0.5 truncate ps-6"
+            <TruncatedText
+              className="text-foreground-subtle -mt-0.5 ps-6"
               data-activity-evidence-matter=""
+              render={<bdi />}
             >
               {row.matter.name}
-            </bdi>
+            </TruncatedText>
           )}
           <div aria-hidden="true" className="bg-muted h-1 rounded-full">
             <div
@@ -1058,12 +1072,19 @@ const EvidenceLabel = ({ row }: { row: EvidenceRow }) => {
   const t = useTranslations("activity");
   switch (row.type) {
     case "named":
-      return <bdi className="min-w-0 flex-1 truncate">{row.label}</bdi>;
+      return (
+        <TruncatedText className="flex-1" render={<bdi />}>
+          {row.label}
+        </TruncatedText>
+      );
     case "untitled":
       return (
-        <bdi className="text-muted-foreground min-w-0 flex-1 truncate">
+        <TruncatedText
+          className="text-muted-foreground flex-1"
+          render={<bdi />}
+        >
           {t("evidenceUntitled", { app: row.label })}
-        </bdi>
+        </TruncatedText>
       );
     default:
       row.type satisfies never;

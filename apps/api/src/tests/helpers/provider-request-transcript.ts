@@ -55,10 +55,20 @@ export type ProviderRequest =
       body: unknown;
       format: ProviderWireFormat;
       /** Per tool call id: the signature an earlier response of the
-       *  conversation sent with the call, which a request replaying the call
-       *  must send back with it (Gemini's `thoughtSignature`). */
-      signedCalls?: ReadonlyMap<string, string>;
+       *  conversation sent with the call and the model that sent it. A
+       *  request to that model replaying the call must send the signature
+       *  back with it (Gemini's `thoughtSignature`). */
+      signedCalls?: ReadonlyMap<string, SignedGeminiCall>;
+      /** The model the request asks, when the request names one. */
+      model?: string | null;
     };
+
+/** A Gemini call's `thoughtSignature` and the model that produced it. */
+export type SignedGeminiCall = {
+  signature: string;
+  /** `null` when the producing request named no model. */
+  model: string | null;
+};
 
 /** A request message as pairing reads it. */
 type Entry =
@@ -807,12 +817,15 @@ const findThinkingAttachmentProblems = (
 
 /**
  * Each call an earlier response sent with a signature carries it again
- * wherever the request replays the call: Gemini rejects a replayed call that
- * lost the signature it was produced with.
+ * wherever a request to the same model replays the call: Gemini rejects a
+ * replayed call that lost the signature it was produced with. A request to
+ * another Gemini model may drop it, since a signature is valid only for the
+ * model that produced it.
  */
 const findDroppedGeminiSignatures = (
   body: unknown,
-  signedCalls: ReadonlyMap<string, string>,
+  signedCalls: ReadonlyMap<string, SignedGeminiCall>,
+  model: string | null,
 ): Finding[] =>
   (arrayField(body, "contents") ?? []).flatMap((content, at) =>
     (arrayField(content, "parts") ?? []).flatMap((part): Finding[] => {
@@ -822,7 +835,8 @@ const findDroppedGeminiSignatures = (
       if (
         id === null ||
         produced === undefined ||
-        stringField(part, "thoughtSignature") === produced
+        stringField(part, "thoughtSignature") === produced.signature ||
+        isOtherGeminiModel(produced.model, model)
       ) {
         return [];
       }
@@ -835,6 +849,13 @@ const findDroppedGeminiSignatures = (
       ];
     }),
   );
+
+/** Whether `requested` is a different model than `producer`; unknown when
+ *  either is unnamed, which keeps the signature owed. */
+const isOtherGeminiModel = (
+  producer: string | null,
+  requested: string | null,
+) => producer !== null && requested !== null && producer !== requested;
 
 /** The problems one request has, unlabeled. */
 export const findTranscriptProblems = (request: ProviderRequest): Finding[] => {
@@ -850,7 +871,11 @@ export const findTranscriptProblems = (request: ProviderRequest): Finding[] => {
       ? findThinkingAttachmentProblems(entries, request.earlierSteps)
       : []),
     ...(request.format === "gemini" && request.signedCalls !== undefined
-      ? findDroppedGeminiSignatures(request.body, request.signedCalls)
+      ? findDroppedGeminiSignatures(
+          request.body,
+          request.signedCalls,
+          request.model ?? null,
+        )
       : []),
   ];
 };

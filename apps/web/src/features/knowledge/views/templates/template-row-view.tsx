@@ -18,6 +18,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -213,20 +214,20 @@ export const TemplateRowView = ({
           {density === "compact" ? (
             <>
               <div className="flex min-w-0 flex-1 items-baseline gap-2 text-start">
-                <span
-                  className="truncate text-sm font-medium"
+                <TruncatedText
+                  className="text-sm font-medium"
                   dir="auto"
                   id={nameId}
                 >
                   {template.name}
-                </span>
+                </TruncatedText>
                 {categoryName !== null && (
-                  <span
-                    className="text-muted-foreground shrink-0 truncate text-xs"
+                  <TruncatedText
+                    className="text-muted-foreground shrink-0 text-xs"
                     dir="auto"
                   >
                     {categoryName}
-                  </span>
+                  </TruncatedText>
                 )}
               </div>
               {trailing}
@@ -235,13 +236,13 @@ export const TemplateRowView = ({
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="flex items-center gap-3">
                 <div className="flex min-w-0 flex-1 text-start">
-                  <span
-                    className="truncate text-sm font-medium"
+                  <TruncatedText
+                    className="text-sm font-medium"
                     dir="auto"
                     id={nameId}
                   >
                     {template.name}
-                  </span>
+                  </TruncatedText>
                 </div>
                 {trailing}
               </div>
@@ -316,7 +317,7 @@ const RowStats = ({ template, lang }: RowStatsProps) => {
           ))}
         </span>
       )}
-      <span className="truncate">{segments.join(" · ")}</span>
+      <TruncatedText>{segments.join(" · ")}</TruncatedText>
     </span>
   );
 };
@@ -353,15 +354,15 @@ const RowDescription = ({
         >
           <span className="group-hover/plain:text-foreground inline-flex min-w-0 items-center gap-1 underline-offset-2 group-hover/plain:underline">
             <PencilLineIcon className="size-3 shrink-0" />
-            <span className="truncate">
+            <TruncatedText>
               {guidance === "" ? t("templates.describeWhenToUse") : guidance}
-            </span>
+            </TruncatedText>
           </span>
         </Button>
       );
     }
     if (guidance !== "") {
-      return <span className="truncate">{guidance}</span>;
+      return <TruncatedText>{guidance}</TruncatedText>;
     }
     return null;
   })();

@@ -262,7 +262,7 @@ function ContactsPage() {
             />
             <FilterButton
               active={filter === "organization"}
-              label={t("contacts.filterOrganizations")}
+              label={t("common.organizations")}
               onClick={() => changeFilter("organization")}
             />
           </div>
@@ -794,7 +794,7 @@ const ContactsToolbarPlaceholder = () => {
             {t("contacts.filterPersons")}
           </Button>
           <Button disabled size="sm" variant="outline">
-            {t("contacts.filterOrganizations")}
+            {t("common.organizations")}
           </Button>
         </div>
       </ResponsiveActionToolbarItem>

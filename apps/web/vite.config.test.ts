@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { type ConfigEnv, createLogger, type UserConfig } from "vite";
 
+import { createTestState } from "@stll/test-state";
+
 import config, {
   capViteLogger,
   REACT_PLUGIN_EXCLUDE,
@@ -46,6 +48,8 @@ const I18N_STORE_PATH = path.resolve(
 // Runtime catalog modules only; the `locales` entry is a type-only import.
 const FOLIO_CATALOG_IMPORT =
   /"(@stll\/folio-react\/messages\/(?!locales")[^"]+)"/gu;
+
+const state = createTestState({ file: import.meta.path, config: {} });
 
 describe("vite config", () => {
   test("keeps route recovery components in the entry graph", () => {
@@ -109,63 +113,46 @@ describe("vite config", () => {
   });
 
   test("proxies every public API surface through one dev origin when requested", () => {
-    const previousTarget = process.env["DEV_API_PROXY_TARGET"];
-    process.env["DEV_API_PROXY_TARGET"] = "http://localhost:3001";
+    state.setEnv("DEV_API_PROXY_TARGET", "http://localhost:3001");
 
-    try {
-      const resolvedConfig = resolveConfig("test");
+    const resolvedConfig = resolveConfig("test");
 
-      expect(resolvedConfig.server?.proxy).toEqual({
-        "/.well-known": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-        "/api": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-          rewrite: expect.any(Function),
-        },
-        "/dev-public": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-        "/health": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-        "/mcp": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-        "/oauth-ui": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-        "/v1": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-      });
-    } finally {
-      if (previousTarget === undefined) {
-        delete process.env["DEV_API_PROXY_TARGET"];
-      } else {
-        process.env["DEV_API_PROXY_TARGET"] = previousTarget;
-      }
-    }
+    expect(resolvedConfig.server?.proxy).toEqual({
+      "/.well-known": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+      "/api": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+        rewrite: expect.any(Function),
+      },
+      "/dev-public": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+      "/health": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+      "/mcp": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+      "/oauth-ui": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+      "/v1": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+    });
   });
 
   test("does not install a dev API proxy without an explicit target", () => {
-    const previousTarget = process.env["DEV_API_PROXY_TARGET"];
-    delete process.env["DEV_API_PROXY_TARGET"];
-
-    try {
-      expect(resolveConfig("test").server?.proxy).toBeUndefined();
-    } finally {
-      if (previousTarget !== undefined) {
-        process.env["DEV_API_PROXY_TARGET"] = previousTarget;
-      }
-    }
+    state.deleteEnv("DEV_API_PROXY_TARGET");
+    expect(resolveConfig("test").server?.proxy).toBeUndefined();
   });
 
   test("serves Silurus WASM outside the dependency optimizer", () => {

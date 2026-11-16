@@ -1,6 +1,8 @@
-import { FieldApi, FormApi, revalidateLogic } from "@tanstack/react-form";
+import { FieldApi, FormApi } from "@tanstack/react-form";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
+
+import { schemaFormOptions } from "./schema";
 
 const REQUIRED_MESSAGE = "Name is required";
 const INVALID_NAME = "   ";
@@ -34,16 +36,27 @@ const createHarness = (
   validationLogic: ValidationLogic,
 ) => {
   const submittedValues: { name: string }[] = [];
-  const form = new FormApi({
+  const productionOptions = schemaFormOptions({
+    schema: formSchema,
     defaultValues: { name: INVALID_NAME },
+    submitValues: "raw",
+    onSubmit: ({ value }) => {
+      submittedValues.push(value);
+    },
+  });
+  const form = new FormApi({
+    defaultValues: productionOptions.defaultValues,
     onSubmit: ({ value }) => {
       submittedValues.push(value);
     },
     ...(validationLogic === "revalidate" && {
-      validationLogic: revalidateLogic(),
+      validationLogic: productionOptions.validationLogic,
     }),
     validators: {
-      onDynamic: validator === "form-sync" ? formSchema : undefined,
+      onDynamic:
+        validator === "form-sync"
+          ? productionOptions.validators.onDynamic
+          : undefined,
       onDynamicAsync: validator === "form-async" ? asyncFormSchema : undefined,
     },
   });

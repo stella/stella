@@ -121,7 +121,7 @@ export type CompaniesHouseRawSearchResponse = {
 // Raw officers response shapes (`/company/{number}/officers`)
 // ---------------------------------------------------------------------------
 
-export type CompaniesHouseRawOfficerDateOfBirth = {
+type CompaniesHouseRawOfficerDateOfBirth = {
   // Day is suppressed by Companies House for natural persons; the
   // upstream response carries it for some legacy records, but our
   // parser drops it on the way out so the domain shape never exposes

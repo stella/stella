@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import { SearchHitIcon } from "@/components/search-dialog-results";
@@ -250,10 +251,17 @@ const SearchPreviewContent = ({
         <div className="flex items-start gap-3">
           <SearchHitIcon hit={hit} />
           <div className="min-w-0 flex-1">
-            <BidiText as="p" className="line-clamp-2 text-sm font-medium">
+            <TruncatedText
+              className="text-sm font-medium"
+              lines={2}
+              render={<BidiText as="p" />}
+            >
               {hit.title || hit.id}
-            </BidiText>
-            <p className="text-muted-foreground mt-0.5 truncate text-xs">
+            </TruncatedText>
+            <TruncatedText
+              className="text-muted-foreground mt-0.5 text-xs"
+              render={<p />}
+            >
               <BidiText>{t(KIND_TRANSLATION_KEYS[hit.type])}</BidiText>
               {location && (
                 <>
@@ -267,7 +275,7 @@ const SearchPreviewContent = ({
                   <BidiText>{formattedPreviewDate}</BidiText>
                 </>
               )}
-            </p>
+            </TruncatedText>
           </div>
           <Button
             className="min-w-0 shrink-0"
@@ -278,12 +286,12 @@ const SearchPreviewContent = ({
             variant="outline"
           >
             {opensLocation ? (
-              <span className="max-w-48 truncate">
+              <TruncatedText className="max-w-48">
                 {t.rich("search.openMatter", {
                   bdi: (chunks) => <BidiText>{chunks}</BidiText>,
                   name: location,
                 })}
-              </span>
+              </TruncatedText>
             ) : (
               t("common.open")
             )}

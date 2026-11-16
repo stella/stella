@@ -59,6 +59,7 @@ import {
   ClipboardIcon,
   ClockIcon,
   CopyPlusIcon,
+  DictateIcon,
   EllipsisVerticalIcon,
   FileTextIcon,
   FolderInputIcon,
@@ -114,6 +115,7 @@ import {
 } from "@stll/ui/scroll-edge-fade";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -164,6 +166,7 @@ import {
   formatClipboardAge,
   hasClipboardPrimaryModifier,
   isClipboardCopyShortcut,
+  isClipboardDictation,
   isClipboardNameInput,
   isClipboardSearchConfirm,
   MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
@@ -580,9 +583,7 @@ const ClipboardCardName = ({
           name ? "text-foreground" : "text-muted-foreground",
         )}
       >
-        <span className="truncate" dir="auto">
-          {name ?? untitledName}
-        </span>
+        <TruncatedText dir="auto">{name ?? untitledName}</TruncatedText>
         <PencilIcon
           aria-hidden="true"
           className="size-3 shrink-0 opacity-0 transition-opacity group-focus-within:opacity-60 group-hover:opacity-60"
@@ -590,6 +591,22 @@ const ClipboardCardName = ({
       </span>
     </Button>
   );
+};
+
+/** The icon of what a clip holds, when no group or source app marks it. */
+const ClipboardKindIcon = ({ item }: { item: ClipboardItem }) => {
+  const className = "text-muted-foreground size-6";
+  // A dictation reads as one even when its text is a link.
+  if (isClipboardDictation(item)) {
+    return <DictateIcon aria-hidden="true" className={className} />;
+  }
+  if (clipboardItemLink(item)) {
+    return <LinkIcon aria-hidden="true" className={className} />;
+  }
+  if (item.type === "image") {
+    return <ImageIcon aria-hidden="true" className={className} />;
+  }
+  return <FileTextIcon aria-hidden="true" className={className} />;
 };
 
 const ClipboardCard = ({
@@ -669,22 +686,12 @@ const ClipboardCard = ({
     : undefined;
   const link = clipboardItemLink(item);
   const untitledName = clipboardUntitledName(item, {
+    dictation: t("dictation"),
     image: t("image"),
     text: t("unnamedClip"),
   });
-  let metadataIcon: ReactNode = (
-    <FileTextIcon aria-hidden="true" className="text-muted-foreground size-6" />
-  );
-  if (item.type === "image") {
-    metadataIcon = (
-      <ImageIcon aria-hidden="true" className="text-muted-foreground size-6" />
-    );
-  }
-  if (link) {
-    metadataIcon = (
-      <LinkIcon aria-hidden="true" className="text-muted-foreground size-6" />
-    );
-  }
+  const dictation = isClipboardDictation(item);
+  let metadataIcon: ReactNode = <ClipboardKindIcon item={item} />;
   if (groupName) {
     metadataIcon = (
       <TagsIcon aria-hidden="true" className="text-muted-foreground size-6" />
@@ -713,6 +720,9 @@ const ClipboardCard = ({
   }
   if (link) {
     metadataTitle = t("link");
+  }
+  if (dictation) {
+    metadataTitle = t("dictation");
   }
 
   const beginNameEdit = () => {
@@ -1355,9 +1365,7 @@ const ClipboardContextMenu = ({
                               }
                         }
                       />
-                      <span className="truncate" dir="auto">
-                        {group.name}
-                      </span>
+                      <TruncatedText dir="auto">{group.name}</TruncatedText>
                     </span>
                   </MenuRadioItem>
                 ),
@@ -3635,14 +3643,14 @@ const ClipboardApp = () => {
                               }}
                             >
                               <RotateCcwIcon />
-                              <span className="truncate">
+                              <TruncatedText>
                                 {t.rich("removeSourceAppExclusion", {
                                   bdi: (chunks) => (
                                     <bdi dir="auto">{chunks}</bdi>
                                   ),
                                   source: exclusion.name,
                                 })}
-                              </span>
+                              </TruncatedText>
                             </MenuItem>
                           ))}
                         </MenuSubPopup>

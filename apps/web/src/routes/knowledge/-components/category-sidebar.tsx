@@ -40,6 +40,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { detached } from "@/lib/detached";
@@ -406,9 +407,9 @@ const CategoryMobileFilterButton = ({
         />
       )}
       {icon ?? null}
-      <span className="max-w-40 truncate" dir="auto">
+      <TruncatedText className="max-w-40" dir="auto">
         {label}
-      </span>
+      </TruncatedText>
     </Button>
   );
 };
@@ -513,11 +514,11 @@ const CategoryNavButton = ({
         size="row"
         variant="ghost"
       >
-        <span
-          className={cn("truncate", isSelected ? "font-medium" : "font-normal")}
+        <TruncatedText
+          className={cn(isSelected ? "font-medium" : "font-normal")}
         >
           {label}
-        </span>
+        </TruncatedText>
       </Button>
     </div>
   );
@@ -584,11 +585,11 @@ const CategoryRow = ({
         size="row"
         variant="ghost"
       >
-        <span
-          className={cn("truncate", isSelected ? "font-medium" : "font-normal")}
+        <TruncatedText
+          className={cn(isSelected ? "font-medium" : "font-normal")}
         >
           {category.name}
-        </span>
+        </TruncatedText>
       </Button>
 
       <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>

@@ -2,6 +2,7 @@ import { Stack, ThemeProvider, useRouter, useSegments } from "expo-router";
 import type { Href } from "expo-router";
 import { useTranslations } from "use-intl";
 
+import { ActiveChatRunsProvider } from "@/components/active-chat-runs";
 import { ChangesProvider } from "@/components/changes";
 import {
   HeaderSearchProvider,
@@ -10,7 +11,14 @@ import {
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
 import { PushRegistration } from "@/components/push-registration";
+import { RoleProvider, useCan } from "@/components/role";
+import { RunBanners } from "@/components/run-banner";
 import { SelectionProvider, useSelection } from "@/components/selection";
+import {
+  TasksViewProvider,
+  useTasksFilterMenu,
+  useTasksView,
+} from "@/components/tasks-view";
 import { TimerActivitySync } from "@/components/timer-activity-sync";
 import { barGlyph } from "@/components/ui/bar-glyph";
 import { useSession } from "@/connection/session-provider";
@@ -29,13 +37,20 @@ export const ProtectedScreens = () => {
     <LayoutMetricsProvider>
       <HeaderSearchProvider activeTab={activeTab}>
         <MattersViewProvider>
-          <ChangesProvider>
-            <SelectionProvider>
-              <TimerActivitySync />
-              <PushRegistration />
-              <Screens />
-            </SelectionProvider>
-          </ChangesProvider>
+          <TasksViewProvider>
+            <ChangesProvider>
+              <RoleProvider>
+                <SelectionProvider>
+                  <ActiveChatRunsProvider>
+                    <TimerActivitySync />
+                    <PushRegistration />
+                    <Screens />
+                    <RunBanners />
+                  </ActiveChatRunsProvider>
+                </SelectionProvider>
+              </RoleProvider>
+            </ChangesProvider>
+          </TasksViewProvider>
         </MattersViewProvider>
       </HeaderSearchProvider>
     </LayoutMetricsProvider>
@@ -66,6 +81,7 @@ const Screens = () => {
   const router = useRouter();
   const { searchBar, setQuery, setSearching, tab } = useHeaderSearch();
   const { groupBy, setGroupBy } = useMattersView();
+  const tasksFilterMenu = useTasksFilterMenu(useTasksView());
   const tabAction = useTabAction(tab);
 
   // A screen opened from a tab has GitHub's bar: the bare back chevron and a
@@ -149,6 +165,7 @@ const Screens = () => {
                     <Stack.Toolbar.Label>{tabAction.label}</Stack.Toolbar.Label>
                   </Stack.Toolbar.Button>
                 )}
+                {tab === "tasks" ? tasksFilterMenu : null}
                 {tab === "matters" ? (
                   <Stack.Toolbar.Menu title={matters("groupBy")}>
                     {barGlyph("sliders-horizontal")}
@@ -167,6 +184,13 @@ const Screens = () => {
                       }}
                     >
                       {matters("noGrouping")}
+                    </Stack.Toolbar.MenuAction>
+                    <Stack.Toolbar.MenuAction
+                      onPress={() => {
+                        router.push("/archived-matters");
+                      }}
+                    >
+                      {matters("archivedMatters")}
                     </Stack.Toolbar.MenuAction>
                   </Stack.Toolbar.Menu>
                 ) : null}
@@ -213,7 +237,7 @@ const Screens = () => {
               options={{
                 ...pushedScreen,
                 presentation: "formSheet",
-                sheetAllowedDetents: [0.5, 1],
+                sheetAllowedDetents: [0.75, 1],
                 sheetGrabberVisible: true,
               }}
             />
@@ -269,6 +293,20 @@ const Screens = () => {
               name="matter/[workspaceId]/index"
               options={pushedScreen}
             />
+            <Stack.Screen
+              name="matter/[workspaceId]/info"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
+              name="matter/[workspaceId]/tasks"
+              options={pushedScreen}
+            />
+            <Stack.Screen name="archived-matters" options={pushedScreen} />
             <Stack.Screen
               name="document/[workspaceId]/[entityId]"
               options={pushedScreen}
@@ -390,18 +428,23 @@ function useShortcuts(
 /** A tab's "+": what it starts, and starting it. */
 type TabAction = { label: string; onPress: () => void };
 
-/** The header's "+" for a tab, if it has one; ⌘N presses it too. */
+/**
+ * The header's "+" for a tab, if it has one and the person's role may add
+ * there, as the web hides its own; ⌘N presses it too.
+ */
 function useTabAction(tab: string): TabAction | undefined {
   const chat = useTranslations("chat");
   const matters = useTranslations("matters");
   const tasks = useTranslations("tasks");
   const router = useRouter();
   const newChat = useNewChat();
+  const canAddTask = useCan({ entity: ["create"] });
+  const canAddMatter = useCan({ workspace: ["create"] });
 
   if (tab === "index") {
     return { label: chat("newChat"), onPress: newChat };
   }
-  if (tab === "tasks") {
+  if (tab === "tasks" && canAddTask) {
     return {
       label: tasks("newTask"),
       onPress: () => {
@@ -409,7 +452,7 @@ function useTabAction(tab: string): TabAction | undefined {
       },
     };
   }
-  if (tab === "matters") {
+  if (tab === "matters" && canAddMatter) {
     return {
       label: matters("newMatter"),
       onPress: () => {

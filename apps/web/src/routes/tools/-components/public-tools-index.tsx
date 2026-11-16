@@ -23,6 +23,7 @@ import {
   InputGroupInput,
 } from "@stll/ui/input-group";
 import { Prose } from "@stll/ui/prose";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   nativeToolDescriptionKey,
@@ -400,9 +401,9 @@ function TaskBrowser({
               variant="ghost"
             >
               <Icon className="text-muted-foreground" />
-              <span className="truncate">
+              <TruncatedText>
                 {t(PUBLIC_TOOL_TASK_LABEL_KEY[task])}
-              </span>
+              </TruncatedText>
             </Button>
           );
         })}

@@ -105,7 +105,7 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
       ),
       cursor: cursorInput({
         description:
-          "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
+          "Prior search_case_law cursor; same queries/order. Tracks each query's position, not prior output: overlapping queries can repeat decisions across pages. Key results by decisionId.",
         maxLength: CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
       }),
       continuation_token: continuationTokenInput,
@@ -137,7 +137,7 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
           v.minLength(LIMITS.mcpNonEmptyMin),
           v.maxLength(LIMITS.caseLawFilterValueMaxChars),
           v.description(
-            'Exact publisher category from metadata.category, for example "A" or "B"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
+            'Exact metadata.category, e.g. "A"/"B"; does not imply Sbírka publication. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable.',
           ),
         ),
       ),
@@ -182,7 +182,7 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
         v.pipe(
           v.boolean(),
           v.description(
-            "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.",
+            "True: nonempty stored legal sentence (právní věta); false: none. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable.",
           ),
         ),
       ),
@@ -234,7 +234,7 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
         v.pipe(
           v.picklist(SEARCH_SORTS),
           v.description(
-            `Result order; defaults to '${DEFAULT_SEARCH_SORT}'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.`,
+            `Order; default '${DEFAULT_SEARCH_SORT}'. relevance blends text match, citation authority and court rank; newest sorts by decision date, undated last. Docket/ECLI queries use identity lookup and ignore sort.`,
           ),
         ),
       ),
@@ -242,7 +242,7 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
         v.pipe(
           v.boolean(),
           v.description(
-            "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and `searches[].queryUsed` reports what was required. Pass true when every word matters.",
+            "Require every query word, including function words. Default off: questions include words absent from judgments; `searches[].queryUsed` reports required words. Set true when every word matters.",
           ),
         ),
       ),

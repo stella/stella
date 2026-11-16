@@ -4,7 +4,18 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
 
+import { DESKTOP_DICTATION_CLEANUP_LIMITS } from "@stll/api-contract/desktop-dictation-cleanup";
+import { displayLanguageName } from "@stll/locales";
 import { Button } from "@stll/ui/button";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/combobox";
+import { Label } from "@stll/ui/label";
 import { Switch } from "@stll/ui/switch";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -14,16 +25,60 @@ import {
   DESKTOP_PLATFORM,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { DictationDestination } from "./DictationDestination";
+import type { DictationDestinationValue } from "./DictationDestination";
 
 type DictationModel =
   | { status: "missing" | "failed" | "ready" }
   | { received: number; status: "downloading"; total: number };
 
+const AUTOMATIC_LANGUAGE = "auto";
+
+type DictationLanguage = {
+  /** `auto` or one of `supported`. */
+  choice: string;
+  /** What automatic means on this computer right now. */
+  inferred: string[];
+  supported: string[];
+};
+
 type DictationSnapshot = {
   available: boolean;
+  /** Whether the transcribed text goes through stella to the organization's
+   *  AI provider before it is typed. */
+  cleanup: boolean;
+  /** Whether the server enables transcription by stella AI; without it the
+   *  choice of destination is not offered. */
+  cloudAvailable: boolean;
+  /** The stella AI model the user picked; null: the region's default. */
+  cloudModel: string | null;
+  /** Where speech is transcribed: always this computer while stella AI is
+   *  not available. */
+  destination: DictationDestinationValue;
   enabled: boolean;
+  /** Whether each dictation's text also goes to clipboard history; not
+   *  while the user paused it or the organization turned it off. */
+  keepsInHistory: boolean;
+  language: DictationLanguage;
+  /** Whether cleanup also gets the focused window's title. */
+  shareWindowTitle: boolean;
+  /** Whether cleanup also gets the text before the cursor. */
+  shareTextBeforeCursor: boolean;
+  /** Whether this computer can read the text before the cursor; without it
+   *  the switch is not offered. */
+  textBeforeCursorAvailable: boolean;
   failure:
-    "accessibility" | "microphone" | "modelMissing" | "transcription" | null;
+    | "accessibility"
+    | "cloudTranscription"
+    | "focusChanged"
+    | "focusUnconfirmed"
+    | "microphone"
+    | "modelMissing"
+    | "shortcutHeld"
+    | "transcription"
+    | null;
+  /** Whether the failed dictation's text is in clipboard history. */
+  failureKeptInHistory: boolean;
   keys: ShortcutKeys;
   model: DictationModel;
   modelBytes: number;
@@ -34,14 +89,23 @@ type DictationSnapshot = {
 const BYTES_PER_MEGABYTE = 1_000_000;
 const PERCENT = 100;
 
+/** The language choice changes something only when cleanup reads it, stella
+ *  AI transcribes with it, or the installed speech model takes a language
+ *  hint; otherwise it is hidden. */
+const languageHasEffect = (snapshot: DictationSnapshot): boolean =>
+  snapshot.cleanup ||
+  snapshot.destination === "cloud" ||
+  (snapshot.model.status === "ready" && snapshot.language.supported.length > 0);
+
 const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   typeof value === "object" &&
   value !== null &&
   "available" in value &&
   typeof value.available === "boolean";
 
-/** Local dictation: the switch, the speech model and what went wrong. Renders
- *  nothing, group included, for an account without the feature. */
+/** Local dictation: the switch, AI cleanup, the speech model and what went
+ *  wrong. Renders nothing, group included, for an account without the
+ *  feature. */
 export const DictationSetting = ({
   renderGroup,
 }: {
@@ -103,6 +167,56 @@ export const DictationSetting = ({
     }
   };
 
+  const setCleanup = async (cleanup: boolean) => {
+    const result = await Result.tryPromise(async () =>
+      invoke<DictationSnapshot>("dictation_set_cleanup", { enabled: cleanup }),
+    );
+    if (Result.isOk(result)) {
+      setSnapshot(result.value);
+    }
+  };
+
+  const setShare = async (
+    command:
+      | "dictation_set_share_text_before_cursor"
+      | "dictation_set_share_window_title",
+    enabled: boolean,
+  ) => {
+    const result = await Result.tryPromise(async () =>
+      invoke<DictationSnapshot>(command, { enabled }),
+    );
+    if (Result.isOk(result)) {
+      setSnapshot(result.value);
+    }
+  };
+
+  const setLanguage = async (language: string) => {
+    const result = await Result.tryPromise(async () =>
+      invoke<DictationSnapshot>("dictation_set_language", { language }),
+    );
+    if (Result.isOk(result)) {
+      setSnapshot(result.value);
+    }
+  };
+
+  const setDestination = async (destination: DictationDestinationValue) => {
+    const result = await Result.tryPromise(async () =>
+      invoke<DictationSnapshot>("dictation_set_destination", { destination }),
+    );
+    if (Result.isOk(result)) {
+      setSnapshot(result.value);
+    }
+  };
+
+  const setCloudModel = async (modelId: string) => {
+    const result = await Result.tryPromise(async () =>
+      invoke<DictationSnapshot>("dictation_set_cloud_model", { modelId }),
+    );
+    if (Result.isOk(result)) {
+      setSnapshot(result.value);
+    }
+  };
+
   const download = async () => {
     const result = await Result.tryPromise(async () =>
       invoke<DictationSnapshot>("dictation_download_model"),
@@ -121,8 +235,15 @@ export const DictationSetting = ({
             className="text-muted-foreground mt-1 text-sm leading-relaxed"
             id="dictation-description"
           >
-            {t("description", { shortcut })}
+            {snapshot.destination === "cloud"
+              ? t("descriptionCloud", { shortcut })
+              : t("description", { shortcut })}
           </p>
+          {snapshot.enabled && snapshot.keepsInHistory && (
+            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+              {t("keptInHistory")}
+            </p>
+          )}
         </div>
         <Switch
           aria-describedby="dictation-description"
@@ -134,6 +255,79 @@ export const DictationSetting = ({
         />
       </div>
       {snapshot.enabled && (
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">{t("cleanup.title")}</p>
+            <p
+              className="text-muted-foreground mt-1 text-sm leading-relaxed"
+              id="dictation-cleanup-description"
+            >
+              {snapshot.destination === "cloud"
+                ? t("cleanup.descriptionCloud")
+                : t("cleanup.description")}
+            </p>
+          </div>
+          <Switch
+            aria-describedby="dictation-cleanup-description"
+            aria-label={t("cleanup.title")}
+            checked={snapshot.cleanup}
+            onCheckedChange={(cleanup) => {
+              void setCleanup(cleanup);
+            }}
+          />
+        </div>
+      )}
+      {snapshot.enabled && snapshot.cleanup && (
+        <div className="flex flex-col gap-3 ps-4">
+          <DictationSwitchRow
+            checked={snapshot.shareWindowTitle}
+            description={t("context.windowTitle.description")}
+            id="dictation-share-window-title"
+            onChange={(enabled) => {
+              void setShare("dictation_set_share_window_title", enabled);
+            }}
+            title={t("context.windowTitle.title")}
+          />
+          {snapshot.textBeforeCursorAvailable && (
+            <DictationSwitchRow
+              checked={snapshot.shareTextBeforeCursor}
+              description={t("context.textBeforeCursor.description", {
+                limit: DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength,
+              })}
+              id="dictation-share-text-before-cursor"
+              onChange={(enabled) => {
+                void setShare(
+                  "dictation_set_share_text_before_cursor",
+                  enabled,
+                );
+              }}
+              title={t("context.textBeforeCursor.title")}
+            />
+          )}
+        </div>
+      )}
+      {snapshot.enabled && snapshot.cloudAvailable && (
+        <DictationDestination
+          cloudModel={snapshot.cloudModel}
+          destination={snapshot.destination}
+          onDestinationChange={(destination) => {
+            void setDestination(destination);
+          }}
+          onModelChange={(modelId) => {
+            void setCloudModel(modelId);
+          }}
+        />
+      )}
+      {snapshot.enabled && languageHasEffect(snapshot) && (
+        <DictationLanguageRow
+          language={snapshot.language}
+          locale={locale}
+          onChange={(language) => {
+            void setLanguage(language);
+          }}
+        />
+      )}
+      {snapshot.enabled && snapshot.destination === "local" && (
         <DictationModelRow
           model={snapshot.model}
           modelBytes={snapshot.modelBytes}
@@ -150,9 +344,111 @@ export const DictationSetting = ({
       {snapshot.failure !== null && (
         <p className="text-destructive text-sm" role="status">
           {t(`failure.${snapshot.failure}`)}
+          {/* Two sentences, each translated whole. */}
+          {snapshot.failureKeptInHistory && ` ${t("failureKeptInHistory")}`}
         </p>
       )}
     </div>,
+  );
+};
+
+/** An opt-in switch under AI cleanup, with what it sends. */
+const DictationSwitchRow = ({
+  checked,
+  description,
+  id,
+  onChange,
+  title,
+}: {
+  checked: boolean;
+  description: string;
+  id: string;
+  onChange: (enabled: boolean) => void;
+  title: string;
+}) => (
+  <div className="flex items-center justify-between gap-4">
+    <div className="min-w-0 flex-1">
+      <p className="text-sm font-medium">{title}</p>
+      <p
+        className="text-muted-foreground mt-1 text-sm leading-relaxed"
+        id={`${id}-description`}
+      >
+        {description}
+      </p>
+    </div>
+    <Switch
+      aria-describedby={`${id}-description`}
+      aria-label={title}
+      checked={checked}
+      onCheckedChange={onChange}
+    />
+  </div>
+);
+
+/** Which language dictation expects: automatic (this computer's languages)
+ *  or one the speech model lists, named in its own language. */
+const DictationLanguageRow = ({
+  language,
+  locale,
+  onChange,
+}: {
+  language: DictationLanguage;
+  locale: string;
+  onChange: (language: string) => void;
+}) => {
+  const t = useTranslations("dictation.language");
+  const items = [AUTOMATIC_LANGUAGE, ...language.supported];
+  const automatic =
+    language.inferred.length === 0
+      ? t("automatic")
+      : t("automaticWith", {
+          languages: new Intl.ListFormat(locale, {
+            type: "conjunction",
+          }).format(language.inferred.map((code) => displayLanguageName(code))),
+        });
+  const label = (item: string) =>
+    item === AUTOMATIC_LANGUAGE ? automatic : displayLanguageName(item);
+
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <Label className="text-sm font-medium" htmlFor="dictation-language">
+          {t("title")}
+        </Label>
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+          {t("description")}
+        </p>
+      </div>
+      <Combobox<string>
+        autoHighlight
+        items={items}
+        itemToStringLabel={label}
+        onValueChange={(value) => {
+          if (value !== null && value !== language.choice) {
+            onChange(value);
+          }
+        }}
+        value={
+          items.includes(language.choice) ? language.choice : AUTOMATIC_LANGUAGE
+        }
+      >
+        <ComboboxInput
+          className="w-48"
+          id="dictation-language"
+          showTrigger={false}
+        />
+        <ComboboxPopup align="end">
+          <ComboboxList>
+            {(item: string) => (
+              <ComboboxItem key={item} value={item}>
+                {label(item)}
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+          <ComboboxEmpty>{t("noResults")}</ComboboxEmpty>
+        </ComboboxPopup>
+      </Combobox>
+    </div>
   );
 };
 

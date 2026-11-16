@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "apps/api/src/lib/queue owns the document run queue: the one-shot BullMQ skeleton (attempts, job identity, time budget, stuck rules, worker failure path, recovery sweeps) that document review and list verification runs share. No existing lib module owns a run queue; each feature module held its own copy."
+}

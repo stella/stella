@@ -276,6 +276,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     },
     // A batch read answers per entry, so the leaf renders `items`. It pages
     // by number (`--page`), not by cursor, so there is nothing to follow.
+    verify_quote: {
+      command: ["case-law", "verify-quote"],
+      scope: "read",
+      paginationless: true,
+    },
     read_case_law_decision: {
       command: ["case-law", "read"],
       scope: "read",
@@ -451,11 +456,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
 
     add_matter_member: {
       command: ["matter", "add-member"],
-      scope: "admin_write",
+      scope: "matters_write",
     },
     remove_matter_member: {
       command: ["matter", "remove-member"],
-      scope: "admin_write",
+      scope: "matters_write",
     },
     create_organization: {
       confirmPassthrough: true,

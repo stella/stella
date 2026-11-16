@@ -59,6 +59,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -72,7 +73,6 @@ import { scrollEditorToPos } from "@/components/ai-suggestions/scroll-editor-to-
 import { withBlockTextHashes } from "@/components/ai-suggestions/snapshot-blocks";
 import {
   CHAT_SEND_KEPT,
-  CHAT_SEND_SENT,
   useChatEditor,
 } from "@/components/chat-editor-provider";
 import type {
@@ -676,11 +676,11 @@ const TemplateStudioChatInner = ({
     error,
     messages,
     refreshAnswers,
+    approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
-    queuedMessages,
-    removeQueuedMessage,
-    sendQueuedMessageNow,
+    queue,
     stop,
     leave,
     isGenerating,
@@ -1411,8 +1411,7 @@ const TemplateStudioChatInner = ({
         notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
         return CHAT_SEND_KEPT;
       }
-      await sendMessage(message.value);
-      return CHAT_SEND_SENT;
+      return await sendMessage(message.value);
     });
     if (Result.isError(sent)) {
       capturePromptSubmitError(sent.error, {
@@ -1429,6 +1428,7 @@ const TemplateStudioChatInner = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,
@@ -1465,12 +1465,9 @@ const TemplateStudioChatInner = ({
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
               onOpenPlaybook={handleOpenPlaybook}
+              onContinuePausedTurn={continuePausedTurn}
               onResend={resendLatestMessage}
-              queuedMessageActions={{
-                remove: removeQueuedMessage,
-                sendNow: sendQueuedMessageNow,
-              }}
-              queuedMessages={queuedMessages}
+              queue={queue}
               showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}
             />
@@ -1539,6 +1536,9 @@ const TemplateStudioChatInner = ({
           canSubmitNow={canSubmitWithCurrentSnapshot}
           context={{ activeOrganizationId, threadRef }}
           editorController={editorController}
+          // The Studio pins its model and runs on stella: its turns place
+          // fields through this page's editor bridge.
+          models={null}
           emptyPlaceholder={
             <span
               className={cn(
@@ -1549,12 +1549,12 @@ const TemplateStudioChatInner = ({
               <span className="shrink-0">
                 {t("chat.editableFilePlaceholderAction")}
               </span>
-              <BidiText
-                as="span"
-                className="text-foreground-label max-w-64 truncate"
+              <TruncatedText
+                className="text-foreground-label max-w-64"
+                render={<BidiText as="span" />}
               >
                 {fileName}
-              </BidiText>
+              </TruncatedText>
             </span>
           }
           layout="floating"
@@ -1601,6 +1601,7 @@ const TemplateStudioChatInner = ({
           dock={
             <ChatComposerDock
               data={data}
+              models={null}
               onNewThread={hasMessages ? startNewThread : null}
               status="ready"
               threadRef={threadRef}

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   isSkOpeningFormula,
   isSkPortalMetadataRow,
+  isSkStateLine,
   isSkVerdictFormulaLine,
   skSectionHeading,
   skTitleFormulaStart,
@@ -66,6 +67,21 @@ describe("the Slovak opening formula", () => {
     "v mene republiky",
   ])("%j is the formula", (text) => {
     expect(isSkOpeningFormula(text)).toBe(true);
+  });
+
+  test.each(["SLOVENSKÁ REPUBLIKA", "S L O V E N S K Á   R E P U B L I K A"])(
+    "%j is the state line, not the formula",
+    (text) => {
+      expect(isSkStateLine(text)).toBe(true);
+      expect(isSkOpeningFormula(text)).toBe(false);
+    },
+  );
+
+  test.each([
+    "Slovenská republika, zastúpená ministerstvom",
+    "Ústavný súd Slovenskej republiky",
+  ])("%j is no state line", (text) => {
+    expect(isSkStateLine(text)).toBe(false);
   });
 
   test("is read off a title it runs on from", () => {

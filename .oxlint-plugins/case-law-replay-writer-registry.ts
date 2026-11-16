@@ -9,22 +9,17 @@ export type ReplayWriterOwner = {
 export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/db/root.ts",
-    line: 716,
+    line: 761,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1034,
+    line: 1037,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1276,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1355,
+    line: 1369,
     kind: "pending",
   },
   {
@@ -34,22 +29,27 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1494,
+    line: 1541,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1534,
+    line: 1587,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1569,
+    line: 1626,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1619,
+    line: 1661,
+    kind: "pending",
+  },
+  {
+    file: "apps/api/src/handlers/case-law/citation-resolution.ts",
+    line: 1711,
     kind: "pending",
   },
   {
@@ -184,7 +184,7 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/corpus-mirror.ts",
-    line: 85,
+    line: 88,
     kind: "pending",
   },
   {
@@ -199,37 +199,37 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 474,
+    line: 659,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 735,
+    line: 917,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-context.ts",
-    line: 184,
+    line: 188,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    line: 449,
+    line: 488,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 262,
+    line: 375,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 309,
+    line: 433,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 327,
+    line: 451,
     kind: "pending",
   },
   {
@@ -293,47 +293,47 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 370,
+    line: 373,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 404,
+    line: 407,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 554,
+    line: 557,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 645,
+    line: 648,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1220,
+    line: 1221,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1762,
+    line: 1763,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1836,
+    line: 1837,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1873,
+    line: 1874,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1921,
+    line: 1922,
     kind: "pending",
   },
   {

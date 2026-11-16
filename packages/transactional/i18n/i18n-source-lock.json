@@ -29,6 +29,7 @@
   "pushAlert.flowRunAwaitingApproval": "A workflow is waiting for your approval",
   "pushAlert.flowRunCompleted": "A workflow finished",
   "pushAlert.flowRunFailed": "A workflow failed",
+  "pushAlert.localRunLimitReset": "The coding agent on your computer can continue your chat",
   "pushAlert.mention": "You were mentioned in a comment",
   "pushAlert.taskAssigned": "A task was assigned to you",
   "reportExportStatus.action": "Open stella",

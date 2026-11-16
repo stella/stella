@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "The reservation queue walk shared by the per-row path and the offline route build, and the batched reservation cancel that replaces the per-row one, are bookkeeping on the derived public corpus projection, with no tenant data and no user actor, like the projection writers beside them; their per-row predecessors were ledger entries this change removes."
+}

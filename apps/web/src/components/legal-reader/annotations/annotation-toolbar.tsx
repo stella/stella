@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { AddCommentIcon, SparklesIcon, Trash2Icon } from "@stll/ui/icons";
 
+import { useSelectionCopyControl } from "@/components/copy-control";
 import type {
   AnnotationColor,
   AnnotationStyle,
@@ -37,7 +38,6 @@ import { SelectionToolbar } from "@/components/selection-toolbar";
 import {
   SelectionAIActions,
   SelectionCopyMenu,
-  useSelectionCopy,
 } from "@/components/selection-toolbar-actions";
 import {
   MarkColorSwatches,
@@ -148,7 +148,7 @@ export const AnnotationToolbar = ({
   const [style, setStyle] = useState<AnnotationStyle>("highlight");
   const [copyOpen, setCopyOpen] = useState(false);
   // The bar copies the words selected in the reader while it is showing.
-  const selectionCopy = useSelectionCopy({
+  const selectionCopy = useSelectionCopyControl({
     ownsSelection: (selection, root) =>
       barRef.current !== null &&
       root.contains(selection.anchorNode) &&

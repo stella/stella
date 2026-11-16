@@ -7,6 +7,7 @@ import path from "node:path";
 import { createDetached } from "@stll/errors";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
+import { PROTOCOL_LOG_OFF } from "../protocol-log";
 import { startHarnessProcess } from "./harness-process";
 
 const FAKE_SERVER = path.join(
@@ -89,6 +90,7 @@ const startLeaving = (root: string, log: string) => {
     }),
     deadlines: { requestMs: 30_000, terminateMs: 300 },
     name: "fake-codex",
+    protocol: { channel: "codex", log: PROTOCOL_LOG_OFF },
     unanswered: (_reason, message) => new Error(message),
     message: (value) => {
       if (
@@ -199,6 +201,7 @@ describe.skipIf(process.platform === "win32")(
         }),
         deadlines: { requestMs: 1000, terminateMs: 300 },
         name: "missing",
+        protocol: { channel: "codex", log: PROTOCOL_LOG_OFF },
         unanswered: (_reason, message) => new Error(message),
         message: () => undefined,
         violation: () => undefined,

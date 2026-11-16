@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import {
   createHostedManagementSession,
@@ -12,6 +14,8 @@ import {
 } from "@/api/lib/hosted-usage-provider/client";
 import { POLAR_API_VERSIONS } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const testFetchState = createTestFetch();
 
@@ -431,8 +435,7 @@ describe("createPolarManagementSession", () => {
 describe("outbound version contract", () => {
   for (const version of POLAR_API_VERSIONS) {
     test(`every endpoint carries configured version ${version}`, async () => {
-      const previousVersion = env.HOSTED_USAGE_PROVIDER_API_VERSION;
-      env.HOSTED_USAGE_PROVIDER_API_VERSION = version;
+      testState.setConfig("HOSTED_USAGE_PROVIDER_API_VERSION", version);
       const observed: (string | null)[] = [];
       installFetch(async (_url, init) => {
         const headers = new Headers(init?.headers);
@@ -444,29 +447,26 @@ describe("outbound version contract", () => {
           customer_portal_url: "https://provider.test/session",
         });
       });
-      try {
-        const setup = {
-          credentials,
-          policyRef: "policy_ref",
-          successUrl: "https://app.test/return",
-          metadata: {
-            organization_id: "org_fixture",
-            usage_policy_id: "policy_fixture",
-          },
-        };
-        const management = { credentials, accountRef: "account_ref" };
-        for (const result of [
-          await createHostedSetupSession(setup),
-          await createPolarSetupSession(setup),
-          await createHostedManagementSession(management),
-          await createPolarManagementSession(management),
-        ]) {
-          expect(Result.isOk(result)).toBe(true);
-        }
-        expect(observed).toEqual([version, version, version, version]);
-      } finally {
-        env.HOSTED_USAGE_PROVIDER_API_VERSION = previousVersion;
+
+      const setup = {
+        credentials,
+        policyRef: "policy_ref",
+        successUrl: "https://app.test/return",
+        metadata: {
+          organization_id: "org_fixture",
+          usage_policy_id: "policy_fixture",
+        },
+      };
+      const management = { credentials, accountRef: "account_ref" };
+      for (const result of [
+        await createHostedSetupSession(setup),
+        await createPolarSetupSession(setup),
+        await createHostedManagementSession(management),
+        await createPolarManagementSession(management),
+      ]) {
+        expect(Result.isOk(result)).toBe(true);
       }
+      expect(observed).toEqual([version, version, version, version]);
     });
   }
 });

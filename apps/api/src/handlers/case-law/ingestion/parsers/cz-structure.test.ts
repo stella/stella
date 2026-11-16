@@ -97,12 +97,15 @@ const holdings = (ast: DocumentAst): string[] =>
       : [],
   );
 
-/** The formula and the lead-in are the court's wording, not sections. */
+/**
+ * The formula is the court's wording under the title: neither a section nor
+ * the preamble's prose.
+ */
 const expectOpeningFormula = (ast: DocumentAst): void => {
   expect(titles(ast)).not.toContain("JMÉNEM REPUBLIKY");
   expect(blockWithText(ast, "JMÉNEM REPUBLIKY")).toMatchObject({
     type: "paragraph",
-    role: "intro",
+    role: "opening-formula",
   });
 };
 
@@ -123,7 +126,7 @@ describe("letter-spaced words inside a sentence", () => {
 });
 
 describe("the formula and the lead-in to the operative part", () => {
-  test("regional court: the formula is intro, the title stands alone, takto: is no heading", async () => {
+  test("regional court: the formula is the opening formula, the title stands alone, takto: is no heading", async () => {
     const ast = await readRegional("20-co-186-2026");
 
     expect(titles(ast)).toEqual(["ROZSUDEK"]);
@@ -155,18 +158,18 @@ describe("the formula and the lead-in to the operative part", () => {
     ).toBe(true);
   });
 
-  test("Nejvyšší soud: the state and the formula under the title are intro, the title is the only title", async () => {
+  test("Nejvyšší soud: the state and the formula under the title are the opening formula, the title is the only title", async () => {
     const ast = await readNs("30-cdo-5117-2017");
 
     expect(titles(ast)).toEqual(["ROZSUDEK"]);
     expectOpeningFormula(ast);
     expect(blockWithText(ast, "ČESKÁ REPUBLIKA")).toMatchObject({
       type: "paragraph",
-      role: "intro",
+      role: "opening-formula",
     });
   });
 
-  test("Nejvyšší správní soud: the formula is intro, takto: is no heading", async () => {
+  test("Nejvyšší správní soud: the formula is the opening formula, takto: is no heading", async () => {
     const ast = await readNss("10-afs-36-2026");
 
     expect(titles(ast)).toEqual(["ROZSUDEK"]);

@@ -5,23 +5,30 @@ import {
   type ModelMessage,
   normalizeStreamChunk,
   type RunAgentResumeItem,
+  type StreamChunk,
 } from "@tanstack/ai";
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { HARNESS_CONTINUATION_EVENT } from "@stll/agent-engine";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
-import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import {
+  AGENT_HARNESSES,
+  harnessSessionIdEvent,
+} from "@stll/api-contract/agent-harness";
 import {
   CHAT_TOOL_EXECUTOR,
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
 } from "@stll/api-contract/chat";
 import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
+import { chatLocalRunCallId } from "@stll/api-contract/chat-local-run-step-output";
 import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   chatLocalRunApprovalMessage,
   chatLocalRunApprovalReason,
+  chatLocalRunParentCallId,
   chatLocalRunShownText,
   type ChatLocalRunToolName,
   chatLocalRunToolStatusContent,
@@ -36,22 +43,28 @@ import {
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
   CHAT_LOCAL_RUN_QUESTION_TOOL,
+  CHAT_LOCAL_RUN_STEER_EVENT,
+  CHAT_LOCAL_RUN_STEER_TOOL,
   type ChatLocalRunComputerEvent,
   chatLocalRunContextSchema,
   type ChatLocalRunFile,
   type ChatLocalRunHarness,
   type ChatLocalRunLimit,
   chatLocalRunLimitSchema,
+  chatLocalRunSteerCallId,
+  type ChatLocalRunSteerEvent,
+  type ChatLocalRunSteerInput,
 } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  DESKTOP_RUNNER_INPUT_EVENT,
   DESKTOP_RUNNER_OUTPUT_EVENT,
-  type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
+  desktopRunnerInputEventSchema,
   desktopRunnerOutputEventSchema,
 } from "@stll/api-contract/desktop-runner";
 import type {
@@ -61,6 +74,16 @@ import type {
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import type { SafeDbError } from "@/api/db/safe-db";
+import {
+  type ChatTurnRunCut,
+  chatTurnRunCutOf,
+} from "@/api/handlers/chat/chat-turn-run-cut";
+import {
+  type LocalRunRouteRefusal,
+  type LocalRunTarget,
+  routeLocalRun,
+} from "@/api/handlers/chat/local-run-route";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { chatMcpAppForTool } from "@/api/lib/chat/mcp-app-catalog";
@@ -79,8 +102,10 @@ import type {
   DesktopRunnerControlError,
   LocalRunAttachment,
   QueueCommandOutcome,
+  StartLocalRunOutcome,
 } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
+import { announcedAwaitedSteps } from "@/api/lib/desktop-runner/step-contents";
 import type {
   ChatRunForRequest,
   DesktopRunnerRunView,
@@ -114,9 +139,12 @@ type LocalRunControl = Pick<
   | "interruptRun"
   | "pairAppCall"
   | "readChatRunForRequest"
+  | "pickDesktop"
   | "readChatRunSession"
   | "readEvents"
+  | "readHandedOverChatRun"
   | "readRun"
+  | "readRunInputText"
   | "readRunOutputFile"
   | "recordChatReadSeq"
   | "startRun"
@@ -134,17 +162,22 @@ export type LocalRunAppIssuer = {
   }) => Result<StellaMcpAppPart, string>;
 };
 
-/** The computer and harness a new turn was routed to before it started. */
-type LocalRunDestination = {
-  desktopId: string;
-  harness: ChatLocalRunHarness;
-  harnessVersion: string;
-  model: string;
-  approvals: DesktopRunnerApprovalMode;
+/**
+ * What a run's report on a steer does to the queued message the steer named
+ * (`createSteeredQueue`): `taken`, it leaves the queue; `refused`, it waits
+ * for the turn's end. A steer written in the composer named none, and its
+ * report changes nothing.
+ */
+export type LocalRunSteeredQueue = {
+  settle: (
+    inputId: string,
+    report: "taken" | "refused",
+  ) => Promise<Result<void, SafeDbError>>;
 };
 
 export type LocalRunContext = {
   control: LocalRunControl;
+  steeredQueue: LocalRunSteeredQueue;
   runBell: DesktopRunnerRunBell;
   owner: RunOwner;
   chatThreadId: SafeId<"chatThread">;
@@ -179,8 +212,11 @@ type LocalRunStreamInput = {
    */
   resume: readonly RunAgentResumeItem[] | undefined;
   /**
-   * The turn's own cut: a stop on any API task, its deadline, a lost owner or
-   * a failed production. It interrupts the run on the computer.
+   * The turn's own cut: a stop on any API task, a lost owner or admission,
+   * or a failed production, told apart by its reason (`chatTurnRunCutOf`).
+   * Its kind decides whether it interrupts the run on the computer
+   * (`LOCAL_RUN_CUT_STOPS_COMPUTER`). No deadline is among them
+   * (`ChatTurnRunBound`).
    */
   abortSignal: AbortSignal;
 };
@@ -209,7 +245,17 @@ type LocalRunFailure =
   | typeof AI_FAILURE_CODES.local_runner_needs_login
   | typeof AI_FAILURE_CODES.local_runner_limit_reached
   | typeof AI_FAILURE_CODES.local_runner_unavailable
-  | typeof AI_FAILURE_CODES.local_runner_turn_too_large;
+  | typeof AI_FAILURE_CODES.local_runner_turn_too_large
+  | typeof AI_FAILURE_CODES.local_runner_not_reached
+  | typeof AI_FAILURE_CODES.local_runner_relinked
+  | typeof AI_FAILURE_CODES.local_runner_restoring
+  | typeof AI_FAILURE_CODES.local_runner_folder_unavailable
+  | typeof AI_FAILURE_CODES.local_runner_no_computer
+  | typeof AI_FAILURE_CODES.local_runner_harness_unavailable
+  | typeof AI_FAILURE_CODES.local_runner_model_unavailable
+  | typeof AI_FAILURE_CODES.local_runner_reasoning_effort_unavailable
+  | typeof AI_FAILURE_CODES.local_runner_approvals_unavailable
+  | typeof AI_FAILURE_CODES.local_runner_folder_not_approved;
 
 const FAILURE_MESSAGE = {
   [AI_FAILURE_CODES.local_runner_needs_login]:
@@ -220,6 +266,26 @@ const FAILURE_MESSAGE = {
     "The computer stopped running the turn.",
   [AI_FAILURE_CODES.local_runner_turn_too_large]:
     "The conversation is too long to hand to the computer.",
+  [AI_FAILURE_CODES.local_runner_not_reached]:
+    "The computer did not pick up the turn; it is not connected.",
+  [AI_FAILURE_CODES.local_runner_relinked]:
+    "The computer was linked again, so the run of its previous link stopped.",
+  [AI_FAILURE_CODES.local_runner_restoring]:
+    "The computer is still undoing an earlier turn's file changes.",
+  [AI_FAILURE_CODES.local_runner_folder_unavailable]:
+    "The folder linked to the chat is not available on the computer.",
+  [AI_FAILURE_CODES.local_runner_no_computer]:
+    "None of the member's computers is connected.",
+  [AI_FAILURE_CODES.local_runner_harness_unavailable]:
+    "The harness on the computer cannot take a turn right now.",
+  [AI_FAILURE_CODES.local_runner_model_unavailable]:
+    "The harness on the computer does not offer that model.",
+  [AI_FAILURE_CODES.local_runner_reasoning_effort_unavailable]:
+    "The harness on the computer does not offer that reasoning effort for the model.",
+  [AI_FAILURE_CODES.local_runner_approvals_unavailable]:
+    "The computer cannot run the harness with those permissions.",
+  [AI_FAILURE_CODES.local_runner_folder_not_approved]:
+    "The member has not yet let the agent work in the chat's folder.",
 } as const satisfies Record<LocalRunFailure, string>;
 
 type StoredOutcome = Extract<
@@ -260,16 +326,27 @@ type RejectReason = Extract<
 const LOCAL_RUN_REJECTION = {
   harness_needs_login: AI_FAILURE_CODES.local_runner_needs_login,
   harness_limited: AI_FAILURE_CODES.local_runner_limit_reached,
-  harness_not_installed: AI_FAILURE_CODES.local_runner_unavailable,
-  harness_unsupported: AI_FAILURE_CODES.local_runner_unavailable,
-  harness_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
-  harness_version_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
-  model_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
-  policy_unsupported: AI_FAILURE_CODES.local_runner_unavailable,
+  // The same causes the pick and the run's insert find read the same.
+  harness_not_installed: AI_FAILURE_CODES.local_runner_harness_unavailable,
+  harness_unsupported: AI_FAILURE_CODES.local_runner_harness_unavailable,
+  harness_unavailable: AI_FAILURE_CODES.local_runner_harness_unavailable,
+  harness_version_unavailable:
+    AI_FAILURE_CODES.local_runner_harness_unavailable,
+  model_unavailable: AI_FAILURE_CODES.local_runner_model_unavailable,
+  // The harness cannot run in the turn's approval mode on this computer.
+  policy_unsupported: AI_FAILURE_CODES.local_runner_approvals_unavailable,
   at_capacity: AI_FAILURE_CODES.local_runner_unavailable,
   run_too_large: AI_FAILURE_CODES.local_runner_turn_too_large,
   unknown_run: AI_FAILURE_CODES.local_runner_unavailable,
-  folder_busy: AI_FAILURE_CODES.local_runner_unavailable,
+  // The computer is still undoing an earlier turn's file changes.
+  folder_busy: AI_FAILURE_CODES.local_runner_restoring,
+  // The linked folder is gone from the computer's list, on a volume that is
+  // not mounted, moved, holds what runs rely on, or cannot be read.
+  folder_unlinked: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_offline: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_moved: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_protected: AI_FAILURE_CODES.local_runner_folder_unavailable,
+  folder_unreadable: AI_FAILURE_CODES.local_runner_folder_unavailable,
 } as const satisfies Record<RejectReason, LocalRunFailure>;
 
 /** A stored chunk as the turn pipeline folds it. */
@@ -297,27 +374,21 @@ export const approvalDecisionOf = (
   return "deny";
 };
 
-/**
- * Call ids the harness mints are unique only within its own run, so every id
- * of a local run is prefixed with the run: stable across the turn's pause and
- * resume, and unique across the thread.
- */
-const MAX_CALL_ID_LENGTH = 256;
-
-const localCallId = (runnerRunId: string, toolCallId: string) => {
-  const prefixed = `${runnerRunId.replaceAll("-", "")}_${toolCallId}`;
-  // A harness id too long for the budget keeps its identity as a digest, so
-  // two long ids never collapse into one call.
-  return prefixed.length <= MAX_CALL_ID_LENGTH
-    ? prefixed
-    : `${runnerRunId.replaceAll("-", "")}_${sha256Hex(toolCallId)}`;
-};
-
 type RewriteContext = {
   runnerRunId: string;
   chatRunId: string;
   threadId: string;
 };
+
+const rewriteOf = (
+  context: LocalRunContext,
+  runnerRunId: string,
+  chatRunId: string,
+): RewriteContext => ({
+  runnerRunId,
+  chatRunId,
+  threadId: context.chatThreadId,
+});
 
 /**
  * Which stored events a local turn carries. A harness turn is text, reasoning,
@@ -367,9 +438,25 @@ const LOCAL_RUN_EVENT_DISPOSITION = {
  * only these pass; the rest of what a desktop sends goes no further.
  */
 const LOCAL_RUN_CUSTOM_EVENTS: ReadonlySet<string> = new Set([
-  ...AGENT_HARNESSES.map((harness) => `${harness}.session-id`),
+  ...AGENT_HARNESSES.map(harnessSessionIdEvent),
   HARNESS_CONTINUATION_EVENT,
 ]);
+
+/** The part of a turn's continuation the chat tells the member about. */
+const SessionNotResumedSchema = v.object({
+  type: v.literal("resume_unavailable"),
+});
+
+/**
+ * The harness could not resume the session it ran the chat's earlier turns
+ * in, so this turn started from the chat's messages instead.
+ */
+export const reportsSessionNotResumed = (
+  chunk: PublicStreamChunk | StreamChunk,
+) =>
+  chunk.type === EventType.CUSTOM &&
+  chunk.name === HARNESS_CONTINUATION_EVENT &&
+  v.is(SessionNotResumedSchema, chunk.value);
 
 /** The chunks a stream processor merges metadata from into the message. */
 const MESSAGE_METADATA_EVENTS: ReadonlySet<string> = new Set([
@@ -416,9 +503,23 @@ type LocalRunToolCalls = Map<
   { name: string; argsCarried: boolean; endCarried: boolean }
 >;
 
+type CallId = (id: string) => string;
+
 /** The input chat keeps for a native step, from what the desktop sent. */
 const nativeInput = (name: ChatLocalRunToolName, input: unknown) =>
   parseChatLocalRunToolCall(name, input)?.input ?? {};
+
+/**
+ * The subagent step a call's start names, kept in the call's metadata under
+ * that step's chat call id, as the step itself is kept, so the link holds in
+ * the stored turn. Nothing for a start that names none.
+ */
+const subagentLink = (metadata: unknown, callId: CallId) => {
+  const parent = chatLocalRunParentCallId(metadata);
+  return parent === null
+    ? {}
+    : { [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: callId(parent) };
+};
 
 /**
  * What TanStack's normaliser keeps of a chunk beyond the AG-UI spec, under
@@ -440,8 +541,6 @@ const parsedArguments = (delta: string): unknown => {
   const parsed = Result.try((): unknown => JSON.parse(delta));
   return parsed.isOk() ? parsed.value : undefined;
 };
-
-type CallId = (id: string) => string;
 
 /**
  * A call's arguments or end. A native step's input is rebuilt from the
@@ -485,7 +584,6 @@ const asToolInputChunk = (
       metadata: {
         tanstack: {
           toolCallName: name,
-          toolName: name,
           input: nativeInput(name, reported["input"]),
           ...reportedModel(chunk.metadata),
         },
@@ -667,7 +765,7 @@ const asChatChunk = (
   if (LOCAL_RUN_EVENT_DISPOSITION[chunk.type] === "drop") {
     return null;
   }
-  const callId = (id: string) => localCallId(runnerRunId, id);
+  const callId = (id: string) => chatLocalRunCallId(runnerRunId, id, sha256Hex);
   if (chunk.type === EventType.TOOL_CALL_START) {
     // A call's first start names it for good: the chat keeps the first part
     // of an id, so a start naming another tool is not carried.
@@ -683,8 +781,9 @@ const asChatChunk = (
       });
     }
     // A start is rebuilt from the fields it names: its metadata becomes the
-    // call's, so only the model a harness names and the owner the API names
-    // are carried, and nothing else a desktop adds (an input, an output).
+    // call's, so only the model a harness names, the subagent step it names
+    // and the owner the API names are carried, and nothing else a desktop
+    // adds (an input, an output).
     const model = reportedModel(chunk.metadata);
     return {
       type: EventType.TOOL_CALL_START,
@@ -696,6 +795,7 @@ const asChatChunk = (
       ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
       metadata: {
         ...(model.model === undefined ? {} : { tanstack: model }),
+        ...subagentLink(chunk.metadata, callId),
         [CHAT_TOOL_EXECUTOR_METADATA_KEY]: CHAT_TOOL_EXECUTOR.harness,
       },
     };
@@ -872,6 +972,27 @@ const finishedRunChunks = ({
 export const LOCAL_RUN_OUTPUTS_INSTRUCTIONS = `Files meant for the member go in the outputs/ folder of your working folder, as ${RUN_OUTPUT_FILE_EXTENSIONS.join(", ")}: when your turn ends, the chat shows what you wrote there. Everything else in the working folder, scratch files and caches included, stays on this computer.`;
 
 /**
+ * Why a lost run ended the turn: its computer was linked again under a new
+ * key, which can never continue it; it never reached a computer (or the
+ * relink ended it before one accepted it); or its computer never came back.
+ */
+const lostRunFailure = (run: DesktopRunnerRunView): LocalRunFailure => {
+  switch (run.lostReason) {
+    case "computer_relinked":
+      return AI_FAILURE_CODES.local_runner_relinked;
+    case "not_reached":
+      return AI_FAILURE_CODES.local_runner_not_reached;
+    case null:
+      return run.deliveredAt === null
+        ? AI_FAILURE_CODES.local_runner_not_reached
+        : AI_FAILURE_CODES.local_runner_unavailable;
+    default:
+      run.lostReason satisfies never;
+      return panic("Unknown lost reason");
+  }
+};
+
+/**
  * What an open read does once it has caught up: wait for more (with the
  * computer there or away), read the final message the run stored with its
  * transition, or end the turn with why the gateway gave the run up.
@@ -879,7 +1000,7 @@ export const LOCAL_RUN_OUTPUTS_INSTRUCTIONS = `Files meant for the member go in 
 const caughtUpStep = (
   run: DesktopRunnerRunView | null,
 ):
-  | { type: "wait"; computer: ChatLocalRunComputerEvent["status"] }
+  | { type: "wait"; computer: ChatLocalRunComputerEvent }
   | { type: "read" }
   | { type: "fail"; code: LocalRunFailure } => {
   if (run === null) {
@@ -895,15 +1016,27 @@ const caughtUpStep = (
             : LOCAL_RUN_REJECTION[run.rejectReason],
       };
     case "lost":
-      return { type: "fail", code: AI_FAILURE_CODES.local_runner_unavailable };
+      return { type: "fail", code: lostRunFailure(run) };
     case "finished":
       return { type: "read" };
     case "assigned":
-    case "running":
-      return { type: "wait", computer: "connected" };
     case "waiting_for_computer":
-      // A computer that is away resumes the run when it reconnects.
-      return { type: "wait", computer: "waiting" };
+      // Until a computer accepts the run (an assigned one never was), the
+      // turn waits for one to pick it up, counted from the run's creation;
+      // the gateway ends it as lost once it reached no socket in time
+      // (`unacceptedRunMs`). A computer that took it and is away resumes it
+      // when it reconnects.
+      return run.acceptedAt === null
+        ? {
+            type: "wait",
+            computer: {
+              status: "delivering",
+              since: run.createdAt.toISOString(),
+            },
+          }
+        : { type: "wait", computer: { status: "waiting" } };
+    case "running":
+      return { type: "wait", computer: { status: "connected" } };
     default:
       run.state satisfies never;
       return panic("Unknown desktop runner run state");
@@ -1036,6 +1169,154 @@ const createRunOutputs = (
   };
 };
 
+/** What a stored chunk reports about one steering message, if that is what it is. */
+const runInputReportOf = (
+  chunk: PublicStreamChunk,
+): { value: unknown } | null =>
+  chunk.type === EventType.CUSTOM && chunk.name === DESKTOP_RUNNER_INPUT_EVENT
+    ? { value: chunk.value }
+    : null;
+
+class LocalRunSteerUnknown extends TaggedError("LocalRunSteerUnknown")<{
+  message: string;
+}> {}
+
+const LOCAL_RUN_STEER_SINK = failureSink({
+  event: "chat.local_run_steer_unknown",
+  expected: [],
+});
+
+/** The live event that tells the chat what became of its steer. */
+const steerEvent = (event: ChatLocalRunSteerEvent): PublicStreamChunk => ({
+  type: EventType.CUSTOM,
+  name: CHAT_LOCAL_RUN_STEER_EVENT,
+  value: event,
+  timestamp: nowMs(),
+});
+
+/**
+ * What one read of a run makes of the computer's reports on steering
+ * messages. A message the harness took becomes a call in the answer, where
+ * it was taken: a harness call whose input is the text the API itself queued
+ * (`run.input`), never what a desktop says it was. A report for an input
+ * this run was never sent, or a second report for one, shows nothing.
+ */
+const createRunSteers = (context: LocalRunContext, runnerRunId: string) => {
+  const settled = new Set<string>();
+  /**
+   * The queued message a steer named leaves the queue, or waits for the
+   * turn's end, before the report is shown and before the run's end is read:
+   * the turn ends only after that, and the queue sends nothing before, so a
+   * message the turn took is never sent again. A write that fails leaves it
+   * queued for the turn's end, as a report never read would.
+   */
+  const settleQueued = async (inputId: string, report: "taken" | "refused") => {
+    const written = await context.steeredQueue.settle(inputId, report);
+    if (written.isErr()) {
+      observeFailure(written.error, { sink: LOCAL_RUN_STORE_SINK });
+    }
+  };
+  return async (value: unknown): Promise<PublicStreamChunk[]> => {
+    const report = v.safeParse(desktopRunnerInputEventSchema, value);
+    if (!report.success || settled.has(report.output.inputId)) {
+      return [];
+    }
+    const { inputId, status } = report.output;
+    settled.add(inputId);
+    const text = await context.control.readRunInputText({
+      owner: context.owner,
+      runId: runnerRunId,
+      inputId,
+    });
+    if (text.isErr()) {
+      observeFailure(text.error, { sink: LOCAL_RUN_STORE_SINK });
+      // A message the harness refused needs no text. One it took cannot be
+      // shown in the answer, but saying it was refused would have the chat
+      // stop the turn that holds it and send it again; the steer stays open
+      // and the turn's end leaves the message queued, as for an input the
+      // turn never answered.
+      if (status === "accepted") {
+        return [];
+      }
+      await settleQueued(inputId, "refused");
+      return [steerEvent({ inputId, status: "refused" })];
+    }
+    if (text.value === null) {
+      observeFailure(
+        new LocalRunSteerUnknown({
+          message: "A computer reported an input its run was never sent",
+        }),
+        { sink: LOCAL_RUN_STEER_SINK },
+      );
+      return [];
+    }
+    if (status === "rejected") {
+      await settleQueued(inputId, "refused");
+      return [steerEvent({ inputId, status: "refused" })];
+    }
+    await settleQueued(inputId, "taken");
+    const toolCallId = chatLocalRunSteerCallId(inputId);
+    const input = { text: text.value } satisfies ChatLocalRunSteerInput;
+    const args = JSON.stringify(input);
+    return [
+      ...publicChunks({
+        type: EventType.TOOL_CALL_START,
+        toolCallId,
+        toolCallName: CHAT_LOCAL_RUN_STEER_TOOL,
+        metadata: {
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: CHAT_TOOL_EXECUTOR.harness,
+        },
+        timestamp: nowMs(),
+      }),
+      ...publicChunks({
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId,
+        delta: args,
+        args,
+        timestamp: nowMs(),
+      }),
+      ...publicChunks({
+        type: EventType.TOOL_CALL_END,
+        toolCallId,
+        toolCallName: CHAT_LOCAL_RUN_STEER_TOOL,
+        input,
+        timestamp: nowMs(),
+      }),
+      ...publicChunks({
+        type: EventType.TOOL_CALL_RESULT,
+        toolCallId,
+        messageId: `${toolCallId}_result`,
+        content: JSON.stringify({ status: "delivered" }),
+        timestamp: nowMs(),
+      }),
+      steerEvent({ inputId, status: "steered" }),
+    ];
+  };
+};
+
+/**
+ * What the chat makes of a chunk that reports on the run rather than being
+ * part of its answer: an output file or a steering message. `null` for any
+ * other chunk.
+ */
+const createRunReports = (
+  context: LocalRunContext,
+  rewrite: RewriteContext,
+) => {
+  const outputs = createRunOutputs(context, rewrite);
+  const steers = createRunSteers(context, rewrite.runnerRunId);
+  return async (
+    chunk: PublicStreamChunk,
+  ): Promise<PublicStreamChunk[] | null> => {
+    const output = runOutputReportOf(chunk);
+    if (output !== null) {
+      return await outputs(output.value);
+    }
+    const steer = runInputReportOf(chunk);
+    return steer === null ? null : await steers(steer.value);
+  };
+};
+
 type ReadRunOptions = {
   context: LocalRunContext;
   runnerRunId: string;
@@ -1047,12 +1328,20 @@ type ReadRunOptions = {
   toolCalls: LocalRunToolCalls;
   chatRunId: string;
   abortSignal: AbortSignal;
+  /**
+   * When the turn was sent, for a run just started: the chat shows it waits
+   * for the computer to pick the run up until it did. `null` when reading on
+   * a run the computer already took.
+   */
+  deliveringSince: string | null;
+  /** For a turn another task released: what its read had built (`foldAdoptedRead`). */
+  adopted?: AdoptedRead | undefined;
 };
 
 /**
- * Stop the computer's turn: what a user's stop, a deadline or a lost owner
- * means for a run nobody reads any more. The gateway keeps one interrupt per
- * run, so a repeat is a no-op.
+ * Stop the computer's turn: what a read that cannot go on, or a cut of the
+ * turn (`LOCAL_RUN_CUT_STOPS_COMPUTER`), means for a run nobody reads any
+ * more. The gateway keeps one interrupt per run, so a repeat is a no-op.
  */
 const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
   const stopped = await context.control.interruptRun({
@@ -1067,26 +1356,46 @@ const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
 };
 
 /**
- * Tells the chat when its computer went away or came back. Only a change is
- * sent, so a long wait adds one event to the run log, not one per poll; the
- * run's start goes first when none went out yet.
+ * Whether a cut of the turn, by its kind, stops the computer's turn. After
+ * each of them nobody reads the run any more, so each does.
  */
-const computerStatusChunks = (start: () => Generator<PublicStreamChunk>) => {
-  /** Whether the turn last told the chat its computer is away. */
-  let away = false;
+const LOCAL_RUN_CUT_STOPS_COMPUTER: Readonly<Record<ChatTurnRunCut, boolean>> =
+  {
+    "member-stop": true,
+    "owner-lost": true,
+    "production-failed": true,
+    "admission-lost": true,
+    other: true,
+  };
+
+/**
+ * Tells the chat while its run waits for the computer to pick it up, once it
+ * did, and when the computer went away or came back. Only a change is sent,
+ * so a long wait adds one event to the run log, not one per poll; the run's
+ * start goes first when none went out yet.
+ */
+const computerStatusChunks = (
+  start: () => Generator<PublicStreamChunk>,
+  /**
+   * What the chat was last told; `connected` for a new read, which has
+   * nothing to show, and `null` for an adopted one, which tells the first
+   * status it learns at once (`AdoptedRead`).
+   */
+  initial: ChatLocalRunComputerEvent["status"] | null,
+) => {
+  let told = initial;
   return function* (
-    status: ChatLocalRunComputerEvent["status"],
+    event: ChatLocalRunComputerEvent,
   ): Generator<PublicStreamChunk> {
-    const nowAway = status === "waiting";
-    if (nowAway === away) {
+    if (event.status === told) {
       return;
     }
-    away = nowAway;
+    told = event.status;
     yield* start();
     yield {
       type: EventType.CUSTOM,
       name: CHAT_LOCAL_RUN_COMPUTER_EVENT,
-      value: { status } satisfies ChatLocalRunComputerEvent,
+      value: event,
       timestamp: nowMs(),
     };
   };
@@ -1223,6 +1532,17 @@ const createRunApps = (context: LocalRunContext, runnerRunId: string) => {
       yield chunk;
       yield* apps.after(chunk);
     },
+    /**
+     * What a chunk an earlier read carried did to the calls still waiting
+     * for their result. Nothing is paired or minted again: the app that read
+     * showed is in the answer it stored.
+     */
+    replay(chunk: PublicStreamChunk): void {
+      apps.observe(chunk);
+      if (chunk.type === EventType.TOOL_CALL_RESULT) {
+        reported.delete(chunk.toolCallId);
+      }
+    },
   };
 };
 
@@ -1308,6 +1628,113 @@ const openedCalls = async (
 };
 
 /**
+ * What a read of a run had built when it stopped at a position: the calls it
+ * saw open, whether the harness finished and with which error, the files and
+ * steers it reported, and the app calls still waiting for a result. A read
+ * that a pause ends leaves nothing of this to the read that continues after
+ * it except the opened calls, as a resume starts afresh; the rest belongs to
+ * the stretch of the run since the last pause.
+ *
+ * An adopted read also starts as one whose run start went out: the task that
+ * released the turn sent it before it handed the turn over.
+ */
+type AdoptedRead = {
+  toolCalls: LocalRunToolCalls;
+  finished: boolean;
+  harnessError: HarnessError | null;
+  runReports: ReturnType<typeof createRunReports>;
+  runApps: ReturnType<typeof createRunApps>;
+};
+
+/**
+ * Fold the run's stored events through `throughSeq` into the state the read
+ * that stopped there held (`AdoptedRead`), the way that read built it, so the
+ * read that continues shows and stores the same answer an uninterrupted one
+ * would. Nothing is sent to the computer or paired; the reports a read
+ * restates (output files, steers) are read again from the store.
+ */
+const foldAdoptedRead = async ({
+  chatRunId,
+  context,
+  runnerRunId,
+  throughSeq,
+}: {
+  chatRunId: string;
+  context: LocalRunContext;
+  runnerRunId: string;
+  throughSeq: number;
+}): Promise<Result<AdoptedRead, DatabaseError>> => {
+  const rewrite = rewriteOf(context, runnerRunId, chatRunId);
+  const read: AdoptedRead = {
+    toolCalls: new Map(),
+    finished: false,
+    harnessError: null,
+    runReports: createRunReports(context, rewrite),
+    runApps: createRunApps(context, runnerRunId),
+  };
+  let after = 0;
+  while (after < throughSeq) {
+    const page = await context.control.readEvents({
+      owner: context.owner,
+      runId: runnerRunId,
+      afterSeq: after,
+      limit: EVENT_PAGE,
+    });
+    if (page.isErr()) {
+      return Result.err(page.error);
+    }
+    for (const item of page.value.items) {
+      if (item.seq > throughSeq) {
+        return Result.ok(read);
+      }
+      after = item.seq;
+      const message = storedRunMessage(item.message);
+      if (message.type !== DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent) {
+        continue;
+      }
+      if (!isPublicStreamChunk(message.chunk)) {
+        panic("A stored desktop runner chunk no longer folds");
+      }
+      if (announcedAwaitedSteps(message.chunk) !== null) {
+        continue;
+      }
+      if ((await read.runReports(message.chunk)) !== null) {
+        continue;
+      }
+      const chunk = asChatChunk(message.chunk, rewrite, read.toolCalls);
+      if (chunk === null || chunk.type === EventType.RUN_STARTED) {
+        continue;
+      }
+      if (chunk.type === EventType.RUN_ERROR) {
+        read.harnessError = {
+          code: chunk.code ?? AI_FAILURE_CODES.local_runner_unavailable,
+          message: chunk.message,
+          limit: limitOfRunError(chunk),
+        };
+        continue;
+      }
+      if (chunk.type !== EventType.RUN_FINISHED) {
+        read.runApps.replay(chunk);
+        continue;
+      }
+      if (chunk.outcome?.type === "interrupt") {
+        // A pause ended that read; the one after it started afresh.
+        read.finished = false;
+        read.harnessError = null;
+        read.runReports = createRunReports(context, rewrite);
+        read.runApps = createRunApps(context, runnerRunId);
+        continue;
+      }
+      read.finished = true;
+    }
+    if (page.value.nextAfterSeq === null) {
+      break;
+    }
+  }
+  return Result.ok(read);
+};
+
+/**
  * The run's chunks after `afterSeq`, until the run finishes or pauses for an
  * approval or a blocking question. A pause records the position, so the
  * resumed turn continues after it. A computer that is away keeps the turn waiting; a run the gateway
@@ -1332,15 +1759,88 @@ const storedRunMessage = (stored: unknown): SequencedRunMessage => {
       return message;
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.hello:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.harnessStatus:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.linkedFoldersStatus:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runAccepted:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runRejected:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runBackground:
       return panic(`A run stored an unsequenced ${message.type}`);
     default:
       message satisfies never;
       return panic("Unknown desktop runner message");
   }
 };
+
+/**
+ * The run a read holds until it finishes or pauses for an answer. Any other
+ * way the read ends interrupts the run, once: a consumer that stops reading,
+ * a store that cannot be read, or a cut of the turn, while the read waits or
+ * while its consumer is not pulling, of a kind that stops the computer's turn
+ * (`LOCAL_RUN_CUT_STOPS_COMPUTER`).
+ */
+const holdRun = (
+  context: LocalRunContext,
+  runnerRunId: string,
+  abortSignal: AbortSignal,
+) => {
+  let holds = true;
+  let interrupting: Promise<void> | null = null;
+  const stop = async () => {
+    if (holds) {
+      holds = false;
+      interrupting = interruptRun(context, runnerRunId);
+    }
+    await interrupting;
+  };
+  /** The run finished, ended on the gateway's side, or paused. */
+  const release = () => {
+    holds = false;
+  };
+  return {
+    stop,
+    release,
+    /** End the read for the turn's cut, as its kind says. */
+    endForCut: async () => {
+      if (LOCAL_RUN_CUT_STOPS_COMPUTER[chatTurnRunCutOf(abortSignal.reason)]) {
+        await stop();
+        return;
+      }
+      release();
+    },
+  };
+};
+
+/**
+ * Where a read starts: afresh, or as the read another task released left it
+ * (`AdoptedRead`). An adopted read continues a chat run that already
+ * started: its run start is in the log, and a second one would read as a new
+ * provider run to every page joining it.
+ */
+const readStartOf = (
+  context: LocalRunContext,
+  rewrite: RewriteContext,
+  adopted: AdoptedRead | undefined,
+): Omit<AdoptedRead, "toolCalls"> & {
+  started: boolean;
+  told: ChatLocalRunComputerEvent["status"] | null;
+} =>
+  adopted === undefined
+    ? {
+        started: false,
+        finished: false,
+        harnessError: null,
+        runReports: createRunReports(context, rewrite),
+        runApps: createRunApps(context, rewrite.runnerRunId),
+        told: "connected",
+      }
+    : {
+        started: true,
+        finished: adopted.finished,
+        harnessError: adopted.harnessError,
+        runReports: adopted.runReports,
+        runApps: adopted.runApps,
+        told: null,
+      };
 
 async function* readRunChunks({
   context,
@@ -1349,18 +1849,16 @@ async function* readRunChunks({
   toolCalls,
   chatRunId,
   abortSignal,
+  deliveringSince,
+  adopted,
 }: ReadRunOptions): AsyncGenerator<PublicStreamChunk> {
   const { control, owner } = context;
-  const rewrite: RewriteContext = {
-    runnerRunId,
-    chatRunId,
-    threadId: context.chatThreadId,
-  };
+  const rewrite = rewriteOf(context, runnerRunId, chatRunId);
   let position = afterSeq;
-  let started = false;
-  let finished = false;
+  const initial = readStartOf(context, rewrite, adopted);
+  let { started, finished } = initial;
   /** The harness's own run error, held for the outcome `run.finished` names. */
-  let harnessError: HarnessError | null = null;
+  let { harnessError } = initial;
   const start = function* (): Generator<PublicStreamChunk> {
     if (!started) {
       started = true;
@@ -1372,9 +1870,8 @@ async function* readRunChunks({
       };
     }
   };
-  const computer = computerStatusChunks(start);
-  const runOutputChunks = createRunOutputs(context, rewrite);
-  const runApps = createRunApps(context, runnerRunId);
+  const computer = computerStatusChunks(start, initial.told);
+  const { runApps, runReports } = initial;
   const fail = function* (
     code: LocalRunFailure,
     message?: string,
@@ -1389,34 +1886,21 @@ async function* readRunChunks({
       runId: runnerRunId,
       seq: position,
     });
-  /**
-   * The run is this reader's to end until it finishes or pauses for an
-   * answer. Any other way the read ends interrupts it, once: a cut of the
-   * turn while the read waits or while its consumer is not pulling, a
-   * consumer that stops reading, a store that cannot be read.
-   */
-  let holdsRun = true;
-  let interrupting: Promise<void> | null = null;
-  const stopRun = async () => {
-    if (holdsRun) {
-      holdsRun = false;
-      interrupting = interruptRun(context, runnerRunId);
-    }
-    await interrupting;
-  };
-  /** The run finished, ended on the gateway's side, or paused. */
-  const releaseRun = () => {
-    holdsRun = false;
-  };
+  const held = holdRun(context, runnerRunId, abortSignal);
+  const stopRun = held.stop;
+  const releaseRun = held.release;
   const onCut = () => {
-    detached(stopRun, "local-run-chunks.interrupt");
+    detached(held.endForCut, "local-run-chunks.interrupt");
   };
   abortSignal.addEventListener("abort", onCut, { once: true });
   const listener = context.runBell.listen(runnerRunId);
   try {
+    if (deliveringSince !== null) {
+      yield* computer({ status: "delivering", since: deliveringSince });
+    }
     for (;;) {
       if (abortSignal.aborted) {
-        await stopRun();
+        await held.endForCut();
         return;
       }
       const page = await control.readEvents({
@@ -1433,8 +1917,9 @@ async function* readRunChunks({
         return;
       }
       if (page.value.items.length > 0) {
-        // Anything the computer stored since it was away means it is back.
-        yield* computer("connected");
+        // Anything the computer stored means it has the run, and is back
+        // when it was away.
+        yield* computer({ status: "connected" });
       }
       for (const item of page.value.items) {
         position = item.seq;
@@ -1444,10 +1929,15 @@ async function* readRunChunks({
             if (!isPublicStreamChunk(message.chunk)) {
               panic("A stored desktop runner chunk no longer folds");
             }
-            const output = runOutputReportOf(message.chunk);
-            if (output !== null) {
+            // The run's word on the steps it still has to send was recorded
+            // when the event was stored; it is no part of the answer.
+            if (announcedAwaitedSteps(message.chunk) !== null) {
+              continue;
+            }
+            const reported = await runReports(message.chunk);
+            if (reported !== null) {
               yield* start();
-              yield* await runOutputChunks(output.value);
+              yield* reported;
               continue;
             }
             const chunk = asChatChunk(message.chunk, rewrite, toolCalls);
@@ -1553,8 +2043,9 @@ async function* readRunChunks({
   } finally {
     abortSignal.removeEventListener("abort", onCut);
     listener.close();
-    // A consumer that closed the read early, or a read that threw.
-    await stopRun();
+    // A read the turn's cut ended, or a consumer that closed the read early,
+    // or a read that threw.
+    await (abortSignal.aborted ? held.endForCut() : stopRun());
   }
 }
 
@@ -1572,38 +2063,71 @@ const unavailableHarnessFailure = (
     case "unsupported":
     case "unavailable":
     case undefined:
-      return AI_FAILURE_CODES.local_runner_unavailable;
+      return AI_FAILURE_CODES.local_runner_harness_unavailable;
     default:
       state satisfies never;
       return panic("Unknown harness state");
   }
 };
 
+/**
+ * Why a new turn's run did not start, as the turn's failure. The pick of a
+ * computer and the insert of the run both answer through this, so one cause
+ * reads the same to the member whichever of the two found it.
+ */
+const startRefusalFailure = (
+  refusal:
+    LocalRunRouteRefusal | Exclude<StartLocalRunOutcome, { type: "assigned" }>,
+): LocalRunFailure => {
+  switch (refusal.type) {
+    case "no_computer":
+      return AI_FAILURE_CODES.local_runner_no_computer;
+    case "harness_unavailable":
+      return unavailableHarnessFailure(refusal.report?.state);
+    case "model_unavailable":
+      return AI_FAILURE_CODES.local_runner_model_unavailable;
+    case "reasoning_effort_unavailable":
+      return AI_FAILURE_CODES.local_runner_reasoning_effort_unavailable;
+    case "approvals_unavailable":
+      return AI_FAILURE_CODES.local_runner_approvals_unavailable;
+    case "folder_unavailable":
+      // The linked folder is away, offline or moved; the insert also answers
+      // this for a folder whose approval was withdrawn since the pick.
+      return AI_FAILURE_CODES.local_runner_folder_unavailable;
+    case "folder_not_approved":
+      return AI_FAILURE_CODES.local_runner_folder_not_approved;
+    case "folder_busy":
+      // An undo of the chat's files is still running on the computer.
+      return AI_FAILURE_CODES.local_runner_restoring;
+    case "too_large":
+      return AI_FAILURE_CODES.local_runner_turn_too_large;
+    default:
+      refusal satisfies never;
+      return panic("Unknown local run start refusal");
+  }
+};
+
 type StartOptions = {
   attachments: readonly LocalRunAttachment[];
   context: LocalRunContext;
-  destination: LocalRunDestination;
+  target: LocalRunTarget;
   input: LocalRunStreamInput;
 };
 
 /**
- * Start the turn's run on the routed computer; a refusal ends the turn.
+ * Pick a computer for the turn and start its run there. The turn and the
+ * member's message are stored by now, so a computer that cannot take the
+ * turn ends it as a failed turn with the reason.
  *
  * @yields Chunks of the chat run, ending with its terminal one.
  */
 async function* startLocalRun({
   attachments,
   context,
-  destination,
+  target,
   input,
 }: StartOptions): AsyncGenerator<PublicStreamChunk> {
   const { control, owner } = context;
-  const session = await control.readChatRunSession({
-    owner,
-    chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
-    desktopId: destination.desktopId,
-    harness: destination.harness,
-  });
   const rewrite = {
     chatRunId: input.chatRunId,
     threadId: context.chatThreadId,
@@ -1614,12 +2138,35 @@ async function* startLocalRun({
     threadId: context.chatThreadId,
     timestamp: nowMs(),
   } as const satisfies PublicStreamChunk;
+  const refuse = function* (code: LocalRunFailure) {
+    yield opened;
+    yield* runErrorChunks(failureOf(code), rewrite);
+  };
+  const route = await routeLocalRun({ control, owner, target });
+  if (route.isErr()) {
+    yield opened;
+    yield* storeUnavailable(route.error, rewrite);
+    return;
+  }
+  const routed = route.value;
+  if (routed.type !== "routed") {
+    yield* refuse(startRefusalFailure(routed));
+    return;
+  }
+  const { destination } = routed;
+  const session = await control.readChatRunSession({
+    owner,
+    chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
+    desktopId: destination.desktopId,
+    harness: destination.harness,
+    capabilities: destination.capabilities,
+    linkedFolderId: destination.linkedFolderId,
+  });
   if (session.isErr()) {
     yield opened;
     yield* storeUnavailable(session.error, rewrite);
     return;
   }
-  const harnessSessionId = session.value;
   const start = async (messages: readonly ModelMessage[]) =>
     await control.startRun({
       owner,
@@ -1627,31 +2174,30 @@ async function* startLocalRun({
       harness: destination.harness,
       harnessVersion: destination.harnessVersion,
       model: destination.model,
+      reasoningEffort: destination.reasoningEffort,
       approvals: destination.approvals,
-      harnessSessionId,
+      session: session.value,
       instructions: input.instructions,
       // Copied to plain objects: the wire schema reads them as records.
       messages: messages.map((message) => ({ ...message })),
       attachments,
       mcp: context.mcp,
       workspaceIds: context.workspaceIds,
+      linkedFolderId: destination.linkedFolderId,
       chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
     });
+  const sentAt = new Date(nowMs()).toISOString();
   let started = await start(input.messages);
   const latest = input.messages.at(-1);
   if (
     started.isOk() &&
     started.value.type === "too_large" &&
-    harnessSessionId !== null &&
+    session.value.type !== "fresh" &&
     latest !== undefined
   ) {
-    // The resumed session already holds the history.
+    // The resumed or forked session already holds the history.
     started = await start([latest]);
   }
-  const refuse = function* (code: LocalRunFailure) {
-    yield opened;
-    yield* runErrorChunks(failureOf(code), rewrite);
-  };
   if (started.isErr()) {
     if (started.error._tag === "DatabaseError") {
       yield opened;
@@ -1664,33 +2210,19 @@ async function* startLocalRun({
     return;
   }
   const outcome = started.value;
-  switch (outcome.type) {
-    case "assigned":
-      yield* readRunChunks({
-        context,
-        runnerRunId: outcome.runId,
-        afterSeq: 0,
-        toolCalls: new Map(),
-        chatRunId: input.chatRunId,
-        abortSignal: input.abortSignal,
-      });
-      return;
-    case "harness_unavailable":
-      yield* refuse(unavailableHarnessFailure(outcome.report?.state));
-      return;
-    case "no_computer":
-    case "model_unavailable":
-    case "approvals_unavailable":
-    case "folder_busy":
-      yield* refuse(AI_FAILURE_CODES.local_runner_unavailable);
-      return;
-    case "too_large":
-      yield* refuse(AI_FAILURE_CODES.local_runner_turn_too_large);
-      return;
-    default:
-      outcome satisfies never;
-      panic("Unknown local run start outcome");
+  if (outcome.type !== "assigned") {
+    yield* refuse(startRefusalFailure(outcome));
+    return;
   }
+  yield* readRunChunks({
+    context,
+    runnerRunId: outcome.runId,
+    afterSeq: 0,
+    toolCalls: new Map(),
+    chatRunId: input.chatRunId,
+    abortSignal: input.abortSignal,
+    deliveringSince: sentAt,
+  });
 }
 
 /** Whether a queued command lets the paused run go on; `null` once it is queued. */
@@ -1903,16 +2435,76 @@ async function* resumeLocalRun({
     toolCalls: calls.value,
     chatRunId: input.chatRunId,
     abortSignal: input.abortSignal,
+    deliveringSince: null,
   });
 }
 
 /**
- * How a turn reaches its run: a new turn starts one on the computer it was
- * routed to, a resumed turn answers the run that paused, wherever it is.
+ * Read on the run of a turn another task released, after where its reader
+ * stopped, with the state that reader held. No command goes to the computer:
+ * the run never stopped. The first chunk is the computer's status, so a page
+ * that rejoins the run's log sees progress at once.
+ *
+ * @yields Chunks of the chat run, ending with its terminal one.
+ */
+async function* adoptLocalRun({
+  context,
+  input,
+}: {
+  context: LocalRunContext;
+  input: LocalRunStreamInput;
+}): AsyncGenerator<PublicStreamChunk> {
+  const rewrite = {
+    chatRunId: input.chatRunId,
+    threadId: context.chatThreadId,
+  };
+  const found = await context.control.readHandedOverChatRun({
+    owner: context.owner,
+    chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
+  });
+  if (found.isErr()) {
+    yield* storeUnavailable(found.error, rewrite);
+    return;
+  }
+  const run = found.value;
+  if (run === null) {
+    yield* runErrorChunks(
+      failureOf(AI_FAILURE_CODES.local_runner_unavailable),
+      rewrite,
+    );
+    return;
+  }
+  const read = await foldAdoptedRead({
+    chatRunId: input.chatRunId,
+    context,
+    runnerRunId: run.runId,
+    throughSeq: run.chatReadSeq,
+  });
+  if (read.isErr()) {
+    yield* storeUnavailable(read.error, rewrite);
+    return;
+  }
+  yield* readRunChunks({
+    context,
+    runnerRunId: run.runId,
+    afterSeq: run.chatReadSeq,
+    toolCalls: read.value.toolCalls,
+    chatRunId: input.chatRunId,
+    abortSignal: input.abortSignal,
+    deliveringSince: null,
+    adopted: read.value,
+  });
+}
+
+/**
+ * How a turn reaches its run: a new turn starts one on a computer picked
+ * as the run starts, a resumed turn answers the run that paused, wherever it
+ * is, and an adopted turn reads on the run another task released.
  */
 export type LocalRunPlan =
-  | { type: "start"; destination: LocalRunDestination }
-  | { type: "resume"; harness: ChatLocalRunHarness };
+  | { type: "start"; target: LocalRunTarget }
+  | { type: "resume"; harness: ChatLocalRunHarness }
+  | { type: "adopt"; harness: ChatLocalRunHarness };
 
 /** A local chat run for one turn. */
 const localChatRun = (
@@ -1920,7 +2512,7 @@ const localChatRun = (
   plan: LocalRunPlan,
   attachments: readonly LocalRunAttachment[],
 ): LocalChatRun => ({
-  harness: plan.type === "start" ? plan.destination.harness : plan.harness,
+  harness: plan.type === "start" ? plan.target.harness : plan.harness,
   withAttachments: (next) => localChatRun(context, plan, next),
   withResourceOrigin: (resourceOrigin) =>
     localChatRun({ ...context, resourceOrigin }, plan, attachments),
@@ -1932,7 +2524,7 @@ const localChatRun = (
           ? startLocalRun({
               attachments,
               context,
-              destination: plan.destination,
+              target: plan.target,
               input,
             })
           : panic("A new local turn was handed approvals to resume");
@@ -1940,6 +2532,10 @@ const localChatRun = (
         return resume !== undefined && resume.length > 0
           ? resumeLocalRun({ context, input: { ...input, resume } })
           : panic("A resumed local turn carries no approvals");
+      case "adopt":
+        return resume === undefined || resume.length === 0
+          ? adoptLocalRun({ context, input })
+          : panic("An adopted local turn was handed approvals to resume");
       default:
         plan satisfies never;
         return panic("Unknown local run plan");

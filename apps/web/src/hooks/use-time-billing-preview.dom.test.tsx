@@ -165,11 +165,8 @@ const renderShell = (queryClient: InstanceType<typeof QueryClient>) =>
     React.createElement(
       QueryClientProvider,
       { client: queryClient },
-      React.createElement(IntlProvider, {
-        locale: "en",
-        messages,
-        timeZone: "UTC",
-        children: React.createElement(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        {React.createElement(
           AuthenticatedUserProvider,
           {
             user: {
@@ -190,8 +187,8 @@ const renderShell = (queryClient: InstanceType<typeof QueryClient>) =>
             React.createElement(GlobalTimer),
             React.createElement(BetaPage),
           ),
-        ),
-      }),
+        )}
+      </IntlProvider>,
     ),
   );
 

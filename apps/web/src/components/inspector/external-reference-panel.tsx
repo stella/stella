@@ -19,13 +19,14 @@ import {
 import { ExternalLinkIcon, SearchIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { CompanyRegistryPreview } from "@/components/company-registry-preview";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import {
   InspectorFindBar,
@@ -484,19 +485,22 @@ const GenericExternalReferencePanel = ({
               <div className="flex min-w-0 items-center gap-1.5">
                 <ExternalSourceLogo iconHref={iconHref} />
                 {provider && (
-                  <p className="text-muted-foreground truncate text-xs">
+                  <TruncatedText
+                    className="text-muted-foreground text-xs"
+                    render={<p />}
+                  >
                     {provider}
-                  </p>
+                  </TruncatedText>
                 )}
                 {connectorSlug && (
-                  <span className="bg-muted text-muted-foreground text-3xs max-w-24 truncate rounded-sm px-1.5 py-0.5 font-mono">
+                  <TruncatedText className="bg-muted text-muted-foreground text-3xs max-w-24 rounded-sm px-1.5 py-0.5 font-mono">
                     {connectorSlug}
-                  </span>
+                  </TruncatedText>
                 )}
                 {sourceToolName && (
-                  <span className="bg-muted text-muted-foreground text-3xs min-w-0 truncate rounded-sm px-1.5 py-0.5 font-mono">
+                  <TruncatedText className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5 font-mono">
                     {sourceToolName}
-                  </span>
+                  </TruncatedText>
                 )}
               </div>
             )}
@@ -508,9 +512,9 @@ const GenericExternalReferencePanel = ({
                 }}
                 variant="plain"
               >
-                <span className="text-muted-foreground hover:text-foreground block truncate text-xs underline-offset-2 hover:underline">
+                <TruncatedText className="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline">
                   {safeHref}
-                </span>
+                </TruncatedText>
               </Button>
             )}
           </div>
@@ -605,7 +609,7 @@ const GenericExternalReferencePanel = ({
             className="grid grid-cols-2 gap-2 sm:grid-cols-2"
             variant="bare"
           >
-            <CopyActionButton
+            <CopyControl
               iconClassName="size-4"
               label={t("common.copyLink")}
               text={confirmHref ?? ""}

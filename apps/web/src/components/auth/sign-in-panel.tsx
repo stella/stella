@@ -11,6 +11,7 @@ import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
+import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
@@ -55,16 +56,23 @@ import { PasswordSignInOption } from "./password-sign-in-option";
 import { SIGN_IN_MODE } from "./sign-in-mode";
 import type { SignInMode } from "./sign-in-mode";
 import {
+  initialPasswordEntry,
   resolveLastUsedSignInMethod,
   resolveSignInOptions,
   SIGN_IN_METHOD,
   signInMethodVariant,
 } from "./sign-in-panel.logic";
-import type { AuthCapabilities, SignInMethod } from "./sign-in-panel.logic";
+import type {
+  AuthCapabilities,
+  SignInEntryMethod,
+  SignInMethod,
+} from "./sign-in-panel.logic";
 
 type SignInPanelProps = {
   mode?: SignInMode;
   className?: string;
+  /** The method a link asked this page to open with. */
+  entryMethod?: SignInEntryMethod | undefined;
   redirectTo: string;
   showHeading?: boolean;
   onOtpSent?: (payload: {
@@ -105,6 +113,7 @@ const renderTermsLink = (chunks: ReactNode) => (
 
 const SignInOptionsPanel = ({
   className,
+  entryMethod,
   redirectTo,
   showHeading = true,
   mode = SIGN_IN_MODE.signIn,
@@ -141,6 +150,11 @@ const SignInOptionsPanel = ({
     stored: readLastUsedLoginMethod(),
     options: signInOptions,
   });
+  const [passwordEntry, setPasswordEntry] = useState(() =>
+    initialPasswordEntry({ entryMethod, options: signInOptions }),
+  );
+  const openPasswordEntry = (email: string) =>
+    setPasswordEntry({ type: "open", email });
 
   const handleOtpSent = async (email: string) => {
     if (onOtpSent) {
@@ -190,41 +204,6 @@ const SignInOptionsPanel = ({
     }
     setSocialLoading(null);
   };
-
-  const form = useForm(
-    schemaFormOptions({
-      schema: formSchema(t("validation.invalidEmail")),
-      defaultValues: { email: "" },
-      submitValues: "schema-output",
-      onSubmit: async ({ value }) => {
-        const { error } = await authClient.emailOtp.sendVerificationOtp({
-          email: value.email,
-          type: "sign-in",
-        });
-
-        if (error) {
-          analytics.captureError(toAuthClientError(error), {
-            fingerprintKey: "SignInOptionsPanel.onSubmit:failure",
-            scope: {
-              type: "handler",
-              handlerId: "SignInOptionsPanel.onSubmit:failure",
-            },
-          });
-          if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-            notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
-          }
-          return;
-        }
-
-        await handleOtpSent(value.email);
-      },
-    }),
-  );
-
-  const { formErrors, dirty } = useSelector(form.store, (s) => ({
-    formErrors: toFormErrors(s.fieldMeta),
-    dirty: !s.isDefaultValue,
-  }));
 
   return (
     <div className={cn("flex w-full max-w-md flex-col gap-8", className)}>
@@ -331,6 +310,7 @@ const SignInOptionsPanel = ({
       {showLocalPassword && !showBootstrap && (
         <PasswordSignInForm
           autoFocus={!showSocialProviders}
+          defaultEmail=""
           lastUsed={lastUsed}
           redirectTo={redirectTo}
         />
@@ -340,60 +320,27 @@ const SignInOptionsPanel = ({
         <TextSeparator>{t("auth.orSignInWithEmail")}</TextSeparator>
       )}
 
-      {showEmailOtp && (
-        <Form
-          dirty={dirty}
-          onDiscard={() => form.reset()}
-          errors={formErrors}
-          onSubmit={(e) => {
-            e.preventDefault();
-            detached(form.handleSubmit(), "sign-in-panel.submit");
-          }}
-        >
-          <form.Field name="email">
-            {(field) => (
-              <Field className="relative" name={field.name}>
-                <Input
-                  autoFocus={!showSocialProviders && !showLocalPassword}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  placeholder={t("auth.emailPlaceholder")}
-                  size="lg"
-                  type="email"
-                  value={field.state.value}
-                />
-                {lastUsed === SIGN_IN_METHOD.emailOtp && <LastUsedFieldBadge />}
-                <FieldError />
-              </Field>
-            )}
-          </form.Field>
-          <form.Subscribe
-            selector={(s) => ({
-              isSubmitting: s.isSubmitting,
-              canSubmit: s.canSubmit,
-              email: s.values.email,
-            })}
-          >
-            {({ isSubmitting, canSubmit, email }) => (
-              <Button
-                className="w-full"
-                disabled={!canSubmit || email.trim().length === 0}
-                loading={isSubmitting}
-                type="submit"
-                variant={signInMethodVariant({
-                  method: SIGN_IN_METHOD.emailOtp,
-                  lastUsed,
-                  fallback: "default",
-                })}
-              >
-                {t("auth.continueWithEmail")}
-              </Button>
-            )}
-          </form.Subscribe>
-        </Form>
+      {showEmailOtp && passwordEntry.type === "closed" && (
+        <EmailCodeSignInForm
+          autoFocus={!showSocialProviders && !showLocalPassword}
+          lastUsed={lastUsed}
+          onCodeSent={handleOtpSent}
+          onPasswordRequired={openPasswordEntry}
+          onUsePassword={
+            showReviewPasswordSignIn ? openPasswordEntry : undefined
+          }
+        />
       )}
-      {showReviewPasswordSignIn && (
-        <PasswordSignInOption redirectTo={redirectTo} />
+      {passwordEntry.type === "open" && (
+        <PasswordSignInOption
+          email={passwordEntry.email}
+          onUseEmailCode={
+            showEmailOtp
+              ? () => setPasswordEntry({ type: "closed" })
+              : undefined
+          }
+          redirectTo={redirectTo}
+        />
       )}
       <p className="text-foreground-muted text-xs">
         {t.rich("onboarding.termsNotice", {
@@ -406,6 +353,130 @@ const SignInOptionsPanel = ({
         </p>
       )}
     </div>
+  );
+};
+
+/** The email step of code sign-in: asks the server to send the code. */
+const EmailCodeSignInForm = ({
+  autoFocus,
+  lastUsed,
+  onCodeSent,
+  onPasswordRequired,
+  onUsePassword,
+}: {
+  autoFocus: boolean;
+  lastUsed: SignInMethod | null;
+  onCodeSent: (email: string) => Promise<void>;
+  /** The server sends this address no code: it signs in with a password. */
+  onPasswordRequired: (email: string) => void;
+  /** Opens the password form with the address typed so far, where offered. */
+  onUsePassword: ((email: string) => void) | undefined;
+}) => {
+  const t = useTranslations();
+  const analytics = useAnalytics();
+  const form = useForm(
+    schemaFormOptions({
+      schema: formSchema(t("validation.invalidEmail")),
+      defaultValues: { email: "" },
+      submitValues: "schema-output",
+      onSubmit: async ({ value }) => {
+        const { error } = await authClient.emailOtp.sendVerificationOtp({
+          email: value.email,
+          type: "sign-in",
+        });
+
+        if (error?.code === AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE) {
+          onPasswordRequired(value.email);
+          return;
+        }
+        if (error) {
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "EmailCodeSignInForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "EmailCodeSignInForm.onSubmit:failure",
+            },
+          });
+          if (error.status !== HTTP_TOO_MANY_REQUESTS) {
+            notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
+          }
+          return;
+        }
+
+        await onCodeSent(value.email);
+      },
+    }),
+  );
+
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
+
+  return (
+    <>
+      <Form
+        dirty={dirty}
+        onDiscard={() => form.reset()}
+        errors={formErrors}
+        onSubmit={(e) => {
+          e.preventDefault();
+          detached(form.handleSubmit(), "sign-in-panel.submit");
+        }}
+      >
+        <form.Field name="email">
+          {(field) => (
+            <Field className="relative" name={field.name}>
+              <Input
+                autoFocus={autoFocus}
+                onBlur={field.handleBlur}
+                onChange={(e) => field.handleChange(e.target.value)}
+                placeholder={t("auth.emailPlaceholder")}
+                size="lg"
+                type="email"
+                value={field.state.value}
+              />
+              {lastUsed === SIGN_IN_METHOD.emailOtp && <LastUsedFieldBadge />}
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
+        <form.Subscribe
+          selector={(s) => ({
+            isSubmitting: s.isSubmitting,
+            canSubmit: s.canSubmit,
+            email: s.values.email,
+          })}
+        >
+          {({ isSubmitting, canSubmit, email }) => (
+            <Button
+              className="w-full"
+              disabled={!canSubmit || email.trim().length === 0}
+              loading={isSubmitting}
+              type="submit"
+              variant={signInMethodVariant({
+                method: SIGN_IN_METHOD.emailOtp,
+                lastUsed,
+                fallback: "default",
+              })}
+            >
+              {t("auth.continueWithEmail")}
+            </Button>
+          )}
+        </form.Subscribe>
+      </Form>
+      {onUsePassword && (
+        <Button
+          className="self-center"
+          onClick={() => onUsePassword(form.state.values.email)}
+          size="sm"
+          type="button"
+          variant="link"
+        >
+          {t("auth.usePassword")}
+        </Button>
+      )}
+    </>
   );
 };
 
@@ -489,6 +560,7 @@ const BootstrapSignUpForm = ({
           {(field) => (
             <SecretCredentialField
               autoComplete="new-password"
+              autoFocus={false}
               field={field}
               placeholder={t("auth.password")}
             />
@@ -498,6 +570,7 @@ const BootstrapSignUpForm = ({
           {(field) => (
             <SecretCredentialField
               autoComplete="one-time-code"
+              autoFocus={false}
               field={field}
               placeholder={t("auth.bootstrapToken")}
             />

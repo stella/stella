@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts",
+  "delta": 2,
+  "reason": "The cleanup claim reads its queue a page at a time and locks each page before reading the next, so a page whose candidates are held elsewhere does not end the turn; a turn reads at most four pages."
+}

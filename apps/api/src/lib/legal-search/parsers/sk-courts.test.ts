@@ -596,7 +596,7 @@ describe("reader-compatible Slovak heading identities", () => {
     ]);
     expect(ast.blocks[1]).toMatchObject({
       type: "paragraph",
-      role: "intro",
+      role: "opening-formula",
       plainText: "V MENE SLOVENSKEJ REPUBLIKY",
     });
     expect(v.safeParse(documentAstSchema, ast).success).toBe(true);
@@ -625,7 +625,7 @@ describe("reader-compatible Slovak heading identities", () => {
     });
     expect(formula).toMatchObject({
       type: "paragraph",
-      role: "intro",
+      role: "opening-formula",
       plainText: "V MENE SLOVENSKEJ REPUBLIKY",
     });
     const boldTexts = (inlines: readonly Inline[]): string[] =>

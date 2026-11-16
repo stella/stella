@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-decisions-language-group-published-idx",
   revision: 1414,
+  lifecycle: "finalized",
   type: "indexes",
   values: [SITEMAP_LANGUAGE_GROUP_INDEX],
 } satisfies OnlineMigrationEntry;

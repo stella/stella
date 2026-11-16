@@ -56,6 +56,7 @@ import {
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
 import { collapseSpacedLetters } from "@stll/text-normalize";
+import { restoreHungarianLetters } from "@stll/text-normalize/hungarian-letters";
 import { parsePlainDate } from "@stll/time";
 
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
@@ -186,7 +187,11 @@ const runsOf = (paragraph: FolioParagraph): DocRun[] => {
   };
 
   visit(paragraph.content);
-  return runs;
+  // Every line, note and cell is read from these runs, in either format.
+  return runs.map((run) => ({
+    ...run,
+    text: restoreHungarianLetters(run.text),
+  }));
 };
 
 const lineOf = (paragraph: FolioParagraph): DocLineData => {
@@ -222,9 +227,13 @@ const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
       case "blockSdt":
       case "blockCustomXml":
         return cellParagraphsOf(item.content);
+      // parser-output-unchanged: comment range markers carry no text and
+      // were not block content before folio 0.68.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "commentRangeStart":
+      case "commentRangeEnd":
       case "moveFromRangeStart":
       case "moveFromRangeEnd":
       case "moveToRangeStart":
@@ -330,6 +339,8 @@ const itemsOf = (
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "commentRangeStart":
+      case "commentRangeEnd":
       case "moveFromRangeStart":
       case "moveFromRangeEnd":
       case "moveToRangeStart":

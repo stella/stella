@@ -12,11 +12,13 @@ import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { authMetadataRoute } from "@/api/handlers/auth/routes";
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
+import { conflictChecksRoute } from "@/api/handlers/conflict-checks/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRunnerRoute } from "@/api/handlers/desktop-runner/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { devPublicRoute } from "@/api/handlers/dev/routes";
+import { desktopDictationRoute } from "@/api/handlers/dictation/routes";
 import { pdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
 import {
   feedbackPublicRoute,
@@ -125,6 +127,8 @@ const ROOT_ROUTE_TABLES: Readonly<Record<string, readonly RouteEntry[]>> = {
   aiAutocompleteRoute,
   authMetadataRoute,
   authUiRoute,
+  conflictChecksRoute,
+  desktopDictationRoute,
   desktopFeatureAccessRoute,
   desktopPresenceRoute,
   desktopRunnerRoute,

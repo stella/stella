@@ -117,7 +117,8 @@ type RecordedAction =
   | { type: "stop" }
   | { type: "drop-connection" }
   | { type: "reload" }
-  | { type: "retry" };
+  | { type: "retry" }
+  | { messageId: string; text: string; type: "continue" };
 type RecordedConversation = {
   initialPage: RecordedPage;
   scenario: string;
@@ -158,6 +159,7 @@ const STEP_KINDS: readonly RecordedAction["type"][] = [
   "approve",
   "auto-approve",
   "client-tool",
+  "continue",
   "drop-connection",
   "reload",
   "retry",
@@ -379,6 +381,14 @@ const createRecordedServer = (
     ) {
       return threadPage();
     }
+    // The recorder queues nothing: the chat's queue is empty.
+    if (
+      url.origin === API_ORIGIN &&
+      method === "GET" &&
+      url.pathname === `/v1/chat/threads/${recording.threadId}/queue`
+    ) {
+      return Response.json({ hold: null, items: [] });
+    }
     if (
       url.origin === API_ORIGIN &&
       url.pathname === "/v1/chat/tool-grants/coverage"
@@ -453,6 +463,11 @@ const createRecordedServer = (
   };
 
   return {
+    /**
+     * Ids the page minted for a message the recording sent under another id
+     * (a paused turn's Continue), mapped to the recorded id.
+     */
+    idAliases: new Map<string, string>(),
     /** The approvals the API holds now; a page opens with them loaded. */
     grants,
     dropConnection: () => {
@@ -533,6 +548,7 @@ const ALLOWED = messages.chat.approval.allowed;
 const DENIED = messages.chat.approval.denied;
 const SUBMIT_ANSWERS = messages.chat.askUser.submit;
 const ANSWER_PLACEHOLDER = messages.chat.askUser.placeholder;
+const CONTINUE_PAUSED_TURN = messages.chat.turnPaused.continue;
 const ASK_USER_TITLE = messages.chat.tool["ask-user"];
 const BUSY_TEXTS = [messages.chat.thinking, messages.chat.analyzingSources];
 /** The approval tool the recordings call; its one input is the call's id. */
@@ -739,7 +755,39 @@ const sortKeys = (value: unknown): unknown => {
  * object keys are sorted. Every other value, the thread's and messages' ids
  * included, must be equal.
  */
-const comparableRequests = (bodies: readonly unknown[]): unknown[] => {
+/** `text` with each page-minted id replaced by the recorded one. */
+const withAliases = (text: string, idAliases: ReadonlyMap<string, string>) => {
+  let aliased = text;
+  for (const [minted, recorded] of idAliases) {
+    aliased = aliased.replaceAll(minted, () => recorded);
+  }
+  return aliased;
+};
+
+/** The id of the Continue message a posted body sends, if it sends one. */
+const continuedMessageId = (body: unknown): string | undefined => {
+  const sent: unknown =
+    typeof body === "object" && body !== null
+      ? Reflect.get(body, "messages")
+      : undefined;
+  if (!Array.isArray(sent)) {
+    return undefined;
+  }
+  const message: unknown = sent.at(-1);
+  if (typeof message !== "object" || message === null) {
+    return undefined;
+  }
+  const id: unknown = Reflect.get(message, "id");
+  return Reflect.get(message, "content") === CONTINUE_PAUSED_TURN &&
+    typeof id === "string"
+    ? id
+    : undefined;
+};
+
+const comparableRequests = (
+  bodies: readonly unknown[],
+  idAliases: ReadonlyMap<string, string> = new Map(),
+): unknown[] => {
   const names = new Map<string, string>();
   const rename = (match: string) => {
     const known = names.get(match);
@@ -752,7 +800,7 @@ const comparableRequests = (bodies: readonly unknown[]): unknown[] => {
   };
   return bodies.map((body): unknown =>
     JSON.parse(
-      JSON.stringify(sortKeys(body))
+      withAliases(JSON.stringify(sortKeys(body)), idAliases)
         .replaceAll(CLIENT_ID_PATTERN, rename)
         .replaceAll(INSTANT_PATTERN, "<instant>"),
     ),
@@ -890,15 +938,19 @@ const performAction = async ({
 }) => {
   switch (action.type) {
     case "send": {
+      // A recorded send never goes over a turn that waits on the member: the
+      // server refuses that, and the page queues it instead.
+      expect(live.session().turnAwaitsMember).toBe(false);
       // What the composer hands the session on submit.
       await act(async () => {
         pendingActions.push(
           Result.tryPromise({
-            try: async () =>
+            try: async () => {
               await live.session().sendMessage({
                 content: action.text,
                 id: toSafeId<"chatMessage">(action.messageId),
-              }),
+              });
+            },
             catch: (cause: unknown) => cause,
           }),
         );
@@ -927,6 +979,22 @@ const performAction = async ({
       fireEvent.click(
         within(container).getByRole("button", { name: SUBMIT_ANSWERS }),
       );
+      return;
+    }
+    case "continue": {
+      // The paused answer's Continue, which sends the recorded message under
+      // an id the page mints itself.
+      const before = server.posted.length;
+      fireEvent.click(
+        within(container).getByRole("button", { name: CONTINUE_PAUSED_TURN }),
+      );
+      await waitFor(() => {
+        expect(server.posted.length).toBeGreaterThan(before);
+      });
+      const minted = continuedMessageId(server.posted.at(before)?.body);
+      if (minted !== undefined) {
+        server.idAliases.set(minted, action.messageId);
+      }
       return;
     }
     case "retry": {
@@ -1122,7 +1190,10 @@ const replay = async (
   }
   // The page posted what the recorded page posted, request for request.
   expect(
-    comparableRequests(server.posted.map(({ body }) => body)),
+    comparableRequests(
+      server.posted.map(({ body }) => body),
+      server.idAliases,
+    ),
     finding(RENDER_ORACLE.requestsMatchRecorded, scenario),
   ).toEqual(
     comparableRequests(server.posted.map(({ exchange }) => exchange.request)),
@@ -1152,6 +1223,11 @@ const notRecorded = (reason: string): RecordedCoverage => ({
 const OUTSIDE_THE_CONVERSATION = notRecorded(
   "It changes the page or the thread's settings, not the conversation the server records.",
 );
+/** The queue's own actions: the queue is the server's, with routes of its
+ *  own that the recorder does not drive. */
+const QUEUE_ACTION = notRecorded(
+  "The queue is the server's; the recorder does not drive its routes.",
+);
 
 const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "allow-in-conversation": recordedAs(approvedAs("allow-in-conversation")),
@@ -1166,6 +1242,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   ),
   "check-saved-private-input": OUTSIDE_THE_CONVERSATION,
   "check-stored-grant": OUTSIDE_THE_CONVERSATION,
+  "continue-paused-turn": recordedAs(({ type }) => type === "continue"),
   "continue-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),
@@ -1178,6 +1255,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "edit-answer": notRecorded(
     "The recorder drives the chat runtime, not the session hook that edits and reruns an answer.",
   ),
+  "edit-queued-message": QUEUE_ACTION,
   "edit-message": notRecorded(
     "The recorder drives the chat runtime, not the session hook that edits a sent message and runs it again.",
   ),
@@ -1190,6 +1268,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   ),
   "improve-prompt": OUTSIDE_THE_CONVERSATION,
   "load-older": OUTSIDE_THE_CONVERSATION,
+  "move-queued-message": QUEUE_ACTION,
   "move-to-side": OUTSIDE_THE_CONVERSATION,
   "new-chat": OUTSIDE_THE_CONVERSATION,
   "open-created-document": OUTSIDE_THE_CONVERSATION,
@@ -1198,23 +1277,25 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "Opening the editor only stops a running turn, which the recorder records as its own stop step.",
   ),
   "open-playbook": OUTSIDE_THE_CONVERSATION,
+  "pause-queue": QUEUE_ACTION,
   "refresh-edited-answer": notRecorded(
     "It reloads the canonical answer after a revision write or conflict; the recorder does not drive answer revisions.",
   ),
-  "remove-queued-message": notRecorded(
-    "The recorder has no send queue; it lives in the session hook this replay renders.",
-  ),
+  "remove-queued-message": QUEUE_ACTION,
   "rename-thread": OUTSIDE_THE_CONVERSATION,
+  "replace-with-queued-message": QUEUE_ACTION,
   "resend-without-anonymization": notRecorded(
     "Offered only after the anonymization boundary refuses a turn, which the recorder's raw boundary never does.",
   ),
   "resolve-draft": OUTSIDE_THE_CONVERSATION,
+  "resume-queue": QUEUE_ACTION,
   retry: recordedAs(({ type }) => type === "retry"),
   "run-client-tool": recordedAs(({ type }) => type === "client-tool"),
   "select-matters": OUTSIDE_THE_CONVERSATION,
   "select-model": notRecorded(
     "The recorder scripts one model; a model switch needs a second one.",
   ),
+  queue: QUEUE_ACTION,
   send: recordedAs(({ type }) => type === "send"),
   "submit-connector-request": notRecorded(
     "The recorder posts text messages only; connector cards submit through their own endpoint.",
@@ -1222,9 +1303,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "submit-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),
-  "send-queued-message-now": notRecorded(
-    "The recorder has no send queue; it lives in the session hook this replay renders.",
-  ),
+  "send-queued-message-now": QUEUE_ACTION,
   stop: recordedAs(({ type }) => type === "stop"),
   "toggle-anonymization": OUTSIDE_THE_CONVERSATION,
   "toggle-web-search": OUTSIDE_THE_CONVERSATION,
@@ -1233,14 +1312,6 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
 const SCENARIOS = readdirSync(FIXTURE_DIR)
   .filter((file) => file.endsWith(RECORDING_EXTENSION))
   .map((file) => file.slice(0, -RECORDING_EXTENSION.length));
-/** Conversations where a new message replaces a turn that still waits on a
- *  card. */
-const SUPERSEDE_SCENARIOS = new Set([
-  "supersede-approval",
-  "supersede-approval-then-grant",
-  "supersede-ask-user",
-]);
-
 /** A stored interrupt without a readable binding kind. */
 const UNBOUND_INTERRUPT = "unbound";
 
@@ -1313,39 +1384,6 @@ describe("a recorded conversation, rendered", () => {
     );
   });
 
-  test.each([...SUPERSEDE_SCENARIOS])(
-    "%s sends the new message and never answers the replaced card",
-    async (scenario) => {
-      const { recording, server } = await replay(scenario);
-      const sends = recording.steps.flatMap(({ action }) =>
-        action.type === "send" ? [action.messageId] : [],
-      );
-      const replaced = storedToolCalls(recording).find(
-        ({ id }) => id === "call-1",
-      );
-      // The fixture must reach the fault: a second message typed while
-      // call-1 waited.
-      expect(sends).toHaveLength(2);
-      expect(replaced).toBeDefined();
-      const posted = JSON.stringify(server.posted.map(({ body }) => body));
-      expect(posted).toContain(sends.at(1) ?? "");
-      const answered = server.posted.flatMap(({ body }) =>
-        resumedInterrupts(body),
-      );
-      expect(
-        answered.filter((id) => id === replaced?.approval?.id),
-        finding(RENDER_ORACLE.grantAnswersOnce, scenario),
-      ).toEqual([]);
-      // The replaced card shows what the server stored and offers nothing.
-      const shown = readScreen(document.body);
-      expect(shown.actionable).not.toContain("call-1");
-      expect(shown.actionable).not.toContain("ask-user-1");
-      if (replaced?.approval !== undefined) {
-        expect(shown.denied).toContain("call-1");
-      }
-    },
-  );
-
   test("a conversation grant answers each matching approval exactly once, without a click", async () => {
     const { recording, server } = await replay("conversation-grant");
     const autoApproved = recording.steps.flatMap(({ action }) =>
@@ -1365,6 +1403,81 @@ describe("a recorded conversation, rendered", () => {
         finding(RENDER_ORACLE.grantAnswersOnce, toolCallId),
       ).toHaveLength(1);
     }
+  });
+
+  test("a reopened thread whose waiting card a grant covers starts no tool call until the user answers", async () => {
+    const recording = readRecording("conversation-grant");
+    const [sent, ...later] = recording.steps;
+    const waiting =
+      sent?.exchanges.at(-1)?.page ??
+      expect.unreachable("The recording must start with a send");
+    // The page opens the thread as the first turn left it: call-1 waits,
+    // and the conversation grant covers its tool.
+    const reopened = { ...recording, initialPage: waiting, steps: later };
+    const grants = grantConversationTools(recording);
+    // The fixture must reach the fault: a grant, and the page answered
+    // the same card on its own while it watched the turn ask.
+    expect(grants).not.toEqual([]);
+    expect(later.at(0)?.action).toEqual({
+      toolCallId: "call-1",
+      type: "auto-approve",
+    });
+    const server = createRecordedServer(reopened, grants);
+    routeRequest = server.fetch;
+    openGrants = server.grants;
+    const live = await openPage(reopened);
+    await flush();
+
+    expect(
+      server.posted,
+      finding(RENDER_ORACLE.requestsMatchRecorded, "reopen"),
+    ).toEqual([]);
+    expect(readScreen(live.view.container).actionable).toEqual(["call-1"]);
+
+    // The user's own click is what resumes the turn.
+    fireEvent.click(
+      within(approvalCard(live.view.container, "call-1")).getByRole("button", {
+        name: ALLOW_ONCE,
+      }),
+    );
+    await waitFor(() => {
+      expect(server.posted).toHaveLength(1);
+    });
+  });
+
+  test("a reopened page whose kept runtime watched a card arrive starts no tool call until the user answers", async () => {
+    const recording = readRecording("conversation-grant");
+    const sent =
+      recording.steps.at(0)?.action ??
+      expect.unreachable("The recording must start with a send");
+    // No grant yet: the card that arrives while the page is open waits.
+    const server = createRecordedServer(recording, []);
+    routeRequest = server.fetch;
+    openGrants = server.grants;
+    const first = await openPage(recording);
+    const pendingActions: Promise<Result<void, unknown>>[] = [];
+    await performAction({
+      action: sent,
+      container: first.view.container,
+      live: first,
+      server,
+      pendingActions,
+    });
+    await flush();
+    expect(readScreen(first.view.container).actionable).toEqual(["call-1"]);
+    // The user leaves without answering; the registry keeps the runtime that
+    // still waits on the card. Then a grant comes to cover its tool.
+    first.view.unmount();
+    server.grants.push(...grantConversationTools(recording));
+    const posted = server.posted.length;
+    const reopened = await openPage(recording);
+    await flush();
+
+    expect(
+      server.posted.length,
+      finding(RENDER_ORACLE.requestsMatchRecorded, "reattach"),
+    ).toBe(posted);
+    expect(readScreen(reopened.view.container).actionable).toEqual(["call-1"]);
   });
 
   test("a recording performs every action the page offers, or says why not", () => {

@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-contacts-org-id-unique",
   revision: 310,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

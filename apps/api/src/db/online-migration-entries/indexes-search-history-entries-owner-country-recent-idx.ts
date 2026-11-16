@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-search-history-entries-owner-country-recent-idx",
   revision: 750,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

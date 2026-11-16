@@ -1,8 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { QueryMeta } from "@tanstack/react-query";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import {
+  chatQueueChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   newNotificationRealtimeEvent,
   RESOURCE_TYPE,
   resourceSetUpdatedRealtimeEvent,
@@ -43,12 +46,17 @@ class FakeEventSource extends EventTarget {
 Object.assign(globalThis, { EventSource: FakeEventSource });
 
 const { act, cleanup, renderHook } = await import("@testing-library/react");
-const { QueryClient, QueryClientProvider } =
+const { QueryClient, QueryClientProvider, QueryObserver } =
   await import("@tanstack/react-query");
 const { activeChatRunsOptions } = await import("@/features/chat/active-runs");
+const { chatKeys } = await import("@/features/chat/chat-query-contract");
+const { groupedChatThreadsOptions } = await import("@/features/chat/queries");
 const { contactsKeys } = await import("@/lib/contacts/queries");
 const { notificationsOptions } = await import("@/lib/notification-queries");
 const { useUserEventRefreshes } = await import("./user-events-sse");
+const { taskDetailOptions, taskKeys } =
+  await import("@/lib/workspaces/queries/tasks");
+const { resourceQueryOptions } = await import("@/lib/workspace-realtime");
 
 afterEach(() => {
   cleanup();
@@ -71,7 +79,21 @@ const mount = () => {
     activeOrganizationId: ORGANIZATION,
     userId: USER,
   }).queryKey;
-  for (const key of [activeRuns, contactsList, otherFirmContacts]) {
+  // The history's pinned section: any grouped list of the reader's chats.
+  const chatThreads = groupedChatThreadsOptions({
+    activeOrganizationId: ORGANIZATION,
+    pinState: "pinned",
+    userId: USER,
+  }).queryKey;
+  // One open chat's queue.
+  const chatQueue = chatKeys.queue(ORGANIZATION, USER, "thread-one");
+  for (const key of [
+    activeRuns,
+    chatQueue,
+    chatThreads,
+    contactsList,
+    otherFirmContacts,
+  ]) {
     queryClient.setQueryData(key, { seeded: true });
   }
   // The notification refresh trims an infinite list to its first page.
@@ -93,6 +115,8 @@ const mount = () => {
     queryClient.getQueryState(key)?.isInvalidated === true;
   return {
     activeRuns,
+    chatQueue,
+    chatThreads,
     contactsList,
     isStale,
     notifications,
@@ -129,15 +153,41 @@ test("a notification event refreshes the notifications", async () => {
   expect(view.isStale(view.contactsList)).toBe(false);
 });
 
-test("a chat run change refreshes the active runs only", async () => {
+test("a chat run change refreshes the active runs, the chat lists, whose rows turn unread, and the queues a turn takes from or holds", async () => {
   const view = mount();
   await act(async () => {
     FakeEventSource.opened.at(0)?.push(chatRunsChangedRealtimeEvent());
   });
 
   expect(view.isStale(view.activeRuns)).toBe(true);
+  expect(view.isStale(view.chatThreads)).toBe(true);
+  expect(view.isStale(view.chatQueue)).toBe(true);
   expect(view.isStale(view.notifications)).toBe(false);
   expect(view.isStale(view.contactsList)).toBe(false);
+});
+
+test("a chat read or pin change refreshes the chat lists only", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened.at(0)?.push(chatThreadsChangedRealtimeEvent());
+  });
+
+  expect(view.isStale(view.chatThreads)).toBe(true);
+  expect(view.isStale(view.activeRuns)).toBe(false);
+  expect(view.isStale(view.notifications)).toBe(false);
+  expect(view.isStale(view.contactsList)).toBe(false);
+});
+
+test("a queue change refreshes the open chats' queues only", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened.at(0)?.push(chatQueueChangedRealtimeEvent());
+  });
+
+  expect(view.isStale(view.chatQueue)).toBe(true);
+  expect(view.isStale(view.activeRuns)).toBe(false);
+  expect(view.isStale(view.chatThreads)).toBe(false);
+  expect(view.isStale(view.notifications)).toBe(false);
 });
 
 test("the first open re-reads nothing: the queries were just fetched", async () => {
@@ -161,6 +211,8 @@ test("a reopen after a drop re-reads everything the stream keeps fresh", async (
   });
 
   expect(view.isStale(view.activeRuns)).toBe(true);
+  expect(view.isStale(view.chatThreads)).toBe(true);
+  expect(view.isStale(view.chatQueue)).toBe(true);
   expect(view.isStale(view.notifications)).toBe(true);
   expect(view.isStale(view.contactsList)).toBe(true);
   expect(view.isStale(view.otherFirmContacts)).toBe(false);
@@ -178,3 +230,128 @@ test("a frame that is no known event refreshes nothing", async () => {
   expect(view.isStale(view.notifications)).toBe(false);
   expect(view.isStale(view.contactsList)).toBe(false);
 });
+
+test.each(["event", "reconnect"])(
+  "organization user projections refresh exact owner queries on %s",
+  async (delivery) => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    });
+    const base = taskDetailOptions({
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      taskId: "00000000-0000-4000-8000-000000000002",
+      organizationId: ORGANIZATION,
+    });
+    let name = "Before";
+    const subscriptions: (() => void)[] = [];
+    const observe = (options: {
+      queryKey: readonly unknown[];
+      meta: QueryMeta;
+    }) => {
+      const observer = new QueryObserver(client, {
+        ...options,
+        initialData: "Before",
+        queryFn: async () => name,
+      });
+      subscriptions.push(observer.subscribe(() => undefined));
+      return () => observer.getCurrentResult().data;
+    };
+    const own = observe(base);
+    const wrongOrganization = observe(
+      resourceQueryOptions(
+        {
+          queryKey: [
+            ...taskKeys.detail(
+              "00000000-0000-4000-8000-000000000001",
+              "00000000-0000-4000-8000-000000000002",
+            ),
+            "other-organization",
+          ],
+        },
+        {
+          resources: [RESOURCE_TYPE.ENTITY],
+          scope: { type: "workspace", workspaceId: "same-workspace" },
+          organizationReads: {
+            organizationId: "organization-two",
+            resources: [RESOURCE_TYPE.USER],
+          },
+        },
+      ),
+    );
+    const wrongResource = observe(
+      resourceQueryOptions(
+        {
+          queryKey: [
+            ...taskKeys.detail(
+              "00000000-0000-4000-8000-000000000001",
+              "00000000-0000-4000-8000-000000000002",
+            ),
+            "other-resource",
+          ],
+        },
+        {
+          resources: [RESOURCE_TYPE.ENTITY],
+          scope: { type: "workspace", workspaceId: "same-workspace" },
+          organizationReads: {
+            organizationId: ORGANIZATION,
+            resources: [RESOURCE_TYPE.CONTACT],
+          },
+        },
+      ),
+    );
+    const view = renderHook(
+      ({ userId }) =>
+        useUserEventRefreshes({ organizationId: ORGANIZATION, userId }),
+      {
+        initialProps: { userId: USER },
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        ),
+      },
+    );
+    try {
+      const stream = FakeEventSource.opened.at(0);
+      name = "After";
+      await act(async () => {
+        stream?.open();
+        if (delivery === "event") {
+          stream?.push(resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.USER));
+        } else {
+          stream?.drop();
+          stream?.open();
+        }
+        await Promise.all(
+          client
+            .getQueryCache()
+            .findAll()
+            .map(async (query) => await query.promise),
+        );
+      });
+      expect(own()).toBe("After");
+      expect(wrongOrganization()).toBe("Before");
+      expect(wrongResource()).toBe("Before");
+      await act(async () => {
+        view.rerender({ userId: "new-user" });
+      });
+      expect(stream?.readyState).toBe(FakeEventSource.CLOSED);
+      name = "Wrong old user";
+      await act(async () => {
+        stream?.push(resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.USER));
+        stream?.open();
+        await Promise.all(
+          client
+            .getQueryCache()
+            .findAll()
+            .map(async (query) => await query.promise),
+        );
+      });
+      expect(own()).toBe("After");
+    } finally {
+      view.unmount();
+      for (const unsubscribe of subscriptions) {
+        unsubscribe();
+      }
+      client.clear();
+    }
+  },
+);

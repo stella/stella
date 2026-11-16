@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 3,
-  "reason": "Folder restore rows are runner socket bookkeeping on the owner connection, like the runner's other tables: queuing a restore, and recording which run carries the note about it and when that run was accepted. The member's request to undo is audited by the endpoint that asks for it."
-}

@@ -29,6 +29,7 @@ const makeRun = (
   status: "completed",
   errorCode: null,
   entityVersionId: toSafeId<"entityVersion">(uuid(12)),
+  scope: { kind: "whole" },
   listId: LIST_A,
   createdAt: `2026-09-2${String(suffix)}T10:00:00.000Z`,
   finishedAt: `2026-09-2${String(suffix)}T10:05:00.000Z`,

@@ -68,6 +68,9 @@
   "connectStella": {
     "message": "Połącz stellę"
   },
+  "openStella": {
+    "message": "Otwórz stellę"
+  },
   "adoptTab": {
     "message": "Użyj tej karty ze stellą"
   },
@@ -85,5 +88,17 @@
   },
   "connectStellaInstead": {
     "message": "Połącz stellę tutaj zamiast tamtej"
+  },
+  "allowDesktop": {
+    "message": "Używaj ze stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop: połączono"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop nie jest uruchomiony"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Zaktualizuj stella desktop i to rozszerzenie"
   }
 }

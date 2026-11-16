@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-invoices-id-workspace-unique",
   revision: 420,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

@@ -14,6 +14,10 @@ const PERMISSION_COPY = {
     description: "permissionAccessibilityDescription",
     label: "permissionAccessibility",
   },
+  microphone: {
+    description: "permissionMicrophoneDescription",
+    label: "permissionMicrophone",
+  },
   notifications: {
     description: "permissionNotificationsDescription",
     label: "notifications",
@@ -25,6 +29,8 @@ const PERMISSION_COPY = {
 } as const satisfies Record<Permission, { description: string; label: string }>;
 
 type PermissionRowProps = {
+  /** Replaces the usual purpose where one feature asks for the permission. */
+  description?: string | undefined;
   onOpenSettings: () => void;
   onRequest: () => void;
   onTurnOff: () => void;
@@ -37,6 +43,7 @@ type PermissionRowProps = {
  * is a switch until macOS says it needs approval in Login Items.
  */
 export const PermissionRow = ({
+  description,
   onOpenSettings,
   onRequest,
   onTurnOff,
@@ -58,7 +65,7 @@ export const PermissionRow = ({
           <p className="text-sm font-medium">{t(copy.label)}</p>
         )}
         <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-          {t(copy.description)}
+          {description ?? t(copy.description)}
         </p>
         {row.status === "denied" ? (
           <p className="text-warning-foreground mt-1 text-sm">

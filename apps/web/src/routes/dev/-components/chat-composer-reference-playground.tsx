@@ -85,6 +85,8 @@ const DraftComposer = ({ state, variant }: DraftComposerProps) => {
   return (
     <ChatInputSurface
       controller={controller}
+      // The playground has no thread to choose a model for.
+      models={null}
       // The playground sends nowhere, so the draft stays for the next look.
       onSubmit={() => CHAT_SEND_KEPT}
       reservedCommands={{ hasPersistedThread: false }}

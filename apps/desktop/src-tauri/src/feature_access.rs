@@ -2,9 +2,14 @@
 //!
 //! The request carries only the desktop account key and receives only
 //! per-feature decisions; this module never reads or sends feature data. The
-//! decision is refreshed at startup, on every account link or unlink, and
-//! every 15 minutes. Anything but an explicit `enabled` (no account, a
-//! network or server error, an unknown status) turns a feature off.
+//! decision is refreshed at startup, on every account link or unlink, right
+//! after the computer wakes, and every 2 minutes. Anything but an explicit
+//! `enabled` (no account, a refusal, an unknown status) turns a feature off.
+//!
+//! A read that could not happen (the network is down after a wake, the
+//! server failed, the Keychain did not answer in time) decides nothing: the
+//! last decision stands, bounded by the credential's expiry, and the read is
+//! retried within seconds rather than at the next 2 minute tick.
 
 use serde::Deserialize;
 use std::{
@@ -20,6 +25,9 @@ use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 use crate::logging::{json_cause_logged, request_cause_logged};
 
 const REFRESH_INTERVAL: Duration = Duration::from_secs(2 * 60);
+/// The first retry after a read that could not happen; each next one waits
+/// twice as long, up to the refresh interval.
+const FIRST_RETRY: Duration = Duration::from_secs(5);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_RESPONSE_BYTES: usize = 16 * 1024;
 const ENABLED_STATUS: &str = "enabled";
@@ -63,6 +71,33 @@ fn enabled_features(body: &[u8]) -> Result<HashSet<DesktopFeature>, String> {
   )
 }
 
+/// Why a read produced no decision from the server.
+#[derive(Debug, PartialEq, Eq)]
+enum FetchFailure {
+  /// The request never got an answer, or the server failed: nothing is
+  /// known, so the last decision stands and the read is retried soon.
+  Unreached(String),
+  /// The server refused the request or answered with something unreadable:
+  /// gated features go off.
+  Refused(String),
+}
+
+/// A server failure or a rate limit says nothing about the account; any
+/// other refusal does.
+fn failure_for_status(status: reqwest::StatusCode) -> FetchFailure {
+  let message = format!("feature access request was refused: {status}");
+  if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+    FetchFailure::Unreached(message)
+  } else {
+    FetchFailure::Refused(message)
+  }
+}
+
+/// How long to wait before retrying a read that could not happen.
+fn next_retry(previous: Option<Duration>) -> Duration {
+  previous.map_or(FIRST_RETRY, |wait| (wait * 2).min(REFRESH_INTERVAL))
+}
+
 fn client() -> Result<&'static DesktopHttpClient, String> {
   static CLIENT: OnceLock<DesktopHttpClient> = OnceLock::new();
   if let Some(client) = CLIENT.get() {
@@ -88,29 +123,34 @@ fn signed_request(
   )
 }
 
-async fn fetch(request: &AccountRequest) -> Result<HashSet<DesktopFeature>, String> {
-  let mut response = signed_request(client()?, request)?
-    .send()
-    .await
-    .map_err(request_cause_logged("feature access request failed"))?;
+async fn fetch(
+  request: &AccountRequest,
+) -> Result<HashSet<DesktopFeature>, FetchFailure> {
+  let mut response =
+    signed_request(client().map_err(FetchFailure::Unreached)?, request)
+      .map_err(FetchFailure::Refused)?
+      .send()
+      .await
+      .map_err(request_cause_logged("feature access request failed"))
+      .map_err(FetchFailure::Unreached)?;
   if !response.status().is_success() {
-    return Err(format!(
-      "feature access request was refused: {}",
-      response.status()
-    ));
+    return Err(failure_for_status(response.status()));
   }
   let mut body = Vec::new();
   while let Some(chunk) = response
     .chunk()
     .await
-    .map_err(request_cause_logged("feature access response failed"))?
+    .map_err(request_cause_logged("feature access response failed"))
+    .map_err(FetchFailure::Unreached)?
   {
     if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
-      return Err("feature access response is too large".to_string());
+      return Err(FetchFailure::Refused(
+        "feature access response is too large".to_string(),
+      ));
     }
     body.extend_from_slice(&chunk);
   }
-  enabled_features(&body)
+  enabled_features(&body).map_err(FetchFailure::Refused)
 }
 
 struct AccountDecision {
@@ -119,11 +159,20 @@ struct AccountDecision {
   enabled: HashSet<DesktopFeature>,
 }
 
-async fn current_decision(app: &AppHandle) -> AccountDecision {
-  let closed = || AccountDecision {
-    namespace: None,
-    expires_at: None,
-    enabled: HashSet::new(),
+/// What one read tells about the account's features.
+enum Outcome {
+  Decided(AccountDecision),
+  /// Nothing could be read; the last decision stands.
+  Unknown,
+}
+
+async fn current_decision(app: &AppHandle) -> Outcome {
+  let closed = || {
+    Outcome::Decided(AccountDecision {
+      namespace: None,
+      expires_at: None,
+      enabled: HashSet::new(),
+    })
   };
   let Some(state) = app.try_state::<AccountState>() else {
     return closed();
@@ -137,26 +186,39 @@ async fn current_decision(app: &AppHandle) -> AccountDecision {
       account::set_reconnect_needed(app, false);
       return closed();
     }
-    Err(error) => {
-      account::set_reconnect_needed(app, error == crate::device_proof::RECONNECT);
-      tracing::warn!(error = %error, "feature access skipped: account is unreadable");
+    Err(error) if error == crate::device_proof::RECONNECT => {
+      account::set_reconnect_needed(app, true);
+      tracing::warn!(error = %error, "feature access skipped: account needs reconnecting");
       return closed();
+    }
+    // The Keychain did not answer (often while the computer sleeps): the
+    // account is still linked, so nothing is decided until it can be read.
+    Err(error) => {
+      tracing::warn!(error = %error, "feature access deferred: account is unreadable now");
+      return Outcome::Unknown;
     }
   };
   let namespace = Some(request.local_data_namespace());
   let expires_at = chrono::DateTime::parse_from_rfc3339(&request.credential.expires_at)
     .ok()
     .map(|expiry| expiry.with_timezone(&chrono::Utc));
-  let enabled = fetch(&request).await.unwrap_or_else(|error| {
-    tracing::warn!(error = %error, "feature access is unavailable; gated features stay off");
-    HashSet::new()
-  });
+  let enabled = match fetch(&request).await {
+    Ok(enabled) => enabled,
+    Err(FetchFailure::Unreached(error)) => {
+      tracing::warn!(error = %error, "feature access deferred: the server was not reached");
+      return Outcome::Unknown;
+    }
+    Err(FetchFailure::Refused(error)) => {
+      tracing::warn!(error = %error, "feature access is unavailable; gated features stay off");
+      HashSet::new()
+    }
+  };
   drop(request);
-  AccountDecision {
+  Outcome::Decided(AccountDecision {
     namespace,
     expires_at,
     enabled,
-  }
+  })
 }
 
 fn refresh_signal() -> &'static tokio::sync::Notify {
@@ -190,10 +252,23 @@ pub type FeatureChangeHandler =
 pub fn start(app: AppHandle, on_change: FeatureChangeHandler) {
   tauri::async_runtime::spawn(async move {
     let mut interval = tokio::time::interval(REFRESH_INTERVAL);
+    let mut wakes = crate::presence::subscribe_wakes();
+    // Set while the last read could not happen: when to read again.
+    let mut retry: Option<Duration> = None;
     loop {
+      let retrying = async {
+        match retry {
+          Some(wait) => tokio::time::sleep(wait).await,
+          None => std::future::pending().await,
+        }
+      };
       tokio::select! {
         _ = interval.tick() => {}
         () = refresh_signal().notified() => {}
+        // A wake can follow a network change; the decision is read again
+        // right away instead of at the next tick.
+        _ = wakes.changed() => {}
+        () = retrying => {}
       }
       let Some(gates) = app.try_state::<FeatureGates>() else {
         return;
@@ -201,7 +276,21 @@ pub fn start(app: AppHandle, on_change: FeatureChangeHandler) {
       let Some(generation) = gates.generation() else {
         return;
       };
-      let decision = current_decision(&app).await;
+      let decision = match current_decision(&app).await {
+        Outcome::Decided(decision) => {
+          retry = None;
+          decision
+        }
+        Outcome::Unknown => {
+          let wait = next_retry(retry);
+          tracing::info!(
+            retry_in_seconds = wait.as_secs(),
+            "feature access read again soon"
+          );
+          retry = Some(wait);
+          continue;
+        }
+      };
       let Some(changed) = gates.install(
         generation,
         decision.namespace,
@@ -240,6 +329,43 @@ mod tests {
       .collect::<Vec<_>>();
     known.sort();
     assert_eq!(ids, known);
+  }
+
+  #[test]
+  fn a_server_failure_decides_nothing_and_a_refusal_turns_features_off() {
+    for status in [
+      reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+      reqwest::StatusCode::BAD_GATEWAY,
+      reqwest::StatusCode::SERVICE_UNAVAILABLE,
+      reqwest::StatusCode::TOO_MANY_REQUESTS,
+    ] {
+      assert!(
+        matches!(failure_for_status(status), FetchFailure::Unreached(_)),
+        "{status}"
+      );
+    }
+    for status in [
+      reqwest::StatusCode::UNAUTHORIZED,
+      reqwest::StatusCode::FORBIDDEN,
+      reqwest::StatusCode::NOT_FOUND,
+    ] {
+      assert!(
+        matches!(failure_for_status(status), FetchFailure::Refused(_)),
+        "{status}"
+      );
+    }
+  }
+
+  #[test]
+  fn a_read_that_could_not_happen_is_retried_within_seconds_then_less_often() {
+    let mut waits = Vec::new();
+    let mut retry = None;
+    for _ in 0..7 {
+      let wait = next_retry(retry);
+      waits.push(wait.as_secs());
+      retry = Some(wait);
+    }
+    assert_eq!(waits, [5, 10, 20, 40, 80, 120, 120]);
   }
 
   #[test]
@@ -356,11 +482,16 @@ mod tests {
         .unwrap(),
       HashSet::from([DesktopFeature::ActivityTimeline])
     );
-    assert!(
-      fetch(&AccountRequest::fixture(account("stella_dr_bad")).await)
-        .await
-        .is_err()
-    );
+    assert!(matches!(
+      fetch(&AccountRequest::fixture(account("stella_dr_bad")).await).await,
+      Err(FetchFailure::Refused(_))
+    ));
     server.abort();
+    let _stopped = server.await;
+    // A server that is gone decides nothing.
+    assert!(matches!(
+      fetch(&AccountRequest::fixture(account("stella_dr_good")).await).await,
+      Err(FetchFailure::Unreached(_))
+    ));
   }
 }

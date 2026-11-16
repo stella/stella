@@ -48,7 +48,7 @@ import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
 import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 import type { SafeId } from "@/lib/safe-id";
 
-export const DIRECTION_TITLE = {
+const DIRECTION_TITLE = {
   incoming: "caseLaw.viewer.citedBy",
   outgoing: "caseLaw.viewer.cites",
 } as const satisfies Record<CitationDirection, TranslationKey>;
@@ -178,7 +178,7 @@ const groupByTreatment = (
   return ordered;
 };
 
-export const CitationList = ({
+const CitationList = ({
   decision,
   decisionId,
   direction,

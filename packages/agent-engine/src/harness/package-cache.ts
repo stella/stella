@@ -3,9 +3,10 @@ import path from "node:path";
 
 /**
  * Where package managers a local run starts keep their caches and downloads:
- * one stella-owned folder per computer, which every harness sandbox may write
- * to. Without it a sandboxed `bun install`, `pip install` or a browser
- * download would try to write to the user's home and be refused.
+ * the chat's own stella-owned cache folder, which every harness sandbox may
+ * write to and no other chat's run sees. Without it a sandboxed `bun
+ * install`, `pip install` or a browser download would try to write to the
+ * user's home and be refused.
  *
  * The one list both harness adapters set; each variable names its own
  * subfolder so tools never share a layout. The temp directory is not set

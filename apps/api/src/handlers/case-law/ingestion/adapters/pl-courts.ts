@@ -44,10 +44,7 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  parsePlDecisionContent,
-  PL_DECISION_MARKUP,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { parsePlCommonCourtDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   absentDecisionTextFields,
@@ -1500,21 +1497,23 @@ export const buildPlDecision = ({
 
   if (content) {
     try {
-      const parserResult = parsePlDecisionContent({
-        caseNumber,
-        ecli: undefined,
-        court: courtName,
-        decisionDate,
-        decisionType,
-        sourceUrl: publicSourceUrl(saosId),
-        documentUrl,
-        content,
-        keywords,
-        statutes,
-        documentId: upstreamId ?? String(saosId ?? caseNumber),
-        superscripts: true,
-        markup: PL_DECISION_MARKUP.COMMON_COURT,
-      });
+      const parserResult = parsePlCommonCourtDecision(
+        {
+          caseNumber,
+          ecli: undefined,
+          court: courtName,
+          decisionDate,
+          decisionType,
+          sourceUrl: publicSourceUrl(saosId),
+          documentUrl,
+          content,
+          keywords,
+          statutes,
+          documentId: upstreamId ?? String(saosId ?? caseNumber),
+          superscripts: true,
+        },
+        "pl-courts",
+      );
 
       documentAst = parserResult.documentAst;
       fulltext = parserResult.fulltext;

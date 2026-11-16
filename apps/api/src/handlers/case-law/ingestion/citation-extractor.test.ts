@@ -698,16 +698,57 @@ describe("extractCitations", () => {
       "Nejvyššího správního soudu citovaná v tomto rozsudku jsou " +
       "publikována na www.nssoud.cz)";
     // The docket and the collection number name one decision, so they are
-    // one citation: the entry anchors on the docket and resolves by the
-    // collection number.
+    // one citation: the entry anchors on the docket, which names the sheet
+    // and so resolves by itself.
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(citations[0]).toMatchObject({
       citationText: "č.j. 3 Ads 110/2009",
       citedSheetNumber: "49",
-      identifierType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-      identifierValue: "č. 2018/2010 Sb. NSS",
+      identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     });
+  });
+
+  describe("a docket printed beside its collection number", () => {
+    const collections = [
+      "č. 933/2006 Sb. NSS",
+      "č. 58/2011 Sb. NS",
+      "č. 12/2015 Sb. rozh. tr.",
+    ];
+    const dockets = [
+      { printed: "č. j. 1 Azs 13/2006 ‑ 39", sheet: "39" },
+      { printed: "č. j. 9 Afs 59/2007-56", sheet: "56" },
+      { printed: "č. j. 2 As 196/2016‑123", sheet: "123" },
+      { printed: "sp. zn. 29 Cdo 1234/2013", sheet: null },
+      { printed: "sp. zn. 6 Tdo 512/2014", sheet: null },
+    ];
+
+    test.each(
+      dockets.flatMap((docket) =>
+        collections.map((collection) => ({ ...docket, collection })),
+      ),
+    )(
+      "$printed, $collection: one citation, keyed by the docket exactly when it names the sheet",
+      ({ printed, sheet, collection }) => {
+        const text = `viz rozsudek ${printed}, ${collection}, a dále`;
+        const citations = extractCitations([{ index: 0, text }]);
+
+        expect(citations).toHaveLength(1);
+        const [citation] = citations;
+        expect(citation?.citedSheetNumber ?? null).toBe(sheet);
+        if (sheet === null) {
+          expect(citation).toMatchObject({
+            identifierType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+            identifierValue: collection,
+          });
+        } else {
+          expect(citation?.identifierType).toBe(
+            DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          );
+          expect(citation?.identifierValue).toBe(citation?.citationText);
+        }
+      },
+    );
   });
 
   test("extracts a bare Cpjn plenary-opinion citation without sp. zn.", () => {

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 3,
+  "reason": "The new browser-page package holds the page script and guards the extension and the holder share; it declares the catalog's better-result and valibot, which the moved modules import, and bun-types for its tests, as every workspace package does."
+}
