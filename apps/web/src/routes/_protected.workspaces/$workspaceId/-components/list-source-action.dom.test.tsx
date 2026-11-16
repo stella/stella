@@ -712,8 +712,8 @@ test("ambiguous source retries retain each intent's key and document version", a
   expect(changed.headers.get("Idempotency-Key")).toBeTruthy();
   expect(changed.headers.get("Idempotency-Key")).not.toBe(firstKey);
   expect(replay.headers.get("Idempotency-Key")).toBe(firstKey);
-  const firstBody = await first.clone().json();
-  expect(firstBody.sourceEntityVersionId).toBe(versionId);
+  const firstBody: unknown = await first.clone().json();
+  expect(firstBody).toMatchObject({ sourceEntityVersionId: versionId });
   expect(await replay.clone().json()).toEqual(firstBody);
   expect(await changed.clone().json()).toMatchObject({
     quote: "Different intent",

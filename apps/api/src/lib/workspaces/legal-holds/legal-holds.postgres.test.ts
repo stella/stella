@@ -365,11 +365,11 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           const holdId = placedResult.value.id;
           for (const deletion of [
             async () =>
-              await client`DELETE FROM workspaces WHERE id = ${workspaceId}`,
+              await client<unknown>`DELETE FROM workspaces WHERE id = ${workspaceId}`,
             async () =>
-              await client`DELETE FROM entities WHERE id = ${rawEntityId}`,
+              await client<unknown>`DELETE FROM entities WHERE id = ${rawEntityId}`,
             async () =>
-              await client`DELETE FROM workspace_contacts WHERE id = ${workspaceContactId}`,
+              await client<unknown>`DELETE FROM workspace_contacts WHERE id = ${workspaceContactId}`,
           ]) {
             const outcome = await Result.tryPromise(deletion);
             expect(outcome.isErr()).toBe(true);

@@ -176,8 +176,9 @@ const holdPublish = async (indexId: string) => {
   const held = Promise.withResolvers<undefined>();
   const released = Promise.withResolvers<undefined>();
   const transaction = metastore().begin(async (tx: TransactionSQL) => {
-    const rows =
-      await tx`SELECT index_uid FROM indexes WHERE index_id = ${indexId} FOR NO KEY UPDATE`;
+    const rows = await tx<
+      { index_uid: unknown }[]
+    >`SELECT index_uid FROM indexes WHERE index_id = ${indexId} FOR NO KEY UPDATE`;
     if (rows.length !== 1) {
       panic(`expected to lock one index row, locked ${String(rows.length)}`);
     }

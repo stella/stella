@@ -20,6 +20,9 @@ import { loadOfficeEvidence } from "./office-evidence";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
+
 describe.skipIf(!enabled)("Office evidence storage boundaries", () => {
   const fixture = activeFileContextFixture({
     fileName: "schedule.xlsx",
@@ -102,7 +105,7 @@ describe.skipIf(!enabled)("Office evidence storage boundaries", () => {
                 ([, delay]) => delay === LIMITS.workPoolHeavySidecarDeadlineMs,
               )
               ?.at(0);
-            if (typeof fireDeadline !== "function") {
+            if (!isCallable(fireDeadline)) {
               panic("Office evidence did not acquire its admission deadline");
             }
             fireDeadline();

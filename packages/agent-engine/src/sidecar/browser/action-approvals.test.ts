@@ -114,7 +114,8 @@ test("a key press and an option name the key and the option, and chat keeps the 
     const harness = createEventQueue<HarnessEvent>();
     const stream = approvals.withEvents(harness.items)[Symbol.asyncIterator]();
     const decided = approvals.request(request);
-    const event = (await stream.next()).value;
+    const next = await stream.next();
+    const event = next.done === true ? undefined : next.value;
     if (event?.type !== "approval.requested") {
       throw new Error("Expected an approval request");
     }
