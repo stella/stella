@@ -6,6 +6,8 @@ import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
 import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import type { ChatEditorController } from "@/components/chat-editor-provider";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 
 // The network, for this file. Installed before the app loads, so a client
@@ -24,15 +26,16 @@ globalThis.fetch = Object.assign(
 
 const { act } = await import("react");
 const { cleanup, waitFor, within } = await import("@testing-library/react");
-const { default: messages } = await import("@/i18n/langs/en.json");
 const { openChatThreadDomPage } =
   await import("@/components/chat/chat-thread-dom-page");
 const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
-const { chatKeys } = await import("@/features/chat/chat-query-contract");
-const { CHAT_SEND_KEPT, CHAT_SEND_SENT } =
+const { CHAT_SEND_KEPT, CHAT_SEND_SENT, useChatEditor } =
   await import("@/components/chat-editor-provider");
 const { toSafeId } = await import("@/lib/safe-id");
+const { toChatThreadId } = await import("@/lib/chat-thread-ref");
+const { EditorContent } = await import("@tiptap/react");
+const { useExternalSyncEffect } = await import("@/hooks/use-effect");
 
 afterEach(async () => {
   await act(async () => cleanup());
@@ -54,7 +57,6 @@ const REFUSED_ID = "00000000-0000-7000-8000-0000000000c3";
 const ANSWER_ID = "00000000-0000-7000-8000-0000000000c4";
 const REFUSED_TEXT = "Which leases end this year?";
 const ANSWER = "Two of them.";
-const NOT_ALLOWED = messages.chat.localRun.refusalPermissionAboveLimit;
 
 type StoredMessage = {
   createdAt: string;
@@ -228,67 +230,75 @@ const messageIdOf = (posted: Record<string, unknown> | undefined): unknown => {
     : undefined;
 };
 
-type Page = Awaited<ReturnType<typeof openChatThreadDomPage>>;
-
-/** The revision of the thread the page last read. */
-const revisionRead = ({ queryClient }: Page): unknown =>
-  queryClient
-    .getQueryCache()
-    .findAll({ queryKey: chatKeys.all })
-    .map(({ state }): unknown => state.data)
-    .flatMap((data) =>
-      typeof data === "object" && data !== null && "threadRevision" in data
-        ? [data.threadRevision]
-        : [],
-    )
-    .at(0);
-
-/** The page once the read that follows a refused send has landed. */
-const refusalShown = async (server: Server, page: Page) => {
-  const { container } = page.view;
-  await waitFor(() => {
-    if (within(container).queryByText(NOT_ALLOWED) === null) {
-      panic("The refusal is not shown yet");
-    }
+/** The chat's main composer, as the thread page mounts it. */
+const Composer = ({
+  onController,
+}: {
+  onController: (controller: ChatEditorController) => void;
+}) => {
+  const controller = useChatEditor({
+    threadRef: { scope: "global", threadId: toChatThreadId(THREAD_ID) },
   });
-  // The fixture reaches the boundary: the thread has moved on from the read
-  // the page was built on, stores nothing of the refused send, and the page
-  // has read it again.
-  expect(server.stored.some(({ id }) => id === REFUSED_ID)).toBe(false);
-  const moved = `revision-${String(server.revision)}`;
-  await waitFor(() => {
-    if (revisionRead(page) !== moved) {
-      panic("The page has not read the thread again yet");
-    }
-  });
-  await act(async () => {
-    await Promise.resolve();
-  });
+  useExternalSyncEffect(() => {
+    onController(controller);
+  }, [controller, onController]);
+  return <EditorContent editor={controller.editor} />;
 };
 
-const expectMessageAndRefusal = (container: HTMLElement) => {
-  const page = within(container);
-  expect(page.getByText(REFUSED_TEXT)).toBeDefined();
-  expect(page.getByText(NOT_ALLOWED)).toBeDefined();
-  expect(
-    page.getByRole("button", { name: messages.chat.resend }),
-  ).toBeDefined();
-};
-
-test("the first send of a new chat, refused before it is stored, keeps the message and the reason", async () => {
+test("the first message of a new chat, refused before it is stored, goes back into the chat's composer, and is answered when sent again", async () => {
   const server = serve([]);
+  let composer: ChatEditorController | undefined;
   const page = await openChatThreadDomPage({
     organizationId: ORGANIZATION_ID,
+    renderComposer: () => (
+      <Composer
+        onController={(controller) => {
+          composer = controller;
+        }}
+      />
+    ),
     threadId: THREAD_ID,
     routeHandoff: {
       content: REFUSED_TEXT,
       id: toSafeId<"chatMessage">(REFUSED_ID),
     },
   });
+  const composerText = () => composer?.editor?.getText() ?? "";
 
-  await refusalShown(server, page);
+  // Sent from the landing page before this page existed, refused before
+  // anything of it was stored: the composer holds it, the transcript does
+  // not.
+  await waitFor(() => {
+    if (composerText() !== REFUSED_TEXT) {
+      panic("The refused message is not back in the composer yet");
+    }
+  });
+  const { container } = page.view;
+  const shownIds = () => page.session().messages.map(({ id }) => id);
+  await waitFor(() => {
+    if (shownIds().includes(REFUSED_ID)) {
+      panic("The refused message still shows in the transcript");
+    }
+  });
+  expect(server.stored).toEqual([]);
+  expect(server.posted.map(messageIdOf)).toEqual([REFUSED_ID]);
 
-  expectMessageAndRefusal(page.view.container);
+  server.allowed = true;
+  let outcome: unknown;
+  await act(async () => {
+    outcome = await page.session().sendMessage({
+      content: REFUSED_TEXT,
+      id: toSafeId<"chatMessage">(REFUSED_ID),
+    });
+  });
+  expect(outcome).toEqual(CHAT_SEND_SENT);
+  await waitFor(() => {
+    if (within(container).queryByText(ANSWER) === null) {
+      panic("The message sent again is not answered yet");
+    }
+  });
+  expect(server.posted.map(intentOf)).toEqual([undefined, undefined]);
+  expect(shownIds()).toEqual([REFUSED_ID, ANSWER_ID]);
   expect(server.unexpected).toEqual([]);
 });
 

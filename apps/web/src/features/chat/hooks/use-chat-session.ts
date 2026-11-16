@@ -149,7 +149,7 @@ import {
   sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
 import {
-  resendLatestChatMessage,
+  settleRouteHandoff,
   showStoredChatThread,
 } from "@/features/chat/chat-runtime-registry";
 import {
@@ -915,6 +915,51 @@ export const useChatSession = ({
   );
 
   /**
+   * Say why a message the server refused before storing it was not sent,
+   * while the composer holds it again: in the words the thread used for a
+   * failed request.
+   */
+  const notifySendRefused = useCallback(
+    (refused: Error) => {
+      // The server's refusal is found beneath the transport's wrapping: its
+      // message, as the thread showed it, unless a notice of its own (an
+      // expired session, an admission refusal) says more.
+      const refusal = chatRefusal(refused);
+      const copy = chatErrorTranslationKey(refused);
+      if (refusal !== null) {
+        notifyUserError(refusal, refusal.message);
+      } else if (copy === "chat.sendError") {
+        notifyUserError(refused, t(copy));
+      } else {
+        notifyUserProblem(t(copy));
+      }
+    },
+    [t],
+  );
+
+  // A new chat's first message was sent before the page existed (the landing
+  // page, `/new`, Ask AI); this page takes it from the runtime. Refused before
+  // the server stored it, it goes back into this chat's composer, like any
+  // send the server refused.
+  useExternalSyncEffect(() => {
+    const handoff = chat.takeRouteHandoff();
+    if (handoff === null) {
+      return;
+    }
+    detached(
+      (async () => {
+        const settled = await settleRouteHandoff(chat, handoff);
+        if (settled.type === "sent") {
+          return;
+        }
+        notifySendRefused(settled.error);
+        restoreIntoComposer(handoff.message);
+      })(),
+      "use-chat-session.settle-route-handoff",
+    );
+  }, [chat, notifySendRefused, restoreIntoComposer]);
+
+  /**
    * Queue `message` at the end of the chat's queue, as it would be sent now
    * (its mode and document preferences snapshotted). `kept` when the server
    * did not take it: the composer gets it back.
@@ -1136,25 +1181,13 @@ export const useChatSession = ({
       if (isQueueInsteadRefusal(acceptance.error)) {
         return await enqueueMessage(message, options);
       }
-      // The composer holds the message again; the notice says why it was
-      // not sent in the words the thread used for a failed request.
-      // The server's refusal is found beneath the transport's wrapping.
-      const refusal = chatRefusal(acceptance.error);
-      const copy = chatErrorTranslationKey(acceptance.error);
-      if (refusal !== null) {
-        // Its message, as the thread showed it, unless a notice of its own
-        // (an expired session, an admission refusal) says more.
-        notifyUserError(refusal, refusal.message);
-      } else if (copy === "chat.sendError") {
-        notifyUserError(acceptance.error, t(copy));
-      } else {
-        notifyUserProblem(t(copy));
-      }
+      notifySendRefused(acceptance.error);
       return CHAT_SEND_KEPT;
     },
     [
       chat,
       enqueueMessage,
+      notifySendRefused,
       notifySteerRefused,
       readQueue,
       resolveToolApproval,
@@ -1414,8 +1447,7 @@ export const useChatSession = ({
         return;
       }
 
-      await resendLatestChatMessage(
-        chat,
+      await chat.reload(
         sendMode === undefined ? undefined : { body: { sendMode } },
       );
     },
