@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expectTypeOf, test } from "bun:test";
 
 import type { RegistryClientOptions } from "@stll/business-registries/shared";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
@@ -50,6 +50,10 @@ const registryContracts = {
 };
 
 test("every outbound entry point requires an explicit observation choice", () => {
-  expect(Object.values(corpusContracts).every(Boolean)).toBe(true);
-  expect(Object.values(registryContracts).every(Boolean)).toBe(true);
+  expectTypeOf<
+    (typeof corpusContracts)[keyof typeof corpusContracts]
+  >().toEqualTypeOf<true>();
+  expectTypeOf<
+    (typeof registryContracts)[keyof typeof registryContracts]
+  >().toEqualTypeOf<true>();
 });

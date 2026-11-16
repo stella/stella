@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, test } from "bun:test";
+import { describe, expectTypeOf, test } from "bun:test";
 
 import type {
   TableRowHost,
@@ -56,7 +56,6 @@ describe("the row host of one kind cannot serve another", () => {
       renderRow: () => null,
     };
 
-    expect(decisionHost.collapsedRowSpan).toBeUndefined();
-    expect(decisionHost.bottomRow).toBeUndefined();
+    expectTypeOf(decisionHost).toExtend<TableRowHost<DecisionRowData>>();
   });
 });
