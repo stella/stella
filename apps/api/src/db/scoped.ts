@@ -108,6 +108,8 @@ export const TRANSACTION_DEADLINE_MODE = {
 export type TransactionDeadline = {
   timeoutMs: number;
   mode: (typeof TRANSACTION_DEADLINE_MODE)[keyof typeof TRANSACTION_DEADLINE_MODE];
+  /** The monotonic clock the deadline is measured on; `performance.now()` when omitted. */
+  clock?: { monotonic: () => number } | undefined;
 };
 export const TRANSACTION_DEADLINE = {
   /** A request's transaction: observed until its long cases are measured. */
@@ -273,7 +275,12 @@ const runScopedTransaction = async <
   featureAccessSnapshot,
   deadline,
 }: RunScopedTransactionOptions<TTransaction, T>): Promise<T> => {
-  const startedAt = performance.now();
+  // The pool hands over a connection only when one is free, and the callback
+  // runs only then: the deadline is measured from that entry, so time spent
+  // waiting for a connection is reported beside it, not counted in it.
+  const monotonic = deadline?.clock?.monotonic ?? (() => performance.now());
+  const requestedAt = monotonic();
+  let enteredAt: number | undefined;
   try {
     return await openScopedTransaction({
       database,
@@ -283,9 +290,18 @@ const runScopedTransaction = async <
       workspaceScope,
       featureAccessSnapshot,
       deadline,
+      onEnter: () => {
+        enteredAt = monotonic();
+      },
     });
   } finally {
-    reportOverDeadline({ deadline, elapsedMs: performance.now() - startedAt });
+    if (enteredAt !== undefined) {
+      reportOverDeadline({
+        deadline,
+        elapsedMs: monotonic() - enteredAt,
+        connectionWaitMs: enteredAt - requestedAt,
+      });
+    }
   }
 };
 
@@ -293,9 +309,13 @@ const runScopedTransaction = async <
 export const reportOverDeadline = ({
   deadline,
   elapsedMs,
+  connectionWaitMs,
 }: {
   deadline: TransactionDeadline | undefined;
+  /** From the callback's entry, once the transaction holds its connection. */
   elapsedMs: number;
+  /** How long the transaction waited for a pooled connection before that. */
+  connectionWaitMs: number;
 }): void => {
   if (deadline === undefined || elapsedMs <= deadline.timeoutMs) {
     return;
@@ -305,6 +325,7 @@ export const reportOverDeadline = ({
     "http.method": route?.method ?? "none",
     "http.route": route?.routeTemplate ?? "unmounted",
     "db.transaction.duration_ms": Math.round(elapsedMs),
+    "db.transaction.connection_wait_ms": Math.round(connectionWaitMs),
     "db.transaction.deadline_ms": deadline.timeoutMs,
     "db.transaction.deadline_mode": deadline.mode,
   });
@@ -321,8 +342,13 @@ const openScopedTransaction = async <
   workspaceScope,
   featureAccessSnapshot,
   deadline,
-}: RunScopedTransactionOptions<TTransaction, T>): Promise<T> =>
+  onEnter,
+}: RunScopedTransactionOptions<TTransaction, T> & {
+  /** Called first inside the transaction, once it holds its connection. */
+  onEnter?: (() => void) | undefined;
+}): Promise<T> =>
   await database.transaction(async (tx: TTransaction) => {
+    onEnter?.();
     if (
       featureAccessSnapshot !== undefined &&
       (featureAccessSnapshot.organizationId !== organizationId ||

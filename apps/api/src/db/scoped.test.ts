@@ -1,11 +1,15 @@
 import { Result, UnhandledException } from "better-result";
 import { describe, expect, it, spyOn } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+
+import { createTestClock } from "@stll/test-kit";
+import type { TestClock } from "@stll/test-kit";
 
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import {
+  createMembershipScopedDb,
   createSafeDb,
   markRlsDatabase,
   reportOverDeadline,
@@ -183,15 +187,21 @@ describe("scoped transaction deadline", () => {
     const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
     try {
       const { timeoutMs } = TRANSACTION_DEADLINE.request;
-      reportOverDeadline({ deadline: undefined, elapsedMs: timeoutMs * 2 });
+      reportOverDeadline({
+        deadline: undefined,
+        elapsedMs: timeoutMs * 2,
+        connectionWaitMs: 0,
+      });
       reportOverDeadline({
         deadline: TRANSACTION_DEADLINE.request,
         elapsedMs: timeoutMs,
+        connectionWaitMs: 0,
       });
       expect(warn).not.toHaveBeenCalled();
       reportOverDeadline({
         deadline: TRANSACTION_DEADLINE.request,
         elapsedMs: timeoutMs + 1,
+        connectionWaitMs: 0,
       });
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0]?.[0]).toBe(
@@ -216,6 +226,7 @@ describe("scoped transaction deadline", () => {
           reportOverDeadline({
             deadline: TRANSACTION_DEADLINE.request,
             elapsedMs: timeoutMs + 1,
+            connectionWaitMs: 0,
           });
           await Promise.resolve();
         },
@@ -223,6 +234,65 @@ describe("scoped transaction deadline", () => {
       expect(warn.mock.calls[0]?.[1]).toMatchObject({
         "http.method": "POST",
         "http.route": "/api/v1/workspaces/:workspaceId/documents",
+      });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  /**
+   * A pool that hands over its connection after `connectionWaitMs` on `clock`,
+   * as Bun does: the transaction callback runs only once a connection is free.
+   */
+  const pooledDatabase = (clock: TestClock, connectionWaitMs: number) => {
+    const params: unknown[] = [];
+    const tx = {
+      execute: async (query: SQLWrapper | string) => {
+        if (typeof query !== "string") {
+          params.push(...dialect.sqlToQuery(query.getSQL()).params);
+        }
+        return await Promise.resolve([]);
+      },
+    };
+    const database = markRlsDatabase({
+      transaction: async <TResult>(
+        fn: (open: typeof tx) => Promise<TResult>,
+      ) => {
+        await clock.advance(connectionWaitMs);
+        return await fn(tx);
+      },
+    });
+    return { database, params };
+  };
+  const observedOn = (clock: TestClock): TransactionDeadline => ({
+    ...TRANSACTION_DEADLINE.request,
+    clock,
+  });
+
+  it("measures from the transaction's entry, not from the wait for a connection", async () => {
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    try {
+      const clock = createTestClock();
+      const { timeoutMs } = TRANSACTION_DEADLINE.request;
+      const { database } = pooledDatabase(clock, timeoutMs * 2);
+      const scopedDb = createMembershipScopedDb(database, {
+        organizationId: mintAuthProviderId<"organization">(),
+        serverValidatedWorkspaceIds: [],
+        userId: mintAuthProviderId<"user">(),
+        deadline: observedOn(clock),
+      });
+      await scopedDb(async () => {
+        await clock.advance(1);
+      });
+      expect(warn).not.toHaveBeenCalled();
+
+      await scopedDb(async () => {
+        await clock.advance(timeoutMs + 1);
+      });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[1]).toMatchObject({
+        "db.transaction.duration_ms": timeoutMs + 1,
+        "db.transaction.connection_wait_ms": timeoutMs * 2,
       });
     } finally {
       warn.mockRestore();

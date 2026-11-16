@@ -596,9 +596,9 @@
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "4d04d0f517bbed6477a69875eb1e270a7adcdf763893c6a1c075db4c21de6f70",
+    "fingerprint": "a0d461591d9aabd02a6e3345d40088c1e01e780e8883b00ca61898780df9e8dd",
     "count": 1,
-    "reason": "The scoped transaction runner opens the same transaction; it only passes an optional request deadline into the settings statement it already sends."
+    "reason": "The scoped transaction runner opens the same transaction; it only notes when its callback is entered and passes an optional request deadline into the settings statement it already sends."
   },
   {
     "file": "apps/api/src/db/scoped.ts",
