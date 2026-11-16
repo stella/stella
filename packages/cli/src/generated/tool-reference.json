@@ -51,42 +51,49 @@
   {
     "access": "read",
     "command": ["case-law", "search"],
-    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use `url` for the reader and `source_url` for the publisher.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Reader: `url`; publisher: `source_url`.",
     "name": "search_case_law",
     "title": "Search case law"
   },
   {
     "access": "read",
     "command": ["case-law", "coverage"],
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
+    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
     "name": "case_law_coverage",
     "title": "Read case-law coverage"
   },
   {
     "access": "read",
     "command": ["case-law", "read"],
-    "description": "Read `decision_ids[]` in order. `page` selects a `max_chars` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. `full: true` returns whole text up to 200000 chars. `query` returns matches, neighbours and deep links. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. `include` picks fields; [] returns text and identity only.",
+    "description": "Read `decision_ids[]` in order; `page`: `max_chars` window. Returns page/pageCount, textSource 'ast'/'fulltext'. Pass textVersion as text_version; versionChanged flags text changes. `full: true` returns whole text up to 200000 chars. `query`: matches/neighbours/deep links; matches.resumeAfter continues them. Page 1: reader/publisher URLs, metadata, textFields, citation summaries (top citers may be bounded by 2048 edges). All citations: read_case_law_citations. One id adds outline. `include` selects fields; []: text/identity only.",
     "name": "read_case_law_decision",
     "title": "Read case-law decision"
   },
   {
     "access": "read",
     "command": ["case-law", "citations"],
-    "description": "Read citations with citing passages. `cited_by` reads citers; `cites` reads citations. Filters `doctrine` and `polarity` combine with AND. `polarity`: 'unclassified' means unread; 'mixed' means mentions disagreed. `doctrine` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when `doctrineAvailability` is 'unavailable'. `passage.evidenceQuote` is the verbatim evidence when text is available. `passage.text` is at most 1200 characters, cut when `passage.truncated`; `passage.mention` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use `url` for the reader and `source_url` for the publisher.",
+    "description": "Read citations/citing passages. `cited_by`: citers; `cites`: citations. `doctrine` AND `polarity` filters. `polarity`: 'unclassified': unread; 'mixed': mentions disagreed. `doctrine`: reviewed 'distinguishes'/'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread': none was read; null when `doctrineAvailability` is 'unavailable'. `passage.evidenceQuote`: verbatim evidence when text is available. `passage.text` is at most 1200 chars, cut when `passage.truncated`; `passage.mention`: 'sole', 'classified_section' (polarity source mention) or 'latest_of_several' (may not be). `detail`, `passage_query` narrow replies. Pass nextCursor as cursor. Use `url` for the reader and `source_url` for the publisher.",
     "name": "read_case_law_citations",
     "title": "Read case-law citations"
   },
   {
     "access": "read",
+    "command": ["case-law", "verify-quote"],
+    "description": "Check a quote in one stored decision; resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizes whitespace, quotes, dashes, soft/line-end hyphens and č. j. spacing; returns occurrenceCount and the first 20 occurrences per ordered ellipsis segment, paragraph labels/links and original UTF-16 offsets. Only exact: verified:true; all others:false. Report fuzzy as an altered quote, never confirmed: closest token-edit passage, similarity >= 0.75; not_found: lower. Differences go passage→quote (added/dropped tokens). cannot_verify: unreadable text, not quote absence. No publisher fetch; read_case_law_decision gives context.",
+    "name": "verify_quote",
+    "title": "Verify a decision quotation"
+  },
+  {
+    "access": "read",
     "command": ["case-law", "open"],
-    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
+    "description": "Open a decision the user asks to read/open: metadata, outline, small target window. paragraphs uses court-printed numbers (48 or 48-53); url opens that range in the web reader. Once per answer at most.",
     "name": "open_case_law_decision",
     "title": "Open case-law decision"
   },
   {
     "access": "read",
     "command": ["case-law", "resolve"],
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: identity, not text; read_case_law_decision reads it; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
     "name": "resolve_case_law_decision",
     "title": "Resolve a case-law citation"
   },
@@ -128,14 +135,14 @@
   {
     "access": "write",
     "command": ["document", "comparison", "prepare"],
-    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, open_file_comparison provides a picker panel that uploads from the user's browser; prepare_file_comparison_from_links accepts files reachable by HTTPS link. Both files must be .docx and at most 50 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, open_file_comparison provides a picker panel that uploads from the user's browser; prepare_file_comparison_from_links accepts files reachable by HTTPS link. Both files must be .docx and at most 200 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
     "name": "prepare_file_comparison",
     "title": "Prepare file comparison"
   },
   {
     "access": "write",
     "command": ["document", "comparison", "prepare-from-links"],
-    "description": "Stage two .docx files for redlining from HTTPS links the server can download, so no bytes pass through the client. Each file is at most 50 MB and must be a .docx. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "description": "Stage two .docx files for redlining from HTTPS links the server can download, so no bytes pass through the client. Each file is at most 200 MB and must be a .docx. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
     "name": "prepare_file_comparison_from_links",
     "title": "Prepare file comparison from links"
   },
@@ -226,7 +233,7 @@
   {
     "access": "read",
     "command": ["legislation", "search"],
-    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). `as_of` searches text in force on that date; omit it to include historical wording. No facets are returned and `total` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its `eli` to read_statute for the text, the outline of anchors and the consolidated versions. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). `as_of` searches text in force on that date; omit it to include historical wording. No facets are returned; `total` is not counted, so page with nextCursor. A hit is metadata only: pass its `eli` to read_statute for the text, the outline of anchors and the consolidated versions. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token.",
     "name": "search_legislation",
     "title": "Search legislation"
   },
@@ -267,6 +274,20 @@
   },
   {
     "access": "read",
+    "command": ["guidance", "search"],
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "name": "search_guidance",
+    "title": "Search regulator guidance"
+  },
+  {
+    "access": "read",
+    "command": ["guidance", "read"],
+    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "name": "read_guidance",
+    "title": "Read regulator guidance"
+  },
+  {
+    "access": "read",
     "command": ["template", "list"],
     "description": "List the organization's document templates (NDAs, powers of attorney, leases), or pass template_id for one template's full field configuration, named conditions and formula fields. Listing returns each template's id, name, field count, tags and usage guidance: use one whose whenToUse matches the request; skip any whose whenNotToUse applies. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. `arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
     "name": "list_templates",
@@ -296,7 +317,7 @@
   {
     "access": "destructive",
     "command": ["template", "create"],
-    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters ARE its field's configuration. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields writes those filters.",
+    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 200 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters ARE its field's configuration. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields writes those filters.",
     "name": "create_template",
     "title": "Create template"
   },
@@ -660,16 +681,30 @@
   {
     "access": "destructive",
     "command": ["capability", "chat", "threads-delete"],
-    "description": "Permanently delete one of your own chat threads with its messages and the files uploaded to it; the stored file objects are deleted, not just dereferenced. Succeeds silently when the thread does not exist or belongs to someone else.",
+    "description": "Permanently delete one of your own chat threads with its messages and the files uploaded to it; stored file objects are queued for removal in the background. Succeeds silently when the thread does not exist or belongs to someone else.",
     "name": "capability:chat.threads.delete",
     "title": "chat.threads.delete"
   },
   {
     "access": "read",
     "command": ["capability", "chat", "threads-list"],
-    "description": "List your own chat threads, most recently active first, split into global threads and groups per matter. Threads with no messages, and threads belonging to a matter that is being deleted, are left out. Each thread carries a bounded preview of its context: the matters and files it drew on, with their total counts, and the case-law decision the chat is about, if any. search matches the thread title, the matter it lives in, or a matter pinned to it; matterId keeps only the threads that live in that matter (not global threads that merely pinned it) and is not found when you cannot open the matter; paginate with limit and cursor.",
+    "description": "List your own chat threads, most recently active first, split into global threads and groups per matter. Threads with no messages, and threads belonging to a matter that is being deleted, are left out. Each thread carries a bounded preview of its context: the matters and files it drew on, with their total counts, and the case-law decision the chat is about, if any. Each thread also says whether you have read its latest answer (readState) and whether you pinned it (pinState). The pinState filter keeps only your pinned or only your unpinned threads, so a list can show the pinned ones first. search matches the thread title, the matter it lives in, or a matter pinned to it; matterId keeps only the threads that live in that matter (not global threads that merely pinned it) and is not found when you cannot open the matter; paginate with limit and cursor.",
     "name": "capability:chat.threads.list",
     "title": "chat.threads.list"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "chat", "threads-pin-state-update"],
+    "description": "Pin one of your own chat threads to the top of your chat list, or unpin it. Idempotent: pinning a pinned thread, or unpinning an unpinned one, changes nothing, keeps its place among your pinned chats and notifies none of your devices. A thread that does not exist in the requested scope is a 404: this never creates one.",
+    "name": "capability:chat.threads.pin-state.update",
+    "title": "chat.threads.pin-state.update"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "chat", "threads-read-state-update"],
+    "description": "Mark one of your own chat threads read or unread. read records that you have seen its latest answer, so it reads unread again only once a newer answer finishes; unread keeps it unread until it is marked read. Idempotent: marking a thread the way it already reads changes nothing and notifies none of your devices. A thread that does not exist in the requested scope is a 404: this never creates one.",
+    "name": "capability:chat.threads.read-state.update",
+    "title": "chat.threads.read-state.update"
   },
   {
     "access": "write",
@@ -833,6 +868,41 @@
     "title": "client-invoices.prefill"
   },
   {
+    "access": "write",
+    "command": ["capability", "conflict-checks", "create"],
+    "description": "Run an internal conflict-of-interest check: screen the parties of a prospective matter (each with its side: client, adverse or related) against every contact and matter of the organization, and record the result. The outcome is potential_conflict, incomplete (part of the records was not searched; never read it as clear), needs_review, information_only or no_matches. A check is never clear by itself: a person records the decision. For a matter the caller cannot open, a match shows only a count, its severity and whom to ask.",
+    "name": "capability:conflict-checks.create",
+    "title": "conflict-checks.create"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "conflict-checks", "get"],
+    "description": "Read one conflict check as the caller may see it: its parties, the matched contacts with match evidence, the matters the caller can open, and for any other matter only a count, a severity and whom to ask.",
+    "name": "capability:conflict-checks.get",
+    "title": "conflict-checks.get"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "conflict-checks", "link"],
+    "description": "Link a conflict check to the matter it was run for. Only the check's runner or an owner or administrator may link it, and only to a matter they can open; a check links to one matter at most.",
+    "name": "capability:conflict-checks.link",
+    "title": "conflict-checks.link"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "conflict-checks", "list"],
+    "description": "List the conflict checks the caller may see, newest first: their own, every check for an owner or administrator, and checks run for a matter the caller can open.",
+    "name": "capability:conflict-checks.list",
+    "title": "conflict-checks.list"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "conflict-checks", "review"],
+    "description": "Record a decision on a conflict check: cleared, conflict, or waived (with the client's consent reference). Pass the decision and revision you read as expectedDecision and expectedRevision. Clearing a potential conflict or an incomplete check, any waiver, and replacing a recorded decision need an owner or administrator and a note.",
+    "name": "capability:conflict-checks.review",
+    "title": "conflict-checks.review"
+  },
+  {
     "access": "destructive",
     "command": ["capability", "contacts", "bulk-delete"],
     "description": "Permanently delete up to 500 contacts from the organization address book in one transaction. Contacts used as matter clients are skipped.",
@@ -936,6 +1006,20 @@
     "description": "Change a contact in the organization address book, writing only the fields you pass and clearing a nullable one when you pass null. metadata is merged into the stored object rather than replacing it. An attorney id that is not a member of the organization is refused, and an unknown contact is a 404.",
     "name": "capability:contacts.update",
     "title": "contacts.update"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "data-exports", "get"],
+    "description": "Read one data export: status (queued, running, ready, failed or expired), progress in matters and bytes, the finished parts with size and SHA-256, how many files could not be included, and when the files expire. Organization owners and admins only.",
+    "name": "capability:data-exports.get",
+    "title": "data-exports.get"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "data-exports", "list"],
+    "description": "List the organization's data exports, newest first, with status, progress, part count and expiry; data-exports.get lists the parts. Paginate with limit and cursor. Organization owners and admins only.",
+    "name": "capability:data-exports.list",
+    "title": "data-exports.list"
   },
   {
     "access": "read",
@@ -1073,7 +1157,7 @@
   {
     "access": "read",
     "command": ["capability", "entities", "files-list"],
-    "description": "List every document in a matter that has an uploaded file, oldest first with cursor pagination, each with its entity id, name, parent folder, file field id, file name, and media type. search narrows the list to documents whose file name or name contains the text. Documents without a file, and folders and tasks, are left out; use entities.list for the full table with column values.",
+    "description": "List every document in a matter that has an uploaded file, oldest first with cursor pagination, each with its entity id, name, parent folder, file field id, file name, media type, and size in bytes. search narrows the list to documents whose file name or name contains the text. Documents without a file, and folders and tasks, are left out; use entities.list for the full table with column values.",
     "name": "capability:entities.files.list",
     "title": "entities.files.list"
   },
@@ -1111,6 +1195,20 @@
     "description": "Read one document, folder, or task in a matter: its kind, name, current version id, creation time and document reference, that version's field values, and which field is the current text-extraction source. Use entities.versions.get to read a historical version, and entities.versions.list for the version list.",
     "name": "capability:entities.get",
     "title": "entities.get"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "entities", "legal-holds-place"],
+    "description": "Place a legal hold on an item. Requires explicit human approval and a reason. Active holds prevent deletion.",
+    "name": "capability:entities.legal-holds.place",
+    "title": "entities.legal-holds.place"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "entities", "legal-holds-release"],
+    "description": "Release a legal hold on an item. Requires explicit human approval and a reason. Active holds prevent deletion.",
+    "name": "capability:entities.legal-holds.release",
+    "title": "entities.legal-holds.release"
   },
   {
     "access": "read",
@@ -1639,26 +1737,33 @@
   },
   {
     "access": "write",
+    "command": ["capability", "lists", "fact-extractions-create"],
+    "description": "Start reading the facts out of evidence documents (DOCX, PDF, or files with a PDF rendition) into one list. Each document's current version is pinned. Every fact cites the passage it comes from, carries when it happened, whether it rests on a document or on testimony, and how unambiguous its meaning is; a fact whose meaning is genuinely contested is held with a note. An optional instruction says which facts matter. Returns a generation run id; poll lists.generations.list for its status and read the proposed facts with lists.generation-candidates.list, then accept or reject each.",
+    "name": "capability:lists.fact-extractions.create",
+    "title": "lists.fact-extractions.create"
+  },
+  {
+    "access": "write",
     "command": [
       "capability",
       "lists",
       "generation-candidates-acceptance-create"
     ],
-    "description": "Accept one candidate from a generation run: create the item it proposes as a task in the matter, optionally in a named section, and copy the candidate's sources onto the new item with their locators and quotes. The candidate is claimed before the item is created, so two concurrent accepts cannot both produce one, and the run flips to committed once no candidate is left pending. A candidate whose sources have disappeared is refused and the reserved item is cleaned up.",
+    "description": "Accept one candidate from a generation run: create the item it proposes as a task in the matter, optionally in a named section, and copy the candidate's sources onto the new item with their locators and quotes. An accepted fact also gets the candidate's fact details, scored as included unless the candidate holds it. The candidate is claimed before the item is created, so two concurrent accepts cannot both produce one, and the run flips to committed once no candidate is left pending. A candidate whose sources have disappeared is refused and the reserved item is cleaned up.",
     "name": "capability:lists.generation-candidates.acceptance.create",
     "title": "lists.generation-candidates.acceptance.create"
   },
   {
     "access": "write",
     "command": ["capability", "lists", "generation-candidates-create"],
-    "description": "Submit the candidates a generation run produced: per candidate a name, description, item type, status, priority, due date, suggested assignees, and the sources it was drawn from, each naming a document version with a locator and optional quote. Every source must be one of the run's own source versions. The run moves from running to review; candidates stay proposals until they are accepted or rejected.",
+    "description": "Submit the candidates a generation run produced: per candidate a name, description, item type, status, priority, due date, suggested assignees, fact details for a fact (when it happened, evidence kind, medium, confidence, interpretation note, scoring), and the sources it was drawn from, each naming a document version with a locator and optional quote. Every source must be one of the run's own source versions. Only a run started with lists.generations.create accepts candidates. The run moves from running to review; candidates stay proposals until they are accepted or rejected.",
     "name": "capability:lists.generation-candidates.create",
     "title": "lists.generation-candidates.create"
   },
   {
     "access": "read",
     "command": ["capability", "lists", "generation-candidates-list"],
-    "description": "List one generation run's candidates in proposal order with cursor pagination: the proposed item fields, the candidate's status, the item it was accepted as when it has one, and the sources it cites. The run's own status is returned alongside the page.",
+    "description": "List one generation run's candidates in proposal order with cursor pagination: the proposed item fields, a fact's proposed fact details (null for other item types; a null scoring is accepted as included), the candidate's status, the item it was accepted as when it has one, and the sources it cites. The run's own status is returned alongside the page.",
     "name": "capability:lists.generation-candidates.list",
     "title": "lists.generation-candidates.list"
   },
@@ -1683,7 +1788,7 @@
   {
     "access": "read",
     "command": ["capability", "lists", "generations-list"],
-    "description": "List one list's generation runs, newest first, with cursor pagination: each run's status, its instruction, and its created, updated, and completed timestamps.",
+    "description": "List one list's generation runs, newest first, with cursor pagination: each run's status, who produces its candidates (an external client or stella), the item type a stella run proposes, why a failed run failed, its instruction, and its created, updated, started, and completed timestamps.",
     "name": "capability:lists.generations.list",
     "title": "lists.generations.list"
   },
@@ -1693,6 +1798,27 @@
     "description": "Read one list with its sections in order, its columns (each bound property with its position and required flag), and how many items it holds. The items themselves come from lists.items.list.",
     "name": "capability:lists.get",
     "title": "lists.get"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "lists", "graph-neighbours-list"],
+    "description": "Read what one node of the matter's graph is linked to, one hop either way. `summary` counts all the node's links by `kind`, `stance` and `decision`; `edges` is a page of them. Each edge names `from`, `to` and the `neighbour` at its far end, its `kind` (`cites`: a claim rests on a fact, with `stance` `supports`, `conflicts` or `record`; `sourced-from`: a fact comes from a document), who produced it (`producer`), its `decision` (`proposed`, `accepted`, `rejected`) and `quote`: the exact text it rests on, with the document and locator. A claim's citations are those of the grade it is read with now (a re-check replaces the run's). Filter by `edgeKind`, `stance` or `decision`; paginated with a cursor.",
+    "name": "capability:lists.graph.neighbours.list",
+    "title": "lists.graph.neighbours.list"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "lists", "graph-nodes-list"],
+    "description": "Find nodes of the matter's graph whose words contain `text` (case-insensitive): list facts and documents by name, claims found in verified documents by their words. Each node has `kind`, `id` and `label`; a claim also names its `documentId` and `runId`. Pass a node's `kind` and `id` to `lists.graph.neighbours.list` to read what it is linked to, or to `lists.graph.paths.list` to follow links further. Ordered by kind (facts, claims, documents), then id; paginated with a cursor.",
+    "name": "capability:lists.graph.nodes.list",
+    "title": "lists.graph.nodes.list"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "lists", "graph-paths-list"],
+    "description": "Follow the matter's graph from one node, either way along its links, for `depth` hops (1 to 3, default 2): for a claim, the facts it rests on and the documents they come from; for a fact, the claims citing it. Each path lists its `nodes` from the start and the `edges` between them, each edge with its `kind`, `stance`, `decision`, `producer` and `quote` (the exact text it rests on). No node repeats within a path. Filter every hop by `edgeKind`, `stance` or `decision`. At most `limit` paths come back; `truncated` is true when more exist (read fewer hops or filter, or page one hop with `lists.graph.neighbours.list`).",
+    "name": "capability:lists.graph.paths.list",
+    "title": "lists.graph.paths.list"
   },
   {
     "access": "read",
@@ -1718,7 +1844,7 @@
   {
     "access": "read",
     "command": ["capability", "lists", "items-list"],
-    "description": "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns. A fact item also carries its evidential detail (date and precision, evidence kind, medium, confidence and interpretation note), null until it is set, and its first source (document id, document name, locator), null when it has none.",
+    "description": "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns. A fact item also carries its evidential detail (date and precision, evidence kind, medium, confidence and interpretation note), null until it is set, its first source (document id, document name, locator), null when it has none, and its tier: `document` when a source records it, `testimony` when its sources are only witness accounts, `unsourced` without a source (null for other items and for a caller without list verification).",
     "name": "capability:lists.items.list",
     "title": "lists.items.list"
   },
@@ -1779,6 +1905,20 @@
     "title": "lists.sections.create"
   },
   {
+    "access": "read",
+    "command": ["capability", "lists", "source-documents-list"],
+    "description": "Read what each named document is to one list's facts: `document` (it records what happened: a letter, minutes, a register) or `testimony` (a person's account: a witness statement, an interview note, a transcript). Every named document is answered; one nobody has classified is `document`. Set a kind with lists.source-documents.update.",
+    "name": "capability:lists.source-documents.list",
+    "title": "lists.source-documents.list"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "lists", "source-documents-update"],
+    "description": "Set what one document is to a list's facts: `testimony` when it is a person's account (a witness statement, an interview note, a transcript), `document` when it records what happened. Every source of the list citing the document takes the kind at once: a fact whose sources are all testimony reads as testimony, and a claim whose verdict rests only on such facts carries the `testimony-only` qualifier. Setting the kind a document already has changes nothing.",
+    "name": "capability:lists.source-documents.update",
+    "title": "lists.source-documents.update"
+  },
+  {
     "access": "write",
     "command": ["capability", "lists", "update"],
     "description": "Rename a list, change its description, or move it between active and archived. Only the fields you pass are written, an unrecognized status is refused, and a call that changes nothing is a no-op rather than an error.",
@@ -1818,32 +1958,64 @@
     "command": [
       "capability",
       "lists",
+      "verifications-claim-rechecks-bulk-create"
+    ],
+    "description": "Grade several claims of one list verification again, each as lists.verifications.claim-rechecks.create does: against the verified list's facts as they stand now (held facts are left out) and the facts linked to it, recording the new grade in the claim's history and withdrawing its earlier status, override, reopening and record-conflict resolution. Use it for the claims lists.verifications.get reports as out of date (`staleness`). Returns one result per claim: `rechecked` (with `replayed: true` when its `requestKey` already graded it), or `refused` with the error that claim alone would get. When every claim is refused for the same reason (an organization at its verification limit is refused before any claim is graded), the request fails with that error.",
+    "name": "capability:lists.verifications.claim-rechecks.bulk.create",
+    "title": "lists.verifications.claim-rechecks.bulk.create"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "lists", "verifications-claim-rechecks-create"],
+    "description": "Grade one claim of a list verification again, against the verified list's facts as they stand now (held facts are left out) and any facts linked to it with lists.verifications.claim-reviews.create (`fact-link`). The new grade is recorded in the claim's history with who asked and the facts it read; the run's own grade is kept. A new grade withdraws the claim's earlier status, override, reopening and record-conflict resolution. Returns the claim as it now reads, with `recheck` naming the grade it replaced. Repeating a request with the same `requestKey` grades nothing again: it returns `replayed: true` and the claim as it reads now, which later review actions may have changed, not the first response. A claim set aside as not verifiable is reopened first.",
+    "name": "capability:lists.verifications.claim-rechecks.create",
+    "title": "lists.verifications.claim-rechecks.create"
+  },
+  {
+    "access": "write",
+    "command": [
+      "capability",
+      "lists",
       "verifications-claim-reviews-bulk-create"
     ],
-    "description": "Mark the routine claims among `claimIds` reviewed in one action. A claim is routine when its verdict is not a conflict and no fact it rests on has a contested meaning; those need an individual decision and are refused. Claims that already have a status are left as they are. Returns the review of every claim that was marked.",
+    "description": "Mark the routine claims among `claimIds` reviewed in one action. A claim is routine when its verdict is not a conflict, no fact it rests on has a contested meaning, and it carries no qualifier that asks for judgement (a cited fact of a different scope, or one now held out of scoring); those need an individual decision and are refused. Claims that already have a status (reviewed, disputed, or needs-evidence) are left as they are. Returns the review of every claim that was marked.",
     "name": "capability:lists.verifications.claim-reviews.bulk.create",
     "title": "lists.verifications.claim-reviews.bulk.create"
   },
   {
     "access": "write",
     "command": ["capability", "lists", "verifications-claim-reviews-create"],
-    "description": "Record one reviewer action on a claim of a list verification and return the claim's review after it. `status` marks the claim reviewed or disputed (null clears it); `override` annotates the verdict with the reviewer's own state, beside the tool's, never replacing it; `note` sets the review note; `reopen` reclassifies a set-aside claim as checkable; `record-conflict` resolves a claim withheld between two records by naming the governing fact or escalating it. Reopening and resolving a conflict withdraw an earlier status and override.",
+    "description": "Record one reviewer action on a claim of a list verification and return the claim's review after it. `status` marks the claim reviewed, disputed, or needs-evidence (open until the record can answer it; null clears it); `override` annotates the verdict with the reviewer's own state, beside the tool's, never replacing it; `note` sets the review note; `reopen` reclassifies a set-aside claim as checkable; `record-conflict` resolves a claim withheld between two records by naming the governing fact or escalating it; the event also keeps which record was suggested to govern then (a document's record over a witness's account; see suggestedGoverningFactId in lists.verifications.get); `fact-link` points the claim at a fact of the verified list (`link`) or takes that back (`unlink`), which changes no verdict until the claim is re-checked with lists.verifications.claim-rechecks.create. `override`, `reopen` and `record-conflict` change the verdict and require `reason` (the reviewer's words, kept in the claim's history); `status` and `fact-link` take an optional `reason`. Reopening and resolving a conflict withdraw an earlier status and override.",
     "name": "capability:lists.verifications.claim-reviews.create",
     "title": "lists.verifications.claim-reviews.create"
   },
   {
+    "access": "read",
+    "command": ["capability", "lists", "verifications-claim-reviews-list"],
+    "description": "List the review history of a list verification, newest first with cursor pagination: every reviewer action on its claims, or on one claim with `claimId`, optionally only one `kind` of action or one reviewer's (`actorId`). Each entry names the reviewer (or `former` when their account or membership is gone), the time, the action, the reason (`given`, `none`, or `unrecorded` for an action that requires one but was recorded before reasons were required), and the claim's disposition just before and just after (verdict as reviewers see it, override, status). `carriedFrom` names the earlier run of the document an action was first taken on, when it was carried to this run's matching claim; null otherwise. `reviewers` lists everyone who acted on the run (`complete`), or says there are more than it names (`overflow`).",
+    "name": "capability:lists.verifications.claim-reviews.list",
+    "title": "lists.verifications.claim-reviews.list"
+  },
+  {
     "access": "write",
     "command": ["capability", "lists", "verifications-create"],
-    "description": "Start checking one document (DOCX, PDF, or a file with a PDF rendition) against the facts of one list. Every claim the document makes is found and, when factual, graded against the list's facts (held facts are left out). Returns a run id; read the result with lists.verifications.get. A document holds one unfinished verification at a time.",
+    "description": "Start checking one document (DOCX, PDF, or a file with a PDF rendition) against the facts of one list. Every claim the document makes is found and, when factual, graded against the list's facts (held facts are left out); with `paragraphs`, only the claims in that range. Returns a run id; read the result with lists.verifications.get. A document holds one unfinished verification at a time.",
     "name": "capability:lists.verifications.create",
     "title": "lists.verifications.create"
   },
   {
     "access": "read",
     "command": ["capability", "lists", "verifications-get"],
-    "description": "Read one list verification: the document version it checked, the list facts it checked against as they stood then, and every claim found in the document with its verdict (state, and a 0-100 support score for supported, tension and contradicted), the facts it rests on, and the claim's current review (null while nobody has acted on it).",
+    "description": "Read one list verification: the document version it checked, the list facts it checked against as they stood then, how each of those facts stands on the list now (held or included; its tier: `document` when a source is a document's record, `testimony` when its sources are only witness accounts, `unsourced` without a source; see lists.source-documents.update), and every claim found in the document with its verdict (state, and a 0-100 support score for supported, tension and contradicted), its qualifiers (caveats that never change the verdict: the record is not expected to speak to the point, a cited fact has a different scope, no document's record backs it and it rests on testimony, every fact it rests on is unsourced, or it rests on a held fact), the facts it rests on, for a record conflict the fact suggested to govern it (the document's record over a witness's account; null when neither), and the claim's current review (null while nobody has acted on it). A claim's `paragraph` is the printed number of the paragraph it sits in (null when the document's numbering is unclear or the claim is outside a numbered paragraph). Each claim's `staleness` says why its grade may no longer stand on the list as it is now: a fact the grade cites was edited (`fact-changed`), held out of scoring (`fact-held`) or taken off the list (`fact-removed`), or a fact the grade never read bears on the claim (`new-fact-related`: linked to it, from a cited fact's document, or on its words); empty when none of these was found (a new fact on the claim's point in other words is not detected), null when the list holds more facts than one check reads. Nothing is graded again until asked: re-check those claims with lists.verifications.claim-rechecks.bulk.create. `assertedOn` is the date the claim's words give (`dated`, with a `day`, `month` or `year` precision stored as its first day and its `source`: the words, or the grader when they name no complete date), or `none`. `decider` says who decided the verdict: `llm` (with a `fallback` reason when the organization's decision model was asked and its answer was not used), or `decision-model` with its `model`, its `confidence` and the state it `replaced`. `carryOver` says what the run took from the previous run of the same document and list. Notes and fact links follow a claim with the same words or with edited words in the same paragraph or page; other decisions follow only the same words with an unchanged verdict. It counts the reviewed claims that came across whole and lists the rest (`text-changed`, `verdict-changed`, `unmatched`, `ambiguous`); null when there was nothing to carry. `unreadParts` lists the text a completed run could not read (each from `start` to `end`, a block id and an offset): no claim was looked for there, so verify the document again to read it; empty when the run read everything.",
     "name": "capability:lists.verifications.get",
     "title": "lists.verifications.get"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "lists", "verifications-graph-get"],
+    "description": "Read the verification graph of one list: every document verified against it (`statements`, the latest finished verification of each), their claims with the verdict as reviewers see it now (a re-check counts, a governed record conflict takes the governing record's verdict), the review status, qualifiers and the printed number of the paragraph each claim sits in (`paragraph`, null when the document's numbering is unclear or the claim is outside a numbered paragraph), the list's facts (`held` when kept out of scoring, `tier`: `document`, `testimony` or `unsourced`; a fact off the list that a claim still cites has `listed` false), and the documents the facts come from (`sources`). `citations` links a claim to each fact it rests on: `cites` with the relation its grade gives (`supports`, `conflicts`, `record`), or `record-conflict` for each of the two records a withheld verdict sits between. `provenance` links a fact to a source document at its locator, with the source's `quote` when the list holds one. Paginated by documents with a cursor; a document with more claims than `limit` continues on the next page. Every page carries the list's facts, at most 1000 of them: `factOverflow` is true when the list holds more, so check it before treating the facts as complete.",
+    "name": "capability:lists.verifications.graph.get",
+    "title": "lists.verifications.graph.get"
   },
   {
     "access": "read",
@@ -1931,6 +2103,13 @@
   },
   {
     "access": "read",
+    "command": ["capability", "matters", "contacts-list"],
+    "description": "List a matter's linked contacts besides its client, oldest first: each link's id, role and notes with the contact's id, type, display name and colour. overflow is true when the matter holds more than one answer carries. Link one with matters.contacts.create.",
+    "name": "capability:matters.contacts.list",
+    "title": "matters.contacts.list"
+  },
+  {
+    "access": "read",
     "command": ["capability", "matters", "correspondence-get"],
     "description": "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox, the files of the message as attachments, and in dataBoxContacts the organization contacts whose data boxes list the sender or recipient box ID (null on email).",
     "name": "capability:matters.correspondence.get",
@@ -1973,10 +2152,31 @@
   },
   {
     "access": "read",
+    "command": ["capability", "matters", "get"],
+    "description": "Read one matter, active or archived: its name, reference, status, colour, lead and client, and stampedVersionCount, how many live document versions carry its reference in a stamp, which a new reference cannot rewrite.",
+    "name": "capability:matters.get",
+    "title": "matters.get"
+  },
+  {
+    "access": "read",
     "command": ["capability", "matters", "justifications-list"],
     "description": "Read the stored justifications for the current versions of up to one page of documents in a matter: per extracted cell, the explanation the model gave, the bounding boxes on the source file, and the file fields those boxes belong to.",
     "name": "capability:matters.justifications.list",
     "title": "matters.justifications.list"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "matters", "legal-holds-place"],
+    "description": "Place a legal hold on a matter. Requires explicit human approval and a reason. Active holds prevent deletion.",
+    "name": "capability:matters.legal-holds.place",
+    "title": "matters.legal-holds.place"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "matters", "legal-holds-release"],
+    "description": "Release a legal hold on a matter. Requires explicit human approval and a reason. Active holds prevent deletion.",
+    "name": "capability:matters.legal-holds.release",
+    "title": "matters.legal-holds.release"
   },
   {
     "access": "read",
@@ -1984,6 +2184,20 @@
     "description": "List the matters you can access.",
     "name": "capability:matters.list",
     "title": "matters.list"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "matters", "matter-numbering-get"],
+    "description": "Read the organization's matter-number convention: the pattern new matter numbers follow and the padding of its counter, so a number typed for a matter can be checked against it (`matchesMatterReferencePattern`). An organization that never set one gets the defaults.",
+    "name": "capability:matters.matter-numbering.get",
+    "title": "matters.matter-numbering.get"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "matters", "member-candidates-list"],
+    "description": "List the people of the caller's organization a matter can be shared with, each with their user id, name, email and image, ordered by name. Pass a userId to matters.create's memberUserIds or to matters.members.add.",
+    "name": "capability:matters.member-candidates.list",
+    "title": "matters.member-candidates.list"
   },
   {
     "access": "write",
@@ -2295,9 +2509,20 @@
   {
     "access": "read",
     "command": ["capability", "organization-settings", "get"],
-    "description": "Read the organization's general settings: document processing mode, matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt caching, memory extraction, time policy, and the time zone whose calendar decides the organization's day. declaredFeatureIds identifies policies in force; capabilities contains caller decisions; deploymentFeatures supplies deployment availability. timeZoneSource says whether the zone was chosen or derived from the primary practice jurisdiction (Europe/Prague for CZ and SK, UTC otherwise). primaryJurisdictionTimeZone is the zone the primary jurisdiction implies, regardless of an organization override. An organization that has never saved settings gets the defaults rather than an error.",
+    "description": "Read the organization's general settings: document processing mode, matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt caching, organization AI instructions, memory extraction, time policy, the time zone whose calendar decides the organization's day, and localRunMaxApprovalMode, the most a chat turn run on a member's computer may do without asking. declaredFeatureIds identifies policies in force; capabilities contains caller decisions; deploymentFeatures supplies deployment availability. timeZoneSource says whether the zone was chosen or derived from the primary practice jurisdiction (Europe/Prague for CZ and SK, UTC otherwise). primaryJurisdictionTimeZone is the zone the primary jurisdiction implies, regardless of an organization override. An organization that has never saved settings gets the defaults rather than an error.",
     "name": "capability:organization-settings.get",
     "title": "organization-settings.get"
+  },
+  {
+    "access": "write",
+    "command": [
+      "capability",
+      "organization-settings",
+      "members-billing-access-update"
+    ],
+    "description": "Set a member's additional billing visibility in the active organization. Only owners and admins may change it. Their role grants billing visibility independently of this field.",
+    "name": "capability:organization-settings.members.billing-access.update",
+    "title": "organization-settings.members.billing-access.update"
   },
   {
     "access": "write",
@@ -2331,7 +2556,7 @@
   {
     "access": "write",
     "command": ["capability", "organization-settings", "update"],
-    "description": "Change the organization's general settings: document processing mode, matter-number pattern, padding, whether titles show that number, prompt caching, memory extraction, time policy, and time zone. Only the fields you pass are written and the matter-number pattern is validated against its padding first. Turning document processing off is refused while an automatic run is still going. Practice jurisdictions are set through organization-settings.practice-jurisdictions.update.",
+    "description": "Change the organization's general settings: document processing mode, matter-number pattern, padding, whether titles show that number, prompt caching, organization AI instructions, memory extraction, time policy, and time zone. Only the fields you pass are written and the matter-number pattern is validated against its padding first. Turning document processing off is refused while an automatic run is still going. Practice jurisdictions are set through organization-settings.practice-jurisdictions.update.",
     "name": "capability:organization-settings.update",
     "title": "organization-settings.update"
   },
@@ -2646,7 +2871,7 @@
   {
     "access": "destructive",
     "command": ["capability", "search-history", "clear"],
-    "description": "Delete your whole search history in the active organization: every search and opened decision or statute it holds. Entries are erased, not hidden; this cannot be undone. Your history in other organizations stays. Pass the scope from `search-history.list` to reject a changed sign-in scope; these fields never select a different owner.",
+    "description": "Delete your search history in the active organization. With `country`, remove that country's entries and older searches that recorded no country; older documents without a known country must finish classification before a country clear. Omit `country` to remove all history. Entries are erased, not hidden; this cannot be undone. Your history in other organizations stays. Pass the scope from `search-history.list` to reject a changed sign-in scope; these fields never select a different owner.",
     "name": "capability:search-history.clear",
     "title": "search-history.clear"
   },
@@ -2712,6 +2937,34 @@
     "description": "Update an active issuer profile in the active organization. Omitted fields stay unchanged; null clears an optional field. A VAT payer (vatPayer: true) must keep a VAT ID.",
     "name": "capability:seller-profiles.update",
     "title": "seller-profiles.update"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "sharepoint", "drives-items-list"],
+    "description": "List the files and folders directly inside one folder of a drive; use itemId \"root\" for the top level. Not recursive. Items of kind file can be copied into a matter with sharepoint.imports.create.",
+    "name": "capability:sharepoint.drives.items.list",
+    "title": "sharepoint.drives.items.list"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "sharepoint", "drives-list"],
+    "description": "List the document libraries of a SharePoint site (siteId from sharepoint.sites.list), or the caller's own OneDrive when siteId is omitted. Pass a drive id to sharepoint.drives.items.list to browse it.",
+    "name": "capability:sharepoint.drives.list",
+    "title": "sharepoint.drives.list"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "sharepoint", "imports-create"],
+    "description": "Copy SharePoint or OneDrive files (driveId and itemId from sharepoint.drives.items.list) into a matter as documents, read with the caller's own Microsoft account. Each file is a one-way snapshot: importing it again adds a version only when its content changed in SharePoint, otherwise it is a no-op. Returns one result per file; a failed file does not stop the others, and files the request had no time left for come back deferred: send those again.",
+    "name": "capability:sharepoint.imports.create",
+    "title": "sharepoint.imports.create"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "sharepoint", "sites-list"],
+    "description": "List the SharePoint sites the caller follows, or find sites by name with search. Read with the caller's own connected Microsoft account, so it shows only sites they can open. Pass a site id to sharepoint.drives.list for its document libraries.",
+    "name": "capability:sharepoint.sites.list",
+    "title": "sharepoint.sites.list"
   },
   {
     "access": "write",
@@ -2966,6 +3219,20 @@
     "title": "skills.update"
   },
   {
+    "access": "read",
+    "command": ["capability", "soft-law", "get"],
+    "description": "Read one served regulator guidance document by id: its issuer, kind, reference, issue date, validity as the publisher states it, publisher URL, required attribution and text. It is guidance, not a court decision. textState says why text is null: withheld_by_source_setting or not_extracted. A source that is not served answers not found. When you summarize this text, show attribution.text, its conditions and any summaryDisclaimer with the summary.",
+    "name": "capability:soft-law.get",
+    "title": "soft-law.get"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "soft-law", "search"],
+    "description": "Full-text search regulator guidance (soft law) served by stella: methodologies, opinions, guidelines, recommendations, FAQs and similar documents, never court decisions. Every result names its issuer, document kind, publisher URL and required attribution. Filter by authority, jurisdiction, kind and issue date; paginate with limit and cursor. A source served as metadata only is matched on its title alone, so a missing hit there says nothing about its text. Totals are not counted.",
+    "name": "capability:soft-law.search",
+    "title": "soft-law.search"
+  },
+  {
     "access": "destructive",
     "command": ["capability", "style-sets", "delete"],
     "description": "Permanently delete an organization style set and the stored package file behind it. Documents and templates already created from the style set are unaffected, because they copied its styles at creation time.",
@@ -3057,6 +3324,13 @@
     "title": "tasks.create"
   },
   {
+    "access": "destructive",
+    "command": ["capability", "tasks", "delete"],
+    "description": "Permanently delete one task from its matter, together with its links, assignees and field values. Refused while the matter is archived or the task is read-only. This is irreversible.",
+    "name": "capability:tasks.delete",
+    "title": "tasks.delete"
+  },
+  {
     "access": "write",
     "command": ["capability", "tasks", "entity-links-create"],
     "description": "Link a task to another document, folder, or task, with a link type that defaults to related. Both ends must be in this matter, an entity cannot be linked to itself, and a read-only entity is refused. Remove the link with tasks.entity-links.delete.",
@@ -3087,7 +3361,7 @@
   {
     "access": "read",
     "command": ["capability", "tasks", "list"],
-    "description": "List your open tasks across every matter you can open: the tasks you are assigned to that are not done or cancelled, soonest due date first and undated tasks last. Each item names its matter (id, name, reference). Paginate with limit and cursor.",
+    "description": "List tasks across every matter you can open, or in one with matterId, soonest due date first and undated tasks last. By default only your own open tasks: assignee 'any' lists everyone's and 'unassigned' those nobody has, openOnly=false keeps done and cancelled ones, and dateTo keeps tasks due on or before that day (with openOnly, the overdue ones). Each item names its matter (id, name, reference). Paginate with limit and cursor.",
     "name": "capability:tasks.list",
     "title": "tasks.list"
   },
@@ -3458,7 +3732,7 @@
   {
     "access": "read",
     "command": ["capability", "time-entries", "get"],
-    "description": "Read one time entry in a matter by id, with its minutes, rate, currency, narratives, billing status, source, task and activity codes, timer timestamps, and the timekeeper's name. A caller without time-entry approval access can only read their own entries; another user's entry is reported as not found.",
+    "description": "Read one time entry in a matter by id, with its minutes, rate, currency, narratives, billing status, source, task and activity codes, timer timestamps, and the timekeeper's name. A caller without time-entry approval access can only read their own entries; another user's entry is reported as not found. The rate is null without billing access.",
     "name": "capability:time-entries.get",
     "title": "time-entries.get"
   },
@@ -3479,7 +3753,7 @@
   {
     "access": "read",
     "command": ["capability", "time-entries", "list"],
-    "description": "List time entries in a matter, optionally filtered by workItemId (the document, folder, or task providing context), userId or scope=me, a date-worked range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status.",
+    "description": "List time entries in a matter, optionally filtered by workItemId (the document, folder, or task providing context), userId or scope=me, a date-worked range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units; null without billing access), currency, narrative, and status.",
     "name": "capability:time-entries.list",
     "title": "time-entries.list"
   },
