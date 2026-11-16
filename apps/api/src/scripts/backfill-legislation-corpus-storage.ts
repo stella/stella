@@ -1,0 +1,201 @@
+/**
+ * Store the inline payload of legislation documents that have no corpus write
+ * yet in object storage, and record their keys and content hash through the
+ * projectability owner, which projects each document into every active
+ * generation in the recording transaction
+ * (`lib/legal-search/legislation-corpus-storage-backfill.ts`). The case-law
+ * counterpart is `backfill-corpus-storage.ts`.
+ *
+ * Reports by default, writing nothing. `--apply` writes. The walk is bounded
+ * by `--limit` documents examined, pauses while the database-load brake holds,
+ * and is resumable with `--after <id>`, the last id a run printed.
+ * Idempotent: a document with a recorded corpus write leaves the walk.
+ *
+ *   # how many documents have no corpus write
+ *   bun run src/scripts/backfill-legislation-corpus-storage.ts
+ *
+ *   # write, bounded and resumable
+ *   CORPUS_STORAGE_MODE=dual-write LEGAL_CORPUS_S3_BUCKET=... \
+ *     bun run src/scripts/backfill-legislation-corpus-storage.ts --apply [--limit 100000] [--page 50] [--after <id>]
+ */
+import { panic } from "better-result";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import {
+  BackfillHeldError,
+  runBackfillPass,
+} from "@stll/db-load-gate/backfill-pass";
+import { decideStart } from "@stll/db-load-gate/health";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+import { Temporal } from "@stll/time";
+
+import { createScriptBackfillHealthReader } from "@/api/db/backfill-runtime";
+import { loadGateHealthConfig } from "@/api/env-online-index";
+import { captureError } from "@/api/lib/analytics/capture";
+import type { SafeId } from "@/api/lib/branded-types";
+import {
+  enterCaseLawMaintenanceLane,
+  openCaseLawReadOnlySession,
+} from "@/api/lib/case-law/maintenance-lane";
+import {
+  backfillLegislationCorpusStorageRow,
+  type LegislationCorpusStorageOutcome,
+  readLegislationCorpusStoragePage,
+} from "@/api/lib/legal-search/legislation-corpus-storage-backfill";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
+import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
+import { rejectUnknownFlags } from "@/api/scripts/repair-flags";
+
+/** Documents written at once: each pays three object PUTs. */
+const CONCURRENCY = 4;
+
+const USAGE = `Usage: bun run src/scripts/backfill-legislation-corpus-storage.ts [options]
+
+  --apply        Write the objects and record them. Omitted, the run only reports.
+  --dry-run      Report only, the default; contradicts --apply.
+  --limit <n>    Documents this run examines (default 100000).
+  --page <n>     Documents one page reads (default 50).
+  --after <id>   Resume after this document id, as a previous run printed.`;
+
+rejectUnknownFlags({ known: ["limit", "page", "after"], usage: USAGE });
+
+await runScriptWithErrorOutput(async () => {
+  const plan = backfillEntrypoints["legislation-corpus-storage"]({
+    args: process.argv.slice(2),
+  });
+  const { apply, limit } = plan;
+
+  // A report only reads, so it takes no lane and cannot block a writer.
+  const { rootDb, ingestionDb } = apply
+    ? await enterCaseLawMaintenanceLane()
+    : await openCaseLawReadOnlySession();
+  const health = createScriptBackfillHealthReader({
+    db: rootDb,
+    tableName: plan.tableName,
+    clock: () => Temporal.Now.instant().epochMilliseconds,
+  });
+  const healthConfig = loadGateHealthConfig();
+
+  if (apply) {
+    await refreshS3();
+    await refreshCorpusS3();
+  }
+
+  let cursor: SafeId<"legislationDocument"> | null =
+    plan.after === undefined
+      ? null
+      : brandPersistedLegislationDocumentId(plan.after);
+  let examined = 0;
+  let written = 0;
+  let skipped = 0;
+  let failed = 0;
+  const progress = { reachedEnd: false };
+
+  const pass = await runBackfillPass({
+    step: async () => {
+      // The brake is read before each page: the page's PUTs run outside any
+      // transaction, so the runtime's per-transaction admission cannot hold
+      // them.
+      const verdict = await (async () => {
+        try {
+          return await health.readVerdict();
+        } finally {
+          await health.settle();
+        }
+      })();
+      if (
+        decideStart(verdict, "backfill_batch", healthConfig).decision === "wait"
+      ) {
+        throw new BackfillHeldError({
+          message: "The database-load brake holds the storage backfill",
+          holdUntil: null,
+          heldSince: Temporal.Now.instant().epochMilliseconds,
+        });
+      }
+      const rows = await readLegislationCorpusStoragePage(ingestionDb, {
+        after: cursor,
+        limit: Math.min(plan.initialSize, limit - examined),
+      });
+      const done = rows.length === 0 || examined + rows.length >= limit;
+      const outcomes: (readonly [
+        SafeId<"legislationDocument">,
+        LegislationCorpusStorageOutcome,
+      ])[] = [];
+      if (!apply) {
+        return { done, sleepMs: 0, value: { rows, outcomes } };
+      }
+      for (const batch of chunkItems(rows, CONCURRENCY)) {
+        // db-await-in-loop: bounded page, CONCURRENCY documents at a time
+        outcomes.push(
+          ...(await Promise.all(
+            batch.map(
+              async (row) =>
+                [
+                  row.id,
+                  await backfillLegislationCorpusStorageRow({
+                    db: ingestionDb,
+                    row,
+                  }),
+                ] as const,
+            ),
+          )),
+        );
+      }
+      return { done, sleepMs: 0, value: { rows, outcomes } };
+    },
+    onBatch: ({ value: { rows, outcomes } }) => {
+      const last = rows.at(-1);
+      if (last === undefined) {
+        progress.reachedEnd = true;
+        return;
+      }
+      cursor = last.id;
+      examined += rows.length;
+      for (const [documentId, outcome] of outcomes) {
+        switch (outcome.type) {
+          case "written":
+            written += 1;
+            break;
+          case "skipped":
+            skipped += 1;
+            break;
+          case "failed":
+            failed += 1;
+            captureError(
+              outcome.error,
+              handlerErrorContext("scripts.backfillLegislationCorpusStorage", {
+                documentId,
+                step: "legislationCorpusStorageBackfill",
+              }),
+            );
+            break;
+          default:
+            outcome satisfies never;
+            panic(`Unhandled storage backfill outcome: ${String(outcome)}`);
+        }
+      }
+      console.info(
+        `  examined=${String(examined)} written=${String(written)} skipped=${String(skipped)} failed=${String(failed)} last=${last.id}`,
+      );
+    },
+    sleep: Bun.sleep,
+  });
+  if (pass.isErr()) {
+    throw pass.error;
+  }
+
+  console.info(
+    apply
+      ? `Done. Examined ${String(examined)} documents with no corpus write: wrote ${String(written)}, skipped ${String(skipped)}, ${String(failed)} failed.`
+      : `${String(examined)} documents have no corpus write. Report only: nothing written. Re-run with --apply to write.`,
+  );
+  if (!progress.reachedEnd && cursor !== null) {
+    console.info(
+      `Stopped at --limit ${String(limit)}; resume with --after ${cursor}.`,
+    );
+  }
+  // Non-zero on partial failure; a rerun retries the documents still unwritten.
+  process.exit(failed === 0 ? 0 : 1);
+});

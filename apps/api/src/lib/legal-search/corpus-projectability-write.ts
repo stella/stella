@@ -222,57 +222,36 @@ type StoredCorpusWrite = {
 };
 
 /**
- * Record a row's first corpus write: its object keys and content hash, only
- * while the row still has no recorded write and is as the caller read it
- * (`updatedAtToken`), so a concurrent ingestion refresh that wrote newer keys
- * is never pointed back at a stale payload. Projects the row in the same
- * transaction. Returns whether the compare-and-set held.
+ * Record a legislation document's first corpus write: its object keys and
+ * content hash, only while the document still has no recorded write and is
+ * as the caller read it (`updatedAtToken`), so a concurrent ingestion refresh
+ * that wrote newer keys is never pointed back at a stale payload. Projects
+ * the document in the same transaction. Returns whether the compare-and-set
+ * held. (A decision's first write settles through its upload intent instead,
+ * `scripts/backfill-corpus-storage.ts`.)
  */
-export const recordFirstCorpusWriteTx = async (
+export const recordFirstLegislationCorpusWriteTx = async (
   tx: Transaction,
-  input:
-    | {
-        family: "case_law";
-        id: SafeId<"caseLawDecision">;
-        written: StoredCorpusWrite;
-        updatedAtToken: TimestampCasToken;
-      }
-    | {
-        family: "legislation";
-        id: SafeId<"legislationDocument">;
-        written: StoredCorpusWrite;
-        updatedAtToken: TimestampCasToken;
-      },
-): Promise<boolean> => {
-  const columns = {
-    textS3Key: input.written.textKey,
-    normalizedS3Key: input.written.sectionsKey,
-    astS3Key: input.written.astKey,
-    contentHash: input.written.contentHash,
-  };
-  return input.family === "case_law"
-    ? await writeProjectedCorpusColumnsTx(tx, {
-        family: "case_law",
-        id: input.id,
-        columns,
-        where: and(
-          isNull(caseLawDecisions.textS3Key),
-          timestampMatchesCasToken(
-            caseLawDecisions.updatedAt,
-            input.updatedAtToken,
-          ),
-        ),
-      })
-    : await writeProjectedCorpusColumnsTx(tx, {
-        family: "legislation",
-        id: input.id,
-        columns,
-        where: and(
-          isNull(legislationDocuments.textS3Key),
-          timestampMatchesCasToken(
-            legislationDocuments.updatedAt,
-            input.updatedAtToken,
-          ),
-        ),
-      });
-};
+  input: {
+    id: SafeId<"legislationDocument">;
+    written: StoredCorpusWrite;
+    updatedAtToken: TimestampCasToken;
+  },
+): Promise<boolean> =>
+  await writeProjectedCorpusColumnsTx(tx, {
+    family: "legislation",
+    id: input.id,
+    columns: {
+      textS3Key: input.written.textKey,
+      normalizedS3Key: input.written.sectionsKey,
+      astS3Key: input.written.astKey,
+      contentHash: input.written.contentHash,
+    },
+    where: and(
+      isNull(legislationDocuments.textS3Key),
+      timestampMatchesCasToken(
+        legislationDocuments.updatedAt,
+        input.updatedAtToken,
+      ),
+    ),
+  });

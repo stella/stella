@@ -1,8 +1,10 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
   caseLawIndexJobs,
@@ -23,6 +25,10 @@ import {
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { writeProjectedCorpusColumnsTx } from "@/api/lib/legal-search/corpus-projectability-write";
+import {
+  backfillLegislationCorpusStorageRow,
+  readLegislationCorpusStoragePage,
+} from "@/api/lib/legal-search/legislation-corpus-storage-backfill";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {
@@ -155,6 +161,77 @@ test("a deferred legislation document that gains its content hash is projected i
   expect(written).toBe(true);
   expect(await statesOf(documentId(1))).toEqual([
     { generation: "legislation_v2", action: "upsert" },
+  ]);
+});
+
+test("the legislation storage backfill records a deferred document's first corpus write and projects it, and leaves a document changed since its read alone", async () => {
+  await register("legislation_v2");
+  await db.insert(legislationDocuments).values(
+    [1, 2].map((n) => ({
+      id: documentId(n),
+      sourceId: LEGISLATION_SOURCE_ID,
+      eli: `eli/cze/sb/2020/${String(n)}`,
+      title: `Zákon ${String(n)}`,
+      country: "CZE",
+      language: "cs",
+      fulltext: `Text ${String(n)}`,
+    })),
+  );
+  const scopedDb: ScopedDb = async (work) => await inTx(work);
+  const rows = await readLegislationCorpusStoragePage(scopedDb, {
+    after: null,
+    limit: 10,
+  });
+  expect(rows.map(({ id }) => id)).toEqual([documentId(1), documentId(2)]);
+  const write: NonNullable<
+    Parameters<typeof backfillLegislationCorpusStorageRow>[0]["write"]
+  > = async ({ documentId: id }) =>
+    await Promise.resolve(
+      Result.ok({
+        type: "written" as const,
+        written: {
+          textKey: `corpus/${id}/text`,
+          sectionsKey: `corpus/${id}/sections`,
+          astKey: `corpus/${id}/ast`,
+          contentHash: HASH,
+        },
+      }),
+    );
+  // Document 2 changes after the page read it: its recording is refused.
+  await db
+    .update(legislationDocuments)
+    .set({ title: "Zákon 2, změněný", updatedAt: new Date(Date.UTC(2030, 0)) })
+    .where(eq(legislationDocuments.id, documentId(2)));
+
+  const outcomes: string[] = [];
+  for (const row of rows) {
+    // db-await-in-loop: two fixture rows, in order
+    outcomes.push(
+      (await backfillLegislationCorpusStorageRow({ db: scopedDb, row, write }))
+        .type,
+    );
+  }
+
+  expect(outcomes).toEqual(["written", "skipped"]);
+  expect(await statesOf(documentId(1))).toEqual([
+    { generation: "legislation_v2", action: "upsert" },
+  ]);
+  expect(await statesOf(documentId(2))).toEqual([]);
+  const stored = await db
+    .select({
+      id: legislationDocuments.id,
+      textS3Key: legislationDocuments.textS3Key,
+      contentHash: legislationDocuments.contentHash,
+    })
+    .from(legislationDocuments)
+    .orderBy(legislationDocuments.id);
+  expect(stored).toEqual([
+    {
+      id: documentId(1),
+      textS3Key: `corpus/${documentId(1)}/text`,
+      contentHash: HASH,
+    },
+    { id: documentId(2), textS3Key: null, contentHash: null },
   ]);
 });
 
