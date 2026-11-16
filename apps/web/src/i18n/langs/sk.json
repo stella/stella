@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upraviť pomocou AI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "Funkcie AI nie sú pre tento účet dostupné.",
       "accountRestricted": "Nastavenia poskytovateľa AI nie sú pre tento účet dostupné.",
       "configUnreadable": "Konfiguráciu poskytovateľa AI nemožno načítať. Požiadajte správcu organizácie o opätovné pripojenie.",
       "cta": "Otvoriť nastavenia AI",
@@ -5385,6 +5386,7 @@
       "tokenHelp": "Dostupné tokeny: '{'SEQ'}' (poradové číslo), '{'YYYY'}' (rok), '{'YY'}' (2-ciferný rok), '{'MM'}' (mesiac)"
     },
     "members": {
+      "billingAccess": "Prístup k fakturačným údajom",
       "changeRole": "Zmeniť rolu",
       "changeRoleDescription": "Aktualizovať rolu pre {email}",
       "confirmRoleChangeDescription": "Rola používateľa {email} sa zmení z {oldRole} na {newRole}.",

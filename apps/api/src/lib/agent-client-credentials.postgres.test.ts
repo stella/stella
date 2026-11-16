@@ -1,6 +1,8 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import {
   encryptAgentClientCredential,
@@ -10,16 +12,14 @@ import { agentRegistration } from "@/api/db/agent-auth-schema";
 import { env } from "@/api/env";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
-let priorStorageSetting = false;
-beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
-});
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const databaseUrl = process.env["DATABASE_URL"];
+
+beforeEach(() => {
+  testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
+});
+
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const credential = Buffer.alloc(32, 0x2a).toHex();
 

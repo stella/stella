@@ -2,8 +2,14 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import type { AIErrorKind } from "@stll/api-contract";
-import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
+import {
+  type AIErrorKind,
+  CHAT_HISTORY_CHANGED_ERROR_CODE,
+} from "@stll/api-contract";
+import {
+  CHAT_QUEUE_ERROR_CODE,
+  CHAT_SEND_QUEUES_INSTEAD_CODE,
+} from "@stll/api-contract/chat-queue";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -75,6 +81,8 @@ import {
 } from "@/api/lib/chat/thread-names";
 import { lockThreadStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
 import {
+  admitMemberMessageOnTx,
+  type MemberMessageAdmission,
   releaseChatQueueOnTx,
   takeQueuedChatMessageOnTx,
 } from "@/api/lib/db/chat-queue-gate";
@@ -1193,7 +1201,23 @@ const safeDbOnTransaction = (tx: Transaction): SafeDb =>
     return Result.ok(await operation(tx));
   };
 
+/**
+ * What a member's message does to the thread's history: `append` a new
+ * message, which waits behind a turn waiting on the member and behind
+ * queued messages (`admitMemberMessageOnTx`); or `rewrite` it, an edit or a
+ * regeneration, which replaces the history a waiting turn belongs to.
+ */
+export const CHAT_MEMBER_MESSAGE_PLACEMENT = {
+  append: "append",
+  rewrite: "rewrite",
+} as const;
+
+type ChatMemberMessagePlacement =
+  (typeof CHAT_MEMBER_MESSAGE_PLACEMENT)[keyof typeof CHAT_MEMBER_MESSAGE_PLACEMENT];
+
 type PersistAcceptedMessageWithClaimProps = PersistMessageProps & {
+  /** Where the message goes in the thread; read for a member's own turn. */
+  placement: ChatMemberMessagePlacement;
   /** The history the message's plan read: its persistence plan, deletions,
    *  and the run's model history. */
   plannedOnHistory: ChatHistorySnapshot;
@@ -1215,11 +1239,34 @@ const CHAT_TURN_REFUSAL_MESSAGE = {
   "turn-running": "A chat turn is already running",
 } as const satisfies Record<ChatTurnRefusal, string>;
 
+const CHAT_TURN_REFUSAL_CODE = {
+  "history-changed": CHAT_HISTORY_CHANGED_ERROR_CODE,
+  "turn-running": CHAT_SEND_QUEUES_INSTEAD_CODE.turnRunning,
+} as const satisfies Record<ChatTurnRefusal, string>;
+
 const refuseChatTurn = (refusal: ChatTurnRefusal): HandlerError<409> =>
   new HandlerError({
     status: 409,
+    code: CHAT_TURN_REFUSAL_CODE[refusal],
     message: CHAT_TURN_REFUSAL_MESSAGE[refusal],
   });
+
+/** Why a member's new message was refused for the queue's sake. */
+const MEMBER_MESSAGE_REFUSAL = {
+  "turn-awaiting-member": {
+    code: CHAT_SEND_QUEUES_INSTEAD_CODE.turnAwaitingMember,
+    message:
+      "The chat waits on your answer; queue the message, or send a queued " +
+      "message now to replace what it waits on",
+  },
+  "queued-ahead": {
+    code: CHAT_SEND_QUEUES_INSTEAD_CODE.queuedAhead,
+    message: "Messages are queued ahead of this one; queue it after them",
+  },
+} as const satisfies Record<
+  Exclude<MemberMessageAdmission, "admitted">,
+  { code: string; message: string }
+>;
 
 const queuedMessageNotDue = (): HandlerError<409> =>
   new HandlerError({
@@ -1230,22 +1277,33 @@ const queuedMessageNotDue = (): HandlerError<409> =>
 
 /**
  * A member's own turn releases the thread's held queue: it is the member's
- * next word, so the queue waits behind it instead. A queued message must be
- * the due head of an open gate, and leaves the queue in this transaction.
+ * next word, so the queue waits behind it instead. A new message of theirs
+ * must first be admitted: it never replaces a turn waiting on them, nor goes
+ * ahead of messages queued before it. A queued message must be the due head
+ * of an open gate, and leaves the queue in this transaction.
  */
 const takeTurnSourceOnTx = async ({
+  placement,
   source,
   threadId,
   tx,
 }: {
+  placement: ChatMemberMessagePlacement;
   source: ChatTurnSource;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
-}): Promise<"taken" | "not-due"> => {
+}): Promise<
+  "taken" | "not-due" | Exclude<MemberMessageAdmission, "admitted">
+> => {
   switch (source.type) {
-    case "member":
-      await releaseChatQueueOnTx({ threadId, tx });
-      return "taken";
+    case "member": {
+      if (placement === CHAT_MEMBER_MESSAGE_PLACEMENT.rewrite) {
+        await releaseChatQueueOnTx({ threadId, tx });
+        return "taken";
+      }
+      const admission = await admitMemberMessageOnTx({ threadId, tx });
+      return admission === "admitted" ? "taken" : admission;
+    }
     case "queue":
       return await takeQueuedChatMessageOnTx({
         id: source.queuedMessageId,
@@ -1266,6 +1324,7 @@ const takeTurnSourceOnTx = async ({
  * the message was planned on is the thread's history when the lock is taken.
  */
 export const persistAcceptedMessageWithClaim = async ({
+  placement,
   plannedOnHistory,
   refuseTurn = refuseChatTurn,
   safeDb,
@@ -1286,14 +1345,28 @@ export const persistAcceptedMessageWithClaim = async ({
         if (reservation !== "reserved") {
           return Result.err(refuseTurn(reservation));
         }
-        if (
-          (await takeTurnSourceOnTx({
-            source: turnAcceptance.source,
-            threadId: turnAcceptance.threadId,
-            tx,
-          })) === "not-due"
-        ) {
-          return Result.err(queuedMessageNotDue());
+        const taken = await takeTurnSourceOnTx({
+          placement,
+          source: turnAcceptance.source,
+          threadId: turnAcceptance.threadId,
+          tx,
+        });
+        switch (taken) {
+          case "taken":
+            break;
+          case "not-due":
+            return Result.err(queuedMessageNotDue());
+          case "turn-awaiting-member":
+          case "queued-ahead":
+            return Result.err(
+              new HandlerError({
+                status: 409,
+                ...MEMBER_MESSAGE_REFUSAL[taken],
+              }),
+            );
+          default:
+            taken satisfies never;
+            return panic("Unhandled turn source");
         }
         const persistenceResult = await runPersistMessage({
           ...persistenceProps,

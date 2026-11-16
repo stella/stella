@@ -336,11 +336,14 @@ export type ChatLocalRunSteerRequest = v.InferOutput<
  * - `not_taken`: the agent did not take it; its turn was ending or between
  *   attempts. Only the turn's stream says this, as `refused`.
  */
-export const CHAT_LOCAL_RUN_STEER_REFUSALS = [
+const CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS = [
   "turn_not_running",
   "no_run",
   "harness_cannot_steer",
   "run_full",
+] as const;
+export const CHAT_LOCAL_RUN_STEER_REFUSALS = [
+  ...CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS,
   "not_taken",
 ] as const;
 export type ChatLocalRunSteerRefusal =
@@ -351,12 +354,16 @@ export type ChatLocalRunSteerRefusal =
  * handed the message (the turn's stream then says whether it took it), or
  * `refused` with why, before anything reached the computer.
  */
-export type ChatLocalRunSteerOutcome =
-  | { type: "queued" }
-  | {
-      type: "refused";
-      reason: Exclude<ChatLocalRunSteerRefusal, "not_taken">;
-    };
+export const chatLocalRunSteerOutcomeSchema = v.variant("type", [
+  v.strictObject({ type: v.literal("queued") }),
+  v.strictObject({
+    type: v.literal("refused"),
+    reason: v.picklist(CHAT_LOCAL_RUN_STEER_ROUTE_REFUSALS),
+  }),
+]);
+export type ChatLocalRunSteerOutcome = v.InferOutput<
+  typeof chatLocalRunSteerOutcomeSchema
+>;
 
 /**
  * The CUSTOM stream event a turn running on a computer sends while its run

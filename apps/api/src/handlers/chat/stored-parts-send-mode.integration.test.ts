@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
@@ -8,6 +8,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { propertyTestTimeout } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -57,6 +58,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // Every kind of stored message part, sent to every provider's real adapter
 // under each send mode, from a thread whose history was written under either
@@ -330,8 +333,7 @@ let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
 let fakeS3: FakeS3;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+
 const seededThreadIds: SafeId<"chatThread">[] = [];
 const catalogEntryIds: SafeId<"anonymizationBlacklistEntry">[] = [];
 
@@ -342,7 +344,7 @@ registerProviderWireReplay({
   options: () => ({ passThroughOrigins: [fakeS3.endpoint] }),
 });
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -350,11 +352,13 @@ beforeAll(async () => {
     createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
   );
   safeDb = toSafeDbMock(scopedDb);
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
+
+  testState.setConfig("USE_MOCK_AI", false);
+
+  testState.setEnv(
+    "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+  );
   fakeS3 = startFakeS3();
   // The organization's catalog names every planted value, so anonymized
   // mode recognises each one wherever it is stored.
@@ -372,12 +376,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   fakeS3.stop();
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
-  }
+
   if (catalogEntryIds.length > 0) {
     await testDb
       .delete(anonymizationBlacklistEntries)

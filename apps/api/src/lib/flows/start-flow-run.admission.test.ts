@@ -69,6 +69,7 @@ describe("flow kickoff acceptance", () => {
           entered.resolve(undefined);
           await proceed.promise;
           return {
+            billingAccess: false,
             memberId: "member",
             email: "member@example.test",
             role: "owner",
@@ -359,6 +360,7 @@ describe("flow kickoff acceptance", () => {
           {
             findDefinition: async () => definition,
             resolveAuthorization: async () => ({
+              billingAccess: false,
               memberId: "member",
               email: "member@example.test",
               role: "owner",

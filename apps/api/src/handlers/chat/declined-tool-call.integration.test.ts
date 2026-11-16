@@ -214,7 +214,7 @@ describe("a declined tool call", () => {
     }
   });
 
-  test("is stored in the same shape when a new message supersedes its approval", async () => {
+  test("is stored in the same shape when Send now ends the turn its approval waits on", async () => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
     const threadId = newThreadId();
     try {
@@ -236,22 +236,18 @@ describe("a declined tool call", () => {
       // The fixture reaches the fault: the approval waits on the user.
       expect(pendingApprovalCallOf(pending.parts).id).toBe("call-NDA");
 
-      harness.script(threadId, [
-        { finishReason: "stop", text: "Kept.", type: "text" },
-      ]);
-      expect(
-        await harness.send(
-          harness.sendContext({
-            message: {
-              id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-              parts: [{ content: "Never mind", type: "text" }],
-              role: "user",
-            },
-            runId: `run-${Bun.randomUUIDv7()}`,
-            threadId,
-          }),
-        ),
-      ).toEqual({ status: "streamed" });
+      // A plain message never replaces the wait; Send now on a queued one
+      // ends the waiting turn first, as a stop does.
+      const waiting = await testDb.query.chatTurns.findFirst({
+        where: { status: { eq: "awaiting-user" }, threadId: { eq: threadId } },
+        columns: { id: true },
+      });
+      expect(waiting).toBeDefined();
+      const stopped = await harness.stopTurn({
+        threadId,
+        turnId: waiting?.id ?? "",
+      });
+      expect(stopped.status).toBe(200);
 
       const superseded = (await harness.readThreadMessages(threadId)).find(
         ({ id }) => id === pending.id,

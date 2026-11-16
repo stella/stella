@@ -71,6 +71,7 @@
     "chooseRewriteInstruction": "Perrašymo parinktys",
     "editWithAI": "Redaguoti su DI",
     "keyRequired": {
+      "accountFeaturesUnavailable": "DI funkcijos šiai paskyrai nepasiekiamos.",
       "accountRestricted": "DI teikėjo nustatymai šiai paskyrai nepasiekiami.",
       "configUnreadable": "DI teikėjo konfigūracijos nuskaityti nepavyko. Paprašykite organizacijos administratoriaus prijungti jį iš naujo.",
       "cta": "Atidaryti DI nustatymus",
@@ -5385,6 +5386,7 @@
       "tokenHelp": "Galimos žymos: '{'SEQ'}' (eilės numeris), '{'YYYY'}' (metai), '{'YY'}' (2 skaitmenų metai), '{'MM'}' (mėnuo)"
     },
     "members": {
+      "billingAccess": "Prieiga prie atsiskaitymo duomenų",
       "changeRole": "Keisti rolę",
       "changeRoleDescription": "Atnaujinti rolę naudotojui {email}",
       "confirmRoleChangeDescription": "{email} vaidmuo bus pakeistas iš {oldRole} į {newRole}.",

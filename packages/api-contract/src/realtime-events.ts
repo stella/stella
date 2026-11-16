@@ -11,6 +11,7 @@ import {
 
 export const REALTIME_EVENT_TYPE = {
   CHAT_BACKGROUND_TASKS_CHANGED: "chat-background-tasks.changed",
+  CHAT_QUEUE_CHANGED: "chat-queue.changed",
   CHAT_RUNS_CHANGED: "chat-runs.changed",
   CHAT_THREADS_CHANGED: "chat-threads.changed",
   DESKTOP_EDIT_SESSION_CLOSED: "__desktop_edit_session_closed__",
@@ -187,11 +188,23 @@ const chatBackgroundTasksChangedEventSchema = v.object({
   data: v.null(),
 });
 
+/**
+ * User-channel event announcing that the messages the recipient queued in
+ * one of their chats, or what holds that queue, changed: from any device, or
+ * by the server sending or holding them. Content-free: an open chat re-reads
+ * its own queue through the ordinary authorized endpoint.
+ */
+const chatQueueChangedEventSchema = v.object({
+  type: v.literal(REALTIME_EVENT_TYPE.CHAT_QUEUE_CHANGED),
+  data: v.null(),
+});
+
 const userRealtimeEventSchema = v.variant("type", [
   newNotificationEventSchema,
   chatRunsChangedEventSchema,
   chatThreadsChangedEventSchema,
   chatBackgroundTasksChangedEventSchema,
+  chatQueueChangedEventSchema,
 ]);
 
 export type ResourceChange = v.InferOutput<typeof resourceChangeSchema>;
@@ -213,6 +226,7 @@ export type UserRealtimeEvent = v.InferOutput<typeof userRealtimeEventSchema>;
 export const USER_EVENT_READ = {
   ACTIVE_CHAT_RUNS: "active-chat-runs",
   CHAT_BACKGROUND_TASKS: "chat-background-tasks",
+  CHAT_QUEUES: "chat-queues",
   CHAT_THREADS: "chat-threads",
   NOTIFICATIONS: "notifications",
 } as const;
@@ -223,18 +237,22 @@ export type UserEventRead =
 /**
  * What each user event makes a client read again: the one table every client
  * follows, so none reads less than an event changed. A run that ends with an
- * answer makes its chat unread, so a runs change reads the chats too.
+ * answer makes its chat unread, so a runs change reads the chats too; a turn
+ * that starts may take its message from the chat's queue, and one that ends
+ * may hold the queue, so it reads the queues as well.
  */
 export const USER_EVENT_READS = {
   [REALTIME_EVENT_TYPE.NEW_NOTIFICATION]: [USER_EVENT_READ.NOTIFICATIONS],
   [REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED]: [
     USER_EVENT_READ.ACTIVE_CHAT_RUNS,
     USER_EVENT_READ.CHAT_THREADS,
+    USER_EVENT_READ.CHAT_QUEUES,
   ],
   [REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED]: [USER_EVENT_READ.CHAT_THREADS],
   [REALTIME_EVENT_TYPE.CHAT_BACKGROUND_TASKS_CHANGED]: [
     USER_EVENT_READ.CHAT_BACKGROUND_TASKS,
   ],
+  [REALTIME_EVENT_TYPE.CHAT_QUEUE_CHANGED]: [USER_EVENT_READ.CHAT_QUEUES],
 } as const satisfies Record<
   UserRealtimeEvent["type"],
   readonly UserEventRead[]
@@ -261,6 +279,12 @@ export const chatThreadsChangedRealtimeEvent = () =>
 export const chatBackgroundTasksChangedRealtimeEvent = () =>
   ({
     type: REALTIME_EVENT_TYPE.CHAT_BACKGROUND_TASKS_CHANGED,
+    data: null,
+  }) as const satisfies UserRealtimeEvent;
+
+export const chatQueueChangedRealtimeEvent = () =>
+  ({
+    type: REALTIME_EVENT_TYPE.CHAT_QUEUE_CHANGED,
     data: null,
   }) as const satisfies UserRealtimeEvent;
 

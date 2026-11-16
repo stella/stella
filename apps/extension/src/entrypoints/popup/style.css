@@ -25,25 +25,12 @@ main {
   min-width: 0;
 }
 
+/* The extension's own icon, the same in both colour schemes. */
 .mark {
-  align-items: center;
-  background: var(--primary);
-  border-radius: 9px;
-  color: var(--primary-foreground);
-  display: flex;
+  display: block;
   flex: 0 0 auto;
   height: 32px;
-  justify-content: center;
   width: 32px;
-}
-
-/* The bundled symbol is the mask and the tile's text colour fills it, so
- * tile and symbol swap with the colour scheme like a primary button. */
-.mark-symbol {
-  background: currentcolor;
-  height: 21px;
-  mask: url("/brand/stella-symbol.svg") center / contain no-repeat;
-  width: 20px;
 }
 
 h1 {
