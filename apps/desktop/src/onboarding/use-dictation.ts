@@ -38,6 +38,11 @@ export const namedDictationFailure = (
 
 export type DictationSnapshot = {
   available: boolean;
+  /** Whether the transcribed text goes through stella to the organization's
+   *  AI provider before it is typed; on by default. */
+  cleanup: boolean;
+  /** Where speech is transcribed. */
+  destination: "cloud" | "local";
   enabled: boolean;
   failure: string | null;
   keys: ShortcutKeys;
@@ -76,6 +81,8 @@ const isModel = (value: unknown): value is DictationModel => {
 const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   isRecord(value) &&
   typeof value["available"] === "boolean" &&
+  typeof value["cleanup"] === "boolean" &&
+  (value["destination"] === "local" || value["destination"] === "cloud") &&
   typeof value["enabled"] === "boolean" &&
   (value["failure"] === null || typeof value["failure"] === "string") &&
   isShortcutKeys(value["keys"]) &&
@@ -105,10 +112,11 @@ export type DictationControls = {
   /** Turns dictation on and starts the speech model download. */
   turnOn: () => Promise<void>;
   download: () => Promise<void>;
+  setCleanup: (enabled: boolean) => Promise<void>;
 };
 
 /**
- * The live dictation state for setup, and the two actions setup offers. The
+ * The live dictation state for setup, and the actions setup offers. The
  * download runs natively, so it goes on after this window moves on or
  * closes; progress arrives through the change event.
  */
@@ -186,9 +194,15 @@ export const useDictation = (): DictationControls => {
     }
   };
 
+  const setCleanup = async (enabled: boolean) => {
+    await run(async () =>
+      invoke<unknown>("dictation_set_cleanup", { enabled }),
+    );
+  };
+
   const reload = () => {
     reread.current();
   };
 
-  return { download, failed, reload, snapshot, turnOn, unread };
+  return { download, failed, reload, setCleanup, snapshot, turnOn, unread };
 };

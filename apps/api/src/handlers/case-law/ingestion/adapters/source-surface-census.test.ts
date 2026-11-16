@@ -54,6 +54,7 @@ import {
   atFindokFixture,
   atRisFixture,
   type AtRisFixtureAdapter,
+  brTjdftFixture,
   brTstAcordaoFixture,
   czNsFixture,
   czNssFixture,
@@ -185,6 +186,7 @@ const SURFACE_EVIDENCE = {
     { kind: "built", fixture: plUokikFixture },
     { kind: "built", fixture: plUokikRulingFixture },
   ],
+  [ADAPTER_KEYS.BR_TJDFT]: [{ kind: "built", fixture: brTjdftFixture }],
 } as const satisfies Record<SourceRegistrationKey, readonly SurfaceEvidence[]>;
 
 // ── Reading a stored raw back into part names ────────────

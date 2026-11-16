@@ -54,6 +54,7 @@ import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-s
 import {
   atFindokFixture,
   atRisFixture,
+  brTjdftFixture,
   brTstCrawlFixture,
   czNsFixture,
   czNssFixture,
@@ -133,6 +134,7 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.PL_KIS]: plKisFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
+  [ADAPTER_KEYS.BR_TJDFT]: brTjdftFixture,
 } as const satisfies Record<AdapterKey, () => EnrolledAdapterFixture>;
 
 const UNDRIVEN_REASON =

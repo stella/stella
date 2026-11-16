@@ -1,3 +1,4 @@
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: timeout reports carry a static label; parsing and stored output are unchanged.
 // parser-output-unchanged: the UK_FCL publisher mapping is new; existing adapter mappings and shared functions are unchanged, so their parsed output is identical.
@@ -90,6 +91,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.PL_KIS]: "eureka-mf",
   [ADAPTER_KEYS.PL_UODO]: "uodo-gov-pl",
   [ADAPTER_KEYS.PL_UOKIK]: "uokik-gov-pl",
+  [ADAPTER_KEYS.BR_TJDFT]: "tjdft-jus-br",
 } as const satisfies Record<AdapterKey, PublisherGateId>;
 
 /** The hosts an adapter's publisher serves from. */
