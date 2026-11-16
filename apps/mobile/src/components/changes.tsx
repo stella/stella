@@ -14,7 +14,8 @@ import { panic } from "better-result";
  * What the app can change, each of which some list shows: from a sheet or a
  * row here, or, for chats, from another device the event stream names.
  */
-export type ChangeKind = "chats" | "documents" | "matters" | "tasks" | "timers";
+export type ChangeKind =
+  "chats" | "chatQueues" | "documents" | "matters" | "tasks" | "timers";
 
 type Changes = {
   /** How many times each kind has changed here; a list keyed on it loads afresh. */
@@ -26,6 +27,7 @@ const ChangesContext = createContext<Changes | null>(null);
 
 const NONE: Readonly<Record<ChangeKind, number>> = {
   chats: 0,
+  chatQueues: 0,
   documents: 0,
   matters: 0,
   tasks: 0,

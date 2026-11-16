@@ -295,6 +295,32 @@
       "runFull": "Agent ei saa praegu rohkem sõnumeid vastu võtta.",
       "notTaken": "Agent ei saanud sinu sõnumit praegu vastu võtta.",
       "queuedMessageChanged": "Sõnum on vahepeal muutunud või pole enam järjekorras, seega agent seda ei saanud."
+    },
+    "queue": {
+      "notice": "Järjekorras: saadetakse, kui praegune vastus on valmis",
+      "prompt": "Saada, kui agent on lõpetanud",
+      "sendNow": "Saada kohe",
+      "remove": "Tühista järjekorras sõnum",
+      "edit": "Muuda",
+      "moveUp": "Liiguta üles",
+      "moveDown": "Liiguta alla",
+      "cancel": "Tühista",
+      "attachments": "{count, plural, one {# manus} other {# manust}}",
+      "actions": "Järjekorras oleva sõnumi toimingud",
+      "notSent": "Saatmine ebaõnnestus",
+      "pause": "Peata järjekord",
+      "resume": "Jätka järjekorda",
+      "replaceTitle": "Kas saata see sõnum kohe?",
+      "replaceDescription": "See vestlus ootab teie vastust. Kui saadate selle sõnumi kohe, tühistatakse küsimus või kinnitus, mida see ootab.",
+      "noLongerQueued": "Seda sõnumit pole enam järjekorras.",
+      "held": {
+        "turn-failed": "Järjekord on peatatud: viimane vastus ebaõnnestus. Järgmise sõnumi saatmiseks jätkake.",
+        "turn-interrupted": "Järjekord on peatatud: viimane vastus katkes. Järgmise sõnumi saatmiseks jätkake.",
+        "member": "Järjekord on peatatud.",
+        "send-refused": "Järjekord on peatatud: esimest sõnumit ei õnnestunud saata. Muutke või eemaldage see ja seejärel jätkake.",
+        "usage-limit": "Järjekord on peatatud: kasutuslimiit on täis. Jätkake, kui see lähtestub.",
+        "computer-away": "Ootame teie arvutit: järjekorras olevad sõnumid saadetakse, kui see ühendub."
+      }
     }
   },
   "tasks": {

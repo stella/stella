@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/chat-context-notice";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
+import { CHAT_SEND_QUEUES_INSTEAD_CODE } from "@stll/api-contract/chat-queue";
 import {
   SSE_HEARTBEAT_FRAME,
   SSE_HEARTBEAT_INTERVAL_MS,
@@ -21,6 +22,7 @@ import {
   type StoredSession,
 } from "@/connection/session";
 
+import { queuesInstead } from "./chat-queue";
 import {
   answerEntry,
   applyChatEvent,
@@ -850,6 +852,33 @@ describe("sending a message", () => {
         ? sent.error.error.status
         : undefined,
     ).toBe(409);
+  });
+
+  test("reports the code of a refused send, which says to queue it instead", async () => {
+    const { fetch } = streamingFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            code: CHAT_SEND_QUEUES_INSTEAD_CODE.turnAwaitingMember,
+            message: "A turn waits on you",
+          }),
+          { status: 409 },
+        ),
+    );
+    const sent = await sendChatMessage({
+      anonymized: false,
+      fetch,
+      matterId: undefined,
+      messageId: MESSAGE_ID,
+      onEvent: () => {},
+      onTurn: () => {},
+      runId: "run-1",
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      text: "Hello",
+      threadId: THREAD_ID,
+    });
+    expect(Result.isError(sent) && queuesInstead(sent.error.error)).toBe(true);
   });
 
   test("names the turn of a send refused after the server stored it, and none before", async () => {

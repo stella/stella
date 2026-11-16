@@ -295,6 +295,32 @@
       "runFull": "Der Agent nimmt gerade keine weiteren Nachrichten an.",
       "notTaken": "Der Agent konnte Ihre Nachricht gerade nicht annehmen.",
       "queuedMessageChanged": "Die Nachricht wurde inzwischen geändert oder ist nicht mehr in der Warteschlange, daher hat der Agent sie nicht erhalten."
+    },
+    "queue": {
+      "notice": "Eingereiht – wird gesendet, sobald die aktuelle Antwort abgeschlossen ist",
+      "prompt": "Senden, wenn der Agent fertig ist",
+      "sendNow": "Jetzt senden",
+      "remove": "Eingereihte Nachricht abbrechen",
+      "edit": "Bearbeiten",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "cancel": "Abbrechen",
+      "attachments": "{count, plural, one {# Anhang} other {# Anhänge}}",
+      "actions": "Aktionen für die Nachricht in der Warteschlange",
+      "notSent": "Konnte nicht gesendet werden",
+      "pause": "Warteschlange pausieren",
+      "resume": "Warteschlange fortsetzen",
+      "replaceTitle": "Diese Nachricht jetzt senden?",
+      "replaceDescription": "Dieser Chat wartet auf Ihre Antwort. Wenn Sie diese Nachricht jetzt senden, wird die Frage oder Freigabe, auf die er wartet, abgebrochen.",
+      "noLongerQueued": "Diese Nachricht ist nicht mehr in der Warteschlange.",
+      "held": {
+        "turn-failed": "Warteschlange pausiert: Die letzte Antwort ist fehlgeschlagen. Setzen Sie fort, um die nächste Nachricht zu senden.",
+        "turn-interrupted": "Warteschlange pausiert: Die letzte Antwort wurde abgebrochen. Setzen Sie fort, um die nächste Nachricht zu senden.",
+        "member": "Warteschlange pausiert.",
+        "send-refused": "Warteschlange pausiert: Die erste Nachricht konnte nicht gesendet werden. Bearbeiten oder entfernen Sie sie und setzen Sie dann fort.",
+        "usage-limit": "Warteschlange pausiert: Ihr Nutzungslimit ist erreicht. Setzen Sie fort, sobald es zurückgesetzt ist.",
+        "computer-away": "Warten auf Ihren Computer: Nachrichten in der Warteschlange werden gesendet, sobald er verbunden ist."
+      }
     }
   },
   "tasks": {

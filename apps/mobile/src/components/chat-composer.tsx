@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useImperativeHandle, useState } from "react";
+import type { Ref } from "react";
 
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import {
@@ -26,6 +27,7 @@ import { useSharedDraft } from "@/components/use-shared-draft";
 import {
   ArrowUpIcon,
   CheckIcon,
+  ClockIcon,
   DictateIcon,
   SendIcon,
   SquareIcon,
@@ -65,9 +67,18 @@ import { useUiColors } from "@/theme";
  * until the person taps done (or for a minute at most), and the transcribed
  * text lands in the box to read over before sending.
  */
+/** What the thread may do to its composer. */
+export type ChatComposerHandle = {
+  /** Puts text taken back into the box, such as a queued message to edit,
+   *  before what is typed. */
+  readonly handBack: (text: string) => void;
+};
+
 export const ChatComposer = ({
   busy,
   canStop,
+  handle,
+  onQueue,
   onSend,
   onSteer,
   onStop,
@@ -77,6 +88,13 @@ export const ChatComposer = ({
 }: {
   busy: boolean;
   canStop: boolean;
+  /** What the thread may do to the box from outside it. */
+  handle?: Ref<ChatComposerHandle> | undefined;
+  /**
+   * Queues the draft behind the answer arriving now (the web's queue
+   * button); undefined where the conversation keeps no queue.
+   */
+  onQueue?: ((draft: ChatDraft, onRefused: () => void) => boolean) | undefined;
   /** Sends the draft; returns false when it was not taken, so it stays in the box. */
   onSend: (draft: ChatDraft, onRefused: () => void) => boolean;
   /**
@@ -95,6 +113,11 @@ export const ChatComposer = ({
 }) => {
   const t = useTranslations("chat");
   const [draft, setDraft] = useState("");
+  useImperativeHandle(handle, () => ({
+    handBack: (text: string) => {
+      setDraft((typed) => (typed === "" ? text : `${text}\n\n${typed}`));
+    },
+  }));
   const files = useChatAttachments();
   useSharedDraft({
     addFiles: files.addFiles,
@@ -131,6 +154,24 @@ export const ChatComposer = ({
       setDraft((typed) => (typed === "" ? message : typed));
       files.restore(taken);
     });
+    if (accepted) {
+      setDraft("");
+      files.clear();
+    }
+  };
+
+  const queue = () => {
+    if (onQueue === undefined || !canSend) {
+      return;
+    }
+    const taken = files.attachments;
+    const accepted = onQueue(
+      { text: message, files: readyFiles(taken) },
+      () => {
+        setDraft((typed) => (typed === "" ? message : typed));
+        files.restore(taken);
+      },
+    );
     if (accepted) {
       setDraft("");
       files.clear();
@@ -263,6 +304,15 @@ export const ChatComposer = ({
               </Text>
             )}
           </View>
+          {busy && onQueue !== undefined && hasDraft ? (
+            <RoundButton
+              enabled={canSend}
+              filled={false}
+              Icon={ClockIcon}
+              label={t("queue.prompt")}
+              onPress={queue}
+            />
+          ) : null}
           {busy && canSteer ? (
             <RoundButton
               enabled

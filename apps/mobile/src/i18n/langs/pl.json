@@ -295,6 +295,32 @@
       "runFull": "Agent nie przyjmie teraz kolejnych wiadomości.",
       "notTaken": "Agent nie mógł teraz przyjąć twojej wiadomości.",
       "queuedMessageChanged": "Wiadomość się zmieniła lub nie ma jej już w kolejce, więc agent jej nie otrzymał."
+    },
+    "queue": {
+      "notice": "W kolejce: zostanie wysłana po zakończeniu bieżącej odpowiedzi",
+      "prompt": "Wyślij, gdy agent skończy",
+      "sendNow": "Wyślij teraz",
+      "remove": "Anuluj wiadomość w kolejce",
+      "edit": "Edytuj",
+      "moveUp": "Przesuń w górę",
+      "moveDown": "Przesuń w dół",
+      "cancel": "Anuluj",
+      "attachments": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
+      "actions": "Akcje wiadomości w kolejce",
+      "notSent": "Nie udało się wysłać",
+      "pause": "Wstrzymaj kolejkę",
+      "resume": "Wznów kolejkę",
+      "replaceTitle": "Wysłać tę wiadomość teraz?",
+      "replaceDescription": "Ten czat czeka na Twoją odpowiedź. Wysłanie tej wiadomości teraz anuluje pytanie lub zatwierdzenie, na które czeka.",
+      "noLongerQueued": "Tej wiadomości nie ma już w kolejce.",
+      "held": {
+        "turn-failed": "Kolejka wstrzymana: ostatnia odpowiedź nie powiodła się. Wznów, aby wysłać następną wiadomość.",
+        "turn-interrupted": "Kolejka wstrzymana: ostatnia odpowiedź została przerwana. Wznów, aby wysłać następną wiadomość.",
+        "member": "Kolejka wstrzymana.",
+        "send-refused": "Kolejka wstrzymana: nie udało się wysłać pierwszej wiadomości. Edytuj ją lub usuń, a potem wznów.",
+        "usage-limit": "Kolejka wstrzymana: osiągnięto limit użycia. Wznów, gdy zostanie odnowiony.",
+        "computer-away": "Oczekiwanie na Twój komputer: wiadomości z kolejki zostaną wysłane, gdy się połączy."
+      }
     }
   },
   "tasks": {

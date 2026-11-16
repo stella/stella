@@ -295,6 +295,32 @@
       "runFull": "El agente no puede aceptar más mensajes ahora.",
       "notTaken": "El agente no pudo aceptar tu mensaje en este momento.",
       "queuedMessageChanged": "El mensaje cambió o ya no está en la cola, así que el agente no lo recibió."
+    },
+    "queue": {
+      "notice": "En cola: se enviará cuando termine la respuesta actual",
+      "prompt": "Enviar cuando el agente termine",
+      "sendNow": "Enviar ahora",
+      "remove": "Cancelar mensaje en cola",
+      "edit": "Editar",
+      "moveUp": "Mover arriba",
+      "moveDown": "Mover abajo",
+      "cancel": "Cancelar",
+      "attachments": "{count, plural, one {# adjunto} many {# adjuntos} other {# adjuntos}}",
+      "actions": "Acciones del mensaje en cola",
+      "notSent": "No se pudo enviar",
+      "pause": "Pausar la cola",
+      "resume": "Reanudar la cola",
+      "replaceTitle": "¿Enviar este mensaje ahora?",
+      "replaceDescription": "Este chat espera tu respuesta. Si envías este mensaje ahora, se cancela la pregunta o aprobación que espera.",
+      "noLongerQueued": "Ese mensaje ya no está en la cola.",
+      "held": {
+        "turn-failed": "Cola en pausa: la última respuesta falló. Reanúdala para enviar el siguiente mensaje.",
+        "turn-interrupted": "Cola en pausa: la última respuesta se interrumpió. Reanúdala para enviar el siguiente mensaje.",
+        "member": "Cola en pausa.",
+        "send-refused": "Cola en pausa: no se pudo enviar el primer mensaje. Edítalo o quítalo y luego reanuda.",
+        "usage-limit": "Cola en pausa: has alcanzado tu límite de uso. Reanúdala cuando se restablezca.",
+        "computer-away": "Esperando a tu ordenador: los mensajes en cola se envían en cuanto se conecte."
+      }
     }
   },
   "tasks": {

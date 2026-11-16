@@ -215,3 +215,42 @@ describe("a failed answer", () => {
     }
   });
 });
+
+/** Where the web keeps each string of the phone's chat queue. */
+const WEB_QUEUE_KEYS = {
+  notice: ["chat", "queuedNotice"],
+  prompt: ["chat", "queuePrompt"],
+  sendNow: ["chat", "sendQueuedMessageNow"],
+  remove: ["chat", "cancelQueuedMessage"],
+  edit: ["common", "edit"],
+  moveUp: ["common", "moveUp"],
+  moveDown: ["common", "moveDown"],
+  cancel: ["common", "cancel"],
+  attachments: ["chat", "queuedAttachmentCount"],
+  actions: ["chat", "queue", "actions"],
+  notSent: ["chat", "queue", "notSent"],
+  pause: ["chat", "queue", "pause"],
+  resume: ["chat", "queue", "resume"],
+  replaceTitle: ["chat", "queue", "replaceTitle"],
+  replaceDescription: ["chat", "queue", "replaceDescription"],
+  noLongerQueued: ["chat", "queue", "noLongerQueued"],
+  held: {
+    "turn-failed": ["chat", "queue", "heldTurnFailed"],
+    "turn-interrupted": ["chat", "queue", "heldTurnInterrupted"],
+    member: ["chat", "queue", "heldByMember"],
+    "send-refused": ["chat", "queue", "heldSendRefused"],
+    "usage-limit": ["chat", "queue", "heldUsageLimit"],
+    "computer-away": ["chat", "queue", "heldComputerAway"],
+  },
+} as const satisfies {
+  readonly [Key in keyof MobileMessages["chat"]["queue"]]: unknown;
+};
+
+// The queue reads as on the web: the same notices, actions and reasons.
+describe("a chat's queue", () => {
+  test.each(UI_LOCALES)("is worded in %s as on the web", (locale) => {
+    const web = webCatalog(locale);
+    const { chat } = CATALOGS[locale];
+    expect(webMessages(web, WEB_QUEUE_KEYS)).toEqual(chat.queue);
+  });
+});

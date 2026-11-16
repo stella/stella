@@ -295,6 +295,32 @@
       "runFull": "The agent cannot take more messages right now.",
       "notTaken": "The agent could not take your message just now.",
       "queuedMessageChanged": "The message changed or left the queue, so the agent was not handed it."
+    },
+    "queue": {
+      "notice": "Queued: sends when the current response finishes",
+      "prompt": "Send when the agent finishes",
+      "sendNow": "Send now",
+      "remove": "Cancel queued message",
+      "edit": "Edit",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "cancel": "Cancel",
+      "attachments": "{count, plural, one {# attachment} other {# attachments}}",
+      "actions": "Queued message actions",
+      "notSent": "Could not be sent",
+      "pause": "Pause queue",
+      "resume": "Resume queue",
+      "replaceTitle": "Send this message now?",
+      "replaceDescription": "This chat is waiting for your answer. Sending this message now cancels the question or approval it is waiting on.",
+      "noLongerQueued": "That message is no longer queued.",
+      "held": {
+        "turn-failed": "Queue paused: the last response failed. Resume to send the next message.",
+        "turn-interrupted": "Queue paused: the last response was cut off. Resume to send the next message.",
+        "member": "Queue paused.",
+        "send-refused": "Queue paused: the first message could not be sent. Edit or remove it, then resume.",
+        "usage-limit": "Queue paused: your usage limit is reached. Resume once it resets.",
+        "computer-away": "Waiting for your computer: queued messages are sent once it connects."
+      }
     }
   },
   "tasks": {

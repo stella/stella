@@ -295,6 +295,32 @@
       "runFull": "Agentas šiuo metu negali priimti daugiau žinučių.",
       "notTaken": "Agentas šiuo metu negalėjo priimti jūsų žinutės.",
       "queuedMessageChanged": "Žinutė pasikeitė arba jos nebėra eilėje, todėl agentas jos negavo."
+    },
+    "queue": {
+      "notice": "Eilėje: bus išsiųsta, kai baigsis dabartinis atsakymas",
+      "prompt": "Siųsti, kai agentas baigs",
+      "sendNow": "Siųsti dabar",
+      "remove": "Atšaukti eilėje esančią žinutę",
+      "edit": "Redaguoti",
+      "moveUp": "Perkelti aukštyn",
+      "moveDown": "Perkelti žemyn",
+      "cancel": "Atšaukti",
+      "attachments": "{count, plural, one {# priedas} few {# priedai} many {# priedo} other {# priedų}}",
+      "actions": "Eilėje esančios žinutės veiksmai",
+      "notSent": "Nepavyko išsiųsti",
+      "pause": "Pristabdyti eilę",
+      "resume": "Tęsti eilę",
+      "replaceTitle": "Išsiųsti šią žinutę dabar?",
+      "replaceDescription": "Šis pokalbis laukia jūsų atsakymo. Išsiuntus šią žinutę dabar, klausimas ar patvirtinimas, kurio jis laukia, bus atšauktas.",
+      "noLongerQueued": "Šios žinutės eilėje nebėra.",
+      "held": {
+        "turn-failed": "Eilė pristabdyta: paskutinis atsakymas nepavyko. Tęskite, kad išsiųstumėte kitą žinutę.",
+        "turn-interrupted": "Eilė pristabdyta: paskutinis atsakymas buvo nutrauktas. Tęskite, kad išsiųstumėte kitą žinutę.",
+        "member": "Eilė pristabdyta.",
+        "send-refused": "Eilė pristabdyta: pirmosios žinutės išsiųsti nepavyko. Pakeiskite ją arba pašalinkite, tada tęskite.",
+        "usage-limit": "Eilė pristabdyta: pasiekėte naudojimo limitą. Tęskite, kai jis atsinaujins.",
+        "computer-away": "Laukiama jūsų kompiuterio: eilėje esančios žinutės bus išsiųstos, kai jis prisijungs."
+      }
     }
   },
   "tasks": {

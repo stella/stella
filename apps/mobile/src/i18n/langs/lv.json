@@ -295,6 +295,32 @@
       "runFull": "Aģents pašlaik nevar pieņemt vairāk ziņu.",
       "notTaken": "Aģents pašlaik nevarēja pieņemt jūsu ziņu.",
       "queuedMessageChanged": "Ziņa ir mainīta vai vairs nav rindā, tāpēc aģents to nesaņēma."
+    },
+    "queue": {
+      "notice": "Rindā: tiks nosūtīts, kad pabeigsies pašreizējā atbilde",
+      "prompt": "Sūtīt, kad aģents pabeigs",
+      "sendNow": "Sūtīt tūlīt",
+      "remove": "Atcelt rindā gaidošo ziņojumu",
+      "edit": "Rediģēt",
+      "moveUp": "Pārvietot augšup",
+      "moveDown": "Pārvietot lejup",
+      "cancel": "Atcelt",
+      "attachments": "{count, plural, zero {# pielikumu} one {# pielikums} other {# pielikumi}}",
+      "actions": "Rindā esošās ziņas darbības",
+      "notSent": "Neizdevās nosūtīt",
+      "pause": "Apturēt rindu",
+      "resume": "Turpināt rindu",
+      "replaceTitle": "Vai nosūtīt šo ziņu tagad?",
+      "replaceDescription": "Šī tērzēšana gaida jūsu atbildi. Nosūtot šo ziņu tagad, tiks atcelts jautājums vai apstiprinājums, ko tā gaida.",
+      "noLongerQueued": "Šīs ziņas vairs nav rindā.",
+      "held": {
+        "turn-failed": "Rinda apturēta: pēdējā atbilde neizdevās. Turpiniet, lai nosūtītu nākamo ziņu.",
+        "turn-interrupted": "Rinda apturēta: pēdējā atbilde tika pārtraukta. Turpiniet, lai nosūtītu nākamo ziņu.",
+        "member": "Rinda apturēta.",
+        "send-refused": "Rinda apturēta: pirmo ziņu neizdevās nosūtīt. Rediģējiet vai noņemiet to un pēc tam turpiniet.",
+        "usage-limit": "Rinda apturēta: sasniegts lietojuma limits. Turpiniet, kad tas tiks atjaunots.",
+        "computer-away": "Gaida jūsu datoru: rindā esošās ziņas tiks nosūtītas, tiklīdz tas pieslēgsies."
+      }
     }
   },
   "tasks": {
