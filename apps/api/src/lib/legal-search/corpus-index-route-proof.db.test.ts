@@ -41,6 +41,7 @@ import { proveCorpusProjectionRevisionsPresent } from "@/api/lib/legal-search/co
 import { proveAcceptedCorpusProjectionAppendsTx } from "@/api/lib/legal-search/corpus-index-projection-store";
 import {
   advanceCorpusIndexRouteProof,
+  type CorpusIndexRouteProofAdmission,
   type CorpusIndexRouteProofAdvance,
   type CorpusIndexRouteProofWorkUnit,
 } from "@/api/lib/legal-search/corpus-index-route-proof";
@@ -249,10 +250,8 @@ const seedWithdrawn = async (index: number) => {
   });
 };
 
-const governor = async <Value>(
-  unit: CorpusIndexRouteProofWorkUnit,
-  work: () => Promise<Value>,
-): Promise<Value> => {
+/** A governor that admits at once and records each unit it was asked for. */
+const governor: CorpusIndexRouteProofAdmission = async (unit, work) => {
   admitted.push(unit);
   return await work();
 };

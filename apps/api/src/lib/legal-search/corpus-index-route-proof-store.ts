@@ -80,8 +80,8 @@ export type CorpusIndexRoute = {
  * is in epoch microseconds, PostgreSQL's precision. `through` is the last key
  * the current phase walks, null when the phase has nothing to walk.
  * `incarnation` is the engine index the pass read first, null before that.
- * `readAtUs` is the database clock when the row was read, so a pass's age is
- * measured on the one clock its start was. `lastProof` is the route's last
+ * `elapsedMs` is the pass's age when the row was read, on the database clock
+ * its start was taken on. `lastProof` is the route's last
  * clean pass, null before one completes: its number tells how many passes
  * have restarted since, its count how far the pass under way has to go.
  */
@@ -94,7 +94,7 @@ export type CorpusIndexRouteCensusPass = {
   cursor: string | null;
   inspected: number;
   incarnation: string | null;
-  readAtUs: string;
+  elapsedMs: number;
   lastProof: { number: number; inspected: number } | null;
 };
 
@@ -180,6 +180,13 @@ const requiredCount = (row: unknown, key: string): number => {
     : panic(`Malformed route proof row: ${key}`);
 };
 
+const requiredMilliseconds = (row: unknown, key: string): number => {
+  const value = isRecord(row) ? row[key] : undefined;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : panic(`Malformed route proof row: ${key}`);
+};
+
 const censusExpectation = (value: string): CorpusIndexRouteCensusExpectation =>
   CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS.find(
     (expectation) => expectation === value,
@@ -198,7 +205,8 @@ const passColumns = sql`${proofs.passNumber}::int AS pass_number,
   ${proofs.passCursor}::text AS cursor,
   ${proofs.passInspected}::int AS inspected,
   ${proofs.passIndexIncarnation} AS incarnation,
-  ${epochMicros(sql`clock_timestamp()`)}::text AS read_at_us,
+  floor(extract(epoch FROM clock_timestamp() - ${proofs.passStartedAt}) * 1000)::float8
+    AS elapsed_ms,
   ${proofs.provenPassNumber}::int AS last_proof_number,
   ${proofs.provenInspected}::int AS last_proof_inspected`;
 
@@ -213,7 +221,7 @@ const passOf = (row: unknown): CorpusIndexRouteCensusPass => {
     cursor: nullableText(row, "cursor"),
     inspected: requiredCount(row, "inspected"),
     incarnation: nullableText(row, "incarnation"),
-    readAtUs: requiredText(row, "read_at_us"),
+    elapsedMs: requiredMilliseconds(row, "elapsed_ms"),
     lastProof:
       lastProofNumber === null
         ? null
@@ -719,7 +727,7 @@ type CorpusIndexRouteProofStatus =
   | { type: "expired"; provenPassStartedAtUs: string }
   | Extract<CorpusIndexRouteRefusal, { type: "unattested" }>;
 
-export type CorpusIndexRouteProofReading = {
+type CorpusIndexRouteProofReading = {
   indexId: string;
   status: CorpusIndexRouteProofStatus;
   /** The pass under way; null when no pass ever reached the route. */
@@ -727,7 +735,7 @@ export type CorpusIndexRouteProofReading = {
 };
 
 /** A declared route whose proof counts, with what the flip re-checks. */
-export type CurrentCorpusIndexRouteProof = {
+type CurrentCorpusIndexRouteProof = {
   indexId: string;
   /** The engine incarnation the proving pass walked. */
   incarnation: string;
@@ -845,7 +853,7 @@ export const readCorpusIndexRouteProofsTx = async (
           gate.type === "manifest"
             ? null
             : enrollmentGate(gate, enrolled.get(gate.indexGroup));
-        if (attestation !== null && attestation.type === "unattested") {
+        if (attestation?.type === "unattested") {
           return attestation;
         }
         if (row === undefined || !isRecord(row) || row["proven"] !== true) {

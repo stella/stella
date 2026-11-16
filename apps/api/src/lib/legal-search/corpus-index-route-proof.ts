@@ -191,9 +191,7 @@ const logCensusPage = ({
       ? walked.value.advance.inspected
       : 0;
   const passRows = pass.inspected + pageRows;
-  const elapsedSeconds =
-    Number(BigInt(pass.readAtUs) - BigInt(pass.startedAtUs)) / 1_000_000 +
-    pageMs / 1000;
+  const elapsedSeconds = (pass.elapsedMs + pageMs) / 1000;
   const rowsPerSecond = elapsedSeconds > 0 ? passRows / elapsedSeconds : null;
   const estimatedRemainingSeconds =
     pass.lastProof === null || rowsPerSecond === null || rowsPerSecond === 0

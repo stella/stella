@@ -1049,6 +1049,41 @@ const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> =>
     });
   });
 
+/** An index's metadata document, or that the engine holds no such index. */
+type IndexMetadataRead =
+  { type: "missing" } | { type: "present"; metadata: unknown };
+
+const readIndexMetadata = async (
+  request: CorpusIndexRequest,
+): Promise<Result<IndexMetadataRead, CorpusIndexError>> =>
+  await Result.tryPromise({
+    try: async () =>
+      await sendRequest(
+        request,
+        async (response, bounded): Promise<IndexMetadataRead> => {
+          if (response.status === 404) {
+            return { type: "missing" };
+          }
+          if (!response.ok) {
+            throw new CorpusIndexError({
+              message: `corpus index ${requestLabel(request)} -> ${response.status}`,
+              status: response.status,
+            });
+          }
+          const metadata = await response.json().catch((error: unknown) => {
+            throw requestFailure({
+              request: bounded,
+              error,
+              unaborted: "returned an unreadable body",
+              reach: bodyReadReach(error),
+            });
+          });
+          return { type: "present", metadata };
+        },
+      ),
+    catch: toCorpusIndexError,
+  });
+
 type SettlementSplit = {
   evidence: CorpusIndexSettlementSplit;
   /** Null while the split has never been published. */
@@ -1657,115 +1692,84 @@ const buildClient = (
       catch: toCorpusIndexError,
     }),
 
-  readIndexIncarnation: async (indexId, observer) =>
-    await Result.tryPromise({
-      try: async () => {
-        const request = {
-          observer,
-          // The endpoint the census reads, so the incarnation is the one the
-          // census pages observed.
-          baseUrl: searchBaseUrl(cluster),
-          path: `/api/v1/indexes/${indexId}`,
-          init: { method: "GET" },
-          timeoutMs: ADMIN_TIMEOUT_MS,
-        } satisfies CorpusIndexRequest;
-        return await sendRequest(
-          request,
-          async (response, bounded): Promise<CorpusIndexIncarnation> => {
-            if (response.status === 404) {
-              return { type: "missing" };
-            }
-            if (!response.ok) {
-              throw new CorpusIndexError({
-                message: `corpus index ${requestLabel(request)} -> ${response.status}`,
-                status: response.status,
-              });
-            }
-            const metadata = await response.json().catch((error: unknown) => {
-              throw requestFailure({
-                request: bounded,
-                error,
-                unaborted: "returned an unreadable body",
-                reach: bodyReadReach(error),
-              });
-            });
-            const incarnation = isRecord(metadata)
-              ? metadata["index_uid"]
-              : undefined;
-            const config = isRecord(metadata)
-              ? metadata["index_config"]
-              : undefined;
-            // An uid names its index id first: `<index id>:<ULID>`.
-            if (
-              typeof incarnation !== "string" ||
-              !incarnation.startsWith(`${indexId}:`) ||
-              incarnation.length <= indexId.length + 1 ||
-              incarnation.length > CORPUS_INDEX_INCARNATION_MAX_LENGTH ||
-              !isRecord(config) ||
-              config["index_id"] !== indexId
-            ) {
-              throw new CorpusIndexError({
-                message: `corpus index ${indexId} metadata named no incarnation of it`,
-              });
-            }
-            return { type: "present", incarnation };
-          },
-        );
-      },
-      catch: toCorpusIndexError,
-    }),
+  readIndexIncarnation: async (indexId, observer) => {
+    const read = await readIndexMetadata({
+      observer,
+      // The endpoint the census reads, so the incarnation is the one the
+      // census pages observed.
+      baseUrl: searchBaseUrl(cluster),
+      path: `/api/v1/indexes/${indexId}`,
+      init: { method: "GET" },
+      timeoutMs: ADMIN_TIMEOUT_MS,
+    });
+    if (read.isErr()) {
+      return Result.err(read.error);
+    }
+    if (read.value.type === "missing") {
+      return Result.ok({ type: "missing" });
+    }
+    const { metadata } = read.value;
+    const incarnation = isRecord(metadata) ? metadata["index_uid"] : undefined;
+    const config = isRecord(metadata) ? metadata["index_config"] : undefined;
+    // An uid names its index id first: `<index id>:<ULID>`.
+    if (
+      typeof incarnation !== "string" ||
+      !incarnation.startsWith(`${indexId}:`) ||
+      incarnation.length <= indexId.length + 1 ||
+      incarnation.length > CORPUS_INDEX_INCARNATION_MAX_LENGTH ||
+      !isRecord(config) ||
+      config["index_id"] !== indexId
+    ) {
+      return Result.err(
+        new CorpusIndexError({
+          message: `corpus index ${indexId} metadata named no incarnation of it`,
+        }),
+      );
+    }
+    return Result.ok({ type: "present", incarnation });
+  },
 
-  attestIndexConfig: async (config, observer) =>
-    await Result.tryPromise({
-      try: async () => {
-        const request = {
-          observer,
-          baseUrl: mutationBaseUrl(cluster),
-          path: `/api/v1/indexes/${config.index_id}`,
-          init: { method: "GET" },
-          timeoutMs: ADMIN_TIMEOUT_MS,
-        } satisfies CorpusIndexRequest;
-        return await sendRequest(request, async (response, bounded) => {
-          if (response.status === 404) {
-            return { status: "missing" } as const;
-          }
-          if (!response.ok) {
-            throw new CorpusIndexError({
-              message: `corpus index ${requestLabel(request)} -> ${response.status}`,
-              status: response.status,
-            });
-          }
-          const metadata = await response.json().catch((error: unknown) => {
-            throw requestFailure({
-              request: bounded,
-              error,
-              unaborted: "returned an unreadable body",
-              reach: bodyReadReach(error),
-            });
-          });
-          if (!isRecord(metadata) || !isRecord(metadata["index_config"])) {
-            throw new CorpusIndexError({
-              message: "corpus index metadata omitted its index config",
-            });
-          }
-          const observedConfig = metadata["index_config"];
-          const difference = configDifference(config, observedConfig);
-          if (difference !== null) {
-            throw new CorpusIndexError({
-              message: `corpus index ${config.index_id} configuration drift at ${difference}`,
-            });
-          }
-          const indexUri = observedConfig["index_uri"];
-          if (typeof indexUri !== "string" || indexUri.length === 0) {
-            throw new CorpusIndexError({
-              message: `corpus index ${config.index_id} metadata omitted its index URI`,
-            });
-          }
-          return { status: "matching", indexUri } as const;
-        });
-      },
-      catch: toCorpusIndexError,
-    }),
+  attestIndexConfig: async (config, observer) => {
+    const read = await readIndexMetadata({
+      observer,
+      baseUrl: mutationBaseUrl(cluster),
+      path: `/api/v1/indexes/${config.index_id}`,
+      init: { method: "GET" },
+      timeoutMs: ADMIN_TIMEOUT_MS,
+    });
+    if (read.isErr()) {
+      return Result.err(read.error);
+    }
+    if (read.value.type === "missing") {
+      return Result.ok({ status: "missing" });
+    }
+    const { metadata } = read.value;
+    if (!isRecord(metadata) || !isRecord(metadata["index_config"])) {
+      return Result.err(
+        new CorpusIndexError({
+          message: "corpus index metadata omitted its index config",
+        }),
+      );
+    }
+    const observedConfig = metadata["index_config"];
+    const difference = configDifference(config, observedConfig);
+    if (difference !== null) {
+      return Result.err(
+        new CorpusIndexError({
+          message: `corpus index ${config.index_id} configuration drift at ${difference}`,
+        }),
+      );
+    }
+    const indexUri = observedConfig["index_uri"];
+    if (typeof indexUri !== "string" || indexUri.length === 0) {
+      return Result.err(
+        new CorpusIndexError({
+          message: `corpus index ${config.index_id} metadata omitted its index URI`,
+        }),
+      );
+    }
+    return Result.ok({ status: "matching", indexUri });
+  },
 
   ingestBatch: async (indexId, ndjson, commit, observer) =>
     await ingestBatch({
