@@ -75,6 +75,7 @@ import {
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
 import * as searchInterpretation from "@/api/handlers/case-law/decisions/search-interpretation";
+import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -659,6 +660,8 @@ const createCitationDigest = (
 });
 
 const createReadDecisionResult = () => ({
+  textIncompleteReason: null,
+  textWithheldReason: null,
   extractionWarnings: [],
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
@@ -5215,6 +5218,10 @@ describe("OpenAI-compatible MCP tools", () => {
             id: "00000000-0000-4000-8000-0000000c0001",
             citationText: "29 Cdo 123/2024",
             textWithheldReason: null,
+            textIncompleteReason: null,
+            evidenceIncompleteReason: "missing_privileges",
+            polarityEvidence: null,
+            citedPart: null,
             extractionWarnings: [],
             sectionIndex: 3,
             doctrine: "unread",
@@ -5248,6 +5255,10 @@ describe("OpenAI-compatible MCP tools", () => {
             id: "00000000-0000-4000-8000-0000000c0002",
             citationText: "Rozhodnutí, které korpus nedrží",
             textWithheldReason: null,
+            textIncompleteReason: null,
+            evidenceIncompleteReason: "missing_privileges",
+            polarityEvidence: null,
+            citedPart: null,
             extractionWarnings: [],
             sectionIndex: null,
             doctrine: "unread",
@@ -5294,6 +5305,10 @@ describe("OpenAI-compatible MCP tools", () => {
           citationId: "00000000-0000-4000-8000-0000000c0001",
           citationText: "29 Cdo 123/2024",
           textWithheldReason: null,
+          textIncompleteReason: null,
+          evidenceIncompleteReason: "missing_privileges",
+          polarityEvidence: null,
+          citedPart: null,
           extractionWarnings: [],
           polarity: "negative",
           doctrine: "unread",
@@ -5318,6 +5333,10 @@ describe("OpenAI-compatible MCP tools", () => {
           citationId: "00000000-0000-4000-8000-0000000c0002",
           citationText: "Rozhodnutí, které korpus nedrží",
           textWithheldReason: null,
+          textIncompleteReason: null,
+          evidenceIncompleteReason: "missing_privileges",
+          polarityEvidence: null,
+          citedPart: null,
           extractionWarnings: [],
           polarity: "unclassified",
           doctrine: "unread",
@@ -7791,6 +7810,9 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
     test("reports every jurisdiction with only public coverage facts and the data timestamp", async () => {
+      expect(v.is(coverageResponseSchema, CASE_LAW_COVERAGE_FIXTURE)).toBe(
+        true,
+      );
       const result = await call({});
       expect(result.isError).not.toBe(true);
       expect(result.structuredContent).toEqual(CASE_LAW_COVERAGE_EXPECTED);

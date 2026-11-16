@@ -18,6 +18,7 @@ import {
 import type { AIProvider, ModelRate } from "@stll/ai-catalog";
 import {
   TRANSCRIPTION_MODELS,
+  type TranscriptionEndpoint,
   type TranscriptionModelId,
 } from "@stll/ai-catalog/transcription";
 
@@ -419,7 +420,8 @@ type TranscriptionUsageUnitsOptions = {
   modelId: TranscriptionModelId;
   durationMs: number;
   isByok: boolean;
-  residency: "eu" | "us";
+  /** The endpoint that served the audio; each bills its own price. */
+  residency: TranscriptionEndpoint;
 };
 
 export const transcriptionUsageUnits = ({

@@ -34,8 +34,6 @@ Runner slots:
 
 ```text
 case-law-ingest                   implemented
-case-law-corpus-storage-backfill  implemented
-legal-corpus-storage-backfill     implemented
 statute-ingest                    reserved
 search-index                      reserved
 ```

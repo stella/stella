@@ -34,12 +34,27 @@ import {
   caseLawCourtStatusRows,
   readCaseLawCourtActivityQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
+import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { coverageSnapshotSchema } from "@/api/handlers/case-law/public-response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  currentCensusSourceScopes,
+  readCompletenessCensusQuery,
+  unmeasuredSourceCensus,
+} from "@/api/lib/case-law/completeness-census";
+import { censusCapabilityFor } from "@/api/lib/case-law/completeness-census-capabilities";
+import {
+  countryCensusVerdict,
+  publisherCensusOf,
+} from "@/api/lib/case-law/completeness-census-contract";
+import type {
+  PublisherCensus,
+  SourceCensus,
+} from "@/api/lib/case-law/completeness-census-contract";
 import {
   type CaseLawCoverageFreshness,
   caseLawCoverageFreshness,
@@ -65,7 +80,10 @@ import {
   ADAPTER_MANIFESTS,
   type AdapterEdition,
 } from "@/api/lib/legal-search/adapter-manifest";
-import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  ADAPTER_KEYS,
+  CASE_LAW_SOURCE_ROWS_BOUND,
+} from "@/api/lib/legal-search/ingestion-constants";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import {
   createUnrecognizedSourceReporter,
@@ -153,6 +171,7 @@ type CaseLawCoverageSource = {
   courts: readonly CoverageCourt[];
   /** Reconciled slice-ledger completeness by calendar year. */
   knownGaps: CaseLawKnownGaps;
+  publisherCensus: PublisherCensus;
   completeness: CaseLawSourceCompleteness;
   /**
    * Decisions published for this source in the last seven days; null when
@@ -182,6 +201,7 @@ type CaseLawCoverageCountryBase = {
    * unknown state rather than a zero.
    */
   unreadParts: readonly CaseLawCoveragePart[];
+  censusVerdict: SourceCensus["verdict"];
 };
 
 type CaseLawCoverageCountry =
@@ -222,6 +242,11 @@ type CaseLawCoverage = {
 
 const provisionStatusReadFailure = failureSink({
   event: "case_law.coverage.provision_status_unavailable",
+  expected: [],
+});
+
+const publisherCensusReadFailure = failureSink({
+  event: "case_law.coverage.publisher_census_unavailable",
   expected: [],
 });
 
@@ -476,6 +501,9 @@ type CoverageLoad = {
   readArrivals: (
     sourceIds: readonly SafeId<"caseLawSource">[],
   ) => Promise<ReadonlyMap<string, CaseLawSourceArrivals> | null>;
+  readCensus: (
+    sources: readonly Pick<CaseLawCoverageSourceRow, "id" | "adapterKey">[],
+  ) => Promise<ReadonlyMap<string, SourceCensus>>;
   readYearCompleteness: (
     sources: readonly Pick<CaseLawCoverageSourceRow, "id" | "adapterKey">[],
   ) => Promise<ReadonlyMap<string, CaseLawKnownGaps>>;
@@ -508,6 +536,74 @@ const coverageError = (fallback: string) => (cause: unknown) =>
     cause,
   });
 
+const publisherCensusForSource = (
+  census: ReadonlyMap<string, SourceCensus>,
+  source: Pick<CaseLawCoverageSourceRow, "id" | "adapterKey">,
+) =>
+  publisherCensusOf(
+    census.get(String(source.id)) ?? unmeasuredSourceCensus(source.adapterKey),
+  );
+
+type ReadYearLedgerOptions = {
+  readYearCompleteness: CoverageLoad["readYearCompleteness"];
+  sources: readonly CaseLawCoverageSourceRow[];
+  onPartialFailure: CoverageLoad["onPartialFailure"];
+};
+const readYearLedger = async ({
+  readYearCompleteness,
+  sources: admitted,
+  onPartialFailure,
+}: ReadYearLedgerOptions) => {
+  const yearCompleteness = await Result.tryPromise({
+    try: async () => await readYearCompleteness(admitted),
+    catch: coverageError("reading case-law slice completeness failed"),
+  });
+  if (Result.isError(yearCompleteness)) {
+    onPartialFailure("slice-completeness");
+    observeFailure(yearCompleteness.error, {
+      sink: sliceCompletenessReadFailure,
+    });
+  }
+
+  return yearCompleteness;
+};
+
+type ReadPublisherCensusOptions = {
+  readCensus: CoverageLoad["readCensus"];
+  sources: readonly CaseLawCoverageSourceRow[];
+  onPartialFailure: CoverageLoad["onPartialFailure"];
+};
+
+const readPublisherCensus = async ({
+  readCensus,
+  sources,
+  onPartialFailure,
+}: ReadPublisherCensusOptions) => {
+  const result = await Result.tryPromise({
+    try: async () => await readCensus(sources),
+    catch: coverageError("reading the publisher census failed"),
+  });
+  if (Result.isOk(result)) {
+    return result.value;
+  }
+  onPartialFailure("publisher-census");
+  observeFailure(result.error, { sink: publisherCensusReadFailure });
+  return new Map<string, SourceCensus>();
+};
+
+const coverageCountryCensus = (
+  country: CaseLawJurisdiction,
+  sources: readonly CaseLawCoverageSource[],
+) =>
+  countryCensusVerdict(
+    Object.values(ADAPTER_KEYS)
+      .filter((key) => caseLawSourceJurisdiction(key) === country)
+      .map(
+        (key) =>
+          sources.find(({ adapterKey }) => adapterKey === key)?.publisherCensus
+            .measurement ?? unmeasuredSourceCensus(key),
+      ),
+  );
 /** The earliest and latest decision year over the sources that state both. */
 const decisionYearRange = (
   sources: readonly Pick<
@@ -546,6 +642,7 @@ export const loadCaseLawCoverage = async ({
   readFacets,
   readSources,
   readYearCompleteness,
+  readCensus,
 }: CoverageLoad): Promise<Result<CaseLawCoverage, CoverageError>> => {
   const sources = await Result.tryPromise({
     try: readSources,
@@ -569,16 +666,17 @@ export const loadCaseLawCoverage = async ({
   );
   // Per-year completeness is a per-source detail: a failed ledger read marks
   // every source not reconciled and the rest of the page still answers.
-  const yearCompleteness = await Result.tryPromise({
-    try: async () => await readYearCompleteness(admitted),
-    catch: coverageError("reading case-law slice completeness failed"),
+  const yearCompleteness = await readYearLedger({
+    readYearCompleteness,
+    sources: admitted,
+    onPartialFailure: unreadEverywhere,
   });
-  if (Result.isError(yearCompleteness)) {
-    unreadEverywhere("slice-completeness");
-    observeFailure(yearCompleteness.error, {
-      sink: sliceCompletenessReadFailure,
-    });
-  }
+
+  const censusRows = await readPublisherCensus({
+    readCensus,
+    sources: admitted,
+    onPartialFailure: unreadEverywhere,
+  });
 
   const reportUnrecognizedSource = createUnrecognizedSourceReporter(
     SOURCE_REPORT_FEATURE.coverage,
@@ -627,6 +725,7 @@ export const loadCaseLawCoverage = async ({
       decisionYearFrom: source.decisionYearFrom,
       decisionYearTo: source.decisionYearTo,
       pendingTextCount: source.pendingTextCount,
+      publisherCensus: publisherCensusForSource(censusRows, source),
       courts: source.courts,
       publishedDecisions: source.publishedDecisions,
       storedDecisions: source.storedTotalAsOf ? source.storedTotal : null,
@@ -681,6 +780,7 @@ export const loadCaseLawCoverage = async ({
       ),
       sources: entry.sources,
       unreadParts: orderedCoverageParts(sharedUnread),
+      censusVerdict: coverageCountryCensus(country, entry.sources),
     } satisfies CaseLawCoverageCountryBase;
     storedTotal += entry.stored;
     if (
@@ -790,6 +890,55 @@ const storedCoverageSchema = v.object({
 type StoredCaseLawCoverage =
   v.InferOutput<typeof storedCoverageSchema> | CaseLawCoverageUnavailable;
 
+/**
+ * A summary stored before the publisher census existed carries neither a
+ * country verdict nor per-source census. It is read as not measured yet,
+ * the same answer a source without observations gives, rather than refused.
+ */
+const withUnmeasuredCensusDefaults = (summary: unknown): unknown => {
+  if (!isRecord(summary) || !isRecord(summary["answer"])) {
+    return summary;
+  }
+  const countries = summary["answer"]["countries"];
+  if (!Array.isArray(countries)) {
+    return summary;
+  }
+  return {
+    ...summary,
+    answer: {
+      ...summary["answer"],
+      countries: countries.map((country: unknown) => {
+        if (!isRecord(country)) {
+          return country;
+        }
+        const sources = country["sources"];
+        return {
+          ...country,
+          censusVerdict: country["censusVerdict"] ?? "unmeasured",
+          sources: Array.isArray(sources)
+            ? sources.map((source: unknown) => {
+                if (
+                  !isRecord(source) ||
+                  source["publisherCensus"] !== undefined ||
+                  typeof source["adapterKey"] !== "string" ||
+                  censusCapabilityFor(source["adapterKey"]) === undefined
+                ) {
+                  return source;
+                }
+                return {
+                  ...source,
+                  publisherCensus: publisherCensusOf(
+                    unmeasuredSourceCensus(source["adapterKey"]),
+                  ),
+                };
+              })
+            : sources,
+        };
+      }),
+    },
+  };
+};
+
 /** What a reader receives: the stored figures and how fresh they are. */
 type CaseLawCoverageResponse =
   | (CaseLawCoverageSnapshot & { freshness: CaseLawCoverageFreshness })
@@ -818,7 +967,10 @@ export const readCaseLawCoverageSummaryQuery = definePublicLawSharedQuery(
     if (!isRecord(row) || row["summary"] === null) {
       return COVERAGE_UNAVAILABLE;
     }
-    const parsed = v.safeParse(storedCoverageSchema, row["summary"]);
+    const parsed = v.safeParse(
+      storedCoverageSchema,
+      withUnmeasuredCensusDefaults(row["summary"]),
+    );
     if (!parsed.success) {
       logger.warn("case_law.coverage.summary_invalid");
       return COVERAGE_UNAVAILABLE;
@@ -961,6 +1113,17 @@ export const computeCaseLawCoverageAnswer = async (
           },
           { isolation: "repeatable-read" },
         ),
+      readCensus: async (sources) => {
+        const scopes = await currentCensusSourceScopes({
+          sources,
+          now,
+          loadAdapter: loadAdapterByKey,
+        });
+        return await caseLawDb(
+          async (tx) => await readCompletenessCensusQuery(tx, scopes),
+          { isolation: "repeatable-read" },
+        );
+      },
       readYearCompleteness: async (sources) =>
         await caseLawDb(
           async (tx) => await readCaseLawCoverageYearsQuery(tx, sources),

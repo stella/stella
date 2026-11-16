@@ -7,6 +7,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatQueuedMessages } from "@/api/db/schema";
+import { isChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import {
   lockOwnQueueThreadOnTx,
   parseQueuedChatSend,
@@ -62,8 +63,9 @@ const steerMark = (revision: number | null) =>
  * input per id, so a second revision would be removed for the first one's
  * report. `not-raw` when that revision is queued to be sent anonymized: a
  * steer hands the computer the text as it is, and a turn on a computer is
- * never anonymized, so it goes as a message of its own. The caller holds the
- * thread lock.
+ * never anonymized, so it goes as a message of its own. `has-files` when it
+ * carries files: a steer hands over text alone, and the message would leave
+ * the queue without them. The caller holds the thread lock.
  */
 export const markSteeredQueuedMessageOnTx = async ({
   id,
@@ -71,7 +73,7 @@ export const markSteeredQueuedMessageOnTx = async ({
   threadId,
   tx,
 }: SteeredMessageOnTx & { revision: number }): Promise<
-  "marked" | "changed" | "not-raw"
+  "marked" | "changed" | "not-raw" | "has-files"
 > => {
   const at = and(
     eq(chatQueuedMessages.id, id),
@@ -88,10 +90,12 @@ export const markSteeredQueuedMessageOnTx = async ({
   if (queued === undefined) {
     return "changed";
   }
-  if (
-    parseQueuedChatSend(queued.request).sendMode !== CHAT_SEND_MODE.rawOverride
-  ) {
+  const send = parseQueuedChatSend(queued.request);
+  if (send.sendMode !== CHAT_SEND_MODE.rawOverride) {
     return "not-raw";
+  }
+  if (send.message.parts.some(isChatAttachmentPart)) {
+    return "has-files";
   }
   const mark = steerMark(revision);
   // A repeat of the same steer marks the same revision again.

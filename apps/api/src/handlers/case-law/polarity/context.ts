@@ -1,5 +1,7 @@
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
+
 /**
  * Extract citation context from decision sections.
  *
@@ -33,7 +35,8 @@ const SENTENCE_BREAK = /(?<![\s(]\p{L}{1,2})[.!?](?=\s+\p{Lu}|\s*$)|\n/u;
  * letters, so a publisher that serves "á" decomposed (U+0061 U+0301) would
  * silently match none of them: a combining mark is neither the letter nor
  * `\p{L}`. Nothing indexes into a window, so composing it costs no offset; the
- * citation is located in the section's own characters first.
+ * citation is located in the section's own characters first. Evidence offsets
+ * remain in the original text, before normalization.
  */
 export type CitationContexts = readonly [string, ...string[]];
 
@@ -72,8 +75,11 @@ export type CitationWindows = {
    * rule tier reads cannot shift a stored kind.
    */
   contexts: CitationContexts;
+  /** Exact offsets for each mention in the original joined section text. */
+  evidenceWindows: CitationEvidenceWindows;
+  /** Exact offsets for each merged model context in the original text. */
+  contextEvidenceWindows: CitationEvidenceWindows;
 };
-
 type Span = { start: number; end: number };
 
 /**
@@ -99,6 +105,12 @@ export const extractContexts = (
 ): CitationWindows | null => {
   const section = sectionIndex !== null ? sections[sectionIndex] : undefined;
   const text = section?.text ?? sections.map((s) => s.text).join("\n");
+  const sectionOffset =
+    section && sectionIndex !== null
+      ? sections
+          .slice(0, sectionIndex)
+          .reduce((offset, s) => offset + s.text.length + 1, 0)
+      : 0;
 
   const spans: Span[] = [];
   for (
@@ -132,11 +144,32 @@ export const extractContexts = (
 
   const window = ({ start, end }: Span) =>
     normalizeUnicode(text.slice(start, end), "NFC");
+  // Each mention's evidence window covers the same sentence-extended span
+  // its mention text reads.
+  const firstMention = toSentenceEnd(text, first);
+  const restMentions = rest.map((span) => toSentenceEnd(text, span));
   return {
-    mentions: [
-      window(toSentenceEnd(text, first)),
-      ...rest.map((span) => window(toSentenceEnd(text, span))),
-    ],
+    mentions: [window(firstMention), ...restMentions.map(window)],
     contexts: [window(mergedFirst), ...mergedRest.map(window)],
+    evidenceWindows: [
+      {
+        start: sectionOffset + firstMention.start,
+        end: sectionOffset + firstMention.end,
+      },
+      ...restMentions.map(({ start, end }) => ({
+        start: sectionOffset + start,
+        end: sectionOffset + end,
+      })),
+    ],
+    contextEvidenceWindows: [
+      {
+        start: sectionOffset + mergedFirst.start,
+        end: sectionOffset + mergedFirst.end,
+      },
+      ...mergedRest.map(({ start, end }) => ({
+        start: sectionOffset + start,
+        end: sectionOffset + end,
+      })),
+    ],
   };
 };

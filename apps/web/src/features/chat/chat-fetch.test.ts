@@ -10,6 +10,7 @@ import {
 import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 
 import { APIError } from "@/lib/errors/api";
+import { toSafeId } from "@/lib/safe-id";
 
 import {
   chatCommandFetchClient,
@@ -253,7 +254,7 @@ describe("a member's command sent through the chat transport", () => {
     globalThis.fetch = originalFetch;
   });
 
-  const TURN_ID = "0198c0de-0000-7000-8000-000000000001";
+  const TURN_ID = toSafeId<"chatTurn">("0198c0de-0000-7000-8000-000000000001");
 
   /** The server: answers each request in turn, recording its command id. */
   const serve = (answers: readonly (() => Response)[]) => {

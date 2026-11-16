@@ -359,8 +359,9 @@ export type ChatLocalRunSteerRequest = v.InferOutput<
  * - `run_full`: the run holds as many commands as one run may.
  * - `queued_message_changed`: the queued message was edited, sent or
  *   removed since the revision the request names, or that revision is
- *   queued to be sent anonymized: a steer hands the text over as it is, and
- *   a turn on a computer is never anonymized.
+ *   queued to be sent anonymized (a steer hands the text over as it is, and
+ *   a turn on a computer is never anonymized) or carries files (a steer
+ *   hands over text alone).
  * - `not_taken`: the agent did not take it; its turn was ending or between
  *   attempts. Only the turn's stream says this, as `refused`.
  */
