@@ -31,6 +31,7 @@ import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 import type {
   Block,
   DocumentAst,
+  HeadingLevel,
   Inline,
   TableBlock,
   TableCell,
@@ -209,7 +210,7 @@ const nextIds = (state: ParseState) => {
 const pushRunsBlock = (
   state: ParseState,
   runs: readonly Run[],
-  options: { quote: boolean; heading: boolean },
+  options: { quote: boolean; heading: boolean; level?: HeadingLevel },
 ): void => {
   const trimmed = trimRuns(runs);
   const plainText = plainTextOfRuns(trimmed);
@@ -221,7 +222,7 @@ const pushRunsBlock = (
     state.blocks.push({
       ...nextIds(state),
       type: "heading",
-      level: 1,
+      level: options.level ?? 1,
       role: "section-heading",
       inlines,
       plainText,
@@ -584,6 +585,38 @@ const readPreformattedText = (state: ParseState, text: string): void => {
 
 // ── Markup walk ──────────────────────────────────────────
 
+const HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"] as const;
+type HeadingTag = (typeof HEADING_TAGS)[number];
+
+const HEADING_LEVELS = {
+  h1: 1,
+  h2: 2,
+  h3: 3,
+  h4: 4,
+  h5: 5,
+  h6: 6,
+} as const satisfies Record<HeadingTag, HeadingLevel>;
+
+const isHeadingTag = (tag: string): tag is HeadingTag =>
+  HEADING_TAGS.some((heading) => heading === tag);
+
+/**
+ * A `pre` element's text with each `<br>` read as the line end it prints,
+ * so two lines it separates are not read as one.
+ */
+const preformattedTextOf = (node: AnyNode): string => {
+  if (isText(node)) {
+    return node.data;
+  }
+  if (!isTag(node)) {
+    return "";
+  }
+  if (node.tagName.toLowerCase() === "br") {
+    return "\n";
+  }
+  return node.children.map(preformattedTextOf).join("");
+};
+
 const walk = (state: ParseState, node: AnyNode, marks: Marks): void => {
   if (isText(node)) {
     state.pending.runs.push({
@@ -625,7 +658,23 @@ const walk = (state: ParseState, node: AnyNode, marks: Marks): void => {
   }
   if (tag === "pre") {
     flush(state);
-    readPreformattedText(state, state.$(node).text());
+    readPreformattedText(state, preformattedTextOf(node));
+    return;
+  }
+  if (isHeadingTag(tag)) {
+    // The court's own heading markup: a heading at its level, whatever its
+    // wording or weight (rule 9).
+    flush(state);
+    for (const child of node.children) {
+      walk(state, child, marks);
+    }
+    const { runs, quote } = state.pending;
+    state.pending = { runs: [], quote };
+    pushRunsBlock(state, runs, {
+      quote,
+      heading: true,
+      level: HEADING_LEVELS[tag],
+    });
     return;
   }
   if (BLOCK_TAGS.has(tag)) {

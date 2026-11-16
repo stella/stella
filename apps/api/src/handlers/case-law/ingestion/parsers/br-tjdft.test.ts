@@ -249,3 +249,35 @@ describe("a table's caption", () => {
     );
   });
 });
+
+describe("the court's own heading markup", () => {
+  test("is a heading at its level, whatever its wording or weight", () => {
+    const { documentAst } = parse({
+      type: "html",
+      text: "<h2>Fundamentação</h2><p>O recurso é tempestivo.</p><h3>Mérito</h3>",
+    });
+    expect(
+      documentAst.blocks.map((block) =>
+        block.type === "heading"
+          ? { heading: block.plainText, level: block.level }
+          : { paragraph: block.plainText },
+      ),
+    ).toEqual([
+      { heading: "Fundamentação", level: 2 },
+      { paragraph: "O recurso é tempestivo." },
+      { heading: "Mérito", level: 3 },
+    ]);
+  });
+});
+
+describe("a preformatted block", () => {
+  test("ends a line at each line break, so words either side stay apart", () => {
+    const { fulltext } = parse({
+      type: "html",
+      text: "<pre>Primeira palavra<br>Segunda palavra</pre>",
+    });
+    expect(fulltext).not.toContain("palavraSegunda");
+    expect(fulltext).toContain("Primeira palavra");
+    expect(fulltext).toContain("Segunda palavra");
+  });
+});
