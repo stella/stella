@@ -933,6 +933,7 @@ const suite = (
       const deletion = await withLock(threadId, owner, async (tx) => {
         const removed = await removeQueuedChatMessageOnTx({
           id: queuedId,
+          revision: 0,
           threadId,
           tx,
         });
