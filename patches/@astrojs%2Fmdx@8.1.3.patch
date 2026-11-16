@@ -1,0 +1,12 @@
+diff --git a/dist/vite-plugin-mdx.js b/dist/vite-plugin-mdx.js
+--- a/dist/vite-plugin-mdx.js
++++ b/dist/vite-plugin-mdx.js
+@@ -49,7 +49,7 @@
+ 						}
+ 					};
+ 				} catch (e) {
+-					const err = e;
++					const err = new Error(e.message, { cause: e });
+ 					// Surface compile failures as a dedicated MDX error with a source
+ 					// location so the dev overlay can point at the offending file.
+ 					err.name = "MDXError";

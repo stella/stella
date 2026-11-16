@@ -6,9 +6,9 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { locateAbbreviatedProvisionCitations } from "@stll/decision-reader/fallback-legal-anchors";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { provision } from "./provisions-cited.fixture";
 

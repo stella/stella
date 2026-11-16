@@ -4,7 +4,6 @@ import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
 
-import { defaultConfig } from "@stll/db-load-gate/health";
 import type { HealthConfig, Signal } from "@stll/db-load-gate/health";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Bytes } from "@stll/sha256/bun";
@@ -22,7 +21,13 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  replayWrite,
+  replayWriteOutcome,
+} from "@/api/lib/case-law/replay-write";
+import { lockCaseLawReplaySource } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { remainingCycleMs } from "@/api/lib/legal-search/cycle-deadline";
@@ -70,21 +75,64 @@ type SourceTotalValues = Pick<
   | "storedTotalWarnedSlot"
 >;
 
-type WriteSourceTotalsOptions = {
-  tx: Transaction;
+type SourceTotalsWrite = {
   values: { [Key in keyof SourceTotalValues]?: SourceTotalValues[Key] | SQL };
   where: SQL | undefined;
 };
 
-/** One mutation owner for public coverage figures and their refresh state. */
-const writeSourceTotals = ({ tx, values, where }: WriteSourceTotalsOptions) => {
-  if (where === undefined) {
-    return panic("Source total writes require an explicit source predicate");
-  }
+type WriteSourceTotalsOptions = SourceTotalsWrite & {
+  tx: Transaction;
+  /**
+   * `one` tells an unchanged row from a lost fence; `many` writes a batch,
+   * where rows already holding the values simply stay as they are.
+   */
+  rows?: "one" | "many";
+};
+
+const sourceTotalsPredicate = (where: SQL | undefined) =>
+  where ?? panic("Source total writes require an explicit source predicate");
+
+/** The statement a source-total write issues, built apart so its plan can be read. */
+const sourceTotalsUpdate = (
+  tx: Transaction,
+  { values, where }: SourceTotalsWrite,
+) => {
+  const predicate = sourceTotalsPredicate(where);
+  const write = replayWrite(caseLawSources, values);
   // audit: skip — public case-law corpus bookkeeping, no workspace data
-  return tx.update(caseLawSources).set(values).where(where).returning({
-    id: caseLawSources.id,
+  return tx
+    .update(caseLawSources)
+    .set(write.set)
+    .where(and(predicate, write.setWhere))
+    .returning({ id: caseLawSources.id });
+};
+
+/** One mutation owner for public coverage figures and their refresh state. */
+const writeSourceTotals = async ({
+  tx,
+  values,
+  where,
+  rows = "one",
+}: WriteSourceTotalsOptions) => {
+  const matched = await lockCaseLawReplaySource({
+    tx,
+    where: sourceTotalsPredicate(where),
   });
+  const written = await sourceTotalsUpdate(tx, { values, where });
+  if (rows === "many") {
+    return written;
+  }
+  const outcome = replayWriteOutcome(written, matched);
+  switch (outcome.status) {
+    case "written":
+    case "unchanged":
+      return outcome.row;
+    case "ownership-lost":
+      return [];
+    default:
+      outcome satisfies never;
+      return panic("Unhandled source-total write outcome");
+  }
 };
 
 const UNKNOWN_HOLD_CAUSE = "indicators_unavailable";
@@ -419,31 +467,41 @@ type SourceStoredTotalRefreshClaimOptions = {
   now: Date;
 };
 
-/** Commit a full failure backoff first; only a fenced success restores the normal phase. */
-export const sourceStoredTotalRefreshClaim = ({
-  tx,
+const refreshClaimWrite = ({
   sourceId,
   now,
-}: SourceStoredTotalRefreshClaimOptions) =>
-  writeSourceTotals({
-    tx,
-    values: {
-      storedTotalAttemptedAt: now,
-      storedTotalHeldSince: null,
-      storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
-        sourceId,
-        new Date(now.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
-      ),
-    },
-    where: and(
-      eq(caseLawSources.id, sourceId),
-      sourceStoredTotalSpacingAvailable(now),
-      or(
-        isNull(caseLawSources.storedTotalNextRefreshAt),
-        sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
-      ),
+}: Omit<SourceStoredTotalRefreshClaimOptions, "tx">): SourceTotalsWrite => ({
+  values: {
+    storedTotalAttemptedAt: now,
+    storedTotalHeldSince: null,
+    storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
+      sourceId,
+      new Date(now.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
     ),
-  });
+  },
+  where: and(
+    eq(caseLawSources.id, sourceId),
+    sourceStoredTotalSpacingAvailable(now),
+    or(
+      isNull(caseLawSources.storedTotalNextRefreshAt),
+      sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
+    ),
+  ),
+});
+
+/** The claim's UPDATE, unexecuted, for reading its plan. */
+export const sourceStoredTotalRefreshClaimStatement = ({
+  tx,
+  ...claim
+}: SourceStoredTotalRefreshClaimOptions) =>
+  sourceTotalsUpdate(tx, refreshClaimWrite(claim));
+
+/** Commit a full failure backoff first; only a fenced success restores the normal phase. */
+export const sourceStoredTotalRefreshClaim = async ({
+  tx,
+  ...claim
+}: SourceStoredTotalRefreshClaimOptions) =>
+  await writeSourceTotals({ tx, ...refreshClaimWrite(claim) });
 
 const initialSourceRefreshSlot = (
   sourceId: SafeId<"caseLawSource">,
@@ -687,6 +745,7 @@ export const refreshNextSourceStoredTotal = async (
               ),
               isNull(caseLawSources.storedTotalNextRefreshAt),
             ),
+            rows: "many",
           });
         }
         return (
@@ -709,6 +768,12 @@ export const refreshNextSourceStoredTotal = async (
       }),
   );
   if (Result.isError(selected)) {
+    if (
+      CorpusSchemaLaneUnavailableError.is(selected.error) ||
+      signal?.aborted
+    ) {
+      return "held";
+    }
     observeFailure(selected.error, {
       sink: sourceStoredTotalSelectionFailure,
       ctx: { step: "refreshNextSourceStoredTotal.select" },
@@ -759,7 +824,7 @@ export const createSourceStoredTotalMaintenanceRuntime = (
   {
     clock = () => Temporal.Now.instant().epochMilliseconds,
     readEbsSignal,
-    config = defaultConfig,
+    config = loadGateHealthConfig(),
   }: SourceStoredTotalMaintenanceOptions = {},
 ) => {
   const readVerdict = createDatabaseLoadVerdictReader({
@@ -802,14 +867,15 @@ export const invalidateSourceStoredTotalTx = async (
   sourceId: SafeId<"caseLawSource">,
 ): Promise<void> => {
   // audit: skip — source-count invalidation belongs to the canonical removal audit.
+  const write = replayWrite(caseLawSources, {
+    storedTotal: null,
+    storedTotalAsOf: null,
+    storedTotalAttemptedAt: null,
+    storedTotalNextRefreshAt: sql`clock_timestamp()`,
+    storedTotalHeldSince: null,
+  });
   await tx
     .update(caseLawSources)
-    .set({
-      storedTotal: null,
-      storedTotalAsOf: null,
-      storedTotalAttemptedAt: null,
-      storedTotalNextRefreshAt: sql`clock_timestamp()`,
-      storedTotalHeldSince: null,
-    })
-    .where(eq(caseLawSources.id, sourceId));
+    .set(write.set)
+    .where(and(write.setWhere, eq(caseLawSources.id, sourceId)));
 };

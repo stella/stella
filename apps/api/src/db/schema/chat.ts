@@ -4,6 +4,8 @@ import type { SQL } from "drizzle-orm";
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
 import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
+import { CHAT_QUEUE_HOLD_REASONS } from "@stll/api-contract/chat-queue";
+import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 
 import { chatContentJsonb } from "@/api/db/columns";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -13,6 +15,7 @@ import {
   CHAT_TURN_INTERACTION_TYPES,
   CHAT_TURN_INTERRUPTION_REASONS,
 } from "@/api/handlers/chat/chat-turn-state";
+import type { StoredArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
 import type { ChatRunReferenceState } from "@/api/lib/chat/run-log-reference-state";
 import {
   CHAT_THREAD_NAME_KIND,
@@ -35,6 +38,8 @@ import {
   chatMessagePolicies,
   chatMessageRevisionPolicies,
   chatMessageSearchDocumentPolicies,
+  chatQueuedMessagePolicies,
+  chatQueueHoldPolicies,
   chatThreadCompactionPolicies,
   chatThreadNamePolicies,
   chatThreadPolicies,
@@ -87,6 +92,118 @@ const CHAT_TURN_TIMING_ACTIVE_SQL_VALUES = CHAT_TURN_STATUSES.filter(
   (status) => CHAT_TURN_TIMING_DISPOSITION[status] !== "finished",
 ).map((status) => sql`${status}`);
 
+type ChatTurnStateColumns = Record<
+  | "assistantMessageId"
+  | "cancellationReason"
+  | "executionId"
+  | "failureCode"
+  | "failureRetryable"
+  | "interactionToolCallId"
+  | "interactionType"
+  | "interruptionReason"
+  | "leaseExpiresAt"
+  | "settledAt"
+  | "status",
+  AnyPgColumn
+>;
+
+/**
+ * The columns each chat turn status carries (`chat_turns_state_payload_check`):
+ * a status not listed is refused.
+ */
+const chatTurnStatePayload = (table: ChatTurnStateColumns) =>
+  sql`CASE ${table.status}
+      WHEN 'accepted' THEN
+        ${table.leaseExpiresAt} IS NOT NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'running' THEN
+        ${table.leaseExpiresAt} IS NOT NULL AND
+        ${table.executionId} IS NOT NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'awaiting-user' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NOT NULL AND
+        ${table.interactionToolCallId} IS NOT NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'handed-over' THEN
+        ${table.leaseExpiresAt} IS NOT NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'completed' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NOT NULL
+      WHEN 'failed' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NOT NULL AND
+        ${table.failureRetryable} IS NOT NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NOT NULL
+      WHEN 'cancelled' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NOT NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NOT NULL
+      WHEN 'interrupted' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NOT NULL AND
+        ${table.settledAt} IS NOT NULL
+      ELSE false
+    END`;
+
 const CHAT_THREAD_NAME_KIND_SQL_VALUES = CHAT_THREAD_NAME_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
 );
@@ -131,6 +248,10 @@ export const chatThreads = p.pgTable(
         NonNullable<ChatSendRequest["activeSkill"]>
       >(),
     title: p.varchar({ length: CHAT_THREAD_TITLE_MAX_LENGTH }).notNull(),
+    /** Per-value generated or authored origin; null and missing slots are legacy. */
+    generationProvenance: p
+      .jsonb("generation_provenance")
+      .$type<StoredArtefactProvenance>(),
     // Provenance of `title`; gates whether background AI titling may replace it.
     // See ChatTitleSource in ./common. New threads start "default"; a rename
     // stamps "user"; the generator only replaces "default" and stamps "ai".
@@ -199,6 +320,19 @@ export const chatThreads = p.pgTable(
     chatReasoningEffort: p.text("chat_reasoning_effort", {
       enum: REASONING_EFFORTS,
     }),
+    /**
+     * Superseded by `chat_local_run_target` and no longer read or written;
+     * dropped in a later release, once no running API task selects it.
+     */
+    chatRunTarget: p.varchar("chat_run_target", { length: 256 }),
+    /**
+     * Where the thread's turns run: the coding-agent harness on the member's
+     * computer, its model and permission mode, shaped and read back by the
+     * contract's `chatLocalRunTargetSchema`. Null keeps stella's own models.
+     */
+    chatLocalRunTarget: p
+      .jsonb("chat_local_run_target")
+      .$type<ChatLocalRunTarget>(),
     /**
      * Cached "where you left off" recap, shown as subtle grey text
      * below the last message when the user reopens this thread after
@@ -274,6 +408,24 @@ export const chatThreads = p.pgTable(
      * content would be accepted and its cursor advanced past the corrected row.
      */
     compactionEpoch: p.integer("compaction_epoch").notNull().default(0),
+    /**
+     * When the thread's reader last had it open. The chat reads unread while
+     * its latest answer settled after this instant; null means the reader
+     * marked it unread, so it reads unread until they open it again. New and
+     * pre-existing threads start at their insert (or the column's addition),
+     * so no answer older than that turns unread. Writes leave `updated_at`
+     * alone: reading a chat does not reorder the history.
+     */
+    lastReadAt: timestamptz("last_read_at").defaultNow(),
+    /** When the reader pinned the chat to the top of their list; null when it is not pinned. */
+    pinnedAt: timestamptz("pinned_at"),
+    /**
+     * The largest `chat_turns.ordinal` the thread has given out; null until
+     * it gives out its first. Written only by the insert trigger on
+     * `chat_turns` and the `chat-turn-ordinals` repair, never by a handler
+     * (`no-chat-turn-ordinal-write`).
+     */
+    lastTurnOrdinal: p.integer("last_turn_ordinal"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -281,6 +433,12 @@ export const chatThreads = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // The reader's pinned chats, newest activity first, without walking the
+    // rest of their history. Built online (indexes-chat-threads-org-user-pinned-idx).
+    p
+      .index("chat_threads_org_user_pinned_idx")
+      .on(table.organizationId, table.userId, table.updatedAt, table.id)
+      .where(isNotNull(table.pinnedAt)),
     // RESTRICT mirrors the single-column workspace reference: a global thread
     // (workspace_id NULL) is exempt under MATCH SIMPLE, and matter deletion
     // removes threads explicitly before it removes the workspace.
@@ -324,6 +482,22 @@ export const chatThreads = p.pgTable(
         table.id,
       )
       .where(sql`${table.compactionScheduledAt} IS NOT NULL`),
+    p.check(
+      "chat_threads_generation_provenance_valid",
+      sql`${table.generationProvenance} IS NULL OR ${table.generationProvenance} = 'null'::jsonb OR coalesce(
+  jsonb_typeof(${table.generationProvenance}) = 'object'
+  AND ${table.generationProvenance} - ARRAY['version', 'slots']::text[] = '{}'::jsonb
+  AND ${table.generationProvenance}->'version' = '1'::jsonb
+  AND jsonb_typeof(${table.generationProvenance}->'slots') = 'object'
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.keyvalue() ? (@.key == "")')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, 'strict $.slots.* ? (@.type() != "object")', '{}'::jsonb, true)
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type() != "object" || !exists(@.type) || @.type.type() != "string" || (@.type != "authored" && @.type != "generated"))')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type == "authored").keyvalue() ? (@.key != "type")')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type == "generated").keyvalue() ? (@.key != "type" && @.key != "generator" && @.key != "decisionIds" && @.key != "coverage")')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type == "generated" && (!exists(@.generator) || @.generator.type() != "string" || @.generator == "" || !exists(@.decisionIds) || @.decisionIds.type() != "array" || @.decisionIds.size() > 1024 || !exists(@.coverage) || @.coverage.type() != "string" || (@.coverage != "complete" && @.coverage != "legacy-input")))')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, 'strict $.slots.* ? (@.type == "generated").decisionIds[*] ? (@.type() != "string" || !(@ like_regex "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"))', '{}'::jsonb, true),
+  false)`,
+    ),
     p.check(
       "chat_threads_reasoning_effort_selection_check",
       sql`${table.chatReasoningEffort} IS NULL OR (${table.chatModel} IS NOT NULL AND ${table.chatReasoningEffort} IN (${sql.join(REASONING_EFFORT_SQL_VALUES, sql`, `)}))`,
@@ -557,6 +731,17 @@ export const chatTurns = p.pgTable(
      * starts and kept once the turn settles. Unique in the organization.
      */
     runId: p.text("run_id"),
+    /**
+     * The turn's position in its thread by acceptance: unique in the thread,
+     * larger for a later turn, never given out twice. The database assigns it
+     * as the row is inserted (`assign_chat_turn_ordinal`), under the thread's
+     * lock. Application code never supplies one
+     * (`no-chat-turn-ordinal-write`); a row copied with its number, as a
+     * restore does, keeps it. Null only on a turn stored before the column,
+     * until the `chat-turn-ordinals` repair numbers it. Read turn order
+     * through `lib/chat/turn-order.ts`.
+     */
+    ordinal: p.integer("ordinal"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -617,89 +802,7 @@ export const chatTurns = p.pgTable(
       "chat_turns_interruption_reason_values_check",
       sql`${table.interruptionReason} IS NULL OR ${table.interruptionReason} IN (${sql.join(CHAT_TURN_INTERRUPTION_REASON_SQL_VALUES, sql`, `)})`,
     ),
-    p.check(
-      "chat_turns_state_payload_check",
-      sql`CASE ${table.status}
-        WHEN 'accepted' THEN
-          ${table.leaseExpiresAt} IS NOT NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NULL
-        WHEN 'running' THEN
-          ${table.leaseExpiresAt} IS NOT NULL AND
-          ${table.executionId} IS NOT NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NULL
-        WHEN 'awaiting-user' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NOT NULL AND
-          ${table.interactionType} IS NOT NULL AND
-          ${table.interactionToolCallId} IS NOT NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NULL
-        WHEN 'completed' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NOT NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NOT NULL
-        WHEN 'failed' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NOT NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NOT NULL AND
-          ${table.failureRetryable} IS NOT NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NOT NULL
-        WHEN 'cancelled' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NOT NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NOT NULL
-        WHEN 'interrupted' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NOT NULL AND
-          ${table.settledAt} IS NOT NULL
-        ELSE false
-      END`,
-    ),
+    p.check("chat_turns_state_payload_check", chatTurnStatePayload(table)),
     p.check(
       "chat_turns_lease_after_created_check",
       sql`${table.leaseExpiresAt} IS NULL OR ${table.leaseExpiresAt} > ${table.createdAt}`,
@@ -709,10 +812,25 @@ export const chatTurns = p.pgTable(
       sql`${table.settledAt} IS NULL OR ${table.settledAt} >= ${table.createdAt}`,
     ),
     p.index("chat_turns_thread_id_idx").on(table.threadId),
+    // A thread's turns by position, newest first on a backward scan with
+    // unnumbered turns last. Built online (indexes-chat-turns-thread-ordinal-uidx).
+    p
+      .uniqueIndex("chat_turns_thread_ordinal_uidx")
+      .on(table.threadId, table.ordinal.asc().nullsFirst()),
+    // Superseded by chat_turns_active_thread_v2_uidx, which also covers
+    // `handed-over`; dropped once that one is valid everywhere.
     p
       .uniqueIndex("chat_turns_active_thread_uidx")
       .on(table.threadId)
       .where(sql`${table.status} IN ('accepted', 'running', 'awaiting-user')`),
+    // A thread holds at most one unsettled turn. Built online
+    // (indexes-chat-turns-handed-over-indexes).
+    p
+      .uniqueIndex("chat_turns_active_thread_v2_uidx")
+      .on(table.threadId)
+      .where(
+        sql`${table.status} IN ('accepted', 'running', 'awaiting-user', 'handed-over')`,
+      ),
     p
       .index("chat_turns_org_user_thread_created_idx")
       .on(
@@ -722,6 +840,20 @@ export const chatTurns = p.pgTable(
         table.createdAt,
         table.id,
       ),
+    // Superseded by chat_turns_org_user_active_v2_idx; dropped once that one
+    // is valid everywhere. Built online (indexes-chat-turns-org-user-active-idx).
+    p
+      .index("chat_turns_org_user_active_idx")
+      .on(table.organizationId, table.userId)
+      .where(sql`${table.status} IN ('accepted', 'running', 'awaiting-user')`),
+    // A member's unfinished runs, without walking their settled history.
+    // Built online (indexes-chat-turns-handed-over-indexes).
+    p
+      .index("chat_turns_org_user_active_v2_idx")
+      .on(table.organizationId, table.userId)
+      .where(
+        sql`${table.status} IN ('accepted', 'running', 'awaiting-user', 'handed-over')`,
+      ),
     p
       .index("chat_turns_org_user_message_created_idx")
       .on(table.organizationId, table.userMessageId, table.createdAt, table.id),
@@ -729,13 +861,171 @@ export const chatTurns = p.pgTable(
       .uniqueIndex("chat_turns_org_run_id_uidx")
       .on(table.organizationId, table.runId)
       .where(sql`${table.runId} IS NOT NULL`),
+    // Superseded by chat_turns_org_active_lease_v2_idx; dropped once that one
+    // is valid everywhere.
     p
       .index("chat_turns_org_active_lease_idx")
+      .on(table.organizationId, table.status, table.leaseExpiresAt, table.id)
+      .where(sql`${table.status} IN ('accepted', 'running')`),
+    // Built online (indexes-chat-turns-handed-over-indexes).
+    p
+      .index("chat_turns_org_active_lease_v2_idx")
       .on(table.organizationId, table.status, table.leaseExpiresAt, table.id)
       .where(
         sql`${table.status} IN (${sql.join(CHAT_TURN_TIMING_ACTIVE_SQL_VALUES, sql`, `)})`,
       ),
     ...chatTurnPolicies(),
+  ],
+);
+
+const CHAT_QUEUE_HOLD_REASON_SQL_VALUES = CHAT_QUEUE_HOLD_REASONS.map(
+  (reason) => sql.raw(`'${reason}'`),
+);
+
+/**
+ * A message a member queued in a thread, waiting to be sent. It is not part
+ * of the conversation until the server sends it: sending deletes this row and
+ * stores the message and its turn in one transaction, under `id`.
+ */
+export const chatQueuedMessages = p.pgTable(
+  "chat_queued_messages",
+  {
+    /** The id the message is stored under once sent; minted by the client. */
+    id: pUuid<"chatMessage">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "restrict" },
+    ),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    threadId: safeUuid<"chatThread">("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    /** Order in the thread's queue, 1..n, rewritten under the thread lock. */
+    position: p.integer("position").notNull(),
+    /** The send the member queued, without its thread and run (validated on read). */
+    request: jsonb("request").notNull(),
+    /** Raised by every edit; a send and an edit name the revision they read. */
+    revision: p.integer("revision").notNull().default(0),
+    /**
+     * The chat files the enqueue stored for this message's inline files.
+     * Removing the message deletes them; sending it leaves them to the
+     * message that now holds them.
+     */
+    uploadedFileIds: safeUuid<"userFile">("uploaded_file_ids")
+      .array()
+      .notNull()
+      .default([]),
+    /**
+     * The revision handed to a running turn as a steer, until the run says
+     * whether it took it: taken, the message leaves the queue at that
+     * revision; refused, the mark is cleared. Null when no steer is open.
+     */
+    steeredRevision: p.integer("steered_revision"),
+    /** When a queue sweep last tried this thread's queue; the next sweep tries the oldest first. */
+    sweptAt: timestamptz("swept_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "chat_queued_messages_workspace_organization_fk",
+      })
+      .onDelete("restrict"),
+    p.check("chat_queued_messages_position_check", sql`${table.position} >= 1`),
+    p.check("chat_queued_messages_revision_check", sql`${table.revision} >= 0`),
+    p
+      .index("chat_queued_messages_org_user_thread_position_idx")
+      .on(table.organizationId, table.userId, table.threadId, table.position),
+    p.index("chat_queued_messages_thread_id_idx").on(table.threadId),
+    // The owner connection (the queue's sender, the turn reaper) is held to
+    // RLS too (FORCE), so it is admitted by name.
+    p.pgPolicy("chat_queued_messages_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queued_messages'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queued_messages'::regclass)`,
+    }),
+    ...chatQueuedMessagePolicies(),
+  ],
+);
+
+/**
+ * Why a thread's queue waits although its turn ended. One row at most per
+ * thread, and only while the thread has a queued message.
+ */
+export const chatQueueHolds = p.pgTable(
+  "chat_queue_holds",
+  {
+    threadId: safeUuid<"chatThread">("thread_id")
+      .primaryKey()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "restrict" },
+    ),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    reason: p.text("reason", { enum: CHAT_QUEUE_HOLD_REASONS }).notNull(),
+    /** The turn whose end held the queue (`turn-failed`, `turn-interrupted`). */
+    turnId: safeUuid<"chatTurn">("turn_id").references(() => chatTurns.id, {
+      onDelete: "set null",
+    }),
+    /** The queued message whose send was refused (`send-refused`). */
+    queuedMessageId: safeUuid<"chatMessage">("queued_message_id"),
+    /** Why that send was refused, as the send's error code. */
+    refusalCode: p.text("refusal_code"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "chat_queue_holds_workspace_organization_fk",
+      })
+      .onDelete("restrict"),
+    p.check(
+      "chat_queue_holds_reason_values_check",
+      sql`${table.reason} IN (${sql.join(CHAT_QUEUE_HOLD_REASON_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "chat_queue_holds_reason_payload_check",
+      sql`CASE ${table.reason}
+        WHEN 'send-refused' THEN
+          ${table.queuedMessageId} IS NOT NULL AND ${table.refusalCode} IS NOT NULL
+        ELSE
+          ${table.queuedMessageId} IS NULL AND ${table.refusalCode} IS NULL
+      END`,
+    ),
+    p
+      .index("chat_queue_holds_org_user_idx")
+      .on(table.organizationId, table.userId),
+    // The owner connection (the queue's sender, the turn reaper) is held to
+    // RLS too (FORCE), so it is admitted by name.
+    p.pgPolicy("chat_queue_holds_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queue_holds'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queue_holds'::regclass)`,
+    }),
+    ...chatQueueHoldPolicies(),
   ],
 );
 

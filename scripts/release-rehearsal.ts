@@ -7,7 +7,7 @@ import {
   type CutGateRunner,
   productionCutGateEffects,
   readLatestFinalVersion,
-  readReleaseDates,
+  readReleaseManifest,
   type ReleaseDates,
 } from "./prepare-maintenance-release";
 import {
@@ -45,7 +45,7 @@ export const runReleaseRehearsal = async ({
     injected.latestFinalVersion ?? (() => readLatestFinalVersion(rootDir));
   const write = injected.write ?? production.write;
   const releaseDates =
-    injected.readReleaseDates ?? (() => readReleaseDates(rootDir));
+    injected.readReleaseDates ?? (() => readReleaseManifest(rootDir).releases);
   const selected = gates.filter(
     ({ name }) => scope === "all" || name !== "deploy-env-contract",
   );

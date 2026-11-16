@@ -24,6 +24,10 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
     v.picklist(DOCTRINAL_TREATMENTS.filter((value) => value !== "not_stated")),
   ),
   polarity: v.optional(v.picklist(CITATION_TREATMENTS)),
+  // Echoed, like `doctrine` and `polarity`, when the passage filter ran, with
+  // how many citations the page read before it did.
+  passageQuery: v.optional(v.string()),
+  scannedCitations: v.optional(v.number()),
   // The decision the citations were read from, echoed so a paged reply still
   // says what it is about.
   decisionId: passthroughId(),

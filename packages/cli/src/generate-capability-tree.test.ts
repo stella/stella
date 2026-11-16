@@ -56,6 +56,19 @@ test("catalog confirmation requirements survive generated leaf projection", () =
   }
 });
 
+test("catalog replay declarations survive every generated capability projection", () => {
+  const parsed = parseCapabilityCatalog(readCapabilityCatalog());
+  expect(parsed).not.toBeNull();
+  expect(parsed?.some((item) => item.idempotency?.type === "replay")).toBe(
+    true,
+  );
+  for (const item of parsed ?? []) {
+    expect(deriveCapabilityLeaf(item).spec.idempotency, item.id).toEqual(
+      item.idempotency,
+    );
+  }
+});
+
 const fileInput = (field: string, required: boolean): CatalogTransport => ({
   type: "file-input",
   input: { field, required },
@@ -746,9 +759,9 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
         return;
       }
       const record: Record<string, unknown> = { ...node };
-      const branches = record["anyOf"];
+      const anyOf = record["anyOf"];
+      const branches: unknown[] = Array.isArray(anyOf) ? anyOf : [];
       if (
-        Array.isArray(branches) &&
         branches.some(
           (branch) =>
             typeof branch === "object" &&

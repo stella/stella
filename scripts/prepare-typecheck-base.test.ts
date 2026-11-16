@@ -153,6 +153,11 @@ const runFallback = ({
       path.join(base, "apps/api/scripts/generate-capability-runtime.ts"),
       "",
     );
+    mkdirSync(path.join(base, "packages/scripts/src"), { recursive: true });
+    writeFileSync(
+      path.join(base, "packages/scripts/src/prepare-cli-runtime.ts"),
+      "",
+    );
     if (baseHasRetry) {
       writeFileSync(
         path.join(base, "scripts/retry.sh"),
@@ -273,6 +278,9 @@ for (const failure of [
     expect(result.exitCode, result.stderr).toBe(0);
     expect(result.commands).toContain(
       `git:worktree add --detach ${result.base} ${sha}`,
+    );
+    expect(result.commands).toContain(
+      `${result.base}:--cwd=packages/cli run codegen:runtime`,
     );
     expect(result.commands).toContain(
       `${result.base}:--filter @stll/api generate:capability-runtime`,

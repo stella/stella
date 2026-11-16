@@ -1,30 +1,35 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  ENTITY_KINDS,
   RESOURCE_TYPE,
   resourceRef,
   toChatResourceHref,
 } from "@stll/api-contract";
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+import { classifyFailure } from "@stll/errors";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawSearchDocuments,
   chatMessages,
   chatThreads,
   contactSearchDocuments,
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
+import {
+  searchProvenanceAnswer,
+  searchProvenanceError,
+} from "@/api/handlers/search/provenance-error";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { status } from "@/api/http/status";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import {
   createTanStackAIAnalyticsCallbacks,
   type TanStackAIAnalyticsCallbacks,
@@ -34,17 +39,21 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
-  brandPersistedCaseLawDecisionId,
   brandPersistedContactId,
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
@@ -62,6 +71,26 @@ import {
 } from "@/api/lib/search/types";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
+
+const SEARCH_REFINE_FAILED = failureSink({
+  event: "search.refine_failed",
+  expected: [],
+});
+const SEARCH_SUMMARY_FAILED = failureSink({
+  event: "search.summary_failed",
+  expected: [],
+});
+const SEARCH_SUMMARY_CHAT_FAILED = failureSink({
+  event: "search.summary_chat_failed",
+  expected: [],
+});
+
+/** A model answer the search route cannot use, after it parsed. */
+const unusableModelAnswer = (message: string) =>
+  classifyFailure(
+    new HandlerError({ status: 502, code: "model_output_invalid", message }),
+    "model_output_invalid",
+  );
 
 const SEARCH_SUMMARY_RESULT_LIMIT = 5;
 const SEARCH_CONTEXT_CHARS_PER_RESULT = 3000;
@@ -81,7 +110,9 @@ type SearchSummaryCitationPolicy = "cite" | "exclude";
 const SEARCH_SUMMARY_CITATION_POLICY = {
   matter: "cite",
   contact: "cite",
-  "case-law": "cite",
+  // Global search answers no case-law hits (the palette asks the corpus
+  // search engine for them), so there is no case-law context to cite.
+  "case-law": "exclude",
   document: "cite",
   folder: "cite",
   task: "cite",
@@ -230,6 +261,8 @@ type SearchAIContext = {
 
 type SearchSummaryContext = SearchAIContext & {
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  /** The caller's access-token scopes; `undefined` for a browser session. */
+  grantedScopes: readonly string[] | undefined;
 };
 
 type SearchResultContext = {
@@ -264,6 +297,8 @@ const citableSummaryTypes = (
 type SearchSummaryChatContext = {
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  /** The caller's access-token scopes; `undefined` for a browser session. */
+  grantedScopes: readonly string[] | undefined;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
@@ -325,14 +360,17 @@ type GenerateRefinedSearchQueryOptions = {
   managedAIResidency: ManagedAIResidency;
 };
 
-const validateSearchQueryWithPostgres = async ({
+type SearchQueryValidation =
+  { type: "valid" } | { type: "invalid" } | { type: "failed"; cause: unknown };
+
+export const validateSearchQueryWithPostgres = async ({
   query,
   scopedDb,
 }: {
   query: string;
   scopedDb: ScopedDb;
-}) =>
-  await Result.tryPromise({
+}): Promise<SearchQueryValidation> => {
+  const validation = await Result.tryPromise({
     try: async () => {
       await scopedDb((tx) =>
         tx.execute(sql`SELECT ${buildSearchTsQuery(query)}::text AS query`),
@@ -340,6 +378,14 @@ const validateSearchQueryWithPostgres = async ({
     },
     catch: (error: unknown) => error,
   });
+  if (validation.isOk()) {
+    return { type: "valid" };
+  }
+  if (isPgError(validation.error, PG_ERROR.SYNTAX_ERROR)) {
+    return { type: "invalid" };
+  }
+  return { type: "failed", cause: validation.error };
+};
 
 const generateRefinedSearchQuery = async ({
   analytics,
@@ -402,7 +448,11 @@ export const refineSearchQuery = async ({
     task: "short-text",
   });
   if (gate.isErr()) {
-    return status(gate.error.status, { message: gate.error.message });
+    return observedStatus(
+      { sink: SEARCH_REFINE_FAILED, cause: gate.error },
+      gate.error.status,
+      { message: gate.error.message },
+    );
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
@@ -448,7 +498,11 @@ export const refineSearchQuery = async ({
         status: 502,
         message: "Failed to improve search query",
       });
-      return status(mapped.status, mapped.body);
+      return observedStatus(
+        { sink: SEARCH_REFINE_FAILED, cause: result.error },
+        mapped.status,
+        mapped.body,
+      );
     }
 
     const refinedQuery = result.value.query.trim();
@@ -468,15 +522,34 @@ export const refineSearchQuery = async ({
       scopedDb,
     });
 
-    if (postgresValidation.isOk()) {
-      return { query: refinedQuery };
+    switch (postgresValidation.type) {
+      case "valid":
+        return { query: refinedQuery };
+      case "failed":
+        return observedStatus(
+          { sink: SEARCH_REFINE_FAILED, cause: postgresValidation.cause },
+          502,
+          { message: "Failed to improve search query" },
+        );
+      case "invalid":
+        lastValidationError =
+          "PostgreSQL rejected the generated tsquery. Use valid stella syntax with balanced operators and searchable terms.";
+        break;
+      default: {
+        postgresValidation satisfies never;
+        return panic("Unhandled search query validation outcome");
+      }
     }
-
-    lastValidationError =
-      "PostgreSQL rejected the generated tsquery. Use valid stella syntax with balanced operators and searchable terms.";
   }
 
-  return status(502, { message: "Failed to improve search query" });
+  return observedStatus(
+    {
+      sink: SEARCH_REFINE_FAILED,
+      cause: unusableModelAnswer("No generated search query was valid"),
+    },
+    502,
+    { message: "Failed to improve search query" },
+  );
 };
 
 export const summarizeSearchResults = async ({
@@ -485,6 +558,7 @@ export const summarizeSearchResults = async ({
   admission,
   userId,
   accessibleWorkspaceIds,
+  grantedScopes,
   orgAIConfig,
   managedAIResidency,
   orgAIConfigStatus,
@@ -501,7 +575,11 @@ export const summarizeSearchResults = async ({
     task: "short-text",
   });
   if (gate.isErr()) {
-    return status(gate.error.status, { message: gate.error.message });
+    return observedStatus(
+      { sink: SEARCH_SUMMARY_FAILED, cause: gate.error },
+      gate.error.status,
+      { message: gate.error.message },
+    );
   }
 
   const resolved = await resolveSelectedWorkspaceIds({
@@ -516,6 +594,7 @@ export const summarizeSearchResults = async ({
 
   const contextsResult = await loadSummaryContexts({
     accessibleWorkspaceIds,
+    grantedScopes,
     filters: body,
     organizationId,
     userId,
@@ -586,24 +665,32 @@ export const summarizeSearchResults = async ({
 
   if (result.isErr()) {
     aiAnalytics.captureError(result.error);
-    captureError(
-      result.error,
-      handlerErrorContext("search.summarizeSearchResults.result_error", {
-        feature: "search.summary",
-        organizationId,
-      }),
-    );
     const mapped = aiErrorStatusBody(result.error, {
       status: 502,
       message: "Failed to summarize search results",
     });
-    return status(mapped.status, mapped.body);
+    return observedStatus(
+      {
+        sink: SEARCH_SUMMARY_FAILED,
+        cause: result.error,
+        ctx: { feature: "search.summary", organizationId },
+      },
+      mapped.status,
+      mapped.body,
+    );
   }
 
   const title = result.value.title.trim();
   const summary = result.value.summary.trim();
   if (!title || !summary) {
-    return status(502, { message: "Failed to summarize search results" });
+    return observedStatus(
+      {
+        sink: SEARCH_SUMMARY_FAILED,
+        cause: unusableModelAnswer("The generated summary was empty"),
+      },
+      502,
+      { message: "Failed to summarize search results" },
+    );
   }
 
   return {
@@ -665,6 +752,7 @@ const resolveSummaryCitations = ({
 export const createSearchSummaryChatThread = async ({
   featureAccessSnapshot,
   accessibleWorkspaceIds,
+  grantedScopes,
   body,
   organizationId,
   safeDb,
@@ -690,6 +778,7 @@ export const createSearchSummaryChatThread = async ({
 
   const contextsResult = await loadSummaryContexts({
     accessibleWorkspaceIds,
+    grantedScopes,
     filters: body,
     organizationId,
     userId,
@@ -733,7 +822,7 @@ export const createSearchSummaryChatThread = async ({
   // Derive the embedded data scope from the actual cited and
   // ranked context. The AI summary draws from every context, not
   // only those it explicitly cited, so include all of them. Org-
-  // scoped hit types (case-law, contact) have no workspaceId and
+  // scoped hit types (contact) have no workspaceId and
   // are correctly excluded — RLS for those is enforced elsewhere.
   const dataWorkspaceIds = uniqueWorkspaceIds(
     contextsResult
@@ -824,40 +913,37 @@ export const createSearchSummaryChatThread = async ({
   });
 
   if (insertResult.isErr()) {
-    captureError(
-      insertResult.error,
-      handlerErrorContext(
-        "search.createSearchSummaryChatThread.insertResult_error",
-        {
-          feature: "search.summary.chat",
-          organizationId,
-        },
-      ),
+    return observedStatus(
+      {
+        sink: SEARCH_SUMMARY_CHAT_FAILED,
+        cause: insertResult.error,
+        ctx: { feature: "search.summary.chat", organizationId },
+      },
+      500,
+      { message: "Failed to create chat thread" },
     );
-    return status(500, { message: "Failed to create chat thread" });
   }
 
   // Index the freshly seeded summary thread so it is findable in
   // global search. Fire-and-forget: indexing must not fail the create.
-  upsertSearchDocument(threadId).catch(
-    createErrorCapture(
-      handlerErrorContext("createSearchSummaryChatThread.upsertSearchDocument"),
-    ),
+  detached(
+    async () =>
+      upsertSearchDocument(threadId).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "createSearchSummaryChatThread.upsertSearchDocument",
+          ),
+        ),
+      ),
+    "search-summary.index-thread",
   );
 
   return { threadId };
 };
 
-const loadSummaryContexts = async ({
-  accessibleWorkspaceIds,
-  filters,
-  organizationId,
-  userId,
-  search = searchGlobal,
-  selectedWorkspaceIds,
-  scopedDb,
-}: {
+type SummaryContextsOptions = {
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  grantedScopes: readonly string[] | undefined;
   filters: Pick<
     SummarizeSearchBody,
     | "editedByUserIds"
@@ -873,10 +959,27 @@ const loadSummaryContexts = async ({
   search?: typeof searchGlobal;
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   scopedDb: ScopedDb;
-}) => {
+};
+
+/**
+ * The search summary's ranked, budgeted sources, or the provenance error
+ * that left a hit unreadable.
+ */
+const searchSummaryContexts = async ({
+  accessibleWorkspaceIds,
+  grantedScopes,
+  filters,
+  organizationId,
+  userId,
+  search = searchGlobal,
+  selectedWorkspaceIds,
+  scopedDb,
+}: SummaryContextsOptions): Promise<
+  Result<SearchResultContext[], ArtefactProvenanceDecodeError>
+> => {
   const types = citableSummaryTypes(filters.types);
   if (filters.types.length > 0 && types.length === 0) {
-    return [];
+    return Result.ok([]);
   }
 
   const searchResult = await search(
@@ -887,6 +990,7 @@ const loadSummaryContexts = async ({
       accessibleWorkspaceIds,
       selectedWorkspaceIds,
       types,
+      grantedScopes,
       editedByUserIds: filters.editedByUserIds,
       mimeTypes: filters.mimeTypes,
       updatedFrom: filters.updatedFrom,
@@ -896,13 +1000,76 @@ const loadSummaryContexts = async ({
     { scopedDb },
   );
 
-  return await buildSearchResultContexts({
-    hits: searchResult.hits,
-    organizationId,
-    accessibleWorkspaceIds,
-    scopedDb,
-  });
+  if (searchResult.isErr()) {
+    return Result.err(searchResult.error);
+  }
+  return Result.ok(
+    await buildSearchResultContexts({
+      hits: searchResult.value.hits,
+      organizationId,
+      accessibleWorkspaceIds,
+      scopedDb,
+    }),
+  );
 };
+
+const loadSummaryContexts = async (options: SummaryContextsOptions) => {
+  const contexts = await searchSummaryContexts(options);
+  if (contexts.isErr()) {
+    return searchProvenanceAnswer(contexts.error);
+  }
+  return contexts.value;
+};
+
+/** A matter search hit with the clipped content the search summary reads. */
+export type MatterSearchContext = SearchResultContext;
+
+/**
+ * The search summary's sources, scoped to one matter the caller already
+ * holds: the same ranked search and the same content budget, limited to the
+ * matter's own files. Callers authorize `workspaceId` before calling.
+ */
+export const loadMatterSearchContexts = async ({
+  accessibleWorkspaceIds,
+  grantedScopes,
+  organizationId,
+  query,
+  scopedDb,
+  userId,
+  workspaceId,
+  search = searchGlobal,
+}: {
+  accessibleWorkspaceIds: SafeId<"workspace">[];
+  grantedScopes: readonly string[] | undefined;
+  organizationId: SafeId<"organization">;
+  query: string;
+  scopedDb: ScopedDb;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+  search?: typeof searchGlobal;
+}): Promise<Result<MatterSearchContext[], HandlerError>> =>
+  (
+    await searchSummaryContexts({
+      accessibleWorkspaceIds,
+      grantedScopes,
+      filters: {
+        editedByUserIds: [],
+        limit: SEARCH_SUMMARY_RESULT_LIMIT,
+        mimeTypes: [],
+        query: query.slice(0, LIMITS.searchQueryMaxLength),
+        // Only the matter's own files: a contact or the matter record must not
+        // take a slot of the result limit before a document that answers.
+        types: [...ENTITY_KINDS],
+        updatedFrom: undefined,
+        updatedTo: undefined,
+      },
+      organizationId,
+      userId,
+      search,
+      selectedWorkspaceIds: [workspaceId],
+      scopedDb,
+    })
+  ).mapError(searchProvenanceError);
 
 const toModelSearchResultContext = (context: SearchResultContext) => ({
   number: context.number,
@@ -916,11 +1083,6 @@ const toModelSearchResultContext = (context: SearchResultContext) => ({
 const citationHref = (context: SearchResultContext): string | null => {
   const hit = context.hit;
   switch (hit.type) {
-    case "case-law":
-      return toChatResourceHref({
-        type: RESOURCE_TYPE.CASE_LAW_DECISION,
-        resource: hit.resource,
-      });
     case "matter":
       return toChatResourceHref({
         type: RESOURCE_TYPE.WORKSPACE,
@@ -978,7 +1140,7 @@ const buildChatSummaryText = ({
 const extractHitWorkspaceId = (
   hit: CitableSearchHit,
 ): SafeId<"workspace"> | null => {
-  if (hit.type === "case-law" || hit.type === "contact") {
+  if (hit.type === "contact") {
     return null;
   }
   return brandPersistedWorkspaceId(hit.workspaceId);
@@ -990,11 +1152,7 @@ const uniqueWorkspaceIds = (
 
 const toChatSourceDocuments = (context: SearchResultContext) => {
   const hit = context.hit;
-  if (
-    hit.type === "case-law" ||
-    hit.type === "contact" ||
-    hit.type === "matter"
-  ) {
+  if (hit.type === "contact" || hit.type === "matter") {
     return [];
   }
 
@@ -1081,35 +1239,6 @@ const loadSearchHitContent = async ({
   accessibleWorkspaceIds,
   scopedDb,
 }: LoadSearchHitContentOptions): Promise<string> => {
-  if (hit.type === "case-law") {
-    // The pg-fts projection is the only body source here, and that is
-    // consistent: `searchGlobal` selects case-law hits FROM
-    // case_law_search_documents whatever LEGAL_SEARCH_PROVIDER says, so a
-    // decision without a projection row is never a hit in the first place.
-    // Do not reach for the corpus objects as a fallback — importing that
-    // read into a route module costs ~1.5M type instantiations (see the
-    // typecheck-cost baseline) for a branch this query cannot produce.
-    //
-    // The limitation this leaves is global search's, not this handler's:
-    // under canonical storage new decisions get no projection row, so
-    // `searchGlobal`'s case-law section stops seeing them entirely and both
-    // the UI and this summariser lose them together. That section needs a
-    // corpus-aware path before any database goes canonical.
-    const rows = await scopedDb((tx) =>
-      tx
-        .select({ searchableText: caseLawSearchDocuments.searchableText })
-        .from(caseLawSearchDocuments)
-        .where(
-          eq(
-            caseLawSearchDocuments.decisionId,
-            brandPersistedCaseLawDecisionId(hit.decisionId),
-          ),
-        )
-        .limit(1),
-    );
-    return compactContent(rows.at(0)?.searchableText);
-  }
-
   if (hit.type === "contact") {
     const rows = await scopedDb((tx) =>
       tx

@@ -54,11 +54,6 @@ type IgnorePolicy =
     };
 
 const ignorePolicies = {
-  "@anthropic-ai/sdk": {
-    blocker: "@tanstack/ai-anthropic",
-    repositoryBlocker: undefined,
-    type: "upstream_blocker",
-  },
   "@expo/*": {
     reason:
       "Expo packages ship as one SDK-coordinated major and are upgraded together.",
@@ -66,11 +61,6 @@ const ignorePolicies = {
   },
   "@formatjs/icu-messageformat-parser": {
     blocker: "intl-messageformat",
-    repositoryBlocker: undefined,
-    type: "upstream_blocker",
-  },
-  "@openrouter/sdk": {
-    blocker: "@tanstack/ai-openrouter",
     repositoryBlocker: undefined,
     type: "upstream_blocker",
   },
@@ -87,11 +77,6 @@ const ignorePolicies = {
   katex: {
     blocker: "@streamdown/math",
     repositoryBlocker: "apps/web/package.json",
-    type: "upstream_blocker",
-  },
-  openai: {
-    blocker: "@tanstack/ai-openai",
-    repositoryBlocker: undefined,
     type: "upstream_blocker",
   },
   "react-native": {

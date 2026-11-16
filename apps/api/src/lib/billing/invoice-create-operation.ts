@@ -555,7 +555,7 @@ const checkCreation = async (
             id: { eq: originalInvoiceId },
             organizationId: { eq: organizationId },
           },
-          columns: { workspaceId: true, clientId: true },
+          columns: { workspaceId: true, clientId: true, sellerProfileId: true },
         });
   const quotaMatters = new Set<SafeId<"workspace">>();
   switch (matterLocks.type) {
@@ -808,7 +808,7 @@ export const billCreatedDraft = async (
       new HandlerError({
         status: 409,
         code: "invoice_total_changed",
-        message: `The invoice total is ${totalAmount} minor units, not the reviewed ${body.expectedTotalAmount}`,
+        message: "The invoice total differs from the reviewed amount",
         hint: "Read invoices.prefill again; the VAT rate for the supply date or the selected items may differ from what was reviewed.",
       }),
     );
@@ -939,7 +939,11 @@ export const createDraftInvoice = async (
       language,
       notes: body.notes ?? null,
       status: INVOICE_STATUS.DRAFT,
-      sellerProfileId: prefill?.seller?.id ?? null,
+      // A credit note corrects its original, so the original's seller issues it.
+      sellerProfileId:
+        documentType === "credit_note"
+          ? (originalScope?.sellerProfileId ?? null)
+          : (prefill?.seller?.id ?? null),
       ...prefill?.buyer,
     })
     .returning({

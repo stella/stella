@@ -17,10 +17,13 @@ import {
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { testRevisionOf } from "@/api/tests/helpers/corpus-projection-revisions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const APPLIED_REVISION = testRevisionOf("applied");
@@ -122,9 +125,11 @@ const readRevisionFixture = async ({
       snippets: [],
     });
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
   const hitDispositions = createCorpusHitDispositionCounter();
   const page = await readCorpusIndexSearchPage({
     hitDispositions,
@@ -143,9 +148,8 @@ const readRevisionFixture = async ({
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
       const text = snippet?.["text"];
-      return Array.isArray(text) && typeof text.at(0) === "string"
-        ? text.at(0)
-        : null;
+      const first: unknown = Array.isArray(text) ? text.at(0) : undefined;
+      return typeof first === "string" ? first : null;
     },
     unseenScoreUpperBound: () => 0,
     rankCandidates: async (probes, { selectAppliedCandidates }) => {

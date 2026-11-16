@@ -1,4 +1,0 @@
-{
-  "kind": "support",
-  "qualifier": "Smoke-tests the built API image by digest before release publication and promotion."
-}

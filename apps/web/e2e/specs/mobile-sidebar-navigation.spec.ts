@@ -1,4 +1,5 @@
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 
 // A phone-sized, touch viewport: below `md` the sidebar is a sheet over the
@@ -23,7 +24,7 @@ test("phone sidebar closes once a matter it opened has loaded", async ({
       waitUntil: "commit",
     });
     await expect(page.getByText(workspaceName).first()).toBeVisible({
-      timeout: 30_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
     await page.goto("/contacts", { waitUntil: "commit" });
 

@@ -98,8 +98,9 @@ describe("handoff sessions require recent account authentication", () => {
     expect(sensitive.length).toBeGreaterThan(20);
   });
 
-  test("sensitive export routes require step-up", () => {
+  test("organization creation and sensitive export routes require step-up", () => {
     for (const path of [
+      "/api/v1/organizations",
       "/api/exports",
       "/api/export/document",
       "/api/style-sets/style-id/download",

@@ -1,18 +1,19 @@
 import { panic } from "better-result";
 import { asc, eq } from "drizzle-orm";
 
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+
 import { chatMessages, chatTurns } from "@/api/db/schema";
+import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
-  chatMessageFromPersisted,
-  getAwaitingUserInteractions,
-} from "@/api/handlers/chat/chat-message-parts";
-import {
+  CHAT_TURN_STATUS_OF_OUTCOME,
   findUnsettledStoredToolCalls,
   isClientAnswerableToolCall,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ToolCallState } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { OLDEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -26,6 +27,8 @@ const LIVE_TURN_STATUS = {
   cancelled: false,
   completed: false,
   failed: false,
+  // Released at an event boundary; the task that adopts it goes on writing.
+  "handed-over": true,
   interrupted: false,
   running: true,
 } as const satisfies Record<ChatTurnStatus, boolean>;
@@ -37,6 +40,7 @@ const SETTLED_TURN_OUTCOME = {
   cancelled: "cancelled",
   completed: "completed",
   failed: "failed",
+  "handed-over": "completed",
   interrupted: "interrupted",
   running: "completed",
 } as const satisfies Record<ChatTurnStatus, ChatTurnOutcome["type"]>;
@@ -80,7 +84,7 @@ export const readThreadInvariantSnapshot = async ({
       })
       .from(chatTurns)
       .where(eq(chatTurns.threadId, threadId))
-      .orderBy(asc(chatTurns.createdAt), asc(chatTurns.id)),
+      .orderBy(...OLDEST_CHAT_TURN_FIRST),
   ]);
   return {
     messages: rows.map((row) => ({
@@ -179,6 +183,7 @@ const rowOutcome = (turn: {
   switch (turn.status) {
     case "accepted":
     case "running":
+    case "handed-over":
       return null;
     case "awaiting-user":
     case "completed":
@@ -241,7 +246,7 @@ const turnOutcomeMismatchesOf = ({
     const stored = answer.metadata?.turnOutcome;
     if (
       stored !== undefined &&
-      stored.type === expected.type &&
+      CHAT_TURN_STATUS_OF_OUTCOME[stored.type] === turn.status &&
       storedReason(stored) === expected.reason
     ) {
       return [];
@@ -264,7 +269,7 @@ export const findTurnOutcomeMismatches = async (
 /** An interaction the stored thread offers: a tool call the client answers,
  *  on a message an `awaiting-user` turn owns. */
 export type OfferedInteraction = {
-  kind: ReturnType<typeof getAwaitingUserInteractions>[number]["type"];
+  kind: ReturnType<typeof memberWaitsOf>[number]["type"];
   messageId: SafeId<"chatMessage">;
   state: ToolCallState;
   toolCallId: string;
@@ -287,7 +292,7 @@ export const offeredInteractionsOf = ({
     .flatMap((row) =>
       // The production reader of what a turn awaits, so this lists exactly
       // what a continuation is validated against.
-      getAwaitingUserInteractions(row).flatMap(({ toolCallId, type }) => {
+      memberWaitsOf(row).flatMap(({ toolCallId, type }) => {
         const part = row.parts.find(
           (candidate) =>
             candidate.type === "tool-call" && candidate.id === toolCallId,

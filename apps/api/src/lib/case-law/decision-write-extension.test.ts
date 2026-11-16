@@ -138,15 +138,14 @@ describe("decision write extension", () => {
     const suspended = new Promise<void>((resolve) => {
       resume = resolve;
     });
-    let finished: Promise<void> | undefined;
+    let finished: Promise<unknown> | undefined;
     const extension: DecisionWriteExtension = async ({ tx: executor }) => {
       await executor.execute(sql.raw("write extension"));
-      finished = suspended.then(async () => {
-        expect(
-          await rejectionOf(executor.execute(sql.raw("late write"))),
-        ).toMatchObject({ message: "Decision write executor is closed" });
-        return undefined;
-      });
+      // The late write's rejection is asserted in the test body, where it is
+      // awaited, so a failure cannot settle after the test has ended.
+      finished = suspended.then(
+        async () => await rejectionOf(executor.execute(sql.raw("late write"))),
+      );
       await suspended;
       return { type: "applied" };
     };
@@ -161,7 +160,9 @@ describe("decision write extension", () => {
       expect(tx.stored).toEqual(["canonical"]);
       expect(tx.statements.at(-1)?.params).toEqual(["0ms", "0ms"]);
       resume?.();
-      await finished;
+      expect(await finished).toMatchObject({
+        message: "Decision write executor is closed",
+      });
       expect(
         tx.statements.some((statement) => statement.sql === "late write"),
       ).toBe(false);

@@ -1,7 +1,10 @@
 import { panic } from "better-result";
 
 import type { PermissionInput } from "@stll/permissions";
-import { isOrganizationManagementRole, roles } from "@stll/permissions";
+import {
+  isOrganizationManagementRole,
+  memberHasPermissions,
+} from "@stll/permissions";
 
 import type { MemberRole } from "@/api/lib/member-roles";
 
@@ -22,6 +25,7 @@ export const SESSION_CREDENTIAL = {
 const AUTHORITY = Symbol("member-authority");
 type MemberAuthorityData = {
   role: MemberRole;
+  billingAccess?: boolean;
   credential: CredentialAuthority;
 };
 class MemberAuthority {
@@ -62,15 +66,31 @@ export const roleForDisplay = (authority: AuthorizedMemberRole): MemberRole =>
  * made after the request started (an approved tool call) re-reads the role
  * and keeps whatever the credential attenuates.
  */
-export const withCurrentMemberRole = (
-  authority: AuthorizedMemberRole,
-  role: MemberRole,
-): AuthorizedMemberRole =>
-  authorizedMemberRole({ role, credential: authority[AUTHORITY]().credential });
+type CurrentMemberRoleOptions = {
+  authority: AuthorizedMemberRole;
+  role: MemberRole;
+  billingAccess: boolean;
+};
+export const withCurrentMemberRole = ({
+  authority,
+  role,
+  billingAccess,
+}: CurrentMemberRoleOptions): AuthorizedMemberRole =>
+  authorizedMemberRole({
+    role,
+    billingAccess,
+    credential: authority[AUTHORITY]().credential,
+  });
 
 /** The authority of a person's own session. */
-export const sessionMemberRole = (role: MemberRole): AuthorizedMemberRole =>
-  authorizedMemberRole({ role, credential: SESSION_CREDENTIAL });
+export const sessionMemberRole = (
+  role: MemberRole,
+  billingAccess = false,
+): AuthorizedMemberRole =>
+  authorizedMemberRole({ role, billingAccess, credential: SESSION_CREDENTIAL });
+
+export const memberBillingAccess = (authority: AuthorizedMemberRole): boolean =>
+  authority[AUTHORITY]().billingAccess === true;
 
 /** Revalidates a persisted membership after the request's credential check. */
 export const hasCurrentMemberPermission = (
@@ -129,7 +149,13 @@ export const hasMemberPermission = (
   authority: AuthorizedMemberRole,
   permissions: PermissionInput,
 ): boolean => {
-  if (!roles[authority[AUTHORITY]().role].authorize(permissions).success) {
+  if (
+    !memberHasPermissions({
+      role: authority[AUTHORITY]().role,
+      billingAccess: memberBillingAccess(authority),
+      permissions,
+    })
+  ) {
     return false;
   }
   const { credential } = authority[AUTHORITY]();

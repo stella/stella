@@ -12,7 +12,7 @@ import {
   PREDICATE_OPS,
 } from "@stll/conditions";
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -100,7 +100,8 @@ const stored = fc.oneof(
 test(
   "accepted stored forms have a stable canonical JSON representation",
   () => {
-    fc.assert(
+    assertProperty(
+      "accepted stored forms have a stable canonical JSON representation",
       fc.property(stored, nonemptyText, (value, propertyId) => {
         const parsed = parseStoredCondition(value, propertyId);
         if (parsed.status === "invalid") {
@@ -116,7 +117,7 @@ test(
           expect(v.is(conditionNodeSchema, parsed.condition)).toBe(true);
         }
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(5000),
@@ -125,14 +126,15 @@ test(
 test(
   "canonical stored trees retain every field",
   () => {
-    fc.assert(
+    assertProperty(
+      "canonical stored trees retain every field",
       fc.property(nodeAtDepth(3), nonemptyText, (condition, propertyId) => {
         expect(parseStoredCondition(condition, propertyId)).toEqual({
           status: "valid",
           condition,
         });
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(5000),
@@ -141,7 +143,8 @@ test(
 test(
   "legacy stored forms preserve their operands and payloads",
   () => {
-    fc.assert(
+    assertProperty(
+      "legacy stored forms preserve their operands and payloads",
       fc.property(
         nonemptyText,
         nonemptyText,
@@ -182,7 +185,7 @@ test(
           });
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(5000),
@@ -203,7 +206,8 @@ const nestedStored = (depth: number): ConditionNode => {
 test(
   "stored input limits preserve the boundary representation",
   () => {
-    fc.assert(
+    assertProperty(
+      "stored input limits preserve the boundary representation",
       fc.property(
         fc.integer({ min: MAX_CONDITION_NESTING + 1, max: 20_000 }),
         (depth) => {
@@ -221,7 +225,7 @@ test(
           });
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 20 }),
+      { seed: propertySeed(), numRuns: 20 },
     );
   },
   propertyTestTimeout(5000),

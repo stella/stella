@@ -20,7 +20,6 @@ import { readLatestDecisionsByCourt } from "@/api/handlers/case-law/decisions/la
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import { caseLawSearchPlan } from "@/api/handlers/case-law/decisions/search";
 import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
-import { readCaseLawCourtActivityQuery } from "@/api/handlers/case-law/decisions/status-courts";
 import { listMatterLinksHandler } from "@/api/handlers/case-law/matter-links/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
@@ -35,8 +34,6 @@ import {
 import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { DEFAULT_SEARCH_SORT } from "@/api/lib/legal-search/corpus-search-order";
-import { pgFtsBrowseFacetPublishedQuery } from "@/api/lib/legal-search/pg-fts-browse-facet-refresh";
-import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -278,34 +275,6 @@ if (!databaseUrl || !runPostgresTests) {
         expect(updatedAt).not.toBeNull();
         expect(new Date(updatedAt ?? "").toISOString()).toBe(NOW.toISOString());
 
-        const activity = await caseLawDb(
-          async (readerTx) =>
-            await readCaseLawCourtActivityQuery(readerTx, {
-              country,
-              courts: [COURT],
-              excludedSourceIds: [],
-              now: new Date("2026-10-11T13:00:00.000Z"),
-            }),
-        );
-        const courtActivity = activity.get(COURT);
-        expect(courtActivity).toMatchObject({
-          addedLastDay: 2,
-          addedLastWeek: 2,
-        });
-        expect(new Date(courtActivity?.updatedAt ?? "").toISOString()).toBe(
-          NOW.toISOString(),
-        );
-
-        const facets = await caseLawDb(
-          async (readerTx) =>
-            await readPgFtsBrowseFacets(readerTx, {
-              excludedSourceIds: [],
-              jurisdiction: "CZE",
-              limit: 10,
-            }),
-        );
-        expect(facets.court).toEqual([{ count: 2, value: COURT }]);
-
         const arrivals = executedRows(
           await tx.execute(sourceArrivalsRefreshQuery(NOW)),
         )
@@ -461,15 +430,6 @@ if (!databaseUrl || !runPostgresTests) {
         expect(new Set(unredactedViewRows.map(({ id }) => id))).toEqual(
           new Set(
             rows.filter((row) => row.redactedAt === null).map(({ id }) => id),
-          ),
-        );
-
-        const published = await pgFtsBrowseFacetPublishedQuery(tx);
-        expect(new Set(published.map(({ sourceId }) => sourceId))).toEqual(
-          new Set(
-            rows
-              .filter((_, index) => states[index]?.visibility === true)
-              .map(({ sourceId }) => sourceId),
           ),
         );
       });

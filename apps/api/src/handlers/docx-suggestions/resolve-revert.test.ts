@@ -117,7 +117,7 @@ describe("docx suggestion resolve/revert state transitions", () => {
       status: "accepted",
       appliedMode: "direct",
       resolvedByUserId: ids.userA1,
-      resolvedAt: new Date(),
+      resolvedAt: new Date("2026-04-30T09:00:00.000Z"),
     });
     const context = workspaceAContext(
       "/v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/revert",

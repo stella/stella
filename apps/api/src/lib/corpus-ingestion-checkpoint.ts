@@ -22,6 +22,20 @@ export const INGESTION_CHECKPOINT_STATUS = {
   SUPERSEDED: "superseded",
 } as const;
 
+/**
+ * Whether a case-law run heard from the publisher. Only a run that did may
+ * move `last_sync_at`, which coverage reads as how current the source is: a
+ * run whose every request failed, or that asked nothing (a parked snapshot),
+ * says nothing about what the publisher holds today.
+ */
+export const PUBLISHER_CHECK = {
+  ANSWERED: "answered",
+  NOT_ASKED_OR_FAILED: "not-asked-or-failed",
+} as const;
+
+export type PublisherCheck =
+  (typeof PUBLISHER_CHECK)[keyof typeof PUBLISHER_CHECK];
+
 type CorpusSource =
   | {
       id: SafeId<"softLawSource">;
@@ -32,6 +46,7 @@ type CorpusSource =
       id: SafeId<"caseLawSource">;
       leaseToken: SafeId<"caseLawSourceIngestionLease">;
       observationOrder: bigint;
+      publisherCheck: PublisherCheck;
       type: typeof CORPUS_SOURCE_TYPE.CASE_LAW;
     }
   | {
@@ -98,7 +113,9 @@ export const advanceCorpusIngestionCheckpoint = async ({
           .update(caseLawSources)
           .set({
             syncCursor: nextCursor,
-            lastSyncAt: new Date(),
+            ...(source.publisherCheck === PUBLISHER_CHECK.ANSWERED
+              ? { lastSyncAt: new Date() }
+              : {}),
             checkpointObservationOrder: source.observationOrder,
           })
           .where(

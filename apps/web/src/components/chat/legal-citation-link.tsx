@@ -4,9 +4,12 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
+import type { CitedDecisionParagraph } from "@stll/api-contract/chat-reference-href";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
@@ -19,8 +22,6 @@ import {
 import type { ExternalSourceReference } from "@/components/chat/external-source-store";
 import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
-import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
-import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import type { LinkIconSource } from "@/features/chat/components/proxy-chat-link";
@@ -60,15 +61,15 @@ const LegalCitationView = ({
       "focus-visible:outline-ring cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2",
       appearance === "tray"
         ? "bg-muted/50 hover:bg-muted inline-flex max-w-full shrink-0 items-center rounded-md border px-1.5 py-0.5 text-xs"
-        : "group rounded",
+        : "group rounded-sm",
     )}
     href={sanitizeHref(citation.url)}
     onClick={onClick}
   >
     {appearance === "tray" ? (
-      <BidiText as="span" className="max-w-[20ch] truncate">
+      <TruncatedText className="max-w-[20ch]" render={<BidiText as="span" />}>
         {children}
-      </BidiText>
+      </TruncatedText>
     ) : (
       <InlinePill className="group-hover:bg-accent/80" truncate>
         {children}
@@ -140,6 +141,7 @@ const DecisionTrayLink = ({
   return (
     <ProxyChatLink
       appearance="tray"
+      fullLabel
       href={href}
       iconSource={linkIconSource}
       newTabLabel={t("common.openInNewTab")}
@@ -179,6 +181,7 @@ const FullLabelTrayLink = ({
   return (
     <ProxyChatLink
       appearance="tray"
+      fullLabel
       href={href}
       iconSource={props.linkIconSource}
       newTabLabel={t("common.openInNewTab")}

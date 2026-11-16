@@ -82,6 +82,7 @@ import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalizat
 import {
   defineSourceAdapter,
   EMPTY_AST,
+  PUBLISHER_REQUEST,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
@@ -147,7 +148,10 @@ const cursorOnlyDb =
     const tx = {
       insert: () => ({ values: insertedValues }),
       query: {
-        caseLawDecisions: { findFirst: async () => undefined },
+        caseLawDecisions: {
+          findFirst: async () => undefined,
+          findMany: async () => await Promise.resolve([]),
+        },
       },
       select: () => ({
         from: (table: unknown) => ({
@@ -842,7 +846,11 @@ describe("runIngestionPipeline — database timeouts", () => {
 
     const decision = baseResult({});
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [decision], nextCursor: "cursor-2" });
+      Result.ok({
+        decisions: [decision],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
 
     let calls = 0;
     let persistedCursor: string | null | undefined;
@@ -1029,7 +1037,11 @@ describe("runIngestionPipeline — failure records", () => {
         [field]: value,
       });
       czNsAdapter.fetchPage = async () =>
-        Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+        Result.ok({
+          decisions: [input],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        });
       // Normalization refuses before the decision write; the ledger insert is
       // the next transaction and must not receive a synthetic write failure.
       const { scopedDb, state } = failingDecisionDb(null, false);
@@ -1071,7 +1083,11 @@ describe("runIngestionPipeline — failure records", () => {
     });
     expect(fitsDecisionSearchCandidateRow(input)).toBe(false);
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+      Result.ok({
+        decisions: [input],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     const { scopedDb, state } = failingDecisionDb(null, false);
     const result = await runIngestionPipeline({
       acquireStoredTotalAdmission: async () => "held",
@@ -1126,7 +1142,11 @@ describe("runIngestionPipeline — failure records", () => {
         fulltext: citationText,
       });
       czNsAdapter.fetchPage = async () =>
-        Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+        Result.ok({
+          decisions: [input],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        });
       const { scopedDb, state } = failingDecisionDb(null, false);
 
       const result = await runIngestionPipeline({
@@ -1158,11 +1178,14 @@ describe("runIngestionPipeline — failure records", () => {
         decisions: [
           plainTextIngestionResult({
             ...baseResult({}),
+            // A publisher id: a full-width docket forms no fallback identity.
+            sourceDocumentId: "failure-record-columns",
             caseNumber,
             language: "sk-SK-x-long",
           }),
         ],
         itemBuildFailures: { type: "item_build_failed", count: 2 },
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: "cursor-2",
       });
     const { scopedDb, state } = failingDecisionDb(null);
@@ -1195,7 +1218,11 @@ describe("runIngestionPipeline — failure records", () => {
   test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [baseResult({})], nextCursor: "cursor-2" });
+      Result.ok({
+        decisions: [baseResult({})],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     const { scopedDb, state } = failingDecisionDb(postgresError("22021"));
     logs = installRecordingLogger();
 
@@ -1222,7 +1249,11 @@ describe("runIngestionPipeline — failure records", () => {
   test("holds the source cursor when the failure record write meets a serialization failure", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [baseResult({})], nextCursor: "cursor-2" });
+      Result.ok({
+        decisions: [baseResult({})],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     const { scopedDb, state } = failingDecisionDb(postgresError("40001"));
 
     const result = await runIngestionPipeline({
@@ -1253,7 +1284,11 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
     const controller = new AbortController();
     czNsAdapter.fetchPage = async () => {
       controller.abort();
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     };
 
     let acquires = 0;
@@ -1348,7 +1383,11 @@ describe("runIngestionPipeline — document observer failures", () => {
               fetch: async () => new Response("document"),
             });
           }
-          return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+          return Result.ok({
+            decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            nextCursor: "cursor-2",
+          });
         },
       });
       czNsAdapter.fetchPage = wrappedAdapter.fetchPage;
@@ -1410,9 +1449,14 @@ describe("runIngestionPipeline — document observer failures", () => {
     ];
 
     for (const { name, observe } of failures) {
-      const startedAt = performance.now();
-      const actual = await run({ observe });
-      expect(performance.now() - startedAt, name).toBeLessThan(2500);
+      let observerCalls = 0;
+      const actual = await run({
+        observe: async (observation) => {
+          observerCalls += 1;
+          await observe(observation);
+        },
+      });
+      expect(observerCalls, name).toBe(1);
       expect(actual.result, name).toEqual(baseline.result);
       expect(actual.cursorWrites, name).toEqual(baseline.cursorWrites);
       expect(actual.finalCursor, name).toBe(baseline.finalCursor);
@@ -1526,6 +1570,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
         decisions: [
           { ...baseResult(EMPTY_AST), sourceRaw: "<html>source</html>" },
         ],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: "cursor-2",
       });
     try {
@@ -1607,13 +1652,168 @@ describe("runIngestionPipeline — cycle deadline", () => {
     }
   });
 
+  test.each(["page", "cycle"] as const)(
+    "keeps a publisher failure that settled before the %s signal fired",
+    async (ending) => {
+      const source = caseLawSourceRow({ name: "Publisher-first source" });
+      const drain = new AbortController();
+      const originalPageTimeout = czNsAdapter.pageTimeoutMs;
+      if (ending === "page") {
+        czNsAdapter.pageTimeoutMs = 20;
+      }
+      let pageSignal: AbortSignal | undefined;
+      czNsAdapter.fetchPage = async (_cursor, _config, signal) => {
+        pageSignal = signal;
+        expect(signal?.aborted).toBe(false);
+        // The publisher's own request timeout, not ours.
+        return Result.err(
+          new AdapterFetchError({
+            message: "Publisher request timed out",
+            adapterKey: "cz-ns",
+            cursor: source.syncCursor,
+            cause: new DOMException("The operation timed out.", "TimeoutError"),
+          }),
+        );
+      };
+      // The lease renewal after the request waits on the database until our
+      // own page or cycle signal has fired.
+      const lease: CaseLawSourceIngestionLease = {
+        ...testSourceLease(source),
+        beforeRemoteEffect: async (effect) => {
+          const settled = await effect();
+          if (ending === "cycle") {
+            drain.abort();
+          }
+          const signal = pageSignal;
+          if (signal !== undefined && !signal.aborted) {
+            await new Promise<void>((resolve) => {
+              signal.addEventListener("abort", () => resolve(), { once: true });
+            });
+          }
+          return settled;
+        },
+      };
+      let persistedCursor: string | null | undefined;
+      try {
+        const result = await runIngestionPipeline({
+          source,
+          sourceLease: lease,
+          acquireStoredTotalAdmission: async () => "held",
+          scopedDb: cursorOnlyDb((cursor) => {
+            persistedCursor = cursor;
+          }),
+          cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+        });
+        expect(pageSignal?.aborted).toBe(true);
+        expect(result.stopKind).toBe(INGESTION_STOP_KIND.SOURCE_UNREACHABLE);
+        expect(result.pagesProcessed).toBe(0);
+        expect(result.nextCursor).toBe(source.syncCursor);
+        expect(persistedCursor).toBe(source.syncCursor);
+      } finally {
+        czNsAdapter.pageTimeoutMs = originalPageTimeout;
+      }
+    },
+  );
+
+  test.each(["page", "cycle"] as const)(
+    "a fetch that settles after the %s signal fired is a deadline",
+    async (ending) => {
+      const source = caseLawSourceRow({ name: "Deadline-only source" });
+      const drain = new AbortController();
+      const originalPageTimeout = czNsAdapter.pageTimeoutMs;
+      if (ending === "page") {
+        czNsAdapter.pageTimeoutMs = 20;
+      }
+      czNsAdapter.fetchPage = async (_cursor, _config, signal) => {
+        if (ending === "cycle") {
+          drain.abort(
+            new DOMException("The operation timed out.", "TimeoutError"),
+          );
+        }
+        if (signal !== undefined && !signal.aborted) {
+          await new Promise<void>((resolve) => {
+            signal.addEventListener("abort", () => resolve(), { once: true });
+          });
+        }
+        // Our own abort reason reads as a request timeout on its own; only
+        // the order of events says it was our deadline.
+        const error = new AdapterFetchError({
+          message: "Request aborted",
+          adapterKey: "cz-ns",
+          cursor: source.syncCursor,
+          cause: signal?.reason,
+        });
+        expect(error.stopKind).toBe(INGESTION_STOP_KIND.SOURCE_UNREACHABLE);
+        return Result.err(error);
+      };
+      try {
+        const result = await runIngestionPipeline({
+          source,
+          sourceLease: testSourceLease(source),
+          acquireStoredTotalAdmission: async () => "held",
+          scopedDb: cursorOnlyDb(() => undefined),
+          cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+        });
+        expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+        expect(result.pagesProcessed).toBe(0);
+        expect(result.nextCursor).toBe(source.syncCursor);
+      } finally {
+        czNsAdapter.pageTimeoutMs = originalPageTimeout;
+      }
+    },
+  );
+
+  test("a page the database brake holds until the cycle ends is a deadline", async () => {
+    const source = caseLawSourceRow({ name: "Brake-held source" });
+    const drain = new AbortController();
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [baseResult(EMPTY_AST)],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
+    let releases = 0;
+    const dbSlot = {
+      acquire: async (signal?: AbortSignal) => {
+        // The brake holds the slot; the cycle ends while the page waits.
+        drain.abort();
+        expect(signal?.aborted).toBe(true);
+        throw new DOMException("aborted", "AbortError");
+      },
+      release: () => {
+        releases++;
+      },
+    };
+    let persistedCursor: string | null | undefined;
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      acquireStoredTotalAdmission: async () => "held",
+      scopedDb: cursorOnlyDb((cursor) => {
+        persistedCursor = cursor;
+      }),
+      dbSlot,
+      cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+    });
+    expect(releases).toBe(0);
+    expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.nextCursor).toBe(source.syncCursor);
+    expect(persistedCursor).toBe(source.syncCursor);
+  });
+
   test("stops before a page the remaining budget cannot cover", async () => {
     const source = caseLawSourceRow({ name: "Short-budget source" });
 
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     };
 
     let persistedCursor: string | null | undefined;
@@ -1644,7 +1844,11 @@ describe("runIngestionPipeline — cycle deadline", () => {
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     };
 
     // The production lease renews itself before the request. This one ends
@@ -1677,6 +1881,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
     expect(fetches).toBe(0);
     expect(result.pagesProcessed).toBe(0);
     expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
     expect(persistedCursor).toBe("cursor-1");
   });
 
@@ -1686,7 +1891,11 @@ describe("runIngestionPipeline — cycle deadline", () => {
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: null });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: null,
+      });
     };
 
     let persistedCursor: string | null | undefined;
@@ -1775,6 +1984,7 @@ describe("processDecision — corpus storage off", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: (table: unknown) => ({
@@ -1882,6 +2092,7 @@ describe("processDecision — the decision's judges", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: () => ({
@@ -2032,6 +2243,7 @@ describe("processDecision — fields on an existing row", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: (table: unknown) => ({
@@ -2189,6 +2401,7 @@ describe("processDecision — source raw upload failure", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(undefined),
+            findMany: async () => await Promise.resolve([]),
           },
         },
       };
@@ -2279,6 +2492,7 @@ describe("processDecision — source raw upload failure", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(undefined),
+            findMany: async () => await Promise.resolve([]),
           },
         },
       };

@@ -54,7 +54,14 @@ const config = {
 
 const createGeneration = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, user, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    user,
+    session,
+    body,
+    recordAuditEvent,
+  }) {
     const distinctVersionIds = [
       ...new Set(body.sources.map((source) => source.entityVersionId)),
     ];
@@ -120,8 +127,11 @@ const createGeneration = createSafeHandler(
           workspaceId,
           listId: body.listId,
           status: "running",
+          producer: "external",
+          organizationId: session.activeOrganizationId,
           instruction: body.instruction,
           requestedBy: user.id,
+          startedAt: new Date(),
         });
         await tx.insert(legalListGenerationSources).values(
           body.sources.map((source) => ({

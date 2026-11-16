@@ -64,6 +64,11 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // Checks stored-key ownership with bounded existence reads before the
   // static constraint validations.
   "20261020000200_stored_keys_organization_scope_validate/migration.sql:4fe1c7457c1ef05de1ae41b2c0975e3accd0d9961f57d58744f1197f0222efb6",
+  // Creates the constrained non-login correspondence maintenance role only
+  // when absent, then verifies attributes, memberships, and ownership of its
+  // routines, including the uploaded-source registration trigger routine.
+  // Static catalog checks and role DDL retain the migration's bounded timeouts.
+  "20261102071500_correspondence_source_maintenance/migration.sql:5612adcb2a7776fc0922aa2c3dfe779bbe61e806511c901c27400157c8b4cc25",
   // Renames legacy resource paths in stable order with collision checks and
   // transaction-local snapshots. Static writes retain the 1s lock and 30s
   // statement budgets; a timeout rolls back the entire cutover.

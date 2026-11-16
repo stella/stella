@@ -19,7 +19,7 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { holdCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
@@ -407,12 +407,10 @@ if (apply) {
   await refreshCorpusS3();
 }
 
-const sourceLease = apply
-  ? await acquireCaseLawSourceIngestionLease({
-      scopedDb: ingestionDb,
-      sourceId,
-    })
+const heldSourceLease = apply
+  ? await holdCaseLawSourceIngestionLease({ scopedDb: ingestionDb, sourceId })
   : null;
+const sourceLease = heldSourceLease?.lease ?? null;
 if (apply && sourceLease === null) {
   console.error(
     "Source cz-regional is being ingested right now (lease held). Retry later.",
@@ -616,9 +614,7 @@ try {
     }
   }
 } finally {
-  if (sourceLease !== null) {
-    await sourceLease.release();
-  }
+  await heldSourceLease?.release();
 }
 
 if (suppliedItems === null) {

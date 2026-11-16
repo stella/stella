@@ -23,9 +23,8 @@ import {
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -91,19 +90,17 @@ const gatedDocx = async () => {
   const body = PARAGRAPHS.map(
     (text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`,
   ).join("");
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
   );
   const { file, written } = await writeFieldFilters(
-    testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+    testDocxFile(await zip.generate({ compression: "store" })),
     [],
     [
       {
@@ -229,10 +226,10 @@ describe("fill to workspace records the completion decision", () => {
       );
       const xml =
         (await (
-          await JSZip.loadAsync(saved?.bytes ?? new Uint8Array())
+          await ZipArchive.read(saved?.bytes ?? new Uint8Array())
         )
-          .file("word/document.xml")
-          ?.async("string")) ?? "";
+          .entry("word/document.xml")
+          ?.text()) ?? "";
       expect(xml).toContain("Preamble.");
       expect(xml).not.toContain("Consumer notice.");
       expect(xml).toContain("Business terms.");

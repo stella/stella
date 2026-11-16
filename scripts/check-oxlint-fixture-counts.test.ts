@@ -20,6 +20,39 @@ describe("rewriteFixture", () => {
     expect(source.split("\n")).toHaveLength(2);
   });
 
+  test("counts suppression-free expect-error markers on the following line", () => {
+    const { source, expected, problems } = rewriteFixture(
+      FILE,
+      `// expect-error: ${RULE}\nf();`,
+    );
+    expect(expected).toEqual(new Map([[`${FILE}:2:${RULE}`, 1]]));
+    expect(source).toBe("\nf();");
+    expect(problems).toEqual([]);
+  });
+
+  test("unwraps marked raw fixtures only in the temporary count copy", () => {
+    const fixture = `// expect-error-fixture\nexport const fixture = String.raw\`
+// expect-error: ${RULE}
+const imported = <Select>{items.map((item) => <SelectItem>{item}</SelectItem>)}</Select>;
+// expect-clean: ${RULE}
+const explicit = <Select><SelectItem value="one">One</SelectItem></Select>;
+\`;`;
+    const { source, expected, clean } = rewriteFixture(FILE, fixture);
+    expect(source).toContain("const imported = <Select>");
+    expect(source).not.toContain("String.raw");
+    expect(source.split("\n")).toHaveLength(fixture.split("\n").length);
+    expect(expected).toEqual(new Map([[`${FILE}:4:${RULE}`, 1]]));
+    expect(clean).toEqual(new Set([`${FILE}:6:${RULE}`]));
+  });
+
+  test("rejects expect-error markers that do not precede code", () => {
+    const { problems } = rewriteFixture(
+      FILE,
+      `// expect-error: ${RULE}\n// another comment\nf();`,
+    );
+    expect(problems).toEqual([`${FILE}:1: expect-error must precede code`]);
+  });
+
   test("reads an xN count from the rationale", () => {
     const { expected } = rewriteFixture(
       FILE,

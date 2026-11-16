@@ -11,10 +11,10 @@
  */
 
 import { panic } from "better-result";
-import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
+import type { ZipArchive } from "@stll/docx-core/zip";
 import {
   type ConditionNode,
   type FilterCall,
@@ -1214,7 +1214,7 @@ const mergeAnalysis = (
  * each one with the same logic used for document.xml.
  */
 const analyzeHeadersAndFooters = async (
-  zip: JSZip,
+  zip: ZipArchive,
   slots: Map<string, ClauseSlot>,
 ): Promise<AnalysisResult> => {
   const result: AnalysisResult = {
@@ -1232,7 +1232,7 @@ const analyzeHeadersAndFooters = async (
 
   // Sort entries alphabetically to match the order used by
   // extractText (which assigns globally sequential indices).
-  const entries = templateContentPartPaths(Object.keys(zip.files)).filter(
+  const entries = templateContentPartPaths(zip.paths()).filter(
     (path) => path !== MAIN_DOCUMENT_PART_PATH,
   );
 
@@ -1242,12 +1242,12 @@ const analyzeHeadersAndFooters = async (
   let footerParaCount = 0;
 
   for (const path of entries) {
-    const entry = zip.file(path);
+    const entry = zip.entry(path);
     if (!entry) {
       continue;
     }
 
-    const xml = await entry.async("string");
+    const xml = await entry.text();
     const doc = slimdom.parseXmlDocument(xml);
 
     // Headers use w:hdr, footers use w:ftr as root element
@@ -1306,12 +1306,12 @@ export const discoverTemplate = async (
     loopAliases: [],
   };
 
-  const docEntry = zip.file(MAIN_DOCUMENT_PART_PATH);
+  const docEntry = zip.entry(MAIN_DOCUMENT_PART_PATH);
   if (!docEntry) {
     return emptyResult;
   }
 
-  const xml = await docEntry.async("string");
+  const xml = await docEntry.text();
   const doc = slimdom.parseXmlDocument(xml);
   const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
 

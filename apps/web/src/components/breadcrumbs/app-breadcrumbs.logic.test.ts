@@ -2,7 +2,10 @@ import { expect, test } from "bun:test";
 
 import { routePresentation } from "@/routes/-route-presentation";
 
-import { declaredBreadcrumbs } from "./app-breadcrumbs.logic";
+import {
+  declaredBreadcrumbs,
+  trailEndsAtMatter,
+} from "./app-breadcrumbs.logic";
 
 test("breadcrumbs follow route metadata, including the beta settings page", () => {
   const breadcrumbs = declaredBreadcrumbs([
@@ -93,4 +96,28 @@ test("detail routes can restore the crumb for an escaped layout", () => {
     },
     { type: "knowledge-detail", detail: "skill" },
   ]);
+});
+
+const matterMatch = {
+  routeId: "/_protected/workspaces/$workspaceId",
+  staticData: {
+    presentation: routePresentation({ type: "entity", entity: "matter" }),
+  },
+};
+
+test("the header stands for the matter on its own pages, not under a document", () => {
+  const matterIndex = {
+    routeId: "/_protected/workspaces/$workspaceId/",
+    staticData: { presentation: routePresentation({ type: "inherit" }) },
+  };
+  const document = {
+    routeId: "/_protected/workspaces/$workspaceId/$viewId/document",
+    staticData: {
+      presentation: routePresentation({ type: "entity", entity: "pdf" }),
+    },
+  };
+
+  expect(trailEndsAtMatter([matterMatch, matterIndex])).toBe(true);
+  expect(trailEndsAtMatter([matterMatch, document])).toBe(false);
+  expect(trailEndsAtMatter([])).toBe(false);
 });

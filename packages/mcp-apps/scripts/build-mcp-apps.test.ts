@@ -47,3 +47,16 @@ test("MCP app bundles build in production without server configuration or output
   );
   expect(await readOutputs()).toEqual(before);
 }, 30_000);
+
+test("every MCP app has non-empty derived outputs", async () => {
+  const appsRoot = path.resolve(import.meta.dirname, "../src");
+  for (const { directory } of MCP_APPS) {
+    for (const file of ["app.js.txt", "app.css.txt", "app.html.txt"]) {
+      const output = Bun.file(
+        path.join(appsRoot, directory, "generated", file),
+      );
+      expect(await output.exists()).toBe(true);
+      expect(output.size).toBeGreaterThan(0);
+    }
+  }
+});

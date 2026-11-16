@@ -42,6 +42,7 @@ import {
 } from "@/api/tests/helpers/auth-provider-id";
 import { type FakeS3, startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createFakeSqsQueue } from "@/api/tests/helpers/fake-sqs";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -210,7 +211,7 @@ if (!databaseUrl || !runPostgresTests) {
     const gated = openGatedTestDatabase(databaseUrl);
     db = gated.db;
     gated.cleanUp(async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, memberId));
     });
 

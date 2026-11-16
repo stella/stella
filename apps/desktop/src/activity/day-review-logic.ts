@@ -20,11 +20,18 @@ export type MatchedSegment = TimedSegment & {
   evidence: string[];
   drafted: boolean;
 };
-/** What an app's windows showed, the longest-used title first. */
+/** What an app's windows showed and for how long, the longest-used title
+ * first. */
 export type AppEvidence = {
   identifier: string;
   name: string;
-  details: string[];
+  details: {
+    title: string;
+    durationMs: number;
+    /** The matter that holds most of the title's time; `null` when time no
+     * matter claimed holds as much or more. */
+    matter: DesktopTimeEntryMatterCandidate | null;
+  }[];
 };
 export type DayReviewGroup = {
   id: string;
@@ -233,9 +240,10 @@ const SHARED_CONTEXT = [
   },
 ] as const;
 
-/** Context that several titles share says nothing about any of them, so it is
- * dropped and each title keeps only its own part. */
-export const withoutSharedContext = (evidence: readonly string[]) => {
+/** Context that several titles share says nothing about any of them, so it
+ * is dropped: each title maps to its own part. */
+export const cleanSharedContext = (evidence: readonly string[]) => {
+  const cleaned = new Map(evidence.map((title) => [title, title]));
   let titles = [...evidence];
   for (const { pattern, context, own } of SHARED_CONTEXT) {
     const counts = new Map<string, number>();
@@ -245,24 +253,24 @@ export const withoutSharedContext = (evidence: readonly string[]) => {
         counts.set(key, (counts.get(key) ?? 0) + 1);
       }
     }
-    titles = [
-      ...new Set(
-        titles.map((title) => {
-          const match = pattern.exec(title);
-          const key = match?.at(context);
-          const rest = match?.at(own);
-          return key && rest && (counts.get(key) ?? 0) > 1 ? rest : title;
-        }),
-      ),
-    ];
+    const strip = (title: string) => {
+      const match = pattern.exec(title);
+      const key = match?.at(context);
+      const rest = match?.at(own);
+      return key && rest && (counts.get(key) ?? 0) > 1 ? rest : title;
+    };
+    for (const [original, current] of cleaned) {
+      cleaned.set(original, strip(current));
+    }
+    titles = [...new Set(titles.map(strip))];
   }
-  return titles;
+  return cleaned;
 };
 
-/** Titles a review row shows per app before it counts the rest. */
+/** Titles a narrative template names per app before it stops. */
 export const EVIDENCE_DETAIL_LIMIT = 3;
 
-const TITLE_SEPARATORS = [" - ", " – ", " — "] as const;
+const TITLE_SEPARATORS = [" - ", " – ", " \u2014 "] as const;
 
 /** Browsers title a window `page - Browser - Profile`; the app icon already
  * names the browser, so the title keeps only the page. */
@@ -288,33 +296,82 @@ export const withoutAppSuffix = (title: string, appName: string) => {
   return title.slice(0, cut);
 };
 
-const appEvidence = (segments: readonly MatchedSegment[]): AppEvidence[] =>
+export const appEvidence = (
+  segments: readonly MatchedSegment[],
+): AppEvidence[] =>
   appTotals(segments).flatMap(({ identifier, name }) => {
-    const durations = new Map<string, number>();
+    // A segment counts once per title, however many of its details name it.
+    const byTitle = new Map<string, Set<MatchedSegment>>();
     for (const segment of segments) {
       if (segment.appIdentifier !== identifier) {
         continue;
       }
-      const titles = new Set(
-        segment.evidence.map((detail) => withoutAppSuffix(detail, name)),
-      );
-      for (const title of titles) {
-        durations.set(
-          title,
-          (durations.get(title) ?? 0) + segment.endMs - segment.startMs,
-        );
+      for (const detail of segment.evidence) {
+        const title = withoutAppSuffix(detail, name);
+        const titled = byTitle.get(title) ?? new Set();
+        titled.add(segment);
+        byTitle.set(title, titled);
       }
     }
-    const details = withoutSharedContext(
-      [...durations]
-        .sort(
-          ([leftTitle, left], [rightTitle, right]) =>
-            right - left || leftTitle.localeCompare(rightTitle),
-        )
-        .map(([title]) => title),
-    ).filter((title) => title.toLowerCase() !== name.toLowerCase());
+    const cleaned = cleanSharedContext([...byTitle.keys()]);
+    const merged = new Map<string, Set<MatchedSegment>>();
+    for (const [title, titled] of byTitle) {
+      const own = cleaned.get(title) ?? title;
+      merged.set(own, new Set([...(merged.get(own) ?? []), ...titled]));
+    }
+    const details = [...merged]
+      .filter(([title]) => title.toLowerCase() !== name.toLowerCase())
+      .map(([title, titled]) => ({
+        title,
+        durationMs: totalDurationMs([...titled]),
+        matter: leadingMatter([...titled]),
+      }))
+      .sort(
+        (left, right) =>
+          right.durationMs - left.durationMs ||
+          left.title.localeCompare(right.title),
+      );
     return details.length > 0 ? [{ identifier, name, details }] : [];
   });
+
+/** How some segments' time splits: the matter holding the most of it, and
+ * the time no matter claimed. */
+export const matterShare = (segments: readonly MatchedSegment[]) => {
+  const totals = new Map<
+    string,
+    { durationMs: number; matter: DesktopTimeEntryMatterCandidate }
+  >();
+  let unmatchedMs = 0;
+  for (const segment of segments) {
+    const durationMs = segment.endMs - segment.startMs;
+    if (segment.matter === null) {
+      unmatchedMs += durationMs;
+      continue;
+    }
+    const total = totals.get(segment.matter.id);
+    totals.set(segment.matter.id, {
+      durationMs: (total?.durationMs ?? 0) + durationMs,
+      matter: segment.matter,
+    });
+  }
+  const [leading = null] = [...totals.values()].sort(
+    (left, right) =>
+      right.durationMs - left.durationMs ||
+      left.matter.id.localeCompare(right.matter.id),
+  );
+  return { leading, unmatchedMs };
+};
+
+/** The matter holding the most of some segments' time, or `null` when time
+ * no matter claimed holds as much or more. */
+export const leadingMatter = (
+  segments: readonly MatchedSegment[],
+): DesktopTimeEntryMatterCandidate | null => {
+  const { leading, unmatchedMs } = matterShare(segments);
+  return leading !== null && leading.durationMs > unmatchedMs
+    ? leading.matter
+    : null;
+};
 
 /** Splitting at every review boundary prevents assignments or receipts from
  * claiming time beyond the exact range the user selected. */

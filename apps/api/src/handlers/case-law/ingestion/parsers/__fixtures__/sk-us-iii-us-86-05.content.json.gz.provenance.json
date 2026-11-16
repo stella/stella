@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "c7a1431197a6040c18a1e8ea831855b93e626b655a72484ddf05d4898431e813",
+  "sourceUrl": "https://www.ustavnysud.sk/o/v1/dms/content",
+  "capturedAt": "2026-10-29T19:47:13.000Z",
+  "note": "POST body: {\"highlightText\":\"\",\"documentId\":\"0ac97ec6-02e0-402f-83e3-6b410df4bd77\",\"docType\":\"USSR_DECISION_MK\"}; III. ÚS 86/05, the response body verbatim (sha256 a0c0e941aa881b672341a79c65eb5654b6b7ff24435e0738ac049d099de8f2cf), gzipped."
+}

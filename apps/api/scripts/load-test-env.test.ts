@@ -10,6 +10,8 @@ import {
 import os from "node:os";
 import path from "node:path";
 
+import { stageMigrateEntrypoint } from "../src/db/migrate-entrypoint.test-helpers";
+
 const apiRoot = path.resolve(import.meta.dir, "..");
 const generatedEnvironment = {
   NODE_ENV: "test",
@@ -48,10 +50,12 @@ const runEntrypoint = async ({
   directory,
   entrypoint,
   expected,
+  args = [],
 }: {
   directory: string;
   entrypoint: string;
   expected: typeof generatedEnvironment;
+  args?: readonly string[];
 }) => {
   const assertion = path.join(directory, "assert-env.ts");
   await Bun.write(
@@ -73,7 +77,7 @@ process.on("exit", () => {
       "--preload",
       assertion,
       entrypoint,
-      "__no_matching_cloud_fixture__",
+      ...args,
     ],
     cwd: directory,
     env: {
@@ -119,6 +123,7 @@ for (const runner of ["run-postgres-tests.ts", "run-valkey-tests.ts"]) {
         directory,
         entrypoint,
         expected: generatedEnvironment,
+        args: ["__no_matching_cloud_fixture__"],
       });
       expect(result.status).toBe(1);
       expect(result.stderr).toContain("matched the selection");
@@ -134,6 +139,7 @@ for (const runner of ["run-postgres-tests.ts", "run-valkey-tests.ts"]) {
         directory,
         entrypoint,
         expected: generatedEnvironment,
+        args: ["__no_matching_cloud_fixture__"],
       });
       expect(mutation.stdout).not.toContain("test environment verified");
       expect(mutation.stderr).toContain("AssertionError");
@@ -143,20 +149,7 @@ for (const runner of ["run-postgres-tests.ts", "run-valkey-tests.ts"]) {
 
 test("migration preserves the deployment environment despite a local test file", async () => {
   await withFixture(async (directory) => {
-    const entrypoint = path.join(directory, "src/db/migrate.ts");
-    await copyFile(path.join(apiRoot, "src/db/migrate.ts"), entrypoint);
-    for (const dependency of ["db-url.ts", "env-db-load-gate.ts", "lib"]) {
-      await symlink(
-        path.join(apiRoot, "src", dependency),
-        path.join(directory, "src", dependency),
-      );
-    }
-    for (const module of ["migration-runner.ts", "sql-client.ts"]) {
-      await symlink(
-        path.join(apiRoot, "src/db", module),
-        path.join(directory, "src/db", module),
-      );
-    }
+    const entrypoint = await stageMigrateEntrypoint(directory);
     await Bun.write(path.join(directory, ".env.test"), environmentSource);
     const result = await runEntrypoint({
       directory,

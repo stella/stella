@@ -9,14 +9,15 @@ import {
   spyOn,
   test,
 } from "bun:test";
+import * as v from "valibot";
 
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { stellaToast } from "@stll/ui/toast";
 
 import messages from "@/i18n/langs/en.json";
 import type { WorkspaceFile } from "@/lib/workspaces/queries/entities";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 let respondLatest: (request: Request) => Promise<Response> | Response = () => {
@@ -33,6 +34,10 @@ const { roleOptions } = await import("@/lib/auth-queries");
 const { workspaceFilesOptions } =
   await import("@/lib/workspaces/queries/entities");
 const { DocumentVerifications } = await import("./document-verifications");
+const { sourceKindsOptions } = await import("./use-source-kinds");
+const kindWrites: unknown[] = [];
+/** Kind reads fail while this is above zero, one failure per read. */
+let failingKindReads = 0;
 const workspaceId = "019a0000-0000-7000-8000-000000000001";
 const listId = "019a0000-0000-7000-8000-000000000002";
 const document = {
@@ -43,11 +48,13 @@ const document = {
   parentId: null,
   mimeType:
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  sizeBytes: 24_000,
 } satisfies WorkspaceFile;
 const clients: InstanceType<typeof QueryClient>[] = [];
 const mountDocuments = (
   files: WorkspaceFile[],
   role: "admin" | "external" | "intern" | "member" | "owner" = "admin",
+  kinds: "seeded" | "read" = "seeded",
 ) => {
   const client = new QueryClient({
     defaultOptions: {
@@ -57,6 +64,15 @@ const mountDocuments = (
   clients.push(client);
   client.setQueryData(workspaceFilesOptions(workspaceId).queryKey, files);
   client.setQueryData(roleOptions.queryKey, role);
+  // Every document starts as a record; the kind read is not what these
+  // tests are about.
+  const documentIds = files.map((file) => file.entityId);
+  if (kinds === "seeded") {
+    client.setQueryData(
+      sourceKindsOptions({ workspaceId, listId, documentIds }).queryKey,
+      new Map(documentIds.map((id) => [id, "document" as const])),
+    );
+  }
   return render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
@@ -86,6 +102,49 @@ beforeEach(() => {
         if (new URL(request.url).pathname.startsWith("/api/auth/")) {
           return Response.json(null);
         }
+        if (
+          request.method === "PATCH" &&
+          new URL(request.url).pathname.endsWith("/source-documents")
+        ) {
+          const body: unknown = await request.json();
+          kindWrites.push(body);
+          return Response.json(body);
+        }
+        if (
+          request.method === "POST" &&
+          new URL(request.url).pathname.endsWith("/source-documents/kinds")
+        ) {
+          if (failingKindReads > 0) {
+            failingKindReads -= 1;
+            return Response.json(
+              { message: "Kind read failed" },
+              { status: 500 },
+            );
+          }
+          // Read back after a write: what was last set, else a record.
+          const { documentEntityIds } = v.parse(
+            v.object({ documentEntityIds: v.array(v.string()) }),
+            await request.json(),
+          );
+          const written = new Map(
+            kindWrites.map((write) => {
+              const { documentEntityId, sourceKind } = v.parse(
+                v.object({
+                  documentEntityId: v.string(),
+                  sourceKind: v.string(),
+                }),
+                write,
+              );
+              return [documentEntityId, sourceKind];
+            }),
+          );
+          return Response.json({
+            documents: documentEntityIds.map((documentEntityId) => ({
+              documentEntityId,
+              sourceKind: written.get(documentEntityId) ?? "document",
+            })),
+          });
+        }
         expect(request.method).toBe("POST");
         expect(new URL(request.url).pathname).toContain("/verifications");
         return await respondLatest(request);
@@ -102,6 +161,8 @@ afterEach(() => {
     client.clear();
   }
   fetchBoundary.mockClear();
+  kindWrites.length = 0;
+  failingKindReads = 0;
   respondLatest = () => {
     throw new TypeError("Unexpected status request");
   };
@@ -190,7 +251,7 @@ test("a loaded document keeps verification disabled without update permission", 
   ).toBe(true);
 });
 
-for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
+for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
   test(`${code}: a limit refusal leaves the document available for a later verification`, async () => {
     const toast = spyOn(stellaToast, "add").mockReturnValue("limit-toast");
     try {
@@ -210,9 +271,9 @@ for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
         view.getByRole("button", { name: messages.common.verify }),
       );
       const expected =
-        code === VERIFICATION_RUN_CAP_CODES.active
-          ? messages.errors.apiCodes.verificationActiveLimitReached
-          : messages.errors.apiCodes.verificationDailyLimitReached;
+        code === MODEL_RUN_CAP_CODES.active
+          ? messages.errors.apiCodes.runActiveLimitReached
+          : messages.errors.apiCodes.runDailyLimitReached;
       await waitFor(() =>
         expect(toast).toHaveBeenCalledWith(
           expect.objectContaining({ title: expected, type: "error" }),
@@ -232,3 +293,52 @@ for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
     }
   });
 }
+test("a document is marked as testimony through its switch", async () => {
+  answerLatest(() => Response.json({ runs: [] }));
+  const view = mountDocuments([document]);
+  const toggle = view.getByRole("switch", {
+    name: messages.avt.documents.testimony,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  fireEvent.click(toggle);
+  // The DOM test environment also forwards the click to the label's
+  // control, so the same write can arrive twice; every write asks for
+  // testimony.
+  const write = {
+    listId,
+    documentEntityId: document.entityId,
+    sourceKind: "testimony",
+  };
+  await waitFor(() => expect(kindWrites).toContainEqual(write));
+  expect(kindWrites.every((sent) => Bun.deepEquals(sent, write))).toBe(true);
+  expect(
+    view
+      .getByRole("switch", { name: messages.avt.documents.testimony })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
+});
+
+test("a failed kind read says so where the switches are and recovers on retry", async () => {
+  answerLatest(() => Response.json({ runs: [] }));
+  failingKindReads = 1;
+  const view = mountDocuments([document], "admin", "read");
+  await waitFor(() =>
+    expect(view.getByText(messages.avt.documents.kindsLoadFailed)).toBeTruthy(),
+  );
+  const toggle = () =>
+    view.getByRole("switch", { name: messages.avt.documents.testimony });
+  expect(Object.hasOwn(toggle().dataset, "disabled")).toBe(true);
+  fireEvent.click(view.getByRole("button", { name: messages.common.retry }));
+  // Polled assertions compare booleans: while the message is still shown, a
+  // failing matcher on the DOM node formats the whole node graph, which
+  // takes seconds per poll and starves the retry it is waiting for.
+  await waitFor(() =>
+    expect(
+      view.queryByText(messages.avt.documents.kindsLoadFailed) === null,
+    ).toBe(true),
+  );
+  await waitFor(() =>
+    expect(Object.hasOwn(toggle().dataset, "disabled")).toBe(false),
+  );
+  expect(toggle().getAttribute("aria-checked")).toBe("false");
+});

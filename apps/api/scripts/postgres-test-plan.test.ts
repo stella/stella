@@ -3,10 +3,15 @@ import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
 import {
+  anyBootsPgliteTestDatabase,
+  assertTemplateDatabaseTestsAreExclusive,
+  bootsPgliteTestDatabase,
   clusterExclusivePostgresTests,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   findSharedTableDdlViolations,
   isolateSharedTableDdlTests,
+  needsTemplateDatabase,
+  TEMPLATE_DATABASE_TEST_PATHS,
 } from "./postgres-test-plan";
 import { discoverGatedTestFiles } from "./run-gated-tests";
 
@@ -156,6 +161,55 @@ describe("PostgreSQL shared-table DDL isolation", () => {
   });
 });
 
+describe("PostgreSQL migrated template planning", () => {
+  test("creates a template only when a declared path is selected", () => {
+    expect(needsTemplateDatabase(["src/example.postgres.test.ts"])).toBeFalse();
+    expect(
+      needsTemplateDatabase([
+        "src/example.postgres.test.ts",
+        ...TEMPLATE_DATABASE_TEST_PATHS,
+      ]),
+    ).toBeTrue();
+  });
+
+  test("requires every template consumer to run exclusively", () => {
+    expect(() => assertTemplateDatabaseTestsAreExclusive()).not.toThrow();
+    expect(() =>
+      assertTemplateDatabaseTestsAreExclusive(
+        TEMPLATE_DATABASE_TEST_PATHS,
+        new Set(),
+      ),
+    ).toThrow("src/db/online-repairs-beside-writer.postgres.test.ts");
+  });
+});
+
+describe("PostgreSQL suites on the PGlite test database", () => {
+  test.each([
+    'import { getRlsFixture } from "@/api/tests/security/rls-fixture";',
+    'import { getTestDb } from "@/api/tests/security/test-utils";',
+    'import { createTestPglite } from "@/api/tests/pglite-test-db";',
+  ])("boots PGlite: %s", (source) => {
+    expect(bootsPgliteTestDatabase(source)).toBe(true);
+  });
+
+  test("a suite on PostgreSQL alone does not boot PGlite", () => {
+    expect(
+      bootsPgliteTestDatabase('import { getDb } from "@/api/db/root";'),
+    ).toBe(false);
+  });
+
+  // The runner boots these from one snapshot; this suite is the one whose
+  // in-process schema build outlasted its setup hook on a loaded runner.
+  test("detects the invoice export suite", async () => {
+    const apiRoot = path.resolve(import.meta.dir, "..");
+    expect(
+      await anyBootsPgliteTestDatabase(apiRoot, [
+        "src/handlers/invoices/pdf/export.integration.test.ts",
+      ]),
+    ).toBe(true);
+  });
+});
+
 describe("PostgreSQL shared batch", () => {
   // Every shared-batch file reuses one process and one cached auth instance,
   // so a module mock there arrives after another file built auth and never
@@ -204,3 +258,20 @@ test.each([
     ).toEqual(new Set([testPath]));
   },
 );
+
+test("the scheduled-run block measurement runs after all cluster workers finish", async () => {
+  const testPath = "src/tests/query-perf/scheduled-run.postgres.test.ts";
+  const runner = packageJson.ciGateTestRunners["test:postgres"];
+  expect(
+    await discoverGatedTestFiles({
+      apiRoot: path.resolve(import.meta.dir, ".."),
+      gate: runner.gate,
+      testFileGlob: runner.testFileGlob,
+    }),
+  ).toContain(testPath);
+  expect(
+    clusterExclusivePostgresTests(
+      new Map([[testPath, "test('measurement', () => {})"]]),
+    ),
+  ).toEqual(new Set([testPath]));
+});

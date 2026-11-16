@@ -4,10 +4,10 @@ import {
   describe,
   expect,
   setDefaultTimeout,
+  spyOn,
   test,
 } from "bun:test";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
-import JSZip from "jszip";
 
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
@@ -15,10 +15,8 @@ import {
   FILE_SECURITY_REMEDIATION,
 } from "@stll/api-contract";
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
-import {
-  ATTACHED_TEMPLATE_SECURITY_RULE,
-  writeZipEntry,
-} from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
+import { ATTACHED_TEMPLATE_SECURITY_RULE } from "@stll/docx-utils";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import {
@@ -35,9 +33,10 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { processDocumentProcessingRun } from "@/api/lib/document-processing-queue";
-import { LIMITS } from "@/api/lib/limits";
+import { readPdfPageTexts } from "@/api/lib/files/pdf-page-text";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { DOCUMENT_BYTES_ADMISSION } from "@/api/lib/load/document-bytes-admission";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
   legacyTmpUploadKey,
@@ -48,6 +47,7 @@ import { docxWithMarkers } from "@/api/tests/helpers/docx-with-markers";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { largeDocx } from "@/api/tests/helpers/large-ooxml";
+import { largeScannedPdf } from "@/api/tests/helpers/large-pdf";
 import {
   executeRowsDatabase,
   executeRowsSafeDb,
@@ -87,9 +87,8 @@ const ATTACHED_TEMPLATE_MESSAGE =
 const ATTACHED_TEMPLATE_REJECTION_MESSAGE = `File rejected by security rule ${ATTACHED_TEMPLATE_SECURITY_RULE}: ${ATTACHED_TEMPLATE_MESSAGE}`;
 
 const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "[Content_Types].xml",
     '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -97,20 +96,17 @@ const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
       '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
       "</Types>",
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/settings.xml",
     '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       '<w:attachedTemplate r:id="rId1"/></w:settings>',
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/settings.xml.rels",
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" ' +
@@ -118,10 +114,7 @@ const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
       'Target="file:///C:/Templates/Contract.dotx" TargetMode="External"/>' +
       "</Relationships>",
   );
-  return await zip.generateAsync({
-    type: "uint8array",
-    compression: "DEFLATE",
-  });
+  return await zip.generate();
 };
 
 beforeAll(async () => {
@@ -538,8 +531,8 @@ describe("presigned upload mutation flow", () => {
       expect(staged.status).toBe(200);
 
       // Fill the whole budget so the finalization below has to wait.
-      const holdBudget = await UPLOAD_FINALIZE_ADMISSION.acquire(
-        LIMITS.uploadFinalizeInFlightBytes,
+      const holdBudget = await DOCUMENT_BYTES_ADMISSION.acquire(
+        LIMITS.documentBytesInFlight,
         0,
       );
       if (holdBudget === null) {
@@ -591,7 +584,7 @@ describe("presigned upload mutation flow", () => {
 
       const finalized = await finalizing;
       expect(finalized).toMatchObject({ code: 422 });
-      expect(UPLOAD_FINALIZE_ADMISSION.inUseBytes()).toBe(0);
+      expect(DOCUMENT_BYTES_ADMISSION.inUseBytes()).toBe(0);
       expect(
         recording.records.filter(
           ({ message }) => message === "uploads.finalize_admitted",
@@ -608,8 +601,8 @@ describe("presigned upload mutation flow", () => {
       ]);
 
       // The stored result replays at once even while the budget is full.
-      const holdAgain = await UPLOAD_FINALIZE_ADMISSION.acquire(
-        LIMITS.uploadFinalizeInFlightBytes,
+      const holdAgain = await DOCUMENT_BYTES_ADMISSION.acquire(
+        LIMITS.documentBytesInFlight,
         0,
       );
       if (holdAgain === null) {
@@ -617,8 +610,8 @@ describe("presigned upload mutation flow", () => {
           "Expected the idle admission budget to admit the hold.",
         );
       }
+      const replayAdmissions = spyOn(DOCUMENT_BYTES_ADMISSION, "acquire");
       try {
-        const startedAt = performance.now();
         const replayed = await finalizeUpload.handler(
           asTestRaw<FinalizeCtx>(
             createContext({
@@ -630,15 +623,14 @@ describe("presigned upload mutation flow", () => {
           ),
         );
         expect(replayed).toEqual(finalized);
+        expect(replayAdmissions).not.toHaveBeenCalled();
         expect(
           recording.records.filter(
             ({ message }) => message === "uploads.finalize_admitted",
           ),
         ).toHaveLength(1);
-        expect(performance.now() - startedAt).toBeLessThan(
-          LIMITS.uploadFinalizeAdmissionWaitMs,
-        );
       } finally {
+        replayAdmissions.mockRestore();
         holdAgain();
       }
     } finally {
@@ -773,6 +765,55 @@ describe("presigned upload finalize lifecycle", () => {
     expect(await uploadStatus(uploadId)).toBe("finalized");
   });
 
+  test("a scanned PDF past the former 50 MiB cap finalizes through the presigned route and parses", async () => {
+    const text = "Inquiry bundle exhibit 14";
+    const bytes = await largeScannedPdf({ minBytes: 51 * 1024 * 1024, text });
+    expect(bytes.byteLength).toBeLessThanOrEqual(
+      FILE_SIZE_LIMIT_BYTES.document,
+    );
+    const presignResult = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            purpose: "entity_version",
+            entityId: ids.entityA1,
+            name: "inquiry-bundle.pdf",
+            mimeType: "application/pdf",
+            size: bytes.byteLength,
+            sha256Hex: hashSha256Hex(bytes),
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    const uploadId = getUploadId(presignResult);
+    seededUploadIds.push(uploadId);
+    const grant = readPresignedUpload(presignResult);
+    const staged = await fetch(grant.url, {
+      method: "PUT",
+      body: bytes,
+      headers: grant.headers,
+    });
+    expect(staged.status).toBe(200);
+
+    const finalized = await finalizeAsOwner(uploadId);
+
+    expect(finalized).toHaveProperty("finalizedResult.type", "entity_version");
+    expect(await uploadStatus(uploadId)).toBe("finalized");
+    // The promoted object is the whole file, and the reader parses it.
+    const stored = [...fake.objects.entries()].find(
+      ([key, object]) =>
+        !key.includes(uploadId) && object.bytes.byteLength === bytes.byteLength,
+    );
+    if (stored === undefined) {
+      throw new Error("The finalized PDF was not promoted to its final key");
+    }
+    const pages = await readPdfPageTexts({ bytes: stored[1].bytes });
+    expect(pages.map((page) => page.text.trim())).toEqual([text]);
+  });
+
   test("replays a finalized upload's result without creating another version", async () => {
     const { uploadId } = await stageDocxVersion("replayed.docx");
     const first = await finalizeAsOwner(uploadId);
@@ -863,8 +904,8 @@ describe("presigned upload finalize lifecycle", () => {
       declaredSha256:
         "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       status: "pending",
-      expiresAt: new Date(Date.now() + 60_000),
-      createdAt: new Date(),
+      expiresAt: sql`now() + interval '1 minute'`,
+      createdAt: sql`now()`,
     });
     seededUploadIds.push(uploadId);
 

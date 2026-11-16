@@ -1,11 +1,13 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
-import type * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
 import { Buffer } from "node:buffer";
 
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifier,
@@ -87,6 +89,7 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -614,6 +617,8 @@ type PlKioSourceField = (typeof SOURCE_FIELDS)[number];
 const isSourceField = (value: string): value is PlKioSourceField =>
   SOURCE_FIELDS.some((field) => field === value);
 
+type PlKioPublisherRecord = Readonly<Record<PlKioSourceField, unknown>>;
+
 const PL_KIO_SOURCE_FIELDS = {
   "Organ wydający": {
     disposition: "stored",
@@ -672,7 +677,7 @@ const PL_KIO_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "keywords" },
   },
-} as const satisfies Record<PlKioSourceField, SourceFieldDisposition>;
+} as const satisfies Record<keyof PlKioPublisherRecord, SourceFieldDisposition>;
 
 /** Response payloads and bounded-read dispositions needed for replay. */
 const RAW_PART = {
@@ -1780,6 +1785,7 @@ const fetchTailPage = async (
           },
         }),
     sourceUrl: listed.value.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: aborted
       ? cursor
       : encodePlKioCursor({ ...parked, tail: parked.tail + rows.length }),
@@ -1820,6 +1826,7 @@ const plKioFetchPage = async (
             },
           }),
       sourceUrl: listed.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlKioCursor(cursor),
     });
   }
@@ -1836,6 +1843,7 @@ const plKioFetchPage = async (
             },
           }),
       sourceUrl: listed.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlKioCursor({ ...cursor, offset: reached }),
     });
   }
@@ -1851,6 +1859,7 @@ const plKioFetchPage = async (
           },
         }),
     sourceUrl: listed.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKioCursor(
       next === null
         ? { ...cursor, offset: reached }

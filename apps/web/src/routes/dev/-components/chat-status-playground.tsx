@@ -199,7 +199,6 @@ export function ChatStatusPlayground() {
       onCreateDocumentResolve={noop}
       onOpenCreatedDocument={noop}
       onResend={noop}
-      showThinkingIndicator
       showToolCalls={showToolCalls}
       streamdownComponents={{
         a: (props) => <StreamdownMentionLink {...props} interactive={false} />,

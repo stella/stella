@@ -145,6 +145,7 @@ export type HandlerErrorMissingRequiredField = {
  */
 export type HandlerErrorValidationIssue = {
   path: string;
+  code?: string | undefined;
   message: string;
 };
 
@@ -290,7 +291,7 @@ export class TelemetryError extends TaggedError("TelemetryError")<{
   cause?: unknown;
 }> {}
 
-export const USAGE_LIMIT_EXCEEDED_REASONS = [
+const USAGE_LIMIT_EXCEEDED_REASONS = [
   "no_entitlement",
   "usage_limit_exceeded",
   "entitlement_inactive",
@@ -366,6 +367,7 @@ export const UNPERSISTABLE_DECISION_FIELDS = {
   PUBLISHER_CITATIONS: "publisher-citations",
   PRIMARY_REFERENCE_TYPE: "primary-reference-type",
   SUPPLEMENT: "supplement",
+  FALLBACK_IDENTITY: "fallback-identity",
 } as const;
 
 export type UnpersistableDecisionField =
@@ -421,9 +423,10 @@ export class CorpusMemberDigestMismatchError extends TaggedError(
 }> {}
 
 /**
- * A stored document AST carried vocabulary this reader does not declare:
- * a block role, a block kind, or an inline kind. The read served the
- * document with those degraded (see `persistedAstDegradations` in
+ * A stored document AST carried vocabulary this reader does not declare
+ * (a block role, a block kind, or an inline kind) or head matter after the
+ * body. The read served the document with those degraded (see
+ * `persistedAstDegradations` and `headMatterOrderDegradations` in
  * `@stll/legal-ast/document-ast`); this is telemetry only, so the row is
  * visible: either a writer newer than this reader, or a row written past
  * the ingestion boundary that needs repair.
@@ -590,14 +593,12 @@ export class WorkflowIntegrationError extends TaggedError(
   cause?: unknown;
 }> {}
 
-/** Post-generation OOXML structural violations. */
-export class OoxmlValidationError extends TaggedError("OoxmlValidationError")<{
+/** The documents of one request cannot fit its model, even trimmed. */
+export class DocumentTooLargeError extends TaggedError(
+  "DocumentTooLargeError",
+)<{
   message: string;
-  violations: {
-    rule: string;
-    message: string;
-    element?: string;
-  }[];
+  budgetBytes: number;
 }> {}
 
 /** Optimistic-lock failure inside a transaction. */
@@ -605,18 +606,6 @@ export class ConcurrentModificationError extends TaggedError(
   "ConcurrentModificationError",
 )<{
   message: string;
-}> {}
-
-/** DOCX template block-directive structural errors. */
-export class TemplateDirectiveError extends TaggedError(
-  "TemplateDirectiveError",
-)<{
-  message: string;
-  errors: {
-    message: string;
-    paragraphIndex: number;
-    directive: string;
-  }[];
 }> {}
 
 type AdapterFetchErrorOptions = {

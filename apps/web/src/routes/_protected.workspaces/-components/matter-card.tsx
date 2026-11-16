@@ -6,6 +6,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 import { FileIcon } from "@stll/ui/icons";
 import { IdentityText } from "@stll/ui/identity-text";
@@ -15,6 +16,7 @@ import {
   PreviewCardPopup,
   PreviewCardTrigger,
 } from "@stll/ui/preview-card";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
@@ -32,6 +34,8 @@ import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import type { Workspace } from "@/lib/workspaces/types";
 import { toMatterCardDragData } from "@/routes/_protected.workspaces/-components/matter-client-drop.logic";
+
+import { matterCardPreviewEnabled } from "./matter-card.logic";
 
 type OverviewData = NonNullable<
   Awaited<
@@ -68,7 +72,7 @@ export const MatterCard = ({
 
   const previewQuery = useQuery({
     ...overviewOptions(workspace.id),
-    enabled: previewEnabled,
+    enabled: matterCardPreviewEnabled(workspace.status, previewEnabled),
   });
   const previewView = queryView(previewQuery);
   const preview = previewView.type === "items" ? previewView.items : undefined;
@@ -121,6 +125,7 @@ export const MatterCard = ({
         name: workspace.name,
         color: workspace.color,
         client: workspace.client,
+        isArchived: workspace.status === WORKSPACE_STATUS.archived,
       }}
     >
       {({ rename, menuOpen }) => (
@@ -157,7 +162,7 @@ export const MatterCard = ({
             {/* Line 1: name + reference */}
             <div className="flex items-center gap-2">
               <h2
-                className="min-w-0 flex-1 overflow-hidden text-sm font-semibold text-ellipsis whitespace-pre"
+                className="min-w-0 flex-1 overflow-hidden text-sm font-semibold whitespace-pre"
                 dir="auto"
               >
                 {rename.status === "editing" ? (
@@ -200,7 +205,7 @@ export const MatterCard = ({
             {!hideClientName &&
               (workspace.client ? (
                 <Link
-                  className="text-muted-foreground hover:text-foreground relative z-10 -mt-1 truncate text-xs hover:underline"
+                  className="text-muted-foreground hover:text-foreground relative z-10 -mt-1 min-w-0 text-xs hover:underline"
                   onClick={(e) => e.stopPropagation()}
                   params={{ contactId: workspace.client.id }}
                   to="/contacts/$contactId"
@@ -208,15 +213,15 @@ export const MatterCard = ({
                   <IdentityText>{workspace.client.displayName}</IdentityText>
                 </Link>
               ) : (
-                <span className="text-muted-foreground -mt-1 truncate text-xs italic">
+                <TruncatedText className="text-muted-foreground -mt-1 text-xs italic">
                   {t("workspaces.parties.personalLabel")}
-                </span>
+                </TruncatedText>
               ))}
 
             {/* Line 2: tasks/items + deadline (left) | avatars + last active (right) */}
             <div className="flex items-center justify-between gap-2 text-xs">
               <div className="text-muted-foreground flex min-w-0 items-center gap-1.5">
-                <span className="truncate">
+                <TruncatedText>
                   {(() => {
                     if (workspace.openTaskCount > 0) {
                       return t("workspaces.tasksCount", {
@@ -230,13 +235,13 @@ export const MatterCard = ({
                     }
                     return t("workspaces.noItems");
                   })()}
-                </span>
+                </TruncatedText>
                 {deadline && (
                   <>
                     <span>·</span>
-                    <span className={cn("truncate", deadline.className)}>
+                    <TruncatedText className={deadline.className}>
                       {deadline.label}
-                    </span>
+                    </TruncatedText>
                   </>
                 )}
               </div>
@@ -363,11 +368,11 @@ const PreviewPopupContent = ({
       <div className="min-w-0 flex-1">
         {(preview.documentCount > 0 || preview.taskCount > 0) && (
           <div className="mb-2 flex gap-1">
-            <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
+            <div className="bg-muted flex-1 rounded-sm px-2 py-1 text-center text-xs tabular-nums">
               {t("workspaces.documentsCount", { count: preview.documentCount })}
             </div>
             {preview.taskCount > 0 && (
-              <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
+              <div className="bg-muted flex-1 rounded-sm px-2 py-1 text-center text-xs tabular-nums">
                 {t("workspaces.tasksCount", { count: preview.taskCount })}
               </div>
             )}

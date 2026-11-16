@@ -256,9 +256,9 @@ describe("delete-version chain-of-custody guard", () => {
     > = {
       "handlers/entities/delete.ts": [
         {
-          anchor: "inArray(entities.id, body.entityIds)",
+          anchor: "inArray(entities.id, deletionEntityIds)",
           reason:
-            "Whole-entity delete GC: enumerates every version (incl. tombstoned) to collect S3 file refs to release; sees no field content.",
+            "Whole-entity delete GC: enumerates every version (incl. tombstoned) of the deletion tree to collect S3 file refs to release; sees no field content.",
         },
       ],
       "handlers/workspaces/read-overview-activity.query.ts": [
@@ -302,6 +302,20 @@ describe("delete-version chain-of-custody guard", () => {
             "A newer tombstone invalidates a legacy extraction's cached provenance.",
           reason:
             "Window-cache provenance reads only the newest version ID across tombstones; matching it to the admitted live current version prevents a rollback from reusing stale extracted text.",
+        },
+      ],
+      "handlers/entities/copy-utils.ts": [
+        {
+          anchor: "movedVersionRows(sourceWorkspaceId, sourceIds)",
+          reason:
+            "A move carries every version, tombstones included: its limit check and row lock read exactly the rows the move snapshot carries, as IDs and counts only, and serve no content.",
+        },
+      ],
+      "lib/entity-versions/insert-entity-version.ts": [
+        {
+          anchor: "tombstoned version moves with its tombstone",
+          reason:
+            "A move carries each version's verification code with it, a tombstoned version's included, so the code keeps resolving to nothing on the target; reads ID and code only under FOR UPDATE.",
         },
       ],
       "mcp/document-tools.ts": [
@@ -467,6 +481,11 @@ describe("delete-version chain-of-custody guard", () => {
       string,
       { anchor: string; reason: string }
     > = {
+      "lib/entity-versions/insert-entity-version.ts": {
+        anchor: "verificationCode: null",
+        reason:
+          "A move clears the codes it just read and locked FOR UPDATE, tombstoned versions included, because each code travels with its version; it touches verificationCode only.",
+      },
       "lib/entity-versions/compute-version-diff.ts": {
         anchor: "diffWordsAdded",
         reason:

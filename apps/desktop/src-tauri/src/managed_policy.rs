@@ -53,7 +53,9 @@ impl ManagedPolicy {
       .copied()
       .filter(|feature| match feature {
         DesktopFeature::ActivityTimeline => self.activity_disabled,
-        DesktopFeature::LocalAgents => false,
+        DesktopFeature::Dictation
+        | DesktopFeature::DictationCloud
+        | DesktopFeature::LocalAgents => false,
       })
       .collect()
   }

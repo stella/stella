@@ -179,7 +179,11 @@
 #v(16pt)
 
 // Payment block with the payment QR code (SPAYD, PAY by square or ZBP).
-#if data.payment != none {
+#if data.payment != none and data.payment.status == "settled" {
+  block(breakable: false)[#data.payment.statement]
+}
+
+#if data.payment != none and data.payment.status == "due" {
   block(breakable: false, grid(
     columns: if data.payment.qrSvg != none { (1fr, data.payment.qrWidthMm * 1mm) } else { (1fr,) },
     gutter: 16pt,

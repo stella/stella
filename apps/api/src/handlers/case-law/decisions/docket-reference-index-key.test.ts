@@ -85,7 +85,8 @@ const familyOf = (entry: string) => {
 
 describe("the docket a query reads is keyed as the stored docket", () => {
   test("every reader spelling's family keys as the filed docket's citation key", () => {
-    fc.assert(
+    assertProperty(
+      "every reader spelling's family keys as the filed docket's citation key",
       fc.property(
         docketArbitrary.chain((docket) =>
           readerSpelling(docket).map((entry) => ({ docket, entry })),
@@ -97,7 +98,7 @@ describe("the docket a query reads is keyed as the stored docket", () => {
           expect(keyOf(intent.family), entry).toBe(stored);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -105,7 +106,8 @@ describe("the docket a query reads is keyed as the stored docket", () => {
     // A publisher's document with no key of its own keeps its tail on the
     // stored docket (`6 Tdo 1/2021- I.`); its key differs from the file's,
     // and the lookup reads it all the same.
-    fc.assert(
+    assertProperty(
+      "a member stored with a part numeral is read under its file's keys",
       fc.property(
         docketArbitrary,
         fc.constantFrom("- ", "-", " - ", " – ", "– ", "/", " / ", ", ", " ,"),
@@ -121,7 +123,7 @@ describe("the docket a query reads is keyed as the stored docket", () => {
           expect(familyOf(stored).family).toBe(filed(docket));
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -129,7 +131,8 @@ describe("the docket a query reads is keyed as the stored docket", () => {
     // However the stored docket spaces the dash, its key is whatever the
     // ingest key function makes of it; the lookup's spellings for the same
     // printed sheet are keyed by that same function.
-    fc.assert(
+    assertProperty(
+      "a member stored with its sheet is read under the key ingestion gave it",
       fc.property(
         docketArbitrary,
         fc.integer({ min: 1, max: 9999 }),
@@ -142,7 +145,7 @@ describe("the docket a query reads is keyed as the stored docket", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

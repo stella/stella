@@ -103,6 +103,23 @@ export const resolveDecisionModel = (
   return client === null ? null : { ...client, keySource: "instance" };
 };
 
+/**
+ * Whether a metered decision over the organization's customer data can
+ * reach a model: its own, or the instance's for an organization that runs on
+ * the instance's models. An organization with its own generative keys is
+ * never charged an instance-funded decision (`decide.ts`), so the instance's
+ * model does not count for it.
+ */
+export const hasCustomerDecisionModel = (
+  orgAIConfig: OrgAIConfig | null,
+  resolveModel: typeof resolveDecisionModel = resolveDecisionModel,
+): boolean => {
+  const model = resolveModel(orgAIConfig, "customer");
+  return (
+    model !== null && !(orgAIConfig !== null && model.keySource === "instance")
+  );
+};
+
 type DecisionModelProbeResult =
   { valid: true } | { valid: false; error: string };
 

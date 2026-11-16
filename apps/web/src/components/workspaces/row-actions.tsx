@@ -15,11 +15,11 @@ import {
   ArchiveIcon,
   DownloadIcon,
   DuplicateIcon,
+  EditPagesIcon,
   EllipsisVerticalIcon,
   EyeIcon,
   FileDownIcon,
   FileOutputIcon,
-  FilePenLineIcon,
   FileTextIcon,
   FolderPlusIcon,
   FolderSyncIcon,
@@ -47,6 +47,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
@@ -790,16 +791,17 @@ export const RowActions = ({
     }
 
     if (desktopEditLockState === "locked-by-me") {
-      const requested = await Result.tryPromise(async () =>
-        unwrapApiResponse(
-          await api
-            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            ["desktop-edit-sessions"].release.post({
-              entityId: toSafeId<"entity">(file.entityId),
-              propertyId: toSafeId<"property">(file.propertyId),
-            }),
-        ),
-      );
+      const requested = await Result.tryPromise(async () => {
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(workspaceId),
+        });
+        return unwrapApiResponse(
+          await entitiesApi["desktop-edit-sessions"].release.post({
+            entityId: toSafeId<"entity">(file.entityId),
+            propertyId: toSafeId<"property">(file.propertyId),
+          }),
+        );
+      });
       if (Result.isError(requested)) {
         analytics.captureError(requested.error, {
           fingerprintKey: "RowActions.handleReleaseLock:failure",
@@ -829,12 +831,16 @@ export const RowActions = ({
       // Resolves false on an error response (e.g. no active session), which
       // forces the release.
       requestTakeover: async () => {
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["desktop-edit-sessions"]["request-takeover"].post({
-            entityId: toSafeId<"entity">(file.entityId),
-            propertyId: toSafeId<"property">(file.propertyId),
-          });
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(workspaceId),
+        });
+
+        const response = await entitiesApi["desktop-edit-sessions"][
+          "request-takeover"
+        ].post({
+          entityId: toSafeId<"entity">(file.entityId),
+          propertyId: toSafeId<"property">(file.propertyId),
+        });
         return !response.error;
       },
       forceTakeover: forceTakeoverWithFeedback,
@@ -1467,9 +1473,12 @@ export const RowOcrMenuActions = ({
                     {...capabilityProps}
                   >
                     <ScanTextIcon />
-                    <BidiText as="span" className="max-w-64 truncate">
+                    <TruncatedText
+                      className="max-w-64"
+                      render={<BidiText as="span" />}
+                    >
                       {source.fileName}
-                    </BidiText>
+                    </TruncatedText>
                   </MenuItem>
                 )}
               </CapabilityAction>
@@ -1665,7 +1674,7 @@ export const RowFeatureMenuActions = ({
         )}
       {onEditPages !== undefined && (
         <MenuItem onClick={onEditPages}>
-          <FilePenLineIcon />
+          <EditPagesIcon />
           {t("workspaces.pdf.pageEditor.editPages")}
         </MenuItem>
       )}
@@ -1859,9 +1868,12 @@ const RowFileOperationsMenu = ({
                 <MenuSub key={source.fieldId}>
                   <MenuSubTrigger>
                     <ScanTextIcon />
-                    <BidiText as="span" className="max-w-64 truncate">
+                    <TruncatedText
+                      className="max-w-64"
+                      render={<BidiText as="span" />}
+                    >
                       {source.fileName}
-                    </BidiText>
+                    </TruncatedText>
                   </MenuSubTrigger>
                   <MenuSubPopup>{renderOcrExport(source)}</MenuSubPopup>
                 </MenuSub>

@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import english from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
 import type { MatterActivityItem } from "@/lib/workspaces/queries";
 
 import {
   activityDayKey,
+  CHANGED_FIELD_LABEL_KEYS,
   expandActivityGroupsForList,
   groupActivityItems,
   resolveSelectedActivityGroup,
@@ -39,6 +41,7 @@ type ItemOptions = {
   action?: MatterActivityItem["action"];
   activityAt?: string;
   changedFields?: MatterActivityItem["changedFields"];
+  detail?: MatterActivityItem["detail"];
   performer?: MatterActivityItem["performer"];
   runId: string | null;
   target?: Partial<MatterActivityItem["target"]>;
@@ -50,6 +53,7 @@ const item = (
     action = "update",
     activityAt = "2026-07-30T12:00:00.000Z",
     changedFields = [],
+    detail = { type: "none" },
     performer = { name: "Review agent", type: "agent" },
     runId,
     target,
@@ -60,6 +64,7 @@ const item = (
   approval: { status: "not_required", user: null },
   category: "documents",
   changedFields,
+  detail,
   id: toSafeId<"auditLog">(id),
   performer,
   runId,
@@ -145,6 +150,14 @@ describe("groupActivityItems", () => {
         runId: null,
       }),
     ];
+
+    const linkRow = item("6", {
+      activityAt: "2026-07-30T12:00:40.000Z",
+      detail: { change: "added", linkedName: "Lease.pdf", type: "taskLink" },
+      performer: user,
+      runId: null,
+    });
+    expect(groupActivityItems([linkRow, ...updates])).toHaveLength(2);
 
     const folded = groupActivityItems(updates);
     expect(folded).toHaveLength(1);
@@ -679,6 +692,15 @@ describe("feed labels", () => {
       expect(key === "workspaces.overview.activity.targets.automation").toBe(
         kind === "automation",
       );
+    }
+
+    for (const key of Object.values(CHANGED_FIELD_LABEL_KEYS)) {
+      expect(key.startsWith("workspaces.overview.activity.fields.")).toBe(true);
+    }
+    for (const label of Object.values(
+      english.workspaces.overview.activity.fields,
+    )) {
+      expect(label).toBe(label.toLowerCase());
     }
 
     const actionLabels = Object.values(ROW_ACTION_LABEL_KEYS);

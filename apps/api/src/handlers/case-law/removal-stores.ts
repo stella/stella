@@ -6,6 +6,7 @@ import {
   caseLawCitationDoctrineReviews,
   caseLawCitationReviews,
   caseLawCitations,
+  caseLawDecisionAnchorRedirects,
   caseLawDecisionCitationStats,
   caseLawDecisionCitationStatsState,
   caseLawDecisionIdentifiers,
@@ -38,6 +39,15 @@ export const CASE_LAW_REMOVAL_STORES = {
       await tx
         .delete(caseLawDecisionIdentifiers)
         .where(eq(caseLawDecisionIdentifiers.decisionId, id)),
+  },
+  // Anchor ids are derived from the erased document's text.
+  case_law_decision_anchor_redirects: {
+    type: "remove",
+    erase: async (tx, id) =>
+      // audit: skip — derived rows belong to the canonical redaction audit.
+      await tx
+        .delete(caseLawDecisionAnchorRedirects)
+        .where(eq(caseLawDecisionAnchorRedirects.decisionId, id)),
   },
   case_law_decision_judges: {
     type: "remove",

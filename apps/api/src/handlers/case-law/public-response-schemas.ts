@@ -42,7 +42,12 @@ import {
   publisherCensusSchema,
 } from "@/api/lib/case-law/completeness-census-contract";
 import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
+import { CASE_LAW_COVERAGE_PARTS } from "@/api/lib/case-law/coverage-parts";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
+import {
+  populationCountsFreshnessSchema,
+  populationCountsReadFreshnessSchema,
+} from "@/api/lib/case-law/population-count-freshness";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import { LIMITS } from "@/api/lib/limits";
@@ -141,6 +146,7 @@ const facet = v.object({
   count: v.number(),
 } satisfies Record<keyof FacetBucket, v.GenericSchema>);
 export const decisionFacetsResponseSchema = v.object({
+  countsFreshness: v.optional(populationCountsReadFreshnessSchema),
   country: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawFacetLimit)),
   court: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawFacetLimit)),
   year: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawYearFacetLimit)),
@@ -180,6 +186,7 @@ const courts = v.pipe(
   v.maxLength(LIMITS.caseLawFacetLimit + 1),
 );
 export const corpusStatusResponseSchema = v.object({
+  countsFreshness: v.optional(populationCountsReadFreshnessSchema),
   decisions: v.number(),
   updatedAt: date,
   health: v.enum(CASE_LAW_COVERAGE_HEALTH),
@@ -311,6 +318,17 @@ const sourceCompleteness = v.union([
   v.object({ state: v.literal("not-measured-yet") }),
   v.object({ state: v.literal("not-counted-yet") }),
 ]);
+/**
+ * The parts a refresh could not read. A summary stored before the field
+ * existed was only ever stored complete, so its absence reads as none.
+ */
+const unreadParts = v.optional(
+  v.pipe(
+    v.array(v.picklist(CASE_LAW_COVERAGE_PARTS)),
+    v.maxLength(CASE_LAW_COVERAGE_PARTS.length),
+  ),
+  [],
+);
 const countryCoverage = {
   // An enum record keeps the literal union; a mapped array would widen it.
   country: v.enum(
@@ -323,6 +341,7 @@ const countryCoverage = {
   addedLastWeek: numberOrNull,
   completeness,
   censusVerdict: v.picklist(CENSUS_VERDICTS),
+  unreadParts,
   sources: v.pipe(
     v.array(
       v.object({
@@ -330,6 +349,13 @@ const countryCoverage = {
         name: boundedString(2048),
         publicHomeUrl: boundedString(8192),
         health: v.enum(CASE_LAW_COVERAGE_HEALTH),
+        edition: v.variant("type", [
+          v.object({ type: v.literal("live") }),
+          v.object({
+            type: v.literal("snapshot"),
+            snapshotDate: boundedString(10),
+          }),
+        ]),
         lastSyncAt: date,
         decisionYearFrom: numberOrNull,
         decisionYearTo: numberOrNull,
@@ -419,7 +445,10 @@ const provisionProcessingState = v.union([
 ]);
 
 const coverageSnapshotEntries = {
+  // Existing stored summaries predate the population fold metadata.
+  countsFreshness: v.optional(populationCountsFreshnessSchema),
   generatedAt: boundedString(128),
+  unreadParts,
   provisionProcessing: v.pipe(
     v.array(
       v.object({

@@ -26,6 +26,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
@@ -59,7 +60,7 @@ if (!databaseUrl || !runPostgresTests) {
               .delete(numberSeries)
               .where(eq(numberSeries.organizationId, orgId)),
         );
-        await db.delete(organization).where(eq(organization.id, orgId));
+        await deleteOrganizationsForTest(db, [orgId]);
         await db.delete(user).where(eq(user.id, userId));
       });
       await db.insert(organization).values({

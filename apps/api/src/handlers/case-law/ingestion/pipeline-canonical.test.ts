@@ -7,6 +7,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCorpusUploadIntents,
+  caseLawDecisionFallbackIdentities,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
@@ -38,6 +39,7 @@ import {
   partialObservationFromMetadata,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,
@@ -79,6 +81,8 @@ const unwrapPackFooter = (
 
 const events: string[] = [];
 const insertedRows: Record<string, unknown>[] = [];
+/** Fallback identity aliases the row writes reserved, read back as owners. */
+const reservedFallbackAliases: Record<string, unknown>[] = [];
 const updatedDecisionRows: Record<string, unknown>[] = [];
 
 /** Every pack the batches under test handed to the transfer. */
@@ -175,6 +179,7 @@ afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
   events.length = 0;
   insertedRows.length = 0;
+  reservedFallbackAliases.length = 0;
   updatedDecisionRows.length = 0;
   transferredPacks.length = 0;
   persistedAdapterKey = "canonical-unregistered-fixture";
@@ -238,6 +243,10 @@ const scopedDb: ScopedDb = async (callback) => {
       // drizzle's relational API returns undefined for a miss.
       caseLawDecisions: {
         findFirst: async () => await Promise.resolve(existingDecision),
+        findMany: async () =>
+          await Promise.resolve(
+            existingDecision === undefined ? [] : [existingDecision],
+          ),
       },
     },
     select: (selection: Record<string, unknown>) => ({
@@ -261,6 +270,11 @@ const scopedDb: ScopedDb = async (callback) => {
           }
           if (table === caseLawDecisionIdentifiers) {
             return [];
+          }
+          if (table === caseLawDecisionFallbackIdentities) {
+            return reservedFallbackAliases.map((alias) => ({
+              id: alias["decisionId"],
+            }));
           }
           if (table === caseLawDecisions && "citationKey" in selection) {
             return existingDecision
@@ -313,6 +327,8 @@ const scopedDb: ScopedDb = async (callback) => {
             insertedRows.push(...inserted);
           } else if (table === caseLawCorpusUploadIntents) {
             events.push("intent-reserve");
+          } else if (table === caseLawDecisionFallbackIdentities) {
+            reservedFallbackAliases.push(...inserted);
           }
         }
         const returning = async () => {
@@ -1076,7 +1092,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+        Result.ok({
+          decisions: [decision],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        }),
       );
 
     const result = await runIngestionPipeline({
@@ -1123,7 +1143,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+        Result.ok({
+          decisions: [decision],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        }),
       );
 
     const result = await runIngestionPipeline({

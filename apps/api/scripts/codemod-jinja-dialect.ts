@@ -20,12 +20,11 @@
  *   bun apps/api/scripts/codemod-jinja-dialect.ts --check <path>
  */
 
-import JSZip from "jszip";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as slimdom from "slimdom";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import {
   legacyLoopAlias,
   markerPattern,
@@ -257,15 +256,15 @@ export const migrateMarkerText = (
 
 /** Rewrite every content part of a `.docx`, preserving runs. */
 export const migrateDocx = async (bytes: Buffer): Promise<Buffer | null> => {
-  const zip = await JSZip.loadAsync(bytes);
+  const zip = await ZipArchive.read(bytes);
   let changed = false;
 
-  for (const partName of templateContentPartPaths(Object.keys(zip.files))) {
-    const entry = zip.file(partName);
+  for (const partName of templateContentPartPaths(zip.paths())) {
+    const entry = zip.entry(partName);
     if (!entry) {
       continue;
     }
-    const xml = await entry.async("string");
+    const xml = await entry.text();
     if (!xml.includes("{{")) {
       continue;
     }
@@ -281,13 +280,13 @@ export const migrateDocx = async (bytes: Buffer): Promise<Buffer | null> => {
       partChanged = true;
     }
     if (partChanged) {
-      writeZipEntry(zip, partName, slimdom.serializeToWellFormedString(doc));
+      zip.set(partName, slimdom.serializeToWellFormedString(doc));
       changed = true;
     }
   }
 
   return changed
-    ? Buffer.from(await zip.generateAsync({ type: "nodebuffer" }))
+    ? Buffer.from(Buffer.from(await zip.generate({ compression: "store" })))
     : null;
 };
 

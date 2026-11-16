@@ -1,3 +1,4 @@
+import type { BullMqWorkerHost } from "./bullmq-queue-hosts";
 import { DATABASE_COMPONENT_KEYS } from "./db-components";
 
 const DEPLOY_TASK = {
@@ -15,6 +16,44 @@ export const DEPLOY_TASK_ADDRESSES = {
   [DEPLOY_TASK.caseLawReplay]:
     "module.ecs.aws_ecs_task_definition.case_law_replay",
 } as const satisfies Record<DeployTask, string>;
+
+/**
+ * The GPU OCR task carries the same document-processing worker beside its OCR
+ * engine. It is a location only: it is not a `DeployTask`, because it does not
+ * carry the API settings every `DeployTask` must.
+ */
+const OCR_WORKER_TASK_ADDRESS = "module.ecs.aws_ecs_task_definition.ocr_worker";
+
+type WorkerLocation = { address: string; container: string };
+
+/**
+ * Where each worker host runs; a host is deployed when any one location holds
+ * its container. The file-derivative worker is a sidecar of the API task.
+ * Total over `BullMqWorkerHost`, so a new host cannot ship without a
+ * deployment decision.
+ */
+export const DEPLOY_WORKER_HOSTS = {
+  api: [{ address: DEPLOY_TASK_ADDRESSES[DEPLOY_TASK.api], container: "api" }],
+  "file-derivative-worker": [
+    {
+      address: DEPLOY_TASK_ADDRESSES[DEPLOY_TASK.api],
+      container: "file-derivative-worker",
+    },
+  ],
+  "document-processing-worker": [
+    {
+      address: DEPLOY_TASK_ADDRESSES[DEPLOY_TASK.documentProcessing],
+      container: "document-processing",
+    },
+    {
+      address: OCR_WORKER_TASK_ADDRESS,
+      container: "document-processing-worker",
+    },
+  ],
+} as const satisfies Record<
+  BullMqWorkerHost,
+  readonly [WorkerLocation, ...WorkerLocation[]]
+>;
 
 const ALL_TASKS = Object.values(DEPLOY_TASK);
 

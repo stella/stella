@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
   assembleAtFindokDecision,
@@ -12,7 +11,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+} from "@/api/lib/legal-search/ingestion-types";
 
 import { PublisherPageError } from "./publisher-page";
 
@@ -48,9 +50,9 @@ const manifestResponse = (
   );
 
 const detailResponse = async (): Promise<Response> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "Gesamt/152257.Entscheidungstext.xml", await xmlFixture());
-  return new Response(await zip.generateAsync({ type: "uint8array" }));
+  const zip = new ZipArchive();
+  zip.set("Gesamt/152257.Entscheidungstext.xml", await xmlFixture());
+  return new Response(await zip.generate({ compression: "store" }));
 };
 
 const reconciliationOf = (adapter: ReturnType<typeof createAtFindokAdapter>) =>
@@ -200,9 +202,9 @@ describe("Austrian Findok adapter", () => {
     "<Segmente><Segment>",
   ]) {
     it(`isolates malformed or unexpected decision XML ${xml}`, async () => {
-      const zip = new JSZip();
-      writeZipEntry(zip, "Gesamt/152257.Entscheidungstext.xml", xml);
-      const bytes = await zip.generateAsync({ type: "uint8array" });
+      const zip = new ZipArchive();
+      zip.set("Gesamt/152257.Entscheidungstext.xml", xml);
+      const bytes = await zip.generate({ compression: "store" });
       let requests = 0;
       const adapter = createAtFindokAdapter({
         now: () => new Date("2026-08-12T00:00:00Z"),
@@ -240,11 +242,11 @@ describe("Austrian Findok adapter", () => {
   });
 
   it("retains the listing when a complete archive has no decision XML", async () => {
-    const zip = new JSZip();
-    writeZipEntry(zip, "Gesamt/152257.Rechtssaetze.xml", "<root/>");
+    const zip = new ZipArchive();
+    zip.set("Gesamt/152257.Rechtssaetze.xml", "<root/>");
     const responses = [
       manifestResponse(),
-      new Response(await zip.generateAsync({ type: "uint8array" })),
+      new Response(await zip.generate({ compression: "store" })),
     ];
     const adapter = createAtFindokAdapter({
       now: () => new Date("2026-08-12T00:00:00Z"),
@@ -307,6 +309,27 @@ describe("Austrian Findok adapter", () => {
 
     const verified = await adapter.fetchPage(page.nextCursor, {});
     expect(verified.unwrap().decisions).toEqual([]);
+    expect(verified.unwrap().publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+  });
+
+  it("does not report a cached empty manifest as a publisher answer", async () => {
+    let requests = 0;
+    const adapter = createAtFindokAdapter({
+      now: () => new Date("2026-08-12T00:00:00Z"),
+      request: async () => {
+        requests += 1;
+        return manifestResponse([]);
+      },
+      sleep: async () => {},
+    });
+    expect((await adapter.fetchPage(null, {})).unwrap().publisherRequest).toBe(
+      PUBLISHER_REQUEST.ANSWERED,
+    );
+    await adapter.getTotalCount(new AbortController().signal);
+    const before = requests;
+    const page = (await adapter.fetchPage(null, {})).unwrap();
+    expect(requests).toBe(before);
+    expect(page.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
   });
 
   it("reports the two publisher inventories as one source total", async () => {

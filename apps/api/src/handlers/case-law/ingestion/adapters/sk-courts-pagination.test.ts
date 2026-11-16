@@ -12,7 +12,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const PAGE_SIZE = 100;
 
@@ -37,11 +40,10 @@ type Endpoint = {
 };
 
 const mockListEndpoint = (): Endpoint => {
-  const originalFetch = globalThis.fetch;
   const requestedPages: number[] = [];
 
-  globalThis.fetch = asFetchMock(
-    (input: string | URL | Request): Promise<Response> => {
+  testFetchState.set(
+    asFetchMock((input: string | URL | Request): Promise<Response> => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.pathname.includes("/v1/sud/")) {
         return Promise.resolve(
@@ -81,13 +83,13 @@ const mockListEndpoint = (): Endpoint => {
           { headers: { "Content-Type": "application/json" } },
         ),
       );
-    },
+    }),
   );
 
   return {
     requestedPages,
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
   };
 };

@@ -1,12 +1,16 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { withBillingRead } from "@stll/permissions";
+
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { readMatterInvoicePrefill } from "@/api/lib/billing/invoice-prefill-operation";
+import { invoicePrefillMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 const prefillInvoice = createSafeHandler(
   {
+    moneyResponse: invoicePrefillMoneyResponse,
     contract: "patch",
     description:
       "Prepare a new invoice for a matter without creating it: the matter's " +
@@ -16,9 +20,12 @@ const prefillInvoice = createSafeHandler(
       "the default seller profile (or sellerProfileId); the buyer copied from " +
       "the matter's client; the VAT treatment and rate the lines would get, " +
       "each with where it came from; and the organization's VAT rate periods, " +
-      "since billing fewer items can move the supply date into another rate. " +
+      "since billing fewer items can move the supply date into another rate; " +
+      "plus issueBlockers, what would stop invoices.transition from finalizing " +
+      "the new invoice (invoice_seller_profile_missing, " +
+      "invoice_number_series_missing; empty when it can be issued). " +
       "Pass the chosen ids to invoices.create, which applies the same prefill.",
-    permissions: { invoice: ["create"] },
+    permissions: withBillingRead({ invoice: ["create"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {

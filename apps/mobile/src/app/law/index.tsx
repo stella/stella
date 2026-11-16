@@ -18,6 +18,8 @@ import { useAppColors } from "@/theme";
 const LawScreen = () => {
   const colors = useAppColors();
   const { state } = useSession();
+  const session =
+    state.status === "signed-in" ? state.source.session() : undefined;
 
   return (
     <HeaderSearchProvider activeTab="law">
@@ -25,8 +27,8 @@ const LawScreen = () => {
       <View
         style={[screenStyles.screen, { backgroundColor: colors.background }]}
       >
-        {state.status === "signed-in" ? (
-          <CaseLawList serverUrl={state.source.session().serverUrl} />
+        {session !== undefined ? (
+          <CaseLawList serverUrl={session.serverUrl} />
         ) : null}
       </View>
     </HeaderSearchProvider>

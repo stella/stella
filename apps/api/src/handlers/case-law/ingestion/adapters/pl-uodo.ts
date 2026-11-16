@@ -1,3 +1,6 @@
+// parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -77,9 +80,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -1339,8 +1342,9 @@ const assembleAuthorityDecision = ({
   const decisionDate = dayOf(row.time);
   const sourceUrl = documentPageUrl(urn);
   const resource = body?.resource ?? plUodoBodyResourceOf(row);
+  // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
   const documentUrl =
-    resource?.ref === undefined ? undefined : bodyPdfUrl(urn, resource.ref);
+    resource?.ref !== undefined ? bodyPdfUrl(urn, resource.ref) : undefined;
 
   // A parse failure is not the decision's failure: the body is stored
   // verbatim below, so its text is recoverable by re-parsing what was kept.
@@ -1861,13 +1865,29 @@ const metadataField = (key: string): SourceFieldDisposition => ({
   target: { type: "metadata", key },
 });
 
+type PlUodoPublisherRecord = Readonly<
+  Record<PlUodoSourceField | keyof PlUodoRow, unknown>
+>;
+
 const PL_UODO_SOURCE_FIELDS = {
-  type: excludedSourceField(
-    "the record format's own name; every record the search returns carries the same value",
-  ),
-  version: excludedSourceField(
-    "the version of the record format, not a fact about the document",
-  ),
+  type: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["type"],
+      reason: "The publisher record format and revision are retained verbatim",
+    },
+  },
+  version: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["version"],
+      reason: "The publisher record format and revision are retained verbatim",
+    },
+  },
   id: metadataField("portalEventId"),
   time: {
     disposition: "stored",
@@ -1942,7 +1962,10 @@ const PL_UODO_SOURCE_FIELDS = {
   "resources{}.size": metadataField("resources"),
   "resources{}.checksum": metadataField("resources"),
   body: { disposition: "stored", target: { type: "document" } },
-} as const satisfies Record<PlUodoSourceField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof PlUodoPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** The structures inside a record whose own keys the inventory names. */
 const NESTED_OBJECTS = ["publication", "publicator"] as const;
@@ -2373,7 +2396,11 @@ const plUodoFetchPage = async (
   const encoded = encodePlUodoCursor(position);
   // Parked on a day that has not closed: this cycle has nothing to ask.
   if (position.parkedOn !== undefined && position.parkedOn >= todayUtc()) {
-    return Result.ok({ decisions: [], nextCursor: encoded });
+    return Result.ok({
+      decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
+      nextCursor: encoded,
+    });
   }
   const listing: Record<string, unknown>[] = [];
   let url = "";
@@ -2423,6 +2450,7 @@ const plUodoFetchPage = async (
               },
             }),
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: encoded,
       });
     }
@@ -2503,6 +2531,7 @@ const plUodoFetchPage = async (
           },
         }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlUodoCursor(
       reachedTip ? { ...next, parkedOn: todayUtc() } : next,
     ),

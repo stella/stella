@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The case DOM is shared for one assembly and cleanup happens on one owned clone; stored fields, HTML and AST output are unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own retention self-check changes no stored field or AST.
 /**
@@ -16,9 +17,10 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -37,6 +39,8 @@ import {
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
+import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   type MetadataUrlDefect,
   type SafeHref,
@@ -319,7 +323,7 @@ const RULING_TAB_ID = /^sprawaForm:tabView:dok_(?<id>\d+)$/u;
 
 /** Parse and index one case page. The returned value belongs to that assembly. */
 export const parsePlTkPage = (html: string): ParsedPlTkPage => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const scope = $('[id="sprawaForm:tabView"]');
   const containers = [
     ...byId($, METRYKA_ID).toArray().filter(isTag),
@@ -878,7 +882,22 @@ export const readPlTkRuling = (
   const panel = panelOf($, tab, documentId);
   const text = byId($, `tekst_${documentId}`);
   const note = collapse(
-    visibleHtmlText(tab.find('div[style="margin:5px"] > span').first()),
+    visibleHtmlText(
+      tab
+        .find("div > span")
+        .filter((_, el) => {
+          const parent = $(el).parent().get(0);
+          return (
+            parent !== undefined &&
+            inlineStyleValue(parent, (property, value) =>
+              property === "margin" && value.length > 0
+                ? { value: value === "5px" }
+                : undefined,
+            )?.value === true
+          );
+        })
+        .first(),
+    ),
   );
   const word = metadataUrlOf(
     byId($, `sprawaForm:tabView:pobierzDoc${documentId}`).attr("href"),
@@ -1056,7 +1075,9 @@ const walkBlockInlines = (
   while (end > start && isBlankEdge(inlines[end - 1])) {
     end -= 1;
   }
-  return collapseHtmlWhitespace(inlines.slice(start, end));
+  return readInlineLetterSpacing(
+    collapseHtmlWhitespace(inlines.slice(start, end)),
+  );
 };
 
 const FOOTNOTE_ANCHOR = /^tresc-przypisu-(?<id>.+)$/u;

@@ -48,4 +48,24 @@ export const GENERATED_ENTRIES: readonly GeneratedCatalogueInput[] = [
   { manifest: nativeToolWebSearch, icon: null },
 ];
 
+export const GENERATED_NATIVE_TOOL_SLUGS = [
+  "anonymize",
+  "ares",
+  "boe",
+  "brreg",
+  "companies-house",
+  "create-docx",
+  "denue",
+  "edgar",
+  "gcis",
+  "infosoud",
+  "krs",
+  "orsr",
+  "prh",
+  "recherche-entreprises",
+  "rpo",
+  "vies",
+  "web-search",
+] as const;
+
 export const GENERATED_RECOMMENDED = recommended;

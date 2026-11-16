@@ -5,6 +5,7 @@ import fc from "fast-check";
 
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -37,8 +38,14 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import createHostedSetup from "./create-hosted-setup";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const testFetchState = createTestFetch();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -122,21 +129,23 @@ const installFakeProvider = (
 ): FakeProvider => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = Object.assign(
-    async (input: Parameters<typeof globalThis.fetch>[0]) => {
-      const url = requestUrl(input);
-      if (new URL(url).origin !== new URL(PROVIDER_BASE_URL).origin) {
-        return panic(`Unexpected outbound request to ${url}`);
-      }
-      calls += 1;
-      return respond(calls);
-    },
-    { preconnect: originalFetch.preconnect },
+  testFetchState.set(
+    Object.assign(
+      async (input: Parameters<typeof globalThis.fetch>[0]) => {
+        const url = requestUrl(input);
+        if (new URL(url).origin !== new URL(PROVIDER_BASE_URL).origin) {
+          return panic(`Unexpected outbound request to ${url}`);
+        }
+        calls += 1;
+        return respond(calls);
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
   return {
     calls: () => calls,
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
   };
 };
@@ -168,17 +177,20 @@ const withHostedEnv = async (fn: () => Promise<void>) => {
     HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS:
       env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS,
   };
-  env.FEATURE_USAGE = true;
-  env.HOSTED_USAGE_PROVIDER = "polar";
-  env.HOSTED_USAGE_PROVIDER_API_VERSION = DEFAULT_POLAR_API_VERSION;
-  env.HOSTED_USAGE_PROVIDER_API_KEY = "provider_fixture_key";
-  env.HOSTED_USAGE_PROVIDER_BASE_URL = PROVIDER_BASE_URL;
-  env.HOSTED_USAGE_WEBHOOK_SECRET = WEBHOOK_SECRET;
-  env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = undefined;
+  testState.setConfig("FEATURE_USAGE", true);
+  testState.setConfig("HOSTED_USAGE_PROVIDER", "polar");
+  testState.setConfig(
+    "HOSTED_USAGE_PROVIDER_API_VERSION",
+    DEFAULT_POLAR_API_VERSION,
+  );
+  testState.setConfig("HOSTED_USAGE_PROVIDER_API_KEY", "provider_fixture_key");
+  testState.setConfig("HOSTED_USAGE_PROVIDER_BASE_URL", PROVIDER_BASE_URL);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET", WEBHOOK_SECRET);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS", undefined);
   try {
     await fn();
   } finally {
-    Object.assign(env, previous);
+    testState.patchConfig(previous);
   }
 };
 
@@ -408,9 +420,9 @@ if (!databaseUrl || !runPostgresTests) {
           } finally {
             provider.restore();
             releaseProvider.resolve(undefined);
-            await setup.db
-              .delete(organization)
-              .where(eq(organization.id, fixture.organizationId));
+            await deleteOrganizationsForTest(setup.db, [
+              fixture.organizationId,
+            ]);
             await setup.db
               .delete(user)
               .where(inArray(user.id, [fixture.userId, secondOwnerId]));
@@ -512,9 +524,9 @@ if (!databaseUrl || !runPostgresTests) {
                     expect(claims.at(0)?.claimId).not.toBe(staleClaimId);
                   } finally {
                     provider.restore();
-                    await setup.db
-                      .delete(organization)
-                      .where(eq(organization.id, fixture.organizationId));
+                    await deleteOrganizationsForTest(setup.db, [
+                      fixture.organizationId,
+                    ]);
                     await setup.db
                       .delete(user)
                       .where(eq(user.id, fixture.userId));

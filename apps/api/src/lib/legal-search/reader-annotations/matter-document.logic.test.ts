@@ -3,6 +3,10 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { MATTER_DOCUMENT_ANNOTATION_REFUSALS } from "@stll/api-contract/legal-reader-annotations";
+import {
+  placeReaderMarks,
+  readerTextQuoteContext,
+} from "@stll/legal-ast/reader-text-quote";
 import { assertProperty } from "@stll/property-testing";
 
 import { pdfPageTextSha256 } from "@/api/lib/files/pdf-page-text";
@@ -35,10 +39,54 @@ describe("a span on a matter document's page", () => {
         startOffset: start,
         endOffset: start + 17,
         quote: "deliver the goods",
+        ...readerTextQuoteContext(PAGE_TWO, {
+          startOffset: start,
+          endOffset: start + 17,
+        }),
       },
     ]);
     expect(placed.value.pageTextSha256ByAnchorId.get("page-2")).toBe(
       pdfPageTextSha256(PAGE_TWO),
+    );
+  });
+
+  test("a placed PDF mark follows its quoted passage after a reparse while retaining its original page digest", () => {
+    const quote = "deliver the goods";
+    const startOffset = PAGE_TWO.indexOf(quote);
+    const placed = placeDocumentSpans({
+      pages: new Map([[2, PAGE_TWO]]),
+      spans: [
+        {
+          pageNumber: 2,
+          startOffset,
+          endOffset: startOffset + quote.length,
+          quote,
+        },
+      ],
+    }).unwrap();
+    const span = placed.spans.at(0);
+    expect(span).toBeDefined();
+    if (span === undefined) {
+      return;
+    }
+    const current = `Summary: deliver the goods promptly.\n${PAGE_TWO.replaceAll("\n", " ")}`;
+    const relocated = placeReaderMarks(
+      [span],
+      [{ anchorId: "page-3", text: current }],
+    );
+    expect(relocated.orphaned).toEqual([]);
+    expect(relocated.placed).toHaveLength(1);
+    expect(relocated.placed.at(0)).toMatchObject({
+      blockAnchorId: "page-3",
+      startOffset: current.lastIndexOf(quote),
+      endOffset: current.lastIndexOf(quote) + quote.length,
+      quote,
+    });
+    expect(placed.pageTextSha256ByAnchorId.get("page-2")).toBe(
+      pdfPageTextSha256(PAGE_TWO),
+    );
+    expect(placed.pageTextSha256ByAnchorId.get("page-2")).not.toBe(
+      pdfPageTextSha256(current),
     );
   });
 

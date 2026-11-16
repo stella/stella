@@ -1,9 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { Temporal } from "@stll/time";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // A DOM for this file only: the hook's contract is about what a committed
 // render reads before and after its timer fires.

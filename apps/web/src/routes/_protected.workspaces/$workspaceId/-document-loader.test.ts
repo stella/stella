@@ -1,8 +1,12 @@
 import { QueryClient } from "@tanstack/react-query";
-import { afterEach, beforeAll, expect, mock, test } from "bun:test";
+import { afterEach, expect, mock, test } from "bun:test";
 
-beforeAll(() => {
-  process.env["VITE_API_URL"] ??= "https://api.example.test";
+import { createTestState } from "@stll/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.beforeAll(() => {
+  testState.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 });
 
 const originalFetch = globalThis.fetch;

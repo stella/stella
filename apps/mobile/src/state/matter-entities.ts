@@ -1,5 +1,8 @@
-import type { Result } from "better-result";
+import { Result } from "better-result";
 import * as v from "valibot";
+
+import { documentFormat } from "@stll/api-contract/document-format";
+import type { DocumentFormat } from "@stll/api-contract/document-format";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -30,6 +33,22 @@ const entityRowSchema = v.object({
   createdBy: v.nullish(v.string()),
   /** The folder it sits in, or none at the matter's top level. */
   parentId: v.nullish(v.string()),
+  /** The one column asked for: the documents column, whose file names the type. */
+  fields: v.optional(
+    v.array(
+      v.object({
+        propertyId: v.string(),
+        content: v.nullish(
+          v.looseObject({
+            type: v.string(),
+            mimeType: v.optional(v.string()),
+            fileName: v.optional(v.string()),
+          }),
+        ),
+      }),
+    ),
+    [],
+  ),
 });
 
 const entityPageSchema = v.object({
@@ -37,7 +56,29 @@ const entityPageSchema = v.object({
   nextCursor: v.nullable(v.string()),
 });
 
-export type MatterEntity = v.InferOutput<typeof entityRowSchema>;
+type EntityRow = v.InferOutput<typeof entityRowSchema>;
+
+/**
+ * A row as the screen shows it: a document carries its file's format (its
+ * mark, and its tag such as "PDF" or "DOCX"), read from the matter's
+ * documents column.
+ */
+export type MatterEntity = Omit<EntityRow, "fields"> & {
+  readonly format?: DocumentFormat | undefined;
+};
+
+const toMatterEntity = (
+  { fields, ...row }: EntityRow,
+  fileFieldId: string | null,
+): MatterEntity => {
+  const file =
+    fileFieldId === null
+      ? undefined
+      : fields.find((field) => field.propertyId === fileFieldId)?.content;
+  return file?.type === "file"
+    ? { ...row, format: documentFormat(file.mimeType, file.fileName) }
+    : row;
+};
 
 export type KnownEntityKind = "folder" | "document" | "task";
 
@@ -45,7 +86,10 @@ export type KnownEntityKind = "folder" | "document" | "task";
 export const isKnownEntityKind = (kind: string): kind is KnownEntityKind =>
   kind === "folder" || kind === "document" || kind === "task";
 
-export type EntityPage = v.InferOutput<typeof entityPageSchema>;
+export type EntityPage = {
+  readonly items: MatterEntity[];
+  readonly nextCursor: string | null;
+};
 
 /**
  * One page of a matter's documents, folders and tasks, in the matter's own
@@ -56,25 +100,36 @@ export const listMatterEntities = async ({
   source,
   workspaceId,
   cursor,
+  fileFieldId,
 }: {
   readonly fetch: Fetch;
   readonly source: AccessTokenSource;
   readonly workspaceId: string;
   readonly cursor: string | null;
+  /** The matter's documents column, when known: the one column asked for. */
+  readonly fileFieldId: string | null;
 }): Promise<Result<EntityPage, ApiError>> =>
-  await requestApi({
-    fetch,
-    source,
-    path: entitiesPath(workspaceId),
-    schema: entityPageSchema,
-    body: {
-      limit: ENTITY_PAGE_SIZE,
-      excludedKinds: ["message", "link"],
-      // No property columns: the rows show built-in fields only.
-      fieldMode: "visible",
-      fieldIds: [],
-      ...(cursor === null ? {} : { cursor }),
-    },
+  await Result.gen(async function* () {
+    const page = yield* Result.await(
+      requestApi({
+        fetch,
+        source,
+        path: entitiesPath(workspaceId),
+        schema: entityPageSchema,
+        body: {
+          limit: ENTITY_PAGE_SIZE,
+          excludedKinds: ["message", "link"],
+          // The built-in fields, and the documents column for each file's type.
+          fieldMode: "visible",
+          fieldIds: fileFieldId === null ? [] : [fileFieldId],
+          ...(cursor === null ? {} : { cursor }),
+        },
+      }),
+    );
+    return Result.ok({
+      items: page.items.map((row) => toMatterEntity(row, fileFieldId)),
+      nextCursor: page.nextCursor,
+    });
   });
 
 /** Pages joined in order; a row a later page repeats keeps its first place. */

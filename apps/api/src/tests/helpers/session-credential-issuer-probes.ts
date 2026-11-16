@@ -15,6 +15,7 @@ import {
 } from "@/api/lib/desktop-edit-sessions";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { createPdfSigningToken } from "@/api/lib/files/pdf-signing/sessions";
+import { createTimerActivityActionKeySecret } from "@/api/lib/push/timer-activity-devices";
 import {
   presignUploadUrl,
   resetAwsS3ClientForTesting,
@@ -125,6 +126,10 @@ export const refusedCredentialIssuerProbes = {
     await expectRefusal(() =>
       createPdfSigningToken({ userId, organizationId }),
     ),
+  timerActivity: async ({ userId, organizationId }) =>
+    await expectRefusal(() =>
+      createTimerActivityActionKeySecret({ userId, organizationId }),
+    ),
   signedUpload: async ({ userId, organizationId }) =>
     await withSignerSentinel(async () => {
       const result = await presignUploadUrl({
@@ -173,7 +178,7 @@ export const refusedCredentialIssuerProbes = {
       subscribeUser({
         userId,
         organizationId,
-        sessionId: "synthetic-session-probe",
+        holder: { id: "synthetic-session-probe", kind: "session" },
         signal: new AbortController().signal,
       }),
     );

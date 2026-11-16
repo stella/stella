@@ -342,8 +342,12 @@ test("application clients declare their class through configured factories", () 
   for (const file of new Bun.Glob(
     "{apps,packages}/*/{src,scripts}/**/*.{ts,tsx}",
   ).scanSync({ cwd: root, onlyFiles: true })) {
+    // Generated sources are rewritten by build steps that can run beside this
+    // test, so a file listed by the glob may be gone when it is read; none of
+    // them constructs a client by hand.
     if (
       file.includes("/__fixtures__/") ||
+      file.includes("/generated/") ||
       /\.(?:test|spec)\.[cm]?tsx?$/u.test(file) ||
       file.includes("/tests/")
     ) {

@@ -131,14 +131,14 @@ await runScriptWithErrorOutput(async () => {
   const enqueueBackfillRow = (
     batch: CorpusPackBatch,
     row: BackfillRow,
-  ): void => {
+  ): ReturnType<CorpusPackBatch["enqueue"]> => {
     const ownerPredicate = and(
       eq(caseLawDecisions.id, row.id),
       isNull(caseLawDecisions.redactedAt),
       sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${row.contentHash}`,
       timestampMatchesCasToken(caseLawDecisions.updatedAt, row.updatedAtToken),
     );
-    batch.enqueue({
+    return batch.enqueue({
       decisionId: row.id,
       jurisdiction: row.country,
       payload: {
@@ -275,7 +275,12 @@ await runScriptWithErrorOutput(async () => {
       // its own fence once that pack is durable.
       const batch = openCorpusPackBatch({ scopedDb: ingestionDb });
       for (const row of chunk) {
-        enqueueBackfillRow(batch, row);
+        const enqueued = enqueueBackfillRow(batch, row);
+        // A row whose stored record does not validate never joins the batch,
+        // so it has no batch outcome: it is counted as failed here.
+        if (Result.isError(enqueued)) {
+          recordOutcome(row.id, { type: "failed", error: enqueued.error });
+        }
       }
       const settled = await batch.flush();
       if (Result.isError(settled)) {

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The mobile app compiles a create-document draft with @stll/docx-core, the compiler the web uses for the same tool, so a chat paused on a draft continues from the phone and the draft can be shown there; the package is already a catalog dependency of the web app."
+}

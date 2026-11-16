@@ -1,13 +1,13 @@
-//! Bounded Accessibility reads for explicitly enabled local activity capture.
+//! Bounded Accessibility reads for explicitly enabled local activity capture
+//! and for the dictation context a speaker chose to share with cleanup.
 
 use core_foundation::{
-  base::{CFType, CFTypeRef, TCFType},
+  base::{CFIndex, CFRange, CFType, CFTypeRef, TCFType},
   boolean::CFBoolean,
   dictionary::{CFDictionary, CFDictionaryRef},
-  string::{CFString, CFStringRef},
-  url::{CFURL, CFURLCopyFileSystemPath, CFURLCreateWithString, kCFURLPOSIXPathStyle},
+  string::{CFString, CFStringGetCharacters, CFStringRef},
 };
-use std::ptr;
+use std::{ffi::c_void, ptr};
 
 const AX_SUCCESS: i32 = 0;
 const AX_TIMEOUT_SECONDS: f32 = 0.15;
@@ -27,7 +27,14 @@ unsafe extern "C" {
     value: *mut CFTypeRef,
   ) -> i32;
   fn AXUIElementSetMessagingTimeout(element: CFTypeRef, timeout: f32) -> i32;
+  fn AXValueGetTypeID() -> usize;
+  fn AXValueGetType(value: CFTypeRef) -> u32;
+  fn AXValueGetValue(value: CFTypeRef, the_type: u32, value_ptr: *mut c_void) -> u8;
 }
+
+/// `kAXValueTypeCFRange` in `AXValue.h`.
+const AX_VALUE_TYPE_CF_RANGE: u32 = 4;
+const SECURE_TEXT_FIELD: &str = "AXSecureTextField";
 
 pub struct FocusedWindowDetails {
   pub window_title: Option<String>,
@@ -113,36 +120,23 @@ fn local_document_path(value: &str) -> Option<String> {
   if !authority.is_empty() && !authority.eq_ignore_ascii_case("localhost") {
     return None;
   }
-  if remainder[slash..].contains(['?', '#']) || value.chars().any(char::is_control) {
+  // A raw backslash is ambiguous: URL parsing reads it as a separator, so the
+  // path would name another document. A literal one arrives encoded (%5C).
+  if remainder[slash..].starts_with("//")
+    || remainder[slash..].contains(['?', '#', '\\'])
+    || value.chars().any(char::is_control)
+  {
     return None;
   }
-  let string = CFString::new(value);
-  // SAFETY: CFURL reads a live CFString, with no base URL. Its nullable Create
-  // result is checked before ownership is wrapped and released by CFURL.
-  let reference = unsafe {
-    CFURLCreateWithString(ptr::null_mut(), string.as_concrete_TypeRef(), ptr::null())
-  };
-  if reference.is_null() {
-    return None;
-  }
-  // SAFETY: The non-null reference was returned by CFURLCreateWithString.
-  let url = unsafe { CFURL::wrap_under_create_rule(reference) };
-  // A CFString preserves embedded NULs for validation; converting through a
-  // C filesystem buffer would truncate an encoded NUL before we can reject it.
-  // SAFETY: The live file URL is owned above; this nullable Copy result is
-  // checked and owned before inspecting its type or contents.
-  let path = owned_type(unsafe {
-    CFURLCopyFileSystemPath(url.as_concrete_TypeRef(), kCFURLPOSIXPathStyle).cast()
-  })?
-  .downcast::<CFString>()?
-  .to_string();
-  if !std::path::Path::new(&path).is_absolute()
+  let path = tauri::Url::parse(value).ok()?.to_file_path().ok()?;
+  let path = path.to_str()?;
+  if !std::path::Path::new(path).is_absolute()
     || path.starts_with("//")
     || path.chars().any(char::is_control)
   {
     return None;
   }
-  Some(path)
+  Some(path.to_string())
 }
 
 /// Reads one focused window without prompting or logging captured values.
@@ -171,9 +165,111 @@ pub fn focused_window_details(pid: i32) -> Option<FocusedWindowDetails> {
   })
 }
 
+/// Where the insertion point of a text element is: the start of its
+/// selection, in UTF-16 units, as Accessibility reports it.
+fn selection_start(element: &CFType) -> Option<CFIndex> {
+  let value = attribute(element, "AXSelectedTextRange")?;
+  // SAFETY: The framework's type-ID query has no arguments or ownership effects.
+  if value.type_of() != unsafe { AXValueGetTypeID() } {
+    return None;
+  }
+  // SAFETY: `value` is a live AXValue, checked above; the query only reads it.
+  if unsafe { AXValueGetType(value.as_CFTypeRef()) } != AX_VALUE_TYPE_CF_RANGE {
+    return None;
+  }
+  let mut range = CFRange {
+    location: 0,
+    length: 0,
+  };
+  // SAFETY: A CFRange AXValue, checked above, copies exactly one CFRange into
+  // the stack value the pointer names, which outlives the call.
+  let copied = unsafe {
+    AXValueGetValue(
+      value.as_CFTypeRef(),
+      AX_VALUE_TYPE_CF_RANGE,
+      ptr::from_mut(&mut range).cast(),
+    )
+  };
+  (copied != 0 && range.location >= 0).then_some(range.location)
+}
+
+/// Up to `max_characters` characters right before the insertion point of the
+/// focused text element of process `pid`, read without prompting or logging.
+/// `None` for a password field, an element without text or an insertion
+/// point, and whenever a read fails: the caller then goes on without it.
+pub fn text_before_cursor(pid: i32, max_characters: usize) -> Option<String> {
+  if pid <= 0 || max_characters == 0 || !accessibility_trusted() {
+    return None;
+  }
+  // SAFETY: A positive process ID is accepted by AX; its Create result is owned
+  // below. A process exit yields failed attribute reads, not pointer misuse.
+  let application = owned_type(unsafe { AXUIElementCreateApplication(pid) })?;
+  if !set_timeout(&application) {
+    return None;
+  }
+  let element = attribute(&application, "AXFocusedUIElement")?;
+  // SAFETY: The framework's type-ID query has no arguments or ownership effects.
+  if element.type_of() != unsafe { AXUIElementGetTypeID() } || !set_timeout(&element) {
+    return None;
+  }
+  // A password field never gives its text away, whatever else it reports.
+  for name in ["AXRole", "AXSubrole"] {
+    if string_attribute(&element, name).ok()?.as_deref() == Some(SECURE_TEXT_FIELD) {
+      return None;
+    }
+  }
+  let end = selection_start(&element)?;
+  let value = attribute(&element, "AXValue")?.downcast::<CFString>()?;
+  if end == 0 || end > value.char_len() {
+    return None;
+  }
+  // A character takes at most two UTF-16 units.
+  let wanted = CFIndex::try_from(max_characters.saturating_mul(2))
+    .ok()?
+    .min(end);
+  let mut units = vec![0_u16; usize::try_from(wanted).ok()?];
+  // SAFETY: The range lies inside the string (0 <= end - wanted < end <=
+  // length) and the buffer holds exactly `wanted` units for the copy.
+  unsafe {
+    CFStringGetCharacters(
+      value.as_concrete_TypeRef(),
+      CFRange {
+        location: end - wanted,
+        length: wanted,
+      },
+      units.as_mut_ptr(),
+    );
+  }
+  // A surrogate pair the cut splits decodes to nothing, not a replacement.
+  let text: String = char::decode_utf16(units).filter_map(Result::ok).collect();
+  let count = text.chars().count();
+  Some(
+    text
+      .chars()
+      .skip(count.saturating_sub(max_characters))
+      .collect(),
+  )
+}
+
 #[cfg(test)]
 mod tests {
   use super::local_document_path;
+
+  #[test]
+  fn documents_reject_every_percent_encoded_ascii_control() {
+    for byte in (0..=31).chain(std::iter::once(127)) {
+      for encoded in [format!("%{byte:02X}"), format!("%{byte:02x}")] {
+        assert_eq!(
+          local_document_path(&format!("file:///Matter{encoded}.docx")),
+          None,
+        );
+      }
+    }
+    assert_eq!(
+      local_document_path("file:///Matter%2500.docx").as_deref(),
+      Some("/Matter%00.docx"),
+    );
+  }
 
   #[test]
   fn documents_accept_only_local_file_urls() {
@@ -185,6 +281,10 @@ mod tests {
       local_document_path("file://localhost/Volumes/Matters/Matter.docx").as_deref(),
       Some("/Volumes/Matters/Matter.docx")
     );
+    assert_eq!(
+      local_document_path("file:///Users/me/Matter%5Cnotes.docx").as_deref(),
+      Some("/Users/me/Matter\\notes.docx")
+    );
     for value in [
       "https://example.test/Matter.docx",
       "file://server/share/Matter.docx",
@@ -194,7 +294,9 @@ mod tests {
       "file:///Matter%00.docx",
       "file:///Matter%0A.docx",
       "file:////server/share/Matter.docx",
+      "file:///%2Fserver/share/Matter.docx",
       "file:relative.docx",
+      "file:///Users/me/Matter\\notes.docx",
     ] {
       assert_eq!(local_document_path(value), None);
     }

@@ -164,7 +164,12 @@ export const createSocialIdentityValidation =
         "verified_primary_email",
         "verified_secondary_email",
       ]
-        .filter((claim) => profile?.[claim] === undefined)
+        .filter((claim) => {
+          if (profile === undefined) {
+            return true;
+          }
+          return profile[claim] === undefined;
+        })
         .join(","),
     });
     return undefined;

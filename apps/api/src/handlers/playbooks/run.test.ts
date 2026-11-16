@@ -37,6 +37,7 @@ const opened = {
     definitionSnapshot: {
       name: "Vendor agreement review",
       positions: { version: 3, items: [] },
+      scope: null,
     },
   },
   materializedPropertyIds: [propertyId],

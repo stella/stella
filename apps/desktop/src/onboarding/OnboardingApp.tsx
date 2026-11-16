@@ -9,11 +9,14 @@ import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
 import { ActivityStep } from "./ActivityStep";
 import { ConnectStep } from "./ConnectStep";
+import { DictationStep } from "./DictationStep";
 import { DoneStep } from "./DoneStep";
 import { FixView } from "./FixView";
 import { HowItWorksStep } from "./HowItWorksStep";
+import { IntroduceDictationView } from "./IntroduceDictationView";
 import { IntroduceView } from "./IntroduceView";
 import { reportOnboardingFailure } from "./onboarding-telemetry";
 import {
@@ -21,6 +24,7 @@ import {
   ONBOARDING_CHANGED_EVENT,
 } from "./onboarding-types";
 import type {
+  IntroducedFeature,
   OnboardingNavigation,
   OnboardingSnapshot,
   OnboardingStep,
@@ -138,6 +142,18 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
     }
   };
 
+  /** Settings hold what an introduction leaves out; the introduction is
+   *  done once they open. */
+  const openSettingsAndDismiss = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke("onboarding_open_settings"),
+    );
+    if (Result.isError(result)) {
+      reportOnboardingFailure();
+    }
+    await close("onboarding_dismiss");
+  };
+
   return (
     <main
       className={cn(
@@ -145,6 +161,7 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
         DESKTOP_PLATFORM === "mac" ? "pt-10" : "pt-6",
       )}
     >
+      <WindowDragRegion />
       {flowContent()}
     </main>
   );
@@ -176,17 +193,7 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
               />
             );
           case "introduce":
-            return (
-              <IntroduceView
-                activityPermissions={flow.snapshot.activityPermissions}
-                onDismiss={() => {
-                  void close("onboarding_dismiss");
-                }}
-                onOpenActivity={() => {
-                  void close("onboarding_open_activity");
-                }}
-              />
-            );
+            return introduction(flow.snapshot, flow.snapshot.mode.feature);
           case "tour":
             break;
           default:
@@ -204,6 +211,40 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
       default:
         flow satisfies never;
         return panic("Unknown onboarding flow state.");
+    }
+  }
+
+  function introduction(
+    snapshot: OnboardingSnapshot,
+    feature: IntroducedFeature,
+  ) {
+    const onDismiss = () => {
+      void close("onboarding_dismiss");
+    };
+    switch (feature) {
+      case "activityTimeline":
+        return (
+          <IntroduceView
+            activityPermissions={snapshot.activityPermissions}
+            onDismiss={onDismiss}
+            onOpenActivity={() => {
+              void close("onboarding_open_activity");
+            }}
+          />
+        );
+      case "dictation":
+        return (
+          <IntroduceDictationView
+            dictationPermissions={snapshot.dictationPermissions}
+            onDismiss={onDismiss}
+            onOpenSettings={() => {
+              void openSettingsAndDismiss();
+            }}
+          />
+        );
+      default:
+        feature satisfies never;
+        return panic("Unknown introduced feature.");
     }
   }
 
@@ -230,6 +271,8 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
         return <PermissionsStep {...props} />;
       case "tryIt":
         return <TryItStep {...props} />;
+      case "dictation":
+        return <DictationStep {...props} />;
       case "done":
         return (
           <DoneStep

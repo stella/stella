@@ -123,7 +123,29 @@ describe("the rest of a replay's command line", () => {
         "--court",
         "X",
       ),
-    ).toBe("--celex and --court are mutually exclusive replay scopes");
+    ).toBe(
+      "--celex, --court and --parser-version are mutually exclusive replay scopes",
+    );
+    expect(
+      rejection("--adapter", "sk-us", "--parser-version", "12", "--court", "X"),
+    ).toBe(
+      "--celex, --court and --parser-version are mutually exclusive replay scopes",
+    );
+  });
+
+  test("a parser version narrows the scope to the decisions it wrote", () => {
+    expect(
+      parsed("--adapter", "sk-us", "--parser-version", "12").scope,
+    ).toEqual({ type: "parser-version", parserVersion: 12 });
+    expect(
+      parsed("--adapter", "sk-us", "--parser-version", "32767").scope,
+    ).toEqual({ type: "parser-version", parserVersion: 32_767 });
+    // The column is a smallint: a larger version names no stored row.
+    for (const value of ["0", "12a", "-1", "1.5", "32768"]) {
+      expect(rejection("--adapter", "sk-us", "--parser-version", value)).toBe(
+        `--parser-version must be an integer from 1 to 32767, got: ${value}`,
+      );
+    }
   });
 
   test("a flag whose value is the next flag has no value", () => {

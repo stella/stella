@@ -91,7 +91,7 @@ const runStore = async (store: FakeStore) => {
           typeof init.body !== "string" &&
           !(init.body instanceof URLSearchParams)
         ) {
-          throw new Error("Expected a JSON publish request body");
+          throw new TypeError("Expected a JSON publish request body");
         }
         expect(JSON.parse(String(init.body))).toEqual({
           publishType: "DEFAULT_PUBLISH",

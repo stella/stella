@@ -97,6 +97,10 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-raw-overflow-scroll/no-raw-overflow-scroll",
     ],
     [
+      "no-raw-context-menu(no-raw-context-menu)",
+      "no-raw-context-menu/no-raw-context-menu",
+    ],
+    [
       "no-imported-class-constant(no-imported-class-constant)",
       "no-imported-class-constant/no-imported-class-constant",
     ],
@@ -111,6 +115,10 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
     [
       "no-computed-key-record-assignment(no-computed-key-record-assignment)",
       "no-computed-key-record-assignment/no-computed-key-record-assignment",
+    ],
+    [
+      "exhaustive-union-map(exhaustive-union-map)",
+      "exhaustive-union-map/exhaustive-union-map",
     ],
     [
       "no-direct-status-set(no-direct-status-set)",
@@ -154,10 +162,12 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
   expect([...DESIGN_LINT_TRACKED_PLUGINS]).toEqual([
     "shadcn",
     "no-raw-overflow-scroll",
+    "no-raw-context-menu",
     "no-imported-class-constant",
     "require-bounded-request-schema",
     "no-unbounded-response-body",
     "no-computed-key-record-assignment",
+    "exhaustive-union-map",
     "no-direct-status-set",
     "require-polite-publisher-fetch",
     "no-native-ui",

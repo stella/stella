@@ -44,7 +44,7 @@ import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
 import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 import type { SafeId } from "@/lib/safe-id";
 
-export const DIRECTION_TITLE = {
+const DIRECTION_TITLE = {
   incoming: "caseLaw.viewer.citedBy",
   outgoing: "caseLaw.viewer.cites",
 } as const satisfies Record<CitationDirection, TranslationKey>;
@@ -76,26 +76,28 @@ const CitationDirectionSection = ({
 
   return (
     <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">
-      <button
+      <Button
         aria-expanded={open}
-        className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-start text-xs font-medium"
+        className="group/plain flex w-full"
         onClick={() => setOpen(!open)}
-        type="button"
+        variant="plain"
       >
-        <DirectionalIcon
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-          flip={!open}
-          icon={ChevronRightIcon}
-        />
-        <span>{t(DIRECTION_TITLE[direction])}</span>
-        <span className="text-muted-foreground font-normal">
-          {capped
-            ? `${format.number(totalCitations(counts))}+`
-            : t("caseLaw.citation.decisionCount", {
-                count: totalCitations(counts),
-              })}
+        <span className="text-foreground-strong-muted group-hover/plain:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium">
+          <DirectionalIcon
+            className={cn("size-3.5 transition-transform", open && "rotate-90")}
+            flip={!open}
+            icon={ChevronRightIcon}
+          />
+          <span>{t(DIRECTION_TITLE[direction])}</span>
+          <span className="text-muted-foreground font-normal">
+            {capped
+              ? `${format.number(totalCitations(counts))}+`
+              : t("caseLaw.citation.decisionCount", {
+                  count: totalCitations(counts),
+                })}
+          </span>
         </span>
-      </button>
+      </Button>
       {capped ? (
         <p className="text-muted-foreground px-3 ps-8 pb-2 text-xs">
           {t("caseLaw.citation.partialSummary")}
@@ -172,7 +174,7 @@ const groupByTreatment = (
   return ordered;
 };
 
-export const CitationList = ({
+const CitationList = ({
   decision,
   decisionId,
   direction,

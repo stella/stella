@@ -70,6 +70,7 @@ const filter = (query: string, jurisdictionFilter = new Set<string>()) =>
   filterOnboardingCatalogueEntries({
     compareName,
     jurisdictionFilter,
+    localizedDescription: (entry) => entry.description,
     localizedName: (entry) => entry.slug,
     otherEntries: others,
     query,
@@ -81,6 +82,20 @@ describe("onboarding catalogue filtering", () => {
     expect(filter("  LEGAL ").map(({ slug }) => slug)).toEqual(["recommended"]);
     expect(filter("contract").map(({ slug }) => slug)).toEqual(["other"]);
     expect(filter("support").map(({ slug }) => slug)).toEqual(["universal"]);
+  });
+
+  test("finds an entry by the description the reader sees", () => {
+    const matches = filterOnboardingCatalogueEntries({
+      compareName,
+      jurisdictionFilter: new Set(),
+      localizedDescription: (entry) =>
+        entry.slug === "other" ? "Kontrola smluv" : entry.description,
+      localizedName: (entry) => entry.slug,
+      otherEntries: others,
+      query: "smluv",
+      recommendedEntries: recommended,
+    });
+    expect(matches.map(({ slug }) => slug)).toEqual(["other"]);
   });
 
   test("blank search keeps entries; jurisdiction scopes preserve universal entries", () => {
@@ -100,6 +115,7 @@ describe("onboarding catalogue filtering", () => {
       filterOnboardingCatalogueEntries({
         compareName,
         jurisdictionFilter: new Set(),
+        localizedDescription: (entry) => entry.description,
         localizedName: (entry) => entry.displayName,
         otherEntries: [
           {
@@ -146,6 +162,7 @@ describe("onboarding catalogue filtering", () => {
       filterOnboardingCatalogueEntries({
         compareName,
         jurisdictionFilter: new Set(),
+        localizedDescription: (entry) => entry.description,
         localizedName: (entry) => entry.slug,
         otherEntries: source,
         query,
@@ -225,6 +242,7 @@ describe("onboarding catalogue filtering", () => {
             filterOnboardingCatalogueEntries({
               compareName,
               jurisdictionFilter,
+              localizedDescription: (entry) => entry.description,
               localizedName,
               otherEntries,
               query,

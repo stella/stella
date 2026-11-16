@@ -200,3 +200,25 @@ error.constraint_name === ACTIVE_INDEX;`,
   });
   expect(findings.map(({ line }) => line)).toEqual([2]);
 });
+
+test("entry modules require exported constants for unique index dependencies", () => {
+  const source = `export default { type: "replacements", values: [{ replacementNames: ["${index.name}"] }] };`;
+  const options = {
+    file: "apps/api/src/db/online-migration-entries/replacements-example.ts",
+    indexes: [{ ...index, introducedBy: "20261016000000_prior" }],
+    newestMigration: index.introducedBy,
+  };
+  expect(
+    checkOnlineIndexDependencySource({ ...options, source }).map(
+      ({ reason }) => reason,
+    ),
+  ).toEqual(["raw index name; use the exported index constant"]);
+  const named = source.replace(
+    `"${index.name}"`,
+    "ONLINE_UNIQUE_INDEX_NAMES.CHAT_TURNS_ORG_RUN_ID_UIDX",
+  );
+  expect(named).not.toBe(source);
+  expect(
+    checkOnlineIndexDependencySource({ ...options, source: named }),
+  ).toEqual([]);
+});

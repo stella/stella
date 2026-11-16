@@ -10,8 +10,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { InvoiceComposer } from "@/components/billing/invoice-composer";
 import { usePermissions } from "@/hooks/use-permissions";
-import { authClient } from "@/lib/auth-client";
-import { roleOptions } from "@/lib/auth-queries";
+import { ensureMemberPermission } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -25,12 +24,11 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/invoices/new",
 )({
   beforeLoad: async ({ context, params }) => {
-    const role = await ensureRouteQueryData(context.queryClient, roleOptions);
     if (
-      !authClient.organization.checkRolePermission({
-        role,
-        permissions: { invoice: ["create"] },
-      })
+      !(await ensureMemberPermission({
+        queryClient: context.queryClient,
+        permissions: { invoice: ["create"], billing: ["read"] },
+      }))
     ) {
       redirect({
         to: "/workspaces/$workspaceId/invoices",

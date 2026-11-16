@@ -6,14 +6,15 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toDocumentReference } from "@/api/lib/document-reference";
 import {
+  type CarriedFieldColumns,
+  carriedFieldValues,
+} from "@/api/lib/entity-versions/field-clone-policy";
+import {
   reuseFileObjectWithinEntity,
   type WritableFileFieldContent,
 } from "@/api/lib/files/file-object-ids";
 
-type RevisionField = {
-  content: FieldContent;
-  propertyId: SafeId<"property">;
-};
+type RevisionField = CarriedFieldColumns;
 
 type CloneRevisionFieldsInput = {
   currentFields: RevisionField[];
@@ -99,19 +100,23 @@ export const cloneFieldsForRevision = ({
   replacementContent,
   workspaceId,
 }: CloneRevisionFieldsInput) =>
-  currentFields.map((field) => ({
-    ...(replacementFieldId &&
-      field.propertyId === propertyId &&
-      field.content.type === "file" && { id: replacementFieldId }),
-    content: contentForRevisionField({
-      field,
-      propertyId,
-      replacementContent,
-    }),
-    entityVersionId,
-    propertyId: field.propertyId,
-    workspaceId,
-  }));
+  currentFields.map((field) => {
+    const replaced =
+      field.propertyId === propertyId && field.content.type === "file";
+    return {
+      ...carriedFieldValues(field),
+      ...(replacementFieldId && replaced && { id: replacementFieldId }),
+      content: contentForRevisionField({
+        field,
+        propertyId,
+        replacementContent,
+      }),
+      // The replacement file is no run's outcome; every other cell keeps its own.
+      ...(replaced && { aiSettlement: null }),
+      entityVersionId,
+      workspaceId,
+    };
+  });
 
 type ContentForRevisionFieldOptions = {
   field: RevisionField;

@@ -21,7 +21,11 @@ export type CutGateCheck =
       readonly kind: "npm-publish-lag";
     }
   | {
-      /** main/heavy and main/pr-depth green on the base commit. */
+      /**
+       * main/heavy and main/pr-depth green on the base commit, or, when
+       * neither failed, a merge-group receipt covering them: the proof the
+       * release health check accepts for a main commit without an RC tag.
+       */
       readonly kind: "main-statuses";
     };
 
@@ -55,6 +59,16 @@ export const MAINTENANCE_CUT_GATES: readonly CutGate[] = [
     check: {
       kind: "command",
       command: ["bun", "scripts/check-deploy-env-contract.ts"],
+    },
+    overriddenByAllowUnprovenMain: false,
+  },
+  {
+    name: "desktop-support-floor",
+    source: "cut",
+    stage: "pre-cut",
+    check: {
+      kind: "command",
+      command: ["bun", "scripts/check-desktop-support-floor.ts"],
     },
     overriddenByAllowUnprovenMain: false,
   },

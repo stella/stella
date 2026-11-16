@@ -622,6 +622,7 @@ const selectedColumnOf = ({
       const selected = projection.properties.find(
         (property) =>
           property.type === "Property" &&
+          !property.computed &&
           !property.shorthand &&
           !property.method &&
           property.kind === "init" &&

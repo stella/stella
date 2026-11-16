@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import type { WithTimeoutScheduler } from "@stll/concurrency/with-timeout";
 import { ParameterStoreError, readParameter } from "@stll/parameter-store";
 
 import { envBase } from "@/api/env-base";
@@ -37,6 +38,7 @@ type CreateFeatureAccessGrantsOwnerOptions = {
   initial: FeatureAccessGrantsState;
   onRefreshFailure: (error: unknown) => void;
   source: FeatureAccessGrantSource;
+  scheduleTimeout?: WithTimeoutScheduler | undefined;
 };
 
 const isNewerParameterVersion = (
@@ -48,6 +50,7 @@ export const createFeatureAccessGrantsOwner = ({
   initial,
   onRefreshFailure,
   source,
+  scheduleTimeout,
 }: CreateFeatureAccessGrantsOwnerOptions) => {
   let current = initial;
   let failureReported = false;
@@ -74,6 +77,7 @@ export const createFeatureAccessGrantsOwner = ({
           {
             label: "feature_access.refresh",
             timeoutMs: FEATURE_ACCESS_REFRESH_TIMEOUT_MS,
+            scheduleTimeout,
           },
         ),
       catch: (error) => error,
@@ -177,12 +181,14 @@ const createSsmGrantSource = (
 type StartFeatureAccessGrantsRefreshOptions = {
   parameterName?: string;
   source?: FeatureAccessGrantSource;
+  scheduleTimeout?: WithTimeoutScheduler;
 };
 
 /** Loads configured grants before returning, then starts periodic refresh; null when off. */
 export const startFeatureAccessGrantsRefresh = async ({
   parameterName = envBase.API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME,
   source,
+  scheduleTimeout,
 }: StartFeatureAccessGrantsRefreshOptions = {}): Promise<
   (() => Promise<void>) | null
 > => {
@@ -200,6 +206,7 @@ export const startFeatureAccessGrantsRefresh = async ({
       });
     },
     source: source ?? createSsmGrantSource(parameterName),
+    scheduleTimeout,
   });
 
   await owner.refresh();

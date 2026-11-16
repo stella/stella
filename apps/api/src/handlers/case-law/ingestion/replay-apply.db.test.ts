@@ -1,9 +1,11 @@
+import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
   beforeAll,
   beforeEach,
+  describe,
   expect,
   test,
 } from "bun:test";
@@ -39,7 +41,7 @@ import {
 import { envBase } from "@/api/env-base";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
 import {
-  assemblePlKioDecision,
+  assemblePlKioDecision as uncheckedAssemblePlKioDecision,
   plKioAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { PL_KIO_DOCUMENT_REJECTION } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
@@ -48,6 +50,7 @@ import {
   skCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
+import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
   CASE_LAW_REPLAY_SCOPE,
   REPLAY_REJECTION_POLICY,
@@ -72,6 +75,8 @@ import {
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
+import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
@@ -93,13 +98,19 @@ import type {
 import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,
   rawSourcePayloadKey,
 } from "@/api/lib/legal-search/raw-source-storage";
+import { captureSkDocumentRaw } from "@/api/lib/legal-search/sk-document-raw";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { memorySkDocumentRawStorage } from "@/api/tests/helpers/sk-document-raw-storage";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
 
 // A writing replay, through the same `processDecision` a crawl feeds.
 //
@@ -1606,7 +1617,7 @@ test("a version bump that changes only a described column goes through the pipel
   await lease.release();
 });
 
-test("a row stored under an encoded docket replays to the decoded docket in place", async () => {
+test("captured PDF replay decodes legacy dockets while metadata-only rows retain their version", async () => {
   const sourceId = createSafeId<"caseLawSource">();
   await db.insert(caseLawSources).values({
     id: sourceId,
@@ -1621,10 +1632,43 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
     })?.sourceRaw ?? panic("legacy fixture stores no raw");
   const keyedId = createSafeId<"caseLawDecision">();
   const docketKeyedId = createSafeId<"caseLawDecision">();
+  const uncapturedId = createSafeId<"caseLawDecision">();
   const payloads = new Map([
     [keyedId, legacyPayloadFor("sk-guid-legacy")],
     [docketKeyedId, legacyPayloadFor(null)],
+    [uncapturedId, legacyPayloadFor("sk-guid-uncaptured")],
   ]);
+  const memory = memorySkDocumentRawStorage();
+  const pdf = PDF.create();
+  const page = pdf.addPage({ size: "letter" });
+  page.drawText("First paragraph of", { x: 72, y: 720, size: 12 });
+  page.drawText("the judgment.", { x: 72, y: 706, size: 12 });
+  page.drawText("Second paragraph of", { x: 72, y: 668, size: 12 });
+  page.drawText("the judgment.", { x: 72, y: 654, size: 12 });
+  const bytes = await pdf.save();
+  for (const id of [keyedId, docketKeyedId]) {
+    const raw = payloads.get(id) ?? panic("Legacy raw fixture missing");
+    // db-await-in-loop: capture each decision's PDF under its own durable identity.
+    const capture = (
+      await captureSkDocumentRaw({
+        sourceId,
+        decisionId: id,
+        window: openRawSourceWriteWindow(),
+        storedKey: null,
+        storedContentType: null,
+        inlineRaw: raw,
+        bytes,
+        signal: new AbortController().signal,
+        storage: memory.storage,
+        beforeRemoteEffect: async <T>(effect: () => Promise<T>) =>
+          await effect(),
+      })
+    ).unwrap("Legacy PDF capture must succeed");
+    payloads.set(
+      id,
+      new TextDecoder().decode(memory.objects.get(capture.sourceRawS3Key)),
+    );
+  }
   // The legacy key, or the content-addressed one the applied write moves the
   // row to; both name the decision.
   const payloadAt = (key: string) =>
@@ -1636,6 +1680,7 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
       [
         [keyedId, "sk-guid-legacy"],
         [docketKeyedId, null],
+        [uncapturedId, "sk-guid-uncaptured"],
       ] as const
     ).map(([id, sourceDocumentId]) => ({
       id,
@@ -1648,6 +1693,9 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
       sourceRawS3Key: `case-law/raw/legacy/${id}`,
       sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       sourceHash: "hash-before-decoding",
+      fulltext: RESTRUCTURED_TEXT,
+      documentAst: FLAT_AST,
+      sections: STORED_SECTIONS,
       parserVersion: legacyVersion,
       metadata: {},
     })),
@@ -1659,6 +1707,7 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
   if (lease === null) {
     throw new TypeError("Expected the source ingestion lease to be free");
   }
+  const beforeUncaptured = await storedDocumentOf(uncapturedId);
   const reparse =
     skCourtsAdapter.reparseStoredRaw ?? panic("adapter has no replay reader");
   const replay = async () =>
@@ -1669,7 +1718,9 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
       sourceLease: lease,
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: async (key) =>
-        await Promise.resolve(new TextEncoder().encode(payloadAt(key))),
+        await Promise.resolve(
+          memory.objects.get(key) ?? new TextEncoder().encode(payloadAt(key)),
+        ),
       bound: { type: "at-most", limit: 10 },
       pageSize: 10,
     });
@@ -1697,11 +1748,22 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
   expect(first.report.rejections["identity-mismatch"]).toBe(1);
   expect(await readRows()).toEqual({
     [docketKeyedId]: { caseNumber: "7C&#x2F;221/1991", version: legacyVersion },
+    [uncapturedId]: { caseNumber: "7C&#x2F;221/1991", version: legacyVersion },
     [keyedId]: {
       caseNumber: "7C/221/1991",
       version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
     },
   });
+
+  expect(
+    first.report.rejections[STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA],
+  ).toBe(1);
+  expect(await storedDocumentOf(uncapturedId)).toEqual(beforeUncaptured);
+  const captured = await storedDocumentOf(keyedId);
+  expect(captured?.fulltext).toContain(
+    "First paragraph of the judgment.\n\nSecond paragraph of the judgment.",
+  );
+  expect(captured?.documentAst).not.toEqual(FLAT_AST);
 
   // The migrated row now matches its payload exactly: a second run converges.
   const second = await replay();
@@ -1975,4 +2037,152 @@ test("replay updates exactly changed rows and produces content-free terminal res
   await db.execute(
     sql`DROP TRIGGER count_replay_decision_update ON case_law_decisions`,
   );
+});
+
+describe("a replay page writes its rows' payloads as one pack", () => {
+  /** Two rows of one source whose stored payloads re-parse to new text. */
+  const twoStaleRows = async () => {
+    const fixture = await replayConvergenceFixture("Body text before.");
+    const secondId = createSafeId<"caseLawDecision">();
+    await db
+      .update(caseLawDecisions)
+      .set({ parserVersion: 3, createdAt: new Date("2026-01-01T00:00:00Z") })
+      .where(eq(caseLawDecisions.id, fixture.id));
+    await db.insert(caseLawDecisions).values({
+      id: secondId,
+      sourceId: fixture.sourceId,
+      caseNumber: "C-11/26",
+      court: fixture.result.court,
+      country: fixture.result.country,
+      language: fixture.result.language,
+      metadata: { celex: "62026CJ0011" },
+      sourceHash: "before-the-parser-change",
+      parserVersion: 3,
+      sourceRawS3Key: "case-law/raw/legacy/second",
+      sourceRawContentType: "application/xhtml+xml",
+      createdAt: new Date("2026-01-02T00:00:00Z"),
+    });
+    const adapter = stubAdapter((stored) => ({
+      type: "parsed",
+      result: plainTextIngestionResult({
+        ...fixture.result,
+        caseNumber: stored.caseNumber,
+        fulltext: `Body text after, ${stored.caseNumber}.`,
+        rawHash: `after-${stored.caseNumber}`,
+      }),
+    }));
+    return { ...fixture, secondId, adapter };
+  };
+
+  const canonicalTransfer = (
+    put: (packs: readonly EncodedPack[]) => Result<void, CorpusPackError>,
+  ) =>
+    ({
+      mode: "canonical",
+      transfer: {
+        layout: "packs",
+        putPacks: async ({ packs }) => await Promise.resolve(put(packs)),
+      },
+    }) satisfies CaseLawCorpusDependencies;
+
+  const mirrorStatuses = async (ids: readonly SafeId<"caseLawDecision">[]) =>
+    await Promise.all(
+      ids.map(async (id) => {
+        const [row] = await db
+          .select({ status: caseLawDecisions.corpusMirrorStatus })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id));
+        return row?.status;
+      }),
+    );
+
+  const replayWith = async (
+    fixture: Awaited<ReturnType<typeof twoStaleRows>>,
+    corpus: CaseLawCorpusDependencies,
+  ) => {
+    const lease = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: fixture.sourceId,
+    });
+    if (lease === null) {
+      return panic("Expected the source ingestion lease to be free");
+    }
+    try {
+      const run = await replayCaseLawSource({
+        adapter: fixture.adapter,
+        scopedDb,
+        sourceId: fixture.sourceId,
+        sourceLease: lease,
+        scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+        readStoredRaw: async () =>
+          await Promise.resolve(new TextEncoder().encode(STORED_PAYLOAD)),
+        bound: { type: "at-most", limit: 10 },
+        pageSize: 10,
+        corpus,
+      });
+      if (run.type !== "ran") {
+        return panic("Expected the replay to run");
+      }
+      return run.report;
+    } finally {
+      await lease.release();
+    }
+  };
+
+  test("both rows of a page settle through a single pack transfer", async () => {
+    const fixture = await twoStaleRows();
+    const transfers: (readonly EncodedPack[])[] = [];
+    const report = await replayWith(
+      fixture,
+      canonicalTransfer((packs) => {
+        transfers.push(packs);
+        return Result.ok(undefined);
+      }),
+    );
+
+    expect(report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(2);
+    expect(report.resumeAfter).toBe(fixture.secondId);
+    // One transfer of one pack for the page, not one per row.
+    expect(transfers.map((packs) => packs.length)).toEqual([1]);
+    expect(await mirrorStatuses([fixture.id, fixture.secondId])).toEqual([
+      CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+      CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+    ]);
+  });
+
+  test("a pack that does not land holds the cursor, and the next run writes the page again", async () => {
+    const fixture = await twoStaleRows();
+    const failed = await replayWith(
+      fixture,
+      canonicalTransfer(() =>
+        Result.err(new CorpusPackError({ message: "bucket unreachable" })),
+      ),
+    );
+
+    // The rows were written but their payloads never became durable: the
+    // first one halts the run as retryable, and nothing advances the cursor.
+    expect(failed.outcomes[REPLAY_ROW_OUTCOME.RETRYABLE]).toBe(1);
+    expect(failed.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(0);
+    expect(failed.resumeAfter).toBeNull();
+    expect(failed.haltReason).toContain("retryable outcome");
+    expect(await mirrorStatuses([fixture.id, fixture.secondId])).toEqual([
+      CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+    ]);
+
+    const transfers: (readonly EncodedPack[])[] = [];
+    const resumed = await replayWith(
+      fixture,
+      canonicalTransfer((packs) => {
+        transfers.push(packs);
+        return Result.ok(undefined);
+      }),
+    );
+    expect(resumed.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(2);
+    expect(transfers.map((packs) => packs.length)).toEqual([1]);
+    expect(await mirrorStatuses([fixture.id, fixture.secondId])).toEqual([
+      CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+      CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+    ]);
+  });
 });

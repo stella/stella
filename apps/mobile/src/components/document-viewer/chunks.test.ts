@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { chunksOf, decodeChunkInto } from "./chunks";
+import { chunksOf, decodeChunkInto, encodeChunk } from "./chunks";
 
 test("slices a file into whole chunks and a shorter last one", () => {
   expect(chunksOf(10, 3)).toEqual([
@@ -27,6 +27,20 @@ test("reassembles the bytes from slices decoded independently", () => {
       offset,
     );
     expect(written).toBe(length);
+  }
+  expect([...target]).toEqual([...bytes]);
+});
+
+test("an edited file crosses back in slices that decode to the same bytes", () => {
+  // Every byte value, and more than one encoding step in a slice.
+  const bytes = Uint8Array.from({ length: 20_000 }, (_, index) => index % 256);
+  const target = new Uint8Array(bytes.length);
+  for (const [offset, length] of chunksOf(bytes.length, 9000)) {
+    const encoded = encodeChunk(bytes.subarray(offset, offset + length));
+    expect(encoded).toBe(
+      Buffer.from(bytes.subarray(offset, offset + length)).toString("base64"),
+    );
+    decodeChunkInto(encoded, target, offset);
   }
   expect([...target]).toEqual([...bytes]);
 });

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { isEffectiveLeaf } from "./effective-leaf";
 import { foldCondition, type FoldHandlers } from "./fold";
@@ -100,7 +100,8 @@ const collectLeaves = (
 
 describe("isEffectiveLeaf + foldCondition (property-based)", () => {
   test("leaves surviving the fold equal the leaves isEffectiveLeaf accepts, and an emptied group never reaches group", () => {
-    fc.assert(
+    assertProperty(
+      "leaves surviving the fold equal the leaves isEffectiveLeaf accepts, and an emptied group never reaches group",
       fc.property(nodeArb, (node) => {
         const expected = new Set(
           collectLeaves(node).filter((leaf) => isEffectiveLeaf(leaf)),
@@ -121,7 +122,7 @@ describe("isEffectiveLeaf + foldCondition (property-based)", () => {
 
         expect(survivors).toEqual(expected);
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

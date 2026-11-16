@@ -17,26 +17,31 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  defaultVarcharSchema,
+  displayNameSchema,
   resourceIdSchema,
   userIdSchema,
 } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const updateWorkspaceBodySchema = v.object({
-  name: v.optional(defaultVarcharSchema),
+  billingNarrativeLanguage: v.optional(narrativeLanguageSchema),
+  name: v.optional(displayNameSchema()),
   clientId: v.optional(resourceIdSchema("contact")),
   expectedClientId: v.optional(v.nullable(resourceIdSchema("contact"))),
   reference: v.optional(v.pipe(v.string(), v.maxLength(64), v.minLength(1))),
@@ -50,8 +55,9 @@ const updateWorkspaceBodySchema = v.object({
 const config = {
   contract: "patch",
   description:
-    "Change a matter: its name, client, reference, billing reference, colour, " +
-    "or lead (who must already be a member of it). Only the fields you pass " +
+    "Change a matter: its name, client, reference, billing reference, the " +
+    "language its billing narratives are written in, colour, or lead (who " +
+    "must already be a member of it). Only the fields you pass " +
     "are written. clientId attaches a client to a personal matter or replaces " +
     "the client of a client matter; members are managed separately. " +
     "Pass expectedClientId (null for a personal matter) to change the client " +
@@ -163,6 +169,48 @@ export type UpdateWorkspaceHandlerProps = {
   body: v.InferOutput<typeof updateWorkspaceBodySchema>;
 };
 
+/** Repairs the matter's search projection after the response, off the request. */
+const flushUpdatedWorkspaceSearch = (workspaceId: SafeId<"workspace">) => {
+  detached(
+    async () =>
+      flushWorkspaceSearchRepairs([workspaceId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "updateWorkspaceHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
+      ),
+    "workspaces-update.flush-workspace-search-repairs",
+  );
+};
+
+type HeldClientOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  body: { clientId?: SafeId<"contact"> | undefined };
+  workspace: { id: SafeId<"workspace">; clientId: SafeId<"contact"> | null };
+};
+
+/** A held matter keeps the client its evidence names. */
+const heldClient = async ({
+  tx,
+  organizationId,
+  body,
+  workspace,
+}: HeldClientOptions) => {
+  if (body.clientId === undefined || body.clientId === workspace.clientId) {
+    return null;
+  }
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "matter", workspaceId: workspace.id },
+  });
+  return hold.isErr()
+    ? { ok: false as const, refusal: legalHoldRefusal(hold.error) }
+    : null;
+};
+
 // Shared matter-update logic reused by the HTTP handler and the
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
@@ -174,6 +222,12 @@ export const updateWorkspaceHandler = async function* ({
   body,
 }: UpdateWorkspaceHandlerProps) {
   const txResult = await safeDb(async (tx) => {
+    await withAggregateLock({
+      aggregate: "workspace",
+      id: { id: workspaceId, organizationId },
+      tx,
+      mode: "update",
+    });
     const workspaceRows = await tx
       .select({
         id: workspaces.id,
@@ -181,12 +235,17 @@ export const updateWorkspaceHandler = async function* ({
         clientId: workspaces.clientId,
         reference: workspaces.reference,
         billingReference: workspaces.billingReference,
+        billingNarrativeLanguage: workspaces.billingNarrativeLanguage,
         color: workspaces.color,
         leadUserId: workspaces.leadUserId,
       })
       .from(workspaces)
-      .where(eq(workspaces.id, workspaceId))
-      .for("update");
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      );
     const workspace = workspaceRows.at(0);
 
     if (!workspace) {
@@ -195,6 +254,11 @@ export const updateWorkspaceHandler = async function* ({
         status: 404 as const,
         message: "Workspace not found",
       };
+    }
+
+    const held = await heldClient({ tx, organizationId, body, workspace });
+    if (held) {
+      return held;
     }
 
     if (body.clientId !== undefined) {
@@ -261,6 +325,7 @@ export const updateWorkspaceHandler = async function* ({
           "clientId",
           "reference",
           "billingReference",
+          "billingNarrativeLanguage",
           "color",
           "leadUserId",
         ]),
@@ -294,6 +359,17 @@ export const updateWorkspaceHandler = async function* ({
         old: workspace.reference,
         new: body.reference,
       };
+    }
+    if (
+      body.billingNarrativeLanguage !== undefined &&
+      body.billingNarrativeLanguage !== workspace.billingNarrativeLanguage
+    ) {
+      Object.assign(changes, {
+        billingNarrativeLanguage: {
+          old: workspace.billingNarrativeLanguage,
+          new: body.billingNarrativeLanguage,
+        },
+      });
     }
     if (
       body.billingReference !== undefined &&
@@ -342,19 +418,17 @@ export const updateWorkspaceHandler = async function* ({
   const failure = txResult.value;
   if (!failure.ok) {
     return yield* Result.err(
-      new HandlerError({
-        status: failure.status,
-        message: failure.message,
-        ...(failure.status === 409 ? { code: failure.code } : {}),
-      }),
+      "refusal" in failure
+        ? failure.refusal
+        : new HandlerError({
+            status: failure.status,
+            message: failure.message,
+            ...(failure.status === 409 ? { code: failure.code } : {}),
+          }),
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(
-    createErrorCapture(
-      handlerErrorContext("updateWorkspaceHandler.flushWorkspaceSearchRepairs"),
-    ),
-  );
+  flushUpdatedWorkspaceSearch(workspaceId);
 
   return Result.ok({});
 };

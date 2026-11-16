@@ -4,9 +4,10 @@ import type {
   AuditRecorder,
   AuditResourceType,
 } from "@/api/lib/audit-log";
-import { AUDIT_ACTION } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
+import type { LiveVersionLock } from "@/api/lib/files/live-version-field";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import type {
   S3SigningKeyspace,
@@ -26,14 +27,40 @@ export const CONTENT_DELIVERY_AUDIT_ACTION = {
   inline: AUDIT_ACTION.ACCESS,
 } as const satisfies Record<ContentDisposition, AuditAction>;
 
-type AuditedPresignDownloadOptions = {
+/**
+ * What the grant audits, and the transaction it records in. A document's file
+ * belongs to a version that can be tombstoned, so its grant takes the version
+ * lock instead of a bare transaction: the audit row and the signature then
+ * happen where no tombstone can commit, and the audited entity is the locked
+ * one. Every other resource is audited in the caller's transaction.
+ */
+type AuditedGrantTarget =
+  | {
+      resourceType: typeof AUDIT_RESOURCE_TYPE.ENTITY;
+      versionLock: LiveVersionLock;
+    }
+  | {
+      resourceType: Exclude<
+        AuditResourceType,
+        typeof AUDIT_RESOURCE_TYPE.ENTITY
+      >;
+      resourceId: string;
+      tx: Transaction;
+    };
+
+const grantTransaction = (target: AuditedGrantTarget) =>
+  target.resourceType === AUDIT_RESOURCE_TYPE.ENTITY
+    ? {
+        tx: target.versionLock.version.tx,
+        resourceId: target.versionLock.version.entityId,
+      }
+    : { tx: target.tx, resourceId: target.resourceId };
+
+type AuditedPresignDownloadOptions = AuditedGrantTarget & {
   userId: string | null;
   source: SignedDownloadSource;
-  tx: Transaction;
   recordAuditEvent: AuditRecorder;
   readSessionAuthority: SyntheticSessionAuthorityReader;
-  resourceType: AuditResourceType;
-  resourceId: string;
   s3Key: string;
   expiresInSeconds: number;
   /**
@@ -61,23 +88,25 @@ type AuditedPresignDownloadOptions = {
  * assembly) do not call this helper — they audit once at the
  * outer request boundary instead.
  */
-export const auditedPresignDownload = async ({
-  userId,
-  source,
-  tx,
-  recordAuditEvent,
-  readSessionAuthority,
-  resourceType,
-  resourceId,
-  s3Key,
-  expiresInSeconds,
-  fileName,
-  metadata,
-  organizationId,
-  s3Keyspace,
-  workspaceId,
-  signDownload = presignDownloadUrl,
-}: AuditedPresignDownloadOptions): Promise<string> => {
+export const auditedPresignDownload = async (
+  options: AuditedPresignDownloadOptions,
+): Promise<string> => {
+  const {
+    userId,
+    source,
+    recordAuditEvent,
+    readSessionAuthority,
+    resourceType,
+    s3Key,
+    expiresInSeconds,
+    fileName,
+    metadata,
+    organizationId,
+    s3Keyspace,
+    workspaceId,
+    signDownload = presignDownloadUrl,
+  } = options;
+  const { tx, resourceId } = grantTransaction(options);
   const disposition: ContentDisposition = fileName ? "attachment" : "inline";
   await recordAuditEvent(tx, {
     action: CONTENT_DELIVERY_AUDIT_ACTION[disposition],

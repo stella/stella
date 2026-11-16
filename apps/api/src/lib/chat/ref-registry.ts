@@ -295,7 +295,7 @@ const parseRefCounter = (prefix: string, ref: string) => {
   const match = new RegExp(`^${escapeRegex(prefix)}_([1-9][0-9]*)$`, "u").exec(
     ref,
   );
-  return match?.[1] === undefined ? null : Number(match[1]);
+  return match?.[1] !== undefined ? Number(match[1]) : null;
 };
 
 type RestoreRefOutcome = "restored" | "conflict" | "malformed";

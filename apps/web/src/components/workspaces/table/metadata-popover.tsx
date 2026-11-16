@@ -7,6 +7,7 @@ import { Button } from "@stll/ui/button";
 import { EyeOffIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { PinProperty } from "@/components/workspaces/properties/pin-property";
 import { SortProperty } from "@/components/workspaces/properties/sort-property";
@@ -45,7 +46,7 @@ export const MetadataPopover = <TRow extends TableRowData = TableTreeNode>({
         }
       >
         <Icon className="size-3.5 shrink-0" />
-        <span className="w-0 flex-1 truncate">{label}</span>
+        <TruncatedText className="w-0 flex-1">{label}</TruncatedText>
       </PopoverTrigger>
       <PopoverPopup
         align="start"

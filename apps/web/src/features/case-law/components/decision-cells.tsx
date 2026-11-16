@@ -33,6 +33,7 @@ import {
   SEARCH_HIT_MARK,
   TextMark,
 } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
@@ -40,7 +41,7 @@ import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import { DecisionTextAvailabilityMarker } from "@/features/case-law/components/decision-text-availability";
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
-import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";
+import { decisionClampLines } from "@/features/case-law/decision-columns.logic";
 import type {
   DecisionColumnId,
   DecisionContentMode,
@@ -257,9 +258,9 @@ const identityLineValue = (
   switch (field) {
     case "court":
       return (
-        <BidiText as="span" className="truncate" title={decision.court}>
+        <TruncatedText render={<BidiText as="span" />}>
           {decision.court}
-        </BidiText>
+        </TruncatedText>
       );
     case "date": {
       const date = formatDecisionDate(decision.decisionDate, format);
@@ -432,7 +433,7 @@ export const DecisionKeywords = ({
           // same class, so a change to how the hook is set moves both.
           className={cn(
             SUMMARY_TEXT_CLASS_NAME,
-            "bg-muted shrink-0 rounded px-1.5 py-0.5",
+            "bg-muted shrink-0 rounded-sm px-1.5 py-0.5",
           )}
           key={item}
         >
@@ -621,8 +622,7 @@ export const HeadnoteProse = ({
 
   return (
     <div>
-      <BidiText
-        as="p"
+      <TruncatedText
         className={cn(
           SUMMARY_TEXT_CLASS_NAME,
           // The publisher's own line breaks: a headnote written as numbered
@@ -630,17 +630,18 @@ export const HeadnoteProse = ({
           // clamp still counts rendered lines, so a break costs one of the
           // two a compact row shows.
           "whitespace-pre-line",
-          // A row the reader opened is read, not scanned: the density control
-          // still governs every other row on the page.
-          showingWhole ? "" : decisionClampClassName(contentMode),
         )}
+        // A row the reader opened is read, not scanned: the density control
+        // still governs every other row on the page.
+        lines={showingWhole ? "none" : decisionClampLines(contentMode)}
+        render={<BidiText as="p" />}
       >
         <HighlightedProse
           columnId={columnId}
           queryTokens={queryTokens}
           text={showingWhole ? view.text : preview.text}
         />
-      </BidiText>
+      </TruncatedText>
       {preview.truncated && (
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
           {view.type === HEADNOTE_VIEW.FAILED && (
@@ -648,15 +649,20 @@ export const HeadnoteProse = ({
               {t("errors.actionFailed")}
             </span>
           )}
-          <button
-            aria-expanded={showingWhole}
-            // The vertical padding extends the hit area without growing the row.
-            className="text-muted-foreground hover:text-foreground -my-2 rounded-sm py-2 underline underline-offset-2"
-            onClick={onActivate}
-            type="button"
-          >
-            {t(HEADNOTE_CONTROL_LABEL_KEYS[view.type])}
-          </button>
+          {/* Muted like the line it closes; the underline marks it as the
+              control, and it brightens while pointed at. */}
+          <span className="text-muted-foreground">
+            <Button
+              aria-expanded={showingWhole}
+              className="group/plain"
+              onClick={onActivate}
+              variant="plain"
+            >
+              <span className="group-hover/plain:text-foreground underline underline-offset-2">
+                {t(HEADNOTE_CONTROL_LABEL_KEYS[view.type])}
+              </span>
+            </Button>
+          </span>
         </div>
       )}
     </div>
@@ -674,21 +680,31 @@ const HighlightedPassage = ({
   contentMode: DecisionContentMode;
   html: string;
 }) => (
-  <p
+  <TruncatedText
     className={cn(
       SUMMARY_TEXT_CLASS_NAME,
       // The grid cell sets `whitespace-nowrap` for the scannable columns, so
       // a passage that does not turn it back off is one long line clipped at
-      // the cell's edge, and the clamp below has a single line to count.
+      // the cell's edge, and the clamp has a single line to count.
       // `wrap-break-word` keeps an unbroken citation inside the cell.
       "wrap-break-word whitespace-normal",
-      decisionClampClassName(contentMode),
-      SEARCH_HIT_DESCENDANT_MARK_CLASS,
     )}
     dangerouslySetInnerHTML={{
       // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the case-law decisions search handler
       __html: html,
     }}
+    lines={decisionClampLines(contentMode)}
+    // The paragraph styles the server's marks inside it.
+    render={<p className={SEARCH_HIT_DESCENDANT_MARK_CLASS} />}
+    tooltip={
+      <span
+        className={SEARCH_HIT_DESCENDANT_MARK_CLASS}
+        dangerouslySetInnerHTML={{
+          // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the case-law decisions search handler
+          __html: html,
+        }}
+      />
+    }
   />
 );
 
@@ -822,7 +838,7 @@ export const DecisionLanguageMenu = ({
 };
 
 export const CountryPill = ({ country }: { country: string }) => (
-  <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
+  <span className="bg-muted rounded-sm px-1.5 py-0.5 text-xs">
     <HighlightedText columnId="country" text={country} />
   </span>
 );

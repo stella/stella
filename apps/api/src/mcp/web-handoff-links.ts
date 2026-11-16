@@ -5,16 +5,13 @@ import * as v from "valibot";
 import { mintWebHandoff } from "@/api/lib/auth";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { nullAsAbsent } from "@/api/mcp/input-schemas";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
   McpToolDefinition,
   TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
-import {
-  nullAsAbsent,
-  toolDataResult,
-  validationErrorResult,
-} from "@/api/mcp/tool-utils";
+import { toolDataResult, validationErrorResult } from "@/api/mcp/tool-utils";
 import {
   defineMcpToolOutput,
   defineValibotMcpTool,

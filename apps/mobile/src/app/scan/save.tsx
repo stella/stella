@@ -20,7 +20,11 @@ import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
-import { readFileProperty, uploadDocument } from "@/state/document-upload";
+import {
+  readFileProperty,
+  UPLOAD_ORIGIN,
+  uploadDocument,
+} from "@/state/document-upload";
 import { listMatters } from "@/state/matters";
 import { sizeInUnits } from "@/state/scan-pages";
 import { useAppColors } from "@/theme";
@@ -49,12 +53,18 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
   const changed = useChanged();
   const params = useLocalSearchParams<{
     matterId?: string;
+    /** The file's type; a scan is always a PDF. */
+    mimeType?: string;
     name: string;
-    pageCount: string;
+    /** "file" for a document picked from Files; a scan otherwise. */
+    origin?: string;
+    pageCount?: string;
     sha256Hex: string;
     size: string;
     uri: string;
   }>();
+  const picked = params.origin === UPLOAD_ORIGIN.file;
+  const matterT = useTranslations("matter");
   // The review passes both counts; a missing one reads as none.
   const size = parseIntegerToken(params.size, { sign: "unsigned" }).unwrapOr(0);
   const pageCount = parseIntegerToken(params.pageCount, {
@@ -86,7 +96,7 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
         return await uploadDocument({
           fetch,
           file: {
-            mimeType: "application/pdf",
+            mimeType: params.mimeType ?? "application/pdf",
             sha256Hex: params.sha256Hex,
             size,
             uri: params.uri,
@@ -99,11 +109,11 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
       });
       if (Result.isOk(uploaded)) {
         changed("documents");
-        // This sheet and the review under it, which removes the scan's files
-        // as it closes. A sheet closed meanwhile, as Escape can, leaves the
-        // review as it is.
+        // This sheet, and for a scan the review under it, which removes the
+        // scan's files as it closes. A sheet closed meanwhile, as Escape can,
+        // leaves the review as it is.
         if (navigation.isFocused()) {
-          router.dismiss(2);
+          router.dismiss(picked ? 1 : 2);
         }
         return;
       }
@@ -121,7 +131,7 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
         options={{
           // An upload in progress keeps the sheet up until it is done.
           gestureEnabled: !uploading,
-          title: t("saveTitle"),
+          title: picked ? matterT("uploadDocument") : t("saveTitle"),
           unstable_headerLeftItems: () => [
             {
               disabled: uploading,
@@ -156,13 +166,18 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
           </Text>
           <Text variant="caption">
             {[
-              t("pages", { count: pageCount }),
+              picked ? undefined : t("pages", { count: pageCount }),
               t(sizeLabel.unit, { size: format.number(sizeLabel.value) }),
-            ].join(" · ")}
+            ]
+              .filter((part) => part !== undefined)
+              .join(" · ")}
           </Text>
         </View>
         {uploading ? <ActivityIndicator color={colors.muted} /> : null}
-        <WriteFailureNotice failure={failure} message={t("uploadFailed")} />
+        <WriteFailureNotice
+          failure={failure}
+          message={picked ? matterT("uploadFailed") : t("uploadFailed")}
+        />
         <View className="gap-2">
           <View className="px-1">
             <Text variant="section">{t("matterTitle")}</Text>

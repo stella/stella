@@ -33,6 +33,7 @@ import {
   lockOrganizationSettingsWrites,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import type { OrganizationEvaluation } from "@/api/lib/db/organization-creation";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   transitionScopedBatch,
@@ -147,6 +148,10 @@ const ORGANIZATION_CREATION_AUDIT_SOURCE = "organization-creation";
  * reconciler row, which closes the rolling-deployment race between those
  * writers. A replayed creation cannot restart or move a final state.
  */
+/** A new organization starts an evaluation period exactly when access state is enforced. */
+export const newOrganizationEvaluation = (): OrganizationEvaluation =>
+  isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE") ? "grant" : "none";
+
 export const recordNewOrganizationAccessState = async (
   db: OrganizationAccessStateDatabase | OrganizationAccessStateWriter,
   { organizationId, now }: OrganizationAccessStateChange,

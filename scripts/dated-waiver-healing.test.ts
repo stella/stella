@@ -8,6 +8,7 @@ import * as v from "valibot";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { waiverKey } from "./dated-waiver-core";
 import {
   createPrivateTaskSink,
   DATED_WAIVER_AUTOFIX_LABEL,
@@ -15,7 +16,6 @@ import {
   FIX_TASK_IDENTITY_LABEL,
   probeSourceFingerprint,
   RESOLUTION_POLICY,
-  waiverKey,
 } from "./dated-waiver-fix-task";
 import type { FixEvidence } from "./dated-waiver-fix-task";
 import {

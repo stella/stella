@@ -3,6 +3,10 @@ import { expect, expectTypeOf, test } from "bun:test";
 import { GUIDANCE_KINDS } from "@stll/legal-ast/document-kind";
 
 import { validateSoftLawAuthorityMetadata } from "@/api/lib/legal-search/soft-law-authority-policy";
+import {
+  softLawDescriptorFlags,
+  softLawServingSettingOf,
+} from "@/api/lib/legal-search/soft-law-serving";
 import type { SoftLawMetadata } from "@/api/lib/legal-search/soft-law-types";
 
 import {
@@ -13,19 +17,27 @@ import {
 test("unregistered authorities cannot enter the sync contract", () => {
   expectTypeOf<"eu-edps">().not.toExtend<RegisteredSoftLawAuthority>();
   expectTypeOf<"de-bfdi">().toExtend<RegisteredSoftLawAuthority>();
+  expectTypeOf<"sk-uoou">().toExtend<RegisteredSoftLawAuthority>();
+  expectTypeOf<"cz-uoou">().toExtend<RegisteredSoftLawAuthority>();
+  expectTypeOf<"cz-suip">().toExtend<RegisteredSoftLawAuthority>();
 });
 
 test("every registered adapter belongs to its authority; pending kinds are refused", () => {
   for (const [authority, disposition] of Object.entries(SOFT_LAW_ADMISSIONS)) {
     if (disposition.state === "registered") {
       expect(authority).toBe(disposition.adapter.authority);
-      expect(disposition.descriptor.allowsRedistribution).toBe(false);
-      expect(disposition.descriptor.allowsDerivedAi).toBe(false);
+      expect(disposition.descriptor).toMatchObject(
+        softLawDescriptorFlags(softLawServingSettingOf(authority)),
+      );
       continue;
     }
     expect(disposition).not.toHaveProperty("adapter");
   }
-  for (const authority of ["eu-edps", "de-bfdi"] as const) {
+  for (const [authority, admittedKind] of [
+    ["eu-edps", null],
+    ["de-bfdi", "recommendation"],
+    ["sk-uoou", "annual_report"],
+  ] as const) {
     for (const kind of GUIDANCE_KINDS) {
       const metadata = {
         title: "Guidance",
@@ -45,7 +57,7 @@ test("every registered adapter belongs to its authority; pending kinds are refus
       } as const satisfies SoftLawMetadata;
       expect(
         validateSoftLawAuthorityMetadata(authority, metadata).isErr(),
-      ).toBe(authority !== "de-bfdi" || kind !== "recommendation");
+      ).toBe(kind !== admittedKind);
     }
   }
 });

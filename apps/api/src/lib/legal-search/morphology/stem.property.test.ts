@@ -9,7 +9,7 @@ import { expect, test } from "bun:test";
  */
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -39,7 +39,8 @@ const term = fc.oneof(
 );
 
 test("a stem never grows and never empties a non-empty term", () => {
-  fc.assert(
+  assertProperty(
+    "a stem never grows and never empties a non-empty term",
     fc.property(term, language, (input, code) => {
       // Bounded against what the stemmer actually sees, not the raw input:
       // NFC can lengthen a string. U+1D1BB decomposes canonically and is on
@@ -61,7 +62,7 @@ test("a stem never grows and never empties a non-empty term", () => {
       expect<number>(stem.length).toBeLessThanOrEqual(bound);
       expect<boolean>(stem.length > 0).toBe(true);
     }),
-    propertyConfig({ numRuns: 2000 }),
+    { numRuns: 2000 },
   );
 });
 
@@ -85,18 +86,20 @@ const decomposableTerm = fc.string({
 test("normalisation form does not change the stem", () => {
   // Extracted text arrives in whichever normal form its producer used, so
   // the same word must not index one way and query another.
-  fc.assert(
+  assertProperty(
+    "normalisation form does not change the stem",
     fc.property(decomposableTerm, language, (input, code) => {
       expect<string>(stemLegalTerm(normalizeUnicode(input, "NFD"), code)).toBe(
         stemLegalTerm(normalizeUnicode(input, "NFC"), code),
       );
     }),
-    propertyConfig({ numRuns: 2000 }),
+    { numRuns: 2000 },
   );
 });
 
 test("stemming is deterministic across a shared stemmer instance", () => {
-  fc.assert(
+  assertProperty(
+    "stemming is deterministic across a shared stemmer instance",
     fc.property(
       fc.array(term, { minLength: 2, maxLength: 20 }),
       language,
@@ -107,6 +110,6 @@ test("stemming is deterministic across a shared stemmer instance", () => {
         expect<readonly string[]>(second).toEqual(first);
       },
     ),
-    propertyConfig({ numRuns: 500 }),
+    { numRuns: 500 },
   );
 });

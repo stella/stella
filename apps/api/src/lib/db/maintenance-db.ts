@@ -17,9 +17,7 @@ import type { Transaction } from "@/api/db/root";
  * fails with SQLSTATE 25006 at its first statement instead of quietly
  * applying.
  */
-type ExecuteResult<TRow extends Record<string, unknown>> = Awaited<
-  ReturnType<typeof rootDb.execute<TRow>>
->;
+type ExecuteResult<TRow extends Record<string, unknown>> = TRow[];
 
 export type MaintenanceDb = {
   execute: <TRow extends Record<string, unknown> = Record<string, unknown>>(
@@ -45,7 +43,8 @@ export const openMaintenanceDb = ({
       TRow extends Record<string, unknown> = Record<string, unknown>,
     >(
       query: SQLWrapper | string,
-    ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+    ) =>
+      await transaction(async (tx) => await tx.execute<TRow>(query, "objects")),
     transaction,
   };
 };

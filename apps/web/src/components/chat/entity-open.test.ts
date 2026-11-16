@@ -9,6 +9,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   openEmailCitationSource,
   openEntityFileFieldInInspector,
+  openEntityInInspector,
 } from "@/components/chat/entity-open";
 import {
   isEntityActiveInMainRoute,
@@ -190,4 +191,68 @@ test("a source-bound citation opens its exact field, not the first file", () => 
     fileName: "cited.pdf",
     facet: "preview",
   });
+});
+
+const previousDocument = {
+  id: "field-previous",
+  entityId: "entity-previous",
+  label: "Previous",
+  fileName: "previous.pdf",
+  mimeType: "application/pdf",
+  pdfFileId: null,
+  workspaceId: "workspace-1",
+};
+
+test("a file with no preview replaces the previous document with its own tab", () => {
+  useInspectorTabsStore.getState().openFile(previousDocument);
+  const fieldId = toSafeId<"field">("field-drawing");
+
+  expect(
+    openEntityFileFieldInInspector({
+      entityId: "entity-drawing",
+      fieldId,
+      fields: [
+        {
+          id: fieldId,
+          content: {
+            version: 1,
+            type: "file",
+            id: "file-drawing",
+            fileName: "drawing.svg",
+            mimeType: "image/svg+xml",
+            sizeBytes: 128,
+            encrypted: false,
+            sha256Hex: "a".repeat(64),
+            pdfFileId: null,
+          },
+        },
+      ],
+      label: "Drawing",
+      workspaceId: "workspace-1",
+    }),
+  ).toBe(true);
+
+  const state = useInspectorTabsStore.getState();
+  expect(state.activeId).toBe(fieldId);
+  expect(state.tabs.find(({ id }) => id === fieldId)).toMatchObject({
+    fileName: "drawing.svg",
+    label: "Drawing",
+  });
+});
+
+test("an open that fails leaves no previous document on screen", async () => {
+  useInspectorTabsStore.getState().openFile(previousDocument);
+  expect(useInspectorTabsStore.getState().minimized).toBe(false);
+
+  expect(
+    await openEntityInInspector({
+      documentOnScreen: undefined,
+      entity: { fields: {}, kind: "document" },
+      entityId: "entity-empty",
+      label: "Empty",
+      workspaceId: "workspace-1",
+    }),
+  ).toEqual({ type: "unsupported" });
+
+  expect(useInspectorTabsStore.getState().minimized).toBe(true);
 });

@@ -43,6 +43,15 @@ describe("buildChatSlashItems", () => {
           name: "rename-chat",
         },
       },
+      {
+        kind: "command",
+        command: {
+          command: "/make-skill",
+          descriptionKey: "chat.makeSkill.command",
+          id: "make-skill",
+          name: "make-skill",
+        },
+      },
     ]);
   });
 

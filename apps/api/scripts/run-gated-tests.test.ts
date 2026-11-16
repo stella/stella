@@ -226,6 +226,7 @@ test("template cloning refuses and names foreign connections", async () => {
         signalCode: null,
         kill: () => undefined,
       }),
+      sleep: async () => {},
     }),
   );
   expect(error).toBeInstanceOf(PostgresTemplateConnectionError);
@@ -267,6 +268,7 @@ test.each([
       databaseUrl: "postgres://localhost/template_db",
       admin: fixture.admin,
       registerSignal: () => () => {},
+      sleep: async () => {},
       log: () => {},
       runWorker: () => {
         workerRuns += 1;
@@ -295,6 +297,44 @@ test.each([
     ).toBe(false);
   },
 );
+test("template cloning waits out a health probe's short session", async () => {
+  const fixture = adminFixture();
+  const query = fixture.admin.query;
+  let samples = 0;
+  fixture.admin.query = async (sql, parameters) => {
+    if (sql.startsWith("SELECT pid")) {
+      samples += 1;
+      return samples === 1
+        ? [{ pid: 419, application_name: "", client_addr: null }]
+        : [];
+    }
+    return query(sql, parameters);
+  };
+  const slept: number[] = [];
+  expect(
+    await runPostgresWorkers({
+      files: ["ordinary.test.ts"],
+      durations: {},
+      exclusivePaths: new Set(),
+      workers: 1,
+      databaseUrl: "postgres://localhost/template_db",
+      admin: fixture.admin,
+      runWorker: () => ({
+        exited: Promise.resolve(0),
+        exitCode: 0,
+        signalCode: null,
+        kill: () => undefined,
+      }),
+      registerSignal: () => () => undefined,
+      sleep: async (milliseconds) => {
+        slept.push(milliseconds);
+      },
+      log: () => undefined,
+    }),
+  ).toBe(0);
+  expect(samples).toBe(2);
+  expect(slept).toHaveLength(1);
+});
 
 type AdminFixture = {
   admin: PostgresAdmin;

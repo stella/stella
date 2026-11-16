@@ -8,6 +8,7 @@ import {
   agentSkillsQueryRoot,
   mcpQueryRoot,
 } from "@/lib/resource-query-roots.logic";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 /**
  * Installs a catalogue entry by routing to the right backend mutation
@@ -18,8 +19,13 @@ export const useInstallEntry = (organizationId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (entry: CatalogueDisplayEntry) =>
-      await installCatalogueEntry(entry),
+    mutationFn: resourceMutation({
+      mutation: "installCatalogueEntry",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (entry: CatalogueDisplayEntry) =>
+        await installCatalogueEntry(entry),
+    }),
     onSuccess: () => {
       detached(
         queryClient.invalidateQueries({

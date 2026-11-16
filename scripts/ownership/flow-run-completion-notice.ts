@@ -24,6 +24,11 @@ export default {
         reason:
           "Kanban collects the resolver's run-derived notice and files it after its outer transaction commits.",
       },
+      {
+        path: "apps/api/src/mcp/matter-tools.ts",
+        reason:
+          "Task save collects the resolver's run-derived notice and files it after the task and assignment transaction commits.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { TruncatedText } from "@stll/ui/truncated-text";
+
 import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 
 type StatuteSignalTextProps = {
@@ -18,9 +20,9 @@ export const StatuteSignalText = ({
         <StatuteDisplayLabel statute={statute} />
       </span>
       {meta !== null && (
-        <span className="text-muted-foreground block truncate text-xs">
+        <TruncatedText className="text-muted-foreground text-xs">
           {meta}
-        </span>
+        </TruncatedText>
       )}
     </span>
   </span>

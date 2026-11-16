@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { aggregateRecorder } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -38,18 +39,16 @@ describe("updateWorkspace", () => {
   test("rejects client changes to contacts outside the active organization", async () => {
     const workspaceSelect = {
       from: () => ({
-        where: () => ({
-          for: async () => [
-            {
-              id: "ws_test123",
-              name: "Workspace",
-              clientId: "contact_existing",
-              reference: null,
-              billingReference: null,
-              color: null,
-            },
-          ],
-        }),
+        where: async () => [
+          {
+            id: "ws_test123",
+            name: "Workspace",
+            clientId: "contact_existing",
+            reference: null,
+            billingReference: null,
+            color: null,
+          },
+        ],
       }),
     };
     const clientSelect = {
@@ -64,6 +63,7 @@ describe("updateWorkspace", () => {
     let selectCount = 0;
 
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
+      execute: aggregateRecorder().tx.execute,
       select: () => {
         selectCount++;
         return selectCount === 1 ? workspaceSelect : clientSelect;
@@ -98,15 +98,14 @@ describe("updateWorkspace", () => {
       leadUserId: null,
     };
     const { safeDb, scopedDb } = createScopedDbMock({
+      execute: aggregateRecorder().tx.execute,
       select: () => ({
         from: () => ({
-          where: () => ({
-            // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the row promise and drop the limit the contact lookup chains
-            for: () =>
-              Object.assign(Promise.resolve([workspaceRow]), {
-                limit: async () => [],
-              }),
-          }),
+          // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the row promise and drop the locking chain the contact lookup uses
+          where: () =>
+            Object.assign(Promise.resolve([workspaceRow]), {
+              for: () => ({ limit: async () => [] }),
+            }),
         }),
       }),
     });

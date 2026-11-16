@@ -7,8 +7,10 @@ import {
 } from "@stll/api-contract/search";
 
 import { env } from "@/api/env";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
@@ -515,6 +517,41 @@ describe("empty-result onboarding next step", () => {
     expect(onboardingNextStepOf(result)).toContain(
       "set_practice_jurisdictions",
     );
+  });
+
+  test("search_case_law keeps a page empty only because a phrasing timed out free of the hint", async () => {
+    searchDecisionsHandlerMock.mockImplementation(
+      async ({ body: { query } }: { body: { query: string } }) =>
+        query === "slow"
+          ? new HttpStatusResponse(503, {
+              code: PUBLIC_READ_TIMEOUT_CODE,
+              message: "Public read timed out. Please try again.",
+            })
+          : {
+              paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+              facets: null,
+              hits: [],
+              nextCursor: null,
+              total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
+              queryUsed: query,
+              warnings: [],
+            },
+    );
+    const context = createContext({
+      scopedDb: createScopedDb({
+        practiceJurisdictions: [],
+      }),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { country: "CZE", queries: ["empty", "slow"] },
+      context,
+      toolName: "search_case_law",
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(onboardingNextStepOf(result)).toBeUndefined();
+    expect(modelViewOf(result)["nextCursor"]).toEqual(expect.any(String));
   });
 
   test("search_case_law returns no next step when results are non-empty", async () => {

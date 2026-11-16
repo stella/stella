@@ -16,6 +16,7 @@ import {
   emitFailureMetric,
   emitSanctionsScreeningWorkMetric,
 } from "@/api/lib/observability/request-metrics";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 
 const SANCTIONS_MATCHER_FAILURE_CAUSES = [
   "closed",
@@ -158,6 +159,33 @@ export const reportSanctionsScreeningFailure = ({
     reason: "unavailable",
   });
 };
+
+const PUBLIC_SCREENING_BUSY_SINK = failureSink({
+  event: "sanctions.search.busy",
+  expected: [],
+});
+
+/**
+ * The 503 a public screening answers at its concurrency ceiling. The cause
+ * names saturation, which grades anticipated: recorded with the request,
+ * never reported as a fault, and it holds no identity.
+ */
+export const publicScreeningBusyAnswer = () =>
+  observedStatus(
+    {
+      sink: PUBLIC_SCREENING_BUSY_SINK,
+      cause: new SanctionsScreeningFailure({
+        message: "Public sanctions screening is at its concurrency limit",
+        stage: "public-matcher",
+        reason: "admission",
+      }),
+    },
+    503,
+    {
+      code: "service_unavailable",
+      message: "Sanctions screening is busy; try again shortly",
+    },
+  );
 
 /** The lease owns diagnostics; its screening caller owns failure capture. */
 export const reportSanctionsMatcherFailure = ({

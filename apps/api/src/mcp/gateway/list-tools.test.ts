@@ -17,6 +17,7 @@ import {
 import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import { hasMcpToolAuthority } from "@/api/mcp/write-tool-authority";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
@@ -65,7 +66,8 @@ const registryEnumOf = (
     "enum" in registry &&
     Array.isArray(registry.enum)
   ) {
-    return [...registry.enum];
+    const values: string[] = registry.enum;
+    return [...values];
   }
   return [];
 };
@@ -461,7 +463,7 @@ describe("listGatewayMcpToolDefinitions role visibility", () => {
     );
   });
 
-  test("rejects exact-name resolution when the role cannot read rates", async () => {
+  test("resolves a named rate tool so dispatch can return a typed grant refusal", async () => {
     const ownerDefinition = await getGatewayMcpToolDefinition({
       context: contextWith(undefined, "owner"),
       mode: "default",
@@ -474,7 +476,19 @@ describe("listGatewayMcpToolDefinitions role visibility", () => {
     });
 
     expect(ownerDefinition?.name).toBe("resolve_rate");
-    expect(memberDefinition).toBeUndefined();
+    expect(memberDefinition?.name).toBe("resolve_rate");
+    if (!memberDefinition) {
+      return;
+    }
+    expect(
+      hasMcpToolAuthority(contextWith(undefined, "member"), memberDefinition),
+    ).toBe(false);
+    expect(
+      hasMcpToolAuthority(
+        { ...contextWith(undefined, "member"), billingAccess: true },
+        memberDefinition,
+      ),
+    ).toBe(true);
   });
 
   test("hides time-entry lists from external roles", async () => {
@@ -578,6 +592,9 @@ describe("MCP app-only discovery", () => {
     };
     const wire = toMcpTools([definition]);
     expect(wire.map(({ name }) => name)).toEqual([definition.name]);
-    expect(wire.at(0)?._meta).toEqual(definition._meta);
+    expect(wire.at(0)?._meta).toEqual({
+      ...definition._meta,
+      schemaVersion: expect.stringMatching(/^[a-f0-9]{16}$/u),
+    });
   });
 });

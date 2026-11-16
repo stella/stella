@@ -8,6 +8,7 @@ import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { toAPIError } from "@/lib/errors/api";
 import {
   detachedUserAction,
+  fieldIssueOrToast,
   notifyUserError,
   notifyUserProblem,
   resetUserErrorReportDedupeForTests,
@@ -47,6 +48,55 @@ const settle = async () => {
 afterEach(() => {
   resetUserErrorReportDedupeForTests();
   mock.restore();
+});
+
+describe("a failure a form shows itself", () => {
+  const refused = () =>
+    toAPIError({
+      status: 400,
+      value: { code: "some_refusal", message: "Refused" },
+    });
+
+  test("an issue on the field is returned and no toast is raised", () => {
+    const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const error = toAPIError({
+      status: 422,
+      value: {
+        code: "validation",
+        message: "Invalid request",
+        issues: [{ field: "name", constraint: "required" }],
+      },
+    });
+
+    expect(fieldIssueOrToast(error, "name", FAILURE)).toBeString();
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  test("an issue on a form that closed meanwhile becomes a toast", () => {
+    spyOn(getAnalytics(), "captureError").mockImplementation(() => undefined);
+    const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const error = toAPIError({
+      status: 422,
+      value: {
+        code: "validation",
+        message: "Invalid request",
+        issues: [{ field: "name", constraint: "required" }],
+      },
+    });
+
+    expect(
+      fieldIssueOrToast(error, "name", FAILURE, () => false),
+    ).toBeUndefined();
+    expect(add).toHaveBeenCalledTimes(1);
+  });
+
+  test("a failure no field can show becomes a toast", () => {
+    spyOn(getAnalytics(), "captureError").mockImplementation(() => undefined);
+    const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+
+    expect(fieldIssueOrToast(refused(), "name", FAILURE)).toBeUndefined();
+    expect(add).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("notifyUserProblem", () => {

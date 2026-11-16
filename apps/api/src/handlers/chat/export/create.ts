@@ -130,7 +130,11 @@ const createMessageExport = createSafeRootHandler(
     session,
     user,
   }) {
-    const scope = yield* resolveChatScope({ getWorkspaceAccess, workspaceId });
+    const scope = yield* resolveChatScope({
+      admitted: "active-or-archived",
+      getWorkspaceAccess,
+      workspaceId,
+    });
 
     const thread = yield* Result.await(
       readChatExportSource({ safeDb, threadId, messageId, userId: user.id }),

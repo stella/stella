@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { contactDataBoxSchema } from "@/api/db/schema-validators";
+import { contactDataBoxSchema } from "@stll/api-contract/contact-write";
+
 import {
   mergeContactMetadata,
   normalizeContactMetadata,

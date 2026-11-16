@@ -2,10 +2,12 @@ import { Result } from "better-result";
 import { deepEquals } from "bun";
 import { eq } from "drizzle-orm";
 
+import { AI_MONEY_COLUMN_UNAVAILABLE_CODE } from "@stll/api-contract/property-policy";
 import type { ConditionNode } from "@stll/conditions";
 
 import type { Transaction } from "@/api/db/root";
 import { properties, propertyDependencies } from "@/api/db/schema";
+import { isScopedFeatureEnabled } from "@/api/db/scoped-feature-access";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -18,6 +20,7 @@ import {
 } from "@/api/lib/conditions/ast-utils";
 import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { TABLE_ANALYSIS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
@@ -101,7 +104,9 @@ export const collectTemplateProperties = ({
 
   const templateProperties: ViewTemplateProperty[] = [];
   for (const property of workspaceProperties) {
-    if (property.system) {
+    // A record column's shape belongs to its data source or its AI
+    // definition, neither of which a view template carries.
+    if (property.system || property.content.type === "record") {
       continue;
     }
     if (
@@ -195,6 +200,32 @@ const addDependencySourceIds = (
  * whatever it has already written, so a caller must abort on the rejection by
  * throwing it inside `abortableTx`, which hands it back unchanged.
  */
+/**
+ * The template body is the caller's own, so an AI money column in it is
+ * admitted the way properties.create admits one: only with table-analysis.
+ */
+const refuseUnadmittedAiMoney = async (
+  tx: Transaction,
+  toCreate: readonly ViewTemplateProperty[],
+): Promise<HandlerError | null> => {
+  const asksForAiMoney = toCreate.some(
+    ({ content, tool }) => content.type === "money" && tool.type === "ai-model",
+  );
+  if (
+    !asksForAiMoney ||
+    (await isScopedFeatureEnabled(tx, TABLE_ANALYSIS_FEATURE_ID))
+  ) {
+    return null;
+  }
+  return new HandlerError({
+    status: 403,
+    code: AI_MONEY_COLUMN_UNAVAILABLE_CODE,
+    retryable: false,
+    message: "AI money columns need the table-analysis feature",
+    hint: "Make the template's money column a manual-input column.",
+  });
+};
+
 export const resolveTemplateProperties = async ({
   tx,
   workspaceId,
@@ -297,13 +328,13 @@ export const resolveTemplateProperties = async ({
       );
     }
 
-    const existingByShape = findUniquePropertyByShape(
+    const existingByShape = findUniquePropertyByShape({
       existingProperties,
       templateProperty,
       consumedExistingPropertyIds,
       propertyIdsWithDependencies,
       roleResolution,
-    );
+    });
     if (existingByShape) {
       propertyIdBySourceId.set(templateProperty.sourceId, existingByShape.id);
       consumedExistingPropertyIds.add(existingByShape.id);
@@ -335,6 +366,11 @@ export const resolveTemplateProperties = async ({
     createdPropertySourceIds.add(templateProperty.sourceId);
     templatePropertiesToCreate.push(templateProperty);
     projectedPropertyCount += 1;
+  }
+
+  const aiMoney = await refuseUnadmittedAiMoney(tx, templatePropertiesToCreate);
+  if (aiMoney !== null) {
+    return Result.err(aiMoney);
   }
 
   if (
@@ -928,19 +964,27 @@ const canReusePropertyByExactId = ({
   );
 };
 
-const findUniquePropertyByShape = (
+type FindUniquePropertyByShapeOptions = {
   existingProperties: readonly {
     id: string;
     name: string;
     content: typeof properties.$inferSelect.content;
     tool: typeof properties.$inferSelect.tool;
     role: typeof properties.$inferSelect.role;
-  }[],
-  templateProperty: ViewTemplateProperty,
-  consumedExistingPropertyIds: ReadonlySet<string>,
-  propertyIdsWithDependencies: ReadonlySet<string>,
-  roleResolution: TemplateRoleResolution,
-) => {
+  }[];
+  templateProperty: ViewTemplateProperty;
+  consumedExistingPropertyIds: ReadonlySet<string>;
+  propertyIdsWithDependencies: ReadonlySet<string>;
+  roleResolution: TemplateRoleResolution;
+};
+
+const findUniquePropertyByShape = ({
+  existingProperties,
+  templateProperty,
+  consumedExistingPropertyIds,
+  propertyIdsWithDependencies,
+  roleResolution,
+}: FindUniquePropertyByShapeOptions) => {
   // Reusing an AI column would silently inherit its existing dependency
   // graph, so only fall back when neither side carries dependencies.
   const templateHasDependencies =

@@ -32,7 +32,9 @@ import {
   UploadIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { StyleSetEditorDialog } from "@/features/style-sets/style-set-editor-dialog";
 import type { StyleSetEditorTarget } from "@/features/style-sets/style-set-editor-types";
@@ -402,8 +404,12 @@ const StyleSetRow = ({
       <FileTextIcon className="text-muted-foreground size-5" />
     </div>
     <div className="min-w-0 flex-1">
-      <p className="truncate text-sm font-medium">{name}</p>
-      <p className="text-muted-foreground truncate text-xs">{description}</p>
+      <TruncatedText className="text-sm font-medium" render={<p />}>
+        {name}
+      </TruncatedText>
+      <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
+        {description}
+      </TruncatedText>
     </div>
     {trailing}
   </li>
@@ -431,6 +437,7 @@ const StyleSetFormDialog = ({
   const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const sourceLabelId = useId();
+  const nameInputId = useId();
   const [name, setName] = useState(styleSet?.name ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -505,15 +512,16 @@ const StyleSetFormDialog = ({
           )}
         </DialogHeader>
         <DialogPanel className="space-y-4">
-          <label className="space-y-1.5">
-            <span className="text-sm font-medium">{t("common.name")}</span>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={nameInputId}>{t("common.name")}</Label>
             <Input
               autoFocus
+              id={nameInputId}
               maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
               onChange={(event) => setName(event.target.value)}
               value={name}
             />
-          </label>
+          </div>
           {!styleSet && (
             <div className="space-y-1.5">
               <span className="text-sm font-medium" id={sourceLabelId}>

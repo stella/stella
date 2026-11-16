@@ -18,6 +18,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 type WorkspaceMemberRow = typeof workspaceMembers.$inferSelect;
 type UserRow = typeof user.$inferSelect;
@@ -133,7 +134,7 @@ const listWorkspaceMemberPreviews = createSafeRootHandler(
             and(
               inArray(workspaces.id, query.workspaceIds),
               eq(workspaces.organizationId, session.activeOrganizationId),
-              inArray(workspaces.status, ["active", "archived"]),
+              visibleWorkspaceSql(),
             ),
           )
           .limit(LIMITS.workspaceMemberPreviewBatchMax);

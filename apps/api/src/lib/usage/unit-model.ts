@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 
-import { getModelRate, resolveModelRate } from "@stll/ai-catalog";
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import {
+  getModelRate,
+  MODEL_RATE_UNITS_PER_USD,
+  resolveModelRate,
+} from "@stll/ai-catalog";
 /**
  * Per-model usage conversion for the usage ledger.
  *
@@ -11,6 +16,10 @@ import { getModelRate, resolveModelRate } from "@stll/ai-catalog";
  * chat middleware.
  */
 import type { AIProvider, ModelRate } from "@stll/ai-catalog";
+import {
+  TRANSCRIPTION_MODELS,
+  type TranscriptionModelId,
+} from "@stll/ai-catalog/transcription";
 
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import type { DecisionModelProvider } from "@/api/lib/ai-config";
@@ -180,36 +189,12 @@ const scaleTokenCost = (tokens: number, ratePerMTok: number): number => {
   return Number(scaled);
 };
 
-type CacheAccounting = "included-in-input" | "separate-from-input";
-
-/**
- * How each provider's reported input/prompt token count relates to its
- * cache-read count. OpenAI-style usage reports cached tokens as a subset
- * of the prompt count (`prompt_tokens_details.cached_tokens` within
- * `prompt_tokens`); Gemini's `promptTokenCount` likewise includes
- * `cachedContentTokenCount`. Anthropic-style usage reports `input_tokens`
- * EXCLUDING `cache_read_input_tokens` and `cache_creation_input_tokens`,
- * so on a warm cache the cached count legitimately exceeds the input
- * count; Bedrock's Converse usage follows the same split.
- */
-const PROVIDER_CACHE_ACCOUNTING = {
-  anthropic: "separate-from-input",
-  azure_foundry: "included-in-input",
-  bedrock: "separate-from-input",
-  google: "included-in-input",
-  huggingface: "included-in-input",
-  mistral: "included-in-input",
-  openai: "included-in-input",
-  openai_compatible: "included-in-input",
-  openrouter: "included-in-input",
-} as const satisfies Record<AIProvider, CacheAccounting>;
-
 type NormalizeProviderPromptTokensOptions = {
   provider: AIProvider;
   modelId: string;
-  /** The provider's own input/prompt token count, in its native semantics. */
+  /** TanStack TokenUsage.promptTokens: total input, including cache operations. */
   promptTokens: number;
-  /** The provider's cache-read count, in its native semantics. */
+  /** TanStack TokenUsage.promptTokensDetails.cachedTokens. */
   cacheReadTokens: number;
   /** Cache-write (cache creation) count for providers that report one. */
   cacheWriteTokens: number;
@@ -222,12 +207,10 @@ type NormalizedPromptTokens = {
 };
 
 /**
- * Normalize a provider's native prompt-token accounting into the
- * non-overlapping components the unit model bills: uncached input at the
- * full input rate, cache reads at the cache-read rate, and cache writes at
- * the cache-write rate. This is the only place provider cache semantics may
- * be interpreted; downstream code
- * never subtracts one provider-reported count from another.
+ * Split TanStack's canonical total input into the non-overlapping components
+ * the unit model bills. Since v1, every adapter includes cache reads and writes
+ * in promptTokens, including Anthropic and Bedrock; native provider counts
+ * must pass through their adapter before reaching this boundary.
  */
 export const normalizeProviderPromptTokens = ({
   provider,
@@ -251,51 +234,36 @@ export const normalizeProviderPromptTokens = ({
     field: "cacheWriteTokens",
     value: cacheWriteTokens,
   });
-  const accounting = PROVIDER_CACHE_ACCOUNTING[provider];
-  switch (accounting) {
-    case "separate-from-input":
-      return {
-        uncachedInputTokens: prompt,
-        cacheReadTokens: cacheRead,
-        cacheWriteTokens: cacheWrite,
-      };
-    case "included-in-input": {
-      const cachedTokens = cacheRead + cacheWrite;
-      if (cachedTokens > prompt) {
-        // Under subset semantics the cached count can never exceed the
-        // prompt count: a shape disagreement with the provider, not an
-        // internal invariant. Fall back to separate accounting — bill the
-        // full prompt at the input rate AND the reported cache operations at
-        // their rates. That over-meters relative to either consistent reading,
-        // which is the conservative direction; discarding the larger cache
-        // count would under-meter.
-        reportUsageShapeAnomaly({
-          modelId,
-          anomaly: "cache-tokens-exceed-included-prompt",
-          context: {
-            provider,
-            promptTokens: String(prompt),
-            cacheReadTokens: String(cacheRead),
-            cacheWriteTokens: String(cacheWrite),
-          },
-        });
-        return {
-          uncachedInputTokens: prompt,
-          cacheReadTokens: cacheRead,
-          cacheWriteTokens: cacheWrite,
-        };
-      }
-      return {
-        uncachedInputTokens: prompt - cachedTokens,
-        cacheReadTokens: cacheRead,
-        cacheWriteTokens: cacheWrite,
-      };
-    }
-    default: {
-      accounting satisfies never;
-      return panic(`Unhandled accounting: ${String(accounting)}`);
-    }
+  const cachedTokens = cacheRead + cacheWrite;
+  if (cachedTokens > prompt) {
+    // Under subset semantics the cached count can never exceed the
+    // prompt count: a shape disagreement with the provider, not an
+    // internal invariant. Fall back to separate accounting — bill the
+    // full prompt at the input rate AND the reported cache operations at
+    // their rates. That over-meters relative to either consistent reading,
+    // which is the conservative direction; discarding the larger cache
+    // count would under-meter.
+    reportUsageShapeAnomaly({
+      modelId,
+      anomaly: "cache-tokens-exceed-included-prompt",
+      context: {
+        provider,
+        promptTokens: String(prompt),
+        cacheReadTokens: String(cacheRead),
+        cacheWriteTokens: String(cacheWrite),
+      },
+    });
+    return {
+      uncachedInputTokens: prompt,
+      cacheReadTokens: cacheRead,
+      cacheWriteTokens: cacheWrite,
+    };
   }
+  return {
+    uncachedInputTokens: prompt - cachedTokens,
+    cacheReadTokens: cacheRead,
+    cacheWriteTokens: cacheWrite,
+  };
 };
 
 type UsageInput = {
@@ -446,6 +414,44 @@ export const decisionUsageUnitsFromTokens = ({
     isByok,
     serviceTier: "standard",
   });
+
+type TranscriptionUsageUnitsOptions = {
+  modelId: TranscriptionModelId;
+  durationMs: number;
+  isByok: boolean;
+  residency: "eu" | "us";
+};
+
+export const transcriptionUsageUnits = ({
+  modelId,
+  durationMs,
+  isByok,
+  residency,
+}: TranscriptionUsageUnitsOptions): UsageUnitsFromTokensResult => {
+  if (!Number.isSafeInteger(durationMs) || durationMs < 0) {
+    return panic("Transcription duration must be a non-negative safe integer");
+  }
+  const regional = TRANSCRIPTION_MODELS[modelId].residency[residency];
+  if (regional.status !== "available") {
+    return panic("Transcription model must have a confirmed regional rate");
+  }
+  const numerator =
+    BigInt(durationMs) *
+    BigInt(regional.price.usdNumerator) *
+    BigInt(MODEL_RATE_UNITS_PER_USD);
+  const denominator = BigInt(regional.price.secondsDenominator) * 1000n;
+  const raw = (numerator + denominator - 1n) / denominator;
+  const parsedRaw = parseIntegerToken(raw.toString(), { sign: "unsigned" });
+  if (parsedRaw.isErr()) {
+    return panic("Transcription usage exceeds the safe integer range");
+  }
+  return unitsFromRawUsage({
+    rawUsageMicroUnits: parsedRaw.value,
+    actionType: "transcription",
+    serviceTier: "standard",
+    isByok,
+  });
+};
 
 type UnitsFromRawUsageOptions = {
   rawUsageMicroUnits: number;

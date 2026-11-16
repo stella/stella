@@ -4,6 +4,7 @@ import { getRouteApi } from "@tanstack/react-router";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import { skillDetailOptions } from "@/lib/knowledge/queries";
 import { classifyToolEntry } from "@/lib/knowledge/tool-entry";
 import { queryView } from "@/lib/query-view.logic";
@@ -14,6 +15,7 @@ const toolEntryRoute = getRouteApi("/knowledge/tools_/$entry");
  *  tool's comes with the page. A tool's slug is never asked for as a skill. */
 export const SkillBreadcrumb = () => {
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const skillLabel = useSkillLabel();
   const entry = toolEntryRoute.useParams({ select: (params) => params.entry });
   const toolName = toolEntryRoute.useMatch({
     select: (match) =>
@@ -28,6 +30,14 @@ export const SkillBreadcrumb = () => {
   });
   const skillView = queryView(skillQuery);
   const skill = skillView.type === "items" ? skillView.items : undefined;
+  const skillName =
+    skill === undefined
+      ? undefined
+      : skillLabel({
+          skillDisplayName: skill.name,
+          skillId: skill.id,
+          skillName: skill.slug,
+        });
 
   if (isSkill && skillView.type !== "items") {
     return <BreadcrumbQueryContent view={skillView} />;
@@ -36,7 +46,7 @@ export const SkillBreadcrumb = () => {
     <>
       {isSkill && <BreadcrumbQueryContent view={skillView} />}
       <BreadcrumbLink to="/knowledge/tools/$entry">
-        {toolName ?? skill?.name ?? entry}
+        {toolName ?? skillName ?? entry}
       </BreadcrumbLink>
     </>
   );

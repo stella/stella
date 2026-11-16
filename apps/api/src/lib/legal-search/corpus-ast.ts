@@ -3,7 +3,8 @@ import * as v from "valibot";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import {
-  isDocumentAst,
+  headMatterOrderDegradations,
+  isDocumentAstInAnyBlockOrder,
   persistedDocumentAstSchema,
 } from "@stll/legal-ast/document-ast";
 
@@ -20,7 +21,7 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
-/** The wire contract shared by corpus readers and every payload writer. */
+/** The wire contract corpus readers accept from any stored row. */
 export const persistedCorpusAstSchema = v.nullable(
   v.union([persistedDocumentAstSchema, emptyAstSchema]),
 );
@@ -52,8 +53,22 @@ export const prepareCorpusAst = ({
     // rebuilt object (schema key order, undeclared fields dropped), and the
     // content hash is order-sensitive JSON, so writing it would change every
     // unchanged decision's hash and lose fields the schema does not name.
-    // Only a legacy-shaped AST is written in its normalized form.
-    const stored = isDocumentAst(ast) ? ast : parsed.output;
+    // Late head matter is reported, not normalized. Only a legacy-shaped AST
+    // is written in its normalized form.
+    const stored = isDocumentAstInAnyBlockOrder(ast) ? ast : parsed.output;
+    if (parsed.output !== null && "blocks" in parsed.output) {
+      const degradations = headMatterOrderDegradations(parsed.output.blocks);
+      if (degradations.length > 0) {
+        logger.warn(
+          "case_law.ingestion.ast_head_matter_order",
+          sanitizeErrorAttributesForOutput({
+            source: source ?? parsed.output.source.system,
+            parserVersion: parserVersion ?? null,
+            lateBlockCount: degradations.length,
+          }),
+        );
+      }
+    }
     return Result.ok({ type: "readable", ast: stored } as const);
   }
   if (

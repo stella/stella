@@ -7,7 +7,7 @@ import { useFormatter, useTranslations } from "use-intl";
 import { Text } from "@stll/ui/text";
 
 import { screenStyles } from "@/components/empty-state-screen";
-import { TaskStatusControl } from "@/components/task-status-control";
+import { TaskEditor } from "@/components/task-editor";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
@@ -16,13 +16,18 @@ import type { EntityDetail } from "@/state/entity-detail";
 import { isKnownEntityKind } from "@/state/matter-entities";
 import { useAppColors } from "@/theme";
 
-/** One item's essentials, read once when the sheet opens. */
+/**
+ * One item's essentials, read once when the sheet opens. A task opens in
+ * full, to be changed or deleted; once deleted, `onDeleted` closes it.
+ */
 export const EntityDetailSheet = ({
   entityId,
+  onDeleted,
   source,
   workspaceId,
 }: {
   entityId: string;
+  onDeleted: () => void;
   source: AccessTokenSource;
   workspaceId: string;
 }) => {
@@ -48,7 +53,12 @@ export const EntityDetailSheet = ({
           <ActivityIndicator color={colors.accent} style={styles.loading} />
         }
       >
-        <LoadedEntity load={load} source={source} workspaceId={workspaceId} />
+        <LoadedEntity
+          load={load}
+          onDeleted={onDeleted}
+          source={source}
+          workspaceId={workspaceId}
+        />
       </Suspense>
     </View>
   );
@@ -56,10 +66,12 @@ export const EntityDetailSheet = ({
 
 const LoadedEntity = ({
   load,
+  onDeleted,
   source,
   workspaceId,
 }: {
   load: Promise<Result<EntityDetail, ApiError>>;
+  onDeleted: () => void;
   source: AccessTokenSource;
   workspaceId: string;
 }) => {
@@ -79,34 +91,44 @@ const LoadedEntity = ({
 
   const entity = result.value;
   const { kind } = entity;
+  if (kind === "task") {
+    return (
+      <ScrollView
+        alwaysBounceVertical={false}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <TaskEditor
+          matterId={workspaceId}
+          onDeleted={onDeleted}
+          source={source}
+          taskId={entity.entityId}
+        />
+      </ScrollView>
+    );
+  }
+
   const untitled = entity.name === null || entity.name === "";
-  // A task's status and due date are its facts (TaskStatusControl); its kind
-  // goes without saying, and versions belong to documents.
-  const facts =
-    kind === "task"
-      ? []
-      : [
-          isKnownEntityKind(kind)
-            ? { label: t("type"), value: matter(`kind.${kind}`) }
-            : undefined,
-          entity.currentVersionReference === null ||
-          entity.currentVersionReference === undefined
-            ? undefined
-            : { label: t("reference"), value: entity.currentVersionReference },
-          entity.currentVersionCreatedAt === null ||
-          entity.currentVersionCreatedAt === undefined
-            ? undefined
-            : {
-                label: t("currentVersion"),
-                value: format.dateTime(
-                  new Date(entity.currentVersionCreatedAt),
-                  {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  },
-                ),
-              },
-        ].filter((fact) => fact !== undefined);
+  // Versions belong to documents.
+  const facts = [
+    isKnownEntityKind(kind)
+      ? { label: t("type"), value: matter(`kind.${kind}`) }
+      : undefined,
+    entity.currentVersionReference === null ||
+    entity.currentVersionReference === undefined
+      ? undefined
+      : { label: t("reference"), value: entity.currentVersionReference },
+    entity.currentVersionCreatedAt === null ||
+    entity.currentVersionCreatedAt === undefined
+      ? undefined
+      : {
+          label: t("currentVersion"),
+          value: format.dateTime(new Date(entity.currentVersionCreatedAt), {
+            dateStyle: "medium",
+            timeStyle: "short",
+          }),
+        },
+  ].filter((fact) => fact !== undefined);
 
   return (
     <ScrollView
@@ -123,13 +145,6 @@ const LoadedEntity = ({
       >
         {untitled ? matter("untitled") : entity.name}
       </Text>
-      {kind === "task" ? (
-        <TaskStatusControl
-          matterId={workspaceId}
-          source={source}
-          taskId={entity.entityId}
-        />
-      ) : null}
       {facts.length === 0 ? null : (
         <View style={[styles.facts, { borderColor: colors.border }]}>
           {facts.map((fact) => (

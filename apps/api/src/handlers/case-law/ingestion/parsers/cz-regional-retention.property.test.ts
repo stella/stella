@@ -1,22 +1,25 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   buildValidationHtml,
   validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseRegionalDecision } from "./cz-regional";
+import { parseRegionalDecision as uncheckedParseRegionalDecision } from "./cz-regional";
 import type { ParseRegionalInput } from "./cz-regional";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,
   markerPlan,
 } from "./marker-injection.test-helper";
+
+const parseRegionalDecision = guardParser(uncheckedParseRegionalDecision);
 
 const paragraph = fc.record({
   styleLocalId: fc.integer({ min: 1, max: 4 }),
@@ -61,7 +64,7 @@ test(
             ...source.information,
           ];
           // Markup is only a transport for the shared marker injector; the parser receives plain JSON text fields.
-          const fixture = cheerio.load("<html><body></body></html>");
+          const fixture = load("<html><body></body></html>");
           for (const para of ordered) {
             const element = fixture("<p></p>");
             for (const span of para.spans) {

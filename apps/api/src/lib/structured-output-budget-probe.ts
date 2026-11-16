@@ -24,6 +24,7 @@ const BATCH_CONTENT_KINDS = [
   "text",
   "date",
   "int",
+  "money",
   "single-select",
   "multi-select",
 ] as const;
@@ -47,6 +48,8 @@ const contentForKind = (
       return { version: 1, type: "date" };
     case "int":
       return { version: 1, type: "int" };
+    case "money":
+      return { version: 1, type: "money", currency: "EUR" };
     case "single-select":
     case "multi-select":
       return {
@@ -73,6 +76,7 @@ const syntheticProperty = (index: number): AIBatchProperty => {
   return {
     id: brandDerivedPropertyId(`budget-edge-probe-${index}`),
     status: "stale",
+    answerShape: "value",
     content: contentForKind(kind),
     dependencies: [],
     tool: {

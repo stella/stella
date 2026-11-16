@@ -12,18 +12,26 @@
 //! length of one flow: it is never persisted, never logged, and never reaches
 //! the webview.
 
+use crate::logging::best_effort;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use stella_desktop_pkcs11::protocol::{Pin, PinEntry, PinRetries};
 use stella_desktop_signing_core::{
   CloseRequest, PromptOwner, Signer, SigningErrorCode, SigningIdentity, SigningKeyType,
+  unix_now,
 };
 use tauri::AppHandle;
 use tokio::sync::{Mutex, oneshot};
 
 use crate::config;
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
+use crate::pkcs11_signing::{
+  CODE_TOKEN_SIGNING_FAILED, CODE_TOKEN_TIMEOUT, CODE_TOKEN_UNREADABLE, DriverNotice,
+  HelperFailure, TokenIdentity, TokenScan, TokenSource,
+};
 use crate::session_manager::SessionManager;
 use crate::types::{ErrorResponse, is_safe_session_id};
 
@@ -51,7 +59,7 @@ const SIGNED_DIALOG_LINGER: Duration = Duration::from_secs(2);
 /// at the same number and closes the session after the last one.
 const MAX_FINALIZE_ATTEMPTS: u32 = 3;
 
-const DIALOG_LABEL: &str = "pdf-sign-dialog";
+pub const DIALOG_LABEL: &str = "pdf-sign-dialog";
 const DIALOG_WIDTH: f64 = 420.0;
 /// Initial viewport; the page requests its measured content size after rendering.
 const DIALOG_HEIGHT: f64 = 640.0;
@@ -105,6 +113,9 @@ fn message_key(code: &str) -> &'static str {
     "unsupported_platform" => "pdfSignUnsupported",
     "keychain_unavailable" => "pdfSignErrors.keychainUnavailable",
     "signing_failed" => "pdfSignErrors.signingFailed",
+    CODE_TOKEN_TIMEOUT => "pdfSignErrors.tokenTimeout",
+    CODE_TOKEN_SIGNING_FAILED => "pdfSignErrors.tokenSigningFailed",
+    CODE_TOKEN_UNREADABLE => "pdfSignErrors.tokenUnreadable",
     CODE_NETWORK_UNREACHABLE => "pdfSignErrors.networkUnreachable",
     CODE_RESPONSE_UNREADABLE => "pdfSignErrors.responseUnreadable",
     "pdf_signing_session_expired" | "pdf_signing_session_not_found" => {
@@ -157,8 +168,10 @@ struct DialogBridge {
 
 /// What the dialog's buttons mean to the flow.
 pub enum DialogChoice {
+  /// `pin` is typed for a token without a PIN pad, and `None` otherwise.
   Sign {
     identity_id: String,
+    pin: Option<Pin>,
   },
   /// Finalize again with the signature already made: no new PIN.
   Retry,
@@ -173,7 +186,11 @@ pub enum DialogChoice {
   tag = "action"
 )]
 pub enum PdfSignDialogResponse {
-  Sign { identity_id: String },
+  Sign {
+    identity_id: String,
+    #[serde(default)]
+    pin: Option<Pin>,
+  },
   Retry,
   Cancel,
 }
@@ -198,6 +215,12 @@ pub enum PdfSignResult {
     code: String,
     message_key: &'static str,
     retry_within_ms: Option<u64>,
+  },
+  /// The token refused the PIN: the dialog asks for it again, warning by
+  /// `pin_retries` how close the card is to locking.
+  PinRejected {
+    message_key: &'static str,
+    pin_retries: PinRetries,
   },
 }
 
@@ -228,12 +251,288 @@ enum DialogState {
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-struct DialogIdentity<'a> {
-  id: &'a str,
-  label: &'a str,
-  issuer: Option<&'a str>,
+struct DialogIdentity {
+  id: String,
+  label: String,
+  issuer: Option<String>,
   /// `YYYY-MM-DD`; the dialog formats it in the app's language.
-  expires_on: &'a str,
+  expires_on: String,
+  /// The smart card or token the key is on, for one the desktop reaches
+  /// through its PKCS #11 driver; `None` for the platform store's own.
+  token: Option<DialogToken>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DialogToken {
+  label: String,
+  pin_entry: PinEntry,
+  pin_retries: PinRetries,
+}
+
+impl From<&OfferedIdentity> for DialogIdentity {
+  fn from(OfferedIdentity { identity, provider }: &OfferedIdentity) -> Self {
+    Self {
+      id: identity.id.clone(),
+      label: identity.label.clone(),
+      issuer: identity.issuer.clone(),
+      expires_on: identity.expires_on.clone(),
+      token: match provider {
+        Provider::Store => None,
+        Provider::Pkcs11(source) => Some(DialogToken {
+          label: source.token_label.clone(),
+          pin_entry: source.pin_entry,
+          pin_retries: source.pin_retries,
+        }),
+      },
+    }
+  }
+}
+
+/// The picker as the open dialog re-reads it, so a card inserted or removed
+/// after the dialog opened shows up without reopening it.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DialogListing {
+  state: DialogState,
+  state_message_key: Option<&'static str>,
+  identities: Vec<DialogIdentity>,
+  driver_notices: Vec<DriverNotice>,
+}
+
+impl DialogListing {
+  fn of(listing: &OfferedListing) -> Self {
+    let (state, state_message_key) = listing.state();
+    Self {
+      state,
+      state_message_key,
+      identities: listing
+        .identities
+        .as_ref()
+        .map(|offered| offered.iter().map(DialogIdentity::from).collect())
+        .unwrap_or_default(),
+      driver_notices: listing.driver_notices.clone(),
+    }
+  }
+}
+
+/// Where the dialog's certificates come from. The platform store is cheap
+/// to read and is read again on every refresh. The cards are scanned only
+/// when the dialog opens and when the user asks for a rescan, since a scan
+/// starts the PKCS #11 helper, which loads card vendors' modules.
+trait CertificateSources {
+  async fn store(&self) -> Result<Vec<SigningIdentity>, SigningErrorCode>;
+  async fn cards(&self) -> Result<TokenScan, HelperFailure>;
+}
+
+/// This computer's store and its installed card drivers.
+struct InstalledSources;
+
+impl CertificateSources for InstalledSources {
+  async fn store(&self) -> Result<Vec<SigningIdentity>, SigningErrorCode> {
+    list_identities().await
+  }
+
+  async fn cards(&self) -> Result<TokenScan, HelperFailure> {
+    crate::pkcs11_signing::scan(
+      unix_now(),
+      crate::pkcs11_module_setting::chosen_module(),
+    )
+    .await
+  }
+}
+
+/// What the last card scan found.
+#[derive(Clone, Debug, Default)]
+struct CardScan {
+  tokens: Vec<TokenIdentity>,
+  notices: Vec<DriverNotice>,
+  /// The dialog code for cards that could not be listed, if they could not.
+  failure: Option<&'static str>,
+}
+
+/// The open dialog's last card scan, with the flow that took it: set when
+/// the dialog opens, replaced by a rescan, read by the store's refresh and by
+/// the signature, and cleared when the flow ends. `None` while no signing
+/// flow runs.
+static CARD_SCAN: std::sync::Mutex<Option<FlowCardScan>> = std::sync::Mutex::new(None);
+/// Numbers the signing flows, so a scan or a cleanup that outlives its flow
+/// cannot touch the next flow's scan.
+static NEXT_CARD_SCAN_FLOW: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Debug)]
+struct FlowCardScan {
+  flow: u64,
+  cards: CardScan,
+}
+
+fn current_card_scan() -> CardScan {
+  let scan = CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner()).clone();
+  scan.map(|scan| scan.cards).unwrap_or_default()
+}
+
+/// The flow whose dialog holds the card scan, if a flow runs.
+fn card_scan_flow() -> Option<u64> {
+  let scan = CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner());
+  scan.as_ref().map(|scan| scan.flow)
+}
+
+/// Replace `flow`'s scan. A scan that outlived its flow is dropped, even when
+/// another flow has started since.
+fn remember_card_scan(flow: u64, cards: CardScan) {
+  let mut scan = CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner());
+  if let Some(current) = scan.as_mut().filter(|current| current.flow == flow) {
+    current.cards = cards;
+  }
+}
+
+/// Holds the flow's card scan, and clears it however the flow ends.
+struct CardScanGuard {
+  flow: u64,
+}
+
+impl CardScanGuard {
+  fn start(cards: CardScan) -> Self {
+    let flow = NEXT_CARD_SCAN_FLOW.fetch_add(1, Ordering::Relaxed);
+    *CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner()) =
+      Some(FlowCardScan { flow, cards });
+    Self { flow }
+  }
+}
+
+impl Drop for CardScanGuard {
+  fn drop(&mut self) {
+    let mut scan = CARD_SCAN.lock().unwrap_or_else(|e| e.into_inner());
+    if scan.as_ref().is_some_and(|scan| scan.flow == self.flow) {
+      *scan = None;
+    }
+  }
+}
+
+/// Scan the cards once, keeping the driver notices when the helper fails.
+async fn scan_cards(sources: &impl CertificateSources) -> CardScan {
+  let scan = sources.cards().await.unwrap_or_else(|failure| TokenScan {
+    failure: Some(failure),
+    ..TokenScan::default()
+  });
+  let failure = match &scan.failure {
+    None => None,
+    Some(HelperFailure::Missing) => {
+      tracing::warn!(
+        "a smart card driver is installed, but this build has no PKCS #11 helper"
+      );
+      None
+    }
+    Some(HelperFailure::TimedOut) => {
+      tracing::warn!("smart card tokens could not be listed in time");
+      Some(CODE_TOKEN_TIMEOUT)
+    }
+    Some(error @ HelperFailure::Failed(_)) => {
+      tracing::warn!(error = %error, "smart card tokens could not be listed");
+      Some(CODE_TOKEN_UNREADABLE)
+    }
+  };
+  CardScan {
+    tokens: scan.identities,
+    notices: scan.notices,
+    failure,
+  }
+}
+
+/// The store as it reads now beside the cards as `cards` found them. It
+/// never starts the helper.
+async fn refreshed_listing(
+  sources: &impl CertificateSources,
+  cards: &CardScan,
+) -> OfferedListing {
+  merge_listing(sources.store().await, cards)
+}
+
+/// The store and the cards, both read anew; the scan is returned to be
+/// kept for the refreshes and the signature that follow.
+async fn rescanned_listing(
+  sources: &impl CertificateSources,
+) -> (OfferedListing, CardScan) {
+  let (store, cards) = tokio::join!(sources.store(), scan_cards(sources));
+  (merge_listing(store, &cards), cards)
+}
+
+/// The picker as the open dialog's three-second refresh reads it: the store
+/// anew, the cards as last scanned.
+pub async fn dialog_listing() -> DialogListing {
+  DialogListing::of(&refreshed_listing(&InstalledSources, &current_card_scan()).await)
+}
+
+/// The picker after the dialog's Rescan button scanned the cards again.
+pub async fn rescan_dialog_listing() -> DialogListing {
+  // The scan belongs to the flow that asked for it; it is dropped if that
+  // flow ends while the helper runs.
+  let flow = card_scan_flow();
+  let (listing, cards) = rescanned_listing(&InstalledSources).await;
+  if let Some(flow) = flow {
+    remember_card_scan(flow, cards);
+  }
+  DialogListing::of(&listing)
+}
+
+/// The chosen certificate as it is at the moment of signing. The store is
+/// read again, so one removed since the last refresh does not reach the
+/// signature. A card's certificate comes from the last scan, with the slot
+/// that listed it: the helper looks for it in that slot only.
+async fn chosen_identity(
+  sources: &impl CertificateSources,
+  cards: &CardScan,
+  identity_id: &str,
+) -> Result<OfferedIdentity, SigningErrorCode> {
+  refreshed_listing(sources, cards)
+    .await
+    .identities?
+    .into_iter()
+    .find(|offered| offered.identity.id == identity_id)
+    .ok_or(SigningErrorCode::KeyNotFound)
+}
+
+/// A certificate the picker offers, and who signs with its key.
+struct OfferedIdentity {
+  identity: SigningIdentity,
+  provider: Provider,
+}
+
+enum Provider {
+  /// The keychain, or the Windows certificate store.
+  Store,
+  /// A smart card or token, through its vendor's PKCS #11 module.
+  Pkcs11(TokenSource),
+}
+
+/// The platform store's identities, then each token identity the store does
+/// not already hold. A card whose certificate the keychain also shows (a
+/// CryptoTokenKit driver beside the PKCS #11 one) signs through the
+/// keychain, which owns the PIN prompt for it.
+fn merge_identities(
+  store: Vec<SigningIdentity>,
+  tokens: Vec<TokenIdentity>,
+) -> Vec<OfferedIdentity> {
+  let mut offered: Vec<OfferedIdentity> = store
+    .into_iter()
+    .map(|identity| OfferedIdentity {
+      identity,
+      provider: Provider::Store,
+    })
+    .collect();
+  for token in tokens {
+    if offered
+      .iter()
+      .any(|existing| existing.identity.id == token.identity.id)
+    {
+      continue;
+    }
+    offered.push(OfferedIdentity {
+      identity: token.identity,
+      provider: Provider::Pkcs11(token.source),
+    });
+  }
+  offered
 }
 
 /// Everything the dialog renders. The session token is deliberately absent:
@@ -244,7 +543,9 @@ struct DialogContent<'a> {
   document_name: &'a str,
   /// Where the signature will be visible, so consent covers what shows.
   stamp_page_number: Option<i64>,
-  identities: &'a [SigningIdentity],
+  identities: &'a [OfferedIdentity],
+  /// Drivers the user has to install or update before their card can sign.
+  driver_notices: &'a [DriverNotice],
   state: DialogState,
   /// Why the keychain could not be read, for `KeychainUnavailable`.
   state_message_key: Option<&'static str>,
@@ -273,8 +574,10 @@ fn cancel_dialog() {
     .lock()
     .unwrap_or_else(|e| e.into_inner())
     .take();
-  if let Some(bridge) = bridge {
-    let _ = bridge.choice.send(DialogChoice::Cancel);
+  if let Some(bridge) = bridge
+    && bridge.choice.send(DialogChoice::Cancel).is_err()
+  {
+    tracing::debug!("PDF signing dialog choice had no waiter");
   }
 }
 
@@ -551,18 +854,15 @@ pub async fn redeem_and_sign(
     token: redeemed.session_token,
   };
 
-  let identities = list_identities().await;
-  let (state, state_message_key) = match &identities {
-    Ok(identities) if identities.is_empty() => (DialogState::NoIdentities, None),
-    Ok(_) => (DialogState::Ready, None),
-    Err(SigningErrorCode::UnsupportedPlatform) => {
-      (DialogState::UnsupportedPlatform, None)
-    }
-    Err(code) => (
-      DialogState::KeychainUnavailable,
-      Some(message_key(code.as_str())),
-    ),
-  };
+  // The cards are scanned once here; the dialog's refresh re-reads only the
+  // store, and its Rescan button scans the cards again.
+  let (listing, cards) = rescanned_listing(&InstalledSources).await;
+  let (state, state_message_key) = listing.state();
+  let OfferedListing {
+    identities,
+    driver_notices,
+    ..
+  } = listing;
   let identities = identities.unwrap_or_default();
 
   if let Err(error) =
@@ -583,11 +883,14 @@ pub async fn redeem_and_sign(
     session.cancel(REASON_USER_CANCELLED).await;
     return Err(crate::handoff::Failure::AlreadyOpen.into());
   }
+  // Only the flow that holds the dialog keeps a card scan, until it ends.
+  let _card_scan = CardScanGuard::start(cards);
 
   let content = DialogContent {
     api_base_url: &session.api_base_url,
     document_name: &redeemed.document_name,
     identities: &identities,
+    driver_notices: &driver_notices,
     stamp_page_number: redeemed.stamp_page_number,
     state,
     state_message_key,
@@ -616,8 +919,8 @@ pub async fn redeem_and_sign(
     }
   };
 
-  let identity_id = match choice {
-    DialogChoice::Sign { identity_id } => identity_id,
+  let (identity_id, pin) = match choice {
+    DialogChoice::Sign { identity_id, pin } => (identity_id, pin),
     // Nothing has been signed yet, so there is nothing to retry: a stray
     // retry reads as the user walking away.
     DialogChoice::Retry | DialogChoice::Cancel => {
@@ -628,40 +931,110 @@ pub async fn redeem_and_sign(
         | DialogState::Ready => REASON_USER_CANCELLED,
       };
       session.cancel(reason).await;
-      let _ = outcome_sender.send(PdfSignResult::Cancelled);
-      let _ = window.close();
+      if outcome_sender.send(PdfSignResult::Cancelled).is_err() {
+        tracing::debug!("PDF signing outcome had no waiter");
+      }
+      best_effort(window.close(), "PDF signing window could not be closed");
       return Ok(());
     }
   };
 
-  let Some(identity) = identities
-    .into_iter()
-    .find(|identity| identity.id == identity_id)
-  else {
-    session.cancel(REASON_USER_CANCELLED).await;
-    let _ = outcome_sender.send(PdfSignResult::failed(
-      SigningErrorCode::KeyNotFound.as_str(),
-      None,
-    ));
-    // The dialog already shows the failure it was sent.
-    return Err(crate::handoff::Stop::Presented(
-      "stella desktop no longer has the chosen certificate.".into(),
-    ));
+  // The dialog re-lists while it is open, so the choice may be a card
+  // inserted since it opened; and a certificate removed since the last
+  // listing must not reach the signature. The store as it is now and the
+  // last card scan decide.
+  let offered = match chosen_identity(
+    &InstalledSources,
+    &current_card_scan(),
+    &identity_id,
+  )
+  .await
+  {
+    Ok(offered) => offered,
+    Err(code) => {
+      session.cancel(REASON_USER_CANCELLED).await;
+      if outcome_sender
+        .send(PdfSignResult::failed(code.as_str(), None))
+        .is_err()
+      {
+        tracing::debug!("PDF signing outcome had no waiter");
+      }
+      // The dialog already shows the failure it was sent.
+      return Err(crate::handoff::Stop::Presented(
+        "stella desktop could not find the chosen certificate.".into(),
+      ));
+    }
   };
 
   if let Err(error) =
     crate::deep_link::recheck_handoff_account(&app_handle, &account).await
   {
     session.cancel(REASON_USER_CANCELLED).await;
-    let _ = outcome_sender.send(PdfSignResult::Cancelled);
-    let _ = window.close();
+    if outcome_sender.send(PdfSignResult::Cancelled).is_err() {
+      tracing::debug!("PDF signing outcome had no waiter");
+    }
+    best_effort(window.close(), "PDF signing window could not be closed");
     return Err(error);
   }
 
-  let signature = match prepare_signature(&session, &identity, &prompt_owner).await {
-    Ok(signature) => signature,
+  let digest = match request_digest(&session, &offered.identity).await {
+    Ok(digest) => digest,
     Err(error) => {
       report_failure(&session, error, outcome_sender).await;
+      return Ok(());
+    }
+  };
+  let (signed, outcome_sender) = match &offered.provider {
+    Provider::Store => (
+      sign_digest(
+        prompt_owner.clone(),
+        offered.identity.id.clone(),
+        digest,
+        offered.identity.key_type,
+      )
+      .await
+      .map_err(SigningStop::Failed),
+      outcome_sender,
+    ),
+    // A dialog closed while the digest was prepared is a user who walked
+    // away: the token is not asked, as the store's owner would not ask the
+    // store.
+    Provider::Pkcs11(_) if prompt_owner.while_open(|_| Ok(())).is_err() => {
+      (Err(SigningStop::Cancelled), outcome_sender)
+    }
+    Provider::Pkcs11(source) => {
+      let (signed, outcome_sender) = sign_on_token(TokenSigning {
+        session: &session,
+        source,
+        identity: &offered.identity,
+        digest: &digest,
+        pin,
+        outcome_sender,
+      })
+      .await;
+      // The token signs outside the window's hold (a PIN pad can wait a
+      // while), so a dialog closed meanwhile is a user who walked away: the
+      // signature is not submitted, as a closed PIN prompt would not be.
+      match signed {
+        Ok(_) if prompt_owner.while_open(|_| Ok(())).is_err() => {
+          (Err(SigningStop::Cancelled), outcome_sender)
+        }
+        signed => (signed, outcome_sender),
+      }
+    }
+  };
+  let signature = match signed {
+    Ok(signature) => signature,
+    Err(SigningStop::Failed(error)) => {
+      report_failure(&session, error, outcome_sender).await;
+      return Ok(());
+    }
+    Err(SigningStop::Cancelled) => {
+      session.cancel(REASON_USER_CANCELLED).await;
+      if outcome_sender.send(PdfSignResult::Cancelled).is_err() {
+        tracing::debug!("PDF signing outcome had no waiter");
+      }
+      best_effort(window.close(), "PDF signing window could not be closed");
       return Ok(());
     }
   };
@@ -671,12 +1044,17 @@ pub async fn redeem_and_sign(
   loop {
     let error = match finalize(&session, &signature).await {
       Ok(version_number) => {
-        let _ = outcome_sender.send(PdfSignResult::Signed { version_number });
+        if outcome_sender
+          .send(PdfSignResult::Signed { version_number })
+          .is_err()
+        {
+          tracing::debug!("PDF signing outcome had no waiter");
+        }
         // The dialog is the receipt: it stays up long enough to be read,
         // then Rust takes it down. A webview cannot close a window it did
         // not open.
         tokio::time::sleep(SIGNED_DIALOG_LINGER).await;
-        let _ = window.close();
+        best_effort(window.close(), "PDF signing window could not be closed");
         return Ok(());
       }
       Err(error) => error,
@@ -712,7 +1090,12 @@ pub async fn redeem_and_sign(
       return Ok(());
     }
     tracing::warn!(error = %error.detail, attempt, "PDF signing will be retried");
-    let _ = outcome_sender.send(PdfSignResult::failed(&error.code, Some(retry_window)));
+    if outcome_sender
+      .send(PdfSignResult::failed(&error.code, Some(retry_window)))
+      .is_err()
+    {
+      tracing::debug!("PDF signing outcome had no waiter");
+    }
     outcome_sender = next_outcome_sender;
 
     match tokio::time::timeout(retry_window, choice_receiver).await {
@@ -720,8 +1103,10 @@ pub async fn redeem_and_sign(
       Ok(_) => {
         cancel_dialog();
         session.cancel(REASON_USER_CANCELLED).await;
-        let _ = outcome_sender.send(PdfSignResult::Cancelled);
-        let _ = window.close();
+        if outcome_sender.send(PdfSignResult::Cancelled).is_err() {
+          tracing::debug!("PDF signing outcome had no waiter");
+        }
+        best_effort(window.close(), "PDF signing window could not be closed");
         return Ok(());
       }
       // The window ran out: the dialog, told how long it had, already says
@@ -747,7 +1132,12 @@ async fn report_failure(
     session.cancel(REASON_USER_CANCELLED).await;
   }
   tracing::warn!(code = %error.code, error = %error.detail, "PDF signing failed");
-  let _ = outcome_sender.send(PdfSignResult::failed(&error.code, None));
+  if outcome_sender
+    .send(PdfSignResult::failed(&error.code, None))
+    .is_err()
+  {
+    tracing::debug!("PDF signing outcome had no waiter");
+  }
 }
 
 struct SigningSession {
@@ -792,13 +1182,11 @@ impl SigningSession {
   }
 }
 
-/// Phase 1 and the store: the certificate goes up, the digest comes back
-/// and the store signs it. The one step that may ask for a PIN.
-async fn prepare_signature(
+/// Phase 1: the certificate goes up, the digest to sign comes back.
+async fn request_digest(
   session: &SigningSession,
   identity: &SigningIdentity,
-  prompt_owner: &PromptOwner,
-) -> Result<Vec<u8>, StepError> {
+) -> Result<[u8; DIGEST_BYTES], StepError> {
   let prepared: CertificateResponse = post(
     &session.client,
     session.url("certificate"),
@@ -833,15 +1221,114 @@ async fn prepare_signature(
       ),
     ));
   }
-  let digest = decode_digest(&prepared.digest_hex)?;
+  decode_digest(&prepared.digest_hex)
+}
 
-  sign_digest(
-    prompt_owner.clone(),
-    identity.id.clone(),
+/// Why a signature was not made.
+enum SigningStop {
+  Failed(StepError),
+  /// The user closed the dialog or let it run out while it asked for a PIN.
+  Cancelled,
+}
+
+struct TokenSigning<'a> {
+  session: &'a SigningSession,
+  source: &'a TokenSource,
+  identity: &'a SigningIdentity,
+  digest: &'a [u8; DIGEST_BYTES],
+  pin: Option<Pin>,
+  outcome_sender: oneshot::Sender<PdfSignResult>,
+}
+
+/// Sign on a smart card or token through its driver. A PIN the token
+/// refuses is asked for again in the dialog, for as long as the token takes
+/// more attempts and the session lasts; the token, not the dialog, counts
+/// them and locks.
+async fn sign_on_token(
+  signing: TokenSigning<'_>,
+) -> (Result<Vec<u8>, SigningStop>, oneshot::Sender<PdfSignResult>) {
+  let TokenSigning {
+    session,
+    source,
+    identity,
     digest,
-    identity.key_type,
-  )
-  .await
+    mut pin,
+    mut outcome_sender,
+  } = signing;
+  loop {
+    // Each attempt, a PIN pad's included, ends inside the session: a
+    // signature made after it expired could not be submitted.
+    let Some(attempt_window) = wait_window(DIALOG_TIMEOUT, session.time_left()) else {
+      return (
+        Err(SigningStop::Failed(StepError::local(
+          CODE_SESSION_EXPIRED,
+          "the signing session ended before the token was asked".to_string(),
+        ))),
+        outcome_sender,
+      );
+    };
+    let failure = match crate::pkcs11_signing::sign(
+      source,
+      identity,
+      digest,
+      pin.take(),
+      attempt_window,
+    )
+    .await
+    {
+      Ok(signature) => return (Ok(signature), outcome_sender),
+      Err(failure) => failure,
+    };
+    let pin_refused = failure.code == SigningErrorCode::PinIncorrect.as_str();
+    if !pin_refused || source.pin_entry != PinEntry::Keyboard {
+      let error = StepError::local(failure.code, failure.detail);
+      return (Err(SigningStop::Failed(error)), outcome_sender);
+    }
+    let Some(pin_window) = wait_window(DIALOG_TIMEOUT, session.time_left()) else {
+      return (
+        Err(SigningStop::Failed(StepError::local(
+          CODE_SESSION_EXPIRED,
+          failure.detail,
+        ))),
+        outcome_sender,
+      );
+    };
+    let (choice_sender, choice_receiver) = oneshot::channel();
+    let (next_outcome_sender, next_outcome_receiver) = oneshot::channel();
+    if reserve_dialog(DialogBridge {
+      choice: choice_sender,
+      outcome: next_outcome_receiver,
+    })
+    .is_err()
+    {
+      let error = StepError::local(failure.code, failure.detail);
+      return (Err(SigningStop::Failed(error)), outcome_sender);
+    }
+    tracing::warn!(error = %failure.detail, "the token refused the PIN");
+    let rejected = PdfSignResult::PinRejected {
+      message_key: message_key(failure.code),
+      // A refused PIN leaves the count low at the least.
+      pin_retries: failure.pin_retries.unwrap_or(PinRetries::Low),
+    };
+    if outcome_sender.send(rejected).is_err() {
+      tracing::debug!("PDF signing outcome had no waiter");
+    }
+    outcome_sender = next_outcome_sender;
+    match tokio::time::timeout(pin_window, choice_receiver).await {
+      Ok(Ok(DialogChoice::Sign {
+        identity_id,
+        pin: Some(next),
+      }))
+        if identity_id == identity.id =>
+      {
+        pin = Some(next)
+      }
+      _ => {
+        cancel_dialog();
+        return (Err(SigningStop::Cancelled), outcome_sender);
+      }
+    }
+  }
 }
 
 /// Phase 2: the API embeds the signature. Safe to repeat with the same
@@ -1010,6 +1497,63 @@ async fn list_identities() -> Result<Vec<SigningIdentity>, SigningErrorCode> {
   }
 }
 
+/// What the dialog offers to sign with, and what it says about drivers.
+struct OfferedListing {
+  identities: Result<Vec<OfferedIdentity>, SigningErrorCode>,
+  driver_notices: Vec<DriverNotice>,
+  /// The dialog code for tokens that could not be listed, if they could not.
+  token_failure: Option<&'static str>,
+}
+
+impl OfferedListing {
+  /// What the dialog shows for this listing. Nothing to offer because the
+  /// cards could not be listed is a failed read, not an empty store: the
+  /// user may well have a card inserted.
+  fn state(&self) -> (DialogState, Option<&'static str>) {
+    match &self.identities {
+      Ok(identities) if identities.is_empty() => match self.token_failure {
+        Some(code) => (DialogState::KeychainUnavailable, Some(message_key(code))),
+        None => (DialogState::NoIdentities, None),
+      },
+      Ok(_) => (DialogState::Ready, None),
+      Err(SigningErrorCode::UnsupportedPlatform) => {
+        (DialogState::UnsupportedPlatform, None)
+      }
+      Err(code) => (
+        DialogState::KeychainUnavailable,
+        Some(message_key(code.as_str())),
+      ),
+    }
+  }
+}
+
+/// The store's identities and the cards', merged, with what the dialog
+/// should say about drivers. A card scan that failed leaves the store's
+/// identities standing and is reported when nothing else can sign; a store
+/// that cannot be read is reported unless a card offers something to sign
+/// with.
+fn merge_listing(
+  store: Result<Vec<SigningIdentity>, SigningErrorCode>,
+  cards: &CardScan,
+) -> OfferedListing {
+  let identities = match store {
+    Ok(store) => Ok(merge_identities(store, cards.tokens.clone())),
+    Err(code) if !cards.tokens.is_empty() => {
+      tracing::warn!(
+        code = code.as_str(),
+        "signing with tokens only: the store could not be read"
+      );
+      Ok(merge_identities(Vec::new(), cards.tokens.clone()))
+    }
+    Err(code) => Err(code),
+  };
+  OfferedListing {
+    identities,
+    driver_notices: cards.notices.clone(),
+    token_failure: cards.failure,
+  }
+}
+
 /// The dialog stays open for as long as the store may show a prompt over it:
 /// a timeout here stops the wait, not the store's call, and closing the
 /// dialog meanwhile is deferred until that call returns. A dialog already
@@ -1053,22 +1597,17 @@ fn open_dialog(
     return Err("A PDF signing dialog is already open.".to_string());
   }
 
-  let listed: Vec<DialogIdentity<'_>> = content
+  let listed: Vec<DialogIdentity> = content
     .identities
     .iter()
-    .map(|identity| DialogIdentity {
-      id: &identity.id,
-      label: &identity.label,
-      issuer: identity.issuer.as_deref(),
-      expires_on: &identity.expires_on,
-    })
+    .map(DialogIdentity::from)
     .collect();
   // Everything the dialog renders travels in the hash, the session token
   // included in what does not: the webview never sees it. The dialog holds no
   // strings of its own, so its wording rides along and it renders in the
   // language the rest of the app runs in.
   let hash = format!(
-    "state={}&store={DIALOG_STORE}&stateMessage={}&apiOrigin={}&stampPage={}&documentName={}&versionNumber={}&workspaceName={}&identities={}&strings={}&lang={}&dir={}",
+    "state={}&store={DIALOG_STORE}&stateMessage={}&apiOrigin={}&stampPage={}&documentName={}&versionNumber={}&workspaceName={}&identities={}&driverNotices={}&strings={}&lang={}&dir={}",
     encode_json(&content.state)?,
     content
       .state_message_key
@@ -1083,6 +1622,7 @@ fn open_dialog(
     content.version_number,
     percent_encode(content.workspace_name),
     encode_json(&listed)?,
+    encode_json(&content.driver_notices)?,
     percent_encode(&crate::i18n::namespace_json("dialog")),
     percent_encode(crate::i18n::active_locale()),
     percent_encode(crate::i18n::text_direction()),
@@ -1116,7 +1656,7 @@ fn open_dialog(
   let prompt_owner = PromptOwner::new(native_handle(&window), {
     let window = window.clone();
     move || {
-      let _ = window.close();
+      best_effort(window.close(), "PDF signing window could not be closed");
     }
   });
   let events_owner = prompt_owner.clone();
@@ -1136,7 +1676,10 @@ fn open_dialog(
     }
     _ => {}
   });
-  let _ = window.set_focus();
+  best_effort(
+    window.set_focus(),
+    "PDF signing window could not be focused",
+  );
   Ok((window, prompt_owner))
 }
 
@@ -1148,7 +1691,7 @@ fn encode_json<T: serde::Serialize>(value: &T) -> Result<String, String> {
 
 /// Percent-encode a string for use in a URL hash parameter.
 fn percent_encode(value: &str) -> String {
-  use std::fmt::Write;
+  const HEX: &[u8; 16] = b"0123456789ABCDEF";
 
   let mut encoded = String::with_capacity(value.len());
   for byte in value.bytes() {
@@ -1157,7 +1700,9 @@ fn percent_encode(value: &str) -> String {
         encoded.push(byte as char);
       }
       _ => {
-        let _ = write!(encoded, "%{byte:02X}");
+        encoded.push('%');
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 0x0F)]));
       }
     }
   }
@@ -1167,6 +1712,43 @@ fn percent_encode(value: &str) -> String {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn a_card_scan_that_outlives_its_flow_leaves_the_next_flow_alone() {
+    let scan = |failure| CardScan {
+      failure: Some(failure),
+      ..CardScan::default()
+    };
+    let first = CardScanGuard::start(scan("first"));
+    let first_flow = card_scan_flow().expect("the first flow holds the scan");
+    drop(first);
+    let second = CardScanGuard::start(scan("second"));
+
+    // The first flow's rescan finishes after the second flow opened.
+    remember_card_scan(first_flow, scan("stale"));
+    assert_eq!(current_card_scan().failure, Some("second"));
+
+    // The second flow's own rescan still lands.
+    let second_flow = card_scan_flow().expect("the second flow holds the scan");
+    remember_card_scan(second_flow, scan("rescanned"));
+    assert_eq!(current_card_scan().failure, Some("rescanned"));
+
+    // A guard of an ended flow cannot clear the running one.
+    drop(CardScanGuard { flow: first_flow });
+    assert_eq!(current_card_scan().failure, Some("rescanned"));
+    drop(second);
+    assert_eq!(card_scan_flow(), None);
+  }
+
+  #[test]
+  fn percent_encoding_spells_every_other_byte_as_uppercase_hex() {
+    assert_eq!(percent_encode("Az09-._~"), "Az09-._~");
+    for character in ['\0', ' ', '%', '/', '\u{7f}', 'é', '€', '😀'] {
+      let text = character.to_string();
+      let expected: String = text.bytes().map(|byte| format!("%{byte:02X}")).collect();
+      assert_eq!(percent_encode(&text), expected);
+    }
+  }
 
   #[test]
   fn a_release_build_does_not_let_a_local_api_ask_for_a_signature() {
@@ -1277,10 +1859,15 @@ mod tests {
     // separator, a fragment marker or a non-ASCII script must not end the
     // parameter it travels in.
     let encoded = encode_json(&[DialogIdentity {
-      id: "abc",
-      label: "Kancelář & Co #2 \"Praha\"",
-      issuer: Some("CA #1 & Co"),
-      expires_on: "2030-01-31",
+      id: "abc".to_string(),
+      label: "Kancelář & Co #2 \"Praha\"".to_string(),
+      issuer: Some("CA #1 & Co".to_string()),
+      expires_on: "2030-01-31".to_string(),
+      token: Some(DialogToken {
+        label: "Karta #1 & PIN=?".to_string(),
+        pin_entry: PinEntry::Keyboard,
+        pin_retries: PinRetries::Normal,
+      }),
     }])
     .unwrap();
 
@@ -1295,13 +1882,243 @@ mod tests {
   fn an_identity_reaches_the_dialog_with_its_issuer_and_expiry() {
     assert_eq!(
       serde_json::to_string(&DialogIdentity {
-        id: "abc",
-        label: "Jane Counsel",
-        issuer: Some("Test Issuing CA"),
-        expires_on: "2030-01-31",
+        id: "abc".to_string(),
+        label: "Jane Counsel".to_string(),
+        issuer: Some("Test Issuing CA".to_string()),
+        expires_on: "2030-01-31".to_string(),
+        token: None,
       })
       .unwrap(),
-      r#"{"id":"abc","label":"Jane Counsel","issuer":"Test Issuing CA","expiresOn":"2030-01-31"}"#
+      r#"{"id":"abc","label":"Jane Counsel","issuer":"Test Issuing CA","expiresOn":"2030-01-31","token":null}"#
+    );
+  }
+
+  #[test]
+  fn a_token_identity_tells_the_dialog_how_its_pin_is_entered() {
+    assert_eq!(
+      serde_json::to_string(&DialogToken {
+        label: "I.CA card".to_string(),
+        pin_entry: PinEntry::PinPad,
+        pin_retries: PinRetries::FinalTry,
+      })
+      .unwrap(),
+      r#"{"label":"I.CA card","pinEntry":"pinPad","pinRetries":"finalTry"}"#
+    );
+  }
+
+  fn identity(certificate: &[u8]) -> SigningIdentity {
+    stella_desktop_signing_core::signing_identity(
+      certificate.to_vec(),
+      "holder",
+      Vec::new,
+      1_780_272_000,
+    )
+    .unwrap()
+  }
+
+  fn token_identity(certificate: &[u8], module: &str) -> TokenIdentity {
+    TokenIdentity {
+      identity: identity(certificate),
+      source: TokenSource {
+        module: std::path::PathBuf::from(module),
+        slot: 1,
+        token_label: "card".to_string(),
+        pin_entry: PinEntry::Keyboard,
+        pin_retries: PinRetries::Normal,
+      },
+    }
+  }
+
+  /// A store and cards that count how often each is read.
+  #[derive(Default)]
+  struct CountingSources {
+    store: Vec<SigningIdentity>,
+    cards: Vec<TokenIdentity>,
+    store_reads: std::sync::atomic::AtomicUsize,
+    card_scans: std::sync::atomic::AtomicUsize,
+  }
+
+  impl CertificateSources for CountingSources {
+    async fn store(&self) -> Result<Vec<SigningIdentity>, SigningErrorCode> {
+      self
+        .store_reads
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+      Ok(self.store.clone())
+    }
+
+    async fn cards(&self) -> Result<TokenScan, HelperFailure> {
+      self
+        .card_scans
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+      Ok(TokenScan {
+        identities: self.cards.clone(),
+        ..TokenScan::default()
+      })
+    }
+  }
+
+  impl CountingSources {
+    fn card_scans(&self) -> usize {
+      self.card_scans.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn store_reads(&self) -> usize {
+      self.store_reads.load(std::sync::atomic::Ordering::SeqCst)
+    }
+  }
+
+  fn offered_ids(listing: &OfferedListing) -> Vec<&str> {
+    listing
+      .identities
+      .as_ref()
+      .unwrap()
+      .iter()
+      .map(|offered| offered.identity.id.as_str())
+      .collect()
+  }
+
+  #[tokio::test]
+  async fn the_refresh_reads_the_store_and_never_starts_the_helper() {
+    let sources = CountingSources {
+      store: vec![identity(SIGNING)],
+      cards: vec![token_identity(EMAIL, "/vendor.dylib")],
+      ..CountingSources::default()
+    };
+    let scanned = CardScan {
+      tokens: vec![token_identity(DOCUMENT, "/vendor.dylib")],
+      ..CardScan::default()
+    };
+
+    let listing = refreshed_listing(&sources, &scanned).await;
+
+    assert_eq!(sources.card_scans(), 0);
+    assert_eq!(sources.store_reads(), 1);
+    // The cards are offered as the last scan found them.
+    assert_eq!(
+      offered_ids(&listing),
+      vec![
+        identity(SIGNING).id.as_str(),
+        identity(DOCUMENT).id.as_str()
+      ]
+    );
+  }
+
+  #[tokio::test]
+  async fn a_rescan_starts_the_helper_and_offers_what_it_found() {
+    let sources = CountingSources {
+      store: vec![identity(SIGNING)],
+      cards: vec![token_identity(EMAIL, "/vendor.dylib")],
+      ..CountingSources::default()
+    };
+
+    let (listing, cards) = rescanned_listing(&sources).await;
+
+    assert_eq!(sources.card_scans(), 1);
+    assert_eq!(cards.tokens.len(), 1);
+    assert_eq!(
+      offered_ids(&listing),
+      vec![identity(SIGNING).id.as_str(), identity(EMAIL).id.as_str()]
+    );
+  }
+
+  #[tokio::test]
+  async fn signing_takes_a_card_certificate_from_the_last_scan_with_its_slot() {
+    let sources = CountingSources {
+      store: vec![identity(SIGNING)],
+      ..CountingSources::default()
+    };
+    let mut card = token_identity(EMAIL, "/vendor.dylib");
+    card.source.slot = 7;
+    let scanned = CardScan {
+      tokens: vec![card],
+      ..CardScan::default()
+    };
+
+    let chosen = chosen_identity(&sources, &scanned, &identity(EMAIL).id)
+      .await
+      .unwrap();
+
+    // The helper is not started to find it; the signature goes to the slot
+    // that listed it.
+    assert_eq!(sources.card_scans(), 0);
+    assert!(
+      matches!(chosen.provider, Provider::Pkcs11(ref source) if source.slot == 7)
+    );
+    // A certificate gone from both is not signed with.
+    assert!(matches!(
+      chosen_identity(&sources, &CardScan::default(), &identity(EMAIL).id).await,
+      Err(SigningErrorCode::KeyNotFound)
+    ));
+  }
+
+  #[test]
+  fn a_relisting_reaches_the_dialog_as_its_script_reads_it() {
+    let listing = merge_listing(Ok(vec![identity(SIGNING)]), &CardScan::default());
+    let json = serde_json::to_value(DialogListing::of(&listing)).unwrap();
+    assert_eq!(json["state"], "ready");
+    assert_eq!(json["stateMessageKey"], serde_json::Value::Null);
+    assert_eq!(json["identities"][0]["id"], identity(SIGNING).id.as_str());
+    assert_eq!(json["driverNotices"], serde_json::json!([]));
+
+    // Cards that could not be scanned, with nothing else to sign with, read
+    // as a failure rather than as no certificate.
+    let failed = merge_listing(
+      Ok(Vec::new()),
+      &CardScan {
+        failure: Some(CODE_TOKEN_UNREADABLE),
+        ..CardScan::default()
+      },
+    );
+    let json = serde_json::to_value(DialogListing::of(&failed)).unwrap();
+    assert_eq!(json["state"], "keychainUnavailable");
+    assert_eq!(json["stateMessageKey"], "pdfSignErrors.tokenUnreadable");
+  }
+
+  const SIGNING: &[u8] =
+    include_bytes!("../crates/signing-core/fixtures/signing-certificate.der");
+  const EMAIL: &[u8] =
+    include_bytes!("../crates/signing-core/fixtures/client-auth-email-certificate.der");
+  const DOCUMENT: &[u8] =
+    include_bytes!("../crates/signing-core/fixtures/document-signing-certificate.der");
+
+  #[test]
+  fn a_certificate_in_both_the_store_and_a_token_signs_through_the_store() {
+    let offered = merge_identities(
+      vec![identity(SIGNING)],
+      vec![
+        token_identity(SIGNING, "/vendor.dylib"),
+        token_identity(EMAIL, "/vendor.dylib"),
+        // A second driver sees the same card: the first one keeps it.
+        token_identity(EMAIL, "/opensc.so"),
+        token_identity(DOCUMENT, "/opensc.so"),
+      ],
+    );
+
+    let summary: Vec<(&str, Option<&std::path::Path>)> = offered
+      .iter()
+      .map(|offered| {
+        (
+          offered.identity.id.as_str(),
+          match &offered.provider {
+            Provider::Store => None,
+            Provider::Pkcs11(source) => Some(source.module.as_path()),
+          },
+        )
+      })
+      .collect();
+    assert_eq!(
+      summary,
+      vec![
+        (identity(SIGNING).id.as_str(), None),
+        (
+          identity(EMAIL).id.as_str(),
+          Some(std::path::Path::new("/vendor.dylib"))
+        ),
+        (
+          identity(DOCUMENT).id.as_str(),
+          Some(std::path::Path::new("/opensc.so"))
+        ),
+      ]
     );
   }
 
@@ -1331,7 +2148,14 @@ mod tests {
       serde_json::from_str(r#"{"action":"sign","identityId":"abc"}"#).unwrap();
     assert!(matches!(
       signed,
-      PdfSignDialogResponse::Sign { identity_id } if identity_id == "abc"
+      PdfSignDialogResponse::Sign { identity_id, pin: None } if identity_id == "abc"
+    ));
+    let with_pin: PdfSignDialogResponse =
+      serde_json::from_str(r#"{"action":"sign","identityId":"abc","pin":"1234"}"#)
+        .unwrap();
+    assert!(matches!(
+      with_pin,
+      PdfSignDialogResponse::Sign { pin: Some(pin), .. } if pin.expose() == "1234"
     ));
     let cancelled: PdfSignDialogResponse =
       serde_json::from_str(r#"{"action":"cancel"}"#).unwrap();
@@ -1360,11 +2184,22 @@ mod tests {
       serde_json::to_string(&PdfSignResult::failed("pin_incorrect", None)).unwrap(),
       r#"{"status":"failed","code":"pin_incorrect","messageKey":"pdfSignErrors.pinIncorrect","retryWithinMs":null}"#
     );
+    assert_eq!(
+      serde_json::to_string(&PdfSignResult::PinRejected {
+        message_key: message_key("pin_incorrect"),
+        pin_retries: PinRetries::FinalTry,
+      })
+      .unwrap(),
+      r#"{"status":"pinRejected","messageKey":"pdfSignErrors.pinIncorrect","pinRetries":"finalTry"}"#
+    );
   }
 
   /// Every code the desktop can show, from the signer, from itself or from
   /// the API, in the order a reviewer can check against the API's handlers.
   const SHOWN_CODES: &[&str] = &[
+    CODE_TOKEN_TIMEOUT,
+    CODE_TOKEN_SIGNING_FAILED,
+    CODE_TOKEN_UNREADABLE,
     CODE_NETWORK_UNREACHABLE,
     CODE_RESPONSE_UNREADABLE,
     CODE_SESSION_EXPIRED,

@@ -39,6 +39,7 @@ type ParseDecisionDocketOptions = {
  */
 export const DECISION_DOCKETS_STORED_WITH_SHEETS = {
   AUT: false,
+  BRA: false,
   CZE: true,
   EU: false,
   GBR: false,

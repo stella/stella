@@ -243,7 +243,9 @@ const runDecisionRetention = async ({
   }
   reportProjection(
     named,
-    await policy.project(sourceRaw),
+    await policy.project(sourceRaw, {
+      sourceRawObjects: result.sourceRawObjects ?? {},
+    }),
     ast.blocks,
     sourcePolicy,
   );

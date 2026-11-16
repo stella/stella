@@ -9,7 +9,7 @@ import type {
 import type { JustificationContent } from "@/api/db/schema";
 import { fieldContentSchema } from "@/api/db/schema-validators";
 import type {
-  AiExtractablePropertyContent,
+  CaseLawQuestionContent,
   FieldContent,
 } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -37,7 +37,7 @@ import type { ValidatedAnswer } from "@/api/lib/workflow/ai-validators";
  * same justification shape — so one cell renderer and one output registry serve
  * both surfaces.
  */
-export type CaseLawResearchColumnContent = AiExtractablePropertyContent;
+export type CaseLawResearchColumnContent = CaseLawQuestionContent;
 
 export const defaultResearchColumnTool = (): CaseLawResearchColumnTool => ({
   version: 1,
@@ -252,6 +252,7 @@ export const statedAnswerContent = (
     case "single-select":
     case "date":
     case "int":
+    case "money":
       return validated.value === null
         ? null
         : fieldContentFromValidated(validated);

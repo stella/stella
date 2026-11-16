@@ -1,0 +1,3 @@
+{
+  "create-trigger": "Three row triggers on legal_list_generation_runs, a small table written only by list generation; creating them reads no rows and holds the lock briefly under 1s lock_timeout and 5s statement_timeout."
+}

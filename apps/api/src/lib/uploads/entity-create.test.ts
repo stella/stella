@@ -1,9 +1,10 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
 import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -46,6 +47,8 @@ import {
   validateEntityCreateCapacity,
 } from "./entity-create";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const entityCreateSource = await Bun.file(
   new URL("entity-create.ts", import.meta.url),
 ).text();
@@ -79,12 +82,9 @@ const SHA_256_HEX = "a".repeat(64);
 
 let testDb: TestDatabase;
 
-beforeAll(
-  async () => {
-    testDb = await getTestDb();
-  },
-  { timeout: 30_000 },
-);
+testState.beforeAll(async () => {
+  testDb = await getTestDb();
+}, 30_000);
 
 afterAll(async () => {
   await releaseTestDb();
@@ -852,8 +852,8 @@ test("root names exclude entities from another matter", async () => {
 
 test("multipart upload resolves names against current root siblings", async () => {
   const fake = startFakeS3();
-  const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-  env.FEATURE_FILE_USAGE_LIMITS = false;
+
+  testState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
   try {
     const seeded = await testDb.transaction(async (tx) => {
       await tx.execute(sql.raw("RESET ROLE"));
@@ -920,7 +920,6 @@ test("multipart upload resolves names against current root siblings", async () =
     expect(recorded.has("contract_2.md")).toBe(true);
     expect(recorded.has("contract_4.md")).toBe(false);
   } finally {
-    env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
     fake.stop();
   }
 });

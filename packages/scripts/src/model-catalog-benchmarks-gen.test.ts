@@ -172,6 +172,8 @@ describe("benchmark check availability", () => {
     await Bun.write(
       preload,
       `
+      const { installOfflineCheckPreloadMarker } = await import(${JSON.stringify(path.join(import.meta.dir, "offline-check-startup.ts"))});
+      installOfflineCheckPreloadMarker();
       const fixture = await Bun.file(${JSON.stringify(responseFile)}).json();
       if (fixture.slow) {
         const schedule = globalThis.setTimeout;
@@ -336,7 +338,7 @@ describe("benchmark check availability", () => {
 
   test.each([
     { oversized: true, reason: "exceeds" },
-    { slow: true, reason: "Fetch timed out" },
+    { slow: true, reason: "Response body stalled" },
   ])(
     "reports bounded transfer failures as inconclusive: %j",
     async (fixture) => {

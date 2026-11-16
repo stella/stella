@@ -2,6 +2,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+import { normalizeOutlookTaskPaneOrigin } from "@stll/api-contract/outlook-client";
 import {
   NODE_ENV,
   type NodeEnvLabel,
@@ -34,7 +35,6 @@ import {
   DEFAULT_POLAR_API_VERSION,
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
-import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
 import {
   caseLawCanariesEnvSchema,
   caseLawDailyBandsEnvSchema,
@@ -46,6 +46,7 @@ import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
+import { modelRunCapEnvSchema } from "@/api/lib/usage/model-run-caps/config";
 
 type EmailProviderInput = {
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
@@ -108,7 +109,7 @@ const originVerifyValue = v.pipe(
 export const envApiServerSchema = {
   DEPLOY_ENVIRONMENT: envBaseServerSchema.DEPLOY_ENVIRONMENT,
   ...rateLimitBudgetEnvSchema,
-  ...verificationRunCapEnvSchema,
+  ...modelRunCapEnvSchema,
   // Data invariants: each adapter's expected published decisions per day, and
   // case-law queries the corpus must answer. Unset skips that invariant.
   DATA_INVARIANT_CASE_LAW_DAILY_BANDS: caseLawDailyBandsEnvSchema,
@@ -146,6 +147,12 @@ export const envApiServerSchema = {
   GOOGLE_GENERATIVE_AI_API_KEY: v.optional(v.string()),
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
+  /**
+   * Optional GitHub token limited to public repositories, for skill sources a
+   * person links. Never the catalogue token: it is sent for any URL a person
+   * enters.
+   */
+  SKILL_IMPORT_GITHUB_TOKEN: v.optional(v.pipe(v.string(), v.minLength(1))),
   OPENROUTER_API_KEY: v.optional(v.string()),
   OPENROUTER_FAST_TIER_API_KEY: v.optional(v.string()),
   OPENROUTER_FAST_TIER_WIF_POLICY_ID: v.optional(
@@ -294,6 +301,16 @@ export const envApiServerSchema = {
   /** Deployment-owned operator credential. Unset disables operator HTTP access. */
   OPERATOR_API_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
   /**
+   * Apple Push Notification service provider-token credentials: the key id
+   * and team id Apple shows beside the `.p8` signing key, and that key as PEM.
+   * All three or none; unset turns mobile push off.
+   */
+  APNS_KEY_ID: v.optional(v.pipe(v.string(), v.regex(/^[A-Z0-9]{10}$/u))),
+  APNS_TEAM_ID: v.optional(v.pipe(v.string(), v.regex(/^[A-Z0-9]{10}$/u))),
+  APNS_PRIVATE_KEY: v.optional(
+    v.pipe(v.string(), v.includes("-----BEGIN PRIVATE KEY-----")),
+  ),
+  /**
    * SHA-256 digest of a deployment-owned decoy machine API key. The
    * plaintext decoy belongs only in a honey resource; presenting it to any
    * API route emits a structured security event and stops the request before
@@ -377,6 +394,21 @@ export const envApiServerSchema = {
   ...converterSettingsSchema,
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
   /**
+   * The https origin serving the Outlook add-in's task pane, e.g.
+   * `https://outlook.example.com`. Set, the API publishes the add-in's OAuth
+   * client document, accepts its one redirect on this origin and answers its
+   * browser requests. Unset, the add-in cannot sign in to this deployment.
+   */
+  OUTLOOK_ADDIN_ORIGIN: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        (value) => normalizeOutlookTaskPaneOrigin(value) === value,
+        "OUTLOOK_ADDIN_ORIGIN must be an https origin without a path, e.g. https://outlook.example.com",
+      ),
+    ),
+  ),
+  /**
    * RFC 3161 timestamp authorities for PDF signing, in preference order,
    * separated by commas or whitespace. Signing falls back to the next one
    * when an authority fails. Unset (with `PDF_SIGNING_TSA_URL` unset too)
@@ -394,9 +426,10 @@ export const envApiServerSchema = {
   /** Single-authority form of `PDF_SIGNING_TSA_URLS`, appended to it. */
   PDF_SIGNING_TSA_URL: v.optional(v.pipe(v.string(), v.url())),
   /**
-   * Trust anchors for timestamp authorities: PEM text, or a path to a PEM
-   * file. CA certificates, or an authority's own certificate to pin it.
-   * Unset: timestamps are embedded but not counted as trusted time.
+   * Extra trust anchors for timestamp authorities, added to the shipped
+   * ones (EU qualified services, DigiCert and Sectigo public timestamping
+   * roots): PEM text, or a path to a PEM file. CA certificates, or an
+   * authority's own certificate to pin it.
    */
   PDF_SIGNING_TSA_TRUST_PEM: v.optional(v.string()),
 
@@ -754,6 +787,8 @@ export const envApiServerSchema = {
   // opts in only after its Microsoft app registration is granted the
   // read-only delegated scopes (see handlers/sharepoint/graph-oauth.ts).
   FEATURE_SHAREPOINT: featureFlagSchema,
+  /** Dark-launch internal conflict-of-interest checks until intake review. */
+  FEATURE_CONFLICT_CHECK: featureFlagSchema,
 
   /**
    * Dark-launch gate for the auth.md `identity_assertion` (ID-JAG)
@@ -982,6 +1017,13 @@ type EnvApiInvariantInput = InboundMailReceivingInput &
   AppleSignInInput & {
     APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
     APP_REVIEW_ORGANIZATION_ID?: string | undefined;
+    APNS_KEY_ID?: string | undefined;
+    APNS_TEAM_ID?: string | undefined;
+    APNS_PRIVATE_KEY?: string | undefined;
+    DEPLOY_ENVIRONMENT?: v.InferOutput<
+      typeof envApiServerSchema.DEPLOY_ENVIRONMENT
+    >;
+    SMOKE_SESSION_SECRET?: string | undefined;
     AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
     FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
     MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
@@ -1148,6 +1190,24 @@ export const freeTierInvariantViolation = ({
   return null;
 };
 
+type ApnsInvariantInput = Pick<
+  EnvApiInvariantInput,
+  "APNS_KEY_ID" | "APNS_TEAM_ID" | "APNS_PRIVATE_KEY"
+>;
+
+const apnsInvariantViolation = ({
+  APNS_KEY_ID,
+  APNS_TEAM_ID,
+  APNS_PRIVATE_KEY,
+}: ApnsInvariantInput): string | null => {
+  const set = [APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY].filter(
+    (value) => value !== undefined,
+  ).length;
+  return set === 0 || set === 3
+    ? null
+    : "APNS_KEY_ID, APNS_TEAM_ID and APNS_PRIVATE_KEY must be set together.";
+};
+
 type ReviewAccountInvariantInput = Pick<
   EnvApiInvariantInput,
   "APP_REVIEW_ACCOUNT_EMAIL" | "APP_REVIEW_ORGANIZATION_ID"
@@ -1162,6 +1222,20 @@ const reviewAccountInvariantViolation = ({
     ? null
     : "APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID must be set together.";
 
+type SmokeSessionInvariantInput = Pick<
+  EnvApiInvariantInput,
+  "DEPLOY_ENVIRONMENT" | "SMOKE_SESSION_SECRET"
+>;
+
+/** The synthetic-monitoring session route serves non-production deployments only. */
+const smokeSessionInvariantViolation = ({
+  DEPLOY_ENVIRONMENT,
+  SMOKE_SESSION_SECRET,
+}: SmokeSessionInvariantInput): string | null =>
+  DEPLOY_ENVIRONMENT === "production" && SMOKE_SESSION_SECRET !== undefined
+    ? "SMOKE_SESSION_SECRET is for non-production deployments; unset it when DEPLOY_ENVIRONMENT=production."
+    : null;
+
 // Feature-owned invariants, kept out of the top-level check's branch budget.
 const delegatedInvariantViolation = (
   input: ManagedProviderCheckInvariantInput &
@@ -1170,11 +1244,21 @@ const delegatedInvariantViolation = (
     FreeTierInvariantInput &
     ReviewAccountInvariantInput &
     AppleSignInInput &
+    ApnsInvariantInput &
+    SmokeSessionInvariantInput &
     Pick<EnvApiInvariantInput, "runtimeMode">,
 ): string | null => {
+  const smokeSessionViolation = smokeSessionInvariantViolation(input);
+  if (smokeSessionViolation !== null) {
+    return smokeSessionViolation;
+  }
   const reviewAccountViolation = reviewAccountInvariantViolation(input);
   if (reviewAccountViolation !== null) {
     return reviewAccountViolation;
+  }
+  const apnsViolation = apnsInvariantViolation(input);
+  if (apnsViolation !== null) {
+    return apnsViolation;
   }
   const managedViolation = managedProviderCheckInvariantViolation(input);
   if (managedViolation !== null) {
@@ -1197,8 +1281,13 @@ const delegatedInvariantViolation = (
 };
 
 export const envApiInvariantViolation = ({
+  DEPLOY_ENVIRONMENT,
+  SMOKE_SESSION_SECRET,
   APP_REVIEW_ACCOUNT_EMAIL,
   APP_REVIEW_ORGANIZATION_ID,
+  APNS_KEY_ID,
+  APNS_TEAM_ID,
+  APNS_PRIVATE_KEY,
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
@@ -1262,8 +1351,13 @@ export const envApiInvariantViolation = ({
     return "FEATURE_CONFIGURED_ACCESS requires FEATURE_ORG_ACCESS_STATE, FEATURE_ORG_SERVICE_BUDGETS, FEATURE_USAGE and PAYMENT_RETRY_WINDOW_MS.";
   }
   const delegatedViolation = delegatedInvariantViolation({
+    DEPLOY_ENVIRONMENT,
+    SMOKE_SESSION_SECRET,
     APP_REVIEW_ACCOUNT_EMAIL,
     APP_REVIEW_ORGANIZATION_ID,
+    APNS_KEY_ID,
+    APNS_TEAM_ID,
+    APNS_PRIVATE_KEY,
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,
     FEATURE_FREE_TIER,

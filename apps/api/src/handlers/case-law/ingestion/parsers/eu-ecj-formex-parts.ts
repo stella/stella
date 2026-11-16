@@ -1,3 +1,4 @@
+// parser-output-unchanged: Retained ZIP directory markers contain no document text; original archive bytes remain stored.
 // parser-output-unchanged: imports byte-identical raw-envelope codecs from their pure owner.
 import { panic } from "better-result";
 
@@ -31,7 +32,7 @@ export const ecjFormexDocuments = (payload: string): readonly string[] => {
   if (entries === null) {
     panic("Invalid stored Formex archive envelope");
   }
-  return Object.values(entries).map((encoded) =>
-    Buffer.from(encoded, "base64").toString("utf-8"),
-  );
+  return Object.entries(entries)
+    .filter(([name]) => !name.endsWith("/"))
+    .map(([, encoded]) => Buffer.from(encoded, "base64").toString("utf-8"));
 };

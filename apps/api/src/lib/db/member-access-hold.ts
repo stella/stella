@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
@@ -11,6 +11,7 @@ import {
   lockMemberAccessRow,
 } from "@/api/lib/db/aggregate-lock";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 type HoldMemberAccessOptions = {
   organizationId: SafeId<"organization">;
@@ -54,7 +55,7 @@ export const holdMemberAccessOnTx = async (
   const assigned = await lockMatterAccessAssignments({
     ...scope,
     workspaceIds: requested,
-    where: ne(workspaces.status, "deleting"),
+    where: visibleWorkspaceSql(),
   });
   const covered = new Set(assigned.map((row) => row.workspaceId));
   // This role condition only preserves the lock scope: assigned matters hold
@@ -67,10 +68,7 @@ export const holdMemberAccessOnTx = async (
     const matterRows = await lockMatterAccessWorkspaceRows({
       ...scope,
       workspaceIds: requested.filter((id) => !covered.has(id)),
-      where: and(
-        ne(workspaces.status, "deleting"),
-        isNotNull(workspaces.clientId),
-      ),
+      where: and(visibleWorkspaceSql(), isNotNull(workspaces.clientId)),
     });
     for (const { id } of matterRows) {
       covered.add(id);
@@ -87,7 +85,7 @@ export const holdMemberAccessOnTx = async (
       and(
         inArray(workspaces.id, candidates),
         eq(workspaces.organizationId, organizationId),
-        ne(workspaces.status, "deleting"),
+        visibleWorkspaceSql(),
         memberReachesMatterSql({ organizationId, userId }, workspaces.id),
       ),
     );

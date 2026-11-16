@@ -22,6 +22,19 @@ export type MigrationTimingRecord =
       appliedCount: number | null;
     }
   | {
+      /**
+       * One step of the schema phase. The migrator applies the pending set in
+       * one transaction, so `apply` is reported per set, naming its migrations.
+       */
+      event: "migrate.schema_step";
+      step: "preflight" | "apply";
+      migrations: readonly string[];
+      durationMs: number;
+      attempts: number;
+      retriesSpent: number;
+      outcome: "done" | "failed";
+    }
+  | {
       event: "migrate.phase_duration";
       phase: "online";
       durationMs: number;

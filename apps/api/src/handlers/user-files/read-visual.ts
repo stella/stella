@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { isDownloadOnlyFileMimeType } from "@stll/api-contract/chat-file-types";
 import {
   generatedVisualInputSchema,
   generatedVisualPageSchema,
@@ -48,6 +49,7 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
           const row = (
             await tx
               .select({
+                mimeType: userFiles.mimeType,
                 s3Key: userFiles.s3Key,
                 userId: userFiles.userId,
                 workspaceId: chatThreads.workspaceId,
@@ -70,7 +72,8 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
               )
               .limit(1)
           ).at(0);
-          if (!row) {
+          // Never rendered, even when its bytes read as a generated view.
+          if (!row || isDownloadOnlyFileMimeType(row.mimeType)) {
             return null;
           }
           await recordAuditEvent(tx, {

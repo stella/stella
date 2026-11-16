@@ -9,6 +9,7 @@ import {
   bufferObjectCleanupIntents,
   desktopEditHandoffs,
   desktopEditSessions,
+  desktopRunners,
   entities,
   entityVersions,
   folioCollabRoomTokens,
@@ -48,6 +49,8 @@ const tables = [
   entityVersions,
   properties,
   bufferObjectCleanupIntents,
+  // The member's desktop keys take their runner sockets with them.
+  desktopRunners,
   workspaces,
   workspaceMembers,
   member,
@@ -113,7 +116,8 @@ if (!databaseUrl || !enabled) {
             );
             if (
               Object.values(getColumns(table)).some(
-                (column) => column.name === "entity_feature_gate",
+                (column: { name: string }) =>
+                  column.name === "entity_feature_gate",
               )
             ) {
               await db.execute(
