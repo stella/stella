@@ -2099,7 +2099,6 @@
     "queue": {
       "actions": "Actions du message en file d’attente",
       "editNeedsComposer": "Ouvrez cette conversation pour modifier un message en file d'attente.",
-      "filesNotQueued": "Un message avec des fichiers ne peut pas attendre dans la file. Envoyez-le une fois la réponse en cours terminée.",
       "heldByMember": "File d’attente en pause.",
       "heldComputerAway": "En attente de votre ordinateur : les messages en file d’attente partent dès qu’il se connecte.",
       "heldSendRefused": "File d’attente en pause : le premier message n’a pas pu être envoyé. Modifiez-le ou retirez-le, puis reprenez.",

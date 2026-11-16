@@ -136,8 +136,24 @@ type ChatDraftFileAttachment = {
   mimeType: string;
 };
 
+/**
+ * A chat file the server already stores (a queued message's, taken back into
+ * the composer to be written again): shown like any file and sent again by
+ * reference, never uploaded twice.
+ */
+export type ChatDraftStoredFileAttachment = {
+  type: "stored_file";
+  filename: string;
+  id: string;
+  mimeType: string;
+  /** The stored file's URL, as the message part named it. */
+  url: string;
+};
+
 export type ChatDraftAttachment =
-  ChatDraftFileAttachment | PastedTextAttachment;
+  | ChatDraftFileAttachment
+  | ChatDraftStoredFileAttachment
+  | PastedTextAttachment;
 
 export type ChatInputDraft = {
   files: ChatDraftAttachment[];
@@ -278,6 +294,7 @@ type RegisteredExtension = {
 export type ChatMessageDraftHandoff = {
   html: string;
   pastedTexts: readonly string[];
+  storedFiles: readonly ChatDraftStoredFileAttachment[];
 };
 
 type ActiveChatEditorHandle = {
@@ -1011,7 +1028,7 @@ export const useChatEditor = ({
         pastedTextAttachmentsRef.current = pastedAttachments;
         const nextAttachments = [
           ...attachmentsRef.current.filter(
-            (attachment) => attachment.type === "file",
+            (attachment) => attachment.type !== "pasted_text",
           ),
           ...readPastedTextAttachments(pastedAttachments),
         ];
@@ -1138,7 +1155,7 @@ export const useChatEditor = ({
   // line breaks survive. What the composer already holds is kept, after it
   // and a paragraph between them.
   const restoreMessageDraft = useLatestCallback(
-    ({ html, pastedTexts }: ChatMessageDraftHandoff) => {
+    ({ html, pastedTexts, storedFiles }: ChatMessageDraftHandoff) => {
       const targetEditor = editorRef.current;
       if (!isUsableEditor(targetEditor)) {
         return;
@@ -1156,6 +1173,16 @@ export const useChatEditor = ({
       }
       for (const text of pastedTexts) {
         addPastedTextAttachment(text);
+      }
+      if (storedFiles.length > 0) {
+        const withStoredFiles = [...attachmentsRef.current, ...storedFiles];
+        attachmentsRef.current = withStoredFiles;
+        const doc = targetEditor.getJSON();
+        getOrCreateWeakSet(editorAuthoredDocsRef).add(doc);
+        setDraft(
+          threadKey,
+          createChatDraftState({ attachments: withStoredFiles, doc }),
+        );
       }
       markDraftStarted();
       targetEditor.commands.focus("end");
@@ -1539,8 +1566,8 @@ export const useChatEditor = ({
 
       for (const file of Array.from(files)) {
         if (
-          nextAttachments.filter((item) => item.type === "file").length >=
-          CHAT_FILES_PER_MESSAGE
+          nextAttachments.filter((item) => item.type !== "pasted_text")
+            .length >= CHAT_FILES_PER_MESSAGE
         ) {
           break;
         }

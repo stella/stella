@@ -2099,7 +2099,6 @@
     "queue": {
       "actions": "Järjekorras oleva sõnumi toimingud",
       "editNeedsComposer": "Järjekorras oleva sõnumi muutmiseks avage see vestlus.",
-      "filesNotQueued": "Failidega sõnum ei saa järjekorras oodata. Saatke see, kui praegune vastus on lõppenud.",
       "heldByMember": "Järjekord on peatatud.",
       "heldComputerAway": "Ootame teie arvutit: järjekorras olevad sõnumid saadetakse, kui see ühendub.",
       "heldSendRefused": "Järjekord on peatatud: esimest sõnumit ei õnnestunud saata. Muutke või eemaldage see ja seejärel jätkake.",

@@ -1904,16 +1904,12 @@ const QueuedUserMessages = ({ queue }: { queue: ChatQueueView }) => {
               sendNow(queued.id);
             },
           },
-          ...(queued.attachmentCount === 0
-            ? [
-                {
-                  label: t("common.edit"),
-                  onClick: () => {
-                    actions.edit(queued.id);
-                  },
-                },
-              ]
-            : []),
+          {
+            label: t("common.edit"),
+            onClick: () => {
+              actions.edit(queued.id);
+            },
+          },
           ...(up === undefined
             ? []
             : [

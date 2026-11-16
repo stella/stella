@@ -3391,7 +3391,7 @@ const isolationCases: IsolationCase[] = [
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(cancelQueuedChatMessage, workspaceA, {
         params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
-        query: { revision: 0 },
+        query: { files: "delete", revision: 0 },
       }),
       queue: await chatQueueOfB(),
     }),
@@ -3401,7 +3401,7 @@ const isolationCases: IsolationCase[] = [
         sameUserWorkspaceB,
         {
           params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
-          query: { revision: 0 },
+          query: { files: "delete", revision: 0 },
         },
       );
       return {
