@@ -96,8 +96,12 @@ test("closing the tab tells the opener first, and falls back once when the brows
     const view = render(
       <OutcomeScreen
         closeTab={{
-          onBeforeClose: () => calls.push("broadcast"),
-          onStillOpen: () => calls.push("still-open"),
+          onBeforeClose: () => {
+            calls.push("broadcast");
+          },
+          onStillOpen: () => {
+            calls.push("still-open");
+          },
         }}
         title="Integration connected"
         tone="success"
@@ -108,8 +112,12 @@ test("closing the tab tells the opener first, and falls back once when the brows
     view.rerender(
       <OutcomeScreen
         closeTab={{
-          onBeforeClose: () => calls.push("broadcast-again"),
-          onStillOpen: () => calls.push("still-open"),
+          onBeforeClose: () => {
+            calls.push("broadcast-again");
+          },
+          onStillOpen: () => {
+            calls.push("still-open");
+          },
         }}
         title="Integration connected"
         tone="success"
