@@ -414,7 +414,6 @@
   },
   "no-imported-class-constant/no-imported-class-constant": {},
   "require-bounded-request-schema/require-bounded-request-schema": {
-    "apps/api/src/handlers/api-keys/mint.ts": 3,
     "apps/api/src/handlers/audit-logs/query.ts": 5,
     "apps/api/src/handlers/case-law/decisions/sitemap.ts": 4,
     "apps/api/src/handlers/chat/chat-schema.ts": 3,
@@ -543,11 +542,9 @@
     "apps/api/src/lib/business-registries/credentials.ts": 1,
     "apps/api/src/lib/case-law/decision-text.ts": 2,
     "apps/api/src/lib/case-law/research-answers.ts": 1,
-    "apps/api/src/lib/configuration-placeholders.ts": 1,
     "apps/api/src/lib/db/migration-history.ts": 2,
     "apps/api/src/lib/document-processing-queue.ts": 2,
     "apps/api/src/lib/document-review/decision-counts.ts": 1,
-    "apps/api/src/lib/file-key.ts": 1,
     "apps/api/src/lib/legal-search/case-law-raw-census.ts": 1,
     "apps/api/src/lib/legal-search/case-law-raw-layout.ts": 1,
     "apps/api/src/lib/legal-search/corpus-index-search-facets.ts": 3,
@@ -964,8 +961,7 @@
     "packages/decision-reader/src/document-ast-text.tsx": 3
   },
   "no-native-ui/no-native-textarea": {
-    "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1,
-    "apps/web/src/routes/law/-law-home/law-entry-box.tsx": 1
+    "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1
   },
   "no-native-ui/no-native-tooltip": {},
   "eslint/complexity": {

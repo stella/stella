@@ -172,6 +172,7 @@ export const FAILURE_TAGS = [
   "DeadlineError",
   "DecisionCourtIdentityError",
   "DecisionParagraphRangeError",
+  "DecisionTextCompletionReadError",
   "DecisionWriteExtensionError",
   "DeepLAuthError",
   "DeepLDocumentError",

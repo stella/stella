@@ -4,12 +4,14 @@
  *
  * This sits between the route and `get.ts` rather than inside it for
  * two reasons. `get.ts` stays a read — it holds the public read-only
- * database boundary, and the fetch is a write. And an import edge added
+ * database boundary, while hydration performs outbound I/O. An import edge added
  * to a module the route tree infers through costs the API typecheck
  * over a million type instantiations (see the typecheck baseline
  * guard), so the read handler keeps the import list it had and reports
  * `documentPending` instead; the fetch is wired in here.
  */
+
+import { panic } from "better-result";
 
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
@@ -26,9 +28,24 @@ import {
 import { onDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand-deps";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { transientDecisionAstProjection } from "@/api/handlers/case-law/decisions/served-ast";
+import {
+  checkDecisionTextCompletion,
+  decisionTextCompletionReasons,
+  readDecisionTextCompletion,
+  readDecisionTextCompletionSafely,
+} from "@/api/handlers/case-law/decisions/text-completion";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import type { DecisionSubjectLocator } from "@/api/lib/case-law/public-subject";
+import {
+  absentDecisionTextFields,
+  absentTextField,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import type { TextAbsenceReason } from "@/api/lib/case-law/decision-text";
+import type {
+  DecisionSubjectLocator,
+  RedistributableDecisionSubject,
+} from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 
 type DecisionRead = Awaited<ReturnType<typeof readDecisionHandler>>;
@@ -113,11 +130,21 @@ const reparsedForDev = async (
 export const readsSharedPublicLawCorpus = (): boolean =>
   envBase.PUBLIC_LAW_DATABASE_URL !== undefined;
 
-const hydrate = async (
-  decision: ReadableDecision,
-  recordDemand: boolean,
-  documentHydration: DecisionDocumentHydration,
-): Promise<ReadableDecision> => {
+type HydrateDocumentOptions = {
+  decision: ReadableDecision;
+  recordDemand: boolean;
+  documentHydration: DecisionDocumentHydration;
+  textEligibilityFingerprint: string;
+  textRevisionFingerprint: string;
+};
+
+const hydrate = async ({
+  decision,
+  recordDemand,
+  documentHydration,
+  textEligibilityFingerprint,
+  textRevisionFingerprint,
+}: HydrateDocumentOptions): Promise<ReadableDecision> => {
   // The development reparse fetches the document from the publisher, so a
   // caller without a permit answers from what is stored before that branch.
   if (documentHydration.type === "stored-only") {
@@ -154,8 +181,10 @@ const hydrate = async (
       decisionType: decision.decisionType,
       documentUrl: decision.documentUrl,
     },
+    textRevisionFingerprint,
     deps: onDemandDocumentDeps,
     recordDemand,
+    textEligibilityFingerprint,
   });
 
   // The fetch did not finish inside the read's budget, or the source
@@ -181,19 +210,290 @@ const hydrate = async (
   };
 };
 
+const DECISION_READ_FIELD_KIND = {
+  METADATA: "metadata",
+  TEXT: "text",
+  STATE: "state",
+} as const;
+
+type DecisionReadFieldKind =
+  (typeof DECISION_READ_FIELD_KIND)[keyof typeof DECISION_READ_FIELD_KIND];
+
 /**
- * The read's second phase: fetch the document when a reader arrives before
- * the ingestion queue does. A publisher fetch and an ingestion write, so it
- * runs after the gated read transaction has closed, never inside it.
+ * Every field of a public decision read, classified for the response that
+ * withholds text after a failed completion. Metadata is copied, text is
+ * replaced by its absence, and state is recomputed. A field added to the read
+ * does not compile until it is classified here.
  */
-export const hydrateDeferredDocument = async (
-  read: DecisionRead,
-  recordDemand: boolean,
-  documentHydration: DecisionDocumentHydration,
-): Promise<DecisionRead> =>
-  "documentPending" in read
-    ? await hydrate(read, recordDemand, documentHydration)
-    : read;
+const DECISION_READ_FIELD_KINDS = {
+  id: DECISION_READ_FIELD_KIND.METADATA,
+  resolution: DECISION_READ_FIELD_KIND.METADATA,
+  caseNumber: DECISION_READ_FIELD_KIND.METADATA,
+  caseNumberType: DECISION_READ_FIELD_KIND.METADATA,
+  slug: DECISION_READ_FIELD_KIND.METADATA,
+  ecli: DECISION_READ_FIELD_KIND.METADATA,
+  identifiers: DECISION_READ_FIELD_KIND.METADATA,
+  court: DECISION_READ_FIELD_KIND.METADATA,
+  courtId: DECISION_READ_FIELD_KIND.METADATA,
+  courtAbbreviation: DECISION_READ_FIELD_KIND.METADATA,
+  courtTier: DECISION_READ_FIELD_KIND.METADATA,
+  country: DECISION_READ_FIELD_KIND.METADATA,
+  language: DECISION_READ_FIELD_KIND.METADATA,
+  languageGroupKey: DECISION_READ_FIELD_KIND.METADATA,
+  decisionDate: DECISION_READ_FIELD_KIND.METADATA,
+  decisionType: DECISION_READ_FIELD_KIND.METADATA,
+  citationCount: DECISION_READ_FIELD_KIND.METADATA,
+  sourceUrl: DECISION_READ_FIELD_KIND.METADATA,
+  sourceAttributionUrl: DECISION_READ_FIELD_KIND.METADATA,
+  documentUrl: DECISION_READ_FIELD_KIND.METADATA,
+  sourceLanguages: DECISION_READ_FIELD_KIND.METADATA,
+  createdAt: DECISION_READ_FIELD_KIND.METADATA,
+  updatedAt: DECISION_READ_FIELD_KIND.METADATA,
+  judges: DECISION_READ_FIELD_KIND.METADATA,
+  languageAlternates: DECISION_READ_FIELD_KIND.METADATA,
+  caseFile: DECISION_READ_FIELD_KIND.METADATA,
+  documentAst: DECISION_READ_FIELD_KIND.TEXT,
+  projectionDigest: DECISION_READ_FIELD_KIND.TEXT,
+  documentAstSource: DECISION_READ_FIELD_KIND.TEXT,
+  sections: DECISION_READ_FIELD_KIND.TEXT,
+  fulltext: DECISION_READ_FIELD_KIND.TEXT,
+  metadata: DECISION_READ_FIELD_KIND.TEXT,
+  headnote: DECISION_READ_FIELD_KIND.TEXT,
+  textFields: DECISION_READ_FIELD_KIND.TEXT,
+  extractionWarnings: DECISION_READ_FIELD_KIND.TEXT,
+  citationsFrom: DECISION_READ_FIELD_KIND.TEXT,
+  citationsTo: DECISION_READ_FIELD_KIND.TEXT,
+  citationsNextCursor: DECISION_READ_FIELD_KIND.TEXT,
+  textIncompleteReason: DECISION_READ_FIELD_KIND.STATE,
+  textWithheldReason: DECISION_READ_FIELD_KIND.STATE,
+  documentPending: DECISION_READ_FIELD_KIND.STATE,
+  documentReadFailed: DECISION_READ_FIELD_KIND.STATE,
+  documentUnavailable: DECISION_READ_FIELD_KIND.STATE,
+  hasDocument: DECISION_READ_FIELD_KIND.STATE,
+  source: DECISION_READ_FIELD_KIND.STATE,
+} as const satisfies Record<keyof ReadableDecision, DecisionReadFieldKind>;
+
+type DecisionReadFieldsOf<Kind extends DecisionReadFieldKind> = {
+  [
+    Field in keyof typeof DECISION_READ_FIELD_KINDS
+  ]: (typeof DECISION_READ_FIELD_KINDS)[Field] extends Kind ? Field : never;
+}[keyof typeof DECISION_READ_FIELD_KINDS];
+
+type DecisionReadPart<Kind extends DecisionReadFieldKind> = Pick<
+  ReadableDecision,
+  DecisionReadFieldsOf<Kind>
+>;
+
+const decisionReadMetadata = (
+  read: ReadableDecision,
+): DecisionReadPart<"metadata"> => ({
+  id: read.id,
+  resolution: read.resolution,
+  caseNumber: read.caseNumber,
+  caseNumberType: read.caseNumberType,
+  slug: read.slug,
+  ecli: read.ecli,
+  identifiers: read.identifiers,
+  court: read.court,
+  courtId: read.courtId,
+  courtAbbreviation: read.courtAbbreviation,
+  courtTier: read.courtTier,
+  country: read.country,
+  language: read.language,
+  languageGroupKey: read.languageGroupKey,
+  decisionDate: read.decisionDate,
+  decisionType: read.decisionType,
+  citationCount: read.citationCount,
+  sourceUrl: read.sourceUrl,
+  sourceAttributionUrl: read.sourceAttributionUrl,
+  documentUrl: read.documentUrl,
+  sourceLanguages: read.sourceLanguages,
+  createdAt: read.createdAt,
+  updatedAt: read.updatedAt,
+  judges: read.judges,
+  languageAlternates: read.languageAlternates,
+  caseFile: read.caseFile,
+});
+
+/** Every text field as its absence; nothing here is read from a decision. */
+const withheldDecisionText = (reason: TextAbsenceReason) =>
+  ({
+    documentAst: null,
+    projectionDigest: null,
+    documentAstSource: null,
+    sections: null,
+    fulltext: null,
+    metadata: {},
+    headnote: absentTextField(reason),
+    textFields: absentDecisionTextFields(reason),
+    extractionWarnings: [],
+    citationsFrom: [],
+    citationsTo: [],
+    citationsNextCursor: null,
+  }) satisfies DecisionReadPart<"text">;
+
+type WithheldDecisionCompletion = Exclude<
+  ReturnType<typeof checkDecisionTextCompletion>,
+  { type: "eligible" }
+>;
+
+const withheldTextAbsenceReason = (
+  completion: WithheldDecisionCompletion,
+): TextAbsenceReason => {
+  switch (completion.type) {
+    case "withheld":
+      return TEXT_ABSENCE_REASON.REDISTRIBUTION_WITHHELD;
+    case "incomplete":
+      return completion.reason === "text_changed"
+        ? TEXT_ABSENCE_REASON.TEXT_CHANGED
+        : TEXT_ABSENCE_REASON.MISSING_TEXT;
+    default:
+      completion satisfies never;
+      return panic("Unhandled withheld decision completion");
+  }
+};
+
+type WithheldDecisionReadOptions = {
+  read: ReadableDecision;
+  completion: WithheldDecisionCompletion;
+  allowsDerivedAi: boolean;
+};
+
+/**
+ * The response for a decision whose text may no longer travel. Built from
+ * the classified parts rather than the prepared read, so a text field the
+ * read gains cannot reach this response unclassified.
+ */
+const withheldDecisionRead = ({
+  read,
+  completion,
+  allowsDerivedAi,
+}: WithheldDecisionReadOptions): ReadableDecision => {
+  const { textIncompleteReason, textWithheldReason } =
+    decisionTextCompletionReasons(completion);
+  const state: DecisionReadPart<"state"> = {
+    textIncompleteReason,
+    textWithheldReason,
+    documentPending: false,
+    documentReadFailed: false,
+    documentUnavailable: true,
+    hasDocument: false,
+    source: {
+      id: read.source.id,
+      name: read.source.name,
+      adapterKey: read.source.adapterKey,
+      allowsDerivedAi,
+    },
+  };
+  return {
+    ...decisionReadMetadata(read),
+    ...withheldDecisionText(withheldTextAbsenceReason(completion)),
+    ...state,
+  };
+};
+
+/**
+ * The read's second phase fetches a transient document outside the gated
+ * transaction. The ingestion queue owns persistent documents independently.
+ */
+type PrepareDecisionDocumentReadOptions = {
+  subject: RedistributableDecisionSubject;
+  citationsCursor?: string | null | undefined;
+  caseFileCursor?: string | null | undefined;
+};
+
+const PREPARED_DOCUMENT: unique symbol = Symbol("preparedDecisionDocument");
+
+/** Bind the text-return proof to the same snapshot that produced the initial read. */
+export const prepareDecisionDocumentRead = async ({
+  subject,
+  citationsCursor,
+  caseFileCursor,
+}: PrepareDecisionDocumentReadOptions) => {
+  const read = await readDecisionHandler({
+    subject,
+    citationsCursor,
+    caseFileCursor,
+  });
+  if (!("documentPending" in read)) {
+    return { type: "response" as const, read };
+  }
+  const completion = await readDecisionTextCompletion({
+    tx: subject.tx,
+    decisionId: read.id,
+    countries: subject.countries,
+  });
+  if (completion === undefined) {
+    return panic("Prepared public decision has no text-completion snapshot");
+  }
+  return {
+    type: "decision" as const,
+    read,
+    expectedFingerprint: completion.textEligibilityFingerprint,
+    textRevisionFingerprint: completion.textRevisionFingerprint,
+    countries: subject.countries,
+    [PREPARED_DOCUMENT]: true as const,
+  };
+};
+
+type PreparedDecisionDocument = Awaited<
+  ReturnType<typeof prepareDecisionDocumentRead>
+>;
+
+type HydrateDeferredDocumentOptions = {
+  prepared: PreparedDecisionDocument;
+  caseLawDb: CaseLawPublicReadDb;
+  recordDemand: boolean;
+  documentHydration: DecisionDocumentHydration;
+  hydrateDocument?: typeof hydrate;
+};
+
+/** Every response boundary completes its prepared proof after slow document work. */
+export const hydrateDeferredDocument = async ({
+  prepared,
+  caseLawDb,
+  recordDemand,
+  documentHydration,
+  hydrateDocument = hydrate,
+}: HydrateDeferredDocumentOptions): Promise<DecisionRead> => {
+  if (prepared.type === "response") {
+    return prepared.read;
+  }
+  const hydrated = await hydrateDocument({
+    decision: prepared.read,
+    recordDemand,
+    documentHydration,
+    textEligibilityFingerprint: prepared.expectedFingerprint,
+    textRevisionFingerprint: prepared.textRevisionFingerprint,
+  });
+  const current = await readDecisionTextCompletionSafely(
+    async () =>
+      await caseLawDb(
+        async (tx) =>
+          await readDecisionTextCompletion({
+            tx,
+            decisionId: prepared.read.id,
+            countries: prepared.countries,
+          }),
+      ),
+  );
+  const currentSnapshot = current.isOk() ? current.value : undefined;
+  const completion = current.match({
+    ok: (snapshot) =>
+      checkDecisionTextCompletion(prepared.expectedFingerprint, snapshot),
+    err: (error) => ({ type: "incomplete", reason: error.reason }) as const,
+  });
+  if (completion.type === "eligible") {
+    return hydrated;
+  }
+  return withheldDecisionRead({
+    read: prepared.read,
+    completion,
+    allowsDerivedAi:
+      currentSnapshot?.textWithheldReason === null &&
+      currentSnapshot.textIncompleteReason === null,
+  });
+};
 
 export type ReadGatedDecisionOptions = {
   caseLawDb: CaseLawPublicReadDb;
@@ -241,6 +541,9 @@ export const decisionDocumentState = (
    */
   readsSharedCorpus: boolean,
 ): DecisionDocumentState => {
+  if ("documentUnavailable" in read && read.documentUnavailable) {
+    return DECISION_DOCUMENT_STATE.unavailable;
+  }
   if (!("documentPending" in read) || !read.documentPending) {
     return DECISION_DOCUMENT_STATE.available;
   }
@@ -264,9 +567,8 @@ export const decisionDocumentState = (
  * Gate, read, then hydrate — in that order and for that reason.
  *
  * The gate and every row of the read share one transaction, so the content
- * cannot come from a state the gate did not approve. Hydration is a
- * publisher fetch and an ingestion write, which must not hold a read-only
- * transaction open, so it runs once that transaction has closed.
+ * cannot come from a state the gate did not approve. Hydration performs
+ * outbound I/O after that transaction closes, then checks the current gate.
  *
  * Null is "no such decision for the public": it does not exist, or its
  * source may not be redistributed.
@@ -279,18 +581,20 @@ export const readGatedDecisionWithDocument = async ({
   documentHydration,
   surface,
 }: ReadGatedDecisionOptions): Promise<DecisionRead | null> => {
-  const read = await withRedistributableSubject(
+  const prepared = await withRedistributableSubject(
     caseLawDb,
     surface,
     locator,
-    async (subject) => await readDecisionHandler({ citationsCursor, subject }),
+    async (subject) =>
+      await prepareDecisionDocumentRead({ citationsCursor, subject }),
   );
 
-  return read === null
+  return prepared === null
     ? null
-    : await hydrateDeferredDocument(
-        read,
-        caller === "attributed",
+    : await hydrateDeferredDocument({
+        prepared,
+        caseLawDb,
+        recordDemand: caller === "attributed",
         documentHydration,
-      );
+      });
 };
