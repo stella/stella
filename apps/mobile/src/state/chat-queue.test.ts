@@ -1,12 +1,22 @@
 import { describe, expect, test } from "bun:test";
 
-import { CHAT_SEND_QUEUES_INSTEAD_CODE } from "@stll/api-contract/chat-queue";
+import {
+  CHAT_SEND_QUEUES_INSTEAD_CODE,
+  QUEUED_MESSAGE_FILES_ON_REMOVE,
+} from "@stll/api-contract/chat-queue";
 import { DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH } from "@stll/api-contract/desktop-runner";
 
+import type { Fetch } from "@/connection/http";
+import {
+  createAccessTokenSource,
+  createSessionStore,
+  type StoredSession,
+} from "@/connection/session";
 import { ApiRequestError } from "@/state/api-request";
 import {
   queuedMessageText,
   queuesInstead,
+  removeQueuedChatMessage,
   steerableQueuedText,
 } from "@/state/chat-queue";
 import { chatSendBody, queuedChatSend } from "@/state/chat-stream";
@@ -71,5 +81,60 @@ describe("a queued message", () => {
         sendMode: "rawOverride",
       }),
     ).toBeNull();
+  });
+});
+
+const SESSION: StoredSession = {
+  serverUrl: "https://stella.example.com",
+  issuer: "https://stella.example.com/api/auth",
+  clientId:
+    "https://stella.example.com/v1/mcp/oauth/mobile-client-metadata.json",
+  tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
+  resource: "https://stella.example.com/v1",
+  signInId: "sign-in-1",
+  refreshToken: "refresh-1",
+  userId: "user-1",
+};
+
+describe("removing a queued message", () => {
+  test("names the revision read and what becomes of its stored files", async () => {
+    const routes: string[] = [];
+    const fetch: Fetch = async (input, init) => {
+      routes.push(
+        `${init?.method ?? "GET"} ${input.replace(SESSION.serverUrl, "")}`,
+      );
+      return Response.json({ message: {} });
+    };
+    const store = createSessionStore({
+      read: async () => SESSION,
+      write: async () => {},
+      prepareClear: async () => {},
+      clear: async () => {},
+    });
+    const source = createAccessTokenSource({
+      fetch,
+      initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
+      now: () => 0,
+      session: SESSION,
+      generation: store.generation(),
+      store,
+    });
+    for (const files of Object.values(QUEUED_MESSAGE_FILES_ON_REMOVE)) {
+      const removed = await removeQueuedChatMessage({
+        fetch,
+        files,
+        messageId: "m-1",
+        revision: 3,
+        source,
+        threadId: "t-1",
+      });
+      expect(removed.isOk()).toBe(true);
+    }
+    expect(routes).toEqual(
+      Object.values(QUEUED_MESSAGE_FILES_ON_REMOVE).map(
+        (files) =>
+          `DELETE /v1/chat/threads/t-1/queue/m-1?files=${files}&revision=3`,
+      ),
+    );
   });
 });

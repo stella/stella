@@ -168,7 +168,11 @@ export const ChatComposer = ({
     const accepted = onQueue(
       { text: message, files: readyFiles(taken) },
       () => {
-        setDraft((typed) => (typed === "" ? message : typed));
+        // Refused after the box was freed, often once the member typed on:
+        // what comes back goes before what is in the box, never instead.
+        setDraft((typed) =>
+          typed === "" ? message : `${message}\n\n${typed}`,
+        );
         files.restore(taken);
       },
     );

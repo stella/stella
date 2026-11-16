@@ -782,7 +782,6 @@ const readChatStream = async ({
           ...(body === undefined ? {} : { body }),
           signal: controller.signal,
         });
-        clearTimeout(connectTimer);
         // A refusal names the turn too once the server has stored the
         // message, so the thread, not the draft, holds what was sent.
         const turnId = response.headers.get(CHAT_TURN_ID_HEADER);
@@ -792,11 +791,15 @@ const readChatStream = async ({
         if (!response.ok || response.body === null) {
           // A refusal names why, so a send the server queues instead of
           // starting can be queued under the same message id.
+          // Its body is read within the connection's deadline: a stalled
+          // one is aborted and the status still answers.
           const refusal: unknown = response.ok
             ? undefined
             : await response.json().catch(() => undefined);
+          clearTimeout(connectTimer);
           return { status: response.status, code: refusalCode(refusal) };
         }
+        clearTimeout(connectTimer);
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         const parse = createSseParser();

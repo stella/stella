@@ -1,9 +1,17 @@
-import { Suspense, use, useEffect, useEffectEvent, useRef } from "react";
+import {
+  Suspense,
+  use,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
 import { panic, Result } from "better-result";
 import { Alert, Pressable, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { QUEUED_MESSAGE_FILES_ON_REMOVE } from "@stll/api-contract/chat-queue";
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
@@ -89,6 +97,27 @@ const stillQueued = async (
   return Result.isOk(queue) && queue.value.items.some((item) => item.id === id);
 };
 
+/**
+ * What a running turn is handed for `item`: its text read whole (the queue
+ * shows only its beginning) at the revision read, or null when it is sent
+ * next instead. Only at the revision the queue's read showed: an edit since
+ * may have changed `sendMode`, which says whether it may go as typed.
+ */
+const steerableRead = async (
+  request: Parameters<typeof readChatQueue>[0],
+  item: ChatQueueItem,
+): Promise<{ readonly revision: number; readonly text: string } | null> => {
+  const whole = await readQueuedChatMessage({ ...request, messageId: item.id });
+  if (Result.isError(whole) || whole.value.revision !== item.revision) {
+    return null;
+  }
+  const text = steerableQueuedText({
+    parts: whole.value.message.parts,
+    sendMode: item.sendMode,
+  });
+  return text === null ? null : { revision: whole.value.revision, text };
+};
+
 const LoadedQueue = ({
   load,
   onEdit,
@@ -112,6 +141,13 @@ const LoadedQueue = ({
   const removedHere = useRef(new Set<string>());
   const sentByServer = useEffectEvent(onSentByServer);
   const idle = thread === "idle";
+  // What the thread does when a Send now that was not taken goes on.
+  const threadNow = useRef(thread);
+  useEffect(() => {
+    threadNow.current = thread;
+  }, [thread]);
+  // The message whose actions are shown, under it.
+  const [opened, setOpened] = useState<string | null>(null);
   useEffect(() => {
     if (queue === null) {
       return;
@@ -181,43 +217,31 @@ const LoadedQueue = ({
     );
   };
 
+  /** Send now over a turn that waits on the person ends it: asked first. */
+  const confirmSendNext = (item: ChatQueueItem) => {
+    Alert.alert(t("replaceTitle"), t("replaceDescription"), [
+      { style: "cancel", text: t("cancel") },
+      {
+        onPress: () => {
+          sendNext(item);
+        },
+        style: "destructive",
+        text: t("sendNow"),
+      },
+    ]);
+  };
+
   const sendNow = (item: ChatQueueItem) => {
     switch (thread) {
       case "waiting":
-        Alert.alert(t("replaceTitle"), t("replaceDescription"), [
-          { style: "cancel", text: t("cancel") },
-          {
-            onPress: () => {
-              sendNext(item);
-            },
-            style: "destructive",
-            text: t("sendNow"),
-          },
-        ]);
+        confirmSendNext(item);
         return;
       case "steerable":
         void (async () => {
-          // The queue shows only the message's beginning; the turn is
-          // handed it whole, or it is sent next as before.
-          const whole = await readQueuedChatMessage({
-            ...request,
-            messageId: item.id,
-          });
-          const text = Result.isOk(whole)
-            ? steerableQueuedText({
-                parts: whole.value.message.parts,
-                sendMode: item.sendMode,
-              })
-            : null;
+          const handed = await steerableRead(request, item);
           removedHere.current.add(item.id);
           const steered =
-            text !== null &&
-            Result.isOk(whole) &&
-            (await steerQueued({
-              id: item.id,
-              revision: whole.value.revision,
-              text,
-            }));
+            handed !== null && (await steerQueued({ id: item.id, ...handed }));
           if (steered) {
             // Taken: the server removed it at the revision the turn was
             // handed. One edited since stays queued, and when the server
@@ -229,6 +253,11 @@ const LoadedQueue = ({
             return;
           }
           removedHere.current.delete(item.id);
+          // Not taken: the turn may wait on the person by now.
+          if (threadNow.current === "waiting") {
+            confirmSendNext(item);
+            return;
+          }
           sendNext(item);
         })();
         return;
@@ -259,10 +288,12 @@ const LoadedQueue = ({
       }
       removedHere.current.add(item.id);
       // Removed at the revision read: one edited elsewhere since stays.
+      // Edit is offered for text only, so no stored file is left behind.
       const removed = await write(
         async () =>
           await removeQueuedChatMessage({
             ...request,
+            files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
             messageId: item.id,
             revision: whole.value.revision,
           }),
@@ -282,6 +313,7 @@ const LoadedQueue = ({
         async () =>
           await removeQueuedChatMessage({
             ...request,
+            files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
             messageId: item.id,
             revision: item.revision,
           }),
@@ -301,60 +333,6 @@ const LoadedQueue = ({
           messageId: item.id,
         }),
     );
-  };
-
-  const showActions = (item: ChatQueueItem, index: number) => {
-    const { items } = queue;
-    const previous = items.at(index - 1);
-    const next = items.at(index + 1);
-    Alert.alert(t("actions"), item.preview, [
-      {
-        onPress: () => {
-          sendNow(item);
-        },
-        text: t("sendNow"),
-      },
-      // Only a message of text goes back into the phone's composer.
-      ...(item.attachmentCount === 0
-        ? [
-            {
-              onPress: () => {
-                edit(item);
-              },
-              text: t("edit"),
-            },
-          ]
-        : []),
-      ...(index > 0 && previous !== undefined
-        ? [
-            {
-              onPress: () => {
-                move(item, previous.id);
-              },
-              text: t("moveUp"),
-            },
-          ]
-        : []),
-      ...(next === undefined
-        ? []
-        : [
-            {
-              onPress: () => {
-                // Before the one after the next, or last.
-                move(item, items.at(index + 2)?.id ?? null);
-              },
-              text: t("moveDown"),
-            },
-          ]),
-      {
-        onPress: () => {
-          remove(item);
-        },
-        style: "destructive",
-        text: t("remove"),
-      },
-      { style: "cancel", text: t("cancel") },
-    ]);
   };
 
   const { hold } = queue;
@@ -385,29 +363,145 @@ const LoadedQueue = ({
         </Button>
       </View>
       {queue.items.map((item, index) => (
-        <Pressable
-          accessibilityHint={t("actions")}
-          accessibilityRole="button"
-          className="border-border rounded-xl border px-3 py-2 active:opacity-70"
+        <QueueItemRow
+          index={index}
+          item={item}
+          items={queue.items}
           key={item.id}
+          notSent={
+            hold?.reason === "send-refused" && hold.queuedMessageId === item.id
+          }
+          on={{ edit, move, remove, sendNow }}
           onPress={() => {
-            showActions(item, index);
+            setOpened((shown) => (shown === item.id ? null : item.id));
           }}
-        >
-          <Text numberOfLines={2} variant="body">
-            {item.preview}
-          </Text>
-          {item.attachmentCount === 0 ? null : (
-            <Text variant="caption">
-              {t("attachments", { count: item.attachmentCount })}
-            </Text>
-          )}
-          {hold?.reason === "send-refused" &&
-          hold.queuedMessageId === item.id ? (
-            <Text variant="error">{t("notSent")}</Text>
-          ) : null}
-        </Pressable>
+          opened={opened === item.id}
+        />
       ))}
+    </View>
+  );
+};
+
+type QueueItemActions = {
+  readonly edit: (item: ChatQueueItem) => void;
+  readonly move: (item: ChatQueueItem, beforeId: string | null) => void;
+  readonly remove: (item: ChatQueueItem) => void;
+  readonly sendNow: (item: ChatQueueItem) => void;
+};
+
+/**
+ * Queued message `items[index]`; tapped, the web's actions on it open
+ * under it as buttons (a system alert holds three on Android).
+ */
+const QueueItemRow = ({
+  index,
+  item,
+  items,
+  notSent,
+  on,
+  onPress,
+  opened,
+}: {
+  readonly index: number;
+  readonly item: ChatQueueItem;
+  readonly items: readonly ChatQueueItem[];
+  readonly notSent: boolean;
+  readonly on: QueueItemActions;
+  readonly onPress: () => void;
+  readonly opened: boolean;
+}) => {
+  const t = useTranslations("chat.queue");
+  const previous = index > 0 ? items.at(index - 1) : undefined;
+  const next = items.at(index + 1);
+  const actions = [
+    {
+      label: t("sendNow"),
+      run: () => {
+        on.sendNow(item);
+      },
+    },
+    // Only a message of text goes back into the phone's composer.
+    ...(item.attachmentCount === 0
+      ? [
+          {
+            label: t("edit"),
+            run: () => {
+              on.edit(item);
+            },
+          },
+        ]
+      : []),
+    ...(previous === undefined
+      ? []
+      : [
+          {
+            label: t("moveUp"),
+            run: () => {
+              on.move(item, previous.id);
+            },
+          },
+        ]),
+    ...(next === undefined
+      ? []
+      : [
+          {
+            label: t("moveDown"),
+            // Before the one after the next, or last.
+            run: () => {
+              on.move(item, items.at(index + 2)?.id ?? null);
+            },
+          },
+        ]),
+  ];
+  return (
+    <View className="border-border rounded-xl border px-3 py-2">
+      <Pressable
+        accessibilityHint={t("actions")}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: opened }}
+        className="active:opacity-70"
+        onPress={onPress}
+      >
+        <Text numberOfLines={2} variant="body">
+          {item.preview}
+        </Text>
+        {item.attachmentCount === 0 ? null : (
+          <Text variant="caption">
+            {t("attachments", { count: item.attachmentCount })}
+          </Text>
+        )}
+        {notSent ? <Text variant="error">{t("notSent")}</Text> : null}
+      </Pressable>
+      {opened ? (
+        <View
+          accessibilityLabel={t("actions")}
+          className="flex-row flex-wrap gap-1 pt-2"
+        >
+          {actions.map(({ label, run }) => (
+            <Button
+              key={label}
+              onPress={() => {
+                onPress();
+                run();
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {label}
+            </Button>
+          ))}
+          <Button
+            onPress={() => {
+              onPress();
+              on.remove(item);
+            }}
+            size="sm"
+            variant="destructive"
+          >
+            {t("remove")}
+          </Button>
+        </View>
+      ) : null}
     </View>
   );
 };

@@ -5,6 +5,7 @@ import {
   CHAT_QUEUE_HOLD_REASONS,
   CHAT_SEND_QUEUES_INSTEAD_CODE,
   type ChatSendQueuesInsteadCode,
+  type QueuedMessageFilesOnRemove,
 } from "@stll/api-contract/chat-queue";
 import { DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH } from "@stll/api-contract/desktop-runner";
 
@@ -117,21 +118,26 @@ export const readQueuedChatMessage = async ({
     source,
   });
 
-/** Remove a queued message at the revision read (409 once edited since). */
+/**
+ * Remove a queued message at the revision read (409 once edited since);
+ * `files` says whether the files its queueing stored go with it.
+ */
 export const removeQueuedChatMessage = async ({
   fetch,
+  files,
   messageId,
   revision,
   source,
   threadId,
 }: QueueRequest & {
+  readonly files: QueuedMessageFilesOnRemove;
   readonly messageId: string;
   readonly revision: number;
 }): Promise<Result<unknown, ApiError>> =>
   await requestApi({
     fetch,
     method: "DELETE",
-    path: `${messagePath(threadId, messageId)}?revision=${String(revision)}`,
+    path: `${messagePath(threadId, messageId)}?files=${files}&revision=${String(revision)}`,
     schema: v.object({ message: v.unknown() }),
     source,
   });
