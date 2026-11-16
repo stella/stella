@@ -780,7 +780,7 @@
     "apps/api/src/handlers/invoices/delete.ts": 2,
     "apps/api/src/handlers/invoices/entries/add.ts": 1,
     "apps/api/src/handlers/invoices/entries/remove.ts": 2,
-    "apps/api/src/handlers/invoices/lines/create.ts": 2,
+    "apps/api/src/handlers/invoices/lines/create.ts": 1,
     "apps/api/src/handlers/invoices/lines/delete.ts": 2,
     "apps/api/src/handlers/invoices/transition.ts": 2,
     "apps/api/src/handlers/invoices/update.ts": 1,
