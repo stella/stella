@@ -21,6 +21,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { WebApiRoutes } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -267,16 +268,20 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     });
   })();
 
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
   const calendarTasksQuery = useQuery({
-    ...calendarTasksOptions({
-      workspaceId,
-      filters,
-      sorts,
-      dateFrom: queryRange.dateFrom,
-      dateTo: queryRange.dateTo,
-      datePropertyIds: visibleDatePropertyIds,
-      endDatePropertyId,
-    }),
+    ...calendarTasksOptions(
+      {
+        workspaceId,
+        filters,
+        sorts,
+        dateFrom: queryRange.dateFrom,
+        dateTo: queryRange.dateTo,
+        datePropertyIds: visibleDatePropertyIds,
+        endDatePropertyId,
+      },
+      organizationId,
+    ),
   });
   const calendarTasksView = queryView(calendarTasksQuery);
   const calendarTasks =
